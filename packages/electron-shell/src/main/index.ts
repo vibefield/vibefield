@@ -1352,6 +1352,13 @@ async function main(
     const artifactPreviewCapture = new ArtifactPreviewCapture({
       dataDir: userRoot,
       native: electronArtifactPreviewNative(),
+      // Item 519 (2026-11-18): a capture session that is never reused again, said with its reason alone.
+      onSessionRetired: (reason, captures) =>
+        logger.warn(
+          "desktop.artifact_preview.session_retired",
+          "A preview capture session was retired and will not be reused",
+          { reason, captures },
+        ),
     });
     // P8b-2: keep the plugin protocol's authority pointed at the LIVE client.
     // Read at call time rather than captured, for the same reason the roster

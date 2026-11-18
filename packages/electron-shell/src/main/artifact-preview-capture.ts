@@ -64,6 +64,13 @@ interface PreviewSession {
   clearCache(): Promise<void>;
   closeAllConnections(): Promise<void>;
   setProxy(config: PreviewProxyConfig): Promise<void>;
+  // Item 519 (2026-11-18): the rest of what a reused session is cleared of between captures.
+  clearData(): Promise<void>;
+  clearAuthCache(): Promise<void>;
+  clearHostResolverCache(): Promise<void>;
+  clearCodeCaches(options: { urls?: string[] }): Promise<void>;
+  clearSharedDictionaryCache(): Promise<void>;
+  readonly serviceWorkers: { getAllRunning(): Record<number, unknown> };
 }
 
 interface PreviewWebContents {
@@ -105,10 +112,36 @@ export interface ArtifactPreviewCaptureNative {
   decodeImage(bytes: Buffer): PreviewImage;
 }
 
+/** Item 519 (2026-11-18): why a capture session is never used again. */
+export type PreviewSessionRetiredReason =
+  | "clear-rejected"
+  | "clear-overran"
+  | "worker-running"
+  | "in-use";
+
+/** Item 519 (2026-11-18): how long a capture waits for its artifact's session to finish clearing before it reuses
+ * it. A clearing still unsettled by then retires the session, and the capture takes a fresh one. */
+export const PREVIEW_SESSION_CLEAR_BOUND_MS = 2_000;
+
 export interface ArtifactPreviewCaptureOptions {
   dataDir: string;
   native: ArtifactPreviewCaptureNative;
   randomId?: () => string;
+  /** Item 519: told each time a session is retired, with the number of captures it served. */
+  onSessionRetired?: (reason: PreviewSessionRetiredReason, captures: number) => void;
+  /** Item 519: the clearing bound; PREVIEW_SESSION_CLEAR_BOUND_MS unless a test shortens it. */
+  clearBoundMs?: number;
+}
+
+/** Item 519 (2026-11-18): one artifact's capture session, kept so its next capture reuses it once it is cleared. */
+interface HeldPreviewSession {
+  readonly partition: string;
+  readonly session: PreviewSession;
+  /** false for a session made for one capture alone, which is never kept. */
+  readonly kept: boolean;
+  inUse: boolean;
+  clearing: Promise<"clean" | "rejected"> | null;
+  captures: number;
 }
 
 export class ArtifactPreviewCaptureError extends Error {
@@ -131,18 +164,28 @@ export class ArtifactPreviewCaptureError extends Error {
   }
 }
 
-/** AH-4's one-shot browser. The shell provider serializes callers; this class
- * owns one ephemeral session/window, the network gate, JPEG normalization, and
- * the atomic host-private write. */
+/** AH-4's capture browser: one in-memory session per artifact, one window per
+ * capture, the network gate, JPEG normalization, and the atomic host-private
+ * write. Item 519 (2026-11-18): an artifact's session is kept and reused by its
+ * next capture, only once every clear of it has settled; a clear that fails or
+ * overruns retires it for good. Two artifacts never share a session. (This said
+ * the class owns one ephemeral session per capture: Electron has no call that
+ * ends a session, so each one was held until the app quit.) */
 export class ArtifactPreviewCapture {
   readonly #previewRoot: string;
   readonly #native: ArtifactPreviewCaptureNative;
   readonly #randomId: () => string;
+  readonly #onSessionRetired: (reason: PreviewSessionRetiredReason, captures: number) => void;
+  readonly #clearBoundMs: number;
+  /** Item 519: each artifact's kept session, by artifact id. */
+  readonly #sessions = new Map<string, HeldPreviewSession>();
 
   constructor(options: ArtifactPreviewCaptureOptions) {
     this.#previewRoot = join(options.dataDir, ...LAYOUT.ARTIFACT_PREVIEWS_DIR);
     this.#native = options.native;
     this.#randomId = options.randomId ?? (() => randomBytes(18).toString("base64url"));
+    this.#onSessionRetired = options.onSessionRetired ?? (() => undefined);
+    this.#clearBoundMs = options.clearBoundMs ?? PREVIEW_SESSION_CLEAR_BOUND_MS;
   }
 
   async capture(
@@ -150,14 +193,14 @@ export class ArtifactPreviewCapture {
     signal: AbortSignal,
   ): Promise<CaptureResult> {
     throwIfAborted(signal);
-    const partition = `${PREVIEW_PARTITION_PREFIX}${this.#randomId()}`;
     const targetOrigin = new URL(params.url).origin;
     // MA-3c: a made app's served-shell hosts (absent for a live artifact: its origin alone).
     const allowHosts = params.allowHosts ?? [];
     const targetDir = join(this.#previewRoot, params.artifactId);
     const targetPath = join(targetDir, "thumbnail.jpg");
-    const tempPath = join(targetDir, `.${this.#randomId()}.thumbnail.jpg.tmp`);
+    let tempPath: string | null = null;
     const denyDownload = (event: { preventDefault(): void }) => event.preventDefault();
+    let held: HeldPreviewSession | null = null;
     let captureSession: PreviewSession | null = null;
     let window: PreviewWindow | null = null;
     let requestGuardInstalled = false;
@@ -171,7 +214,11 @@ export class ArtifactPreviewCapture {
     try {
       await ensureOwnedPreviewDirectory(this.#previewRoot, targetDir);
       throwIfAborted(signal);
-      captureSession = this.#native.createSession(partition);
+      // Item 519: the artifact's kept session, reused only once its last clearing has settled, else a fresh one.
+      held = await this.#lease(params.artifactId, signal);
+      captureSession = held.session;
+      const partition = held.partition;
+      tempPath = join(targetDir, `.${this.#randomId()}.thumbnail.jpg.tmp`);
       guardedPreviewSessions.add(captureSession);
       captureSession.setPermissionRequestHandler((_contents, _permission, callback) =>
         callback(false),
@@ -296,41 +343,151 @@ export class ArtifactPreviewCapture {
       } catch {
         // The operation has already settled; teardown is best-effort.
       }
+      // Item 519: a gate this capture could not remove leaves its session in a state no clear call
+      // vouches for, so that session is never reused.
+      let teardownClean = true;
       if (captureSession !== null) {
         const sessionForCleanup = captureSession;
         if (requestGuardInstalled) {
           try {
             sessionForCleanup.webRequest.onBeforeRequest(ALL_URLS, null);
           } catch {
-            // The unique session is never reused.
+            teardownClean = false;
           }
         }
         if (responseGuardInstalled) {
           try {
             sessionForCleanup.webRequest.onHeadersReceived(ALL_URLS, null);
           } catch {
-            // The unique session is never reused.
+            teardownClean = false;
           }
         }
         if (downloadGuardInstalled) {
           try {
             sessionForCleanup.off("will-download", denyDownload);
           } catch {
-            // The unique session is never reused.
+            teardownClean = false;
           }
         }
         guardedPreviewSessions.delete(sessionForCleanup);
-        // The session is unique and the window is already destroyed. Begin
-        // privacy cleanup, but never let a wedged Chromium cleanup promise keep
-        // the provider busy beyond the broker's whole-operation deadline.
-        void Promise.allSettled([
-          Promise.resolve().then(() => sessionForCleanup.clearStorageData()),
-          Promise.resolve().then(() => sessionForCleanup.clearCache()),
-          Promise.resolve().then(() => sessionForCleanup.closeAllConnections()),
-        ]);
       }
-      await rm(tempPath, { force: true }).catch(() => undefined);
+      // The window is already destroyed. Begin clearing the session, but never let a wedged
+      // Chromium clear keep the provider busy beyond the broker's whole-operation deadline: the
+      // artifact's next capture waits for it instead (item 519).
+      if (held !== null) this.#release(held, teardownClean);
+      if (tempPath !== null) await rm(tempPath, { force: true }).catch(() => undefined);
     }
+  }
+
+  /** Item 519 (2026-11-18): the session this capture of `artifactId` uses. The artifact's kept
+   * session is claimed at once, so no second capture is ever handed it; it is reused only when its
+   * last clearing settled clean within the bound and no worker of it still runs. Otherwise it is
+   * retired for good and a fresh one is kept in its place. A capture that finds the kept session in
+   * use takes a session of its own, which nobody keeps. */
+  async #lease(artifactId: string, signal: AbortSignal): Promise<HeldPreviewSession> {
+    const kept = this.#sessions.get(artifactId);
+    if (kept?.inUse === true) {
+      this.#onSessionRetired("in-use", 0);
+      return this.#fresh(false);
+    }
+    if (kept !== undefined) {
+      kept.inUse = true;
+      const outcome = await settledWithin(kept.clearing, this.#clearBoundMs);
+      const reason: PreviewSessionRetiredReason | null =
+        outcome === "rejected"
+          ? "clear-rejected"
+          : outcome === "overran"
+            ? "clear-overran"
+            : hasRunningWorker(kept.session)
+              ? "worker-running"
+              : null;
+      if (reason === null) {
+        kept.clearing = null;
+        if (signal.aborted) kept.inUse = false;
+        throwIfAborted(signal);
+        return kept;
+      }
+      this.#sessions.delete(artifactId);
+      this.#onSessionRetired(reason, kept.captures);
+      throwIfAborted(signal);
+    }
+    const fresh = this.#fresh(true);
+    this.#sessions.set(artifactId, fresh);
+    return fresh;
+  }
+
+  #fresh(kept: boolean): HeldPreviewSession {
+    const partition = `${PREVIEW_PARTITION_PREFIX}${this.#randomId()}`;
+    return {
+      partition,
+      session: this.#native.createSession(partition),
+      kept,
+      inUse: true,
+      clearing: null,
+      captures: 0,
+    };
+  }
+
+  /** Item 519: every clear starts now; the artifact's next capture awaits them. */
+  #release(held: HeldPreviewSession, teardownClean: boolean): void {
+    held.captures += 1;
+    const clearing = clearPreviewSession(held.session);
+    held.clearing = teardownClean ? clearing : clearing.then(() => "rejected" as const);
+    if (held.kept) held.inUse = false;
+  }
+}
+
+/** Item 519 (2026-11-18): every clear a capture session is given between captures, all started at
+ * once; "clean" only when every one resolved. Electron 43's own words for each are in the item's
+ * design: storage of every kind, the HTTP, code and shared-dictionary caches, the HTTP
+ * authentication and host resolver caches, and every open connection. */
+function clearPreviewSession(session: PreviewSession): Promise<"clean" | "rejected"> {
+  const clears: Array<() => Promise<void>> = [
+    () => session.clearData(),
+    () => session.clearStorageData(),
+    () => session.clearCache(),
+    () => session.clearAuthCache(),
+    () => session.clearHostResolverCache(),
+    () => session.clearCodeCaches({}),
+    () => session.clearSharedDictionaryCache(),
+    () => session.closeAllConnections(),
+  ];
+  return Promise.allSettled(
+    clears.map((clear) => {
+      try {
+        return clear();
+      } catch (error) {
+        return Promise.reject(error);
+      }
+    }),
+  ).then((results) =>
+    results.every((result) => result.status === "fulfilled") ? "clean" : "rejected",
+  );
+}
+
+/** Item 519: a clearing's outcome, or "overran" once `ms` has passed without one. */
+async function settledWithin(
+  clearing: Promise<"clean" | "rejected"> | null,
+  ms: number,
+): Promise<"clean" | "rejected" | "overran"> {
+  if (clearing === null) return "clean";
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const overran = new Promise<"overran">((resolve) => {
+    timer = setTimeout(() => resolve("overran"), ms);
+  });
+  try {
+    return await Promise.race([clearing, overran]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Item 519: a worker of the session still running between captures (or one that cannot be read). */
+function hasRunningWorker(session: PreviewSession): boolean {
+  try {
+    return Object.keys(session.serviceWorkers.getAllRunning()).length > 0;
+  } catch {
+    return true;
   }
 }
 
