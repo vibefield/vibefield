@@ -4,6 +4,7 @@ import {
   type ObjectRef,
   type ObjectsHandResult,
 } from "@vibefield/contracts";
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import { HAND_OVER_WORDS } from "../frame/cards/hand-over";
 import { getRendererLogger } from "../logging";
 import { askAgain } from "../reconnect";
@@ -67,6 +68,17 @@ export interface ThreadSendDeps {
 const reasonOf = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+/** A refusal as the log keeps it (item 293's rider, 2026-11-18): its kind, never its words, which may name a path or
+ * carry a prompt's text. */
+function refusalKind(error: unknown): { readonly kind: string; readonly retryable?: boolean } {
+  if (error instanceof FielddRpcError) return { kind: error.kind, retryable: error.retryable };
+  return { kind: error instanceof Error ? error.name : typeof error };
+}
+
+function logRefused(event: string, message: string, error: unknown): void {
+  getRendererLogger().child({ component: "chat" }).warn(event, message, refusalKind(error));
+}
+
 /** A fresh request id for one send (`ComposeSayRequestId`: 8 to 64 of letters, digits, `_` and `-`). */
 export function sayRequestId(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(12));
@@ -128,6 +140,7 @@ async function sendSteps(
     try {
       await deps.wake();
     } catch (error) {
+      logRefused("renderer.chat.wake_refused", "Chat's wake was refused", error);
       return { state: "wake-refused", reason: reasonOf(error) };
     }
   }
@@ -142,10 +155,14 @@ async function sendSteps(
     return { state: "queued", receipt: await deps.say(ask) };
   } catch (error) {
     // its answer lost with the connection: asked once more by its id, which reads its receipt and never queues twice
-    if (!askAgain(error)) return { state: "failed", reason: reasonOf(error) };
+    if (!askAgain(error)) {
+      logRefused("renderer.chat.send_refused", "Chat's send was refused", error);
+      return { state: "failed", reason: reasonOf(error) };
+    }
     try {
       return { state: "queued", receipt: await deps.say(ask) };
     } catch (again) {
+      logRefused("renderer.chat.send_refused", "Chat's send was refused, asked again", again);
       return { state: "failed", reason: reasonOf(again) };
     }
   }
@@ -168,6 +185,7 @@ export function sendNote(outcome: ThreadSendOutcome, name: string): string | nul
     case "wake-refused":
       return `Couldn't wake ${name}: ${outcome.reason}`;
     case "failed":
-      return `Couldn't send to ${name}: ${outcome.reason}`;
+      // the act and its next step (IS-282-1); what failed is in the log (`refusalKind`, or the step that threw)
+      return `Couldn't send to ${name}. Try again.`;
   }
 }
