@@ -4,8 +4,10 @@ DK-18, the desk migration's Phase 5 (`draft/thinking-desk-migration.md` §5, "th
 cutover of `desk/landing` needs, what each proves, where it runs, and its verdict at the landing SHA. Two commands run them.
 
 - **`pnpm verify`** — THE gate (CLAUDE.md, "Commands"), CI's: the stages below in one `&&` chain. It stops at its first red,
-  and `preflight` is red in a worktree whose sibling checkouts (`../rosetta-pin`, `../mille-pin`) are off their pins
-  *(corrected 2026-10-28, the housekeeping pass: this named ghosttea's, released on every plane since the EL8 to 0.13.1)*, so a worktree's grade
+  and `preflight` is red in a worktree whose sibling checkouts (`../rosetta-pin`, and `../mille-pin` while the overlay
+  links mille) are off their pins *(corrected 2026-10-28, the housekeeping pass: this named ghosttea's, released on
+  every plane since the EL8 to 0.13.1)* *(corrected 2026-11-18, item 536: this named `../mille-pin` with no
+  condition; mille is released since its EL8 to 0.3.6, 2026-11-17)*, so a worktree's grade
   runs the stages ONE AT A TIME — `pnpm gate:landing --with-stages` does, every one even after a red, and says a red that is
   MAIN's known row as main's (`red — main's: …`, still counted red).
 - **`pnpm gate:landing`** — the landing-only gates, by ICE's example (its `gate:landing`: required at every landing, out of

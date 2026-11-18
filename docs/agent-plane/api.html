@@ -3008,9 +3008,13 @@
               <code>workspace.list</code>, <code>workspace.search</code> and
               <code>workspace.openTicket</code> (History opening a folder) answer alike; a search
               hit whose folder did not answer is left out with <code>complete: false</code>.</p>
-            <p>The unreleased mille channel is pinned at <code>c8160d5</code> in a dedicated
-              sibling checkout (<em>2026-10-08:</em> moved from <code>baa0de8</code>, EL8 — M8
-              hydration, M10 bounded reads, mille-git G1–G3, unpushed). R24 confines native
+            <p>mille and mille-ui are exact registry pins at 0.3.6 since mille's release (its EL8,
+              2026-11-17, <code>0d1e63b07</code>): fieldd, field-app and the room resolve them from npm,
+              the sibling window (FS-1b) is closed, and <code>siblings.lock.json</code> keeps mille's
+              entry only as the dev overlay's coordinate. <em>(Corrected 2026-11-18, item 536: this
+              said "The unreleased mille channel is pinned at <code>c8160d5</code> in a dedicated
+              sibling checkout (2026-10-08: moved from <code>baa0de8</code>, EL8 — M8 hydration, M10
+              bounded reads, mille-git G1–G3, unpushed)".)</em> R24 confines native
               imports to the files worker; field-app may use
               the <code>/port</code> and <code>/remote</code> clients and the UI entry
               (<code>/remote</code> today). <strong>Erratum (2026-10-07):</strong> this said

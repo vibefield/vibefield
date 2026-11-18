@@ -37,8 +37,8 @@
 // alone) nor ../mille-pin (no .cargo/) sets any rustflags, and the release job's runner has no user config — so today
 // every door is a pure append; the refusals are for the day one of them does.
 //
-// The pinned checkouts (../rosetta-pin, ../mille-pin; W-D10, FS-1b) are never edited: their builds are reached only
-// through these flags in the environment and the arguments OUR scripts pass.
+// The pinned checkouts (../rosetta-pin, and ../mille-pin while the overlay links mille; W-D10, FS-1b) are never
+// edited: their builds are reached only through these flags in the environment and the arguments OUR scripts pass.
 //
 // MILLE'S INSTALL NAME (`setInstallName`, the stage's step on macOS): a cdylib's LC_ID_DYLIB is the path the linker wrote
 // it to (`…/target/aarch64-apple-darwin/release/deps/libmille_binding.dylib`), which no rustflag reaches, and napi copies

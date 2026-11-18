@@ -303,6 +303,7 @@ test("LP-6b: THE EXPECTED RED — today's artifacts at prod-builder's counts fai
     machOWith(join(bin, "field-terminal-host"), [[registry, 378]]);
     machOWith(join(bin, "field-freeway-host"), [[registry, 199]]);
     machOWith(join(bin, "rosettad"), [[registry, 450]]);
+    // the 2026-11-04 nightly's, built in ../mille-pin then; npm's 0.3.6 addon names @rpath/… itself
     machOWith(join(bin, "mille.darwin-arm64.node"), [
       [
         "/Users/runner/work/vibefield/mille-pin/target/aarch64-apple-darwin/release/deps/libmille_binding.dylib",

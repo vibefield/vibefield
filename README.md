@@ -132,8 +132,10 @@ long-running stack:
   `pnpm verify` remains the uncropped release-quality gate.
 
 The development watcher is deliberately repository-bounded: it does not watch
-sibling checkouts (`../rosetta-pin`, `../mille-pin`, any overlay-linked sibling) or their manifests. After changing dependencies or package manifests, run
+sibling checkouts (`../rosetta-pin`, any overlay-linked sibling) or their manifests. After changing dependencies or package manifests, run
 `pnpm install` and restart `pnpm dev`; installs are never performed implicitly by the watcher.
+*(Corrected 2026-11-18, item 536: this named `../mille-pin` beside `../rosetta-pin`; since the EL8 to mille 0.3.6
+(2026-11-17) mille comes from npm, and `../mille-pin` is a checkout only while the overlay links it.)*
 
 `pnpm dev:studio` starts the real product and VibeField Studio under the same runner, Vite server,
 and Electron host. `pnpm dev:design` is the compatibility entry focused on that same Studio; when
