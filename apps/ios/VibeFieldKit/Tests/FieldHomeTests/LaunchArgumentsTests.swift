@@ -14,9 +14,10 @@ import Testing
 /// none reads the process's arguments. A gate widened later stays held by it.
 ///
 /// The wall's scan runs in a detached task and walks line by line only the files that hold an `#if` or spell a read.
-/// Seen 2026-11-18: a cold FieldHomeTests-only run ends hundreds of rows together, with or without this row, and a
-/// neighbour's two-second wait (`NewSparkCreateTests`) failed in two of four such runs. This row was not shown to be
-/// the cause (item 538).
+/// It prints its time from before the detached scan to its value, so the print holds the scan's wait for a thread as
+/// well as its work (item 538, 2026-11-18); nothing is asserted on the time. Seen 2026-11-18: a cold
+/// FieldHomeTests-only run ends hundreds of rows together, with or without this row, and a neighbour's two-second wait
+/// (`NewSparkCreateTests`) failed in such runs, read as that row's own bound, starved (item 538).
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("no launch argument reaches a TestFlight build or the review build: the kit reads them in development alone")
@@ -95,7 +96,11 @@ struct LaunchArgumentsTests {
 
   @Test("no line a review or a TestFlight build compiles reads the process's arguments, and every condition is read")
   func noReadOutsideDevelopment() async throws {
+    let clock = ContinuousClock()
+    let start = clock.now
     let scan = try await Task.detached(priority: .utility) { try Self.scan() }.value
+    let took = clock.now - start
+    print("LaunchArgumentsTests: \(scan.files) files read, \(scan.walked) walked, in \(took)")
     let named = scan.reads.sorted()
     let unread = scan.unread.sorted()
     #expect(scan.files > 400)
@@ -103,10 +108,11 @@ struct LaunchArgumentsTests {
     #expect(named.isEmpty, "\(named.count) lines outside development read the process's arguments: \(named)")
   }
 
-  /// What the wall finds: how many Swift files it read, the conditions it could not evaluate, and each line a review
-  /// or a TestFlight build compiles that reads the process's arguments.
+  /// What the wall finds: how many Swift files it read and walked, the conditions it could not evaluate, and each line
+  /// a review or a TestFlight build compiles that reads the process's arguments.
   struct Scan: Sendable {
     var files = 0
+    var walked = 0
     var unread: Set<String> = []
     var reads: Set<String> = []
   }
@@ -122,6 +128,7 @@ struct LaunchArgumentsTests {
         scan.files += 1
         let text = try String(contentsOf: url, encoding: .utf8)
         guard text.contains("#if") || readsArguments(text) else { continue }
+        scan.walked += 1
         for build in builds {
           let read = compiled(text, flags: build.flags)
           scan.unread.formUnion(read.unread)
