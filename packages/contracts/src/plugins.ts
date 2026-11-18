@@ -1711,6 +1711,10 @@ export const PLUGIN_CAPABILITY_ELIGIBILITY: Readonly<
   // SurfaceService's participant gate refuses window-less principals anyway,
   // so eligibility states the same truth. `surface.control` stays absent:
   // reserved for the DT-5 broker lane, minted by no v1 manifest.
+  // *Dated 2026-11-17 (EY-0; EY-D8 A, draft/thinking-agents-eyes.md): the
+  // reservation is retired, and that scope is never minted. An agent's call
+  // on a page is the internal `shell.surfaces.control` (shell.ts), which only
+  // fieldd's pages room dispatches.*
   "surface.attach": { renderer: true },
   "surface.browser": { renderer: true },
   "surface.capture": { renderer: true },

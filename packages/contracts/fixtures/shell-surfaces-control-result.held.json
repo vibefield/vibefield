@@ -1,0 +1,5 @@
+{
+  "//": "EY-0 — the person holds the page, so the call is refused with the fact `held`, a word the model reads. Nothing is replayed (EY-L2).",
+  "status": "refused",
+  "fact": "held"
+}

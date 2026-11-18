@@ -335,6 +335,8 @@ import {
   AppPreferences,
   CommunityStatement,
   FielddLinkUnavailable,
+  ShellSurfacesControlParams,
+  ShellSurfacesControlResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
 } from "../src/shell";
@@ -517,6 +519,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "vibefield-app-manifest": VibefieldAppManifest,
   "shell-capture-preview-params": ShellWebContentsCaptureArtifactPreviewParams,
   "shell-capture-preview-result": ShellWebContentsCaptureArtifactPreviewResult,
+  // EY-0 — an agent's call on a page (`shell.surfaces.control`, TS-only): a read, an act and the run-level open, and
+  // three answers (done, held, needs-you). fieldd's room and main's broker parse them through these schemas.
+  "shell-surfaces-control-params": ShellSurfacesControlParams,
+  "shell-surfaces-control-result": ShellSurfacesControlResult,
   "native-health": NativeHealth,
   "desired-state": DesiredState,
   // IL-D4 (draft/thinking-inventory-latency.md §4.1) — three floors on purpose: a judging floor

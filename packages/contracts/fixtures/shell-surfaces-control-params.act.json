@@ -1,0 +1,7 @@
+{
+  "//": "EY-0 — an act on a page the run holds, in an act window: a click by the ref a snapshot gave. The broker runs exactly this command, never argv.",
+  "run": "run-01J8Z3K9",
+  "surfaceId": "surface_0123456789abcdef",
+  "window": "act",
+  "command": { "action": "click", "selector": "@e3" }
+}

@@ -25,6 +25,8 @@ import {
   ShellRendererRequestReplacementResult,
   ShellRevealPathParams,
   ShellRevealPathResult,
+  ShellSurfacesControlParams,
+  ShellSurfacesControlResult,
   ShellSurfacesEnumerateParams,
   ShellSurfacesEnumerateResult,
   ShellSurfacesMintParams,
@@ -112,6 +114,13 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
     input: ShellSurfacesSimulatorDevicesParams,
     output: ShellSurfacesSimulatorDevicesResult,
     deadlineMs: SURFACE_AUTHORITY_LIMITS.SIMULATOR_DEVICES_DEADLINE_MS,
+  },
+  // EY-0 — an agent's call on a page (internal; only the pages room dispatches it, from EY-2). Main answers
+  // UNAVAILABLE until EY-1 builds its broker.
+  "shell.surfaces.control": {
+    input: ShellSurfacesControlParams,
+    output: ShellSurfacesControlResult,
+    deadlineMs: SURFACE_AUTHORITY_LIMITS.CONTROL_DEADLINE_MS,
   },
   // The Agents settings section's Show in Finder (internal; the agent
   // distribution service dispatches it for a path its own inventory holds, and

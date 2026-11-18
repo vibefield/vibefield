@@ -374,6 +374,11 @@ export class RecoveringShellProvider {
         await this.native.listSimulatorDevices(params, signal),
       );
     }
+    // EY-0 — an agent's call on a page. Main has no broker until EY-1, so it refuses before any
+    // parse: the live-surface authority is unavailable, and the call never reaches a dialog below.
+    if (call.method === "shell.surfaces.control") {
+      throw { kind: "UNAVAILABLE" };
+    }
     // GT-7 — Settings → Terminal's Import file…: one FILE, and main hands back
     // only its path; fieldd reads it (bounded, UTF-8). Each verb is locked to
     // its one purpose, so anything else is refused before a dialog exists.

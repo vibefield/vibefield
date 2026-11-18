@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SURFACE_LIMITS } from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
+import { PAGES_NEEDS } from "../src/pages";
 import {
   IPC_CHANNELS,
   MADE_APP_LIMITS,
@@ -53,6 +54,9 @@ import {
   ShellProviderRegisterResult,
   ShellRendererRequestReplacementParams,
   ShellRendererRequestReplacementResult,
+  ShellSurfacesControlParams,
+  ShellSurfacesControlRefusalFact,
+  ShellSurfacesControlResult,
   ShellSurfacesSimulatorDevicesParams,
   ShellSurfacesSimulatorDevicesResult,
   ShellWebContentsCaptureArtifactPreviewParams,
@@ -66,6 +70,7 @@ import {
   WindowLightsState,
   WindowTerminalBootstrap,
 } from "../src/shell";
+import { TOOL_FACTS } from "../src/tools";
 
 // Shell-boundary contracts (ESR spec §6.1–6.2). These shapes cross the Electron
 // seam — product.json on the daemon filesystem boundary and the CLOSED
@@ -1001,6 +1006,69 @@ describe("AH-3/AH-4 static shell provider", () => {
         runtimes: ["F93EABF3-4281-4EB5-A5F6-A550FBE95CDC"],
       }).success,
     ).toBe(false);
+  });
+
+  it("EY-0: an agent's call on a page is an INTERNAL provider verb, in a page form and a run-level form, and main's refusals are facts", () => {
+    expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.surfaces.control");
+    expect(SHELL_PROVIDER_METHODS).toContain("shell.surfaces.control");
+    expect(METHODS.some((method) => method.method === "shell.surfaces.control")).toBe(false);
+    // above main's worst case for any call: the act lease, or the longest read or wait EY-2 allows
+    expect(SURFACE_AUTHORITY_LIMITS.CONTROL_DEADLINE_MS).toBe(30_000);
+    const params = (value: unknown) => ShellSurfacesControlParams.safeParse(value).success;
+    const page = {
+      run: "run-01J8Z3K9",
+      surfaceId: "surface_0123456789abcdef",
+      window: "read",
+      command: { action: "snapshot", interactive: true },
+    };
+    expect(ShellSurfacesControlParams.parse(page)).toEqual(page);
+    // the run-level form names no page: an open with no page yet, a new tab, the tab list, the close
+    const runLevel = {
+      run: "run-01J8Z3K9",
+      window: "act",
+      command: { action: "navigate", url: "https://example.com/" },
+    };
+    expect(ShellSurfacesControlParams.parse(runLevel)).toEqual(runLevel);
+    // the command is bounded as JSON's UTF-8 bytes, and passes exactly at its bound
+    const max = SURFACE_AUTHORITY_LIMITS.CONTROL_COMMAND_MAX_BYTES;
+    const frame = JSON.stringify({ action: "fill", text: "" }).length;
+    const fits = { action: "fill", text: "x".repeat(max - frame) };
+    expect(params({ ...page, command: fits })).toBe(true);
+    for (const bad of [
+      { surfaceId: page.surfaceId, window: "read", command: page.command },
+      { ...page, run: "" },
+      { ...page, window: "write" },
+      { ...page, surfaceId: "short" },
+      { ...page, command: { interactive: true } },
+      { ...page, command: "snapshot -i" },
+      { ...page, command: { ...fits, text: `${fits.text}x` } },
+    ])
+      expect(params(bad), JSON.stringify(bad).slice(0, 80)).toBe(false);
+
+    const result = (value: unknown) => ShellSurfacesControlResult.safeParse(value).success;
+    const done = { status: "done", output: { origin: "https://example.com", refs: 12 } };
+    expect(ShellSurfacesControlResult.parse(done)).toEqual(done);
+    expect(result({ status: "done", output: null })).toBe(true);
+    // every refusal is a fact the model reads as a word; `needs-you` carries its need
+    for (const fact of ShellSurfacesControlRefusalFact.options) {
+      expect(TOOL_FACTS, fact).toContain(fact);
+      expect(result({ status: "refused", fact }), fact).toBe(true);
+    }
+    expect(TOOL_FACTS).toContain("needs-you");
+    for (const need of PAGES_NEEDS)
+      expect(result({ status: "refused", fact: "needs-you", need }), need).toBe(true);
+    for (const bad of [
+      { status: "done" },
+      { status: "done", output: "x".repeat(SURFACE_AUTHORITY_LIMITS.CONTROL_OUTPUT_MAX_BYTES) },
+      { status: "refused", fact: "needs-you" },
+      { status: "refused", fact: "needs-you", need: "money" },
+      // fieldd's facts, never main's; and UNAVAILABLE stays an error kind
+      { status: "refused", fact: "not-handed" },
+      { status: "refused", fact: "forbidden" },
+      { status: "refused", fact: "unavailable" },
+      { status: "failed" },
+    ])
+      expect(result(bad), JSON.stringify(bad).slice(0, 80)).toBe(false);
   });
 
   it("requires a unique registered static method set and exactly one outcome arm", () => {

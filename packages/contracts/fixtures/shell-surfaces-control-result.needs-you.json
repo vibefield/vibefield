@@ -1,0 +1,6 @@
+{
+  "//": "EY-0 — the act needs the person: `needs-you` with its `need`, here a sign-in. The agent asks the user.",
+  "status": "refused",
+  "fact": "needs-you",
+  "need": "sign-in"
+}

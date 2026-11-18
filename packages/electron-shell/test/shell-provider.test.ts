@@ -87,7 +87,8 @@ function call(
     | "shell.revealPath"
     | "shell.webcontents.captureArtifactPreview"
     | "shell.renderer.requestReplacement"
-    | "shell.surfaces.simulatorDevices",
+    | "shell.surfaces.simulatorDevices"
+    | "shell.surfaces.control",
   params: unknown,
 ) {
   return {
@@ -363,6 +364,43 @@ describe("RecoveringShellProvider", () => {
         },
       }),
     );
+    provider.dispose();
+  });
+
+  it("EY-0: refuses an agent's call on a page as the live-surface authority unavailable, and never reaches the folder dialog", async () => {
+    const { client, native, provider } = await fixture();
+    // a page's call as fieldd's pages room will send it, and one whose params a folder pick would take
+    const calls = [
+      {
+        callId: "shell-controlaaaaaaaaa",
+        params: {
+          run: "run-01J8Z3K9",
+          surfaceId: "surface_0123456789abcdef",
+          window: "read",
+          command: { action: "snapshot", interactive: true },
+        },
+      },
+      { callId: "shell-controlbbbbbbbbb", params: { purpose: "workspace.export" } },
+    ];
+    for (const { callId, params } of calls) {
+      client.emit("shell.provider.call", call(callId, "shell.surfaces.control", params));
+      await vi.waitFor(() =>
+        expect(client.requests).toContainEqual({
+          method: "shell.provider.resolve",
+          params: {
+            callId,
+            outcome: {
+              error: {
+                kind: "UNAVAILABLE",
+                message: "the live-surface authority is unavailable",
+                retryable: true,
+              },
+            },
+          },
+        }),
+      );
+    }
+    expect(native.showOpenDialog).not.toHaveBeenCalled();
     provider.dispose();
   });
 

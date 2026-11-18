@@ -1,0 +1,8 @@
+{
+  "//": "EY-0 — a call that ran: the engine's output, as JSON within SURFACE_AUTHORITY_LIMITS.CONTROL_OUTPUT_MAX_BYTES. Here a snapshot's parts, each with a ref.",
+  "status": "done",
+  "output": {
+    "snapshot": "- heading \"Example Domain\" [ref=e1]\n- link \"Learn more\" [ref=e2]",
+    "origin": "https://example.com/"
+  }
+}

@@ -69,6 +69,7 @@ export const TOOL_FAMILIES = [
   "canvas",
   "object",
   "you",
+  "pages",
 ] as const;
 export type ToolFamily = (typeof TOOL_FAMILIES)[number];
 
@@ -83,8 +84,33 @@ export const TOOL_SCOPES = ["profiles", "device", "object", "self"] as const;
 export type ToolScope = (typeof TOOL_SCOPES)[number];
 
 /** The slice that builds a row (the compose plane's order; MT-1 onward adds its own). */
-export const TOOL_SLICES = ["CP-1", "CP-2", "CP-3", "CP-4", "OB-3"] as const;
+export const TOOL_SLICES = ["CP-1", "CP-2", "CP-3", "CP-4", "OB-3", "EY-2"] as const;
 export type ToolSlice = (typeof TOOL_SLICES)[number];
+
+/** The facts a refusal names in its `fact`, so the model can act on it (the study's §8). The first eight are the
+ * ones fieldd answers today. The pages room's eight follow (EY; `draft/thinking-agents-eyes.md`, its facts table):
+ * - `gone` is a pane that closed or a page that was replaced. It is not the app quitting: a grant is kept across a
+ *   quit (EY-D9 B). While the app's window is down, a page answers `unavailable`.
+ * - `held` answers reads and stills as well as acts (BU-9 A). */
+export const TOOL_FACTS = [
+  "unknown-tool",
+  "forbidden",
+  "bad-input",
+  "outside",
+  "not-found",
+  "unavailable",
+  "limit",
+  "failed",
+  "not-handed",
+  "held",
+  "off-site",
+  "stale-ref",
+  "loading",
+  "parked",
+  "gone",
+  "needs-you",
+] as const;
+export type ToolFact = (typeof TOOL_FACTS)[number];
 
 export interface ToolDef {
   /** `<noun>_<verb>`, singular for one object and plural for a list: lowercase, unique on the server, never a dot or a
@@ -114,6 +140,18 @@ const SPARK_AGENTS = { category: "agents", audience: "spark", scope: "profiles" 
 
 const DESK_DEVICE = { category: "desk", audience: "agent", scope: "device" } as const;
 const DESK_OBJECT = { category: "desk", audience: "agent", scope: "object" } as const;
+
+// EY — the pages room (`draft/tool-plane/browser-use.md`, BU-1 and BU-2 A). The map was signed on 2026-11-17
+// (EY-0, plan §2.1). The rows are the pinned engine's core profile, in its order, named `browser_<verb>`. They are
+// every agent's (MT-D2), each on the browser pane. Planned: EY-2 serves them. `pages-record.ts` records the pin, and
+// a test holds these rows to it.
+const PAGES = {
+  family: "pages",
+  category: "desk",
+  audience: "agent",
+  object: "vibefield.browser-pane",
+  slice: "EY-2",
+} as const;
 
 /** Every row, in the version 2 page's order with the new rooms after it. History and the projects list are the `agent`
  * rows; projects_list reads no profile and answers this desktop's projects, so its scope is the device (the MT lead's
@@ -387,6 +425,268 @@ export const TOOLS: readonly ToolDef[] = [
     idempotent: false,
     slice: "CP-3",
     description: `Tell the user something, on one line of at most ${NEEDS_NOTICE_CHARS} characters: every VibeField window's status line says it, and a notification does while no VibeField window is in front. It returns once handed on, never that they read it. At most ${NOTIFY_PER_MINUTE} a minute from you.`,
+  },
+  {
+    name: "browser_tools_profiles",
+    ...PAGES,
+    scope: "self",
+    readOnly: true,
+    description:
+      "List the browser tools you hold, and how to reach the browser's other commands from your pane. VibeField answers it, and it touches no page.",
+  },
+  {
+    name: "browser_open",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: true,
+    description:
+      "Open a page at an address. On a page you have, it goes there: a page the user handed you stays inside its site, or answers off-site. With no page yet, it opens one of your own on the desk. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_read",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Read a page you opened or the user handed you, as text. While the user holds the page, it answers held. A page that has not settled answers loading: read it again.",
+  },
+  {
+    name: "browser_snapshot",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Read a page you opened or the user handed you, as its parts, each with a ref you can act on. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_back",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: false,
+    description:
+      "Go back one step in a page's history. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_forward",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: false,
+    description:
+      "Go forward one step in a page's history. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_reload",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: true,
+    description:
+      "Reload a page you opened or the user handed you. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_click",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: false,
+    description:
+      "Click a part of a page by the ref a snapshot gave you. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_fill",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: true,
+    description:
+      "Clear a field on a page and fill it with your text, by its ref. A ref the page no longer has answers stale-ref. A field only the user may fill, such as a password, answers needs-you.",
+  },
+  {
+    name: "browser_type",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: false,
+    idempotent: false,
+    description:
+      "Type text into a part of a page by its ref, after what it already holds. A ref the page no longer has answers stale-ref. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_press",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: false,
+    description:
+      "Press a key on a page, where its focus is. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_check",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: false,
+    idempotent: true,
+    description:
+      "Check a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot.",
+  },
+  {
+    name: "browser_uncheck",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: false,
+    idempotent: true,
+    description:
+      "Uncheck a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot.",
+  },
+  {
+    name: "browser_select",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: false,
+    idempotent: true,
+    description:
+      "Pick one or more options in a list on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot.",
+  },
+  {
+    name: "browser_scroll",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: false,
+    idempotent: false,
+    description:
+      "Scroll a page, or one part of it by its ref. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_wait_ms",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Wait a set number of milliseconds on a page, within a bound, before your next call. A page that closed answers gone.",
+  },
+  {
+    name: "browser_wait_for_selector",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Wait until a part of a page appears, within a bound. Past the bound it answers loading: read the page again.",
+  },
+  {
+    name: "browser_wait_for_text",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Wait until some text appears on a page, within a bound. Past the bound it answers loading: read the page again.",
+  },
+  {
+    name: "browser_wait_for_load",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Wait until a page has loaded, within a bound. Past the bound it answers loading: read the page again.",
+  },
+  {
+    name: "browser_screenshot",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Take a still of a page, or of one part of it. It is saved as a file in your folder and answered as its path. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_get_text",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description:
+      "Read the visible text of one part of a page, by its ref. A ref the page no longer has answers stale-ref.",
+  },
+  {
+    name: "browser_get_url",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description: "Read the address a page is at now. A page that closed answers gone.",
+  },
+  {
+    name: "browser_get_title",
+    ...PAGES,
+    scope: "object",
+    readOnly: true,
+    description: "Read a page's title. A page that closed answers gone.",
+  },
+  {
+    name: "browser_tab_new",
+    ...PAGES,
+    scope: "device",
+    readOnly: false,
+    destructive: false,
+    idempotent: false,
+    description:
+      "Open a new page of your own, in a pane the window places on the desk. When the desk parks one of your pages to stay within its cap, that page answers parked.",
+  },
+  {
+    name: "browser_tab_list",
+    ...PAGES,
+    scope: "self",
+    readOnly: true,
+    description: "List the pages you have: those you opened and those the user handed you.",
+  },
+  {
+    name: "browser_tab_switch",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: false,
+    idempotent: true,
+    description:
+      "Switch the browser to one of your pages. Each call on a page switches to that page first, so this sets nothing for later calls. A page that closed answers gone: list your pages again.",
+  },
+  {
+    name: "browser_tab_close",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: true,
+    description:
+      "Close one of your pages. A page that already closed answers gone: list your pages again.",
+  },
+  {
+    name: "browser_eval",
+    ...PAGES,
+    scope: "object",
+    readOnly: false,
+    destructive: true,
+    idempotent: false,
+    description:
+      "Run your own script on a page and read what it returns. On a page with the user's sign-ins it runs only if the user allowed your scripts there. While the user holds the page, it answers held.",
+  },
+  {
+    name: "browser_close",
+    ...PAGES,
+    scope: "self",
+    readOnly: false,
+    destructive: true,
+    idempotent: true,
+    description: "End your browser session, when you are done with the pages you opened.",
   },
 ];
 

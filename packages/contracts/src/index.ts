@@ -29,6 +29,7 @@ export * from "./meshdata";
 export * from "./methods";
 export * from "./mgmt";
 export * from "./objects";
+export * from "./pages";
 export * from "./phone-code";
 export * from "./plugin-diagnostics";
 export * from "./plugin-distribution";

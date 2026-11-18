@@ -14,6 +14,7 @@ import {
   SurfaceReuseKeyV1,
   SurfaceSourceDescriptorV1,
 } from "./live-surfaces";
+import { PagesNeed } from "./pages";
 import { isAbsoluteDesktopPath } from "./paths";
 import { PluginId } from "./plugins";
 import { SHELL_CLIPBOARD } from "./registries";
@@ -724,6 +725,11 @@ export const SHELL_INTERNAL_PROVIDER_METHODS = [
   // Mac's simulator devices, REDACTED to the ids a binding is made of. Internal
   // like its siblings: only the SurfaceService dispatches it.
   "shell.surfaces.simulatorDevices",
+  // EY-0 (draft/tool-plane/EY-0-PLAN.md §2.3) — an agent's call on a page:
+  // one checked command, run by main's broker in a read or an act window.
+  // Internal: only fieldd's pages room dispatches it, with an explicit fieldd
+  // caller; no client reaches it. Main refuses it UNAVAILABLE until EY-1.
+  "shell.surfaces.control",
   // The Agents settings section — show a path in the OS file manager. Internal:
   // only fieldd's agent service dispatches it, for a path its own inventory
   // holds; no caller hands main a path to reveal. GT-7: the terminal service
@@ -1024,6 +1030,15 @@ export const SURFACE_AUTHORITY_LIMITS = {
   /** PT-S2: one `simctl list --json` (main's own bound is 8 s), after the Xcode probe that precedes every simctl (5 s, on a
    * cold service) — above main's worst case, 13 s, by an IPC margin, so a slow CoreSimulator's answer is never discarded. */
   SIMULATOR_DEVICES_DEADLINE_MS: 15_000,
+  /** EY-0: one method carries reads, waits and acts, so this sits above main's worst case for any call, plus an IPC
+   * margin. That case is the act lease (proposed at 10 s) or the longest read or wait EY-2's schemas allow. EY-2 caps
+   * its waits below this. Provisional: EY-1 measures the lease and moves it. */
+  CONTROL_DEADLINE_MS: 30_000,
+  /** EY-0: the checked command main receives, as JSON's UTF-8 bytes. The shim's own bound is EY-2's. */
+  CONTROL_COMMAND_MAX_BYTES: 64 * 1024,
+  /** EY-0: the engine's output on a `done`, as JSON's UTF-8 bytes. The door carries it twice, as text and as
+   * structure, so it stays well under the door's line (NATIVE_DOOR.LINE_MAX_BYTES). Provisional: EY-1 measures it. */
+  CONTROL_OUTPUT_MAX_BYTES: 1024 * 1024,
 } as const;
 
 export const ShellSurfacesEnumerateParams = z
@@ -1083,6 +1098,70 @@ export const ShellSurfacesSimulatorDevicesResult = z
 export type ShellSurfacesSimulatorDevicesResult = z.infer<
   typeof ShellSurfacesSimulatorDevicesResult
 >;
+
+/** Whether a value's JSON fits in `max` UTF-8 bytes. A missing value never fits. */
+function jsonFits(value: unknown, max: number): boolean {
+  return value !== undefined && utf8ByteLength(JSON.stringify(value)) <= max;
+}
+
+/** EY-0 — an agent's call on a page, from fieldd's pages room to main's broker. Two forms:
+ * - the page form names the page by `surfaceId`, the key release uses;
+ * - the run-level form leaves it out, for a call with no page to name: `browser_open` or `browser_tab_new` when the
+ *   run has no page yet, `browser_tab_list`, and `browser_close`. A pane the engine makes on such a call is the run's
+ *   own, placed by the window, and the call holds a window on it until it ends (BU-19).
+ *
+ * `run` is fieldd's own key for the run. It picks the run's one engine (BU-20) and is never authority, like mint's
+ * `owner`. `window` is the window the broker opens for this call. `command` is the checked JSON command, with a string
+ * `action`: the broker runs exactly it, never argv. No `rendererParticipant`: an agent has no window. */
+export const ShellSurfacesControlParams = z
+  .object({
+    run: z.string().min(1).max(128),
+    surfaceId: LiveSurfaceIdV1.optional(),
+    window: z.enum(["read", "act"]),
+    command: z
+      .object({ action: z.string().min(1) })
+      .passthrough()
+      .refine(
+        (command) => jsonFits(command, SURFACE_AUTHORITY_LIMITS.CONTROL_COMMAND_MAX_BYTES),
+        "command over SURFACE_AUTHORITY_LIMITS.CONTROL_COMMAND_MAX_BYTES",
+      ),
+  })
+  .passthrough();
+export type ShellSurfacesControlParams = z.infer<typeof ShellSurfacesControlParams>;
+
+/** EY-0 — the facts main refuses a page's call with, each one of TOOL_FACTS. `not-handed` and `forbidden` are
+ * fieldd's, never main's. `needs-you` rides its own arm, with its `need`. */
+export const ShellSurfacesControlRefusalFact = z.enum([
+  "held",
+  "gone",
+  "parked",
+  "stale-ref",
+  "loading",
+  "off-site",
+]);
+export type ShellSurfacesControlRefusalFact = z.infer<typeof ShellSurfacesControlRefusalFact>;
+
+/** EY-0 — the call's answer. A fact has to reach the model as a word, and main's errors cross only as a kind with a
+ * fixed message, so a refusal is a result: `done` with the engine's `output` (JSON, bounded), or `refused` with its
+ * `fact`. UNAVAILABLE (no window, no broker) and TIMEOUT stay error kinds. */
+export const ShellSurfacesControlResult = z.union([
+  z
+    .object({
+      status: z.literal("done"),
+      output: z
+        .unknown()
+        .refine(
+          (output) => jsonFits(output, SURFACE_AUTHORITY_LIMITS.CONTROL_OUTPUT_MAX_BYTES),
+          "output is required, within SURFACE_AUTHORITY_LIMITS.CONTROL_OUTPUT_MAX_BYTES",
+        ),
+    })
+    .passthrough(),
+  z.object({ status: z.literal("refused"), fact: ShellSurfacesControlRefusalFact }).passthrough(),
+  z
+    .object({ status: z.literal("refused"), fact: z.literal("needs-you"), need: PagesNeed })
+    .passthrough(),
+]);
+export type ShellSurfacesControlResult = z.infer<typeof ShellSurfacesControlResult>;
 
 export const ShellProviderRegisterParams = z
   .object({ methods: z.array(ShellProviderMethod).min(1).max(SHELL_PROVIDER_METHODS.length) })

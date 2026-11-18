@@ -10,6 +10,7 @@ import {
   profileSetOfRun,
   type SparkId,
   type SparkRecord,
+  TOOL_FACTS,
   TOOL_SCHEMAS,
   type ToolFamily,
   toolRow,
@@ -162,6 +163,7 @@ const ROOM_WORDS: Record<ToolFamily, string> = {
   canvas: "see and place objects on the user's desk",
   object: "work the objects you placed or the user handed you",
   you: "reach the user",
+  pages: "use the browser pages you open or the user hands you",
 };
 
 /** §6's paragraph for a caller that holds the desk's rows: every harness that shows a server's instructions shows these
@@ -260,19 +262,10 @@ const FACT_OF: Readonly<Record<string, string>> = {
   UNAVAILABLE: "unavailable",
 };
 
-/** The facts a room may name itself in a refusal's `details.fact` (the talk room's `forbidden` and `limit`). */
-const FACTS = new Set([
-  "unknown-tool",
-  "forbidden",
-  "bad-input",
-  "outside",
-  "not-found",
-  "unavailable",
-  "limit",
-  "failed",
-  // OB-3b — the desk room's (§5.2), said by the room or by the window that holds the board
-  ...OBJECT_FACTS,
-]);
+/** The facts a room may name itself in a refusal's `details.fact` (the talk room's `forbidden` and `limit`). They are
+ * contracts' one list, TOOL_FACTS (EY-0 adds the pages room's eight), and the desk room's (OB-3b, §5.2), said by the
+ * room or by the window that holds the board. `<string>`, so a room's word is tested as is. */
+const FACTS = new Set<string>([...TOOL_FACTS, ...OBJECT_FACTS]);
 /** UNAVAILABLE's service and state, beside its fact: which thing is out, and how. */
 const outOf = (err: RpcCallError): string => {
   const { service, state } = (err.details ?? {}) as { service?: unknown; state?: unknown };

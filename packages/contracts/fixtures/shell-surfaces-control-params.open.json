@@ -1,0 +1,6 @@
+{
+  "//": "EY-0 — the run-level form: no `surfaceId`, for a call with no page to name. A run with no page yet opens one. The engine makes a pane of the run's own, placed by the window, and this call holds a window on it until it ends (BU-19).",
+  "run": "run-01J8Z3K9",
+  "window": "act",
+  "command": { "action": "navigate", "url": "https://example.com/" }
+}

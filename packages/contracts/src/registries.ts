@@ -1863,6 +1863,10 @@ export const SCOPES = [
   // because capturing OTHER apps' windows is a different consent class
   // (Screen Recording gravity, A5/EL7). `surface.control` (the DT-5 agent
   // lane) is reserved and deliberately NOT minted by any v1 manifest.
+  // *Dated 2026-11-17 (EY-0; EY-D8 A, draft/thinking-agents-eyes.md): the
+  // reservation is retired, and that scope is never minted. An agent's call
+  // on a page is the internal `shell.surfaces.control` (shell.ts), which only
+  // fieldd's pages room dispatches.*
   // None of these enter TAILNET_SCOPES: a surface is a window on THIS device.
   "surface.attach",
   "surface.browser",

@@ -3,9 +3,12 @@ import { SERVED_TOOLS } from "../gen/tools";
 import { AGENT_CATALOG } from "../src/agent-catalog";
 import { NEEDS_CHOICES_MAX, NOTIFY_PER_MINUTE } from "../src/compose";
 import { METHODS } from "../src/methods";
+import { PagesEngineRecordV1, PagesScriptSetV1 } from "../src/pages";
+import { PAGES_ENGINE_RECORD, PAGES_SCRIPT_SET } from "../src/pages-record";
 import {
   TOOL_AUDIENCES,
   TOOL_CATEGORIES,
+  TOOL_FACTS,
   TOOL_FAMILIES,
   TOOL_SCHEMAS,
   TOOL_SCOPES,
@@ -28,7 +31,9 @@ describe("the catalog's names (MT-L1, ruling 1)", () => {
     expect(new Set(names).size).toBe(names.length);
     for (const name of names) {
       expect(name, name).toMatch(/^[a-z]+(?:_[a-z]+)*$/);
-      expect(name.length, name).toBeLessThanOrEqual(24);
+      // Raised from 24 to 32 on 2026-11-17 (EY-0, plan §2.1 and §6.1): the pages rows keep the pin's own verbs, and
+      // `browser_wait_for_selector` is 25. A rename would break the map to the pin.
+      expect(name.length, name).toBeLessThanOrEqual(32);
     }
   });
 
@@ -66,6 +71,35 @@ describe("the catalog's names (MT-L1, ruling 1)", () => {
       "object_release",
       "ask_user",
       "notify",
+      "browser_tools_profiles",
+      "browser_open",
+      "browser_read",
+      "browser_snapshot",
+      "browser_back",
+      "browser_forward",
+      "browser_reload",
+      "browser_click",
+      "browser_fill",
+      "browser_type",
+      "browser_press",
+      "browser_check",
+      "browser_uncheck",
+      "browser_select",
+      "browser_scroll",
+      "browser_wait_ms",
+      "browser_wait_for_selector",
+      "browser_wait_for_text",
+      "browser_wait_for_load",
+      "browser_screenshot",
+      "browser_get_text",
+      "browser_get_url",
+      "browser_get_title",
+      "browser_tab_new",
+      "browser_tab_list",
+      "browser_tab_switch",
+      "browser_tab_close",
+      "browser_eval",
+      "browser_close",
     ]);
   });
 
@@ -191,5 +225,82 @@ describe("served and planned (ruling 2)", () => {
       expect(t.inputSchema.type, t.name).toBe("object");
       expect(t.outputSchema.type, t.name).toBe("object");
     }
+  });
+});
+
+describe("the facts a refusal names (the study's §8; EY-0)", () => {
+  it("holds the eight fieldd answers today, then the pages room's eight, each once", () => {
+    expect(TOOL_FACTS).toEqual([
+      "unknown-tool",
+      "forbidden",
+      "bad-input",
+      "outside",
+      "not-found",
+      "unavailable",
+      "limit",
+      "failed",
+      // the pages room's (draft/thinking-agents-eyes.md, its facts table)
+      "not-handed",
+      "held",
+      "off-site",
+      "stale-ref",
+      "loading",
+      "parked",
+      "gone",
+      "needs-you",
+    ]);
+    expect(new Set(TOOL_FACTS).size).toBe(TOOL_FACTS.length);
+  });
+});
+
+// EY-0 (draft/tool-plane/EY-0-PLAN.md §2.1, §2.7) — the pages rows are written by hand. Until EY-2's generator,
+// they are held here to the record the lab's converter writes.
+describe("the pages room's rows: the pin's core profile, planned (EY-0)", () => {
+  const pages = TOOLS.filter((t) => t.family === "pages");
+  const engine = PAGES_ENGINE_RECORD.core;
+
+  it("names the pin's core profile in its own order, with `browser_` for the engine's prefix: 29, and no get_cdp_url (AB-21)", () => {
+    expect(engine).toHaveLength(29);
+    for (const tool of engine) expect(tool.engineName).toMatch(/^agent_browser_[a-z_]+$/);
+    expect(pages.map((t) => t.name)).toEqual(
+      engine.map((tool) => tool.engineName.replace(/^agent_browser_/, "browser_")),
+    );
+    expect(engine.map((tool) => tool.engineName)).not.toContain("agent_browser_get_cdp_url");
+  });
+
+  it("takes readOnly from the engine's readOnlyHint, but for the map's two: a still is a read, and fieldd answers the profiles row", () => {
+    const departures = new Set(["browser_screenshot", "browser_tools_profiles"]);
+    for (const [index, row] of pages.entries()) {
+      const hint = engine[index]?.readOnlyHint;
+      if (departures.has(row.name)) {
+        expect(hint, row.name).toBe(false);
+        expect(row.readOnly, row.name).toBe(true);
+      } else {
+        expect(row.readOnly, row.name).toBe(hint);
+      }
+    }
+    expect(pages.filter((t) => t.readOnly)).toHaveLength(12);
+  });
+
+  it("puts every row on the browser pane, for every agent, in slice EY-2, and serves none before EY-2", () => {
+    for (const t of pages) {
+      expect(t, t.name).toMatchObject({
+        category: "desk",
+        audience: "agent",
+        object: "vibefield.browser-pane",
+        slice: "EY-2",
+      });
+      expect(served.has(t.name), t.name).toBe(false);
+      // the words are VibeField's: never the engine's name
+      expect(t.description, t.name).not.toMatch(/agent.browser/i);
+    }
+  });
+
+  it("parses the record and the script set by their schemas, both recorded from one release", () => {
+    const record = PagesEngineRecordV1.safeParse(PAGES_ENGINE_RECORD);
+    expect(record.success, record.success ? "" : JSON.stringify(record.error.issues)).toBe(true);
+    const set = PagesScriptSetV1.safeParse(PAGES_SCRIPT_SET);
+    expect(set.success, set.success ? "" : JSON.stringify(set.error.issues)).toBe(true);
+    expect(PAGES_SCRIPT_SET.engineVersion).toBe(PAGES_ENGINE_RECORD.version);
   });
 });

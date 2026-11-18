@@ -885,6 +885,18 @@ export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", 
       command: LiveSurfaceDeviceCommandV1,
     })
     .passthrough(),
+  // EY-0 — the person picks a page up or puts it down (EY-L2, "your hand wins"; `draft/tool-plane/browser-use.md`
+  // §4.2). One message carries both edges. `held: true` closes an agent's act window at once, and `held: false`
+  // redoes the page's journal. At EY-1 main holds it to input's rule: a hold from an attachment without the
+  // `pointer` grant fails the generation. Until then main ignores it, and nothing sends one.
+  z
+    .object({
+      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+      type: z.literal("hold"),
+      attachmentId: LiveSurfaceAttachmentIdV1,
+      held: z.boolean(),
+    })
+    .passthrough(),
 ]);
 export type LiveSurfaceRendererControlMessageV1 = z.infer<
   typeof LiveSurfaceRendererControlMessageV1

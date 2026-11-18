@@ -442,6 +442,23 @@ describe("LSF-1 Live Surfaces contracts", () => {
       );
   });
 
+  it("EY-0: the person's hold on a page is its own control message, and `held` says which edge", () => {
+    const attachmentId = "attachment_0123456789abcdef";
+    for (const held of [true, false]) {
+      const message = { v: 1, type: "hold", attachmentId, held };
+      expect(LiveSurfaceRendererControlMessageV1.parse(message)).toEqual(message);
+    }
+    for (const bad of [
+      { v: 1, type: "hold", attachmentId },
+      { v: 1, type: "hold", attachmentId, held: "yes" },
+      { v: 1, type: "hold", attachmentId: "short", held: true },
+      { v: 2, type: "hold", attachmentId, held: true },
+    ])
+      expect(LiveSurfaceRendererControlMessageV1.safeParse(bad).success, JSON.stringify(bad)).toBe(
+        false,
+      );
+  });
+
   it("PT-S2 (R11): the attach reads this Mac's devices as REDACTED rows — type, runtime, name, booted — never a UDID, and bounded", () => {
     const row = { ...phoneBinding, name: "iPhone 17 Pro", booted: true };
     expect(LiveSurfaceSimulatorDeviceRowV1.parse(row)).toEqual(row);

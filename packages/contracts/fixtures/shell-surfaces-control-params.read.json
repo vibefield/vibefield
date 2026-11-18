@@ -1,0 +1,7 @@
+{
+  "//": "EY-0 — fieldd's pages room asking main's broker to run one checked command on a page the run holds, in a read window: a snapshot. `run` is fieldd's own key for the run, never authority.",
+  "run": "run-01J8Z3K9",
+  "surfaceId": "surface_0123456789abcdef",
+  "window": "read",
+  "command": { "action": "snapshot", "interactive": true }
+}
