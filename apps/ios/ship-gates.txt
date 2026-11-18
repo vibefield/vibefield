@@ -1,1 +1,4 @@
 SHIP-GATE item-373 sp4d-relay OPEN
+# Item 524 (2026-11-18): an app page's WebRTC leaves around its filtering front (ICE over UDP and TCP, to any
+# address the page names). It is ruled again before any build carrying the web host leaves; this line closes then.
+SHIP-GATE item-524 webrtc-ice OPEN

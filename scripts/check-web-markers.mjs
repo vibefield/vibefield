@@ -11,10 +11,12 @@
 // markers nor the gates; item 541 built the refusal. This is the source side:
 // - each marker stands ONLY inside that gate's own branch (never its #else, never a comment or string outside it);
 // - both markers stand only in FieldWeb's Host folder;
-// - item 522 (2026-11-17): no app source outside FieldWeb names the host or its navigation type, gated or not, so no
-//   view mounts the web host. It is unconditional. Item 522's filtering front now stands (the host opens a page only
-//   through it); the rule waits on item 524's reading, whether WebRTC or WebTransport leave a page around its proxy,
-//   and lifts in the commit that records that reading and its ruling;
+// - items 522 and 524 (2026-11-17, 2026-11-18): outside FieldWeb, the host and its navigation type are named only by
+//   the one view that mounts the web host, the open app's page (FieldHome/Apps/Open/AppsWebPage.swift), and there
+//   only on as many lines as MOUNT_ALLOWED counts; any other source naming them, gated or not, is a finding. Item
+//   522's filtering front stands (the host opens a page only through it); item 524 measured what WebRTC and
+//   WebTransport reach around it (ICE leaves; apps/ios/ship-gates.txt holds item 524's gate OPEN), and its ruling
+//   (2026-11-18) let this one view mount it. Zero lines there is no finding, so this rule stands before the view;
 // - each marker stands somewhere, so a rename cannot leave the archive check searching for a name nothing carries;
 // - ship-gates.txt reads in its four forms, and anything else fails closed;
 // - no source and no app plist names a server-trust override: a developer's phone runs Debug builds, so a
@@ -47,22 +49,24 @@ export const TRUST_NAMES = [
 ];
 /** A use that stands, by path and exact count (R23b's form). None at main bf9ebb21c (read 2026-11-13 02:03Z). */
 const TRUST_ALLOWED = {};
-/** Items 522 and 524: the types that mount the web host, named in no app source outside FieldWeb. */
+/** Items 522 and 524: the types that mount the web host, named outside FieldWeb only where MOUNT_ALLOWED says. */
 export const MOUNT_NAMES = ["FieldWebAppHost", "FieldWebAppNavigation"];
+/** The one view that mounts the web host, by path and its exact count of lines naming those types (R23b's form): a
+ * line more or fewer there, or any other file, is a finding until this table says so. */
+const MOUNT_ALLOWED = { "apps/ios/VibeFieldKit/Sources/FieldHome/Apps/Open/AppsWebPage.swift": 3 };
 
-/** Each line of an app source outside FieldWeb that names a type which mounts the web host (item 522). */
-export function mountFindings(path, text) {
+/** An app source outside FieldWeb that names a type which mounts the web host where MOUNT_ALLOWED does not count it. */
+export function mountFindings(path, text, allowed = MOUNT_ALLOWED) {
   if (!SOURCES.some((dir) => path.startsWith(`${dir}/`)) || path.startsWith(WEB)) return [];
-  const findings = [];
+  const lines = [];
   text.split("\n").forEach((line, index) => {
-    for (const name of MOUNT_NAMES) {
-      if (line.includes(name))
-        findings.push(
-          `${path}:${index + 1}: ${name} outside FieldWeb (item 524: not yet measured)`,
-        );
-    }
+    if (MOUNT_NAMES.some((name) => line.includes(name))) lines.push(index + 1);
   });
-  return findings;
+  const may = allowed[path] ?? 0;
+  if (lines.length === 0 || lines.length === may) return [];
+  if (may === 0)
+    return lines.map((at) => `${path}:${at}: the web host's types in no view that may mount it`);
+  return [`${path}: names the web host's types on ${lines.length} lines, ${may} allowed`];
 }
 
 /** Each trust-override name one file holds past its allowed count. */
@@ -175,6 +179,7 @@ function check() {
 function selfTest() {
   const host = `${HOST}FieldWebAppHost.swift`;
   const home = "apps/ios/VibeFieldKit/Sources/FieldHome/Apps/Open/AppOpenScreen.swift";
+  const page = "apps/ios/VibeFieldKit/Sources/FieldHome/Apps/Open/AppsWebPage.swift";
   const rows = "apps/ios/VibeFieldKit/Tests/FieldWebTests/Host/HostRowsTests.swift";
   const front = `let q = DispatchQueue(label: "${MARKERS[0].name}")`;
   const tag = `let t = "${MARKERS[1].name}"`;
@@ -183,7 +188,39 @@ function selfTest() {
     ["the host, gated", host, gated("final class FieldWebAppHost {}", front, tag), 0],
     ["a comment on the #if", host, [`#if ${GATE} // the gate`, tag, "#endif"].join("\n"), 0],
     ["nested inside the gate", host, gated("#if os(iOS)", tag, "#endif"), 0],
-    ["item 522: the type in a gated FieldHome view", home, gated("FieldWebAppHost()"), 1],
+    [
+      "items 522, 524: the type in a gated FieldHome view that may not mount it",
+      home,
+      gated("FieldWebAppHost()"),
+      1,
+    ],
+    [
+      "item 524: the open app's page, naming the host on its three allowed lines",
+      page,
+      gated(
+        "var host: FieldWebAppHost?",
+        "try await FieldWebAppHost.open()",
+        "catch FieldWebAppHost.Failure.noProxy",
+      ),
+      0,
+    ],
+    [
+      "item 524: the open app's page, naming the host on two of its three lines",
+      page,
+      gated("var host: FieldWebAppHost?", "try await FieldWebAppHost.open()"),
+      1,
+    ],
+    [
+      "item 524: the open app's page, naming the host on a fourth line",
+      page,
+      gated(
+        "var host: FieldWebAppHost?",
+        "FieldWebAppHost.open()",
+        "FieldWebAppHost.Failure",
+        "FieldWebAppHost.self",
+      ),
+      1,
+    ],
     [
       "item 522: the navigation type in a FieldHome view",
       home,
