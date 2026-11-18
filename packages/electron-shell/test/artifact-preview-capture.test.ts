@@ -949,4 +949,146 @@ describe("item 519 — an artifact's capture session is reused only once it is c
     expect(session.clearCodeCaches).toHaveBeenCalledOnce();
     expect(session.clearCodeCaches).toHaveBeenCalledWith({});
   });
+
+  /** Three captures of one artifact, each answered, and what the capture said it retired. */
+  async function threeCaptures(
+    rigs: ReturnType<typeof partitionRigs>,
+    options: { clearBoundMs?: number } = {},
+  ): Promise<Array<[string, number]>> {
+    const retired: Array<[string, number]> = [];
+    const capture = new ArtifactPreviewCapture({
+      dataDir: dataDir(),
+      native: rigs.native,
+      randomId: counting(),
+      onSessionRetired: (reason, captures) => {
+        retired.push([reason, captures]);
+      },
+      ...options,
+    });
+    for (let count = 0; count < 3; count += 1) {
+      await expect(
+        capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal),
+      ).resolves.toMatchObject({ captured: true });
+    }
+    return retired;
+  }
+
+  it("PIN: a clear that rejects retires the session: the next capture takes a fresh one, and the retired one is never used again", async () => {
+    const rigs = partitionRigs();
+    rigs
+      .rigOf(`${PARTITION_PREFIX}r-1`)
+      .captureSession.clearCache.mockImplementationOnce(async () => {
+        throw new Error("the clear failed");
+      });
+    expect(await threeCaptures(rigs)).toEqual([["clear-rejected", 1]]);
+    expect(rigs.sessions).toEqual([`${PARTITION_PREFIX}r-1`, `${PARTITION_PREFIX}r-3`]);
+    expect(rigs.windows).toEqual([
+      `${PARTITION_PREFIX}r-1`,
+      `${PARTITION_PREFIX}r-3`,
+      `${PARTITION_PREFIX}r-3`,
+    ]);
+  });
+
+  it("PIN: a clear that has not settled within its bound retires the session, and the next capture still completes", async () => {
+    const rigs = partitionRigs();
+    rigs
+      .rigOf(`${PARTITION_PREFIX}r-1`)
+      .captureSession.clearData.mockImplementationOnce(() => new Promise<void>(() => undefined));
+    expect(await threeCaptures(rigs, { clearBoundMs: 20 })).toEqual([["clear-overran", 1]]);
+    expect(rigs.sessions).toEqual([`${PARTITION_PREFIX}r-1`, `${PARTITION_PREFIX}r-3`]);
+    expect(rigs.windows).toEqual([
+      `${PARTITION_PREFIX}r-1`,
+      `${PARTITION_PREFIX}r-3`,
+      `${PARTITION_PREFIX}r-3`,
+    ]);
+  });
+
+  it("PIN: a worker of the session still running before reuse retires it", async () => {
+    const rigs = partitionRigs();
+    rigs
+      .rigOf(`${PARTITION_PREFIX}r-1`)
+      .captureSession.serviceWorkers.getAllRunning.mockReturnValueOnce({ 7: { scope: URL } });
+    expect(await threeCaptures(rigs)).toEqual([["worker-running", 1]]);
+    expect(rigs.sessions).toEqual([`${PARTITION_PREFIX}r-1`, `${PARTITION_PREFIX}r-3`]);
+  });
+
+  it("PIN: a gate a capture could not take off retires its session", async () => {
+    const rigs = partitionRigs();
+    const session = rigs.rigOf(`${PARTITION_PREFIX}r-1`).captureSession;
+    const install = session.webRequest.onBeforeRequest;
+    session.webRequest.onBeforeRequest = (filter, listener) => {
+      if (listener === null) throw new Error("the gate would not come off");
+      install(filter, listener);
+    };
+    expect(await threeCaptures(rigs)).toEqual([["clear-rejected", 1]]);
+    expect(rigs.sessions).toEqual([`${PARTITION_PREFIX}r-1`, `${PARTITION_PREFIX}r-3`]);
+  });
+
+  it("PIN: two artifacts' captures never share a session, even at one origin", async () => {
+    const rigs = partitionRigs();
+    const retired: Array<[string, number]> = [];
+    const capture = new ArtifactPreviewCapture({
+      dataDir: dataDir(),
+      native: rigs.native,
+      randomId: counting(),
+      onSessionRetired: (reason, captures) => {
+        retired.push([reason, captures]);
+      },
+    });
+    for (const artifactId of [ARTIFACT_ID, "01ARZ3NDEKTSV4RRFFQ69G5FAW", ARTIFACT_ID]) {
+      await expect(
+        capture.capture({ artifactId, url: URL }, new AbortController().signal),
+      ).resolves.toMatchObject({ captured: true });
+    }
+    expect(retired).toEqual([]);
+    expect(rigs.sessions).toEqual([`${PARTITION_PREFIX}r-1`, `${PARTITION_PREFIX}r-3`]);
+    expect(rigs.windows).toEqual([
+      `${PARTITION_PREFIX}r-1`,
+      `${PARTITION_PREFIX}r-3`,
+      `${PARTITION_PREFIX}r-1`,
+    ]);
+  });
+
+  it("PIN: a session in use is never handed to a second capture: an overlapping capture of the same artifact takes a session of its own, which nobody keeps", async () => {
+    const rigs = partitionRigs();
+    const first = rigs.rigOf(`${PARTITION_PREFIX}r-1`).window;
+    const load = first.loadURL.getMockImplementation();
+    let open: () => void = () => undefined;
+    const gate = new Promise<void>((resolve) => {
+      open = resolve;
+    });
+    first.loadURL.mockImplementationOnce(async (url: string) => {
+      await gate;
+      await load?.(url);
+    });
+    const retired: Array<[string, number]> = [];
+    const capture = new ArtifactPreviewCapture({
+      dataDir: dataDir(),
+      native: rigs.native,
+      randomId: counting(),
+      onSessionRetired: (reason, captures) => {
+        retired.push([reason, captures]);
+      },
+    });
+    const capturing = capture.capture(
+      { artifactId: ARTIFACT_ID, url: URL },
+      new AbortController().signal,
+    );
+    await vi.waitFor(() => expect(rigs.windows).toHaveLength(1));
+    await expect(
+      capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal),
+    ).resolves.toMatchObject({ captured: true });
+    open();
+    await expect(capturing).resolves.toMatchObject({ captured: true });
+    await expect(
+      capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal),
+    ).resolves.toMatchObject({ captured: true });
+    expect(retired).toEqual([["in-use", 0]]);
+    expect(rigs.sessions).toEqual([`${PARTITION_PREFIX}r-1`, `${PARTITION_PREFIX}r-3`]);
+    expect(rigs.windows).toEqual([
+      `${PARTITION_PREFIX}r-1`,
+      `${PARTITION_PREFIX}r-3`,
+      `${PARTITION_PREFIX}r-1`,
+    ]);
+  });
 });
