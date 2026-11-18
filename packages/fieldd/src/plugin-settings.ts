@@ -86,9 +86,10 @@ function secretTooLong(most: number): string {
     : `${said}. Nothing was changed.`;
 }
 
-/** A name a set admits: printable ASCII without the two characters the tool's line would need escaped, a quote and
- * a backslash. The probes' names held letters, digits, spaces and hyphens; other printable ASCII is admitted
- * unprobed. */
+/** A name a set admits: printable ASCII without the two characters the tool's line would need escaped, a double quote
+ * and a backslash. The probes' names held letters, digits, spaces and hyphens; other printable ASCII is admitted
+ * unprobed. (Corrected 2026-11-18, item 548: this said "a quote". The character is the double quote, U+0022; a single
+ * quote is admitted.) */
 const SECRET_NAME = /^[\x20\x21\x23-\x5b\x5d-\x7e]*$/u;
 
 /** The environment the keychain tool runs under (item 542): HOME, where it finds the user's keychain domain, and a
@@ -210,7 +211,7 @@ export function createDarwinSecretStore(options: DarwinSecretStoreOptions = {}):
       if (!SECRET_NAME.test(service) || !SECRET_NAME.test(account)) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "a secret's names are printable ASCII, without a quote or a backslash",
+          "a secret's names are printable ASCII, without a double quote or a backslash",
           false,
         );
       }

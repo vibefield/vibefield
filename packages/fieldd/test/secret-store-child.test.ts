@@ -252,7 +252,7 @@ describe("a secret store's child process (item 542)", () => {
     expect(calls.map((call) => call.args[0])).toEqual(["find-generic-password"]);
   });
 
-  it("refuses before any call an empty value, or a name outside printable ASCII or holding a quote or a backslash", async () => {
+  it("refuses before any call an empty value, or a name outside printable ASCII or holding a double quote or a backslash", async () => {
     const cases: ReadonlyArray<readonly [string, string, string]> = [
       [SERVICE, "token", ""],
       [`${SERVICE}"`, "token", "a-542-value"],
