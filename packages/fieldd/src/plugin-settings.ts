@@ -33,6 +33,24 @@ export interface SecretToolCall {
   args: readonly string[];
   input?: string;
   env?: NodeJS.ProcessEnv;
+  /** how long the call may take before it is stopped (default `SECRET_TOOL_TIMEOUT_MS`) */
+  timeoutMs?: number;
+}
+
+/** A call of the keychain tool that did not succeed: its exit code (null when it did not exit by itself) and whether
+ * its time limit stopped it. It holds nothing of the call's arguments, stdin or output, so it may be logged whole. */
+export class SecretToolError extends Error {
+  constructor(
+    readonly exitCode: number | null,
+    readonly timedOut: boolean,
+  ) {
+    super(
+      timedOut
+        ? "the keychain tool did not finish in time"
+        : `the keychain tool ended ${exitCode ?? "without an exit code"}`,
+    );
+    this.name = "SecretToolError";
+  }
 }
 
 /** Runs one call of the keychain tool and answers its stdout; a call that fails rejects. */
@@ -41,17 +59,79 @@ export type SecretToolRunner = (call: SecretToolCall) => Promise<{ stdout: strin
 /** The most a call's answer may be: past it the call is stopped and refused. */
 const SECRET_TOOL_ANSWER_MAX = 1024 * 1024;
 
-/** The runner fieldd uses: the tool as a child process with three pipes of its own. Its stdin is closed once what the
- * call hands it is written, or at once when it hands nothing, so no call can wait on it. Its stdout is the answer; its
- * stderr is read and dropped. A call that fails rejects with an error that says how it ended and nothing of the call. */
+/** The keychain tool, by its absolute path: never a name a PATH resolves (item 542, 2026-11-18). */
+export const SECURITY_TOOL = "/usr/bin/security";
+
+/** How long one call of the tool may take before it is stopped: a call that waits on anything is a refusal. */
+export const SECRET_TOOL_TIMEOUT_MS = 10_000;
+
+/** The tool's exit for an item the keychain does not hold: the one failure a read answers as "no secret". */
+const SECRET_TOOL_NOT_FOUND = 44;
+
+/** The longest stdin line the tool was seen to keep whole, in bytes and its line break included (item 542's probes,
+ * 2026-11-18). One byte past it the tool was seen to end 0 and keep another value, so its exit proves nothing there:
+ * a set refuses, before any call, a value whose line would be longer. */
+export const SECRET_TOOL_LINE_MAX = 4096;
+
+/** The bytes of a value the refusal for its length names, and the call's own limit must reach to name it: for a
+ * profile's server values every line fieldd writes leaves at least 1,989 (the longest profile id's). */
+const SECRET_TOO_LONG_NAMED = 1900;
+
+/** What a person reads when a value is refused for its length (item 542). It names a limit only when this call's own
+ * limit reaches it, so a long name never makes it promise more than the tool would keep. */
+function secretTooLong(most: number): string {
+  const said = "Couldn't save to your keychain: these values are too long to keep together";
+  return most >= SECRET_TOO_LONG_NAMED
+    ? `${said} (about 1,900 characters at most). Nothing was changed.`
+    : `${said}. Nothing was changed.`;
+}
+
+/** A name a set admits: printable ASCII without the two characters the tool's line would need escaped, a quote and
+ * a backslash. The probes' names held letters, digits, spaces and hyphens; other printable ASCII is admitted
+ * unprobed. */
+const SECRET_NAME = /^[\x20\x21\x23-\x5b\x5d-\x7e]*$/u;
+
+/** The environment the keychain tool runs under (item 542): HOME, where it finds the user's keychain domain, and a
+ * fixed PATH, the two it was probed under. Nothing else of fieldd's own, so no FIELD_ or FIELDD_ name. */
+export function secretToolEnv(parent: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = { PATH: "/usr/bin:/bin" };
+  if (parent.HOME !== undefined) env.HOME = parent.HOME;
+  return env;
+}
+
+/** What a caller sees when the keychain does not answer a call in time, or refuses it: a refusal with its state,
+ * never an empty answer. */
+function keychainUnavailable(error: unknown): RpcCallError {
+  const noAnswer = error instanceof SecretToolError && error.timedOut;
+  return new RpcCallError(
+    "UNAVAILABLE",
+    noAnswer ? "the keychain did not answer in time" : "the keychain refused",
+    true,
+    { service: "keychain", state: noAnswer ? "no-answer" : "refused" },
+  );
+}
+
+const notFound = (error: unknown): boolean =>
+  error instanceof SecretToolError && error.exitCode === SECRET_TOOL_NOT_FOUND;
+
+/** The runner fieldd uses: the tool as a child process with three pipes of its own, detached (setsid) so it has no
+ * terminal to ask on, and stopped past its time limit. Its stdin is closed once what the call hands it is written, or at
+ * once when it hands nothing, so no call can wait on it. Its stdout is the answer; its stderr is read and dropped. A
+ * call that fails rejects with a `SecretToolError`, which says how it ended and nothing of the call. */
 export const runSecretTool: SecretToolRunner = (call) =>
   new Promise((resolve, reject) => {
     const child = spawn(call.executable, [...call.args], {
       stdio: ["pipe", "pipe", "pipe"],
+      detached: true,
       ...(call.env !== undefined ? { env: call.env } : {}),
     });
     let answer = "";
     let over = false;
+    let timedOut = false;
+    const limit = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGTERM");
+    }, call.timeoutMs ?? SECRET_TOOL_TIMEOUT_MS);
     child.stdout?.setEncoding("utf8");
     child.stdout?.on("data", (chunk: string) => {
       answer += chunk;
@@ -63,14 +143,14 @@ export const runSecretTool: SecretToolRunner = (call) =>
     child.stderr?.resume();
     // a tool that ends before it reads its stdin must not end fieldd: the write's error is the close's to say
     child.stdin?.on("error", () => undefined);
-    child.on("error", () => reject(new Error("the keychain tool could not be started")));
-    child.on("close", (code, signal) => {
-      if (code === 0 && !over) {
-        resolve({ stdout: answer });
-        return;
-      }
-      const ended = over ? "past its answer's limit" : (code ?? signal);
-      reject(new Error(`the keychain tool ended ${ended}`));
+    child.on("error", () => {
+      clearTimeout(limit);
+      reject(new SecretToolError(null, false));
+    });
+    child.on("close", (code) => {
+      clearTimeout(limit);
+      if (code === 0 && !over && !timedOut) resolve({ stdout: answer });
+      else reject(new SecretToolError(timedOut || over ? null : code, timedOut));
     });
     child.stdin?.end(call.input ?? "");
   });
@@ -78,19 +158,23 @@ export const runSecretTool: SecretToolRunner = (call) =>
 /** Test seam (item 542, 2026-11-18): the tool, how a call runs and the platform, so a row points the store at a stub
  * of its own and never at the real tool. */
 export interface DarwinSecretStoreOptions {
-  /** the keychain tool (default `security`) */
+  /** the keychain tool (default `SECURITY_TOOL`) */
   executable?: string;
   /** how one call runs (default `runSecretTool`) */
   run?: SecretToolRunner;
   /** the platform the store is on (default `process.platform`) */
   platform?: NodeJS.Platform;
+  /** how long one call may take (default `SECRET_TOOL_TIMEOUT_MS`) */
+  timeoutMs?: number;
 }
 
 /** macOS keychain via the security(1) CLI — no native deps, headless-safe.
  * Non-darwin platforms refuse honestly until a portable backend lands. */
 export function createDarwinSecretStore(options: DarwinSecretStoreOptions = {}): SecretStore {
-  const executable = options.executable ?? "security";
+  const executable = options.executable ?? SECURITY_TOOL;
   const run = options.run ?? runSecretTool;
+  const env = secretToolEnv();
+  const timeoutMs = options.timeoutMs ?? SECRET_TOOL_TIMEOUT_MS;
   const refuse = (): never => {
     throw new RpcCallError(
       "UNAVAILABLE",
@@ -107,25 +191,59 @@ export function createDarwinSecretStore(options: DarwinSecretStoreOptions = {}):
         const { stdout } = await run({
           executable,
           args: ["find-generic-password", "-s", service, "-a", account, "-w"],
+          env,
+          timeoutMs,
         });
         return stdout.replace(/\n$/, "");
-      } catch {
-        return null; // absent (or locked) — absent-shaped, never a throw on read
+      } catch (error) {
+        // item 542: only "not found" is no secret; a keychain that does not answer, or refuses, is said so
+        if (notFound(error)) return null;
+        throw keychainUnavailable(error);
       }
     },
     async set(service, account, value) {
       if (!darwin) refuse();
-      await run({
-        executable,
-        args: ["add-generic-password", "-U", "-s", service, "-a", account, "-w", value],
-      });
+      // item 542: the value is handed on stdin, never as an argument: one command line read by the tool's own
+      // interactive mode, the value as hex so it needs no quoting. A name `SECRET_NAME` does not admit, an empty
+      // value, or a line past `SECRET_TOOL_LINE_MAX` is refused here, before any call, so the item the keychain
+      // holds stays as it was.
+      if (!SECRET_NAME.test(service) || !SECRET_NAME.test(account)) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "a secret's names are printable ASCII, without a quote or a backslash",
+          false,
+        );
+      }
+      if (value === "") {
+        throw new RpcCallError("PRECONDITION_FAILED", "an empty secret is not kept", false);
+      }
+      const hex = Buffer.from(value, "utf8").toString("hex");
+      const line = `add-generic-password -U -s "${service}" -a "${account}" -X ${hex}\n`;
+      if (Buffer.byteLength(line) > SECRET_TOOL_LINE_MAX) {
+        // the line's fixed part is all of it but the hex: what that leaves of the limit, halved, is the
+        // value's bytes
+        const most = Math.floor(
+          (SECRET_TOOL_LINE_MAX - (Buffer.byteLength(line) - hex.length)) / 2,
+        );
+        throw new RpcCallError("PRECONDITION_FAILED", secretTooLong(most), false);
+      }
+      await run({ executable, args: ["-i"], input: line, env, timeoutMs }).catch(
+        (error: unknown) => {
+          throw keychainUnavailable(error);
+        },
+      );
     },
     async delete(service, account) {
       if (!darwin) refuse();
       await run({
         executable,
         args: ["delete-generic-password", "-s", service, "-a", account],
-      }).catch(() => undefined); // deleting an absent secret is a no-op
+        env,
+        timeoutMs,
+      }).catch((error: unknown) => {
+        if (notFound(error)) return; // deleting an absent secret is a no-op
+        throw keychainUnavailable(error);
+      });
     },
   };
 }
