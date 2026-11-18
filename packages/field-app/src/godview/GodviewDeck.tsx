@@ -1256,17 +1256,21 @@ export function GodviewDeck({
       ) => fieldd.subscribe(method, params, onFrame, opts),
     };
     const built: MonitorDoor = {
+      // Item 473 — the roster, usage and profile-set ports hold the window's
+      // shared feeds (`holdFeed`, keyed by the client a feed is held on), so
+      // they are handed the window's own client: one wire subscription with
+      // every other holder in the window, and its release seam's ask.
       // DS-4e — the monitor's ONE roster subscription, teed: the deck reads the
       // same lists for the names a remote pane says and the flips it asks
       // again on, and opens no second `device.subscribe` of its own
-      devices: instrumentDevicesPort(teeDevicesPort(devicesPortOver(doorClient), observeRoster)),
+      devices: instrumentDevicesPort(teeDevicesPort(devicesPortOver(fieldd), observeRoster)),
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
       // The views never dial rosettad; the daemon's origin stays in fieldd.
       transcripts: historyPortOver(doorClient),
-      usage: usagePortOver(doorClient),
+      usage: usagePortOver(fieldd),
       // The profile tabs filter existing sessions; terminal birth is independent.
-      profiles: profileSetsPortOver(doorClient),
+      profiles: profileSetsPortOver(fieldd),
       // MV-3 (MV-D18) — the model board and the screen's report: the monitor's
       // rows are the backend's, through this window's one door (`model-replica.ts`).
       model: modelBoardOver(doorClient),

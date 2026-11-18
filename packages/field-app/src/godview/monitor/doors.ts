@@ -10,6 +10,7 @@ import {
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import { holdFeed, refusedForRoom } from "@vibefield/fieldd-client";
 import {
   type AccountUsageBatch,
   type AccountUsageEntry,
@@ -309,6 +310,8 @@ function viewsBatch(batch: AgentAccountUsageBatch): AccountUsageBatch {
  * while one stands), every later reader shares it, and the last to leave
  * closes it. One refused or lost is dropped, so the next reader to come opens
  * it again: the strip's Retry is the stage's reader leaving and coming back.
+ * Item 473 (2026-11-18) — it is the window's shared feed (`holdFeed`): one
+ * refused for room is held, and asks again by itself (item 476).
  * Until UM-3's column, puppeteer-views' `UsageColumn` was the only opener and
  * the rows rode its batch (AO-6b3); the views' face (`snapshot`, `subscribe`)
  * stays this wave, a reader of the same subscription.
@@ -348,11 +351,11 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
     subscriptionReady = false;
     batch = null;
     let cancelled = false;
-    let unsubscribe: (() => void) | null = null;
+    let release: (() => void) | null = null;
     const opened = {
       close: (): void => {
         cancelled = true;
-        unsubscribe?.();
+        release?.();
       },
     };
     feed = opened;
@@ -368,23 +371,19 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
         report("subscription", cause);
       }
     };
-    void client
-      .subscribe("agents.usage.subscribe", {}, (payload) => {
-        if (!cancelled) deliver(payload);
-      })
-      .then((subscription) => {
-        if (cancelled) {
-          subscription.unsubscribe();
-          return;
-        }
-        unsubscribe = subscription.unsubscribe;
-        deliver(subscription.snapshot);
-      })
-      .catch((cause: unknown) => {
-        if (cancelled) return;
+    release = holdFeed(client, "agents.usage.subscribe", {}, (next) => {
+      if (cancelled) return;
+      if (next.status === "live") deliver(next.data);
+      if (next.status !== "error") return;
+      // refused for room, the feed asks again by itself; any other refusal is
+      // let go first, so the next reader (one the report moves too) asks again
+      if (!refusedForRoom(next.error)) {
         if (feed === opened) feed = null;
-        report("subscription", cause);
-      });
+        opened.close();
+      }
+      report("subscription", next.error);
+    });
+    if (cancelled) release();
   };
   /** A reader joins: the subscription opens for the first, or again after a refusal. */
   const hold = <T>(into: Set<T>, entry: T): (() => void) => {
@@ -526,63 +525,30 @@ export function recordedLanesPortOver(client: DoorClient): RecordedLanesPort {
 }
 
 /** The roster (`device.subscribe`): whole lists, the newest one standing. An
- * unreadable list is dropped and the last good one stays. */
+ * unreadable list is dropped and the last good one stays. Item 473 — the
+ * window's shared feed (`holdFeed`): one refused for room asks again by itself
+ * (item 476). It is asked with no params, as every other roster holder in the
+ * window asks it (`useSubscription("device.subscribe")`): a feed is keyed by
+ * its method and params, and `{}` would be a second feed. */
 export function devicesPortOver(client: DoorClient): DevicesPort {
   return {
-    subscribe: (listener) => {
-      let cancelled = false;
-      let unsubscribe: (() => void) | null = null;
-      const deliver = (payload: unknown): void => {
-        const parsed = RosterList.safeParse(payload);
+    subscribe: (listener) =>
+      holdFeed(client, "device.subscribe", undefined, (next) => {
+        if (next.status !== "live") return;
+        const parsed = RosterList.safeParse(next.data);
         if (parsed.success) listener(parsed.data);
-      };
-      void client
-        .subscribe("device.subscribe", {}, (payload) => {
-          if (!cancelled) deliver(payload);
-        })
-        .then((subscription) => {
-          if (cancelled) {
-            subscription.unsubscribe();
-            return;
-          }
-          unsubscribe = subscription.unsubscribe;
-          deliver(subscription.snapshot);
-        })
-        .catch(() => undefined);
-      return () => {
-        cancelled = true;
-        unsubscribe?.();
-      };
-    },
+      }),
   };
 }
 
+/** Item 473 — the window's shared feed (`holdFeed`), as the roster's is. */
 export function profileSetsPortOver(client: DoorClient): ProfileSetsPort {
   return {
-    subscribe: (listener) => {
-      let cancelled = false;
-      let unsubscribe: (() => void) | null = null;
-      const deliver = (payload: unknown): void => {
-        const parsed = AgentsProfileSetsListResult.safeParse(payload);
+    subscribe: (listener) =>
+      holdFeed(client, "agents.profileSets.subscribe", {}, (next) => {
+        if (next.status !== "live") return;
+        const parsed = AgentsProfileSetsListResult.safeParse(next.data);
         if (parsed.success) listener(parsed.data.sets);
-      };
-      void client
-        .subscribe("agents.profileSets.subscribe", {}, (payload) => {
-          if (!cancelled) deliver(payload);
-        })
-        .then((subscription) => {
-          if (cancelled) {
-            subscription.unsubscribe();
-            return;
-          }
-          unsubscribe = subscription.unsubscribe;
-          deliver(subscription.snapshot);
-        })
-        .catch(() => undefined);
-      return () => {
-        cancelled = true;
-        unsubscribe?.();
-      };
-    },
+      }),
   };
 }

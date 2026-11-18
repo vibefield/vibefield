@@ -12,7 +12,7 @@ import {
   uiFieldClass,
 } from "@vibefield/design-kit";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { refusedForRoom } from "@vibefield/fieldd-client";
+import { holdFeed, refusedForRoom } from "@vibefield/fieldd-client";
 import {
   type FormEvent,
   type ReactElement,
@@ -145,38 +145,25 @@ export function LiveApps({ client }: { client: MadeAppsClient }): ReactElement {
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<{ artifactId: string; title: string } | null>(null);
 
-  // subscriptionEpoch is the explicit user-triggered retry signal.
+  // subscriptionEpoch is the explicit user-triggered retry signal: Try again lets the feed go and
+  // holds it anew, which asks again. Item 473 (2026-11-18) — the catalog is the window's shared
+  // feed (`holdFeed`, the head's catalog feed holds it too), so one refused for room asks again by
+  // itself (item 476) and its line goes when it is answered.
   useEffect(() => {
-    let disposed = false;
-    let unsubscribe: (() => void) | undefined;
     setCatalog({ phase: "loading" });
-    const apply = (value: unknown) => {
-      if (disposed) return;
-      const artifacts = parseArtifactSnapshot(value);
+    return holdFeed(client, "artifact.subscribe", {}, (next) => {
+      if (next.status === "error") {
+        setCatalog({ phase: "error", message: friendlyError(next.error, LOAD_LIVE_APPS) });
+        return;
+      }
+      if (next.status !== "live") return;
+      const artifacts = parseArtifactSnapshot(next.data);
       if (artifacts === null) {
         setCatalog({ phase: "error", message: "The app catalog could not be read." });
         return;
       }
       setCatalog({ phase: "live", artifacts });
-    };
-    void client
-      .subscribe("artifact.subscribe", {}, apply)
-      .then((subscription) => {
-        if (disposed) {
-          subscription.unsubscribe();
-          return;
-        }
-        unsubscribe = subscription.unsubscribe;
-        apply(subscription.snapshot);
-      })
-      .catch((error: unknown) => {
-        if (!disposed)
-          setCatalog({ phase: "error", message: friendlyError(error, LOAD_LIVE_APPS) });
-      });
-    return () => {
-      disposed = true;
-      unsubscribe?.();
-    };
+    });
   }, [client, subscriptionEpoch]);
 
   useEffect(() => {
