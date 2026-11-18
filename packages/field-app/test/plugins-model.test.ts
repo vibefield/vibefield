@@ -1140,6 +1140,8 @@ const SAMPLES: Readonly<Record<string, readonly (readonly unknown[])[]>> = {
   ],
   "INSTALLED_LINE.noObject": [[null], ["a service"]],
   "INSTALLED_LINE.broken": [["Desk clock"]],
+  // MK-5b (2026-11-14): a plugin that can't run here, a line of its own with no Try again
+  "INSTALLED_LINE.cantRun": [["Desk clock"]],
   // MK-O3D: the community tile's line, with no plugin by other people listed, one, and many
   "COMMUNITY_WORDS.line": [[0], [1], [12]],
   hasWords: [
