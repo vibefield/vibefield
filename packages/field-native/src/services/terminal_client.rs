@@ -128,6 +128,22 @@ pub struct SessionSummary {
     /// birth, and GT-D11 governs exactly those.
     #[serde(default)]
     pub owner_id: Option<String>,
+    /// PS-D5 (2026-11-18): the kind of ghosttea's `SessionActivity` (`foreground-job`,
+    /// `shell-idle`, `unknown`), its sample of the pane's foreground process group. The kind alone:
+    /// the rest of the sample (its source, confidence, groups and clock) is no row's. Tolerant: an
+    /// absent, null or unreadable activity is `None`, never a failed listing.
+    #[serde(default, rename = "activity", deserialize_with = "activity_kind")]
+    pub activity_kind: Option<String>,
+}
+
+/// PS-D5: read `activity.kind` and nothing else, refusing nothing, so a summary whose activity
+/// this reader cannot read still lists its session.
+fn activity_kind<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let activity = Option::<Value>::deserialize(deserializer)?;
+    Ok(activity.and_then(|activity| activity.get("kind")?.as_str().map(str::to_owned)))
 }
 
 /// An authenticated control connection, plus the pushed-event stream that came

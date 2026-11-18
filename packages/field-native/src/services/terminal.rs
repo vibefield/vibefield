@@ -137,8 +137,9 @@ use crate::cell::{CellCrumb, CellExitReport, CellHello};
 use crate::config::NativeConfig;
 use crate::contracts::ObservedTerminalCell;
 use crate::contracts::{
-    ObservedStaleCell, ObservedTerminal, TerminalCellRole, TerminalEndpoints, TerminalRouteCell,
-    TerminalRouteSnapshot, TerminalWorkloadClass, UnitHealth, UnitState,
+    ObservedStaleCell, ObservedTerminal, ObservedTerminalActivity, TerminalCellRole,
+    TerminalEndpoints, TerminalRouteCell, TerminalRouteSnapshot, TerminalWorkloadClass, UnitHealth,
+    UnitState,
 };
 use crate::manager::NativeService;
 use crate::orphan::{Census, NotFresh, SessionCensus};
@@ -3912,7 +3913,12 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
         title: session.title.clone(),
         cwd: session.cwd.clone(),
         exited: session.exited.then_some(true),
-        activity: None,
+        // PS-D5 (2026-11-18): the pane's activity, its kind alone (the reader keeps nothing else of
+        // the sample), so a later sample of the same kind is no changed inventory.
+        activity: session
+            .activity_kind
+            .clone()
+            .map(|kind| ObservedTerminalActivity { kind }),
         // CORRECTED 2026-09-14 (N-L7). This used to read "the legacy in-process
         // serve has no cell", which named a caller TM-1 deleted — there is no
         // cell-less shape on this floor any more. What is true is narrower and
