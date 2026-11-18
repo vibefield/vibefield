@@ -121,10 +121,12 @@ public struct RemoteMeshCopy: Sendable {
   private var ignoring = false
   private var standingMoved = false
   /// The window's rows as the last `publish` drew them, each drawn row's visual id (the carry-forward) and the
-  /// hand-off's lineage beside it (item 464). None is reset by an open: the window's rows outlive a re-subscribe.
+  /// hand-off's lineage beside it (item 464), and the peers' (item 465). None is reset by an open: the window's rows
+  /// outlive a re-subscribe.
   private var windowRows: [RemoteFieldRow] = []
   private var previous: [String: String] = [:]
   private var lineage = RemoteLineage()
+  private var peerLineage = RemoteLineage()
 
   /// What the fold last handed the replica — the open's snapshot or a frame's change — since the last `open` or
   /// `frame` call began; nil for a frame that handed nothing (a state, a change of nothing). The golden's `fold`.
@@ -240,7 +242,8 @@ public struct RemoteMeshCopy: Sendable {
       model: replica.model, held: { fold.held($0) }, standing: standing,
       order: RemoteWindowRows.order(held: fold.heldRows, here: fold.here),
       sessionByRow: replica.visibility.sessionByRow, succeedsByRow: replica.visibility.succeedsByRow,
-      previous: &previous, lineage: &lineage)
+      peerSessionByRow: replica.visibility.peerSessionByRow, peerSucceedsByRow: replica.visibility.peerSucceedsByRow,
+      previous: &previous, lineage: &lineage, peerLineage: &peerLineage)
     defer { standingMoved = false }
     return Published(
       changes: changes, rejoined: rejoined, standingMoved: standingMoved, rowsMoved: windowRows != before)

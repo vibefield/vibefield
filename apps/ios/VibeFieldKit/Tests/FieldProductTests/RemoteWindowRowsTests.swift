@@ -16,8 +16,12 @@ struct WindowStage {
   var previous: [String: String] = [:]
   /// Item 464 — the hand-off's lineage, carried beside `previous`.
   var lineage = RemoteLineage()
+  /// Item 465 — the peers' hand-off lineage, carried beside it.
+  var peerLineage = RemoteLineage()
   /// The home's chain in the witness open: the next home delta applies on top of it (`home`).
   var homeRevision: Int64 = 80
+  /// Item 465 — the loft's chain in the witness open (a peer of the home): the next loft delta applies on it (`loft`).
+  var loftRevision: Int64 = 30
 
   init(_ open: AgentRemoteMeshOpen) {
     replica.apply(fold.open(open))
@@ -36,6 +40,15 @@ struct WindowStage {
     homeRevision += 1
   }
 
+  /// Item 465 — one delta on the loft's chain, the next link after the last.
+  mutating func loft(upserts: [JSONValue] = [], removed: [String] = []) throws {
+    let delta = try Witness.delta(
+      Remote.loft, epoch: Witness.loftEpoch, since: loftRevision, revision: loftRevision + 1, upserts: upserts,
+      removed: removed)
+    frame(delta)
+    loftRevision += 1
+  }
+
   var joins: RemoteVisibility { .joins(held: fold.heldRows, here: fold.here) }
   var order: [String] { RemoteWindowRows.order(held: fold.heldRows, here: fold.here) }
 
@@ -47,8 +60,9 @@ struct WindowStage {
     let devices = Dictionary(fold.devices.map { ($0.device, $0.state) }) { first, _ in first }
     return RemoteWindowRows.rows(
       model: replica.model, held: { fold.held($0) }, standing: standing ?? devices, order: order,
-      sessionByRow: joins.sessionByRow, succeedsByRow: joins.succeedsByRow, previous: &previous,
-      lineage: &lineage)
+      sessionByRow: joins.sessionByRow, succeedsByRow: joins.succeedsByRow,
+      peerSessionByRow: joins.peerSessionByRow, peerSucceedsByRow: joins.peerSucceedsByRow, previous: &previous,
+      lineage: &lineage, peerLineage: &peerLineage)
   }
 
   static func ids(_ rows: [RemoteFieldRow]) -> [String] { rows.map { $0.id } }
@@ -240,7 +254,7 @@ struct WindowStage {
 
   /// J1 — the home's claims are joined beside its sessions: a bare terminal's, and an agent's hosted on the home with
   /// a session. A claim of the row's own session, an empty one, one from a run hosted nowhere and a peer's join
-  /// nothing.
+  /// nothing here (a peer's are joined apart, keyed by its desktop: item 465, `PeerLineageTests`).
   @Test func theHomesClaimsAreJoinedBesideItsSessions() throws {
     var open = try W.openJSON()
     open = edited(open, W.homeRows + [.row("pty-h2"), .key("terminal"), .key("succeeds")], .string("pty-h0"))
@@ -430,21 +444,175 @@ struct WindowStage {
     #expect(visuals["run-h-second"] == "pty-hb")
   }
 
-  /// L9 — a peer's row whose join says `succeeds` changes nothing: a peer's rows join nothing here (a peer desktop's
-  /// hand-off on the phone is item 465).
-  @Test func aPeersClaimChangesNothing() throws {
+  /// L9 — a peer's row whose join says `succeeds` is read by its own desktop's lineage, not the home's (item 465).
+  /// Until item 465 this row held that a peer's claim changed nothing: the phone drew the peer's shell and its
+  /// successor as two bodies, as its home's window did. Both screens now read a peer's hand-off by one rule.
+  @Test func aPeersClaimIsReadByItsDesktop() throws {
     var stage = WindowStage(try W.open())
     let before = WindowStage.visuals(stage.draw())
     let loftShell = try W.row(W.loftRows, "pty-p1")
     var row = W.moved(loftShell, key: "pty-p9", id: "pty-p9", createdAt: Self.endedAt)
     row = edited(row, [.key("terminal"), .key("runtimeSessionId")], .string("pty-p9"))
     row = edited(row, [.key("terminal"), .key("succeeds")], .string("pty-p1"))
-    stage.frame(try W.delta(Remote.loft, epoch: W.loftEpoch, since: 30, revision: 31, upserts: [row]))
+    try stage.loft(upserts: [row])
     let claims = stage.joins.succeedsByRow
     #expect(claims.isEmpty)
+    let peerClaims = stage.joins.peerSucceedsByRow
+    let shellKey = RemoteVisibility.peerKey(device: Remote.loft, session: "pty-p1")
+    #expect(peerClaims == ["pty-p9": shellKey])
     let drawn = WindowStage.visuals(stage.draw())
     var expected = before
-    expected["pty-p9"] = "pty-p9"
+    expected["pty-p1"] = nil
+    expected["pty-p9"] = "pty-p1"
     #expect(drawn == expected)
+  }
+}
+
+/// Item 465 (2026-11-18) — a PEER desktop's hand-off: the peer's session born in another's place says so on the
+/// peer's own remote cut, which the home relays whole, and the phone draws it on ONE body, by the lineage it reads
+/// over its home's rows (item 464) read again over every peer's, each session keyed by its desktop. The window reads
+/// a peer's hand-off by the same rule (`peer-lineage.ts`); `godview-peer-handoff.test.ts` holds it to these six cases,
+/// named alike. No shared fixture holds the two equal.
+@Suite struct PeerLineageTests {
+  typealias W = Witness
+
+  /// After every loft row of the witness open.
+  static let launchedAt: Int64 = 1_790_800_700_000
+
+  static func key(_ session: String) -> String { RemoteVisibility.peerKey(device: Remote.loft, session: session) }
+
+  /// The loft's launch: its run (`run-p-ask`'s shape) born in a session of its own, `pty-p9`, in the place of the
+  /// loft's shell (`pty-p1`) when `succeeds` is given.
+  static func launch(succeeds: String? = "pty-p1") throws -> JSONValue {
+    let ask = try W.row(W.loftRows, "run-p-ask")
+    var row = W.moved(ask, key: "run-p-launch", id: "run-p-launch", createdAt: launchedAt)
+    row = edited(row, [.key("terminal"), .key("runtimeSessionId")], .string("pty-p9"))
+    if let succeeds { row = edited(row, [.key("terminal"), .key("succeeds")], .string(succeeds)) }
+    return row
+  }
+
+  /// The witness open with the loft's shell (`pty-p1`) typed into.
+  static func typedShell() throws -> WindowStage {
+    let open = edited(
+      try W.openJSON(), W.loftRows + [.row("pty-p1"), .key("monitorRow"), .key("inputUsed")], .bool(true))
+    return WindowStage(try AgentRemoteMeshOpen(json: open))
+  }
+
+  /// P1 — a peer's claims are joined beside its sessions, keyed by its desktop: a bare terminal's, and an agent's whose
+  /// PTY is local to the peer. A claim of the row's own session, an empty one and one from a run hosted nowhere join
+  /// nothing, and the home's joins are the home's alone.
+  @Test func aPeersClaimsAreJoinedBesideItsSessionsKeyedByItsDesktop() throws {
+    var open = try W.openJSON()
+    open = edited(open, W.loftRows + [.row("pty-p1"), .key("terminal"), .key("succeeds")], .string("pty-p0"))
+    open = edited(open, W.loftRows + [.row("run-p-ask"), .key("terminal"), .key("succeeds")], .string("pty-p1"))
+    open = edited(open, W.loftRows + [.row("run-p-done"), .key("terminal"), .key("succeeds")], .string("pty-p1"))
+    let stage = WindowStage(try AgentRemoteMeshOpen(json: open))
+    let claims = stage.joins.peerSucceedsByRow
+    let wantedClaims = ["pty-p1": Self.key("pty-p0"), "pty-p3": Self.key("pty-p1")]
+    #expect(claims == wantedClaims)
+    let sessions = stage.joins.peerSessionByRow
+    let wantedSessions = ["pty-p1": Self.key("pty-p1"), "pty-p3": Self.key("pty-p3")]
+    #expect(sessions == wantedSessions)
+    let home = stage.joins.succeedsByRow
+    #expect(home.isEmpty)
+    let homeSessions = stage.joins.sessionByRow
+    #expect(homeSessions == ["pty-h1": "pty-h1", "pty-h2": "pty-h2", "pty-h3": "pty-h3"])
+    let otherDesktop = RemoteVisibility.peerKey(device: Remote.air, session: "pty-p1")
+    let loftKey = Self.key("pty-p1")
+    #expect(otherDesktop != loftKey)
+
+    let own = edited(
+      try W.openJSON(), W.loftRows + [.row("pty-p1"), .key("terminal"), .key("succeeds")], .string("pty-p1"))
+    let ownClaims = WindowStage(try AgentRemoteMeshOpen(json: own)).joins.peerSucceedsByRow
+    #expect(ownClaims.isEmpty)
+    let blank = edited(
+      try W.openJSON(), W.loftRows + [.row("pty-p1"), .key("terminal"), .key("succeeds")], .string(""))
+    let blankClaims = WindowStage(try AgentRemoteMeshOpen(json: blank)).joins.peerSucceedsByRow
+    #expect(blankClaims.isEmpty)
+    let homeless = RemoteVisibility.joins(held: stage.fold.heldRows, here: nil).peerSucceedsByRow
+    #expect(homeless.isEmpty)
+  }
+
+  /// P2 — a peer's launch takes its shell's body: the run is drawn on the shell's body and the shell is not drawn,
+  /// though the model and the fold still hold it; when the shell's row goes, and when the claim is no longer said,
+  /// the run keeps that body.
+  @Test func aPeersLaunchTakesItsShellsBody() throws {
+    var stage = WindowStage(try W.open())
+    let before = WindowStage.visuals(stage.draw())
+    #expect(before["pty-p1"] == "pty-p1")
+
+    let run = try Self.launch()
+    try stage.loft(upserts: [run])
+    let launched = stage.draw()
+    let ids = WindowStage.ids(launched)
+    #expect(!ids.contains("pty-p1"))
+    let body = WindowStage.visuals(launched)["run-p-launch"]
+    #expect(body == "pty-p1")
+    let modelHolds = stage.replica.model.byId["pty-p1"] != nil
+    #expect(modelHolds)
+    let foldHolds = stage.fold.held("pty-p1") != nil
+    #expect(foldHolds)
+
+    try stage.loft(removed: ["pty-p1"])
+    let released = WindowStage.visuals(stage.draw())["run-p-launch"]
+    #expect(released == "pty-p1")
+    try stage.loft(upserts: [try Self.launch(succeeds: nil)])
+    let settled = WindowStage.visuals(stage.draw())["run-p-launch"]
+    #expect(settled == "pty-p1")
+  }
+
+  /// P3 — a peer's claim of another desktop's session changes nothing: the loft's run naming the home's shell's
+  /// session (`pty-h2`) is keyed by the loft, which no row of the loft stands for.
+  @Test func aPeersClaimOfAnotherDesktopsSessionChangesNothing() throws {
+    var stage = WindowStage(try W.open())
+    let before = WindowStage.visuals(stage.draw())
+    try stage.loft(upserts: [try Self.launch(succeeds: "pty-h2")])
+    let drawn = WindowStage.visuals(stage.draw())
+    var expected = before
+    expected["run-p-launch"] = "run-p-launch"
+    #expect(drawn == expected)
+  }
+
+  /// P4 — a peer's shell typed into is retained: the run still takes the shell's body, and the shell is drawn on a
+  /// body of its own, `retained:<its id>` (a peer's row wears its id where a home row wears its session).
+  @Test func aPeersTypedShellIsRetainedOnABodyOfItsOwn() throws {
+    var stage = try Self.typedShell()
+    _ = stage.draw()
+    try stage.loft(upserts: [try Self.launch()])
+    let visuals = WindowStage.visuals(stage.draw())
+    #expect(visuals["pty-p1"] == "retained:pty-p1")
+    #expect(visuals["run-p-launch"] == "pty-p1")
+  }
+
+  /// P5 — a peer's lapsed claim (fieldd's lapse on the peer, or a rollback there) while the hidden shell still stands:
+  /// the shell is drawn again on its old body and the run on its own id.
+  @Test func aPeersLapsedClaimGivesItsShellItsBodyBack() throws {
+    var stage = WindowStage(try W.open())
+    _ = stage.draw()
+    try stage.loft(upserts: [try Self.launch()])
+    let launched = WindowStage.ids(stage.draw())
+    #expect(!launched.contains("pty-p1"))
+    try stage.loft(upserts: [try Self.launch(succeeds: nil)])
+    let lapsed = WindowStage.visuals(stage.draw())
+    #expect(lapsed["pty-p1"] == "pty-p1")
+    #expect(lapsed["run-p-launch"] == "run-p-launch")
+    // and it stays so
+    let again = WindowStage.visuals(stage.draw())
+    #expect(again == lapsed)
+  }
+
+  /// P6 — a peer's successor a frame late: the shell's row leaves in one frame and the run arrives in the next, naming
+  /// it. The run still takes the body: the peers' lineage keeps a departed session's body for a while.
+  @Test func aPeersSuccessorAFrameLateStillTakesTheBody() throws {
+    var stage = WindowStage(try W.open())
+    _ = stage.draw()
+    try stage.loft(removed: ["pty-p1"])
+    _ = stage.draw()
+    let departed = stage.peerLineage.departed
+    let shellKey = Self.key("pty-p1")
+    #expect(departed == [shellKey])
+    try stage.loft(upserts: [try Self.launch()])
+    let body = WindowStage.visuals(stage.draw())["run-p-launch"]
+    #expect(body == "pty-p1")
   }
 }

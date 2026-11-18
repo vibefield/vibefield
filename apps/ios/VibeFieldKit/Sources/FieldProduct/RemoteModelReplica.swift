@@ -130,11 +130,25 @@ public struct RemoteVisibility: Sendable, Equatable {
   /// `succeeds`), by model id: kept only for a row with a session here, naming another one. The window's rows read it
   /// (`RemoteWindowRows.rows`); `shows` does not, so a moved claim re-reads every row and publishes nothing.
   public let succeedsByRow: [String: String]
+  /// Item 465 (2026-11-18) — the same two joins for every PEER desktop's rows, by model id, each session keyed by its
+  /// desktop and itself (`peerKey`): a peer's floor session names nothing on another desktop. Only the window's rows
+  /// read them, for a peer's hand-off; `shows` reads neither.
+  public let peerSessionByRow: [String: String]
+  public let peerSucceedsByRow: [String: String]
 
-  public init(sessionByRow: [String: String] = [:], succeedsByRow: [String: String] = [:]) {
+  public init(
+    sessionByRow: [String: String] = [:], succeedsByRow: [String: String] = [:],
+    peerSessionByRow: [String: String] = [:], peerSucceedsByRow: [String: String] = [:]
+  ) {
     self.sessionByRow = sessionByRow
     self.succeedsByRow = succeedsByRow
+    self.peerSessionByRow = peerSessionByRow
+    self.peerSucceedsByRow = peerSucceedsByRow
   }
+
+  /// Item 465 — a peer's floor session as the window's rows key it: its desktop and the session, never one alone
+  /// (`peerKey` in `window-local.ts`).
+  public static func peerKey(device: String, session: String) -> String { device + "\u{1F}" + session }
 
   public func shows(_ row: RemoteModelRow) -> Bool {
     let monitor = row.monitor

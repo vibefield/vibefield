@@ -48,6 +48,12 @@ export interface WindowRowFacts {
   /** the deck's visual ids, by floor session (a launcher hand-off's transfer) */
   readonly visualIds: ReadonlyMap<string, string> | undefined;
   /**
+   * Item 465 — every peer desktop's joins (`peerJoins(...).sessionByRow` and
+   * `.succeedsByRow`), keyed by desktop. The red: taken, and not read yet.
+   */
+  readonly peerSessionByRow?: ReadonlyMap<string, string> | undefined;
+  readonly peerSucceedsByRow?: ReadonlyMap<string, string> | undefined;
+  /**
    * SB-3 — where a terminal asked for by a hold was let go, by floor session,
    * asked when the rows are BUILT (`useMonitorAgents`' `hintFor`: the door's
    * answer, else a create in flight claiming its first new terminal row).

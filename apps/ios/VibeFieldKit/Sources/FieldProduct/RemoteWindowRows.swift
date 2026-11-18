@@ -234,8 +234,10 @@ public enum RemoteWindowRows {
   public static func rows(
     model: RemoteModel, held: (String) -> RemoteModelBoard.Held?, standing: [String: AgentMeshDeviceState],
     order: [String], sessionByRow: [String: String], succeedsByRow: [String: String],
-    previous: inout [String: String], lineage: inout RemoteLineage
+    peerSessionByRow: [String: String] = [:], peerSucceedsByRow: [String: String] = [:],
+    previous: inout [String: String], lineage: inout RemoteLineage, peerLineage: inout RemoteLineage
   ) -> [RemoteFieldRow] {
+    // item 465, the red: the peers' joins and lineage are taken, and not read yet
     var ordered: [RemoteModelRow] = []
     var placed: Set<String> = []
     for id in order {

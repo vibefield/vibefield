@@ -263,3 +263,28 @@ export function paneFactsKey(panes: MonitorPaneFacts): string {
       .join("\u0000"),
   ].join("\u0001");
 }
+
+/**
+ * Item 465 (2026-11-18) — EVERY PEER DESKTOP'S hand-off joins, keyed by its
+ * desktop (`peerKey`). The red: declared, and joining nothing yet.
+ */
+export interface PeerJoins {
+  /** model id → its desktop's floor session, keyed (`peerKey`) */
+  readonly sessionByRow: ReadonlyMap<string, string>;
+  /** model id → the floor session of its desktop it says it succeeds, keyed (`peerKey`) */
+  readonly succeedsByRow: ReadonlyMap<string, string>;
+}
+
+const NO_PEER_JOINS: PeerJoins = Object.freeze({
+  sessionByRow: new Map<string, string>(),
+  succeedsByRow: new Map<string, string>(),
+});
+
+/** A peer's floor session as the window's rows key it: its desktop and the session, never one alone. */
+export function peerKey(device: string, session: string): string {
+  return `${device}\u001f${session}`;
+}
+
+export function peerJoins(_held: readonly HeldModelRow[], _here: string | undefined): PeerJoins {
+  return NO_PEER_JOINS;
+}
