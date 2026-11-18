@@ -52,6 +52,22 @@ function dataDir(): string {
   return path;
 }
 
+/** Item 519 (2026-11-18): the clear calls a fake capture session answers, each a spy that resolves,
+ * and no running worker; every fake session here spreads them. */
+function sessionClears() {
+  return {
+    clearData: vi.fn(async (): Promise<void> => undefined),
+    clearStorageData: vi.fn(async (): Promise<void> => undefined),
+    clearCache: vi.fn(async (): Promise<void> => undefined),
+    clearAuthCache: vi.fn(async (): Promise<void> => undefined),
+    clearHostResolverCache: vi.fn(async (): Promise<void> => undefined),
+    clearCodeCaches: vi.fn(async (_options: { urls?: string[] }): Promise<void> => undefined),
+    clearSharedDictionaryCache: vi.fn(async (): Promise<void> => undefined),
+    closeAllConnections: vi.fn(async (): Promise<void> => undefined),
+    serviceWorkers: { getAllRunning: vi.fn((): Record<number, unknown> => ({})) },
+  };
+}
+
 describe("ArtifactPreviewCapture", () => {
   it("captures through one guarded ephemeral session and atomically commits a bounded JPEG", async () => {
     const root = dataDir();
@@ -114,9 +130,7 @@ describe("ArtifactPreviewCapture", () => {
       off: () => {
         download = null;
       },
-      clearStorageData: vi.fn(async () => undefined),
-      clearCache: vi.fn(async () => undefined),
-      closeAllConnections: vi.fn(async () => undefined),
+      ...sessionClears(),
       setProxy: vi.fn(async () => undefined),
     };
     const navigation = new Map<string, (event: { preventDefault(): void }, url: string) => void>();
@@ -263,9 +277,7 @@ describe("ArtifactPreviewCapture", () => {
       setPermissionCheckHandler: vi.fn(),
       on: vi.fn(),
       off: vi.fn(),
-      clearStorageData: vi.fn(async () => undefined),
-      clearCache: vi.fn(async () => undefined),
-      closeAllConnections: vi.fn(async () => undefined),
+      ...sessionClears(),
     };
     const createWindow = vi.fn();
     const capture = new ArtifactPreviewCapture({
@@ -410,9 +422,7 @@ function captureRig(
     setPermissionCheckHandler: vi.fn(),
     on: vi.fn(),
     off: vi.fn(),
-    clearStorageData: vi.fn(async () => undefined),
-    clearCache: vi.fn(async () => undefined),
-    closeAllConnections: vi.fn(async () => undefined),
+    ...sessionClears(),
     setProxy: vi.fn(async (_config: unknown) => {
       order.push("proxy");
     }),
@@ -842,5 +852,101 @@ describe("the userinfo forms stay refused by the capture's guard", () => {
     expect(isAllowedPreviewRequest(origin, `${twin}x.js`, "script", allow)).toBe(false);
     expect(isAllowedTopLevelNavigation(origin, twin)).toBe(false);
     expect(isAllowedTopLevelNavigation(origin, `${origin}/next`), "the control").toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------
+// Item 519 (2026-11-18). Electron has no call that ends a session, so a session per capture was
+// held until the app quit (about 0.9 MiB each, measured on a real Electron). An artifact's session
+// is now kept and reused by its next capture, only once every clear of it has settled. Each
+// partition here gets a capture rig of its own, so two sessions are never one fake.
+// ---------------------------------------------------------------------------------------------
+
+const PARTITION_PREFIX = "vibefield-artifact-preview:";
+
+/** A capture rig per partition, made on first use, with every session and window partition the
+ * capture asked for, in order. */
+function partitionRigs() {
+  const rigs = new Map<string, ReturnType<typeof captureRig>>();
+  const rigOf = (partition: string) => {
+    let rig = rigs.get(partition);
+    if (rig === undefined) {
+      rig = captureRig();
+      rigs.set(partition, rig);
+    }
+    return rig;
+  };
+  const decoder = captureRig();
+  const sessions: string[] = [];
+  const windows: string[] = [];
+  const native: ArtifactPreviewCaptureNative = {
+    createSession: (partition) => {
+      sessions.push(partition);
+      return rigOf(partition).native.createSession(partition);
+    },
+    createWindow: (options) => {
+      windows.push(options.partition);
+      const rig = rigOf(options.partition);
+      rig.window.destroyed = false;
+      return rig.native.createWindow(options);
+    },
+    decodeImage: (bytes) => decoder.native.decodeImage(bytes),
+  };
+  return { native, rigOf, sessions, windows };
+}
+
+/** randomId as `r-1`, `r-2`, …: a capture draws its partition first, then its temp file's name. */
+function counting(): () => string {
+  let value = 0;
+  return () => `r-${++value}`;
+}
+
+describe("item 519 — an artifact's capture session is reused only once it is cleared", () => {
+  it("a second capture of the same artifact reuses the first's session, and only after every clear of it has settled", async () => {
+    const rigs = partitionRigs();
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    rigs.rigOf(`${PARTITION_PREFIX}r-1`).captureSession.clearData.mockImplementation(() => held);
+    const capture = new ArtifactPreviewCapture({
+      dataDir: dataDir(),
+      native: rigs.native,
+      randomId: counting(),
+    });
+
+    await capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal);
+    const second = capture.capture(
+      { artifactId: ARTIFACT_ID, url: URL },
+      new AbortController().signal,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(rigs.windows, "no second window while the first capture's clears are pending").toEqual([
+      `${PARTITION_PREFIX}r-1`,
+    ]);
+    release();
+    await expect(second).resolves.toMatchObject({ captured: true });
+    expect(rigs.sessions).toEqual([`${PARTITION_PREFIX}r-1`]);
+    expect(rigs.windows).toEqual([`${PARTITION_PREFIX}r-1`, `${PARTITION_PREFIX}r-1`]);
+  });
+
+  it("every clear of the session runs after a capture", async () => {
+    const rig = captureRig();
+    const capture = new ArtifactPreviewCapture({ dataDir: dataDir(), native: rig.native });
+    await capture.capture({ artifactId: ARTIFACT_ID, url: URL }, new AbortController().signal);
+    const session = rig.captureSession;
+    for (const [name, clear] of [
+      ["clearData", session.clearData],
+      ["clearStorageData", session.clearStorageData],
+      ["clearCache", session.clearCache],
+      ["clearAuthCache", session.clearAuthCache],
+      ["clearHostResolverCache", session.clearHostResolverCache],
+      ["clearSharedDictionaryCache", session.clearSharedDictionaryCache],
+      ["closeAllConnections", session.closeAllConnections],
+    ] as const) {
+      expect(clear, name).toHaveBeenCalledOnce();
+    }
+    expect(session.clearCodeCaches).toHaveBeenCalledOnce();
+    expect(session.clearCodeCaches).toHaveBeenCalledWith({});
   });
 });
