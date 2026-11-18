@@ -462,7 +462,7 @@ describe("the browser pane — PORTALS' first kind (PT-1)", () => {
     }
   });
 
-  it("a PHONE-SIZE pane — drawn at a phone's cut: its page the phone's own display across, light with contrast by day and dark by night, its head frosted (judged by colour count and contrast, never a hash)", async () => {
+  it("draws the phone page at its display width, with day and night contrast and a readable resting address", async () => {
     const gpu: StillGpu = await stillGpu();
     try {
       const mod = (await import(/* @vite-ignore */ join(PANE, "src", "index.ts"))) as {
@@ -584,11 +584,11 @@ describe("the browser pane — PORTALS' first kind (PT-1)", () => {
           Math.abs(across - display) / display,
           `${across} px across vs ${display}`,
         ).toBeLessThan(0.03);
-        // the head: its capsule frosted pale over the mat's green (the committed compact head — the address alone)
+        // The compact header draws the resting address directly on the pane.
         const top = -S.half[1];
         const head = region(day, -S.half[0] + 14, top + 6, S.half[0] - 14, S.band - 6);
         const mat = region(day, -S.half[0] - 60, top - 60, -S.half[0] - 30, top - 30);
-        expect(head.max - mat.mean, "the frost over the mat").toBeGreaterThan(80);
+        expect(head.max - mat.mean, "the resting address against the mat").toBeGreaterThan(80);
         expect(head.colours, "the head's colours").toBeGreaterThan(20);
       } finally {
         day.dispose();

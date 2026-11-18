@@ -1,55 +1,55 @@
 {
-  "host": "Metal driver on macOS Version 26.5.2 (Build 25F84) (apple metal-3) · darwin-arm64 · webgpu 0.4.0",
+  "host": "Metal driver on macOS Version 26.7.2 (Build 25G332) (apple metal-3) · darwin-arm64 · webgpu 0.4.0",
   "stills": {
     "vibefield.browser-pane:blank:day": {
       "width": 2996,
       "height": 2524,
-      "sha256": "d08f772aff3a0c077571f3c8c6e7135678db41a69f5f00275eac6ddba9c44a3f"
+      "sha256": "3cd9a0c86b76390c025d3081d4013e69e2b150d07384433ac4a3b7edc04e1167"
     },
     "vibefield.browser-pane:blank:night": {
       "width": 2996,
       "height": 2524,
-      "sha256": "f6cd6fe3e75031633d304938ea4320b1c9a08a78b95ffc6a7a05251361623a90"
+      "sha256": "6d543f2617057e636e002ce3a36e583f2278d1b9c86ff820847ef00850b9a620"
     },
     "vibefield.browser-pane:bronze:day": {
       "width": 2996,
       "height": 2524,
-      "sha256": "11c3604dbb7a511406017ac9a93c80d954244e8ac1a59b427e073519384171b4"
+      "sha256": "b1c06a58de1420d8012af80ff1ff027a7787e97b206cedf09a15e65a58828cac"
     },
     "vibefield.browser-pane:bronze:night": {
       "width": 2996,
       "height": 2524,
-      "sha256": "18f12c0d9a2f835ce3ebcc8e41d6bd5c5876e537378be57205a5958d3c2083b8"
+      "sha256": "711587fe8608d38111158b48bcbc03f16df00a56058bd3dc8fe85f7466053d2b"
     },
     "vibefield.browser-pane:default:day": {
       "width": 2996,
       "height": 2524,
-      "sha256": "a936a891bfef3fd4fdab5fe80071f1d884894c3cf8ac1b9918d4a6a549c1d895"
+      "sha256": "c525261581b483b2eaaed0d5fd8bc39807e54b6a78534107c86b43ef4fdaa026"
     },
     "vibefield.browser-pane:default:night": {
       "width": 2996,
       "height": 2524,
-      "sha256": "a0d83144351daaa91d5735f6ba165358d70f07468ab19e342e1d7370fc34f3f1"
+      "sha256": "d49a4c6c4b5de5913eca0b8ea6f93aa70067ed692b13851038b271633391eb3d"
     },
     "vibefield.browser-pane:live:day": {
       "width": 2996,
       "height": 2524,
-      "sha256": "2407d11d28001f5aabef98a3417283f1414bb6c26b45eb0217d82c94afaa603d"
+      "sha256": "628a65021568e1cf2f802df0b1b5b8ed2dafbfd36fc167393801b1046ce5b95e"
     },
     "vibefield.browser-pane:live:night": {
       "width": 2996,
       "height": 2524,
-      "sha256": "850687a5c535d9272008e1bd38eb00bb394fbf8ac86396f2a7528adc7f1673df"
+      "sha256": "4eb064910dae2959568c5fec05c35948b5cf5baa4c7fe3691aa83b6b305b3efe"
     },
     "vibefield.browser-pane:smoke:day": {
       "width": 2996,
       "height": 2524,
-      "sha256": "ced9ce0f17aabb32f1bd2527e6a5fadec3bd177d7131269a0c6f135999c0f96f"
+      "sha256": "9d8efd5e291daaad113c604ce8b01d8846c7b0703523872d89d9a5216775765f"
     },
     "vibefield.browser-pane:smoke:night": {
       "width": 2996,
       "height": 2524,
-      "sha256": "2d65a8d85ee8caf1a426ade5c9a93b54467476a30dd71ca08586a2c8faf39bbb"
+      "sha256": "e9da8ef44774e81a4f7fb29a4a2ca06f074496249907f59007551d9ea9ffb928"
     }
   }
 }
