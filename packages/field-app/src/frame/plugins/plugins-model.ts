@@ -623,6 +623,9 @@ export interface PluginPage {
   readonly powersLive: boolean;
   /** MK-O3D: said under its act while it is held because community plugins are off: its row's line */
   readonly held: string | null;
+  /** item 494 (2026-11-18): said under its act while its row says it isn't working or can't run here: the row's
+   * own line, in its own words; null while the row says anything else */
+  readonly notWorking: string | null;
   /** said under its act, for a Built in plugin, or (N18) one from the plugin list, with switches: they reach your
    * other desktops */
   readonly elsewhere: string | null;
@@ -763,15 +766,31 @@ function powersOf(
 
 /** A plugin's page, from the registry snapshot the window holds and the plugin
  * list the popup already read: nothing here asks fieldd anything. MK-4d's
- * names: What it adds says where each object hangs by the board's `names`. */
+ * names: What it adds says where each object hangs by the board's `names`.
+ * Item 494: it reads the window's own set of plugins that cannot start here and
+ * the plugins whose runtime failed, as Installed's rows do, and says its row's
+ * line while that line says it isn't working or can't run. */
 export function pluginPage(
   record: PluginRecord,
   catalog: PluginsCatalog | null,
   snapshot: PluginRegistrySnapshot,
   onMac: boolean,
   names: BoardNames | null = null,
+  unstarted: UnstartedHere = NONE_UNSTARTED,
+  failed: FailedHere = NONE_FAILED,
 ): PluginPage {
   const listed = listedFrom(catalog);
+  // item 494: the row's own line, read as `installedRows` reads it, and said on the page only while it says the
+  // plugin isn't working or can't run, so the page never says other words than its row
+  const failing = unstarted.has(record.id) || failed.has(record.id);
+  const rowSays =
+    honestLine(record, listed, catalog !== null && held(catalog), failing)?.line ??
+    rowLine(record, names, failing);
+  const notWorking =
+    rowSays === INSTALLED_LINE.broken(record.title) ||
+    rowSays === INSTALLED_LINE.cantRun(record.title)
+      ? rowSays
+      : null;
   const powers = powersOf(record, snapshot, onMac);
   const objects = record.contributions.objects.length;
   const switches = controlsHere(record);
@@ -804,6 +823,7 @@ export function pluginPage(
     onOff,
     powersLive: live,
     held: heldLine(record),
+    notWorking,
     elsewhere: synced && (onOff !== null || powerSwitches) ? SWITCH_WORDS.elsewhere : null,
     offLine: switches && !record.enabled && powerSwitches ? SWITCH_WORDS.off : null,
     settings: settingsOf(record),

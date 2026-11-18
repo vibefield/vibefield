@@ -379,6 +379,8 @@ function PageView({
             {away && (page.onOff !== null || page.powersLive || !page.installed) && (
               <p className="vf-plugins-page-note">{PLUGINS_AWAY}</p>
             )}
+            {/* item 494 (2026-11-18): not working, or unable to run here, it says its row's line */}
+            {page.notWorking !== null && <p className="vf-plugins-page-note">{page.notWorking}</p>}
             {/* MK-O3D: held while community plugins are off, it says its row's line */}
             {page.held !== null && <p className="vf-plugins-page-note">{page.held}</p>}
             {page.elsewhere !== null && <p className="vf-plugins-page-note">{page.elsewhere}</p>}

@@ -7,12 +7,13 @@ import {
 import { describe, expect, it } from "vitest";
 import {
   CATALOG_LISTED,
+  PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
   PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT,
   PLUGINS_FIXTURE_RUNTIME,
   PLUGINS_FIXTURE_SNAPSHOT,
 } from "../src/design-system/plugins-fixtures";
-import { installedRows, runtimeFailures } from "../src/frame/plugins/plugins-model";
+import { installedRows, pluginPage, runtimeFailures } from "../src/frame/plugins/plugins-model";
 import * as words from "../src/frame/plugins/plugins-words";
 
 // MK-5b — a plugin whose runtime failed, in the Plugins popup's model (DESIGN.md §8 "Plugins — the frame's second
@@ -169,5 +170,54 @@ describe("Installed's rows of plugins that aren't working, and Try again (MK-5b)
       null,
       undefined,
     ]);
+  });
+});
+
+// item 494 (2026-11-18): a plugin's page says its row's line while that line says it isn't working or can't run
+describe("a plugin's page says its row's not-working line (item 494)", () => {
+  /** The page of the plugin `id` in `snapshot`, read with the window's sets as Installed's rows read them. */
+  const notWorkingOf = (
+    snapshot: PluginRegistrySnapshot,
+    id: string,
+    unstarted: ReadonlySet<string> = new Set<string>(),
+  ): string | null => {
+    const record = snapshot.plugins.find((plugin) => plugin.id === id);
+    if (record === undefined) throw new Error(`the fixture holds no ${id}`);
+    return pluginPage(record, null, snapshot, true, null, unstarted, failed).notWorking;
+  };
+
+  it("says it for a failed runtime, a plugin that cannot start here and one that can't run, and none else", () => {
+    const snapshot = PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT;
+    expect(notWorkingOf(snapshot, "example.kv-service")).toBe(
+      words.INSTALLED_LINE.broken("Key-value store"),
+    );
+    expect(notWorkingOf(snapshot, "example.gauge")).toBe(words.INSTALLED_LINE.cantRun("Gauge"));
+    // a window that left reports Comment pad's failure, which is not read; in this window's own set, it isn't working
+    expect(notWorkingOf(snapshot, "vibefield.comment-pad")).toBeNull();
+    expect(
+      notWorkingOf(snapshot, "vibefield.comment-pad", new Set(["vibefield.comment-pad"])),
+    ).toBe(words.INSTALLED_LINE.broken("Comment pad"));
+    // Desk clock is off: its row says so, not that it isn't working
+    expect(notWorkingOf(snapshot, "example.desk-clock")).toBeNull();
+    // held while community plugins are off, and stopped after it kept crashing: each row says its own line, so
+    // the page says none, whatever the window's sets say of it
+    expect(
+      notWorkingOf(PLUGINS_FIXTURE_HELD_SNAPSHOT, "acme.kanban", new Set(["acme.kanban"])),
+    ).toBeNull();
+    const stopped = PluginRegistrySnapshot.parse({
+      ...PLUGINS_FIXTURE_SNAPSHOT,
+      plugins: PLUGINS_FIXTURE_SNAPSHOT.plugins.map((plugin) =>
+        plugin.id === "vibefield.simulator" ? { ...plugin, service: "quarantined" } : plugin,
+      ),
+    });
+    expect(notWorkingOf(stopped, "vibefield.simulator")).toBeNull();
+  });
+
+  it("never says other words than its row", () => {
+    const snapshot = PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT;
+    for (const row of rowsOf(snapshot, null)) {
+      const said = notWorkingOf(snapshot, row.id);
+      if (said !== null) expect(said, row.id).toBe(row.line);
+    }
   });
 });

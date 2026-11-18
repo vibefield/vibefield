@@ -281,6 +281,8 @@ describe("the page of a set this desktop doesn't have (§8 'Read only first', co
       powersLive: false,
       // O3-D's held line: a set this desktop doesn't have is held by nothing
       held: null,
+      // item 494: a set this desktop doesn't have runs nowhere here, so its page says no row's line
+      notWorking: null,
       elsewhere: null,
       offLine: null,
       settings: null,

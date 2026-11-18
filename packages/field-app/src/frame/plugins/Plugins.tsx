@@ -1003,16 +1003,17 @@ export function Plugins({
         : (updateList?.length ?? 0);
   const hotAt = Math.max(0, Math.min(hot, walked - 1));
   // a page reads the record the window holds; a plugin gone from it closes its page, unless the list held
-  // offers it (MK-4e: a set this desktop doesn't have, read from the list alone)
+  // offers it (MK-4e: a set this desktop doesn't have, read from the list alone). Item 494: it reads the same
+  // two sets Installed's rows do, so a page says its row's line while that says it isn't working
   const shown = useMemo(() => {
     if (page === null) return null;
     const record = snapshot?.plugins.find((plugin) => plugin.id === page.id);
     if (record !== undefined && snapshot !== null) {
-      return pluginPage(record, catalog, snapshot, onMac, names);
+      return pluginPage(record, catalog, snapshot, onMac, names, unstarted, failed);
     }
     const entry = catalog?.plugins.find((listed) => listed.id === page.id);
     return entry === undefined ? null : listedPage(entry);
-  }, [page, snapshot, catalog, onMac, names]);
+  }, [page, snapshot, catalog, onMac, names, unstarted, failed]);
   // MK-4f: so a page whose plugin went closes to its tab (one removed that the list doesn't hold), and its keys
   // walk again, once both the snapshot and a list have answered; before either, nothing is known gone
   useEffect(() => {

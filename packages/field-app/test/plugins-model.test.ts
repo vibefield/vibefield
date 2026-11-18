@@ -471,6 +471,8 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       powersLive: true,
       // MK-O3D: it is not held while community plugins are off
       held: null,
+      // item 494: it works, so its page says no row's line
+      notWorking: null,
       elsewhere: words.SWITCH_WORDS.elsewhere,
       offLine: null,
       // MK-4c2b: it declares no setting here, so its page has no Settings section
