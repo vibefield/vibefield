@@ -13,10 +13,10 @@ import Testing
 /// TestFlight build compiles, with an `#if` evaluator that refuses any condition it cannot evaluate, and holds that
 /// none reads the process's arguments. A gate widened later stays held by it.
 ///
-/// The wall's scan runs in a detached task, on no actor, and walks line by line only the files that hold an `#if` or
-/// spell a read. Seen 2026-11-18: as a synchronous row walking every file twice, it held the main actor for 5–7 s
-/// whatever this suite's annotation said, and the kit's main-actor rows that wait on a clock (`NewSparkCreateTests`'
-/// row wait) ran out behind it.
+/// The wall's scan runs in a detached task and walks line by line only the files that hold an `#if` or spell a read.
+/// Seen 2026-11-18: a cold FieldHomeTests-only run ends hundreds of rows together, with or without this row, and a
+/// neighbour's two-second wait (`NewSparkCreateTests`) failed in two of four such runs. This row was not shown to be
+/// the cause (item 538).
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("no launch argument reaches a TestFlight build or the review build: the kit reads them in development alone")
