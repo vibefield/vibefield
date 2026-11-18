@@ -1,0 +1,52 @@
+{
+  "generation": 7,
+  "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+  "terminals": [
+    {
+      "sessionId": "7a8b9c0d-1e2f-4a3b-8c4d-5e6f7a8b9c0d",
+      "pid": 51207,
+      "createdAt": 1795132800000,
+      "persistence": "keep-until-exit",
+      "title": "sleep 60",
+      "cwd": "/Users/dev/Projects/vibe-field",
+      "activity": { "kind": "foreground-job" },
+      "cell": {
+        "cellInstanceId": 1,
+        "cellBootId": "01JCELLBOOT0000000000000001",
+        "workloadClass": "interactive",
+        "role": "class"
+      }
+    },
+    {
+      "sessionId": "1c2d3e4f-5a6b-4c7d-9e8f-0a1b2c3d4e5f",
+      "pid": 51344,
+      "createdAt": 1795132860000,
+      "persistence": "keep-until-exit",
+      "title": "zsh — vibe-field",
+      "cwd": "/Users/dev/Projects/vibe-field",
+      "activity": { "kind": "shell-idle" },
+      "cell": {
+        "cellInstanceId": 1,
+        "cellBootId": "01JCELLBOOT0000000000000001",
+        "workloadClass": "interactive",
+        "role": "class"
+      }
+    },
+    {
+      "sessionId": "9e0f1a2b-3c4d-4e5f-a6b7-c8d9e0f1a2b3",
+      "pid": 51490,
+      "createdAt": 1795132920000,
+      "persistence": "keep-until-exit",
+      "title": "claude — vibe-field",
+      "cwd": "/Users/dev/Projects/vibe-field",
+      "cell": {
+        "cellInstanceId": 2,
+        "cellBootId": "01JCELLBOOT0000000000000002",
+        "workloadClass": "agent",
+        "role": "class"
+      }
+    }
+  ],
+  "workers": [{ "id": "w1", "state": "up" }],
+  "inventoryBoundMs": 10000
+}

@@ -8,6 +8,7 @@ import {
   NativeUnavailableDetails,
   ObservedStaleCell,
   ObservedState,
+  ObservedTerminal,
 } from "../src/mgmt";
 import { TERMINAL_INVENTORY } from "../src/registries";
 import {
@@ -126,6 +127,53 @@ describe("a husk on the list — ObservedTerminal.exited (item 97)", () => {
       expect(
         ObservedState.safeParse({ ...base, terminals: [{ ...ended, exited }] }).success,
         String(exited),
+      ).toBe(false);
+  });
+});
+
+describe("a pane's activity on the list — ObservedTerminal.activity (PS-D5)", () => {
+  it("is a field the row declares, so the generated floor carries it typed", () => {
+    expect(Object.keys(ObservedTerminal.shape)).toContain("activity");
+  });
+
+  it("carries the host's kind where it has one, and nothing where the host cannot say", () => {
+    const floor = ObservedState.parse(fixture("observed-state.activity.json"));
+    const [job, prompt, silent] = floor.terminals;
+    expect(job?.activity).toEqual({ kind: "foreground-job" });
+    expect(prompt?.activity).toEqual({ kind: "shell-idle" });
+    expect(silent?.activity).toBeUndefined();
+  });
+
+  it("keeps older floors' rows parsing, their silence never a word that a pane is idle", () => {
+    for (const name of [
+      "observed-state.valid.json",
+      "observed-state.fresh.json",
+      "observed-state.exited-husk.json",
+    ])
+      for (const row of ObservedState.parse(fixture(name)).terminals)
+        expect(row.activity, name).toBeUndefined();
+  });
+
+  it("reads an unknown kind, or a field beside the kind, as a newer host's word", () => {
+    const base = ObservedState.parse(fixture("observed-state.activity.json"));
+    const [job] = base.terminals;
+    for (const activity of [
+      { kind: "waiting-on-input" },
+      { kind: "foreground-job", source: "process-group" },
+    ])
+      expect(
+        ObservedState.safeParse({ ...base, terminals: [{ ...job, activity }] }).success,
+        JSON.stringify(activity),
+      ).toBe(true);
+  });
+
+  it("refuses an activity that is not an object carrying a string kind", () => {
+    const base = ObservedState.parse(fixture("observed-state.activity.json"));
+    const [job] = base.terminals;
+    for (const activity of ["foreground-job", { kind: 1 }, {}, null, true])
+      expect(
+        ObservedState.safeParse({ ...base, terminals: [{ ...job, activity }] }).success,
+        JSON.stringify(activity),
       ).toBe(false);
   });
 });

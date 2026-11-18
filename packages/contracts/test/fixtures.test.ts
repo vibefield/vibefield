@@ -521,7 +521,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // cell (`observed-state.stale-cell`: `staleCells` beside it), and an older floor that cannot
   // say (`observed-state.valid`, neither field). Generated for field-native and parity-checked
   // strict in fixture_parity.rs; their own rows: terminal-inventory.test.ts. Item 97 adds a
-  // fourth: a husk listed `exited` beside a live row (`observed-state.exited-husk`).
+  // fourth: a husk listed `exited` beside a live row (`observed-state.exited-husk`). PS-D5 adds a
+  // fifth: a host's activity on two rows beside one that cannot say (`observed-state.activity`).
   "observed-state": ObservedState,
   "peer-info": PeerInfo,
   "store-snapshot": StoreSnapshot,
