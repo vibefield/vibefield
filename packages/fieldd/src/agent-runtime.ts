@@ -125,6 +125,7 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
+import { RESUMED_WHEN_IDLE, type StartedThrough, startedThrough } from "./agent-started-through";
 import {
   afterEscalation,
   type EscalationOutcome,
@@ -1522,6 +1523,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       const entered = this.enter(result, {
         cwd,
         title: params.title,
+        through: startedThrough("spawn", principal, forwardedFor),
         ...identity.launched(),
         ...(withheld ? { door: "off" as const } : {}),
         ...(place !== null ? { place: place.placeId } : {}),
@@ -1789,6 +1791,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       const entered = this.enter(result, {
         cwd,
         title: params.title,
+        through: startedThrough("resume", principal, forwardedFor),
         ...identity.launched(),
         ...(withheld ? { door: "off" as const } : {}),
         ...(launched !== undefined ? { modelSelection: launched } : {}),
@@ -1942,7 +1945,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           { runtimeRunId: record.runtimeRunId, state: "signed-out" },
         );
       }
-      const entry = await this.track(this.replacePending(pending, params.cwd, "manual", asked));
+      const entry = await this.track(
+        this.replacePending(
+          pending,
+          params.cwd,
+          "manual",
+          asked,
+          startedThrough("resume", principal, forwardedFor),
+        ),
+      );
       const said = this.resumeSelection(record.provider, record.modelSelection).outcome;
       return {
         ...this.ticketed(entry, principal, terminals, forwardedFor),
@@ -2007,7 +2018,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // Item 192 (RV #6) — the gate again, at the birth: `awaitExitCleanup` above is outside `creating`, so a
       // consented stop that closed the launches meanwhile counted no birth for this resume
       this.requireLaunchesOpen();
-      entry = await this.resumeFromRecord(record, params.cwd, husk, undefined, asked);
+      entry = await this.resumeFromRecord(
+        record,
+        params.cwd,
+        husk,
+        undefined,
+        asked,
+        startedThrough("resume", principal, forwardedFor),
+      );
     } finally {
       release();
     }
@@ -3396,6 +3414,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       door?: "off" | undefined;
       /** TH-1 — a resume: the run continues a conversation (the spark's transcript begins none) */
       resumed?: true | undefined;
+      /** Item 502 — the door it came through, said on its start line alone (never on the record) */
+      through?: StartedThrough | undefined;
     } & (
       | {
           /** AR-4 — the record already exists: this run was re-attached, and the
@@ -3547,6 +3567,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         provider: info.provider.id,
         sessionId: info.terminalSessionId,
         ...(info.profileId !== undefined ? { profileId: info.profileId } : {}),
+        // Item 502 — the set the run was bound to, and the door it came through, by ids and kinds alone (EL7)
+        ...(info.profileSetId !== undefined ? { profileSet: info.profileSetId } : {}),
+        ...(launch.through !== undefined
+          ? {
+              door: launch.through.door,
+              caller: launch.through.caller,
+              ...(launch.through.onBehalfOf !== undefined
+                ? { onBehalfOf: launch.through.onBehalfOf }
+                : {}),
+            }
+          : {}),
         ...(launch.replaced !== undefined ? { replaced: launch.replaced } : {}),
         ...(entry.typed !== undefined ? { spawnedBy: SPAWNED_BY_SHELL, pid: entry.typed.pid } : {}),
       },
@@ -3754,6 +3785,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     preparedBriefing?: AgentRunBriefing,
     /** OB custody (rule 6) — the spark fieldd's own wake asked this resume for; read by `resumedAs` and nothing else */
     asked?: SparkId,
+    /** Item 502 — the door this resume came through, for its start line */
+    through?: StartedThrough,
   ): Promise<ManagedEntry> {
     const continuation = continuationOf(record);
     const cwd = cwdOverride ?? record.cwd;
@@ -3783,6 +3816,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       const entered = this.enter(result, {
         cwd,
         title: record.title,
+        ...(through !== undefined ? { through } : {}),
         ...identity.launched(),
         ...(withheld ? { door: "off" as const } : {}),
         replaced,
@@ -4819,7 +4853,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       return;
     }
     try {
-      await this.track(this.replacePending(entry, undefined, "idle"));
+      await this.track(this.replacePending(entry, undefined, "idle", undefined, RESUMED_WHEN_IDLE));
     } catch (error) {
       // a refusal before the point of no return re-armed the poll itself;
       // a failure after it stamped the record, and the door's resume takes it
@@ -4891,6 +4925,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     how: "idle" | "manual",
     /** OB custody (rule 6) — the spark fieldd's own wake asked this resume for (`resume`'s last argument) */
     asked?: SparkId,
+    /** Item 502 — the door this resume came through, for its start line */
+    through?: StartedThrough,
   ): Promise<ManagedEntry> {
     // QL — the replacement takes the run out of `pending` before its new run
     // is entered, so for that window `runContinuing` cannot see it: it holds
@@ -4901,7 +4937,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       entry.record.runtimeRunId,
     );
     try {
-      return await this.replacePendingClaimed(entry, cwdOverride, how, asked);
+      return await this.replacePendingClaimed(entry, cwdOverride, how, asked, through);
     } finally {
       release();
     }
@@ -4912,6 +4948,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     cwdOverride: string | undefined,
     how: "idle" | "manual",
     asked?: SparkId,
+    through?: StartedThrough,
   ): Promise<ManagedEntry> {
     const { record } = entry;
     // AR-7c — never a typed run: the PTY this would end is the person's shell
@@ -5063,7 +5100,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       // 2. the new run: the vendor's own conversation continued in a new PTY
       let next: ManagedEntry;
       try {
-        next = await this.resumeFromRecord(record, cwdOverride, oldId, briefing, asked);
+        next = await this.resumeFromRecord(record, cwdOverride, oldId, briefing, asked, through);
       } catch (error) {
         // the old PTY is gone; the resume did not happen — the record says
         // exactly that, and the door's ordinary resume takes it next
