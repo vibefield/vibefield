@@ -360,6 +360,9 @@ import {
   TerminalReleaseParams,
   TerminalReleaseResult,
   TerminalReleasesFile,
+  TerminalScheme,
+  TerminalSchemeFile,
+  TerminalSchemeSetResult,
 } from "../src/terminal";
 import {
   AttachControlLeg,
@@ -714,6 +717,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // (`users/<fuid>/fieldd/terminal-bindings.json`); fieldd's store writes this
   // shape and its test parses what it wrote with the same schema.
   "terminal-bindings": TerminalBindingsFile,
+  // TL-4a — the terminal scheme: what the deck says (`terminal-scheme`), what
+  // fieldd answers for each cell (`terminal-scheme-set-result`, a cell that is
+  // down among them) and what fieldd keeps (`terminal-scheme-file`). The
+  // refusal when it cannot be kept is `error-data.terminal-scheme-unkept` (the
+  // ErrorData prefix). TS-only; their own rows: terminal-scheme.test.ts.
+  "terminal-scheme": TerminalScheme,
+  "terminal-scheme-set-result": TerminalSchemeSetResult,
+  "terminal-scheme-file": TerminalSchemeFile,
   // SNAP-D2 — the screenshot helper's stdout line and the shell's answer; the
   // Swift harness and the Rust crate parse these same files.
   "screenshot-helper-event": ScreenshotHelperEvent,

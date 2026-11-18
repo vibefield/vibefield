@@ -759,6 +759,7 @@ describe("DS-4 — the terminal doors routable to the owner", () => {
       "terminal.release": "federate",
       "terminal.takeGeometry": "local",
       "terminal.link.open": "local",
+      "terminal.scheme.set": "local",
     });
   });
 

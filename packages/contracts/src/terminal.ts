@@ -707,6 +707,86 @@ export const TerminalConfigRevealResult = z
   .passthrough();
 export type TerminalConfigRevealResult = z.infer<typeof TerminalConfigRevealResult>;
 
+// -- The terminal scheme (TL-4a, 2026-11-18). What a program in a pane is told
+// about its terminal: the ground, the ink, the cursor and the palette. The
+// device's deck says it (`terminal.scheme.set`); fieldd keeps it and tells
+// every local session, so a program that asks whether the ground is dark hears
+// the deck's answer whether or not a pane shows it. TS-only like the rest of
+// this file.
+
+/** `#rrggbb`. Validated here because fieldd turns it into the bytes a session
+ * is told, and never passes a caller's string on. */
+export const TerminalSchemeColor = z.string().regex(/^#[0-9a-fA-F]{6}$/);
+export type TerminalSchemeColor = z.infer<typeof TerminalSchemeColor>;
+
+/** One palette slot the scheme names. */
+export const TerminalSchemePaletteEntry = z
+  .object({
+    index: z.number().int().min(0).max(255),
+    color: TerminalSchemeColor,
+  })
+  .passthrough();
+export type TerminalSchemePaletteEntry = z.infer<typeof TerminalSchemePaletteEntry>;
+
+/** The scheme. It has no dark-or-light field: that is read from the
+ * background, so the two can never disagree. The palette is sparse and names
+ * each index at most once; a slot it does not name follows the terminal's
+ * configuration. */
+export const TerminalScheme = z
+  .object({
+    foreground: TerminalSchemeColor,
+    background: TerminalSchemeColor,
+    cursor: TerminalSchemeColor,
+    palette: z
+      .array(TerminalSchemePaletteEntry)
+      .max(256)
+      .refine((entries) => new Set(entries.map((entry) => entry.index)).size === entries.length, {
+        message: "a palette names each index at most once",
+      }),
+  })
+  .passthrough();
+export type TerminalScheme = z.infer<typeof TerminalScheme>;
+
+/** terminal.scheme.set params. */
+export const TerminalSchemeSetParams = z.object({ scheme: TerminalScheme }).passthrough();
+export type TerminalSchemeSetParams = z.infer<typeof TerminalSchemeSetParams>;
+
+/** One terminal cell's answer to a scheme change. `state` is `told` (every
+ * live session in the cell was told) or `unavailable` (the cell did not
+ * answer, and is told when it next does). A string, so a state added later
+ * does not fail an older reader. */
+export const TerminalSchemeCell = z
+  .object({
+    /** absent for the single cell of a floor that publishes no routes */
+    cellBootId: z.string().optional(),
+    workloadClass: TerminalWorkloadClass.optional(),
+    state: z.string(),
+    sessions: z.number().int().min(0),
+  })
+  .passthrough();
+export type TerminalSchemeCell = z.infer<typeof TerminalSchemeCell>;
+
+/** terminal.scheme.set result. `changed` is false when the scheme equals the
+ * kept one: nothing is written and no session is told, so saying the same
+ * scheme again (the deck says it at every mount) is silent, and `cells` is
+ * empty. */
+export const TerminalSchemeSetResult = z
+  .object({
+    changed: z.boolean(),
+    cells: z.array(TerminalSchemeCell),
+  })
+  .passthrough();
+export type TerminalSchemeSetResult = z.infer<typeof TerminalSchemeSetResult>;
+
+/** The scheme fieldd keeps (LAYOUT `TERMINAL_SCHEME_FILE`, 0600). */
+export const TerminalSchemeFile = z
+  .object({
+    version: z.literal(1),
+    scheme: TerminalScheme,
+  })
+  .passthrough();
+export type TerminalSchemeFile = z.infer<typeof TerminalSchemeFile>;
+
 // -- Terminal links (GT-8a, GT-D22). ghosttea's runtime finds links in a pane's
 // output and, on ⌘-click, hands the host the URL; `terminal.link.open` is where
 // VibeField decides what that click may do. The policy is VibeField's own and

@@ -2437,6 +2437,11 @@ export const LAYOUT = {
    * which profile a surviving shell was born under. */
   TERMINAL_RELEASES_FILE: ["fieldd", "terminal-releases.json"],
   TERMINAL_BINDINGS_FILE: ["fieldd", "terminal-bindings.json"],
+  /** TL-4a — the terminal scheme fieldd keeps (`TerminalSchemeFile`, 0600):
+   * what the deck last said every local session's ground, ink and cursor are.
+   * On disk because a session can be born with the app closed (a phone starts
+   * an agent), and fieldd tells it the scheme with no deck to ask. */
+  TERMINAL_SCHEME_FILE: ["fieldd", "terminal-scheme.json"],
   /** MV-3a (L4) — the project colour's IDENTITY (`ProjectIdentityFile`,
    * 0600): which project key was dealt which colour sequence, and the next
    * sequence to deal. fieldd's, because the monitor backend runs beside the

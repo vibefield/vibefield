@@ -2005,6 +2005,20 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // TL-4a — the terminal scheme: what every local session is told its ground,
+  // ink and cursor are. `settings.manage` like the config surface and for the
+  // same reason: it changes what programs in sessions this caller never opened
+  // are told, so only the trusted desktop window may say it. No agent token
+  // and no tailnet peer holds the scope (EL7). Local: the sessions are this
+  // device's. Idempotent: the same scheme twice is the same state, and fieldd
+  // answers the second call `changed: false` without telling anyone.
+  defineMethod({
+    surface: "product",
+    method: "terminal.scheme.set",
+    scope: "settings.manage",
+    idempotent: true,
+    locality: "local",
+  }),
   // GT-7: the DRY RUN. The loader reads the candidate in the overlay's place
   // and answers what it would make of it; nothing is written, so it is
   // idempotent — but it is still `settings.manage`, because a loader pointed at

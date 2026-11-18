@@ -26,6 +26,7 @@
   "SHELL_RELAUNCHES": ["fieldd", "shell-relaunches.json"],
   "TERMINAL_BINDINGS_FILE": ["fieldd", "terminal-bindings.json"],
   "TERMINAL_RELEASES_FILE": ["fieldd", "terminal-releases.json"],
+  "TERMINAL_SCHEME_FILE": ["fieldd", "terminal-scheme.json"],
   "PROJECT_IDENTITY_FILE": ["fieldd", "project-identity.json"],
   "SETUP_LEDGER_FILE": ["fieldd", "setup.json"],
   "DEVICE_NAME_FILE": ["fieldd", "device-name.json"],

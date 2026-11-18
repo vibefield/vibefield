@@ -1,0 +1,7 @@
+{
+  "changed": true,
+  "cells": [
+    { "cellBootId": "cell-i", "workloadClass": "interactive", "state": "told", "sessions": 3 },
+    { "cellBootId": "cell-a", "workloadClass": "agent", "state": "unavailable", "sessions": 0 }
+  ]
+}
