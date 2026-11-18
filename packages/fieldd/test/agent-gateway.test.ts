@@ -41,6 +41,7 @@ import {
   createAgentCatalogReaders,
   type TerminalInfo,
 } from "@vibefield/contracts";
+import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import type { Logger } from "@vibefield/logging";
 import { createBuiltinProviders } from "@vibefield/puppeteer-builtin-providers";
 import type { AgentInstallation, AgentRunBriefing, BoundIngress } from "@vibefield/puppeteer-core";
@@ -851,6 +852,8 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
   const kit: Unit["kit"] = { gateway: [], materialized: [], rendezvous: [], hosts: [] };
   const integrations: Unit["integrations"] = [];
   const audit: SystemAudit = async (mutation, effect, describe) => {
+    // the real writer refuses an action outside the audit's own grammar: the fake holds the gateway to it as well
+    AuditActionV1.parse(mutation.action);
     const entry: Ledgered = { mutation };
     ledger.push(entry);
     try {

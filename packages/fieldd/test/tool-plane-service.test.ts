@@ -8,6 +8,7 @@ import {
   personaSetsOf,
   type SparkRecord,
 } from "@vibefield/contracts";
+import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   type ToolPlaneAudit,
@@ -112,6 +113,8 @@ function harness(
   }[] = [];
   const audit: ToolPlaneAudit = {
     required: async (ctx, mutation, effect, describe) => {
+      // the real writer refuses an action outside the audit's own grammar: the fake holds the plane to it as well
+      AuditActionV1.parse(mutation.action);
       const value = await effect();
       audited.push({
         action: mutation.action,

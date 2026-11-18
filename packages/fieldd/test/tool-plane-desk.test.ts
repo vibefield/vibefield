@@ -1,5 +1,10 @@
+import { mkdtempSync, readdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { NativeDoorOpen } from "@vibefield/contracts";
+import { AuditActionV1, type AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
+import { AuditService, verifyAuditSegment } from "../src/audit-service";
 import { instructionsFor, type ToolPlaneAudit, ToolPlaneService } from "../src/tool-plane";
 import { MCP_MODERN } from "../src/tool-plane/mcp";
 import { cleanupWorlds, ordinaryWindow, world } from "./desk-fixtures";
@@ -15,6 +20,24 @@ import { cleanupWorlds, ordinaryWindow, world } from "./desk-fixtures";
 
 afterEach(cleanupWorlds);
 
+const trails: string[] = [];
+afterEach(() => {
+  for (const dir of trails.splice(0)) rmSync(dir, { recursive: true, force: true });
+});
+
+/** Every record the real writer kept, each segment verified as the ledger's own reader verifies it. */
+async function trailOf(root: string): Promise<AuditRecordV1[]> {
+  const kept: AuditRecordV1[] = [];
+  for (const name of readdirSync(root)
+    .filter((n) => n.endsWith(".jsonl"))
+    .sort()) {
+    const verified = await verifyAuditSegment(join(root, name));
+    expect(verified.valid, `${name}: ${verified.reason}`).toBe(true);
+    kept.push(...verified.records);
+  }
+  return kept;
+}
+
 const META = {
   "io.modelcontextprotocol/protocolVersion": MCP_MODERN,
   "io.modelcontextprotocol/clientCapabilities": {},
@@ -27,15 +50,18 @@ const DOOR: NativeDoorOpen = {
   pane: { terminalSessionId: "sess-plain", depth: 1 },
 };
 
-function harness() {
+/** `real`: the audit the plane is given in place of the recording fake (item 526's real-trail row). */
+function harness(real?: ToolPlaneAudit) {
   const h = world();
   h.window(ordinaryWindow);
   const handlers = new Map<number, (p: Uint8Array) => void>();
   const sent = new Map<number, string>();
   const order: string[] = [];
   const audited: { action: string; attrs?: Record<string, unknown> }[] = [];
-  const audit: ToolPlaneAudit = {
+  const fake: ToolPlaneAudit = {
     required: async (_ctx, mutation, effect) => {
+      // the real writer refuses an action outside the audit's own grammar: the fake holds the plane to it as well
+      AuditActionV1.parse(mutation.action);
       order.push(`audit ${mutation.action}`);
       audited.push({
         action: mutation.action,
@@ -82,7 +108,7 @@ function harness() {
       },
     },
     desk: { objects },
-    audit,
+    audit: real ?? fake,
     version: "0.1.0",
     now: () => 1_000_000,
   });
@@ -123,6 +149,30 @@ describe("the desk room through the plane (OB-3b)", () => {
     expect(line?.attrs).toMatchObject({ verb: "object_act", ref, tool: "write_text" });
     expect(JSON.stringify(line)).not.toContain("milk");
     expect(JSON.stringify(line)).not.toContain("shopping");
+  });
+
+  it("writes the act's `tools.object_act` lines through the real audit writer, attempt then outcome (item 526)", async () => {
+    // the fake above holds the grammar; this row holds the trail itself: the line a real writer keeps, read back
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-desk-trail-"));
+    trails.push(dataDir);
+    const service = new AuditService({ dataDir, bootId: "fieldd-desk-trail" });
+    await service.start();
+    const { h, plane, call } = harness(service);
+    await plane.ensureStarted();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    const result = await call(1, "object_act", {
+      doing: "Replace the shopping list",
+      ref,
+      tool: "write_text",
+      input: { text: "milk" },
+    });
+    expect(result?.isError).toBeUndefined();
+    await service.close();
+    const lines = (await trailOf(service.root)).filter((r) => r.action === "tools.object_act");
+    expect(lines.map((r) => r.phase)).toEqual(["attempt", "outcome"]);
+    expect(lines[0]?.attrs).toMatchObject({ verb: "object_act", ref, tool: "write_text" });
+    expect(JSON.stringify(lines)).not.toContain("milk");
   });
 
   it("answers not-handed as the words of the model's own tool result, with the instruction", async () => {
