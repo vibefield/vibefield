@@ -788,6 +788,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   readonly extensions: AgentExtensionService;
   /** AR-S4d — what each profile keeps once for its agents: definitions, value names, what each agent was given */
   private readonly extensionStore: AgentExtensionStore;
+  /** item 537 (2026-11-18, EL7) — what the composition starts on its own runs with: `agentEnvironment`'s allow-list,
+   * one snapshot at composition (item 50, 2026-11-17). The services and the runtime are handed this same value. */
+  private readonly serviceEnvironment: Record<string, string>;
   /** PJ-6 — each agent's own model picker, per Agent Profile, as last read */
   private readonly modelCatalogs: AgentModelCatalogs;
   private readonly records: SessionRecordStore;
@@ -967,10 +970,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // it to every service it builds. One snapshot at composition,
     // as fieldd's environment never changes in its lifetime. A probe that needs
     // another variable grows AGENT_ENV_PASSTHROUGH, the one list both read.
+    this.serviceEnvironment = agentEnvironment(home);
     const builtin = createBuiltinProviders({
       executables: executables as BuiltinProviderOptions["executables"],
       ...home,
-      serviceEnvironment: agentEnvironment(home),
+      serviceEnvironment: this.serviceEnvironment,
     });
     // AR-S4d (pass 24, S1) — a profile's server values, in the keychain; an
     // agent is given those of the servers VibeField gave it, when it starts.
@@ -988,6 +992,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       launchEnvironment: (run) =>
         this.extensionStore.launchValues(run.profileSetId, run.providerId),
       providers: opts.providers === undefined ? builtin : opts.providers(builtin),
+      // item 537 (2026-11-18, EL7) — the runtime's own git observers (a run's branch and head) run under the same
+      // snapshot the services do: puppeteer 0.4.2 reads `serviceEnvironment` from the runtime's options as well
+      serviceEnvironment: this.serviceEnvironment,
       creationRegistry: this.claims,
       profiles: {
         store: createProfileStore({
