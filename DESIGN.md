@@ -2941,7 +2941,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     with SP-1e.)* *Since TH-1 (2026-11-05; ER-C15):* the thread's flow takes a card as the composer does, a chip in
     the draft (§8 "Chat's composer", a card from the hand). Over the line the carried card ducks to 0.55; **held over a view's
     cell for 520ms** (HN-D6) that view opens under it, the cell saying "Opening Godview" with its
-    progress — copy in History and play in Godview in one drag.
+    progress — copy in History and play in Godview in one drag. **A Live card** played on an agent's
+    pane is the grant (OB-L1); when the play cannot finish, what it granted is taken back. *Item 526
+    (2026-11-18):* a take-back VibeField could not make is never left unsaid. After the play's own
+    note, the line says "claude·2 still has “Q3 plan”." while the agent still holds it, or
+    "Couldn't take “Q3 plan” back from claude·2." when VibeField cannot tell, and the note stands to
+    be read. Where it can, VibeField asks twice before it says either.
   - **Picking one up** (HN-D5): a click picks a card up the way the desk opens its whiteboard — it flies
     to the window's centre and grows to reading size, **2.4×** (288 × 403), in 560ms on the island curve, while
     the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
