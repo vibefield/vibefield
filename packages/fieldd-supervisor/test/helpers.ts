@@ -497,7 +497,7 @@ setInterval(() => {}, 1e6);
  * it has seen changes: never a secret, only a digest of the line and whether a secret was in argv or env. */
 export const FIXTURE_SEALED = `
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, renameSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
 
@@ -522,8 +522,12 @@ const observed = {
   hellos: [],
   subscribes: 0,
 };
+// whole or not at all: a test reads this file while the child may be rewriting it
 function note() {
-  if (process.env.OBSERVE_FILE) writeFileSync(process.env.OBSERVE_FILE, JSON.stringify(observed));
+  const file = process.env.OBSERVE_FILE;
+  if (!file) return;
+  writeFileSync(file + ".tmp", JSON.stringify(observed));
+  renameSync(file + ".tmp", file);
 }
 
 function readLine() {
