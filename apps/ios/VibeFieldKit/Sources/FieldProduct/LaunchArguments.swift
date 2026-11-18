@@ -5,7 +5,8 @@ import Foundation
 /// tooling, so a TestFlight build and the build App Review sees answer only to their own controls. A demo stands
 /// there by the Developer page's choices alone, wearing its Demo tag, and no fixture's variant is reached.
 ///
-/// `LaunchArgumentsTests` holds that no line a TestFlight build or the review build compiles reads the arguments.
+/// Every read of the arguments in FieldHome and FieldWorkspace goes through `current`. No line a TestFlight build or
+/// the review build compiles reads the arguments any other way, this file's included (`LaunchArgumentsTests`).
 public enum LaunchArguments {
   /// Whether this is a development build, the one kind that reads its launch arguments.
   public static var development: Bool {
@@ -25,9 +26,9 @@ public enum LaunchArguments {
     #endif
   }
 
-  /// The same rule as a value, for the rows: they read a TestFlight build's answer through it, since the kit's tests
-  /// run in a development build. Red: it passes the arguments in every build yet, and no read goes through the seam.
+  /// The same rule as a value: `arguments` in a development build, none in any other. The rows read a TestFlight
+  /// build's answer through it, since the kit's tests run in a development build.
   public static func of(_ arguments: [String], development: Bool) -> [String] {
-    arguments
+    development ? arguments : []
   }
 }

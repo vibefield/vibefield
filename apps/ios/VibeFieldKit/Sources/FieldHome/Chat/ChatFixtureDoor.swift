@@ -261,13 +261,13 @@
 
     /// IOS-12f — the stills' New spark: `-vf-open-new-spark` opens the sheet once Chat's list is heard, and
     /// `-vf-new-spark-create` presses Create once its reads are in (no OS input on the stills' host).
-    static var openNewSpark: Bool { ProcessInfo.processInfo.arguments.contains("-vf-open-new-spark") }
+    static var openNewSpark: Bool { LaunchArguments.current.contains("-vf-open-new-spark") }
     /// ES-5d — `-vf-new-spark-job`: that opening carries the hello's first starter, as a press on the night does.
-    static var newSparkJob: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-job") }
+    static var newSparkJob: Bool { LaunchArguments.current.contains("-vf-new-spark-job") }
     /// ES-5c — `-vf-chat-empty`: no spark, nothing waiting and every desktop answered, so the page is the night.
-    static var emptyNight: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-empty") }
+    static var emptyNight: Bool { LaunchArguments.current.contains("-vf-chat-empty") }
     /// ES-5c — `-vf-chat-off`: no agent at the home can be a spark, so the night is Off.
-    static var nightOff: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-off") }
+    static var nightOff: Bool { LaunchArguments.current.contains("-vf-chat-off") }
 
     /// The merged list with no spark and every desktop answered.
     static func emptied(_ list: JSONValue) -> JSONValue {
@@ -293,10 +293,10 @@
         })
       return .object(fields)
     }
-    static var pressCreate: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-create") }
+    static var pressCreate: Bool { LaunchArguments.current.contains("-vf-new-spark-create") }
     /// IOS-12f's f6 — the stills' row after the flight: `-vf-new-spark-hold` holds Chat's list once the face has
     /// landed, its thread unopened (no OS input on the stills' host).
-    static var holdLanding: Bool { ProcessInfo.processInfo.arguments.contains("-vf-new-spark-hold") }
+    static var holdLanding: Bool { LaunchArguments.current.contains("-vf-new-spark-hold") }
     /// IOS-12f's f6b — the stills' seed: `-vf-new-spark-seed=<n>` deals face n in New spark's sheet, the same every
     /// run, as 12e's stills were seeded (4211). Without it the sheet deals at random, as it ships.
     static var newSparkSeed: UInt32? { flag("-vf-new-spark-seed=").flatMap { UInt32($0) } }
@@ -316,7 +316,7 @@
     }
 
     private static func flag(_ prefix: String) -> String? {
-      ProcessInfo.processInfo.arguments.first { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }
+      LaunchArguments.current.first { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) }
     }
 
     func reader(
@@ -332,7 +332,7 @@
     /// The thread's case: `-vf-chat-case=<case>`, else at rest.
     static var threadCase: String {
       let flag = "-vf-chat-case="
-      let given = ProcessInfo.processInfo.arguments.first { $0.hasPrefix(flag) }
+      let given = LaunchArguments.current.first { $0.hasPrefix(flag) }
       return given.map { String($0.dropFirst(flag.count)) } ?? "at-rest"
     }
 
@@ -340,19 +340,19 @@
     /// input on the stills' host: the 12c plan §5).
     static var openThread: String? {
       let flag = "-vf-open-chat-thread="
-      return ProcessInfo.processInfo.arguments.first { $0.hasPrefix(flag) }.map { String($0.dropFirst(flag.count)) }
+      return LaunchArguments.current.first { $0.hasPrefix(flag) }.map { String($0.dropFirst(flag.count)) }
     }
 
     /// The stills' head of a long flow: `-vf-chat-at-top` opens the thread at its first row, as a scroll up would.
-    static var atTop: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-at-top") }
+    static var atTop: Bool { LaunchArguments.current.contains("-vf-chat-at-top") }
 
     /// The stills' tools still: `-vf-chat-open-tools` opens every turn's tools, as a press would.
-    static var openTools: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-open-tools") }
+    static var openTools: Bool { LaunchArguments.current.contains("-vf-chat-open-tools") }
 
     /// The stills' held draft: `-vf-chat-draft=<words>` stands in the field, as typed.
     static var draft: String? {
       let flag = "-vf-chat-draft="
-      return ProcessInfo.processInfo.arguments.first { $0.hasPrefix(flag) }.map { String($0.dropFirst(flag.count)) }
+      return LaunchArguments.current.first { $0.hasPrefix(flag) }.map { String($0.dropFirst(flag.count)) }
     }
 
     /// IOS-12f's M-f2 — @'s sessions for the stills: one for each agent the first profile signs in, out of the
@@ -380,7 +380,7 @@
     /// is the first staged, whose picker the contracts' `agent-models.valid` is, so its menu's still shows models.
     static var draftParts: [ChatDraftPart]? {
       let staged = stagedAtBoard()
-      guard ProcessInfo.processInfo.arguments.contains("-vf-chat-chips"), let first = staged.first, let run = staged.last
+      guard LaunchArguments.current.contains("-vf-chat-chips"), let first = staged.first, let run = staged.last
       else { return nil }
       let agent = ChatAgentChip(
         id: "agent:\(first.agent):native", agent: first.agent, label: first.label,
@@ -397,14 +397,14 @@
     static let agentChipOffset = 4
 
     /// The stills' agent's menu: `-vf-chat-at-menu` opens it on `-vf-chat-chips`'s agent, as a tap on its chip would.
-    static var openAgentMenu: Bool { ProcessInfo.processInfo.arguments.contains("-vf-chat-at-menu") }
+    static var openAgentMenu: Bool { LaunchArguments.current.contains("-vf-chat-at-menu") }
 
     /// The stills' facts of their case's spark: under `-vf-chat-case=`, the golden's `facts`, what its spark was when
     /// the Mac's fold drew the case (new, awake, blocked, waiting, working, turnedAt), with the mock spark's name, seed
     /// and status kept, so the head and the flow's faces agree. The mock list's Vela has worked and its session is
     /// live, so without them the hello's case draws no hello. Without the flag, nil: the entry's own facts stand.
     static func caseFacts(over spark: ChatFlowSpark) -> ChatFlowSpark? {
-      guard ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-chat-case=") }),
+      guard LaunchArguments.current.contains(where: { $0.hasPrefix("-vf-chat-case=") }),
         let facts = fixture("chat-flow.\(threadCase).golden", in: "Fixtures/chat-flow")?["facts"]
       else { return nil }
       return ChatFlowSpark(

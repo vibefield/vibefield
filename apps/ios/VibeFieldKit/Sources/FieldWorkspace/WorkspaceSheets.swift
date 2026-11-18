@@ -129,7 +129,7 @@ public struct CreateSessionSheet: View {
         if model.needsFolder { choosingFolder = true }
         if let device = model.selected { await model.select(device) }
         #if DEBUG
-          if let scenario = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-workspace=") })?.split(separator: "=").last {
+          if let scenario = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-demo-workspace=") })?.split(separator: "=").last {
             if ["folder", "launch", "refused", "spawning"].contains(String(scenario)) {
               if let reader = model.reader, let root = reader.roots.first(where: { $0.browse == "home" }) {
                 await reader.open(root, path: "Projects/workbench")

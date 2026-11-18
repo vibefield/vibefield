@@ -105,7 +105,7 @@ public struct HomeScreen: View {
     /// once the phone has signed in by itself, nil when the launch does not stamp it. Read here, before the first
     /// frame, so the way in stands from the first frame and the tabs never mount before the sign-in.
     @State private var fieldSliceSignedIn: Bool? =
-      FieldSliceSignIn.launch(ProcessInfo.processInfo.arguments) == nil ? nil : false
+      FieldSliceSignIn.launch(LaunchArguments.current) == nil ? nil : false
   #endif
   @State private var selection: SessionSelection?
   /// The card's SUBJECT, remembered rather than looked up fresh every frame.
@@ -444,7 +444,7 @@ public struct HomeScreen: View {
         // fix8 — a main thread that stops answering for 2 s is said on the
         // console, beside the attach's last phase; a second start is nothing
         MainThreadWitness.shared.start()
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-demo-workspace=") }) {
+        if LaunchArguments.current.contains(where: { $0.hasPrefix("-vf-demo-workspace=") }) {
           workspaceLaunch = WorkspaceFixtureDoor.model()
           createSheet = workspaceLaunch
         }
@@ -889,7 +889,7 @@ public struct HomeScreen: View {
       link = fixture
       fixtureLink = true
       reportCard()
-      guard let delay = FieldSliceSignIn.launch(ProcessInfo.processInfo.arguments), fieldSliceSignedIn == false
+      guard let delay = FieldSliceSignIn.launch(LaunchArguments.current), fieldSliceSignedIn == false
       else { return }
       Task {
         try? await Task.sleep(for: delay)
@@ -1328,7 +1328,7 @@ public struct HomeScreen: View {
   /// The answer's note stands for the note's time; the stills hold it under `-vf-chat-note-holds` (DEBUG, still 8).
   private var chatSaidLasts: Duration {
     #if DEBUG
-      if ProcessInfo.processInfo.arguments.contains("-vf-chat-note-holds") { return .seconds(3600) }
+      if LaunchArguments.current.contains("-vf-chat-note-holds") { return .seconds(3600) }
     #endif
     return ChatNoteView.lasts
   }
@@ -1341,7 +1341,7 @@ public struct HomeScreen: View {
         chat.attach(ChatFixtureDoor.shared, home: ChatFixtureDoor.home)
         chat.stagedAtBoard = ChatFixtureDoor.stagedAtBoard()
         // `-vf-mock-chat-away`: the home answers once and then sleeps, so the page stands as it last said
-        if ProcessInfo.processInfo.arguments.contains("-vf-mock-chat-away") {
+        if LaunchArguments.current.contains("-vf-mock-chat-away") {
           Task {
             try? await Task.sleep(for: .seconds(1))
             chat.attach(nil, home: nil)
@@ -1601,7 +1601,7 @@ public struct HomeScreen: View {
   /// `-vf-apps-open` — the stills' door to the shelf, under `-vf-mock` alone.
   private func openShelfForStills() {
     #if DEBUG || VF_TESTFLIGHT
-      if mock != nil, ProcessInfo.processInfo.arguments.contains(AppsFixtureDoor.openArgument) {
+      if mock != nil, LaunchArguments.current.contains(AppsFixtureDoor.openArgument) {
         appsDoor.openShelf(showing: apps.reading.apps.map(\.foldKey))
       }
     #endif
@@ -2482,7 +2482,7 @@ public struct HomeScreen: View {
         // Debug-only): drive flows a simulator run can't tap into.
         // TS-7 — the welcome's Continue with Tailscale, as a finger would
         // tap it: the corner's menu is not the way in while the welcome stands.
-        if ProcessInfo.processInfo.arguments.contains("-vf-auto-connect") {
+        if LaunchArguments.current.contains("-vf-auto-connect") {
           performSignIn()
         }
         // IOS-9d — `-vf-mock`: the whole phone over invented facts and no
@@ -2498,9 +2498,9 @@ public struct HomeScreen: View {
         // RB-2 — Demo field, by its argument or by the Developer page (`thisLaunch`, read once for the launch)
         if Self.thisLaunch.demoField, mock == nil {
           let account = MockAccount()
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-signed-out") { account.standing = .signedOut }
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-reconnecting") { account.standing = .reconnecting }
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-approval") { account.standing = .approval }
+          if LaunchArguments.current.contains("-vf-mock-signed-out") { account.standing = .signedOut }
+          if LaunchArguments.current.contains("-vf-mock-reconnecting") { account.standing = .reconnecting }
+          if LaunchArguments.current.contains("-vf-mock-approval") { account.standing = .approval }
           mock = account
           mockActive = true
           if account.fieldIsLive { feed.start() }
@@ -2511,17 +2511,17 @@ public struct HomeScreen: View {
           mockSearchRows = MockAccount.searchRows()
           mockProfiles = MockAccount.searchProfiles()
           lens.adopt(mockProfiles)
-          let doors = PhoneSearchWorld.Doors.read(ProcessInfo.processInfo.arguments)
+          let doors = PhoneSearchWorld.Doors.read(LaunchArguments.current)
           lens.show(doors.lens)
           // UM-5b — `-vf-mock-plan=<key>`: a plan chosen for the stills
           lens.showPlan(doors.plan)
           // held too: the profiles' onChange shows it again once they stand, whichever call lands last
           mockLens = doors.lens
           mockPlan = doors.plan
-          if let words = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
+          if let words = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
             searchQuery = String(words.dropFirst("-vf-mock-search=".count))
           }
-          if let tab = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-tab=") }) {
+          if let tab = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-mock-tab=") }) {
             switch tab.dropFirst("-vf-mock-tab=".count) {
             case "history": selectedTab = .history
             case "chat": selectedTab = .chat
@@ -2533,31 +2533,31 @@ public struct HomeScreen: View {
             default: selectedTab = .field
             }
           }
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-landed"), let group = HistoryCorpus.mock.hits.first,
+          if LaunchArguments.current.contains("-vf-mock-landed"), let group = HistoryCorpus.mock.hits.first,
             group.rows.count > 1
           {
             let query = searchQuery.isEmpty ? "badge" : searchQuery
             history.land(FieldHistoryModel.landing(for: group.rows[1], in: group, corpus: .mock), query: query)
             selectedTab = .history
           }
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-open") { accountMenuOpen = true }
+          if LaunchArguments.current.contains("-vf-mock-open") { accountMenuOpen = true }
           // UM-4 — the Agent Profiles page over the fixture door's home (`-vf-mock-usage=` picks its usage state)
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-agent-profiles") { agentProfilesOpen = true }
+          if LaunchArguments.current.contains("-vf-mock-agent-profiles") { agentProfilesOpen = true }
           // UM-4 — the face held for a photograph, once the corner has placed it and the home's profiles are read
-          if let reach = FaceHold.mockReach(ProcessInfo.processInfo.arguments) {
+          if let reach = FaceHold.mockReach(LaunchArguments.current) {
             Task {
               try? await Task.sleep(for: .milliseconds(800))
               faceHold.held = FaceHold.Held(face: faceCentre, reach: reach)
             }
           }
-          if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-project=") }) {
+          if let open = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-mock-project=") }) {
             let id = String(open.dropFirst("-vf-mock-project=".count))
             if HistoryCorpus.mock.project(id) != nil {
               history.path = [.project(id: id)]
               selectedTab = .history
             }
           }
-          if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-session=") }) {
+          if let open = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-mock-session=") }) {
             // a document on top, for the screenshot run
             let id = String(open.dropFirst("-vf-mock-session=".count))
             if let document = HistoryCorpus.mock.document(id) {
@@ -2570,7 +2570,7 @@ public struct HomeScreen: View {
           }
           // After the tab's own change has opened the bar again, or it would
           // undo the fold the moment it landed.
-          if ProcessInfo.processInfo.arguments.contains("-vf-mock-folded") {
+          if LaunchArguments.current.contains("-vf-mock-folded") {
             Task {
               try? await Task.sleep(for: .milliseconds(600))
               history.barMinimized = true
@@ -2584,15 +2584,15 @@ public struct HomeScreen: View {
         // then takes the door away so the cache's replay can be photographed;
         // `-vf-demo-history-session=<id>` puts a document on top, the tail's
         // scripted delta arriving two seconds in for the arrival pill).
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-history"), !demoHistory {
+        if LaunchArguments.current.contains("-vf-demo-history"), !demoHistory {
           demoHistory = true
-          let asleep = ProcessInfo.processInfo.arguments.contains("-vf-demo-history-asleep")
+          let asleep = LaunchArguments.current.contains("-vf-demo-history-asleep")
           historyDesktops.mount(.fixed(corpus: .mock, standing: asleep ? .asleep : .connected))
           selectedTab = .history
         }
-        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-demo-history-door") || $0.hasPrefix("-vf-demo-history-offline") }), !demoHistory {
+        if LaunchArguments.current.contains(where: { $0.hasPrefix("-vf-demo-history-door") || $0.hasPrefix("-vf-demo-history-offline") }), !demoHistory {
           demoHistory = true
-          let offline = ProcessInfo.processInfo.arguments.contains("-vf-demo-history-offline")
+          let offline = LaunchArguments.current.contains("-vf-demo-history-offline")
           let door = HistoryFixtureDoor()
           // PJ-7 — the goldens' own desktops: `studio` answers (its door is
           // the fixture's), `laptop` sleeps
@@ -2605,7 +2605,7 @@ public struct HomeScreen: View {
           historyDesktops.attach(deviceId: studio, name: "studio", isHome: true, door: door, ownsDoor: true)
           historyDesktops.chooseLedger(roster: roster)
           selectedTab = .history
-          let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-session=") })
+          let open = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-demo-history-session=") })
             .map { String($0.dropFirst("-vf-demo-history-session=".count)) }
           Task { @MainActor in
             // the ledger first (the reads are one in-process answer each),
@@ -2615,7 +2615,7 @@ public struct HomeScreen: View {
               try? await Task.sleep(for: .milliseconds(100))
               waited += 1
             }
-            if let project = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-project=") })
+            if let project = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-demo-history-project=") })
               .map({ String($0.dropFirst("-vf-demo-history-project=".count)) })
             {
               historyDesktops.need(.project(id: project))
@@ -2645,10 +2645,10 @@ public struct HomeScreen: View {
         // go as it is read, so it stands for this open alone)
         if let state = Self.thisLaunch.account {
           demoAccount = AccountFixtures.demo(named: state)
-          if ProcessInfo.processInfo.arguments.contains(AccountFixtures.openArgument) {
+          if LaunchArguments.current.contains(AccountFixtures.openArgument) {
             accountMenuOpen = true
           }
-        } else if let argument = ProcessInfo.processInfo.arguments.first(where: {
+        } else if let argument = LaunchArguments.current.first(where: {
           $0.hasPrefix(LaunchFixtures.accountArgument + "=")
         }) {
           print("unknown account fixture:", argument.dropFirst(LaunchFixtures.accountArgument.count + 1))
@@ -2659,7 +2659,7 @@ public struct HomeScreen: View {
         // each step on the console. `shared` meets iOS's consent alert first,
         // `ephemeral` the page itself. No tailnet is involved: the close is the
         // app's own.
-        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-signin=") }),
+        if let argument = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-demo-signin=") }),
           let page = URL(string: "https://login.tailscale.com/start")
         {
           let mode = String(argument.dropFirst("-vf-demo-signin=".count))
@@ -2686,8 +2686,8 @@ public struct HomeScreen: View {
         // `mesh.state` reaches `.up`.
         // The scripted fleet, now behind its own door. Every argument that
         // shows the field's OWN pixels wants it; nothing else does.
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-fleet")
-          || ProcessInfo.processInfo.arguments.contains(where: {
+        if LaunchArguments.current.contains("-vf-demo-fleet")
+          || LaunchArguments.current.contains(where: {
             $0.hasPrefix("-vf-swarm-lab")
           })
         {
@@ -2716,7 +2716,7 @@ public struct HomeScreen: View {
         //
         // WI-1's OWED witness — signed out (`-vf-demo-field-slice-signed-out`), the slice waits until the tabs are
         // down (`installFieldSlice`, from `standing`), so its board can only arrive under the way in.
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-field-slice"), link == nil,
+        if LaunchArguments.current.contains("-vf-demo-field-slice"), link == nil,
           fieldSliceSignedIn != false || !tabsStanding
         {
           installFieldSlice()
@@ -2728,7 +2728,7 @@ public struct HomeScreen: View {
         // deadline (a still cannot tap); `-vf-godview-dissolve=off` draws the stage unmasked, for a frame meter.
         if !godviewLaunchRead {
           godviewLaunchRead = true
-          let arguments = ProcessInfo.processInfo.arguments
+          let arguments = LaunchArguments.current
           if let view = GodviewViewChoice.launch(arguments) { godviewLaunch = view }
           godviewNow = GodviewViewChoice.frozenNow(arguments)
           godviewStill = GodviewViewChoice.still(arguments)
@@ -2738,7 +2738,7 @@ public struct HomeScreen: View {
         // `!demoRemoteActive` for the reason the line above carries: a second
         // appearance would otherwise replace a running fixture field with a
         // fresh one and never stop the first.
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-remote"), !demoRemoteActive {
+        if LaunchArguments.current.contains("-vf-demo-remote"), !demoRemoteActive {
           demoRemoteActive = true
           remoteField = RemoteSessionField(source: DemoRemoteSource())
           remoteField.start()
@@ -2755,20 +2755,20 @@ public struct HomeScreen: View {
         // becomes a launch argument, for exactly the reason every other
         // argument in this block exists: it is the only way to a picture of a
         // state, and it cannot run in Release.
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-landscape") {
+        if LaunchArguments.current.contains("-vf-demo-landscape") {
           requestLandscape()
         }
         // --- end IOS-5e ---------------------------------------------------
         // IOS-10a — `-vf-open-settings[=<page>]`: Settings, at its root or
         // at one page (`account`, `desktop:<id>`, `appearance`, `terminal`,
         // `about`, `acknowledgements`, `lock`), for a photograph run.
-        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-open-settings") }) {
+        if let argument = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-open-settings") }) {
           settingsOpening = FieldHomeModel.settingsOpening(argument: argument)
           settingsSheetOpen = true
         }
         // --- IOS-6c: the swarm design lab — the reference's fixture stages on
         // this phone's renderer, the screenshot gate for every pixel slice.
-        if let argument = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-swarm-lab") }) {
+        if let argument = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-swarm-lab") }) {
           // `-vf-swarm-lab=states:3` opens one page so a screenshot run,
           // which cannot scroll, reaches every stage.
           swarmLabFocus = LabFocus(argument: String(argument.dropFirst("-vf-swarm-lab".count).drop(while: { $0 == "=" })))
@@ -2782,13 +2782,13 @@ public struct HomeScreen: View {
         // simulator has no mesh — so this forces the face and prints the acts
         // instead of sending them. It is a fixture for looking at our own
         // pixels; nothing here can run in Release.
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-card") {
+        if LaunchArguments.current.contains("-vf-demo-input-card") {
           demoInputCard = true
           inputCard.sink = { act in
             print("input act:", act)
             return true
           }
-          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-live") {
+          if LaunchArguments.current.contains("-vf-demo-input-live") {
             inputCard.mode = .live
           } else {
             inputCard.fieldFocused = true
@@ -2796,7 +2796,7 @@ public struct HomeScreen: View {
           // The states a screenshot cannot tap its way into: a filled draft
           // (inverted Send, the field grown past one line) with the latch
           // held (inverted CTRL and its dot). Fixture text, plainly so.
-          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-draft") {
+          if LaunchArguments.current.contains("-vf-demo-input-draft") {
             inputCard.draft = "git status --short\ngit log --oneline -5"
             // LOCKED rather than armed: an armed latch has a 3 s window and
             // would be gone before a screenshot could be taken, which is the
@@ -2807,7 +2807,7 @@ public struct HomeScreen: View {
           // --- IOS-5b: the two states a long press is the only way into ----
           // The fan is opened after the card is on screen — a popover anchored
           // to a key that does not exist yet has nothing to point at.
-          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-fan") {
+          if LaunchArguments.current.contains("-vf-demo-input-fan") {
             Task {
               try? await Task.sleep(for: .seconds(3))
               inputCard.showFan(.control)
@@ -2817,7 +2817,7 @@ public struct HomeScreen: View {
           // slower than that. So the fixture re-arms it on a loop rather than
           // pretending the window is longer than it is — the state in the
           // picture is the real one, held open by a fixture that says so.
-          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-meta") {
+          if LaunchArguments.current.contains("-vf-demo-input-meta") {
             Task {
               for _ in 0..<600 {
                 inputCard.armMeta()
@@ -2835,7 +2835,7 @@ public struct HomeScreen: View {
           // actual rule that puts heard words in the draft rather than a mock
           // of one. Nothing here opens an audio session or asks Speech for
           // anything: our own pixels, never a claim that something was heard.
-          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-dictating") {
+          if LaunchArguments.current.contains("-vf-demo-input-dictating") {
             DictationSession.demoListening = true
             inputCard.appendDictation("run the tests and show me what fails")
           }
@@ -2847,13 +2847,13 @@ public struct HomeScreen: View {
         // consulted: it was assigned two lines up, and a card whose fixture
         // silently did nothing because a `@State` had not settled is exactly
         // the kind of thing a fixture must not be able to do.
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-card") {
+        if LaunchArguments.current.contains("-vf-demo-input-card") {
           // The fixture has no Metal surface to report a first responder, so
           // the flag the strip is derived from is stamped rather than earned.
           if inputCard.mode == .live { inputCard.terminalFocused = true }
           // The keyboard DOWN: the card collapses to the closed row — which on
           // a real card is simply how a session opens.
-          if ProcessInfo.processInfo.arguments.contains("-vf-demo-input-closed") {
+          if LaunchArguments.current.contains("-vf-demo-input-closed") {
             inputCard.fieldFocused = false
             inputCard.terminalFocused = false
           }
@@ -2863,12 +2863,12 @@ public struct HomeScreen: View {
           // shipping code; the permission they answer is invented, and the
           // README says so.
           demoInputChips =
-            ProcessInfo.processInfo.arguments.contains("-vf-demo-input-chips")
+            LaunchArguments.current.contains("-vf-demo-input-chips")
           // The review sheet is otherwise reachable only by tapping a SYSTEM
           // paste control with five lines on the pasteboard, and a headless
           // run can do neither — so its pixels could never be looked at. The
           // same door `-vf-open-write-key` opens, for the same reason.
-          if ProcessInfo.processInfo.arguments.contains("-vf-demo-paste-review") {
+          if LaunchArguments.current.contains("-vf-demo-paste-review") {
             inputCard.pendingPasteReview = PendingPaste(
               text: """
                 #!/bin/sh
@@ -2890,15 +2890,15 @@ public struct HomeScreen: View {
           // They wait, because the card has to be on screen first: a keypad
           // needs a responder to rise under and a sheet needs a presented
           // card to rise from.
-          let keypadArgument = ProcessInfo.processInfo.arguments.first {
+          let keypadArgument = LaunchArguments.current.first {
             $0.hasPrefix(DemoArguments.keypad)
           }
           let showSnippets =
-            ProcessInfo.processInfo.arguments.contains("-vf-demo-input-snippets")
+            LaunchArguments.current.contains("-vf-demo-input-snippets")
           let showHistory =
-            ProcessInfo.processInfo.arguments.contains("-vf-demo-input-history")
-          let showPlus = ProcessInfo.processInfo.arguments.contains("-vf-demo-input-plus")
-          let showScan = ProcessInfo.processInfo.arguments.contains("-vf-demo-input-scan")
+            LaunchArguments.current.contains("-vf-demo-input-history")
+          let showPlus = LaunchArguments.current.contains("-vf-demo-input-plus")
+          let showScan = LaunchArguments.current.contains("-vf-demo-input-scan")
 
           // A scratch defaults suite, wiped at launch: a fixture must never
           // write into the snippets or the history a real user has.
@@ -2937,7 +2937,7 @@ public struct HomeScreen: View {
           // --- end IOS-5d ------------------------------------------------
         }
         // --- end IOS-5c --------------------------------------------------
-        let autoOpen = ProcessInfo.processInfo.arguments.first {
+        let autoOpen = LaunchArguments.current.first {
           $0 == "-vf-auto-open-card" || $0.hasPrefix("-vf-auto-open-card=")
         }
         if let autoOpen {
@@ -3904,14 +3904,14 @@ public struct HomeScreen: View {
   // argument first, the Developer page's choices second, a chosen account state let go as it is read (D5 A), so a
   // return from the background reads nothing. The build submitted for App Review has no demo and compiles no reader.
   #if DEBUG || VF_TESTFLIGHT
-    static let thisLaunch = LaunchFixtures.read(arguments: ProcessInfo.processInfo.arguments, defaults: .standard)
+    static let thisLaunch = LaunchFixtures.read(arguments: LaunchArguments.current, defaults: .standard)
   #else
     static let thisLaunch = LaunchFixtures.off
   #endif
   #if DEBUG || VF_TESTFLIGHT
     /// Whether this open's demo is a scripted run's (its launch argument), not the page's: the mock keeps its own
     /// acts (Q1), and a scripted photograph wears no Demo tag.
-    static let thisLaunchScripted = LaunchFixtures.fromArguments(ProcessInfo.processInfo.arguments) != nil
+    static let thisLaunchScripted = LaunchFixtures.fromArguments(LaunchArguments.current) != nil
   #endif
 
   #if DEBUG || VF_TESTFLIGHT
@@ -3921,7 +3921,7 @@ public struct HomeScreen: View {
     /// fixture. `-vf-demo-signin` is the real welcome under the real sheet.
     /// RB-2 — a demo the Developer page chose owns it as its argument does.
     private static let fixtureArguments = thisLaunch.demoStands
-      || ProcessInfo.processInfo.arguments.contains { argument in
+      || LaunchArguments.current.contains { argument in
       (argument.hasPrefix("-vf-demo-") && !argument.hasPrefix("-vf-demo-signin"))
         || argument.hasPrefix("-vf-mock") || argument.hasPrefix("-vf-swarm-lab")
     }
@@ -4348,7 +4348,7 @@ public struct HomeScreen: View {
     deviceID: String, urlSession: @escaping TerminalAttachment.SessionProvider
   ) async -> TerminalLanes? {
     #if DEBUG
-      guard ProcessInfo.processInfo.arguments.contains("-vf-freeway"), let link else { return nil }
+      guard LaunchArguments.current.contains("-vf-freeway"), let link else { return nil }
       let freeway: Freeway
       if let kept = freeways[deviceID] {
         freeway = kept

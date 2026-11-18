@@ -34,7 +34,7 @@
     init(usage: Usage) { self.usage = usage }
 
     /// The door the launch arguments name.
-    static func launched(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> MetersFixtureDoor {
+    static func launched(_ arguments: [String] = LaunchArguments.current) -> MetersFixtureDoor {
       let word = arguments.first { $0.hasPrefix(argument) }.map { String($0.dropFirst(argument.count)) }
       return MetersFixtureDoor(usage: word.flatMap(Usage.init(rawValue:)) ?? .readings)
     }

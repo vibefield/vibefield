@@ -22,7 +22,7 @@
     init(state: State) { self.state = state }
 
     /// The door the launch arguments name.
-    static func launched(_ arguments: [String] = ProcessInfo.processInfo.arguments) -> AppsFixtureDoor {
+    static func launched(_ arguments: [String] = LaunchArguments.current) -> AppsFixtureDoor {
       let word = arguments.first { $0.hasPrefix(argument) }.map { String($0.dropFirst(argument.count)) }
       return AppsFixtureDoor(state: word.flatMap(State.init(rawValue:)) ?? .empty)
     }

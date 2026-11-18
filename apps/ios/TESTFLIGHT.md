@@ -171,6 +171,13 @@ never goes to `store`.
 *Corrected 2026-11-12: build 6 was not archived before kinds landed. From this commit:
 `bash apps/ios/scripts/testflight.sh archive 6 review`, then `upload 6 store`.*
 
+Neither kind reads a launch argument (item 532, asked for 2026-11-18). Every demo and
+fixture read takes its arguments from `LaunchArguments.current`, which answers none outside a
+development build, and `LaunchArgumentsTests` holds that no line either kind compiles reads
+them another way. A demo stands in a TestFlight build by the Developer page's choices alone,
+wearing its Demo tag. A `-key value` argument can still set those choices through the
+defaults' argument domain: it stands only what the page offers, tagged.
+
 The helper also refuses an archive that carries a real string (item 367, James's pick of
 2026-11-13: every one replaced by DESIGN.md's made-up names before build 6). It reads the
 sources it is about to build before `xcodebuild` (a short literal can compile to bytes a

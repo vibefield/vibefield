@@ -35,7 +35,7 @@ public enum WorkspaceFixtureDoor {
         answer["provider"] = params?["provider"] ?? answer["provider"]
         return .object(answer)
       case "agent.spawn":
-        if ProcessInfo.processInfo.arguments.contains("-vf-demo-workspace=spawning") {
+        if LaunchArguments.current.contains("-vf-demo-workspace=spawning") {
           try await Task.sleep(for: .seconds(60))
         }
         throw FieldProductError(kind: "UNAVAILABLE", message: "Fixture: no agent is launched")

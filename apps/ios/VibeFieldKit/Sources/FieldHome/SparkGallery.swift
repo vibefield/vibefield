@@ -111,7 +111,7 @@
 
     /// What this page shows, and under which flags.
     private var caption: String {
-      let arguments = ProcessInfo.processInfo.arguments
+      let arguments = LaunchArguments.current
       var parts = [
         "The list's eight statuses, seed \(Self.seed): live beside still, at 48 (a row) and 30 (a thread's head)"
       ]

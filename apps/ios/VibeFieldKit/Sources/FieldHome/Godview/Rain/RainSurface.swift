@@ -255,7 +255,7 @@ struct RainSurface: UIViewRepresentable {
 
   func makeUIView(context: Context) -> RainMetalView {
     #if DEBUG
-      let seeded = Mulberry32.launch(ProcessInfo.processInfo.arguments)
+      let seeded = Mulberry32.launch(LaunchArguments.current)
     #else
       let seeded: Mulberry32? = nil
     #endif

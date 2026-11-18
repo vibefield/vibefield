@@ -1,5 +1,6 @@
 import FieldDesign
 import FieldLock
+import FieldProduct
 import FieldSplash
 import SwiftUI
 
@@ -22,7 +23,7 @@ public struct HomeRoot: View {
       // IOS-12e: `-vf-spark-gallery` is the spark gallery instead of the app, and `-vf-reduce-motion` puts the whole
       // app under reduced motion, which simctl cannot turn on. SwiftUI's `accessibilityReduceMotion` is get-only; its
       // setter is `_accessibilityReduceMotion` (SwiftUICore's interface).
-      let arguments = ProcessInfo.processInfo.arguments
+      let arguments = LaunchArguments.current
       let reduceMotion = SparkGalleryRequest.reducesMotion(arguments)
       Group {
         if let gallery = SparkGalleryRequest(arguments: arguments) {
@@ -85,7 +86,7 @@ extension LockPhase {
     static let argument = "-vf-lock="
 
     static func stamped() -> FieldLock? {
-      guard let value = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix(argument) })?.dropFirst(argument.count)
+      guard let value = LaunchArguments.current.first(where: { $0.hasPrefix(argument) })?.dropFirst(argument.count)
       else { return nil }
       let open = value.hasSuffix("-open")
       let method: LockMethod
