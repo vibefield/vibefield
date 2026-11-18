@@ -1876,6 +1876,41 @@
                     </td>
                   </tr>
                   <tr>
+                    <td><span class="route">the pages engine (EY)</span></td>
+                    <td><span class="badge tone-vibefield">contracts</span></td>
+                    <td><span class="badge tone-vibefield">fieldd + Electron main</span></td>
+                    <td>
+                      <p>
+                        <code>packages/contracts/src/pages.ts</code> · <code>pages-record.ts</code> ·
+                        <code>shell.ts</code> · <code>live-surfaces.ts</code><br />
+                        fieldd: the pages room, <code>packages/fieldd/src/tool-plane/rooms/pages/</code> (EY-2)<br />
+                        Electron main: the broker (EY-1)
+                      </p>
+                    </td>
+                    <td>
+                      <p>
+                        An agent uses a page on the desk through the <code>pages</code> family's 29 rows. fieldd's
+                        room reaches main's broker only through the shell provider's internal
+                        <code>shell.surfaces.control</code>, which no client calls. A call carries the run, the page
+                        it acts on (none for a run-level call), its window (<code>read</code> or <code>act</code>)
+                        and the checked JSON command. The broker runs exactly that command, never argv. The person's
+                        pick-up and put-down reach main as the <code>hold</code> message on the live-surface control
+                        port. What comes back is a fact as a word: <code>held</code>, <code>gone</code>,
+                        <code>parked</code>, <code>stale-ref</code>, <code>loading</code>, <code>off-site</code>,
+                        or <code>needs-you</code> with its need. The engine's own codes never cross. The engine is
+                        pinned, and the script set recorded from the pin is kept as hashes and lengths, never as
+                        text. The design: <code>draft/tool-plane/browser-use.md</code> and
+                        <code>draft/thinking-agents-eyes.md</code>.
+                      </p>
+                    </td>
+                    <td>
+                      <span class="badge tone-designed">Designed</span>
+                      <p>EY-0 (2026-11-17) lands the shapes and the pin's record; nothing is served. Main answers
+                      the method <code>UNAVAILABLE</code> until EY-1 builds the broker, and EY-2 builds the room.
+                      The seam's owner is api's <a href="api.html#cat-compose-door"><code>vibefield</code> door</a>.</p>
+                    </td>
+                  </tr>
+                  <tr>
                     <td><span class="route">the flow host (CP-4a)</span></td>
                     <td><span class="badge tone-vibefield">fieldd</span></td>
                     <td><span class="badge tone-vibefield">fieldd</span></td>
