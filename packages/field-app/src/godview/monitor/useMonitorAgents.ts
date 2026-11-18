@@ -42,7 +42,10 @@ import {
   type BoardJoins,
   boardJoins,
   boardJoinsKey,
+  type PeerJoins,
   paneFactsKey,
+  peerJoins,
+  peerJoinsKey,
   windowKindsKey,
   windowLocal,
   windowShown,
@@ -384,6 +387,13 @@ export function useMonitorAgents({
   );
   const joinsRef = useRef(joins);
   joinsRef.current = joins;
+  // item 465 — every peer's hand-off joins, for the window's rows alone
+  const peersKey = peerJoinsKey(held, here);
+  const peers = useMemo<PeerJoins>(
+    () => peerJoins(held, here),
+    // the key stands for the held rows and `here`
+    [peersKey],
+  );
 
   // ── SB-3: where each born terminal was asked for ─────────────────────────
   /** By the FLOOR SESSION the door's answer named; a claim (`hintFor`) stands
@@ -437,11 +447,13 @@ export function useMonitorAgents({
       order: orderKey === "" ? NO_IDS : orderKey.split("\n"),
       sessionByRow: joins.sessionByRow,
       visualIds: panes.terminalVisualIds,
+      peerSessionByRow: peers.sessionByRow,
+      peerSucceedsByRow: peers.succeedsByRow,
       transitions: panes.transitions,
       spawnHintFor: hintFor,
     }),
     // keyed by the facts, never by the arrays the deck and the feed republish
-    [standingKey, orderKey, joins, visualKey, panes.transitions, hintFor],
+    [standingKey, orderKey, joins, peers, visualKey, panes.transitions, hintFor],
   );
   /** Every row, in the stage's order, patched for this window (no device filter). */
   const agents = windowRows.rowsFor(model, rowFacts);
@@ -895,9 +907,13 @@ export function useMonitorAgents({
     return (current: MonitorModel): WindowRowFacts => {
       if (current !== source) {
         const currentHeld = feed?.heldRows() ?? NO_HELD;
+        // item 465: a peer's claim is paired with the same model, as this desktop's sessions
+        const currentPeers = peerJoins(currentHeld, here);
         facts = {
           ...rowFacts,
           sessionByRow: boardJoins(currentHeld, here).sessionByRow,
+          peerSessionByRow: currentPeers.sessionByRow,
+          peerSucceedsByRow: currentPeers.succeedsByRow,
           order: orderFor(currentHeld, here, panes),
         };
         source = current;

@@ -2,6 +2,7 @@ import type { RowsDeviceState } from "@vibefield/contracts";
 import type { AgentView, MonitorModel } from "@vibefield/puppeteer-view-sdk/model";
 import { type HeldModelRow, isTerminalBoardRow } from "./model-board";
 import type { PaneTransitions } from "./pane-transitions";
+import { NO_PEER_LINEAGE, type PeerLineage, peerHeirs } from "./peer-lineage";
 import type { MonitorPaneFacts } from "./useMonitorAgents";
 
 /**
@@ -20,6 +21,11 @@ import type { MonitorPaneFacts } from "./useMonitorAgents";
  *     the fresh shell's body, GT-5c), else the one the row wore last time, else
  *     the floor session it stands for, else its id — the seam's rule, and its
  *     one rule over it: one body per visual identity, the earlier row wins;
+ *   · item 465 (2026-11-18) — a PEER's hand-off, which no pane here pairs: a
+ *     peer's session born in another's place says so on its own remote cut
+ *     (`terminal.succeeds`), and its row wears the body the other's row wore
+ *     (`peer-lineage.ts`, the phone's rule for its home's rows read over every
+ *     peer's, keyed by desktop: the phone reads its peers by it too);
  *   · the ORDER the seam drew: this desktop's agents by birth, then the panes'
  *     terminals in pane order, then the floor's, then other desktops' runs,
  *     each desktop in its place and its rows as the fold first took them (item
@@ -49,7 +55,8 @@ export interface WindowRowFacts {
   readonly visualIds: ReadonlyMap<string, string> | undefined;
   /**
    * Item 465 — every peer desktop's joins (`peerJoins(...).sessionByRow` and
-   * `.succeedsByRow`), keyed by desktop. The red: taken, and not read yet.
+   * `.succeedsByRow`): the floor session each peer row stands for and the one
+   * it says it succeeds, keyed by desktop. Absent: no peer's hand-off is read.
    */
   readonly peerSessionByRow?: ReadonlyMap<string, string> | undefined;
   readonly peerSucceedsByRow?: ReadonlyMap<string, string> | undefined;
@@ -85,6 +92,8 @@ interface Patched {
   readonly row: AgentView;
 }
 
+const NO_JOINS: ReadonlyMap<string, string> = new Map();
+
 function sameList<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((item, index) => item === right[index]);
 }
@@ -93,6 +102,8 @@ export function createWindowRows(): WindowRows {
   const patched = new WeakMap<AgentView, Patched>();
   /** every row's visual id last time: the seam's carry-forward (`previousVisualIds`) */
   let previousVisual: ReadonlyMap<string, string> = new Map();
+  /** item 465 — the peers' hand-off lineage, carried beside `previousVisual` */
+  let peerLineage: PeerLineage = NO_PEER_LINEAGE;
   let lastModel: MonitorModel | undefined;
   let lastFacts: WindowRowFacts | undefined;
   let lastTransition: number | undefined;
@@ -118,6 +129,14 @@ export function createWindowRows(): WindowRows {
         ordered.push(row);
       }
       for (const row of model.agents) if (!placed.has(row.id)) ordered.push(row);
+      // item 465 — the peers' lineage, read over every peer's rows before any is drawn
+      const peers = peerHeirs(
+        ordered.filter((row) => !row.device.self),
+        facts.peerSessionByRow ?? NO_JOINS,
+        facts.peerSucceedsByRow ?? NO_JOINS,
+        previousVisual,
+        peerLineage,
+      );
       const rows: AgentView[] = [];
       const bodies = new Set<string>();
       const visuals = new Map<string, string>();
@@ -125,7 +144,7 @@ export function createWindowRows(): WindowRows {
         const session = row.device.self ? facts.sessionByRow.get(row.id) : undefined;
         if (row.device.self && facts.transitions?.shows(row.id, session, row.inputUsed) === false)
           continue;
-        const visualId =
+        let visualId =
           (row.device.self
             ? facts.transitions?.visualId(session ?? row.id, row.creationId, row.inputUsed)
             : undefined) ??
@@ -133,6 +152,11 @@ export function createWindowRows(): WindowRows {
           (row.creationId === undefined ? previousVisual.get(row.id) : undefined) ??
           session ??
           row.id;
+        if (!row.device.self) {
+          const reading = peers.reading(row);
+          if (reading.kind === "hidden") continue;
+          if (reading.kind === "wears") visualId = reading.body;
+        }
         visuals.set(row.id, visualId);
         // one body per visual identity: during a launcher hand-off the managed
         // row takes over the shell's body while the shell's row is still here
@@ -172,6 +196,7 @@ export function createWindowRows(): WindowRows {
       }
       // the seam carried forward only the rows it drew
       previousVisual = new Map(rows.map((row) => [row.id, visuals.get(row.id) ?? row.id]));
+      peerLineage = peers.next(previousVisual, visuals);
       // the replica's own list while every row is its own; the last list while nothing moved
       last = sameList(rows, model.agents)
         ? model.agents

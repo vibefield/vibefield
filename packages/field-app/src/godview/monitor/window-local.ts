@@ -105,6 +105,77 @@ export function boardJoinsKey(held: readonly HeldModelRow[], here: string | unde
   return parts.join("\u0002");
 }
 
+/**
+ * Item 465 (2026-11-18) — EVERY PEER DESKTOP'S hand-off joins, by the same two
+ * rules as this desktop's: a bare terminal stands for the floor session its row
+ * names (its id when it names none), a run for the PTY its join names when that
+ * PTY is local to the run's own desktop; and a row says it succeeds a session
+ * (`terminal.succeeds`, said on the peer's own remote cut and relayed whole by
+ * the mesh board) only beside a session of its own, naming another one. Each
+ * session is keyed by its desktop and itself (`peerKey`): a peer's floor
+ * session names nothing on another desktop. The window's rows read these for a
+ * peer's lineage alone (`window-rows.ts`); no pane here joins a peer's row.
+ * The phone reads the same (`RemoteVisibility.joins`, the kit's FieldProduct).
+ */
+export interface PeerJoins {
+  /** model id → its desktop's floor session, keyed (`peerKey`) */
+  readonly sessionByRow: ReadonlyMap<string, string>;
+  /** model id → the floor session of its desktop it says it succeeds, keyed (`peerKey`) */
+  readonly succeedsByRow: ReadonlyMap<string, string>;
+}
+
+const NO_PEER_JOINS: PeerJoins = Object.freeze({
+  sessionByRow: new Map<string, string>(),
+  succeedsByRow: new Map<string, string>(),
+});
+
+/** A peer's floor session as the window's rows key it: its desktop and the session together. */
+export function peerKey(device: string, session: string): string {
+  return `${device}\u001f${session}`;
+}
+
+/** The floor session a held row stands for on its own desktop, by the joins' rule, if any. */
+function sessionOf(entry: HeldModelRow): string | undefined {
+  const { board, row } = entry;
+  if (isTerminalBoardRow(board)) return board.terminal.runtimeSessionId ?? row.id;
+  const terminal = board.terminal;
+  if (terminal?.hosted !== "local") return undefined;
+  const session = terminal.runtimeSessionId;
+  return session === undefined || session === "" ? undefined : session;
+}
+
+export function peerJoins(held: readonly HeldModelRow[], here: string | undefined): PeerJoins {
+  if (here === undefined) return NO_PEER_JOINS;
+  const sessionByRow = new Map<string, string>();
+  const succeedsByRow = new Map<string, string>();
+  for (const entry of held) {
+    if (entry.device === here) continue;
+    const session = sessionOf(entry);
+    if (session === undefined) continue;
+    sessionByRow.set(entry.row.id, peerKey(entry.device, session));
+    const claim = entry.board.terminal?.succeeds;
+    if (claim !== undefined && claim !== "" && claim !== session) {
+      succeedsByRow.set(entry.row.id, peerKey(entry.device, claim));
+    }
+  }
+  return { sessionByRow, succeedsByRow };
+}
+
+/** A key over the peers' joins, so a React memo recomputes them only when one moved. */
+export function peerJoinsKey(held: readonly HeldModelRow[], here: string | undefined): string {
+  if (here === undefined) return "";
+  const parts: string[] = [];
+  for (const entry of held) {
+    if (entry.device === here) continue;
+    const session = sessionOf(entry);
+    if (session === undefined) continue;
+    parts.push(
+      [entry.row.id, entry.device, session, entry.board.terminal?.succeeds ?? ""].join("\u0001"),
+    );
+  }
+  return parts.join("\u0002");
+}
+
 export interface WindowLocalInput {
   readonly joins: BoardJoins;
   /** which rows are terminals, by id: the model's word */
@@ -262,29 +333,4 @@ export function paneFactsKey(panes: MonitorPaneFacts): string {
       .map((session) => `${session.id}:${session.exited ? 1 : 0}:${session.activity?.kind ?? ""}`)
       .join("\u0000"),
   ].join("\u0001");
-}
-
-/**
- * Item 465 (2026-11-18) — EVERY PEER DESKTOP'S hand-off joins, keyed by its
- * desktop (`peerKey`). The red: declared, and joining nothing yet.
- */
-export interface PeerJoins {
-  /** model id → its desktop's floor session, keyed (`peerKey`) */
-  readonly sessionByRow: ReadonlyMap<string, string>;
-  /** model id → the floor session of its desktop it says it succeeds, keyed (`peerKey`) */
-  readonly succeedsByRow: ReadonlyMap<string, string>;
-}
-
-const NO_PEER_JOINS: PeerJoins = Object.freeze({
-  sessionByRow: new Map<string, string>(),
-  succeedsByRow: new Map<string, string>(),
-});
-
-/** A peer's floor session as the window's rows key it: its desktop and the session, never one alone. */
-export function peerKey(device: string, session: string): string {
-  return `${device}\u001f${session}`;
-}
-
-export function peerJoins(_held: readonly HeldModelRow[], _here: string | undefined): PeerJoins {
-  return NO_PEER_JOINS;
 }

@@ -33,7 +33,7 @@ import {
 import { keepsFailure } from "../../src/godview/monitor/failed-bodies";
 import { createGodviewMonitorFeed } from "../../src/godview/monitor/model-replica";
 import type { ModelBoardPort } from "../../src/godview/monitor/remote-door";
-import { boardJoins, boardJoinsKey } from "../../src/godview/monitor/window-local";
+import { boardJoins, boardJoinsKey, peerJoins } from "../../src/godview/monitor/window-local";
 import { createRowOrder, createWindowRows } from "../../src/godview/monitor/window-rows";
 
 /**
@@ -485,11 +485,15 @@ export async function computePhoneGoldens(input: {
     const held = feed.heldRows();
     const here = feed.here();
     const devices = feed.devices();
+    // item 465: the peers' hand-off joins too, as the window hands them (no witness row claims)
+    const peers = peerJoins(held, here);
     const rows = windowRows.rowsFor(model, {
       standing: new Map(devices.map((entry) => [entry.device, entry.state] as const)),
       order: orderFor(held, here, { sessionIds: [] }),
       sessionByRow: boardJoins(held, here).sessionByRow,
       visualIds: undefined,
+      peerSessionByRow: peers.sessionByRow,
+      peerSucceedsByRow: peers.succeedsByRow,
     });
     const frame = kind === undefined ? {} : { frame: kind };
     const foldStep: PhoneFoldStep = {
