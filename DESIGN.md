@@ -9692,6 +9692,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       Scrolling up, or a tap on the pill, brings it back.
     - The page's layout ends above the row (P3), so the row never covers the page's own controls.
     - ✕ or an edge swipe zooms it back into its icon.
+    - A link to a site outside the app asks first, with the system's confirmation: "Open ‹site› in Safari?" over
+      "‹app› is opening a page outside VibeField.", **Open in Safari** and **Cancel**. Cancel leaves the page as it
+      was. A link out asks only after your touch; a page's own link with no touch of yours does nothing. One touch
+      brings at most one ask, and while one stands the page raises no other. *(Item 523, 2026-11-17.)*
     - ··· holds Reload · Keep (or Stop keeping) · Versions · Open on ‹desktop› · Open in ‹host› (when it has a
       hosted link) · About this app. A live app adds Copy link. *Hide dropped 2026-11-13 (James, 01:29:54Z).*
     - A page-only app says so in a glass note above the row, never over the page's own head.
@@ -10655,7 +10659,8 @@ Artifacts shelf's contents"). A person opens and uses these, so on the phone and
 and one is an **app**. "Artifact" is the code's word, never the screen's. ‹app› is an app's title, ‹desktop› the
 field's name for a desktop, and ‹agent› the catalog's label for an agent (R23b; never a literal). ‹host› is the host
 of an app's recorded hosted link, claude.ai today, and never says whose account. Words marked ‹for James› are owed to
-him and are not invented here.
+him and are not invented here. ‹site› is the site an app's link out goes to: its registrable domain, and a name that
+is not plain ASCII in its `xn--` form, so a look-alike never reads as the name it imitates (item 523, 2026-11-17).
 - **The door and the cues.** The first peek teaches "Pull down anytime for your apps". A pull short of the threshold
   reads "Pull down for your apps" (the ruled page's words), and past it "Release for your apps". A new one says **New
   app** and its name. A burst of new apps within 4 s is one drop that counts them, its words "‹n› new apps".
@@ -10674,6 +10679,8 @@ him and are not invented here.
 - **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**,
   **Reload**, **Open on ‹desktop›**, **Open in ‹host›** (only with a hosted link) and, for a live app, **Copy link**.
   *Hide from Apps dropped 2026-11-13 (James, 01:29:54Z).*
+  An app's link out asks "Open ‹site› in Safari?", its line "‹app› is opening a page outside VibeField.", with
+  **Open in Safari** and **Cancel**, and only after your touch (item 523, 2026-11-17).
 - **Keep's words.** A keep or a stop that did not go through says why, in a sentence, never a code. On the
   desktop: when keeping cannot be saved yet, "Keeping apps isn't ready yet."; a window without permission, "This
   window can't keep apps yet."; and when you already keep the most VibeField holds, "You're keeping as many apps
