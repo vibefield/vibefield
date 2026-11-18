@@ -222,12 +222,37 @@ describe("LR — asking, restoring, starting clean", () => {
     });
     await askLastRun(fieldd);
     await restoreLastRun(fieldd);
-    expect(fieldd.calls).toContainEqual(["agent.resume", { runtimeRunId: "run-studio-q" }]);
+    // item 468 (2026-11-18): the birth names the session its pane showed (`succeeds`), the pane
+    // the rehydration hands the new terminal to, so other screens draw the two as one body
+    expect(fieldd.calls).toContainEqual([
+      "agent.resume",
+      { runtimeRunId: "run-studio-q", succeeds: "pty-s9" },
+    ]);
     expect(adopted).toEqual([SPAWNED.terminal]);
     expect(resumedPaneSession("pty-s9")).toEqual({ id: SPAWNED.terminal.sessionId });
     expect(fieldd.calls.at(-1)?.[0]).toBe("agent.lastRunForget");
     expect(deckAnswer()).toEqual({ rehydrate: true });
     expect(lastRunState().phase).toBe("answered");
+  });
+
+  it("restore names no session for an agent the last run left without one", async () => {
+    if (LEFT.state !== "left") throw new Error("fixture");
+    // item 468 (2026-11-18): no pane showed it, so its birth takes no one's place
+    const unjoined = {
+      ...LEFT,
+      gone: LEFT.gone.map((row) => (row.kind === "agent" ? { id: row.id, kind: row.kind } : row)),
+    };
+    saveLayout(["pty-s9"]);
+    const fieldd = client({
+      "agent.lastRun": async () => unjoined,
+      "agent.resume": async () => SPAWNED,
+      "agent.lastRunForget": async () => ({ forgotten: true }),
+    });
+    await askLastRun(fieldd);
+    await restoreLastRun(fieldd);
+    const resumes = fieldd.calls.filter(([method]) => method === "agent.resume");
+    expect(resumes).toEqual([["agent.resume", { runtimeRunId: "run-studio-q" }]]);
+    expect(Object.keys(resumes[0]?.[1] as Record<string, unknown>)).toEqual(["runtimeRunId"]);
   });
 
   it("restore says which agents it could not resume, in fieldd's words, before the curtain lifts", async () => {
