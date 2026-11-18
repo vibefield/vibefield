@@ -112,6 +112,8 @@ export function terminalInfoOf(session: SessionSummary, workloadClass?: string):
     createdAt: session.createdAtMs,
     ...(session.cwd ? { cwd: session.cwd } : {}),
     ...(session.title ? { title: session.title } : {}),
+    // PS-D5 (2026-11-18): the floor's row carries the pane's activity, its kind alone
+    ...(session.activity !== undefined ? { activity: { kind: session.activity.kind } } : {}),
     cell: {
       cellInstanceId: 1,
       cellBootId: "cell-1",

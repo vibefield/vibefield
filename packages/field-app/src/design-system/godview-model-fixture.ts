@@ -145,8 +145,9 @@ function hostRunOf(summary: AgentSessionSummary): MonitorHostRun {
 }
 
 /** `agent-monitor.ts` `hostTerminalFrom`: a floor PTY as the backend's host record.
- * fieldd's inventory knows a PTY's cwd and title but not its activity (M28: that is
- * the window's join), so none travels here either. */
+ * fieldd's inventory knows a PTY's cwd and title and, since PS-D5 (2026-11-18), the
+ * floor's word for what its pane is doing (the activity kind; a husk carries none), so
+ * the same travels here. The window's own pane join (M28) still outranks it. */
 function hostTerminalOf(
   session: SessionSummary,
   profileSet: string | undefined,
@@ -157,6 +158,9 @@ function hostTerminalOf(
     ...(session.cwd ? { cwd: session.cwd } : {}),
     ...(session.title ? { title: session.title } : {}),
     ...(profileSet !== undefined ? { profileSet } : {}),
+    ...(session.activity !== undefined && !session.exited
+      ? { activity: { kind: session.activity.kind } }
+      : {}),
   };
 }
 
