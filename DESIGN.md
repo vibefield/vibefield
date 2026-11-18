@@ -6267,6 +6267,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **45 × 22 · click the pane to take it.**, the size the session was left at. *Status
     2026-10-19: until item 20's lane lands, no pane takes the empty seat by itself, so every pane on
     the session, focused or not, says this until a click.*
+  - **A page an agent is using** (track EY, EY-0; `thinking-agents-eyes.md` §5; James, 2026-11-17 ~18:15Z,
+    in the EY lead's session: "Yes, as written"). While an agent uses a page in the browser pane, the
+    pane's head wears the agent's face and says **‹name› is using this page**. The name is the one the
+    run wears on its own pane, for any agent, not only a spark. During an act it says
+    **‹name› is driving**, and a small mark shows where the act lands. The caption is item 42's
+    (above), reworded for the desk's pick-up: **pick it up to take it back**. There is no veil: the
+    person is watching the page. The browser pane has shipped in no packaged app since 2026-11-09 (§8
+    "Tools in hand", its note on the comment pad and the browser pane), so these words hold for a dev
+    run until it returns.
   - **A run a Stop has not stopped** (track ST, ST-D4 (a); ruled by James on the board: the place
     at `ds-d4-place`, Accept, 2026-10-31 06:16:32Z, and the look at `ds-d4-look`, "Accept all
     three", 06:29:00Z, as VF-PM proposed them at 06:16Z and in the convention read of 06:26Z).
