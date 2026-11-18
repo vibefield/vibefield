@@ -48,7 +48,12 @@ export default defineConfig({
     globalSetup: ["./test/global-setup.ts"],
     // Item 345: the run's own socket alias parent in every worker's environment (test/alias-parent-env.ts)
     // Item 447: a stand-in `ssh` first on every worker's PATH, so no row runs the machine's (test/fake-ssh-env.ts)
-    setupFiles: ["./test/alias-parent-env.ts", "./test/fake-ssh-env.ts"],
+    // Item 551: every file refuses the keychain tool, and fails the row that reached for it (test/keychain-guard.ts)
+    setupFiles: [
+      "./test/alias-parent-env.ts",
+      "./test/fake-ssh-env.ts",
+      "./test/keychain-guard.ts",
+    ],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     env: { HISTFILE: "/dev/null" },
