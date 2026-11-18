@@ -2622,7 +2622,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       - "Not sent — that snapshot is no longer kept" (a card's still main no longer keeps, read at the press);
       - "Couldn't wake Vela: …", in fieldd's words, as the line says it;
       - "Couldn't send to Vela: …", in fieldd's words, so a send that fails is never a blank.
-      A starter is sent as Send sends, so its outcomes are these.
+      A starter is sent as Send sends, so its outcomes are these. *Corrected 2026-11-18 (item 293's rider, after
+      IS-282-1):* a send that fails says the act and its next step, "Couldn't send to Vela. Try again.", and what
+      failed goes to the log by its kind. A refused wake keeps fieldd's words for now, since a few of them are the
+      person's next step ("Reinstall VibeField."); its own sentence waits for 282-1a, and its kind goes to the log too.
     - Chat has **no clipboard road**. A message is never copied in place of a send: the hand holds what you copied
       (HN-L1).
     - **Chat leaves nothing in the agent's input.** Words typed into Vela's terminal in Godview and left there unsent
@@ -10951,7 +10954,8 @@ field gives them, and “q” what was typed.
   word, Working · Idle · Needs you.
 - Send's notes (TH-1): "Not sent — a message holds 32,000 characters at most" · "Not sent — that snapshot is no longer
   kept" · "Couldn't wake Vela: …" · "Couldn't send to Vela: …". A card's: "Add to your message to Vela" · "Added to
-  your message to Vela".
+  your message to Vela". *Corrected 2026-11-18 (item 293's rider):* "Couldn't send to Vela. Try again." (§8 "Chat's
+  composer").
 - *Retired 2026-11-05 (TH-1, the pane leaves Chat):* Send's notes on the paste road, kept here from SP-1d until it
   retired ("Pasted into Vela's pane — Return sends it" and eleven more), are in git.
 - The needs-you card (CP-3; §8 "Chat's thread"; its acts' words are "The person's queue's words", above):
