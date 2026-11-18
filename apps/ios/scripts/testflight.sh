@@ -85,8 +85,73 @@ Set DEVELOPER_DIR to use an Xcode installation other than /Applications/Xcode.ap
 USAGE
 }
 
+# Item 541 (2026-11-18): the archive's second fence for the phone's web host. The host compiles only under
+# `#if DEBUG || VF_WEB_RELAY` (the first fence; no target defines VF_WEB_RELAY until SP-4d's relay, item 373), and no
+# archive leaves while its app carries either of the host's two markers (scripts/check-web-markers.mjs's MARKERS) and
+# apps/ios/ship-gates.txt holds an OPEN line. It reads the app's bytes as count_markers does, and the gates file in
+# check-web-markers' four forms (blank, `#…`, `SHIP-GATE <item> <name> OPEN`, `SHIP-GATE <item> <name> CLOSED <sha>`),
+# and fails closed: an app or a gates file it cannot read, any other line in that file, and an app carrying a marker
+# while no gate is recorded at all are each a refusal. `check-web ARCHIVE` runs it alone. Each marker is a literal only
+# the host's code carries (the front's queue label, the document-start script's tag), never a type or file name: a
+# plain Release build keeps the gated host file's source and object paths (an archive drops them), which a name would
+# match in an app without the host.
+# The front's label is also the prefix of its system dial's label, in the same file and gate, so an app with the host
+# reads it more than once: the fence asks only for one or more.
+web_markers=("vibefield.web-front" "vibefield.web-host.document-start.v1")
+ship_gates="$ios_root/ship-gates.txt"
+web_gate() {
+  local app m n found=0 each="" open=0 gates=0 number=0 bad="" line
+  local open_form='^SHIP-GATE [^[:space:]]+ [^[:space:]]+ OPEN$'
+  local closed_form='^SHIP-GATE [^[:space:]]+ [^[:space:]]+ CLOSED [0-9a-f]{7,40}$'
+  app="$(find "${1:-}/Products/Applications" -maxdepth 1 -name '*.app' -print -quit 2>/dev/null)"
+  if [[ -z "$app" ]]; then
+    echo "The archive's app could not be read for the web host's markers (no app in ${1:-the archive})." >&2
+    return 1
+  fi
+  for m in "${web_markers[@]}"; do
+    # grep finds nothing in a clean app and exits 1; under pipefail that must not end the helper.
+    n="$({ LC_ALL=C grep -raoF -- "$m" "$app" || true; } | wc -l | tr -d ' ')"
+    each+="${each:+; }${m:0:24} $n"
+    found=$((found + n))
+  done
+  if [[ ! -r "$ship_gates" ]]; then
+    echo "$ship_gates cannot be read: no archive leaves while the web host's gates are unknown." >&2
+    return 1
+  fi
+  # `read` without IFS= trims each line's leading and trailing blanks, as check-web-markers' trim() does.
+  while read -r line || [[ -n "$line" ]]; do
+    number=$((number + 1))
+    if [[ -z "$line" || "$line" == "#"* ]]; then
+      continue
+    elif [[ "$line" =~ $open_form ]]; then
+      open=$((open + 1))
+      gates=$((gates + 1))
+    elif [[ "$line" =~ $closed_form ]]; then
+      gates=$((gates + 1))
+    else
+      bad+="${bad:+, }$number"
+    fi
+  done <"$ship_gates"
+  if [[ -n "$bad" ]]; then
+    echo "ship-gates.txt, line(s) $bad: not a gate line. No archive leaves while the gates cannot be read." >&2
+    return 1
+  fi
+  if [[ "$found" != 0 && "$gates" == 0 ]]; then
+    echo "The archive's app carries the web host ($each), and no gate is recorded for it in ship-gates.txt." \
+      "It does not leave this Mac." >&2
+    return 1
+  fi
+  if [[ "$found" != 0 && "$open" != 0 ]]; then
+    echo "The archive's app carries the web host ($each) while $open ship gate(s) in ship-gates.txt stand OPEN." \
+      "It does not leave this Mac." >&2
+    return 1
+  fi
+  echo "The web host's markers in the archive's app: $found ($each); ship gates: $gates, $open OPEN."
+}
+
 case "$action" in
   help|-h|--help) usage; exit 0 ;;
+  check-web) web_gate "${2:-}"; exit $? ;;
   archive|upload) ;;
   *) usage >&2; exit 2 ;;
 esac
@@ -419,6 +484,8 @@ case "$action" in
       fi
       echo "The ${recorded_kind:+review }archive carries no TestFlight-only page: $found."
     fi
+    # Item 541: the web host's fence, for both exports.
+    web_gate "$archive" || exit 1
     # The bytes read (items 367, 374), for both exports: internal TestFlight reaches devices too.
     real_strings_check "$archive" || exit 1
     # For both exports: internal TestFlight uploads its dSYMs too.
@@ -659,6 +726,7 @@ case "$action" in
         "VF_TESTFLIGHT did not reach every TestFlight-only page." >&2
       exit 1
     fi
+    web_gate "$archive" || exit 1
     real_strings_check "$archive" || exit 1
     if [[ "$archive_kind" == review ]]; then
       echo "Upload: bash $ios_root/scripts/testflight.sh upload $build_number store"

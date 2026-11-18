@@ -1,9 +1,16 @@
 #!/usr/bin/env node
 // SP-4c / item 373 (2026-11-13) — the app web host compiles
-// only under `#if DEBUG || VF_WEB_RELAY`, and the archive check (`apps/ios/scripts/testflight.sh`) refuses a Release
-// app that carries either of its two web markers while ship-gates.txt holds an OPEN line. This is the source side:
+// only under `#if DEBUG || VF_WEB_RELAY`, and the archive check (`apps/ios/scripts/testflight.sh`, its `web_gate`)
+// refuses an archive whose app carries either of its two web markers while ship-gates.txt holds an OPEN line. Each
+// marker is a literal only the host's code carries (the front's queue label, the document-start script's tag), never
+// a type or file name: a plain Release build keeps the gated host file's source and object paths (an archive drops
+// them; item 541's rows on real apps, 2026-11-18), which a name would match in an app that carries none of the host.
+// The front's label is also the prefix of its system dial's label, in the same file and gate, so it stands more than
+// once, and an app with the host reads it more than once: the archive check asks only for one or more.
+// Corrected 2026-11-18 (item 541): from SP-4c until that day this said so while testflight.sh read neither the
+// markers nor the gates; item 541 built the refusal. This is the source side:
 // - each marker stands ONLY inside that gate's own branch (never its #else, never a comment or string outside it);
-// - the script tag stands only in FieldWeb's Host folder;
+// - both markers stand only in FieldWeb's Host folder;
 // - item 522 (2026-11-17): no app source outside FieldWeb names the host or its navigation type, gated or not, so no
 //   view mounts the web host. It is unconditional. Item 522's filtering front now stands (the host opens a page only
 //   through it); the rule waits on item 524's reading, whether WebRTC or WebTransport leave a page around its proxy,
@@ -25,7 +32,7 @@ const WEB = "apps/ios/VibeFieldKit/Sources/FieldWeb/";
 const SHIP_GATES = "apps/ios/ship-gates.txt";
 export const GATE = "DEBUG || VF_WEB_RELAY";
 export const MARKERS = [
-  { name: "FieldWebAppHost", only: null },
+  { name: "vibefield.web-front", only: HOST },
   { name: "vibefield.web-host.document-start.v1", only: HOST },
 ];
 export const TRUST_NAMES = [
@@ -169,10 +176,11 @@ function selfTest() {
   const host = `${HOST}FieldWebAppHost.swift`;
   const home = "apps/ios/VibeFieldKit/Sources/FieldHome/Apps/Open/AppOpenScreen.swift";
   const rows = "apps/ios/VibeFieldKit/Tests/FieldWebTests/Host/HostRowsTests.swift";
+  const front = `let q = DispatchQueue(label: "${MARKERS[0].name}")`;
   const tag = `let t = "${MARKERS[1].name}"`;
   const gated = (...lines) => [`#if ${GATE}`, ...lines, "#endif"].join("\n");
   const cases = [
-    ["the host, gated", host, gated("final class FieldWebAppHost {}", tag), 0],
+    ["the host, gated", host, gated("final class FieldWebAppHost {}", front, tag), 0],
     ["a comment on the #if", host, [`#if ${GATE} // the gate`, tag, "#endif"].join("\n"), 0],
     ["nested inside the gate", host, gated("#if os(iOS)", tag, "#endif"), 0],
     ["item 522: the type in a gated FieldHome view", home, gated("FieldWebAppHost()"), 1],
@@ -189,15 +197,22 @@ function selfTest() {
       0,
     ],
     ["item 522: a test target naming the host", rows, gated("let h = FieldWebAppHost.self"), 0],
-    ["in the gate's #else", host, gated("#else", "let h: FieldWebAppHost? = nil"), 1],
+    ["in the gate's #else", host, gated("#else", front), 1],
+    [
+      "the host's type name alone is no marker: outside the gate in its own folder",
+      host,
+      "// FieldWebAppHost.swift",
+      0,
+    ],
     [
       "a comment outside the gate, outside FieldWeb",
       home,
-      "/// Mounts FieldWebAppHost.\nstruct S {}",
+      '/// Mounts FieldWebAppHost through "vibefield.web-front".\nstruct S {}',
       2,
     ],
     ["DEBUG alone is not the gate", host, ["#if DEBUG", tag, "#endif"].join("\n"), 1],
     ["the script tag outside Host, gated", home, gated(tag), 1],
+    ["the front's label outside Host, gated", home, gated(front), 1],
     ["an #if with no #endif", host, `#if ${GATE}\nfinal class FieldWebAppHost {}`, 1],
     [
       "a trust override, gated",

@@ -3,7 +3,9 @@
 // name, until SP-4d's relay stands at the dial. So the web host compiles
 // only under `#if DEBUG || VF_WEB_RELAY`, a compilation condition FieldWeb's target gets
 // (`swiftSettings: [.define("VF_WEB_RELAY")]`) only at SP-4d's land. A Release archive without it never compiles the
-// host, so the archive check (`apps/ios/scripts/testflight.sh`, the web markers) finds none. `relayBuilt` is DERIVED
+// host, so the archive check (`apps/ios/scripts/testflight.sh`, the web markers) finds none, and it refuses an archive
+// that carries one while `apps/ios/ship-gates.txt` holds an OPEN line. Corrected 2026-11-18 (item 541): from SP-4c
+// until that day testflight.sh looked for no web marker and read no gate; item 541 built both. `relayBuilt` is DERIVED
 // from that condition, never set by hand; `apps/ios/ship-gates.txt` carries the gate's line.
 // Item 522 (2026-11-17): three targets hold code under that condition, so SP-4d's land gives the define to all three
 // together: FieldWeb (the host and its filtering front), FieldMesh (`MeshModel.peerStream`, the front's origin dial)
