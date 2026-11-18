@@ -87,6 +87,7 @@ fn spawn_session(source: &DirectSessions) -> Arc<Session> {
             program_kind: SessionProgramKind::Application,
             owner_id: None,
             scrollback_bytes: None,
+            colors: None,
         },
         hub.clone(),
         text_engine(),

@@ -904,6 +904,7 @@ mod tests {
                 program_kind: SessionProgramKind::Application,
                 owner_id: None,
                 scrollback_bytes: None,
+                colors: None,
             },
             hub.clone(),
             Arc::new(Mutex::new(TextEngine::discover().unwrap())),

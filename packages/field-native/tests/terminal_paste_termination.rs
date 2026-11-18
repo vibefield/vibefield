@@ -42,6 +42,7 @@ fn a_terminated_session_concludes_while_its_program_never_reads_a_large_paste() 
             program_kind: SessionProgramKind::Application,
             owner_id: None,
             scrollback_bytes: None,
+            colors: None,
         },
         FrameHub::new(16),
         Arc::new(Mutex::new(

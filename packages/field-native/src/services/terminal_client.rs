@@ -76,6 +76,15 @@ use tokio::sync::{mpsc, oneshot};
 /// :88, and :34 in `MAX_CONTROL_BYTES`'s doc below, read as cited; the
 /// per-connection minor is recorded at :1968, broadcast events are gated on it at
 /// :2020, and the hello response's ceiling is at :2522-2524.
+///
+/// *2026-11-18 (the EL8 to ghosttea 0.16.0):* the pin is 0.16.0, which serves 1.20
+/// (`CONTROL_PROTOCOL_MINOR`, service.rs:48). 1.20 is `SESSION_COLORS_PROTOCOL_MINOR`
+/// (:116): the colors a host names on `create-session`, and `set-colors`' palette.
+/// Both are fields on requests. No pushed-event gate moved: the broadcast gates
+/// (`client_accepts_event`, now :143-152) still top out at 1.17, the 1.12 snapshot
+/// after `hello` is at :2026 and `events-lost` at :2052. So this client still hears
+/// every event the service sends. The line numbers in the note above are 0.15.0's;
+/// in 0.16.0 the per-connection minor is recorded at :1990.
 pub const PROTOCOL_MAJOR: u16 = 1;
 pub const PROTOCOL_MINOR: u16 = 17;
 

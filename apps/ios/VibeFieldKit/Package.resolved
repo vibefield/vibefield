@@ -1,13 +1,13 @@
 {
-  "originHash" : "08fc960f47091bad03d28fb842765924715a0aaae7a368a51d4c3d05b2f8dd75",
+  "originHash" : "14f536ee743a1d8b1bf4e91e307f0ec0828a0945eddd2c399a86607bab77b3ba",
   "pins" : [
     {
       "identity" : "ghosttea",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vibecook-dev/ghosttea.git",
       "state" : {
-        "revision" : "8f5b3d122be284c3d0292dacd5c475c2a6193769",
-        "version" : "0.15.0"
+        "revision" : "3e71939735f6594305bf20c7e7e363867eacf1fa",
+        "version" : "0.16.0"
       }
     },
     {

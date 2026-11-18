@@ -362,7 +362,11 @@ truffle-core = "=0.7.28"
 # Swift Truffle pin stays 0.7.26, which 0.15.0 declares too. Tag v0.15.0 = 8f5b3d12. Cargo.lock moves by the six
 # crates alone: 0.15.0 allows rustix 1.1.6 and does not require it, so this graph keeps 1.1.4 (item 331).
 # (*2026-11-17, item 331:* rustix moved 1.1.4 → 1.1.6 in Cargo.lock, alone: the version 0.15.0's own lock names.)
-ghosttea = "=0.15.0"
+# EL8 (2026-11-18): 0.16.0 lets a host tell a session its colors, whole and from its first instant (control protocol
+# 1.20, ghosttea #106), and builds its own daemons against quinn-udp 0.5.16 (#107). No engine change: Ghostty
+# 0fa3d577 and its three patches stand. The Swift Truffle pin stays 0.7.26, which 0.16.0 declares too. Tag
+# v0.16.0 = 3e719397. Cargo.lock moves by the six crates alone.
+ghosttea = "=0.16.0"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

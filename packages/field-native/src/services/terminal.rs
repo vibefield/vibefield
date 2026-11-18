@@ -4103,6 +4103,9 @@ mod tests {
     /// (the kind, the source, the confidence and both process groups). What the kind alone buys is
     /// narrower: a new observation of the same kind, a new foreground process group, is no changed
     /// inventory.
+    ///
+    /// *2026-11-18 (the EL8 to ghosttea 0.16.0):* the same holds at 0.16.0. Between the two tags no
+    /// changed line of ghosttea's Rust sources names the activity.
     #[test]
     fn a_row_carries_its_panes_activity_kind_and_no_more_of_the_sample() {
         let sampled = |kind: &str, observed_at_ms: u64| {
