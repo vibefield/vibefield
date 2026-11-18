@@ -110,6 +110,28 @@ describe("PG-2 — the remote cut, as its owner cuts it", () => {
     monitor.service.dispose();
   });
 
+  it("PS-D5 — a bare terminal running a job is working for a peer and the phone", async () => {
+    const monitor = await testMonitor({
+      terminals: [floorTerminal({ activity: { kind: "foreground-job" } })],
+    });
+    monitor.rows();
+    const board = createRemoteSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: () => undefined,
+      epoch: "boot.r1",
+    });
+    const [bare] = AgentRemoteSnapshot.parse(board.snapshot).rows;
+    expect(bare?.monitorRow).toMatchObject({
+      id: "pty-bare",
+      kind: "terminal",
+      status: "working",
+      activity: { kind: "foreground-job" },
+    });
+    board.dispose();
+    monitor.service.dispose();
+  });
+
   it("a run the backend has not assembled has no remote row; it joins the board once it has one", async () => {
     vi.useFakeTimers();
     const monitor = await testMonitor({ summaries: [working] });

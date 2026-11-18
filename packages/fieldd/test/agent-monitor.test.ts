@@ -158,6 +158,20 @@ describe("hostTerminalFrom — the floor's PTY as the backend's host record", ()
     });
     expect(live).not.toHaveProperty("exited");
   });
+
+  it("a live PTY carries its activity kind alone; a husk or a silent row none (PS-D5)", () => {
+    const busy = hostTerminalFrom(
+      floorTerminal({ activity: { kind: "foreground-job", source: "process-group" } }),
+      undefined,
+    );
+    expect(busy.activity).toEqual({ kind: "foreground-job" });
+    expect(hostTerminalFrom(floorTerminal(), undefined)).not.toHaveProperty("activity");
+    const husk = hostTerminalFrom(
+      floorTerminal({ exited: true, activity: { kind: "foreground-job" } }),
+      undefined,
+    );
+    expect(husk).not.toHaveProperty("activity");
+  });
 });
 
 describe("the hosted backend — the model's rows for the fold's fixtures", () => {
@@ -629,6 +643,24 @@ describe("the hosted backend — live changes", () => {
     ).toBe(true);
     expect(isUrgentChange(held, { since: 0, revision: 1, upserts: [], removed: ["r"] })).toBe(true);
     expect(isUrgentChange(held, change(row({ id: "new" })))).toBe(true);
+  });
+
+  it("PS-D5 — a bare terminal is working while a job runs, idle when its shell waits", async () => {
+    const pane = (kind: string) =>
+      floorTerminal({ sessionId: "pty-shell", cwd: "/repo", activity: { kind } });
+    const monitor = await testMonitor({ summaries: [], terminals: [pane("foreground-job")] });
+    const busy = monitor.rows().find((row) => row.id === "pty-shell");
+    expect(busy).toMatchObject({
+      kind: "terminal",
+      status: "working",
+      activity: { kind: "foreground-job" },
+    });
+    monitor.terminals.observe([pane("shell-idle")]);
+    expect(monitor.rows().find((row) => row.id === "pty-shell")?.status).toBe("idle");
+    // a floor that says nothing is the reading before PS-D5: idle
+    monitor.terminals.observe([floorTerminal({ sessionId: "pty-shell", cwd: "/repo" })]);
+    expect(monitor.rows().find((row) => row.id === "pty-shell")?.status).toBe("idle");
+    monitor.service.dispose();
   });
 });
 
