@@ -87,6 +87,20 @@ const MAX_KEPT_SKILLS = 512;
 
 const empty = (): ExtensionKeep => ({ version: 1, servers: {}, values: [], given: {} });
 
+/** What a person reads when values can't be added because the ones the profile already keeps can't be read (item 548,
+ * 2026-11-18): saving would replace them, so nothing is saved. */
+export const KEPT_VALUES_UNREADABLE =
+  "Couldn't save these values: the values this profile already keeps in your keychain can't be read, and saving would replace them. Nothing was changed.";
+
+/** JSON with every character outside printable ASCII escaped as `\uXXXX` (a character past U+FFFF as its two
+ * halves): the same JSON, all printable ASCII, which the keychain tool hands back as its text (item 548). */
+function asciiJson(value: unknown): string {
+  return JSON.stringify(value).replace(
+    /[\u007f-\uffff]/g,
+    (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, "0")}`,
+  );
+}
+
 export interface AgentExtensionStoreOptions {
   /** `<userRoot>/agents/extensions` (LAYOUT.AGENT_EXTENSIONS_DIR) */
   dir: string;
@@ -138,17 +152,24 @@ export class AgentExtensionStore {
   /**
    * Values for names the profile's servers read, into its keychain entry, and
    * their names into the keep. The keychain is written first: a name is never
-   * listed without its value.
+   * listed without its value. Item 548: an entry that is not read whole is
+   * never written over (the add is refused and nothing changes), and the entry
+   * is written as printable ASCII, so the keychain hands it back as written.
    */
   keepValues(setId: string, values: Readonly<Record<string, string>>): Promise<void> {
     const names = Object.keys(values);
     if (names.length === 0) return Promise.resolve();
     return this.change(setId, async (keep) => {
       const kept = await this.entry(setId);
+      if (!kept.whole) {
+        throw new RpcCallError("PRECONDITION_FAILED", KEPT_VALUES_UNREADABLE, false, {
+          reason: "kept-values-unreadable",
+        });
+      }
       await this.opts.secrets.set(
         EXTENSION_VALUES_SERVICE,
         setId,
-        JSON.stringify({ ...kept, ...values }),
+        asciiJson({ ...kept.values, ...values }),
       );
       keep.values = [...new Set([...keep.values, ...names])].sort();
     });
@@ -186,7 +207,7 @@ export class AgentExtensionStore {
         .filter((name) => kept.has(name)),
     );
     if (names.size === 0) return undefined;
-    const entry = await this.entry(setId);
+    const entry = (await this.entry(setId)).values;
     const values: Record<string, string> = {};
     for (const name of names) {
       const value = entry[name];
@@ -385,21 +406,31 @@ export class AgentExtensionStore {
     });
   }
 
-  private async entry(setId: string): Promise<Record<string, string>> {
+  /**
+   * The profile's keychain entry: its text values, and whether it was read
+   * whole. No entry is whole and empty. An entry that is not a map of text (one
+   * the keychain hands back in another form included) is not whole; its text
+   * values are still read for a launch (item 548).
+   */
+  private async entry(setId: string): Promise<{ values: Record<string, string>; whole: boolean }> {
     const raw = await this.opts.secrets.get(EXTENSION_VALUES_SERVICE, setId);
-    if (raw === null) return {};
+    if (raw === null) return { values: {}, whole: true };
     let parsed: unknown;
     try {
       parsed = JSON.parse(raw);
     } catch {
-      return {};
+      return { values: {}, whole: false };
     }
-    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) return {};
-    const entry: Record<string, string> = {};
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return { values: {}, whole: false };
+    }
+    const values: Record<string, string> = {};
+    let whole = true;
     for (const [name, value] of Object.entries(parsed)) {
-      if (typeof value === "string") entry[name] = value;
+      if (typeof value === "string") values[name] = value;
+      else whole = false;
     }
-    return entry;
+    return { values, whole };
   }
 
   private fileOf(setId: string): string {
