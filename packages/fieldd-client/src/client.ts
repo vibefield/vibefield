@@ -43,6 +43,9 @@ import {
 //   outcome-unknown"). Before this, no client sent a key: a UI retry after a
 //   cut applied twice.
 
+// Item 473 — the shared feed itself (`feeds.ts`), for a door that holds one with
+// no hook (Godview's ports, Live apps), on the client it is handed
+export { type FeedClient, holdFeed } from "./feeds";
 // Item 476 — the cadence a refusal for room is asked again on and the reading
 // of such a refusal, at the root so a window's own re-asks keep the feed's.
 export { REASK_BACKOFF, type ReaskBackoff, reaskDelayMs, refusedForRoom } from "./reask";

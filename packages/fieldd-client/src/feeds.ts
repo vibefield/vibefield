@@ -1,4 +1,4 @@
-import type { FielddClient, FielddRpcError, SubscribeOptions, Subscription } from "./client";
+import type { FielddClient, FielddRpcError, SubscribeOptions } from "./client";
 import { reaskDelayMs, refusedForRoom } from "./reask";
 
 // Item 467 (2026-11-16) — one wire subscription per feed. A window talks to
@@ -23,6 +23,10 @@ import { reaskDelayMs, refusedForRoom } from "./reask";
 // it also asks again by itself on `REASK_BACKOFF` (reask.ts: 1 s, 2, 4, 8, 16,
 // then every 30 s), so a refusal no release on this client would ever answer
 // heals without a remount.*
+// *Item 473 (2026-11-18): a feed is held on any client that subscribes
+// (`FeedClient`), so a door's narrow client holds one too. A feed is keyed by
+// the client it is held on, so holders share one only on the same client, and
+// only the window's own client lends the release seam.*
 //
 // React-free on purpose: the hook in react.ts is a line over `attachSubscription`,
 // so every rule here is read by a test without a DOM.
@@ -35,6 +39,18 @@ export interface SubscriptionState<T> {
 }
 
 type Hears = (state: SubscriptionState<unknown>) => void;
+
+/** What a shared feed asks of its client (item 473): its `subscribe` alone, so
+ * a door's narrow client holds a feed too. The window's own client (a
+ * `FielddClient`) also lends its release seam, read only where it is there. */
+export interface FeedClient {
+  subscribe(
+    method: string,
+    params: unknown,
+    onFrame: (payload: unknown) => void,
+    opts?: SubscribeOptions,
+  ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
+}
 
 /** A feed's identity: the method and the params AS THE WIRE CARRIES THEM, with
  * object keys sorted (fieldd's federated subscriptions key the same way,
@@ -59,12 +75,14 @@ function sortedKeys(_key: string, value: unknown): unknown {
 /** The client's count of given-up subscriptions, or undefined when the client
  * offers none (a stand-in that implements `subscribe` alone): an unknown count
  * never reads as room made. */
-function releasesOf(client: FielddClient): number | undefined {
+function releasesOf(client: FeedClient): number | undefined {
   const count = (client as { subscriptionsReleased?: unknown }).subscriptionsReleased;
   return typeof count === "number" ? count : undefined;
 }
 
-function hasReleaseSeam(client: FielddClient): boolean {
+function hasReleaseSeam(
+  client: FeedClient,
+): client is FeedClient & Pick<FielddClient, "onSubscriptionReleased"> {
   const seam = (client as { onSubscriptionReleased?: unknown }).onSubscriptionReleased;
   return typeof seam === "function";
 }
@@ -77,13 +95,13 @@ const live = (data: unknown): SubscriptionState<unknown> => ({
 
 class SharedFeed {
   // plain fields, no parameter properties: client.ts's rule (strip-only erasure)
-  private readonly client: FielddClient;
+  private readonly client: FeedClient;
   private readonly method: string;
   private readonly params: unknown;
   private readonly forget: () => void;
   private readonly holders = new Set<Hears>();
   private state: SubscriptionState<unknown> = { status: "loading", data: null, error: null };
-  private wire: Subscription | null = null;
+  private wire: { unsubscribe: () => void } | null = null;
   private asking = false;
   private closed = false;
   /** while refused for room: the client's release listener, to ask once more */
@@ -93,7 +111,7 @@ class SharedFeed {
   /** the refusals for room since the feed was last granted: the backoff's step */
   private step = 0;
 
-  constructor(client: FielddClient, method: string, params: unknown, forget: () => void) {
+  constructor(client: FeedClient, method: string, params: unknown, forget: () => void) {
     this.client = client;
     this.method = method;
     this.params = params;
@@ -243,13 +261,15 @@ class SharedFeed {
   }
 }
 
-const feedsOf = new WeakMap<FielddClient, Map<string, SharedFeed>>();
+const feedsOf = new WeakMap<FeedClient, Map<string, SharedFeed>>();
 
 /** Hold the feed `(method, params)` on `client`: `hears` gets its current
  * value at once when there is one, then every value after. The returned
- * function lets go (idempotent); the last holder's letting go unsubscribes. */
+ * function lets go (idempotent); the last holder's letting go unsubscribes.
+ * Any client that subscribes holds one (item 473), and holders share it on the
+ * same client alone. */
 export function holdFeed(
-  client: FielddClient,
+  client: FeedClient,
   method: string,
   params: unknown,
   hears: Hears,
