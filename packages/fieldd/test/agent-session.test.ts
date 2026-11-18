@@ -3434,6 +3434,77 @@ describe("Agent Profiles over the REAL floor (AR-S2) — sessions and sign-ins",
     await win.call("terminal.terminate", { sessionId: native.terminal.sessionId });
   }, 60_000);
 
+  it("item 502 — the start line names the profile set and the door a run came through, by ids and kinds alone (EL7)", async () => {
+    const { daemon, dataDir, envOut } = await setup({ floor: "real", profiles: true });
+    /** fieldd's own `session_started` lines (`logRoot`, as `setup` boots it), each line's attrs */
+    const started = (): Array<Record<string, unknown>> => {
+      const file = join(dataDir, "logs", "system", "fieldd.ndjson");
+      if (!existsSync(file)) return [];
+      return readFileSync(file, "utf8")
+        .split("\n")
+        .filter((line) => line.trim() !== "")
+        .map((line) => JSON.parse(line) as { event?: string; attrs?: Record<string, unknown> })
+        .filter((record) => record.event === "fieldd.agents.session_started")
+        .map((record) => record.attrs ?? {});
+    };
+    /** the run's own line, once the log holds it: a line without the fields is red by value, never by a wait */
+    const lineOf = (runtimeRunId: string) =>
+      poll(
+        async () => started().find((attrs) => attrs["runtimeRunId"] === runtimeRunId),
+        10_000,
+        "the run's session_started line",
+      );
+    const win = await window(daemon, DECK, "i502");
+    const work = await signedIn(win, dataDir, "Work");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      profileSet: work.set,
+    })) as AgentSpawnResult;
+    const spawnLine = await lineOf(spawned.session.runtimeRunId);
+    // the set it ran under, and the door: the spawn, called by a window's local token
+    expect(spawnLine).toMatchObject({
+      sessionId: spawned.terminal.sessionId,
+      profileSet: work.set,
+      door: "spawn",
+      caller: "local-token",
+    });
+    // EL7 — ids and kinds alone: these fields and no other, and no path under the run's root or its folder
+    expect(Object.keys(spawnLine).sort()).toEqual([
+      "caller",
+      "door",
+      "profileId",
+      "profileSet",
+      "provider",
+      "runtimeEpoch",
+      "runtimeRunId",
+      "sessionId",
+    ]);
+    expect(JSON.stringify(spawnLine)).not.toContain(dataDir);
+    expect(JSON.stringify(spawnLine)).not.toContain(envOut);
+
+    // a resume's start line names its own door, and the set the run continues under
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    await poll(
+      async () =>
+        readRecord(dataDir, spawned.session.runtimeRunId).exited !== undefined ? true : undefined,
+      15_000,
+    );
+    const resumed = (await born(win, "agent.resume", {
+      runtimeRunId: spawned.session.runtimeRunId,
+    })) as AgentSpawnResult;
+    const resumeLine = await lineOf(resumed.session.runtimeRunId);
+    expect(resumeLine).toMatchObject({
+      sessionId: resumed.terminal.sessionId,
+      profileSet: work.set,
+      door: "resume",
+      caller: "local-token",
+    });
+    expect(JSON.stringify(resumeLine)).not.toContain(dataDir);
+    expect(JSON.stringify(resumeLine)).not.toContain(envOut);
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+  }, 60_000);
+
   it("QL-D10 — a native resume runs where the index files the conversation: in the agent's own folder when it is filed there, never the default profile; naming another persona (by id or by its Agent Profile) refuses, as does a profile with no sign-in for the agent — before anything runs", async () => {
     const box = await setup({ floor: "real", profiles: true, catalog: FILED_CATALOG });
     const { daemon, dataDir, envOut, seen } = box;
