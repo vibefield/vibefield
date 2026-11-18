@@ -32,6 +32,7 @@ import {
   mkdirSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   statSync,
   writeFileSync,
@@ -2327,6 +2328,105 @@ describe("managed sessions over the REAL floor (field-native)", () => {
 
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 90_000);
+
+  it("a run's git observer runs git under the PTY path's law, never the daemon's environment (item 537, EL7)", async () => {
+    // item 537 (2026-11-18) — puppeteer's runtime reads a managed run's branch and head with `git` in the run's working
+    // tree. It takes the runtime's `serviceEnvironment`, the same allow-list snapshot the services take (item 50,
+    // 2026-11-17). So a recording `git`, first on a PATH this row owns, sees no FIELD_*/FIELDD_* name and no planted
+    // name that no list grants, and it does see PATH and HOME. The recorder writes each call's arguments and its
+    // environment's NAMES, never a value: one file per process, so two calls never interleave.
+    const realGit = execFileSync("/usr/bin/which", ["git"], { encoding: "utf8" }).trim();
+    const stubs = shortTmpRoot("vf-537-");
+    roots.push(stubs);
+    const calls = join(stubs, "calls");
+    mkdirSync(calls);
+    writeFileSync(
+      join(stubs, "git"),
+      [
+        "#!/bin/sh",
+        // each record is written whole under a hidden name, then renamed: the row never reads a call half-written
+        `tmp='${calls}'/.$$`,
+        `{ printf 'CALL'; for a in "$@"; do printf '\\t%s' "$a"; done; printf '\\n';`,
+        `  env | awk -F= '/^[A-Za-z_][A-Za-z0-9_]*=/ { print "NAME\\t" $1 }'; } > "$tmp"`,
+        `mv "$tmp" '${calls}'/$$`,
+        `exec '${realGit}' "$@"`,
+        "",
+      ].join("\n"),
+      { mode: 0o755 },
+    );
+    for (const [name, value] of [
+      ["FIELDD_537_SENTINEL", "1"],
+      ["VF_537_UNLISTED", "1"],
+      ["PATH", `${stubs}:${process.env["PATH"] ?? ""}`],
+    ] as const) {
+      const previous = process.env[name];
+      process.env[name] = value;
+      cleanup.push(() => {
+        if (previous === undefined) delete process.env[name];
+        else process.env[name] = previous;
+      });
+    }
+    const { daemon, envOut } = await setup({ floor: "real" });
+    const win = await window(daemon, DECK, "g537");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+      title: "git observed",
+    })) as AgentSpawnResult;
+    // the observer's own calls: puppeteer-runtime's prefix (`observation/git.js`), in the run's working tree. The
+    // runtime names that tree by its real path (puppeteer's workspace identity resolves it: `/tmp` is a link here)
+    const PREFIX = [
+      "-c",
+      "core.fsmonitor=false",
+      "-c",
+      "core.hooksPath=/dev/null",
+      "--no-pager",
+      "-C",
+    ];
+    const trees = new Set([envOut, realpathSync(envOut)]);
+    const recorded = (): Array<{ args: string[]; names: string[] }> => {
+      const out: Array<{ args: string[]; names: string[] }> = [];
+      for (const file of existsSync(calls) ? readdirSync(calls) : []) {
+        if (file.startsWith(".")) continue; // a record still being written
+        for (const line of readFileSync(join(calls, file), "utf8").split("\n")) {
+          if (line.startsWith("CALL")) out.push({ args: line.split("\t").slice(1), names: [] });
+          else if (line.startsWith("NAME\t")) out.at(-1)?.names.push(line.slice(5));
+        }
+      }
+      return out;
+    };
+    const observerCalls = () =>
+      recorded().filter(
+        (call) =>
+          PREFIX.every((arg, i) => call.args[i] === arg) &&
+          trees.has(call.args[PREFIX.length] ?? ""),
+      );
+    // the observer starts with the run (its first `git` at once, then on a timer): wait for its first calls, bounded,
+    // and ask that one was seen BEFORE anything of its environment, so a run it never reaches fails here, by name
+    const deadline = Date.now() + 15_000;
+    let seen = observerCalls();
+    while (seen.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      seen = observerCalls();
+    }
+    expect(
+      seen.length,
+      `no observer call seen; the git calls recorded: ${JSON.stringify(recorded().map((call) => call.args.slice(0, 9).join(" ")))}`,
+    ).toBeGreaterThan(0);
+    // the daemon itself carries both planted names: what follows is the stripping, not their absence
+    expect(process.env["FIELDD_537_SENTINEL"]).toBe("1");
+    for (const call of seen) {
+      // what the call carries FIRST, so an absence asked next is never read off an empty record
+      expect(call.names, `the observer call [${call.args.slice(0, 9).join(" ")}]`).toEqual(
+        expect.arrayContaining(["PATH", "HOME"]),
+      );
+      expect(call.names.filter((n) => n.startsWith("FIELD_") || n.startsWith("FIELDD_"))).toEqual(
+        [],
+      );
+      expect(call.names).not.toContain("VF_537_UNLISTED");
+    }
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+  }, 60_000);
 
   it("QL-D10 — a conversation resumed by its native id: refused while a run continues it; then a new run on puppeteer's continuation, recorded and audited, answered like a spawn; the exited record no longer resumes beside it", async () => {
     const box = await setup({ floor: "real", catalog: FILED_CATALOG, briefing: SPARK_BRIEFING });
