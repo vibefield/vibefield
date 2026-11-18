@@ -62,6 +62,7 @@ import {
   resetHandOverForTest,
   setHandOverDoor,
   setTakeBackDoor,
+  type TakeBackSaid,
 } from "../src/frame/cards/hand-over";
 import { hearLineSays, type LineViewDoor, refusalClaimed } from "../src/frame/line-door";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
@@ -1541,8 +1542,8 @@ describe("a pane plays the chosen face (OB-1b, §4.4)", () => {
     expect(door.pasted).toEqual([]);
   });
 
-  /** The grant's two doors, recording. */
-  const grants = (refuse?: string) => {
+  /** The grant's two doors, recording; `back` is what each take-back comes to (item 526). */
+  const grants = (refuse?: string, back: TakeBackSaid = "taken") => {
     const handed: string[] = [];
     const taken: Array<[string, string]> = [];
     setHandOverDoor(async (ref) => {
@@ -1552,10 +1553,39 @@ describe("a pane plays the chosen face (OB-1b, §4.4)", () => {
     });
     setTakeBackDoor(async (ref, run) => {
       taken.push([ref, run]);
+      return back;
     });
     return { handed, taken };
   };
   const STACK: Card = { ...MAP, faces: [{ ...LIVE, more: ["vf:obj/aaaaaaaa"] }, OUTLINE] };
+
+  it("says the agent still has what the play granted when it could not be taken back (item 526)", async () => {
+    const root = onePane();
+    const door = agentDoor();
+    grants("vf:obj/aaaaaaaa", "stands");
+    const target = paneCardTarget({ root: () => root, door: () => door });
+    await expect(target.play(STACK, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: `Not that one. ${OUTCOME_WORDS.stillHas("vibe-field", "Q3 plan")}`,
+      stand: "read",
+    });
+    expect(OUTCOME_WORDS.stillHas("vibe-field", "Q3 plan")).toBe("vibe-field still has “Q3 plan”.");
+  });
+
+  it("says it could not take the object back when VibeField cannot tell whether the grant stands (item 526)", async () => {
+    const root = onePane();
+    const closed = { ...agentDoor(), pasteInto: () => false };
+    grants(undefined, "unknown");
+    const target = paneCardTarget({ root: () => root, door: () => closed });
+    await expect(target.play(MAP, "ref", { x: 300, y: 300 })).resolves.toEqual({
+      ok: false,
+      note: `${OUTCOME_WORDS.notTaking("vibe-field")}. ${OUTCOME_WORDS.notTakenBack("vibe-field", "Q3 plan")}`,
+      stand: "read",
+    });
+    expect(OUTCOME_WORDS.notTakenBack("vibe-field", "Q3 plan")).toBe(
+      "Couldn't take “Q3 plan” back from vibe-field.",
+    );
+  });
 
   it("grants nothing while the pane's input is not open", async () => {
     const root = onePane();

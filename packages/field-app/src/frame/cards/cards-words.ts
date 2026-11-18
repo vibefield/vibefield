@@ -160,6 +160,10 @@ export const OUTCOME_WORDS = {
   pictureNotWritten: "Not pasted — the picture could not be written to a file",
   /** a ref played on the desk: where it already is (§4.4) */
   onTheDesk: "It's on the desk",
+  /** item 526: after a Live play's own note, a take-back VibeField could not make while the agent still holds it */
+  stillHas: (name: string, title: string) => `${name} still has “${title}”.`,
+  /** …and when VibeField cannot tell whether it does */
+  notTakenBack: (name: string, title: string) => `Couldn't take “${title}” back from ${name}.`,
 } as const;
 
 /** A drag from another app is a card before the system says what it holds

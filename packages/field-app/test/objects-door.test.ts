@@ -3,6 +3,7 @@
  * OB-1b's seams, connected: the window's doors over fieldd's `objects.hand`, `objects.ref` and `objects.resolve`, and which
  * agents' runs the door can name, read once from `agent.providers` into a synchronous cache.
  */
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { doorCanNameRun, resetRunNameCacheForTest } from "../src/frame/cards/card-landing";
 import {
@@ -13,6 +14,7 @@ import {
   refFor,
   resetHandOverForTest,
   resolveRef,
+  takeBack,
 } from "../src/frame/cards/hand-over";
 
 const REF = "vf:obj/7hk2qx4m";
@@ -185,5 +187,98 @@ describe("which agents' runs the door can name", () => {
     );
     await Promise.resolve();
     expect(doorCanNameRun("r", "claude")).toBe(true);
+  });
+});
+
+describe("the take-back's door never swallows a refusal (item 526)", () => {
+  const grantRow = (holder: string, name: string) => ({
+    ref: REF,
+    docId: "doc-1",
+    key: "k1",
+    holder,
+    name,
+    how: "handed",
+    at: 1,
+  });
+  /** `objects.takeBack` answers each ask in turn from `takes` (a throw is a refusal); `objects.grants` from `grants`. */
+  function takeBackClient(takes: ReadonlyArray<() => unknown>, grants: unknown | (() => unknown)) {
+    let asked = 0;
+    return clientOf({
+      "agent.providers": { providers: [] },
+      "objects.takeBack": () => {
+        const answer = takes[Math.min(asked, takes.length - 1)];
+        asked += 1;
+        return answer?.();
+      },
+      "objects.grants": grants,
+    });
+  }
+  const refused = () => {
+    throw new Error("socket closed");
+  };
+  const methods = (client: ReturnType<typeof clientOf>) => client.asked.map(([method]) => method);
+
+  it("is taken when fieldd takes it, asked once", async () => {
+    const client = takeBackClient([() => ({ taken: true })], { grants: [] });
+    installObjectsDoor(client as never);
+    await expect(takeBack(REF, "run-a")).resolves.toBe("taken");
+    expect(methods(client).filter((m) => m !== "agent.providers")).toEqual(["objects.takeBack"]);
+  });
+
+  it("is taken when fieldd answers AUDIT_UNAVAILABLE with the act applied: its evidence is owed, and nothing more is asked", async () => {
+    const applied = () => {
+      throw new FielddRpcError("AUDIT_UNAVAILABLE", "the action completed", true, {
+        service: "audit",
+        actionApplied: true,
+      });
+    };
+    const client = takeBackClient([applied], { grants: [grantRow("run-a", "claude·2")] });
+    installObjectsDoor(client as never);
+    await expect(takeBack(REF, "run-a")).resolves.toBe("taken");
+    expect(methods(client).filter((m) => m !== "agent.providers")).toEqual(["objects.takeBack"]);
+  });
+
+  it("asks twice, and a second ask that takes it is taken", async () => {
+    const client = takeBackClient([refused, () => ({ taken: true })], { grants: [] });
+    installObjectsDoor(client as never);
+    await expect(takeBack(REF, "run-a")).resolves.toBe("taken");
+    expect(methods(client).filter((m) => m !== "agent.providers")).toEqual([
+      "objects.takeBack",
+      "objects.takeBack",
+    ]);
+  });
+
+  it("refused twice, it reads the grants: one that stands for the run is said to stand", async () => {
+    const client = takeBackClient([refused], { grants: [grantRow("run-a", "claude·2")] });
+    installObjectsDoor(client as never);
+    await expect(takeBack(REF, "run-a", "claude·2")).resolves.toBe("stands");
+    expect(methods(client).filter((m) => m !== "agent.providers")).toEqual([
+      "objects.takeBack",
+      "objects.takeBack",
+      "objects.grants",
+    ]);
+    expect(client.asked.at(-1)).toEqual(["objects.grants", { ref: REF }]);
+  });
+
+  it("refused twice, a spark's grant stands by the name the pane shows", async () => {
+    const client = takeBackClient([refused], { grants: [grantRow("spark:sp-7k2m9q4x", "Vela")] });
+    installObjectsDoor(client as never);
+    await expect(takeBack(REF, "run-a", "Vela")).resolves.toBe("stands");
+  });
+
+  it("refused twice, it is taken when no grant stands for the run, whoever else holds the object", async () => {
+    const client = takeBackClient([refused], { grants: [grantRow("run-b", "codex·1")] });
+    installObjectsDoor(client as never);
+    await expect(takeBack(REF, "run-a", "claude·2")).resolves.toBe("taken");
+  });
+
+  it("refused twice, and the grants cannot be read either: VibeField cannot tell", async () => {
+    const client = takeBackClient([refused], refused);
+    installObjectsDoor(client as never);
+    await expect(takeBack(REF, "run-a", "claude·2")).resolves.toBe("unknown");
+  });
+
+  it("with no door in this window there is no grant to take back", async () => {
+    await expect(takeBack(REF, "run-a")).resolves.toBe("taken");
   });
 });

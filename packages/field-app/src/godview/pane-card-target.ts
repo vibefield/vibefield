@@ -141,8 +141,21 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
       // playing Live is the grant (OB-L1): only once the pane can take the words, and only to the run it shows NOW. Every object
       // named is asked for, and whatever this play granted is taken back if the words cannot follow it
       const granted: { readonly ref: ObjectRef; readonly run: string }[] = [];
-      const takeBackGranted = async (): Promise<void> => {
-        await Promise.all(granted.map(({ ref, run }) => takeBack(ref, run)));
+      // the play did not finish: end what it granted, and when a take-back did not take, say after the play's own note
+      // what the agent was left holding (item 526), never nothing
+      const notPlayed = async (note: string, stand?: "read") => {
+        const said = await Promise.all(
+          granted.map(({ ref, run }) => takeBack(ref, run, pane.name)),
+        );
+        const title = written.type === "ref" ? written.title || written.kindName : "";
+        const left = said.includes("unknown")
+          ? OUTCOME_WORDS.notTakenBack(pane.name, title)
+          : said.includes("stands")
+            ? OUTCOME_WORDS.stillHas(pane.name, title)
+            : null;
+        if (left === null) return { ok: false, note, ...(stand === undefined ? {} : { stand }) };
+        const played = /[.!?…]$/.test(note) ? note : `${note}.`;
+        return { ok: false, note: `${played} ${left}`, stand: "read" as const };
       };
       const showsRun = (run: string): boolean => {
         const now = paneUnder(at);
@@ -154,17 +167,11 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
         if (!showsRun(run)) return { ok: false, note: OUTCOME_WORDS.paneMoved };
         for (const ref of [written.ref, ...(written.more ?? [])]) {
           const handed = await handOver(ref, run);
-          if (!handed.handed) {
-            await takeBackGranted();
-            return { ok: false, note: handed.reason, stand: "read" };
-          }
+          if (!handed.handed) return await notPlayed(handed.reason, "read");
           // a grant the run already held is not this play's to end
           if (handed["already"] !== true) granted.push({ ref, run });
         }
-        if (!showsRun(run)) {
-          await takeBackGranted();
-          return { ok: false, note: OUTCOME_WORDS.paneMoved };
-        }
+        if (!showsRun(run)) return await notPlayed(OUTCOME_WORDS.paneMoved);
       }
       // D6 — a paste too large for the pane's terminal is refused INSIDE the call, so whatever is
       // refused while it runs is this paste's, whichever session the pane shows by now (it may
@@ -181,12 +188,10 @@ export function paneCardTarget(deps: PaneCardTargetDeps): CardTarget {
         stop();
       }
       if (heard.refusal !== null) {
-        await takeBackGranted();
-        return { ok: false, note: inputRefusalNote(heard.refusal, pane.name), stand: "read" };
+        return await notPlayed(inputRefusalNote(heard.refusal, pane.name), "read");
       }
       if (took) return { ok: true, note: OUTCOME_WORDS.pasted(pane.name) };
-      await takeBackGranted();
-      return { ok: false, note: OUTCOME_WORDS.notTaking(pane.name) };
+      return await notPlayed(OUTCOME_WORDS.notTaking(pane.name));
     },
   };
 }

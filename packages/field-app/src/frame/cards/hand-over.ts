@@ -1,11 +1,12 @@
 import {
   AgentProvidersResult,
   type ObjectRef,
+  ObjectsGrantsResult,
   ObjectsHandResult,
   ObjectsRefResult,
   ObjectsResolveResult,
 } from "@vibefield/contracts";
-import type { FielddClient } from "@vibefield/fieldd-client";
+import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { agentDoorCanName, noteAgentNameable } from "./card-landing";
 
 // THE WINDOW'S DOORS TO THE DESK'S OBJECTS (OB-L1, §4.3). Playing a card's Live face on one agent is the grant: the window asks
@@ -43,8 +44,12 @@ export const REF_WAIT_MS = 1_500;
 
 type RefDoor = (ask: RefAsk) => Promise<ObjectRef | null>;
 type ResolveDoor = (ref: ObjectRef) => Promise<RefPlace | null>;
-/** Ends a grant. Never rejects: a take-back that fails leaves a grant the person can still end by hand. */
-export type TakeBackDoor = (ref: ObjectRef, run: string) => Promise<void>;
+/** What a take-back came to (item 526): `taken`; `stands`, refused while the run still holds the object; or `unknown`,
+ * refused when fieldd could not say either way. */
+export type TakeBackSaid = "taken" | "stands" | "unknown";
+/** Ends a grant. Never rejects, and never swallows: a refusal is said as what it left. `handle`: the name the pane
+ * shows, which a spark's grant is named by. */
+export type TakeBackDoor = (ref: ObjectRef, run: string, handle?: string) => Promise<TakeBackSaid>;
 
 let handDoor: HandOverDoor | null = null;
 let refDoor: RefDoor | null = null;
@@ -73,9 +78,19 @@ export function setTakeBackDoor(next: TakeBackDoor): () => void {
   };
 }
 
-/** End the grant this play made when its words could not follow it. */
-export function takeBack(ref: ObjectRef, run: string): Promise<void> {
-  return takeBackDoor === null ? Promise.resolve() : takeBackDoor(ref, run);
+/** End the grant this play made when its words could not follow it, and say what that came to. With no door in this
+ * window nothing was granted, so there is nothing left to take back. */
+export function takeBack(ref: ObjectRef, run: string, handle?: string): Promise<TakeBackSaid> {
+  return takeBackDoor === null ? Promise.resolve("taken") : takeBackDoor(ref, run, handle);
+}
+
+/** fieldd took it back and could not write the evidence yet (item 526): AUDIT_UNAVAILABLE with the act applied. */
+function appliedAnyway(cause: unknown): boolean {
+  if (!(cause instanceof FielddRpcError) || cause.kind !== "AUDIT_UNAVAILABLE") return false;
+  const details = cause.details;
+  return typeof details === "object" && details !== null && "actionApplied" in details
+    ? details.actionApplied === true
+    : false;
 }
 
 /** The name of an object on a board; null when there is no door, or fieldd did not say in time. */
@@ -125,11 +140,27 @@ export function installObjectsDoor(client: Pick<FielddClient, "request">): () =>
       return null;
     }
   };
-  const back: TakeBackDoor = async (ref, run) => {
+  const back: TakeBackDoor = async (ref, run, handle) => {
+    // twice: since item 526 fieldd takes back even when it cannot write the evidence, so a refusal is a fieldd that
+    // could not be reached, and the second ask may find it again
+    for (let ask = 0; ask < 2; ask += 1) {
+      try {
+        await client.request("objects.takeBack", { ref, run });
+        return "taken";
+      } catch (cause) {
+        if (appliedAnyway(cause)) return "taken";
+      }
+    }
+    // refused twice: say only what fieldd still holds, never more (EL5)
     try {
-      await client.request("objects.takeBack", { ref, run });
+      const said = ObjectsGrantsResult.safeParse(await client.request("objects.grants", { ref }));
+      if (!said.success) return "unknown";
+      const stands = said.data.grants.some(
+        (grant) => grant.holder === run || (handle !== undefined && grant.name === handle),
+      );
+      return stands ? "stands" : "taken";
     } catch {
-      // the grant stands, and the person's own take-back still ends it (OB-4)
+      return "unknown";
     }
   };
   handDoor = hand;
