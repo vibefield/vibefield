@@ -23,8 +23,9 @@ import type { DeskObjects } from "./desk-objects";
 // already stale. A take-back answers `taken: true` whatever the disk said, with `kept: false` beside it when the
 // grants file does not hold it yet. Its audit line names the holders it took the object from (holders are no
 // secret), so that whoever reads the line can see when fieldd took it back from more than the one named.
-// Item 526 (2026-11-18): a take-back goes through the audit's `revoke`, the act that ends a grant, never one that gives;
-// a hand and an undo stay `required`.
+// Item 526 (2026-11-18): a take-back always takes, even when its attempt record cannot be written, as the token
+// revocations do. It goes through the audit's `revoke`, which owes the evidence and answers AUDIT_UNAVAILABLE with the
+// act applied. A hand and an undo stay `required`: refusing them leaves nothing open.
 
 /** The audit the doors call (audit-service.ts): `required` for an act that gives or changes, `revoke` for one that
  * ends a grant. */

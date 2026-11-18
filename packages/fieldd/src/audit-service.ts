@@ -299,8 +299,11 @@ export class AuditService extends EventEmitter {
   }
 
   /**
-   * A revocation (item 526, 2026-11-18): an act that ends what someone was given, never one that gives. For now it is
-   * written as `required` is.
+   * A revocation (item 526, 2026-11-18): an act that ends what someone was given, never one that gives. It is
+   * `required` while its attempt record can be written. When it cannot, the act runs all the same, as the token
+   * revocations do: evidence failure is surfaced, but may never leave a grant live. A recovery marker says the act was
+   * applied, and is written once the writer takes a line again; the caller is told AUDIT_UNAVAILABLE with the act
+   * applied. A failure after the attempt record is `required`'s own.
    */
   async revoke<T>(
     ctx: CallerContext,
@@ -308,7 +311,55 @@ export class AuditService extends EventEmitter {
     effect: () => Promise<T> | T,
     describeOutcome?: (value: T) => AuditMutationOutcome,
   ): Promise<T> {
-    return await this.requiredAs(ctx, mutation, effect, describeOutcome);
+    const attempt = { ran: false };
+    try {
+      return await this.requiredAs(
+        ctx,
+        mutation,
+        () => {
+          attempt.ran = true;
+          return effect();
+        },
+        describeOutcome,
+      );
+    } catch (error) {
+      if (attempt.ran || !(error instanceof AuditUnavailableError)) throw error;
+      const details =
+        error.details !== null && typeof error.details === "object"
+          ? (error.details as { operation?: unknown; code?: unknown })
+          : {};
+      const owed = {
+        action: mutation.action,
+        originalLedger: auditLedgerForAction(mutation.action),
+        operationId: `op_${randomBytes(12).toString("base64url")}`,
+        target: targetForAudit(mutation.target),
+      };
+      let value: T;
+      try {
+        value = await effect();
+      } catch (effectError) {
+        this.queueRecovery({
+          ...owed,
+          intendedOutcome: "failed",
+          effectResolution: "effect-threw",
+          failedAt: this.now(),
+        });
+        throw effectError;
+      }
+      this.queueRecovery({
+        ...owed,
+        intendedOutcome: describeOutcome?.(value).outcome ?? "succeeded",
+        effectResolution: "applied",
+        failedAt: this.now(),
+      });
+      throw new AuditUnavailableError(
+        typeof details.operation === "string"
+          ? (details.operation as import("@vibefield/audit").AuditWriterOperation)
+          : "write",
+        typeof details.code === "string" ? details.code : "UNKNOWN",
+        true,
+      );
+    }
   }
 
   close(): Promise<void> {
