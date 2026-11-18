@@ -64,6 +64,18 @@ use tokio::sync::{mpsc, oneshot};
 /// carries the server's own ceiling (service.rs:1864-1874) — so the answer is
 /// what the server can do, not what was negotiated. That is precisely what makes
 /// it checkable, and `hello` checks it.
+///
+/// *Corrected 2026-11-18 (item 530):* the first line names ghosttea 0.13.4; the pin
+/// is 0.15.0, which serves 1.19 (`CONTROL_PROTOCOL_MINOR`, service.rs:46). This
+/// client still announces 1.17. Every pushed-event gate in 0.15.0 sits at or below
+/// 1.17 (the broadcast gates at service.rs:130-141, the 1.12 snapshot after `hello`
+/// at :2003-2005, `events-lost` at :2030), so it hears every event the service
+/// sends, and the gate is on pushed events alone: 1.18's summary fields
+/// (`creationId`, `inputUsed`, `programKind`) ride `list-sessions` at any minor,
+/// and this reader takes the first two. In 0.15.0's service.rs the note's :49 and
+/// :88, and :34 in `MAX_CONTROL_BYTES`'s doc below, read as cited; the
+/// per-connection minor is recorded at :1968, broadcast events are gated on it at
+/// :2020, and the hello response's ceiling is at :2522-2524.
 pub const PROTOCOL_MAJOR: u16 = 1;
 pub const PROTOCOL_MINOR: u16 = 17;
 

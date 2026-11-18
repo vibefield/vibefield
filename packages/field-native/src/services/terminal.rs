@@ -4097,6 +4097,12 @@ mod tests {
     /// says the kind alone. The sample's own stamp moves at every 200 ms sample, so a row that
     /// carried it would be a changed inventory, published again, at every sample; the kind moves
     /// only on an edge.
+    ///
+    /// *Corrected 2026-11-18 (item 530):* the stamp does not move at every sample. ghosttea
+    /// 0.15.0 keeps the summary's activity, its stamp included, while the observation is the same
+    /// (the kind, the source, the confidence and both process groups). What the kind alone buys is
+    /// narrower: a new observation of the same kind, a new foreground process group, is no changed
+    /// inventory.
     #[test]
     fn a_row_carries_its_panes_activity_kind_and_no_more_of_the_sample() {
         let sampled = |kind: &str, observed_at_ms: u64| {

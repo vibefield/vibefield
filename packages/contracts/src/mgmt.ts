@@ -105,7 +105,11 @@ export type ObservedTerminalCell = z.infer<typeof ObservedTerminalCell>;
  * ghosttea's `SessionActivity`, carried as its `kind` alone (`foreground-job`, `shell-idle`,
  * `unknown`), so the row does not change at every sample. The kind is an open word: one this
  * reader does not know still parses, and the monitor's one classifier reads every kind but
- * `foreground-job` as idle. Named for the generator, as the cell tag is. */
+ * `foreground-job` as idle. Named for the generator, as the cell tag is.
+ *
+ * *Corrected 2026-11-18 (item 530):* "at every sample" was loose. The host keeps its sample while
+ * the observation is the same; the kind alone keeps a new observation of the same kind (a new
+ * foreground process group) from changing the row. */
 export const ObservedTerminalActivity = z.object({ kind: z.string() }).passthrough();
 export type ObservedTerminalActivity = z.infer<typeof ObservedTerminalActivity>;
 
