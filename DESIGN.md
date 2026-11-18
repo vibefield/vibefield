@@ -11072,9 +11072,8 @@ screen says of its device, in the voice's words, quoted exactly by the plugin (`
 word for it, else the bound device type's name (a face is drawn only for a phone bound to a device;
 the model's name is the unbound phone's, in hand). A face with words shows them light over the dark
 panel, or over the device's last still dimmed to 0.16; one with a mark shows its still at 0.7. The act is a capsule
-under the words, offered only where the host can run it; it manages the device and never reaches
-inside iOS. In hand the tools say **View only**, in words beside the device's name — the phone takes no
-tap, key or button until PT-S4's touch lands.
+under the words. With a direct device connection, a held phone accepts taps, drags, scrolling and hardware keys.
+**Home** sends the device to its Home Screen. An explicit window capture shows **View only**.
 
 | State | The face says | Its act |
 |---|---|---|
@@ -11088,17 +11087,12 @@ tap, key or button until PT-S4's touch lands.
 | at rest | its last frame, with the rest mark | — |
 | stopped | "The Simulator stopped", over its still | "Try again" |
 
-**The phone's two acts on the selection menu** (track PT, PT-S2; R11, ruled 2026-10-30) — said for the phones selected, one
-undo step for each phone it changes, quoted exactly by the plugin (`plugins/simulator`'s `attach.ts`). **Attach** binds each
-phone to a Simulator of this Mac's own: the booted device of the phone's own model, else the first booted iPhone (the phone
-morphs into its model), else the phone's own model on the newest iOS this Mac has, whose face then says what is true of it
-— off, with "Boot", or no device, with "Create it". **Finish** turns each phone to the next of its model's launch colours,
-and round to the first. There is no Model act: a bound phone's model is its device's, and only Attach sets it — a model
-unlike its device would show another iPhone's screen in its frame. A binding names a model and an iOS, never one Mac's
-device, so on another Mac the same phone shows that Mac's own Simulator of its model. "The newest iOS this Mac has" is its
-newest INSTALLED iOS runtime, whether or not any device runs it yet: the face then shows the model's device on whatever
-runtime has one, or says "no device", with "Create it". Attach changes nothing on a Mac with no iOS runtime installed, or
-before VibeField has read this Mac's devices.
+**The phone's selection menu** offers **Simulator settings…** and **Finish**. Double-clicking a new phone opens setup.
+Choose an installed iOS version and a compatible iPhone model to create a separate local device for each selected phone.
+The device starts when visible. Copies get their own devices. Each pane keeps its apps and data for each model and iOS
+version, including when you switch away and return. VibeField shuts down devices it booted on quit or ten minutes
+after their last pane releases them. Reopening a pane during that time keeps its device warm.
+Finish cycles through the model's available finishes.
 
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a

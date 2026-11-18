@@ -14,6 +14,7 @@ import {
   SimctlVerbRefusedError,
   simctlArgv,
   simctlCallCounts,
+  simulatorConfigurations,
   simulatorDeviceRows,
   simulatorRuntimeIds,
 } from "../src/main/live-surfaces/simctl";
@@ -150,7 +151,7 @@ function harness(options: HarnessOptions = {}) {
 
 describe("simctl's allow-list", () => {
   it("runs list, boot, shutdown and create, and refuses every verb that reaches inside iOS", () => {
-    expect(SIMCTL_VERBS).toEqual(["list", "boot", "shutdown", "create"]);
+    expect(SIMCTL_VERBS).toEqual(["list", "boot", "shutdown", "create", "bootstatus"]);
     expect(simctlArgv("list", ["--json"])).toEqual(["simctl", "list", "--json"]);
     expect(simctlArgv("boot", [UDID_A])).toEqual(["simctl", "boot", UDID_A]);
     expect(simctlArgv("shutdown", [UDID_A])).toEqual(["simctl", "shutdown", UDID_A]);
@@ -275,6 +276,51 @@ describe("pickDevice (R3)", () => {
     expect(pickDevice(resting, binding(PRO, IOS_26_1)).device?.udid).toBe(UDID_B);
   });
 
+  it("reopens a dedicated pane without borrowing another pane's or the user's device", () => {
+    const shared = binding(PRO, IOS_26_5);
+    const first = { ...shared, instance: "phone-a" };
+    const second = { ...shared, instance: "phone-b" };
+    const snapshot = parseSimctlSnapshot(
+      listJson({ [IOS_26_5]: [rawDevice(UDID_A, PRO, "Booted")] }),
+    );
+    const plan = pickDevice(snapshot, first).create!;
+    expect(plan?.name).toBeTruthy();
+    expect(pickDevice(snapshot, second).create?.name).not.toEqual(plan.name);
+    const existing = parseSimctlSnapshot(
+      listJson({
+        [IOS_26_5]: [
+          { ...rawDevice(UDID_B, PRO, "Booted"), name: plan.name },
+          rawDevice(UDID_A, PRO, "Shutdown"),
+        ],
+      }),
+    );
+    expect(pickDevice(existing, first).device?.udid).toBe(UDID_B);
+    expect(pickDevice(existing, second).device).toBeUndefined();
+    expect(pickDevice(existing, shared).device?.udid).toBe(UDID_A);
+  });
+
+  it("pins a managed pane to the selected runtime, even while its other version is running", () => {
+    const older = { deviceType: SE, runtime: IOS_18_6, instance: "a" };
+    const newer = { ...older, runtime: IOS_26_5 };
+    const name = pickDevice(parseSimctlSnapshot(listJson()), older).create!.name;
+    const existing = parseSimctlSnapshot(
+      listJson({ [IOS_26_5]: [rawDevice(UDID_A, SE, "Booted", name)] }),
+    );
+    expect(pickDevice(existing, older).create).toEqual({ name, deviceType: SE, runtime: IOS_18_6 });
+    expect(pickDevice(existing, newer).device?.udid).toBe(UDID_A);
+    expect(pickDevice(existing, { ...older, runtime: IOS_17_0 })).toEqual({
+      typeName: "iPhone SE (2nd generation)",
+    });
+    expect(pickDevice(existing, { ...older, deviceType: PRO }).create).toBeUndefined();
+    const both = parseSimctlSnapshot(
+      listJson({
+        [IOS_26_5]: [rawDevice(UDID_A, SE, "Booted", name)],
+        [IOS_18_6]: [rawDevice(UDID_B, SE, "Shutdown", name)],
+      }),
+    );
+    expect(pickDevice(both, older).device?.udid).toBe(UDID_B);
+  });
+
   it("falls back to the type on any installed runtime: a booted one first, then the newest runtime", () => {
     const missing = "com.apple.CoreSimulator.SimRuntime.iOS-27-0";
     const atRest = parseSimctlSnapshot(
@@ -371,6 +417,43 @@ describe("simulatorDeviceRows (R11)", () => {
     const rows = simulatorDeviceRows(parseSimctlSnapshot(listJson({ [IOS_26_5]: many })));
     expect(rows).toHaveLength(256);
     expect(rows[0]?.booted).toBe(true);
+  });
+});
+
+describe("simulatorConfigurations", () => {
+  it("uses only proven model and runtime pairs when compatibility metadata is missing", () => {
+    const raw = JSON.parse(
+      listJson({
+        [IOS_18_6]: [
+          rawDevice(UDID_A, SE, "Shutdown"),
+          { ...rawDevice(UDID_B, PRO, "Booted"), isAvailable: false },
+        ],
+        [IOS_26_1]: [rawDevice(UDID_C, PRO, "Booted")],
+      }),
+    );
+    delete raw.runtimes[0].supportedDeviceTypes;
+    raw.runtimes[1].supportedDeviceTypes = [];
+    const rows = simulatorConfigurations(parseSimctlSnapshot(JSON.stringify(raw)));
+    expect(rows.find((row) => row.runtime === IOS_18_6)?.models.map((m) => m.deviceType)).toEqual([
+      SE,
+    ]);
+    expect(rows.some((row) => row.runtime === IOS_26_1)).toBe(false);
+  });
+
+  it("lists actual compatible iPhones for each installed iOS runtime even with no created devices", () => {
+    const raw = JSON.parse(listJson());
+    raw.runtimes[0].supportedDeviceTypes.push({
+      identifier: "com.apple.CoreSimulator.SimDeviceType.iPad-Air",
+      name: "iPad Air",
+    });
+    raw.runtimes.push({
+      ...raw.runtimes[0],
+      identifier: "com.apple.CoreSimulator.SimRuntime.watchOS-11-0",
+    });
+    const rows = simulatorConfigurations(parseSimctlSnapshot(JSON.stringify(raw)));
+    expect(rows.map((row) => row.runtime)).toEqual([IOS_26_5, IOS_26_1, IOS_18_6]);
+    expect(rows[0]?.models.map((m) => m.deviceType)).toEqual([PRO, SE]);
+    expect(rows[2]?.models).toEqual([{ deviceType: SE, name: "iPhone SE (2nd generation)" }]);
   });
 });
 
@@ -724,6 +807,7 @@ describe("PT-S3 (D2): the simctl call record — names, never arguments", () => 
       "boot",
       "shutdown",
       "create",
+      "bootstatus",
       "show",
     ]);
     expect(simctlCallCounts()).toEqual({
@@ -733,6 +817,7 @@ describe("PT-S3 (D2): the simctl call record — names, never arguments", () => 
       boot: 0,
       shutdown: 0,
       create: 0,
+      bootstatus: 0,
       show: 0,
     });
   });
@@ -791,6 +876,7 @@ describe("PT-S3 (D2): the simctl call record — names, never arguments", () => 
     });
     expect(await service.enumerateBootedDevices()).toHaveLength(1);
     await service.boot(UDID_B);
+    await service.waitUntilReady(UDID_B);
     await service.shutdown(UDID_B);
     await service.show(UDID_A);
     expect(await service.create("iPhone 17 Pro", PRO, IOS_26_5)).toBe(CREATED);
@@ -808,6 +894,7 @@ describe("PT-S3 (D2): the simctl call record — names, never arguments", () => 
       boot: 1,
       shutdown: 1,
       create: 1,
+      bootstatus: 1,
       show: 1,
     });
   });

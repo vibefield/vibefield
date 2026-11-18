@@ -4,6 +4,13 @@ import type { LiveSurfaceBrowserSourceV1 } from "@vibefield/contracts";
 const ALL_URLS = { urls: ["<all_urls>"] } as const;
 const guardedBrowserSurfaceSessions = new WeakSet<object>();
 const configuredBrowserSurfaceSessions = new WeakSet<object>();
+/** Only guarded pane contents may use HTML fullscreen; their native window never resizes for it. */
+const paneContents = new WeakSet<object>();
+const allowsPaneFullscreen = (contents: unknown, permission: string): boolean =>
+  permission === "fullscreen" &&
+  typeof contents === "object" &&
+  contents !== null &&
+  paneContents.has(contents);
 /** PT-5a: who is told when a page's download is cancelled — by the WebContents that asked (a session is many pages'). */
 const downloadRefusals = new WeakMap<object, () => void>();
 /** BP-D1: who is told when a page's permission REQUEST is denied — by the WebContents that asked, as for a download. */
@@ -161,15 +168,19 @@ export function installGuardedBrowserSurfaceSession(target: BrowserSurfaceSessio
   if (configuredBrowserSurfaceSessions.has(target)) return;
   guardedBrowserSurfaceSessions.add(target);
   try {
-    // ESP §7.4: both handlers deny. BP-D1: a REQUEST is also told to the page that asked, for the pane to say once; a
-    // CHECK stays silent — Chromium asks checks constantly, and nothing was asked of a person.
+    // Fullscreen is contained by the pane's fixed offscreen window. Other permissions remain denied.
+    // Automatic fullscreen (without user activation) is a separate permission and stays denied.
     target.setPermissionRequestHandler((contents, permission, callback, details) => {
+      if (allowsPaneFullscreen(contents, permission)) {
+        callback(true);
+        return;
+      }
       callback(false);
       if (typeof contents === "object" && contents !== null) {
         permissionRefusals.get(contents)?.(browserSurfacePermissionWord(permission, details));
       }
     });
-    target.setPermissionCheckHandler(() => false);
+    target.setPermissionCheckHandler(allowsPaneFullscreen);
     target.webRequest.onBeforeRequest(ALL_URLS, (details, callback) => {
       callback({ cancel: !isAllowedBrowserRequest(details.url, details.resourceType) });
     });
@@ -191,7 +202,7 @@ export function installGuardedBrowserSurfaceSession(target: BrowserSurfaceSessio
  *  - a page that asks to stay on its unload (`beforeunload`) LEAVES — no page blocks behind a dialog nobody sees;
  *  - HTTP auth is cancelled — the page gets its own 401;
  *  - a download the page starts is cancelled by its session's guard, and told here by the contents that asked;
- *  - a permission the page REQUESTS is denied by its session's guard, and told here the same way (BP-D1);
+ *  - a permission denied by the session guard is told here the same way (BP-D1); pane fullscreen is allowed;
  *  - a certificate the engine does not trust is REFUSED, in a line of code and never by its default alone: no page is
  *    shown over a certificate nobody vouched for (the load fails, and its face says so).
  */
@@ -199,6 +210,7 @@ export function installGuardedBrowserSurfaceContents(
   contents: GuardedBrowserSurfaceWebContents,
   refused: (what: BrowserSurfaceGuardRefusal, detail?: string) => void = () => undefined,
 ): void {
+  paneContents.add(contents);
   contents.setWindowOpenHandler((details) => {
     refused("popup", details?.url);
     return { action: "deny" };

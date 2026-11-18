@@ -19,6 +19,7 @@ import type {
 import {
   CoreSimulatorRuntimeIdV1,
   LiveSurfaceSimulatorDeviceRowV1,
+  LiveSurfaceSimulatorRuntimeOptionV1,
   SURFACE_LIMITS,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
@@ -55,6 +56,7 @@ function hasKind(error: unknown): error is KindError {
 }
 
 export interface LiveSurfaceRuntimeHandle extends LiveSurfaceRuntimeAuthority {
+  readonly deviceInput?: boolean;
   dispose(): void;
   /** PT-5c2 (F4): the device switches its page took (a browser page's `stats.emulations`; a capture takes none) — counted
    * by the census. */
@@ -110,6 +112,7 @@ export interface LiveSurfaceSimulatorDeviceSource {
   /** The runtimes installed here, the newest first (ids only) — the attach's third pick binds to the newest iOS, whether
    * or not a device runs it yet. Absent: unsaid (the list carries none). */
   runtimes?(): Promise<readonly string[]>;
+  configurations?(): Promise<readonly LiveSurfaceSimulatorRuntimeOptionV1[]>;
 }
 
 /** PT-S3 (D1) — main's bound simulators, COUNTED (never a UDID, never a name): what a phone row reads beside the runtimes.
@@ -129,6 +132,7 @@ export interface LiveSurfaceSimulatorCensus {
     readonly helperExits: number;
     readonly activeSessions: number;
     readonly framesReceived: number;
+    readonly simulatorFramebufferStarts?: number;
   } | null;
   /** which answer main's simctl probe vetted (P1) — null: none yet, or no Simulator here */
   readonly vetted: SimctlVetted | null;
@@ -191,7 +195,7 @@ function canonicalSourceKey(source: LiveSurfaceSourceSpecV1): string | null {
   // PT-S2 (R10): a bound phone is keyed by its BINDING — one stream a bound device, whoever asks (and two bindings this
   // Mac resolves to one device share its inner runtime below this key: R3, `ios-simulator-device-runtime.ts`)
   if (source.kind === "ios-simulator-device") {
-    return `simdev\u0000${source.binding.deviceType}\u0000${source.binding.runtime}\u0000${JSON.stringify(
+    return `simdev\u0000${source.binding.deviceType}\u0000${source.binding.runtime}\u0000${JSON.stringify(source.binding.instance ?? null)}\u0000${JSON.stringify(
       source.crop ?? null,
     )}`;
   }
@@ -287,15 +291,13 @@ export class LiveSurfaceAuthority {
       ticket = host.issue({
         surfaceId: entry.surfaceId,
         sourceKind: entry.kind,
-        // DT-D6: browser surfaces carry the human interaction ops; capture and
-        // Simulator are view-only in v1 and advertise no input capability.
-        // PT-S2: a bound phone adds its face's acts (boot, create, show, retry,
-        // Open Settings) — still no input of any kind.
         operations:
           entry.kind === "browser"
             ? ["view", "pointer", "keyboard", "navigate"]
             : entry.kind === "ios-simulator-device"
-              ? ["view", "device"]
+              ? entry.runtime.deviceInput
+                ? ["view", "device", "pointer", "keyboard"]
+                : ["view", "device"]
               : ["view"],
         principalId: params.owner?.pluginId ?? participant.participantId,
         authority: entry.runtime,
@@ -351,9 +353,14 @@ export class LiveSurfaceAuthority {
     if (source === null) throw kindError("UNAVAILABLE");
     let rows: readonly LiveSurfaceSimulatorDeviceRowV1[];
     let installed: readonly string[] | undefined;
+    let options: readonly LiveSurfaceSimulatorRuntimeOptionV1[] | undefined;
     try {
       // (main's one shared simctl list serves both: R8)
-      [rows, installed] = await Promise.all([source.list(), source.runtimes?.()]);
+      [rows, installed, options] = await Promise.all([
+        source.list(),
+        source.runtimes?.(),
+        source.configurations?.(),
+      ]);
     } catch (error) {
       if (hasKind(error)) throw error;
       this.#deps.logger?.warn(
@@ -374,14 +381,23 @@ export class LiveSurfaceAuthority {
         booted: parsed.data.booted,
       });
     }
-    if (installed === undefined) return { devices };
+    const configurations = options
+      ?.slice(0, SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
+      .flatMap((option) => {
+        const parsed = LiveSurfaceSimulatorRuntimeOptionV1.safeParse(option);
+        return parsed.success ? [parsed.data] : [];
+      });
     const runtimes: string[] = [];
-    for (const runtime of installed) {
+    for (const runtime of installed ?? []) {
       if (runtimes.length >= SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES) break;
       const parsed = CoreSimulatorRuntimeIdV1.safeParse(runtime);
       if (parsed.success) runtimes.push(parsed.data);
     }
-    return { devices, runtimes };
+    return {
+      devices,
+      ...(installed === undefined ? {} : { runtimes }),
+      ...(configurations === undefined ? {} : { configurations }),
+    };
   }
 
   release(params: ShellSurfacesReleaseParams): ShellSurfacesReleaseResult {

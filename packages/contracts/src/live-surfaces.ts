@@ -211,6 +211,8 @@ export const LiveSurfaceBrowserSourceV1 = z
   .object({
     kind: z.literal("browser"),
     initialUrl: LiveSurfaceUrlV1,
+    /** User mute preference; visibility may also silence the source. */
+    muted: z.boolean().optional(),
     profile: z
       .object({
         mode: z.enum(["persistent", "memory"]),
@@ -285,6 +287,8 @@ export const LiveSurfaceIosSimulatorBindingV1 = z
   .object({
     deviceType: CoreSimulatorDeviceTypeIdV1,
     runtime: CoreSimulatorRuntimeIdV1,
+    /** Local pane identity. Main resolves its managed device on this host. */
+    instance: z.string().min(1).max(512).optional(),
   })
   .passthrough();
 export type LiveSurfaceIosSimulatorBindingV1 = z.infer<typeof LiveSurfaceIosSimulatorBindingV1>;
@@ -533,6 +537,8 @@ export const LiveSurfaceBrowserStateV1 = z
     loading: z.boolean(),
     canGoBack: z.boolean(),
     canGoForward: z.boolean(),
+    /** The page is in HTML fullscreen within its browser pane. */
+    fullscreen: z.boolean().optional(),
     /** PT-3: the CSS cursor the page shows where the pointer last was (`pointer` over a link, `text` over a field) — the
      * producer's `cursor-changed`, as a CSS cursor name; absent until the page has said one. */
     cursor: z
@@ -666,6 +672,7 @@ export const LiveSurfaceSimulatorStateV1 = z
     deviceType: CoreSimulatorDeviceTypeIdV1.optional(),
     runtime: CoreSimulatorRuntimeIdV1.optional(),
     acting: LiveSurfaceDeviceVerbV1.optional(),
+    configurationUnavailable: z.literal(true).optional(),
     degraded: z.boolean().optional(),
     udid: LiveSurfaceNoUdidV1,
   })
@@ -811,6 +818,7 @@ export const LiveSurfaceNavigationCommandV1 = z.discriminatedUnion("action", [
   z.object({ action: z.literal("forward") }).passthrough(),
   z.object({ action: z.literal("reload") }).passthrough(),
   z.object({ action: z.literal("stop") }).passthrough(),
+  z.object({ action: z.literal("mute"), muted: z.boolean() }).passthrough(),
   z
     .object({ action: z.literal("emulate"), emulation: LiveSurfaceBrowserEmulationV1 })
     .passthrough(),
@@ -902,47 +910,56 @@ export type LiveSurfaceRendererControlMessageV1 = z.infer<
   typeof LiveSurfaceRendererControlMessageV1
 >;
 
+const hostReady = z
+  .object({
+    v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+    type: z.literal("ready"),
+    bootstrap: LiveSurfacePortBootstrapV1,
+  })
+  .passthrough();
+const hostAttached = z
+  .object({
+    v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+    type: z.literal("attached"),
+    requestId: LiveSurfaceRequestIdV1,
+    attachment: LiveSurfaceAttachmentDescriptorV1,
+  })
+  .passthrough();
+const hostRejected = z
+  .object({
+    v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+    type: z.literal("rejected"),
+    requestId: LiveSurfaceRequestIdV1,
+    error: LiveSurfaceErrorV1,
+  })
+  .passthrough();
+const hostSummary = z
+  .object({
+    v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+    type: z.literal("summary"),
+    attachmentId: LiveSurfaceAttachmentIdV1,
+    summary: LiveSurfaceRuntimeSummaryV1,
+  })
+  .passthrough();
+const hostDetached = z
+  .object({
+    v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+    type: z.literal("detached"),
+    attachmentId: LiveSurfaceAttachmentIdV1,
+  })
+  .passthrough();
+
+type HostControlOptions = [
+  typeof hostReady,
+  typeof hostAttached,
+  typeof hostRejected,
+  typeof hostSummary,
+  typeof hostDetached,
+];
+
 /** Main → renderer messages carried only by the generation-scoped control port. */
-export const LiveSurfaceHostControlMessageV1 = z.discriminatedUnion("type", [
-  z
-    .object({
-      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
-      type: z.literal("ready"),
-      bootstrap: LiveSurfacePortBootstrapV1,
-    })
-    .passthrough(),
-  z
-    .object({
-      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
-      type: z.literal("attached"),
-      requestId: LiveSurfaceRequestIdV1,
-      attachment: LiveSurfaceAttachmentDescriptorV1,
-    })
-    .passthrough(),
-  z
-    .object({
-      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
-      type: z.literal("rejected"),
-      requestId: LiveSurfaceRequestIdV1,
-      error: LiveSurfaceErrorV1,
-    })
-    .passthrough(),
-  z
-    .object({
-      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
-      type: z.literal("summary"),
-      attachmentId: LiveSurfaceAttachmentIdV1,
-      summary: LiveSurfaceRuntimeSummaryV1,
-    })
-    .passthrough(),
-  z
-    .object({
-      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
-      type: z.literal("detached"),
-      attachmentId: LiveSurfaceAttachmentIdV1,
-    })
-    .passthrough(),
-]);
+export const LiveSurfaceHostControlMessageV1: z.ZodDiscriminatedUnion<"type", HostControlOptions> =
+  z.discriminatedUnion("type", [hostReady, hostAttached, hostRejected, hostSummary, hostDetached]);
 export type LiveSurfaceHostControlMessageV1 = z.infer<typeof LiveSurfaceHostControlMessageV1>;
 
 /** Metadata paired with a process-local transferable frame; no pixel object enters Zod. */
@@ -1035,6 +1052,50 @@ export const LiveSurfaceSimulatorDeviceRowV1 = z
   .passthrough();
 export type LiveSurfaceSimulatorDeviceRowV1 = z.infer<typeof LiveSurfaceSimulatorDeviceRowV1>;
 
+/** Installed iOS runtimes and the iPhone models Xcode can actually create on each one. */
+export const LiveSurfaceSimulatorRuntimeOptionV1 = z.object({
+  runtime: CoreSimulatorRuntimeIdV1.regex(/\.SimRuntime\.iOS-\d+(?:-\d+)*$/u),
+  models: z
+    .array(
+      z.object({
+        deviceType: CoreSimulatorDeviceTypeIdV1.regex(/\.SimDeviceType\.iPhone-/u),
+        name: LiveSurfaceSimulatorNameV1,
+      }),
+    )
+    .min(1)
+    .max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
+});
+export type LiveSurfaceSimulatorRuntimeOptionV1 = z.infer<
+  typeof LiveSurfaceSimulatorRuntimeOptionV1
+>;
+
+/** Setup actions open fixed native destinations on this Mac. */
+export const SimulatorSetupTarget = z.enum(["app-store", "xcode"]);
+export type SimulatorSetupTarget = z.infer<typeof SimulatorSetupTarget>;
+export const SimulatorSetupStatus = z.discriminatedUnion("stage", [
+  z.object({
+    stage: z.literal("ready"),
+    xcodeVersion: z.string().max(64).optional(),
+    configurations: z
+      .array(LiveSurfaceSimulatorRuntimeOptionV1)
+      .min(1)
+      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES),
+  }),
+  z.object({
+    stage: z.enum([
+      "install-xcode",
+      "select-xcode",
+      "accept-license",
+      "finish-xcode",
+      "install-runtime",
+      "unsupported",
+      "unavailable",
+    ]),
+    xcodeVersion: z.string().max(64).optional(),
+  }),
+]);
+export type SimulatorSetupStatus = z.infer<typeof SimulatorSetupStatus>;
+
 /** PT-S2 (R11): the attach's device list asks nothing — what this Mac holds is main's to say (`surface.capture`, as
  * `sources` is: a device list is a capture kind's catalogue). */
 export const SurfaceSimulatorDevicesParamsV1 = z.object({}).passthrough();
@@ -1047,6 +1108,10 @@ export type SurfaceSimulatorDevicesParamsV1 = z.infer<typeof SurfaceSimulatorDev
 export const SurfaceSimulatorDevicesResultV1 = z
   .object({
     devices: z.array(LiveSurfaceSimulatorDeviceRowV1).max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
+    configurations: z
+      .array(LiveSurfaceSimulatorRuntimeOptionV1)
+      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
+      .optional(),
     runtimes: z
       .array(CoreSimulatorRuntimeIdV1)
       .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)

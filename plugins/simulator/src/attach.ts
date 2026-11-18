@@ -1,56 +1,128 @@
-// THE PHONE'S MENU (PT-S2; R11 — PT-S1's R2 Q5: "a Model or Finish act is PT-S2's, with the attach"; DESIGN.md §9 "The
-// phone's two acts on the selection menu", quoted exactly): ICE's `MenuActionDef`s, each phone an act changes ONE undo step
-// (`setProps` — one transaction a call, its props validated, the json binding written as its cell's string by ICE itself).
-//  - ATTACH binds each selected phone to a Simulator of THIS Mac's own: the device the host answers for the phone's own model
-//    (`SIMULATOR_DEVICES.attachable` — synchronous, the host's last read of this Mac's devices): its booted device, else the
-//    first booted iPhone, else the model on the newest iOS here, whose face then says off or no device honestly. It writes
-//    `{ model, binding }` in ONE `setProps`: the model IS the device's type, so the phone morphs into the device it shows
-//    (morph.ts — a change of model). The answer is read through the contract (the binding's one schema) before it is written;
-//    nothing answered — the host has not read this Mac's devices, or holds none — and nothing is written, nor for a phone
-//    already bound there (no undo step for no change).
-//  - FINISH turns each selected phone to the next of its model's launch colours (PHONE.md §7's `f`), and round to the first.
-//  - NO MODEL ACT (R11): a bound phone's model is its device's — a model unlike its binding would show another device's screen
-//    in its frame — so only Attach writes it.
-// They declare NO glyph: the bar prints a kind's act without one as its label alone, in text (field-app's bar, R3) — the words
-// §9 says, never a pictogram the book has not ruled (the phone's one tool says "View only" the same way).
-//
-// A menu act is handed the world and the selection, never the desk: it reaches this desk's local — and through it the host's
-// device list — by the WORLD, as the pane's held tools reach its hand (`handOf`). The phone's DRIVER FACTORY is that bridge:
-// it keeps the desk's local by its world and returns NO driver (core's drag carries the phone; a kind with no driver is
-// never ticked for one, so the idle law of I52 holds by absence).
-
-import { LiveSurfaceIosSimulatorBindingV1 } from "@vibefield/contracts";
 import type {
   DriverFactory,
+  Entity,
+  KindDriver,
   MenuActionApi,
   MenuActionDef,
+  ObjectDomHost,
   World,
 } from "@vibefield/plugin-sdk/desk";
-import { bindingOf } from "./binding";
+import { liveSimulatorFace } from "@vibefield/plugin-sdk/desk";
 import { DEFAULT_MODEL, PROP } from "./ids";
 import { finishOf, modelOf } from "./law";
 import type { SimulatorLocal } from "./local";
+import { mountSimulatorSetup } from "./setup-dialog";
 
 /** The phones' local on each desk, by the world it acts on — what a menu act (handed the world, never the desk) reaches. */
 const locals = new WeakMap<World, SimulatorLocal>();
+const setupByWorld = new WeakMap<World, (entities: readonly Entity[]) => void>();
+export function configureSimulators(world: World, entities: readonly Entity[]): void {
+  setupByWorld.get(world)?.(entities);
+}
 /** The phones' local on `world`'s desk, or undefined: no desk of it has made the phone's kind. */
 export const phoneLocalOf = (world: World): SimulatorLocal | undefined => locals.get(world);
 
-/** THE PHONE'S DRIVER FACTORY — the bridge, made once per desk: the desk's local kept by its world, and no driver. */
+/** THE PHONE'S DRIVER FACTORY — the bridge, made once per desk: the desk's local and its scoped keyboard driver. */
+export interface PhoneDriver extends KindDriver {
+  join(dom: ObjectDomHost): void;
+}
+
 export const phoneDrivers: DriverFactory = (h) => {
   const local = h.local as SimulatorLocal | undefined;
-  if (local !== undefined) locals.set(h.world, local);
-  return undefined;
+  if (local === undefined) return undefined;
+  locals.set(h.world, local);
+  const held = new Map<string, { e: Entity; key: string }>();
+  let document: Document | undefined;
+  let setup: ReturnType<typeof mountSimulatorSetup> | undefined;
+  let previouslyHeld: Entity | undefined;
+  let checkedFailure = false;
+  const heldPhone = () => {
+    const hand = h.hand();
+    return hand && !hand.landing && h.isKind(hand.entity) ? hand.entity : undefined;
+  };
+  const release = (): void => {
+    for (const [code, { e, key }] of held)
+      local?.send(e, { kind: "key", phase: "up", key, code, mods: 0, repeat: false });
+    held.clear();
+  };
+  const key = (event: KeyboardEvent): void => {
+    const hand = h.hand();
+    if (!hand || hand.landing || !h.isKind(hand.entity) || !local?.interactive(hand.entity)) return;
+    if (
+      event.target instanceof Element &&
+      event.target.closest('input,textarea,button,dialog,[contenteditable="true"],[role="dialog"]')
+    )
+      return;
+    // Escape returns the phone to the canvas. The desktop owns command shortcuts.
+    if (event.key === "Escape" || event.metaKey || event.isComposing) return;
+    const down = event.type === "keydown";
+    if (!down && !held.has(event.code)) return;
+    if (down) held.set(event.code, { e: hand.entity, key: event.key });
+    else held.delete(event.code);
+    local.send(hand.entity, {
+      kind: "key",
+      phase: down ? "down" : "up",
+      key: event.key,
+      code: event.code,
+      mods: Number(event.altKey) + 2 * Number(event.ctrlKey) + 8 * Number(event.shiftKey),
+      repeat: event.repeat,
+    });
+    event.preventDefault();
+    event.stopPropagation();
+  };
+  const setupProblem = (entity: Entity | undefined) => {
+    if (checkedFailure || entity === undefined) return;
+    const info = local.screen(entity)?.info;
+    if (info?.extra?.configurationUnavailable === true) return "configuration";
+    const state = liveSimulatorFace(info)?.is;
+    if (state === "no-simulator") return "configuration";
+    if (state === "stopped") return "check";
+  };
+  const driver: PhoneDriver = {
+    follow() {
+      const entity = heldPhone();
+      setup?.follow(entity);
+      if (previouslyHeld !== entity) {
+        release();
+        previouslyHeld = entity;
+        checkedFailure = false;
+        if (entity !== undefined && setup && !setup.configured(entity)) {
+          checkedFailure = true;
+          setup.configure([entity]);
+        }
+      }
+      const problem = setupProblem(entity);
+      if (entity !== undefined && problem) {
+        checkedFailure = true;
+        if (problem === "configuration") setup?.configure([entity]);
+        else void setup?.recover(entity);
+      }
+    },
+    idle: () => heldPhone() === previouslyHeld && !setupProblem(previouslyHeld),
+    join(dom) {
+      setup = mountSimulatorSetup(dom, local.devices());
+      setupByWorld.set(h.world, setup.configure);
+      document = dom.container.ownerDocument;
+      document.addEventListener("keydown", key, true);
+      document.addEventListener("keyup", key, true);
+      document.defaultView?.addEventListener("blur", release);
+    },
+    dispose() {
+      release();
+      document?.removeEventListener("keydown", key, true);
+      document?.removeEventListener("keyup", key, true);
+      document?.defaultView?.removeEventListener("blur", release);
+      setup?.dispose();
+      setupByWorld.delete(h.world);
+      locals.delete(h.world);
+    },
+  };
+  return driver;
 };
 
-/** The acts' ids — what `ops.runMenuAction` names. */
-export const ATTACH_ACT = "attach";
+export const SETUP_ACT = "simulator-settings";
 export const FINISH_ACT = "finish";
 
-/** Each act's word on the menu (DESIGN.md §9, quoted exactly — attach.test.ts reads them there). */
-export const PHONE_ACT_LABELS = { [ATTACH_ACT]: "Attach", [FINISH_ACT]: "Finish" } as const;
-
-/** What a menu act reads and writes of the selection (ICE's `MenuActionApi`, less the transaction it never needs). */
 type PhoneActApi = Pick<MenuActionApi, "world" | "entities" | "props" | "setProps">;
 
 /** The phone's model as its props hold it — a free string (an id this build's catalog lacks stays the phone's own); none, the default. */
@@ -58,34 +130,6 @@ const modelProp = (props: Readonly<Record<string, unknown>>): string => {
   const model = props[PROP.model];
   return typeof model === "string" && model.length > 0 ? model : DEFAULT_MODEL;
 };
-
-/**
- * ATTACH — each phone of `api.entities` bound to the device the host's list answers for its model, `{ model, binding }` in ONE
- * `setProps` (one undo step a phone; the morph follows the model). How many phones were written: none where no list is lent,
- * the host answers nothing a binding can be made of, or a phone is already bound there as its model.
- */
-export function attachPhones(api: PhoneActApi): number {
-  const devices = phoneLocalOf(api.world)?.devices();
-  if (devices === undefined) return 0;
-  let wrote = 0;
-  for (const e of api.entities) {
-    const props = api.props(e);
-    const model = modelProp(props);
-    // the host's answer, through the contract — never written unread: its two ids alone, each the shape Xcode names
-    const read = LiveSurfaceIosSimulatorBindingV1.safeParse(devices.attachable(model));
-    if (!read.success) continue;
-    const binding = { deviceType: read.data.deviceType, runtime: read.data.runtime };
-    const was = bindingOf(props);
-    if (
-      model === binding.deviceType &&
-      was?.deviceType === binding.deviceType &&
-      was.runtime === binding.runtime
-    )
-      continue;
-    if (api.setProps(e, { [PROP.model]: binding.deviceType, [PROP.binding]: binding })) wrote += 1;
-  }
-  return wrote;
-}
 
 /** The next of `model`'s launch colours after the one `finish` names (its model's first, where it names none of them), or
  * undefined: the model has one colour, or none. */
@@ -109,18 +153,15 @@ export function finishPhones(api: PhoneActApi): number {
   return wrote;
 }
 
-/** THE PHONE'S MENU: Attach, then Finish (R11 — no Model act). */
 export const PHONE_ACTS: readonly MenuActionDef[] = [
   {
-    id: ATTACH_ACT,
-    label: PHONE_ACT_LABELS[ATTACH_ACT],
-    run: (api) => {
-      attachPhones(api);
-    },
+    id: SETUP_ACT,
+    label: "Simulator settings…",
+    run: (api) => configureSimulators(api.world, api.entities),
   },
   {
     id: FINISH_ACT,
-    label: PHONE_ACT_LABELS[FINISH_ACT],
+    label: "Finish",
     run: (api) => {
       finishPhones(api);
     },

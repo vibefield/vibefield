@@ -11,6 +11,7 @@ import { PROP } from "./ids";
 export interface Binding {
   readonly deviceType: string;
   readonly runtime: string;
+  readonly dedicated?: boolean;
 }
 
 /** The phone's binding from its props, or undefined: unbound (the default), or a value the contract refuses. */
@@ -26,6 +27,10 @@ export function bindingOf(props: Readonly<Record<string, unknown>>): Binding | u
   }
   const read = LiveSurfaceIosSimulatorBindingV1.safeParse(value);
   return read.success
-    ? { deviceType: read.data.deviceType, runtime: read.data.runtime }
+    ? {
+        deviceType: read.data.deviceType,
+        runtime: read.data.runtime,
+        ...(read.data.dedicated === true ? { dedicated: true } : {}),
+      }
     : undefined;
 }

@@ -218,9 +218,9 @@ describe("HAND — ICE's pick-up, put down by Esc", () => {
     expect(
       judgeHand({
         ...SEEN.hand,
-        tools: SEEN.hand.tools.map((t) => (t.id === "reload" ? { ...t, dim: true } : t)),
+        tools: SEEN.hand.tools.map((t) => (t.id === "sound" ? { ...t, dim: true } : t)),
       }),
-    ).toEqual(["HAND: reload shown dim — declared only, though PT-3's held tools work"]);
+    ).toEqual(["HAND: sound shown dim — declared only, though PT-3's held tools work"]);
     expect(judgeHand({ ...SEEN.hand, down: false, selectedAfter: 0 })).toEqual([
       "HAND: Esc did not put the pane down",
       "HAND: put down, 0 selected — not the pane still",

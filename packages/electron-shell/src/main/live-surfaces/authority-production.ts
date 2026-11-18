@@ -1,5 +1,9 @@
 import { existsSync } from "node:fs";
-import type { BrowserDataClearResult } from "@vibefield/contracts";
+import type {
+  BrowserDataClearResult,
+  SimulatorSetupStatus,
+  SimulatorSetupTarget,
+} from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import type {
   LiveSurfaceEnumerationSources,
@@ -20,6 +24,8 @@ import { MacosCaptureHelperSupervisor } from "./macos-capture-helper";
 import { loadMacosCaptureNativeAdapter } from "./macos-capture-native";
 import { SckLiveSurfaceRuntime } from "./sck-producer";
 import { type SimctlCall, type SimctlCallCounts, SimctlService } from "./simctl";
+
+import { SimulatorSetupService } from "./simulator-setup";
 
 // DT-1c — the production binding of the authority's injectable seams onto the
 // LSF runtime classes. Everything here is lazy: the browser native costs
@@ -46,6 +52,8 @@ export interface ProductionLiveSurfaceSupport {
   /** BP-D4 — Settings' "Clear browsing data": this shell's persistent profiles cleared, their open pages reloaded
    * (`browser-data.ts`). */
   clearBrowsingData(): Promise<BrowserDataClearResult>;
+  checkSimulatorSetup(): Promise<SimulatorSetupStatus>;
+  openSimulatorSetup(target: SimulatorSetupTarget): Promise<void>;
   /** PT-S3 (D1) — main's simulator census (the authority's `state().simulator`): it READS what was made and never makes
    * — no simctl, no capture stack, no session, no spawn, no load. */
   census(): LiveSurfaceSimulatorCensus;
@@ -110,6 +118,7 @@ export function createProductionLiveSurfaceSupport(opts: {
     return simctl;
   };
 
+  const framebuffer = process.env["VF_SIMULATOR_FRAMEBUFFER"] !== "0";
   const ensureCapture = (): CaptureStack => {
     if (disposed || opts.capture === null) throw { kind: "UNAVAILABLE" };
     if (captureStack === null) {
@@ -127,11 +136,13 @@ export function createProductionLiveSurfaceSupport(opts: {
       const devices = ensureSimctl();
       const resolver = new IosSimulatorSourceResolver({
         devices,
+        framebuffer,
         windows: supervisor,
         viewport: adapter,
       });
       const deviceResolver = new IosSimulatorSourceResolver({
         devices: ensureSimctl(),
+        framebuffer,
         windows: supervisor,
         viewport: adapter,
       });
@@ -146,6 +157,7 @@ export function createProductionLiveSurfaceSupport(opts: {
     if (disposed) throw { kind: "UNAVAILABLE" };
     if (simulatorSessions === null) {
       simulatorSessions = new SimulatorDeviceSessions({
+        framebuffer,
         simctl: ensureSimctl(),
         capture: () => {
           const stack = ensureCapture();
@@ -158,7 +170,22 @@ export function createProductionLiveSurfaceSupport(opts: {
     return simulatorSessions;
   };
 
+  let setup: SimulatorSetupService | undefined;
+  const simulatorSetup = () => {
+    setup ??= new SimulatorSetupService(ensureSimctl());
+    return setup;
+  };
+
   return {
+    checkSimulatorSetup: async () => {
+      if (process.platform !== "darwin") return { stage: "unsupported" };
+      if (disposed || !opts.capture) return { stage: "unavailable" };
+      return simulatorSetup().check();
+    },
+    openSimulatorSetup: async (target) => {
+      if (disposed || !opts.capture) throw new Error("Simulator setup is unavailable");
+      await simulatorSetup().open(target);
+    },
     factories: {
       browser: (surfaceId, source) => {
         const runtime = new BrowserLiveSurfaceRuntime({
@@ -217,7 +244,8 @@ export function createProductionLiveSurfaceSupport(opts: {
         if (disposed || opts.capture === null) return [];
         return await ensureSimctl().deviceRows();
       },
-      // the attach's third pick: the runtimes installed here, from the same shared list — none where no phone could stream
+      configurations: async () =>
+        disposed || opts.capture === null ? [] : ensureSimctl().configurations(),
       runtimes: async () => {
         if (disposed || opts.capture === null) return [];
         return await ensureSimctl().runtimeIds();
@@ -256,6 +284,9 @@ export function createProductionLiveSurfaceSupport(opts: {
                 helperExits: stats.helperExits,
                 activeSessions: stats.activeSessions,
                 framesReceived: stats.framesReceived,
+                ...(stats.simulatorFramebufferStarts > 0
+                  ? { simulatorFramebufferStarts: stats.simulatorFramebufferStarts }
+                  : {}),
               },
         vetted: simctl?.vetted() ?? null,
         ...(simctlCalls === undefined ? {} : { simctl: { ...simctlCalls } }),
@@ -263,14 +294,17 @@ export function createProductionLiveSurfaceSupport(opts: {
     },
     dispose: async () => {
       disposed = true;
-      simulatorSessions?.dispose();
+      const phonesStopped = simulatorSessions?.dispose();
       simulatorSessions = null;
-      simctl?.dispose();
-      simctl = null;
       const stack = captureStack;
       captureStack = null;
       browserNative = null;
-      if (stack !== null) await stack.supervisor.dispose();
+      try {
+        await Promise.all([phonesStopped, stack?.supervisor.dispose()]);
+      } finally {
+        simctl?.dispose();
+        simctl = null;
+      }
     },
   };
 }

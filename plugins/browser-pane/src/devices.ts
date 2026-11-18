@@ -138,6 +138,49 @@ export const DEFAULT_DEVICE: Device = DEVICES[0] as Device;
 export const deviceOf = (id: unknown): Device =>
   (typeof id === "string" ? deviceById(id) : undefined) ?? DEFAULT_DEVICE;
 
+/** Resolve durable overrides without making the saved viewport a second source of truth. */
+export function deviceForProps(props: Readonly<Record<string, unknown>>): Device {
+  const base = deviceOf(props.device);
+  const dpr =
+    typeof props.deviceScaleFactor === "number" &&
+    Number.isFinite(props.deviceScaleFactor) &&
+    props.deviceScaleFactor >= 0.5 &&
+    props.deviceScaleFactor <= 8
+      ? props.deviceScaleFactor
+      : base.dpr;
+  const mode = props.inputMode;
+  const mobile =
+    mode === "mobile" || mode === "mobile-pointer"
+      ? true
+      : mode === "desktop" || mode === "desktop-touch"
+        ? false
+        : base.mobile;
+  const touch =
+    mode === "mobile" || mode === "desktop-touch"
+      ? true
+      : mode === "desktop" || mode === "mobile-pointer"
+        ? false
+        : base.touch;
+  let agent = base.agent;
+  if (props.userAgentMode === "browser") agent = null;
+  if (
+    props.userAgentMode === "custom" &&
+    typeof props.userAgent === "string" &&
+    props.userAgent.trim()
+  ) {
+    agent = {
+      userAgent: props.userAgent.trim().slice(0, 512),
+      navigatorPlatform:
+        typeof props.navigatorPlatform === "string" ? props.navigatorPlatform.slice(0, 32) : "",
+      // A custom UA must not retain contradictory hints from the device preset.
+      platform: "",
+      platformVersion: "",
+      model: "",
+    };
+  }
+  return { ...base, dpr, mobile, touch, agent };
+}
+
 /**
  * The pane, in millimetres: the slab's thickness; the clear BORDER round the page (sides and foot); the HEAD's height —
  * the wider clear border at the top where the chrome is engraved (the page starts under it); the outline's corner (the

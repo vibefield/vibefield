@@ -56,7 +56,7 @@
 //  - A BOUND SIMULATOR (PT-S2; the brief's Part 3): a spec the SDK reads as a device (`liveSimulatorSpec`) opens a lane of its
 //    own (`openSimulator`) — its gate's scopes the source's (`surface.attach` + `surface.capture`: live-gate.ts), its mint the
 //    phone's BINDING and never a UDID, its pool key the face's key AND its binding (a phone bound anew never re-holds the
-//    grace-kept stream of the device it left), no input (view-only), no navigation (the page verbs refuse it). It is a `Lane`
+//    grace-kept stream of the device it left), device input when available, and no page navigation. It is a `Lane`
 //    in the one map: the six-alive cap, the rests, the stills' clock and the shelf are the pages' own (`seatOf`,
 //    `stillClockOf`, `readStill`, `forgetLater` — one place for the PT-5b/PT-6a fixes). Main's FACTS are said in the SDK's
 //    nine words (simulator-face.ts, R2): `info().extra.simulator` — its state, the device's name, and the state's ONE act
@@ -83,6 +83,7 @@ import {
   type LiveSurfaceDemandV1,
   type LiveSurfaceDeviceVerbV1,
   type LiveSurfaceFpsBucketV1,
+  type LiveSurfaceFrameMetadataV1,
   type LiveSurfaceInputEventV1,
   type LiveSurfaceSimulatorConditionV1,
   type LiveSurfaceSimulatorStateV1,
@@ -111,6 +112,7 @@ import {
 } from "../pool";
 import { type CapFace, capPlan, LIVE_PAGES_MAX } from "./live-cap";
 import { PAGE_STILL_MAX_PX, type PageStill, type PageStills } from "./page-stills";
+import { previewFrameBatch } from "./preview-frame-batch";
 import {
   SIMULATOR_ACTS,
   type SimulatorAct,
@@ -129,6 +131,12 @@ export type LiveGateAnswer = { readonly type: string } | { readonly refused: str
 export type LiveFaceSource = "browser" | "ios-simulator";
 
 export interface DeskLiveDeps {
+  /** Diagnostic hooks for the staged simulator benchmark. */
+  readonly onArrived?: (key: string) => void;
+  readonly onPresented?: (key: string, frame: LiveSurfaceFrameMetadataV1) => void;
+  /** Enable preview grouping. A benchmark can switch policy on the same faces. */
+  readonly batchPreviews?: () => boolean;
+  readonly minimumMovingSimulators?: 1 | 2;
   /** The window's surface pool; null on a host with no live surfaces (every face fails, said). */
   readonly pool: () => SurfacePool<ProductSurfaceFrame> | null;
   /** The WINDOW's product connection — the mint rides it, as the plugin door's does (surface-door.tsx). Null: daemon away. */
@@ -623,6 +631,7 @@ function browserSource(page: LiveBrowserSpec) {
   return {
     kind: "browser" as const,
     initialUrl: page.url,
+    ...(page.muted === undefined ? {} : { muted: page.muted }),
     // PT-5a: a desk page that stops is SAID to have stopped, and waits for its reload — never restarted behind the person
     whenStopped: "say" as const,
     profile: { mode: "persistent" as const, ref: DESK_PROFILE },
@@ -840,6 +849,14 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     set: (fn: () => void, ms: number): unknown => setTimeout(fn, ms),
     clear: (h: unknown): void => clearTimeout(h as ReturnType<typeof setTimeout>),
   };
+  const previewFace = deps.batchPreviews
+    ? previewFrameBatch(
+        timers,
+        deps.now ?? (() => performance.now()),
+        deps.batchPreviews,
+        deps.minimumMovingSimulators,
+      )
+    : undefined;
   const graceMs = deps.graceMs ?? (() => SURFACE_POOL_GRACE_MS);
   const faces = new Map<string, { face: LiveFace; row: () => DeskLiveFaceRow }>();
   const counts = {
@@ -1425,7 +1442,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
 
   /**
    * PT-S2 — A BOUND SIMULATOR'S LANE (the brief's Part 3): the phone's device, minted by its BINDING (simulator-face.ts) under
-   * the gate's capture scopes, its frames presented as a page's are — and NOTHING of a page: no input (view-only), no
+   * the gate's capture scopes and the presented frame's geometry. Input follows the device capability. There is no
    * navigation, no emulation, no favicon, no document or address rules, no veil (a stopped device's last frame is its
    * truth, not an engine's error page). Its seat at the cap, its still clock, the shelf and its forget are the pages' own.
    *  - ITS POOL ENTRY is its key AND its binding: a phone bound anew opens another entry, and the stream of the device it
@@ -1444,7 +1461,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
    *  - ITS STILL is filed under its binding (R15): one taken of another device is never laid into its face.
    */
   const openSimulator = (key: string, bound: LiveSimulatorSpec, arrived: () => void): LiveFace => {
-    const source = simulatorSource(bound);
+    const binding = { ...bound, ...(bound.dedicated ? { instance: key } : {}) };
+    const source = simulatorSource(binding);
     if (source === undefined)
       return refuse(key, "not a device this desk can open", "ios-simulator");
     const gate = deps.gate(key, "ios-simulator");
@@ -1459,9 +1477,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       );
     const label = `${gate.type}/live ${key}`;
     /** What its stills are filed under, and its pool entry: its key and its binding. */
-    const address = simulatorAddress(bound);
+    const address = simulatorAddress(binding);
     const entry = `${key}~${address}`;
-    const reuseKey = simulatorReuseKey(bound);
+    const reuseKey = simulatorReuseKey(binding);
     let handle: SurfaceHandle<ProductSurfaceFrame>;
     try {
       handle = pool.acquire(poolKey(entry), {
@@ -1493,19 +1511,32 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
      * holds the words at `at-rest` until a frame lands in its place; the texture holds a LIVE frame of the device. */
     let still: number | undefined;
     let liveShown = false;
+    let shown: { revision: number; logical: readonly [number, number] } | undefined;
+    let lastInput: LiveInput["kind"] | null = null;
     let waiting: { readonly bitmap: ImageBitmap; readonly kept: PageStill } | undefined;
     let showing = 0;
-    const tally = { arrivals: 0, presented: 0, dropped: 0, acts: 0 };
+    const tally = { arrivals: 0, presented: 0, dropped: 0, acts: 0, inputs: 0 };
     // close() unsubscribes both listeners at once, so nothing tells after it
     const tell = (): void => arrived();
+    const preview = previewFace?.("ios-simulator", tell);
+    const notifyFrame = preview?.frame ?? tell;
+    let bootFramePresented = false;
     /** Main's facts of the device (absent: none said yet). */
     const facts = (): LiveSurfaceSimulatorStateV1 | undefined =>
       handle.state.presentation?.summary.simulator;
     /** It cannot stream: its lane lost, its producer failed, its device anywhere but streaming — the plan has nothing to do
      * for it (its act has). */
     const stoppedOf = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean => {
-      if (state.status === "lost" || state.presentation?.summary.state === "failed") return true;
-      const condition = state.presentation?.summary.simulator?.condition;
+      if (state.status === "lost") return true;
+      const summary = state.presentation?.summary;
+      const condition = summary?.simulator?.condition;
+      if (condition === "booting" && summary?.capabilities?.pointer) return false;
+      if (summary?.state === "failed") return true;
+      if (
+        bound.dedicated &&
+        (condition === "off" || condition === "no-device" || condition === "booting")
+      )
+        return false;
       return condition !== undefined && condition !== "streaming";
     };
     const seat = seatOf({
@@ -1550,7 +1581,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             : undefined
           : simulatorState(f.condition, { failed, flowing: flowing() });
       if (is === undefined) return undefined;
-      const verb = f?.acting === undefined ? SIMULATOR_ACTS[is] : null;
+      const verb =
+        f?.acting === undefined && !f?.configurationUnavailable ? SIMULATOR_ACTS[is] : null;
       return { is, act: verb !== null && handle.device !== undefined ? verb : null };
     };
     /** Each act's closure, made once (the words compare them as there or not): resolved by the face's KEY when it runs. */
@@ -1640,12 +1672,14 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     const listen = (next: SurfaceHandleState<ProductSurfaceFrame>["presentation"]): void => {
       if (next === presentation && offFrame !== null) return;
       offFrame?.();
+      shown = undefined;
       presentation = next;
       offFrame =
         presentation?.onFrame(() => {
           tally.arrivals += 1;
+          deps.onArrived?.(key);
           frameOwed = true;
-          tell();
+          notifyFrame();
         }) ?? null;
     };
     listen(presentation);
@@ -1655,26 +1689,28 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       `${state.status} ${aliveBySummary(state)} ${stoppedOf(state)}`;
     let capWas = capWord(handle.state);
     spoke = wordOf();
-    const offState = handle.onState((state) => {
-      if (state.presentation !== presentation) listen(state.presentation);
-      // PT-6a (M14, R1), as a page: a device that STOPS streaming gives back the cap's permission — its slot is another's,
-      // and coming back (booted, its window shown, tried again) it waits for the plan's wake; its wire is written at once
-      // (the kind's live ask stays on it while main holds the device: `send`)
-      const stops = stoppedOf(state);
-      if (stops && !wasStopping) {
-        seat.stop();
-        lanes.get(key)?.send();
+    const acceptsInput = (): boolean =>
+      handle.state.presentation?.summary.capabilities?.pointer === true;
+    const sendGuestInput = (event: LiveInput): void => {
+      if (
+        closed ||
+        !shown ||
+        !liveShown ||
+        !flowing() ||
+        !asked?.interactive ||
+        !acceptsInput() ||
+        facts()?.condition !== "streaming"
+      )
+        return;
+      for (const input of liveInputEvents(event, shown.logical)) {
+        if (handle.sendInput(input, shown.revision)) {
+          counts.inputs += 1;
+          tally.inputs += 1;
+          lastInput = event.kind;
+        }
       }
-      wasStopping = stops;
-      const word = capWord(state);
-      if (word !== capWas) {
-        capWas = word;
-        if (!closed && lanes.has(key)) replan();
-      }
-      retell();
-    });
-
-    const face: LiveFace = {
+    };
+    const face: Omit<LiveFace, "input"> & { input?: (event: LiveInput) => void } = {
       key,
       texture: (): LiveTexture | undefined => writer?.face,
       take(): boolean {
@@ -1711,16 +1747,20 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             writerDevice = device;
             counts.writers += 1;
           }
-          writer.present(frame, rect, logicalOf(metadata.geometry.logicalSize));
+          const logical = logicalOf(metadata.geometry.logicalSize);
+          writer.present(frame, rect, logical);
+          shown = logical && { revision: metadata.geometry.revision, logical };
           return true;
         });
         if (r.kind !== "consumed") return changed;
         counts.presented += 1;
         tally.presented += 1;
+        deps.onPresented?.(key, r.metadata);
         // a frame of the device as it is: no still any more (one on its way is void from here) — its words say so with
         // this take
         still = undefined;
         liveShown = true;
+        bootFramePresented = facts()?.condition === "booting";
         clock.fresh = true;
         showing += 1;
         dropWaiting();
@@ -1745,13 +1785,18 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           state.presentation?.summary.transport === "cpu-bgra" ? { degraded: "cpu-bitmap" } : {};
         const word = said();
         if (word === undefined) return degraded;
-        const name = facts()?.name;
+        const name = bound.dedicated ? bound.label : facts()?.name;
         const act = actOf(word.act);
         return {
           ...degraded,
           extra: {
+            ...(acceptsInput() ? { deviceInput: true } : {}),
+            ...(facts()?.configurationUnavailable ? { configurationUnavailable: true } : {}),
             simulator: {
               is: word.is,
+              ...(word.is === "booting" && acceptsInput()
+                ? { bootDisplay: bootFramePresented && liveShown ? "live" : "starting" }
+                : {}),
               ...(name === undefined || name.length === 0 ? {} : { device: name }),
               ...(act === undefined ? {} : { act }),
             },
@@ -1778,6 +1823,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // what the cap knows of the stream it lets go of (the pool's grace keeps it)
         gone.set(entry, { seenAt: seat.seenAt, alive: seat.alive() });
         closed = true;
+        preview?.close();
         lanes.delete(key);
         offState();
         offFrame?.();
@@ -1814,8 +1860,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           arrivals: tally.arrivals,
           presented: tally.presented,
           dropped: tally.dropped,
-          inputs: 0,
-          lastInput: null,
+          inputs: tally.inputs,
+          lastInput,
           texture:
             t === undefined
               ? undefined
@@ -1869,11 +1915,12 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // stream comes up unasked and the plan wakes it or rests it (PT-6a M15)
         const state = handle.state;
         const mainHolds = state.status === "live" && stoppedOf(state) && !seat.rested;
-        handle.setDemand(
+        const intent =
           mainHolds && !parked && asked?.mode === "live"
             ? liveDemandIntent(asked)
-            : seat.intent(undefined, false),
-        );
+            : seat.intent(undefined, false);
+        preview?.demand(intent);
+        handle.setDemand(intent);
         // woken, made to wait, put to rest: the words may say so
         retell();
       },
@@ -1914,6 +1961,36 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         tally.acts += 1;
       },
     };
+    const syncInput = (): void => {
+      if (acceptsInput()) face.input = sendGuestInput;
+      else delete face.input;
+    };
+    syncInput();
+    const offState = handle.onState((state) => {
+      syncInput();
+      if (
+        state.presentation !== presentation ||
+        state.presentation?.summary.simulator?.condition !== "booting"
+      )
+        bootFramePresented = false;
+      if (state.presentation !== presentation) listen(state.presentation);
+      // PT-6a (M14, R1), as a page: a device that STOPS streaming gives back the cap's permission — its slot is another's,
+      // and coming back (booted, its window shown, tried again) it waits for the plan's wake; its wire is written at once
+      // (the kind's live ask stays on it while main holds the device: `send`)
+      const stops = stoppedOf(state);
+      if (stops && !wasStopping) {
+        seat.stop();
+        lanes.get(key)?.send();
+      }
+      wasStopping = stops;
+      const word = capWord(state);
+      if (word !== capWas) {
+        capWas = word;
+        if (!closed && lanes.has(key)) replan();
+      }
+      retell();
+    });
+
     lanes.set(key, lane);
     // a still the shelf keeps of this binding is shown at once — before the device's first frame
     void showStill();
@@ -2063,7 +2140,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let showing = 0;
     /** PT-4: the emulation last told down the lane (as one string) — told again only when the spec's moved. */
     let told: string | undefined;
+    let toldMuted = page.muted === undefined ? false : undefined;
     const tellDevice = (): void => {
+      const muted = page.muted ?? false;
+      if (!closed && muted !== toldMuted && handle.navigate({ action: "mute", muted }))
+        toldMuted = muted;
       const emulation = emulationOf(page);
       const next = JSON.stringify(emulation);
       if (next === told || closed) return;
@@ -2081,6 +2162,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     };
     // close() unsubscribes both listeners at once, so nothing tells after it
     const tell = (): void => arrived();
+    const preview = previewFace?.("browser", tell);
+    const notifyFrame = preview?.frame ?? tell;
     /** The address the page is at (its producer's word), else the one its pane names — what a still is a photograph of. */
     const addressNow = (): string => handle.state.browser?.url ?? page.url;
     /** Where the pane was last SENT (`go`), until its page says an address of its own again; and the address a still is
@@ -2183,10 +2266,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       offFrame =
         presentation?.onFrame(() => {
           tally.arrivals += 1;
+          deps.onArrived?.(key);
           frameOwed = true;
           // PT-5b3 (ruling 4): what the page said when this frame ARRIVED (the newest: it is the one taken)
           arrivedAt = { document: documentNow(), address: addressNow() };
-          tell();
+          notifyFrame();
         }) ?? null;
     };
     listen(presentation);
@@ -2308,6 +2392,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         if (r.kind !== "consumed") return changed;
         counts.presented += 1;
         tally.presented += 1;
+        deps.onPresented?.(key, r.metadata);
         // a frame of the page as it is now: the face shows its texture again — and (PT-5b) it is no still any more: the
         // words say so with this frame, and a still on its way is dropped
         veiled = false;
@@ -2362,6 +2447,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             ? {}
             : {
                 favicon: iconOf(state.browser.favicon),
+                ...(state.browser.fullscreen === true ? { fullscreen: true } : {}),
                 ...(state.browser.refused === undefined
                   ? {}
                   : { refused: refusalOf(state.browser.refused) }),
@@ -2426,6 +2512,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // what the cap knows of the page it lets go of (the pool's grace keeps it)
         gone.set(key, { seenAt: seat.seenAt, alive: seat.alive() });
         closed = true;
+        preview?.close();
         lanes.delete(key);
         offState();
         offFrame?.();
@@ -2518,7 +2605,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         // a page the cap put to rest stays hibernated (and one let go for showing nothing); a parked desk's pages are
         // paused; a page seen that the cap makes wait is paused as it was made (nothing is made of it); else the kind's
         // own ask
-        handle.setDemand(seat.intent(asked?.viewport ?? page.viewport, letGone));
+        const intent = seat.intent(asked?.viewport ?? page.viewport, letGone);
+        preview?.demand(intent);
+        handle.setDemand(intent);
       },
       capFace: seat.capFace,
       adoptable: seat.adoptable,

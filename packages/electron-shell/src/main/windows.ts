@@ -94,8 +94,12 @@ export async function loadRenderer(
   viteUrl: string,
   search: Readonly<Record<string, string>> = {},
 ): Promise<void> {
+  const url = new URL(mode === "dev" ? viteUrl : APP_ENTRY_URL);
+  const previewBatch = process.env["VF_SIMULATOR_PREVIEW_BATCHING"];
+  if (previewBatch === "0" || previewBatch === "1") {
+    url.searchParams.set("simulatorPreviewBatch", previewBatch);
+  }
   if (mode !== "dev") {
-    const url = new URL(APP_ENTRY_URL);
     if (mode === "smoke-godview" || mode === "terminal-perf-lab" || mode === "godview-perf-lab") {
       url.searchParams.set("godviewMarkers", "1");
     }
@@ -117,7 +121,7 @@ export async function loadRenderer(
     await win.loadURL(url.href);
     return;
   }
-  const devUrl = new URL(viteUrl).href;
+  const devUrl = url.href;
   for (let i = 0; i < 40; i++) {
     try {
       await win.loadURL(devUrl);

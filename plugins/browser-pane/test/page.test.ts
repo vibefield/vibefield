@@ -10,7 +10,6 @@ import {
   cutOf,
   DEVICE_ACTS,
   DEVICES,
-  deviceActId,
   deviceById,
   engraveSplit,
   GUTTER,
@@ -172,13 +171,13 @@ describe("the head — keyed by what it says and its band", () => {
         bandDensity(S, bandFor(2)),
       ),
     ];
-    expect(STILL_HEADS.map((h) => h.key)).toEqual(want);
+    expect(STILL_HEADS.map((h) => h.key)).toEqual(want.flatMap((k) => [k, `${k}|interactive`]));
     for (const key of want) {
       const bm = stillHead(key);
       const split = stillSplit(key);
       expect(bm, key).toBeDefined();
       expect(split).toEqual({ height: bm?.height, h: bm?.h, at: bm?.at });
-      // the engraving is drawn (frost on the capsule) and its print holds the favicon on the sample's heads
+      // Passive heads engrave only the address and size; no capsule.
       let frost = 0;
       let print = 0;
       if (bm !== undefined) {
@@ -187,7 +186,8 @@ describe("the head — keyed by what it says and its band", () => {
         for (let i = bm.at * bm.width; i < bm.width * bm.height; i++)
           if ((bm.bytes[i * 4 + 3] as number) > 0) print++;
       }
-      expect(frost, key).toBeGreaterThan(2000);
+      expect(frost, key).toBeGreaterThan(100);
+      expect(frost, key).toBeLessThan(2000);
       expect(print > 0, key).toBe(key.includes("|sample|"));
     }
     expect(stillHead("a head nothing committed says")).toBeUndefined();
@@ -237,12 +237,10 @@ describe("the device switch — re-cut to that screen about the pane's centre", 
     }
   });
 
-  it("its acts are the menu's Laptop · Desktop · iPad · iPhone, each a glyph of its own and an op", () => {
+  it("its menu contains device emulation and sound, with navigation kept on the pane", () => {
     expect(DEVICE_ACTS.map((a) => [a.id, a.label])).toEqual([
-      [deviceActId("laptop"), "Laptop"],
-      [deviceActId("desktop"), "Desktop"],
-      [deviceActId("tablet"), "iPad"],
-      [deviceActId("phone"), "iPhone"],
+      ["device", "Device emulation"],
+      ["sound", "Toggle sound"],
     ]);
     for (const a of DEVICE_ACTS) {
       expect(typeof a.run).toBe("function");

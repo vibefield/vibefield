@@ -32,10 +32,28 @@ export const isSecure = (url: string): boolean => {
 
 /** What an address typed into the head means: a URL, a host — or a search. Nothing typed opens the sample. */
 export function resolveAddress(typed: string): string {
-  const t = typed.trim();
+  // Browsers discard pasted line breaks in an omnibox; ordinary spaces remain search terms.
+  const t = typed.replace(/[\r\n\t]/g, "").trim();
   if (!t) return SAMPLE_URL;
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(t) || t.startsWith("about:")) return t;
-  if (/^[^\s]+\.[a-z]{2,}(\/.*)?$/i.test(t) || /^localhost(:\d+)?(\/.*)?$/.test(t))
-    return `${t.startsWith("localhost") ? "http" : "https"}://${t}`;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(t) || /^about:/i.test(t)) return t;
+  if (!/\s/.test(t)) {
+    try {
+      const url = new URL(`https://${t}`);
+      const host = url.hostname;
+      const local =
+        host === "localhost" ||
+        host.endsWith(".localhost") ||
+        host === "[::1]" ||
+        /^127\./.test(host) ||
+        /^10\./.test(host) ||
+        /^192\.168\./.test(host) ||
+        /^172\.(1[6-9]|2[0-9]|3[01])\./.test(host);
+      // Ports, IPv4/IPv6, Unicode hosts, query strings and fragments are all parsed as URLs.
+      if (!url.username && !url.password && (local || host.includes(".") || host.startsWith("[")))
+        return `${local ? "http" : "https"}://${t}`;
+    } catch {
+      /* A phrase or malformed host is searched. */
+    }
+  }
   return `https://duckduckgo.com/?q=${encodeURIComponent(t)}`;
 }

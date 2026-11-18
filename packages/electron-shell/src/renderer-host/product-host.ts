@@ -155,6 +155,7 @@ export function mountProductHost(
       deck: {
         set: (deck) => window.vibefield.deck.set(deck),
       },
+      simulatorSetup: window.vibefield.simulatorSetup,
       // BP-D4 — Settings' Clear browsing data, straight onto the preload's one door
       browserData: {
         clear: () => window.vibefield.browserData.clear(),

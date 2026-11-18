@@ -138,9 +138,35 @@ function resolvedCapture(
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 describe("Simulator resolution", () => {
+  it("resolves a headless simulator without enumerating windows or querying Accessibility", async () => {
+    vi.stubEnv("VF_SIMULATOR_FRAMEBUFFER", "1");
+    const windows = new FakeWindows([]);
+    const { resolver, viewportSpy } = resolverSetup(() => viewportResolved(), windows);
+    expect((await resolver.resolve(source())).framebufferDevice).toBe(UDID);
+    expect(windows.calls).toEqual([]);
+    expect(viewportSpy).not.toHaveBeenCalled();
+  });
+
+  it("uses the native framebuffer only for the default device viewport on the opt-in path", async () => {
+    vi.stubEnv("VF_SIMULATOR_FRAMEBUFFER", "1");
+    const { resolver, viewportSpy } = resolverSetup(() => viewportResolved());
+    expect(await resolver.resolve(source())).toMatchObject({
+      framebufferDevice: UDID,
+      fingerprint: `framebuffer:${UDID}`,
+    });
+    expect(viewportSpy).not.toHaveBeenCalled();
+    expect((await resolver.resolve(source({ mode: "none" }))).framebufferDevice).toBeUndefined();
+    expect(
+      (await resolver.resolve(source({ mode: "auto" }, simulatorWindow().sourceRef)))
+        .framebufferDevice,
+    ).toBeUndefined();
+    expect(viewportSpy).toHaveBeenCalledOnce();
+  });
+
   it("strictly extracts only available booted devices from simctl metadata", () => {
     const parsed = parseBootedSimulatorDevices(
       JSON.stringify({

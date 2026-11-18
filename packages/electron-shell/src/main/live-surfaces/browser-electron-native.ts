@@ -1,4 +1,4 @@
-import { BrowserWindow, session } from "electron";
+import { app, BrowserWindow, session } from "electron";
 import {
   BrowserFrames,
   type FrameAncestor,
@@ -235,14 +235,15 @@ async function answeredWithin(sent: Promise<unknown>, ms: number): Promise<void>
 
 /**
  * PT-5d (M6.5b i) — THE PAGE'S AUTO-ATTACH AND EACH FRAME'S: flat; each frame of another site STARTS PAUSED (waiting for the
- * debugger) until its guards and its device are on; FILTERED to frames — no worker or service worker is ever attached,
- * paused or sent anything (ruling 4).
+ * debugger) until its guards and its device are on. Chromium 150 can pause a dedicated worker even when the filter
+ * excludes it, leaving no session through which to resume it. Include workers, then immediately release every
+ * non-frame session: workers receive no page guards, device emulation or frame inspection.
  */
 const AUTO_ATTACH = {
   autoAttach: true,
   waitForDebuggerOnStart: true,
   flatten: true,
-  filter: [{ type: "iframe" }],
+  filter: [{ type: "iframe" }, { type: "worker" }],
 } as const;
 
 /** The file picker never shown: CDP says it was asked for (`Page.fileChooserOpened`) and cancels it — the input hears `cancel`. */
@@ -265,20 +266,22 @@ function baseRaster(options: BrowserSurfaceNativeWindowOptions): {
 function safeEffectiveRaster(
   requested: { width: number; height: number },
   base: { width: number; height: number },
-): { width: number; height: number; pageScaleFactor: number } {
+): { width: number; height: number; pageScaleFactor: number; captureScale: number } {
   const baseAspect = base.width / base.height;
   const requestedAspect = requested.width / requested.height;
   const aspectDrift = Math.abs(requestedAspect / baseAspect - 1);
   const scale = Math.min(requested.width / base.width, requested.height / base.height);
-  // Chromium clamps page scale below 1. Preserve layout/raster correctness and
-  // let the WebGPU compositor downsample instead of relaying out the page.
-  if (scale < 1 || aspectDrift > 0.01) {
-    return { ...base, pageScaleFactor: 1 };
+  // Capture scale is independent of page zoom: CDP's view-image scale changes
+  // the output raster without changing layout, DPR or the visual viewport.
+  // A distorted request falls back to the native aspect, as before.
+  if (aspectDrift > 0.01) {
+    return { ...base, pageScaleFactor: 1, captureScale: 1 };
   }
   return {
     width: requested.width,
     height: requested.height,
-    pageScaleFactor: scale,
+    pageScaleFactor: Math.max(1, scale),
+    captureScale: Math.min(1, scale),
   };
 }
 
@@ -293,6 +296,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly controlContents;
   #remoteLoadStarted = false;
   #debuggerAttached = false;
+  #captureScale = 1;
+  #frameRate: number | undefined;
   /** PT-5a: the bootstrap document has been taken out of the page's history (below) — once a window's life. */
   #bootstrapPruned = false;
   /** PT-5a: the main frame's last load failed with this net error (cleared when a page commits). */
@@ -384,6 +389,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * stood was forgotten: a key held across it was never let up.)
    */
   #documents = 0;
+  #fullscreen = false;
+  #fullscreenEscape = false;
 
   constructor(
     readonly window: BrowserWindow,
@@ -393,6 +400,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     readonly focus: FocusHolder = { window: undefined, told: undefined },
   ) {
     this.controlContents = window.webContents;
+    window.webContents.on("enter-html-full-screen", () => {
+      this.#fullscreen = true;
+    });
+    window.webContents.on("leave-html-full-screen", () => {
+      this.#fullscreen = false;
+    });
     window.webContents.debugger.on("message", (_event, method, params, sessionId) =>
       this.heard(method, params as Readonly<Record<string, unknown>>, sessionId),
     );
@@ -415,6 +428,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       for (const arm of [...this.#atPaint]) arm();
       this.#atPaint.clear();
     });
+    // Navigation can create a new compositor whose reported FPS carries over
+    // while its actual cadence returns to the default. Restore the current
+    // demand once loading finishes, including 1 Hz if the pane was paused.
+    window.webContents.on("did-finish-load", () => this.restoreFrameRate());
     window.webContents.on("did-navigate", (_event, url) => {
       if (this.#remoteLoadStarted && url !== "about:blank") committed();
       // PT-6a (M4 — F1): the top at `about:blank` after a remote load runs no words (their own guard): what the document
@@ -595,9 +612,29 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       | { readonly type?: unknown; readonly targetId?: unknown; readonly url?: unknown }
       | undefined;
     const child = params["sessionId"];
-    // PT-5d (ruling 4): a FRAME of the page's tree alone — never a worker, a service worker, another page
-    if (info?.type !== "iframe" || typeof child !== "string" || this.isDestroyed()) return;
+    if (typeof child !== "string" || this.isDestroyed()) return;
     const parent = sessionId === undefined || sessionId === "" ? undefined : sessionId;
+    if (info?.type !== "iframe") {
+      // A filtered-out worker can remain paused without an attachedToTarget event. Accept it so we can release it;
+      // never register it as a frame, inject page scripts, or apply a pane's device to a shared worker.
+      const cdp = this.window.webContents.debugger;
+      let detached = false;
+      const detach = () => {
+        if (detached) return;
+        detached = true;
+        clearTimeout(timer);
+        if (this.isDestroyed() || !cdp.isAttached()) return;
+        void cdp
+          .sendCommand("Target.detachFromTarget", { sessionId: child }, parent)
+          .catch(() => undefined);
+      };
+      // Also detach a target whose resume never answers; it must not retain an abandoned debugger session.
+      const timer = setTimeout(detach, FRAME_STEP_MS);
+      if (params["waitingForDebugger"] === true) {
+        void cdp.sendCommand("Runtime.runIfWaitingForDebugger", {}, child).then(detach, detach);
+      } else detach();
+      return;
+    }
     if (typeof info.targetId === "string")
       this.#frames.attached(
         child,
@@ -941,7 +978,13 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   setFrameRate(fps: number): void {
+    this.#frameRate = fps;
     this.window.webContents.setFrameRate(fps);
+  }
+
+  private restoreFrameRate(): void {
+    if (!this.isDestroyed() && this.#frameRate !== undefined)
+      this.window.webContents.setFrameRate(this.#frameRate);
   }
 
   startPainting(): void {
@@ -971,10 +1014,16 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     // construction-time one: the viewport now follows the card, and a raster
     // judged against a stale base would reject every request whose aspect had
     // legitimately moved with the layout.
-    const effective = safeEffectiveRaster(requested, {
+    const base = {
       width: integerDimension(logicalViewport.width * deviceScaleFactor),
       height: integerDimension(logicalViewport.height * deviceScaleFactor),
-    });
+    };
+    // Mobile pages own their layout/initial zoom (including the 980px fallback).
+    // Preserve their existing native raster until that path has a separate proof.
+    const effective = safeEffectiveRaster(
+      mobile && (requested.width < base.width || requested.height < base.height) ? base : requested,
+      base,
+    );
     return this.device(async () => {
       if (this.isDestroyed()) throw new Error("Browser surface was destroyed during resize");
       await this.bootstrapReady;
@@ -986,7 +1035,12 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         mobile,
         screenWidth: integerDimension(logicalViewport.width),
         screenHeight: integerDimension(logicalViewport.height),
+        // The native window owns the physical size. Letting CDP set it to
+        // the logical viewport makes a repeated same-size native resize a
+        // no-op, silently restoring full-size captures on resume.
+        ...(!mobile ? { scale: effective.captureScale, dontSetVisibleSize: true } : {}),
       });
+      this.#captureScale = effective.captureScale;
       // PT-5b (ruling 5b): never forced on a `mobile` page — a phone's page lays itself out at its OWN width (one that
       // names no viewport: 980 px) and is shown whole at its own scale; forced to 1 it showed its top-left corner (PT-4)
       if (!mobile) {
@@ -997,6 +1051,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const contentWidth = integerDimension(effective.width / this.options.deviceScaleFactor);
       const contentHeight = integerDimension(effective.height / this.options.deviceScaleFactor);
       this.window.setContentSize(contentWidth, contentHeight, false);
+      // Reassert pacing after changing compositor geometry. Read the latest
+      // demand here: a pause may have arrived while the metrics awaited CDP.
+      this.restoreFrameRate();
     }).then(() => ({ width: effective.width, height: effective.height }));
   }
 
@@ -1098,21 +1155,32 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     });
   }
 
-  dispatchMouse(input: BrowserSurfaceNativeMouseInput, heardAt?: number): Promise<void> {
+  dispatchMouse(
+    input: BrowserSurfaceNativeMouseInput,
+    heardAt?: number,
+    heardUntil?: number,
+  ): Promise<void> {
     // PT-5d (M12 J9): when it ARRIVED — a wheel's gesture is measured by the hand's spacing, never by its turn's (a page
     // answering each wheel late spaces the turns by its answers: every wheel a new gesture, H7's defect back). PT-6a (K2):
     // when the PRODUCER heard it, if it says — it reaches this call once per answer (its one chain awaits each dispatch)
     const arrived = heardAt ?? performance.now();
     return this.hand(async () => {
       await this.ensureDebugger();
-      for (const routed of this.routeMouse(input, arrived)) {
+      for (const routed of this.routeMouse(input, arrived, heardUntil ?? arrived)) {
         const sent = performance.now();
+        const command = { ...input, ...this.onSession(routed) };
+        // Chromium undoes desktop view-image scaling for both the wheel point and its delta.
+        // Separately targeted child frames receive wheel travel directly in CSS pixels.
+        if (
+          input.type === "mouseWheel" &&
+          routed.target.session === undefined &&
+          this.#captureScale !== 1
+        ) {
+          command.deltaX = (input.deltaX ?? 0) * this.#captureScale;
+          command.deltaY = (input.deltaY ?? 0) * this.#captureScale;
+        }
         await this.hinted(input.type === "mousePressed", routed.target.session === undefined, () =>
-          this.handCommand(
-            "Input.dispatchMouseEvent",
-            { ...input, ...this.onSession(routed) },
-            routed.target.session,
-          ),
+          this.handCommand("Input.dispatchMouseEvent", command, routed.target.session),
         ).catch((error: unknown) => {
           // PT-5d (M12 J12): a press refused — let go at its frame's detach, or refused by the engine — is down for
           // nobody: the producer never told it down, and no release follows it; nothing holds its button (kept, every move
@@ -1130,6 +1198,32 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void> {
     return this.hand(async () => {
       await this.ensureDebugger();
+      if (input.key === "Escape") {
+        // Fullscreen exit is a browser action, independent of the page's key handlers.
+        // Consume this press and its release before routing keys to page frames.
+        if (this.#fullscreenEscape) {
+          if (input.type === "keyUp") this.#fullscreenEscape = false;
+          return;
+        }
+        if (this.#fullscreen && input.type === "keyDown") {
+          const context = this.#worlds.get("")?.get(this.#mainFrame ?? "");
+          if (context === undefined) throw new Error("Fullscreen document context is unavailable");
+          this.#fullscreenEscape = true;
+          // Use the existing isolated world: page scripts cannot replace this DOM API.
+          // The normal command bound and document teardown also apply to this operation.
+          await this.handCommand(
+            "Runtime.evaluate",
+            {
+              expression: "document.fullscreenElement ? document.exitFullscreen() : undefined",
+              contextId: context,
+              awaitPromise: true,
+              returnByValue: true,
+            },
+            undefined,
+          );
+          return;
+        }
+      }
       await this.focusSettled();
       const target =
         input.type === "keyUp" ? this.#frames.keyUp(input.code) : this.#frames.focused();
@@ -1366,6 +1460,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * waited for a word that never came). What the document held for the frames and the hand goes with it; the commit alone
    * counts a document (the face's history and state) and awaits its paint. */
   private documentGone(): void {
+    this.#fullscreen = false;
+    this.#fullscreenEscape = false;
     // (M12 J6: a key-like event waiting for a word of where the focus was is refused — its document is gone; before: the
     // commit ended the doubt and woke it into the NEW document, its down there unrecorded)
     for (const waiter of [...this.#focusWaiters])
@@ -1441,7 +1537,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
    * last word of its CURRENT document; none yet: 1.
    */
   private onSession(routed: FrameRouted): { readonly x: number; readonly y: number } {
-    if (routed.target.session === undefined) return { x: routed.x, y: routed.y };
+    // CDP's main target receives view-image coordinates. OOPIF target inputs
+    // stay in their own CSS coordinates (verified with a real cross-site frame).
+    if (routed.target.session === undefined)
+      return { x: routed.x * this.#captureScale, y: routed.y * this.#captureScale };
     const said = this.#pageScale;
     const s = said !== undefined && said.document === this.#documents ? said.value : 1;
     return { x: routed.x / s, y: routed.y / s };
@@ -1452,6 +1551,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   private routeMouse(
     input: BrowserSurfaceNativeMouseInput,
     arrived: number,
+    arrivedUntil = arrived,
   ): readonly FrameRouted[] {
     const button = buttonOf(input);
     if (input.type === "mousePressed") return [this.#frames.press(button, input.x, input.y)];
@@ -1459,7 +1559,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       const routed = this.#frames.release(button, input.x, input.y);
       return routed === null ? [] : [routed];
     }
-    if (input.type === "mouseWheel") return [this.#frames.wheel(input.x, input.y, arrived)];
+    if (input.type === "mouseWheel")
+      return [this.#frames.wheel(input.x, input.y, arrived, arrivedUntil)];
     return this.#frames.move(input.x, input.y);
   }
 
@@ -1493,6 +1594,7 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
         canGoBack: contents.navigationHistory.canGoBack(),
         canGoForward: contents.navigationHistory.canGoForward(),
         document: this.#documents,
+        ...(this.#fullscreen ? { fullscreen: true } : {}),
         ...(this.#loadFailure === undefined ? {} : { failure: this.#loadFailure }),
       });
     };
@@ -1533,6 +1635,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       }
       emit();
     };
+    contents.on("enter-html-full-screen", emit);
+    contents.on("leave-html-full-screen", emit);
     contents.on("did-navigate", committed);
     contents.on("did-fail-provisional-load", failed);
     contents.on("did-navigate-in-page", emit);
@@ -1540,6 +1644,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     contents.on("did-start-loading", emit);
     contents.on("did-stop-loading", stopped);
     return () => {
+      contents.off("enter-html-full-screen", emit);
+      contents.off("leave-html-full-screen", emit);
       contents.off("did-navigate", committed);
       contents.off("did-fail-provisional-load", failed);
       contents.off("did-navigate-in-page", emit);
@@ -1783,6 +1889,20 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 }
 
+function nativeEngineAgent(): BrowserSurfaceAgent {
+  return engineAgentOf({
+    chrome: process.versions.chrome,
+    platform: process.platform,
+    arch: process.arch,
+    systemVersion: process.getSystemVersion(),
+  });
+}
+
+/** Set before any renderer starts: service workers use this fallback, not a page's CDP or session UA override. */
+export function configureBrowserEngineIdentity(): void {
+  app.userAgentFallback = nativeEngineAgent().userAgent;
+}
+
 /** Pinned Electron 43 Browser OSR adapter. */
 export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
   /** PT-5d (M9): the one window of this native told it is focused */
@@ -1791,10 +1911,12 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
   createWindow(options: BrowserSurfaceNativeWindowOptions): BrowserSurfaceNativeWindow {
     // PT-4: a persistent profile lives under its USER's data (`LAYOUT.BROWSER_PROFILES_DIR`) when the runtime names where;
     // else — and for a memory profile — Electron's own partition by name
+    // A non-persistent partition already keeps its HTTP cache in memory. Disabling cache is a separate
+    // browser behavior and is unnecessary for keeping a private profile off disk.
     const targetSession =
       options.profilePath !== undefined
         ? session.fromPath(options.profilePath, { cache: true })
-        : session.fromPartition(options.partition, { cache: options.persistent });
+        : session.fromPartition(options.partition, { cache: true });
     installGuardedBrowserSurfaceSession(targetSession);
     const initial = baseRaster(options);
     const window = new BrowserWindow({
@@ -1820,6 +1942,8 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
         allowRunningInsecureContent: false,
         spellcheck: false,
         autoplayPolicy: "document-user-activation-required",
+        // HTML fullscreen fills this page's viewport, never the host display or canvas window.
+        disableHtmlFullscreenWindowResize: true,
         // PT-5a: a page never raises a native dialog — `alert` returns at once, `confirm` answers false (ruling 7)
         disableDialogs: true,
       },
@@ -1854,12 +1978,7 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
   }
 
   engineAgent(): BrowserSurfaceAgent {
-    return engineAgentOf({
-      chrome: process.versions.chrome,
-      platform: process.platform,
-      arch: process.arch,
-      systemVersion: process.getSystemVersion(),
-    });
+    return nativeEngineAgent();
   }
 }
 

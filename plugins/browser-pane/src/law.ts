@@ -136,12 +136,9 @@ const BROWSER_SPEC = {
     haloSigma: 2.2,
   },
   /**
-   * The stream's policy (BROWSER.md §5; the phone's §6) — PT-2's, carried unchanged: the engine renders the page at its
-   * device's pixel ratio, always; a pane asks for the capture at the halving of that native size that covers its page's
-   * device pixels on screen (never more than `rungs` halvings down), at a rate by its size on screen, 0 off screen (the
-   * last frame holds); in use, the native capture at full rate.
+   * Desktop captures follow the displayed page in bounded steps. Mobile previews step through halves of the
+   * native size. Each page keeps its device viewport and pixel ratio across both modes.
    */
-  // far 15, not the prototype's 12: LSF delivers in buckets (0/2/5/10/15/30/60) and 12 is none of them (PT-2 ruling 5)
   stream: { texelsPerPx: 1, rungs: 3, fps: { focused: 60, near: 30, far: 15 }, nearPx: 320 },
   /** The lamp on a face — the kit's one physics (`PHYSICS.light`): the fill a face turned away keeps, how far past flat one turned toward it brightens. */
   lamp: PHYSICS.light,
@@ -553,17 +550,21 @@ export function bandLayout(S: PaneShape): BandLayout {
   const inner = S.half[0] - S.border - 0.6 * MM;
   const compact = S.half[0] * 2 < 120 * MM;
   const capH = 3.1 * MM;
-  if (compact)
+  if (compact) {
+    const back: [number, number] = [-inner + glyph * 0.5, cy];
+    const forward: [number, number] = [back[0] + glyph * 1.35, cy];
+    const left = forward[0] + glyph * 0.95;
     return {
       cy,
       glyph,
-      back: null,
-      forward: null,
-      reload: null,
-      address: [0, cy, Math.max(inner, 8), capH],
+      back,
+      forward,
+      reload: [inner - glyph * 0.62, cy],
+      address: [(left + inner) / 2, cy, Math.max((inner - left) / 2, glyph), capH],
       size: null,
       compact,
     };
+  }
   const back: [number, number] = [-inner + glyph * 0.5, cy];
   const forward: [number, number] = [back[0] + glyph * 1.35, cy];
   const capW = Math.min(Math.max(S.half[0] * 0.5, 40 * MM), 84 * MM);
@@ -740,7 +741,7 @@ export function pageLod(G: PaneGeometry, eye: DeskEye, texWidth: number, dpr: nu
 
 // ---------------------------------------------------------------- the stream's demand (PT-2's)
 
-/** What the page's stream should send: the capture's size — a halving of the native capture — and the rate. */
+/** Capture pixel dimensions and cadence for the projected page. */
 export interface PageDemand {
   /** The capture's size, px. */
   readonly width: number;
@@ -756,10 +757,36 @@ export const nativeOf = (S: PaneShape): readonly [number, number] => [
   Math.round(S.viewport[1] * S.device.dpr),
 ];
 
+const DESKTOP_RASTER_STEPS = 16;
+
+/** Keep desktop captures sharp at their displayed size without resizing the page on every window pixel. */
+function desktopRaster(
+  native: readonly [number, number],
+  pixels: readonly [number, number],
+  law: BrowserLaw,
+  previousWidth?: number,
+): readonly [number, number] {
+  const [width, height] = native;
+  const coverage = Math.min(
+    1,
+    Math.max(pixels[0] / width, pixels[1] / height) * law.stream.texelsPerPx,
+  );
+  const minimumStep = Math.max(1, Math.ceil(DESKTOP_RASTER_STEPS / 2 ** law.stream.rungs));
+  let step = Math.max(minimumStep, Math.ceil(coverage * DESKTOP_RASTER_STEPS));
+  // Keep the larger capture until the page shrinks half a step past the boundary.
+  if (
+    step < DESKTOP_RASTER_STEPS &&
+    previousWidth === Math.round((width * (step + 1)) / DESKTOP_RASTER_STEPS) &&
+    step - coverage * DESKTOP_RASTER_STEPS < 0.5
+  ) {
+    step++;
+  }
+  const scale = step / DESKTOP_RASTER_STEPS;
+  return [Math.max(1, Math.round(width * scale)), Math.max(1, Math.round(height * scale))];
+}
+
 /**
- * The phone's policy (PHONE.md §6), for a page: `held` is the width the stream sends now — a rung is kept while it still
- * covers the page's device pixels and is no more than 2.3× them, so a wobbling zoom does not make the capture flip sizes
- * every frame.
+ * Apply the same demand policy to the projected page in the standalone scene.
  */
 export function pageDemand(
   G: PaneGeometry,
@@ -769,31 +796,21 @@ export function pageDemand(
   law: BrowserLaw = BROWSER,
   held?: number,
 ): PageDemand {
-  const [nw, nh] = nativeOf(G.shape);
   const r = pageOnScreen(G, eye);
   const visible = r.x1 > 0 && r.y1 > 0 && r.x0 < eye.vw && r.y0 < eye.vh;
-  const devPx = Math.max(Math.abs(r.x1 - r.x0), 1) * dpr * law.stream.texelsPerPx;
-  const fps = !visible
-    ? 0
-    : focused
-      ? law.stream.fps.focused
-      : devPx >= law.stream.nearPx
-        ? law.stream.fps.near
-        : law.stream.fps.far;
-  if (focused && visible) return { width: nw, height: nh, fps, visible };
-  const rungs = Array.from({ length: law.stream.rungs + 1 }, (_, k) => Math.round(nw / 2 ** k));
-  if (
-    held !== undefined &&
-    rungs.includes(held) &&
-    held >= Math.min(devPx, nw) &&
-    held <= devPx * 2.3
-  ) {
-    const k = rungs.indexOf(held);
-    return { width: held, height: Math.round(nh / 2 ** k), fps, visible };
-  }
-  let k = 0;
-  while (k < law.stream.rungs && nw / 2 ** (k + 1) >= devPx) k++;
-  return { width: Math.round(nw / 2 ** k), height: Math.round(nh / 2 ** k), fps, visible };
+  const pixels: readonly [number, number] = [(r.x1 - r.x0) * dpr, (r.y1 - r.y0) * dpr];
+  const demand = paneDemand(
+    { seen: true, px: pixels, held: visible && focused },
+    G.shape,
+    held,
+    law,
+  );
+  return {
+    width: demand.raster[0],
+    height: demand.raster[1],
+    fps: visible ? demand.fps : 0,
+    visible,
+  };
 }
 
 // ---------------------------------------------------------------- the live page's demand, over the SIGHT (PT-2)
@@ -837,12 +854,9 @@ export interface PaneLiveDemand {
 }
 
 /**
- * THE PANE'S DEMAND LAW over its SIGHT (PT-2 ruling 5 — the prototype's `pageDemand` above, re-based on what the desk says it
- * drew of the page, `px` the page's device px): UNSEEN — off screen, culled, behind the hand — paused; HELD — the native capture
- * at 60, interactive; at rest the halving of native that covers the page's device px (at most `rungs` halvings; a rung `held`
- * is kept while it still covers the page and is no more than 2.3× it, so a wobbling zoom never flips the raster), 30 fps while
- * the page is ≥ 320 device px wide and 15 below. The viewport is always the pane's own (its Size at its device's density) — a
- * paused page keeps its layout, so waking it never reflows it.
+ * Visible pages keep the emulated viewport and choose a capture that covers their displayed pixels.
+ * Held pages request the focused cadence. Smaller previews use the near/far cadence buckets.
+ * Mobile emulation keeps its existing capture levels and native held raster for touch and page zoom.
  */
 export function paneDemand(
   s: PaneSeen,
@@ -852,17 +866,15 @@ export function paneDemand(
 ): PaneLiveDemand {
   const viewport = S.viewport;
   if (!s.seen) return { mode: "paused", fps: 0, raster: [0, 0], viewport, interactive: false };
-  const [nw, nh] = nativeOf(S);
-  if (s.held)
-    return {
-      mode: "live",
-      fps: law.stream.fps.focused,
-      raster: [nw, nh],
-      viewport,
-      interactive: true,
-    };
+  const native = nativeOf(S);
   const devPx = Math.max(s.px[0], 1) * law.stream.texelsPerPx;
-  const fps = devPx >= law.stream.nearPx ? law.stream.fps.near : law.stream.fps.far;
+  const previewFps = devPx >= law.stream.nearPx ? law.stream.fps.near : law.stream.fps.far;
+  const fps = s.held ? law.stream.fps.focused : previewFps;
+  if (!S.device.mobile || s.held) {
+    const raster = S.device.mobile ? native : desktopRaster(native, s.px, law, held);
+    return { mode: "live", fps, raster, viewport, interactive: s.held };
+  }
+  const [nw, nh] = native;
   const rungs = Array.from({ length: law.stream.rungs + 1 }, (_, k) => Math.round(nw / 2 ** k));
   const at = (k: number): PaneLiveDemand => ({
     mode: "live",

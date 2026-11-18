@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { isAbsolute, join } from "node:path";
 import {
@@ -6,6 +7,7 @@ import {
   CoreSimulatorRuntimeIdV1,
   type LiveSurfaceIosSimulatorBindingV1,
   LiveSurfaceSimulatorDeviceRowV1,
+  type LiveSurfaceSimulatorRuntimeOptionV1,
   SURFACE_LIMITS,
 } from "@vibefield/contracts";
 import type { BootedSimulatorDevice, SimulatorDeviceCatalog } from "./ios-simulator-producer";
@@ -50,13 +52,14 @@ export const SIMCTL_TIMEOUTS_MS = {
   probe: 5_000,
   list: 8_000,
   boot: 120_000,
+  bootstatus: 600_000,
   shutdown: 60_000,
   create: 30_000,
   show: 10_000,
 } as const;
 
 /** THE ALLOW-LIST — the simctl verbs main may run, and no other. */
-export const SIMCTL_VERBS = ["list", "boot", "shutdown", "create"] as const;
+export const SIMCTL_VERBS = ["list", "boot", "shutdown", "create", "bootstatus"] as const;
 export type SimctlVerb = (typeof SIMCTL_VERBS)[number];
 
 /** PT-S3 (P1, P2) — which answer the probe vetted: xcode-select's own, the default Xcode's when xcode-select named a
@@ -204,6 +207,7 @@ export function parseSimctlSnapshot(rawJson: string): SimctlSnapshot {
 
   const runtimes: SimctlRuntime[] = [];
   const runtimeIds = new Set<string>();
+  const typesToInfer = new Map<string, Set<string>>();
   for (const rawRuntime of parsed["runtimes"]) {
     if (!isRecord(rawRuntime)) throw new Error("simctl returned invalid runtime metadata");
     const identifier = rawRuntime["identifier"];
@@ -230,6 +234,9 @@ export function parseSimctlSnapshot(rawJson: string): SimctlSnapshot {
           deviceTypeNames.set(typeId as string, typeName);
         }
       }
+    } else {
+      // Older listings may omit compatibility metadata. An available device proves its own pairing.
+      typesToInfer.set(identifier, supported);
     }
     const version = rawRuntime["version"];
     runtimes.push({
@@ -273,6 +280,7 @@ export function parseSimctlSnapshot(rawJson: string): SimctlSnapshot {
       const normalized = udid.toUpperCase();
       if (udids.has(normalized)) throw new Error("simctl returned duplicate device identity");
       udids.add(normalized);
+      typesToInfer.get(runtime)?.add(deviceType as string);
       devices.push({ udid, name, state, deviceType: deviceType as string, runtime });
     }
   }
@@ -333,11 +341,30 @@ export function pickDevice(
 ): SimctlDevicePick {
   const typeName = snapshot.deviceTypeNames.get(binding.deviceType);
   const named = typeName === undefined ? {} : { typeName };
-  const ofType = snapshot.devices.filter((device) => device.deviceType === binding.deviceType);
+  const tag =
+    binding.instance && createHash("sha256").update(binding.instance).digest("hex").slice(0, 16);
+  const managedName = tag && typeName ? `VibeField ${typeName.slice(0, 88)} [${tag}]` : undefined;
+  const ofType = snapshot.devices.filter(
+    (device) =>
+      device.deviceType === binding.deviceType &&
+      (tag ? device.name === managedName : !/^VibeField .+ \[[a-f0-9]{16}\]$/u.test(device.name)),
+  );
+
   const exact = ofType
     .filter((device) => device.runtime === binding.runtime)
     .sort((left, right) => stateRank(left.state) - stateRank(right.state) || byUdid(left, right));
   if (exact[0] !== undefined) return { device: exact[0], ...named };
+  // Each pane keeps separate guest data per model and OS. Switching versions must never
+  // reconnect to, or create on, another version even when that device is already running.
+  if (binding.instance) {
+    const selected = snapshot.runtimes.find((runtime) => runtime.identifier === binding.runtime);
+    return managedName && selected?.supportedDeviceTypes.has(binding.deviceType)
+      ? {
+          ...named,
+          create: { name: managedName, deviceType: binding.deviceType, runtime: binding.runtime },
+        }
+      : named;
+  }
   const order = new Map(snapshot.runtimes.map((runtime, index) => [runtime.identifier, index]));
   const fallback = [...ofType].sort(
     (left, right) =>
@@ -391,6 +418,27 @@ export function simulatorDeviceRows(
     if (row.success) rows.push(row.data);
   }
   return rows;
+}
+
+/** The runtime supplies its own model list, including models with no device created yet. */
+export function simulatorConfigurations(
+  snapshot: SimctlSnapshot,
+): LiveSurfaceSimulatorRuntimeOptionV1[] {
+  const result: LiveSurfaceSimulatorRuntimeOptionV1[] = [];
+  for (const runtime of snapshot.runtimes) {
+    if (!/\.SimRuntime\.iOS-\d+(?:-\d+)*$/u.test(runtime.identifier)) continue;
+    const models: LiveSurfaceSimulatorRuntimeOptionV1["models"] = [];
+    for (const deviceType of runtime.supportedDeviceTypes) {
+      if (!deviceType.startsWith("com.apple.CoreSimulator.SimDeviceType.iPhone-")) continue;
+      const name = snapshot.deviceTypeNames.get(deviceType);
+      if (name && LiveSurfaceSimulatorDeviceRowV1.shape.name.safeParse(name).success)
+        models.push({ deviceType, name });
+      if (models.length >= SURFACE_LIMITS.MAX_SIMULATOR_DEVICES) break;
+    }
+    if (models.length) result.push({ runtime: runtime.identifier, models });
+    if (result.length >= SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES) break;
+  }
+  return result;
 }
 
 /**
@@ -495,11 +543,11 @@ export class SimctlService implements SimulatorDeviceCatalog {
   }
 
   /** R5: the developer directory that holds simctl, or `SimctlUnavailableError` — before ANY xcrun. */
-  async developerDir(): Promise<string> {
+  async developerDir({ refresh = false }: { refresh?: boolean } = {}): Promise<string> {
     if (this.#disposed) throw new SimctlUnavailableError();
-    if (this.#developerDir !== null) return this.#developerDir;
+    if (!refresh && this.#developerDir !== null) return this.#developerDir;
     const failedAt = this.#probeFailedAt;
-    if (failedAt !== null) {
+    if (!refresh && failedAt !== null) {
       const age = this.#now() - failedAt;
       if (age >= 0 && age < PROBE_RETRY_MS) throw new SimctlUnavailableError();
     }
@@ -568,6 +616,12 @@ export class SimctlService implements SimulatorDeviceCatalog {
   }
 
   /** `simctl shutdown`: a device already shut down counts as shut down. No v1 act runs it (a device is the person's). */
+  /** A newly booted guest can spend minutes migrating its data before SpringBoard is ready. */
+  async waitUntilReady(udid: string): Promise<void> {
+    assertUdid(udid);
+    await this.simctl("bootstatus", [udid], SIMCTL_TIMEOUTS_MS.bootstatus);
+  }
+
   async shutdown(udid: string): Promise<void> {
     assertUdid(udid);
     try {
@@ -659,6 +713,15 @@ export class SimctlService implements SimulatorDeviceCatalog {
     }
   }
 
+  async configurations(): Promise<readonly LiveSurfaceSimulatorRuntimeOptionV1[]> {
+    try {
+      return simulatorConfigurations(await this.list());
+    } catch (error) {
+      if (error instanceof SimctlUnavailableError) return [];
+      throw error;
+    }
+  }
+
   /** R11: the attach's runtimes, the newest first, from the same shared list — none when this Mac has no Simulator. */
   async runtimeIds(): Promise<readonly string[]> {
     try {
@@ -677,7 +740,11 @@ export class SimctlService implements SimulatorDeviceCatalog {
   private async probe(): Promise<string> {
     this.#onCall?.("probe");
     const vetted = await this.selected();
+    if (this.#developerDir !== null && this.#developerDir !== vetted?.developerDir)
+      this.invalidate();
     if (vetted === null) {
+      this.#developerDir = null;
+      this.#vettedBy = null;
       this.#probeFailedAt = this.#now();
       throw new SimctlUnavailableError();
     }

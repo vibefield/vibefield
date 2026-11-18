@@ -22,7 +22,9 @@ import {
 import type { LiveSimulatorSpec, LiveSimulatorState } from "@vibefield/plugin-sdk/desk";
 
 /** The device a phone is bound to, as its spec names it (the SDK's reader held only its shape as words). */
-export type SimulatorBinding = Pick<LiveSimulatorSpec, "deviceType" | "runtime">;
+export type SimulatorBinding = Pick<LiveSimulatorSpec, "deviceType" | "runtime"> & {
+  readonly instance?: string;
+};
 
 /** CoreSimulator's prefixes — off a device type's and a runtime's id in the continuity key (it must fit `SurfaceReuseKeyV1`). */
 const DEVICE_TYPE_PREFIX = "com.apple.CoreSimulator.SimDeviceType.";
@@ -38,11 +40,12 @@ export function simulatorSource(
   const parsed = LiveSurfaceIosSimulatorBindingV1.safeParse({
     deviceType: binding.deviceType,
     runtime: binding.runtime,
+    ...(binding.instance === undefined ? {} : { instance: binding.instance }),
   });
   if (!parsed.success) return undefined;
   return {
     kind: "ios-simulator-device",
-    binding: { deviceType: parsed.data.deviceType, runtime: parsed.data.runtime },
+    binding: parsed.data,
     crop: { mode: "auto" },
   };
 }
@@ -50,6 +53,7 @@ export function simulatorSource(
 /** The device's continuity key (`sim:iPhone-17-Pro:iOS-26-1`) — undefined where it would not fit the wire's bound (the mint
  * goes without one: fresh each time, swept when its document dies). */
 export function simulatorReuseKey(binding: SimulatorBinding): string | undefined {
+  if (binding.instance !== undefined) return undefined;
   const type = binding.deviceType.startsWith(DEVICE_TYPE_PREFIX)
     ? binding.deviceType.slice(DEVICE_TYPE_PREFIX.length)
     : binding.deviceType;
@@ -62,7 +66,7 @@ export function simulatorReuseKey(binding: SimulatorBinding): string | undefined
 
 /** R15 — what a phone's still is FILED under (the shelf's `address`): its binding, whole. */
 export const simulatorAddress = (binding: SimulatorBinding): string =>
-  `ios-simulator:${binding.deviceType}/${binding.runtime}`;
+  `ios-simulator:${binding.deviceType}/${binding.runtime}${binding.instance ? `/${encodeURIComponent(binding.instance)}` : ""}`;
 
 /** R2 — main's facts in the SDK's words: each condition its own state by name; `streaming` is the renderer's to say
  * (`simulatorState`: `live`, or `at-rest`) — `live` here is only its name. */

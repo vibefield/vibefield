@@ -11,8 +11,8 @@
 //    (the address, the loading line, the history's reach: what the head and the record read) ask `remake(e)`; the tick answers
 //    nothing of its own (the local's tick stays false for it);
 //  - THE DEMAND (ruling 5): the sight (`createSight(host.frames)`, told by the pass's prepares) feeds the pane's law
-//    (`paneDemand` — paused unseen; native at 60 and interactive in the hand; at rest the halving of native that covers the
-//    page, its rung held through a wobble, 30 fps from 320 device px and 15 under), sent CHANGE-ONLY; a new size or device asks
+//    (`paneDemand` pauses unseen pages, fits desktop captures to the displayed pixels and keeps mobile emulation native in
+//    the hand. A held page requests 60 fps, previews request 30 from 320 device px and 15 below.) A new size or device asks
 //    the law again with the same sight — a NEW VIEWPORT is the source's relayout, sent at most once each `PAGE_REMAKE_MS` while
 //    the size moves (the still's re-cut, PT-1, is now the source's) and once more when it rests. The kind is due NOW while a
 //    frame was drawn its sight has not stepped over, or when a held-back viewport falls due; never else.
@@ -356,7 +356,9 @@ export function createPaneFaces(
           continue;
         }
         const held =
-          f.demand?.mode === "live" && !f.demand.interactive ? f.demand.raster[0] : undefined;
+          f.demand?.mode === "live" && f.demand.interactive === s.held
+            ? f.demand.raster[0]
+            : undefined;
         const d = paneDemand(s, f.shape, held, law);
         if (sameDemand(f.demand, d)) {
           relaw.delete(e);

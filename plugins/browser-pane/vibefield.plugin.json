@@ -39,6 +39,12 @@
               "phone"
             ]
           },
+          "deviceScaleFactor": {
+            "default": 0,
+            "kind": "number",
+            "max": 8,
+            "min": 0
+          },
           "finish": {
             "default": "low-iron",
             "kind": "enum",
@@ -48,6 +54,26 @@
               "smoke",
               "bronze"
             ]
+          },
+          "inputMode": {
+            "default": "device",
+            "kind": "enum",
+            "options": [
+              "device",
+              "desktop",
+              "desktop-touch",
+              "mobile",
+              "mobile-pointer"
+            ]
+          },
+          "muted": {
+            "default": false,
+            "kind": "boolean"
+          },
+          "navigatorPlatform": {
+            "default": "",
+            "kind": "string",
+            "maxLength": 32
           },
           "scheme": {
             "default": "desk",
@@ -62,6 +88,20 @@
             "default": "https://lumen.example/",
             "kind": "string",
             "maxLength": 2048
+          },
+          "userAgent": {
+            "default": "",
+            "kind": "string",
+            "maxLength": 512
+          },
+          "userAgentMode": {
+            "default": "device",
+            "kind": "enum",
+            "options": [
+              "device",
+              "browser",
+              "custom"
+            ]
           }
         },
         "provides": [

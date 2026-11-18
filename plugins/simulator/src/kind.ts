@@ -1,3 +1,5 @@
+import { configureSimulators, phoneLocalOf, SETUP_ACT } from "./attach";
+import { iosLabel } from "./setup";
 // THE PHONE as a kind (PT-S1 — PORTALS' iOS Simulator, written exactly as a third party writes a kind: through
 // `@vibefield/plugin-sdk/desk` alone, ICE design-016 K-L1/K-L2): its RENDER half (`simulatorProgram` — its own pass and WGSL,
 // made on the root's mat, spawned into every other slot) and its WORLD half — `resolve` the phone where it lies (its MODEL's
@@ -7,9 +9,8 @@
 // point of it is the phone, so a drag anywhere on it carries it), the frame the desk's marks go round (its silhouette as its
 // eye sees it), its look from the palette (theme.ts), its desk state (local.ts) and its OPENING: USE — double-click or ⏎, as
 // the notebook, the board and the pane open (the PT-S design §6 Q-2) — picked up into the hand at the reading size, its
-// stream asked native at 60 there. View-only until PT-S4's touch lands: in hand no tap, key or button reaches iOS; the held
-// bar says "View only", in words, beside the device's name (its one tool's state, ICE I49), and the only press the kind takes
-// is its face's act.
+// stream requested at native size. The held phone routes touch, keyboard and Home to its own guest when device input is
+// available. An unconfigured phone opens its model and iOS picker on pickup.
 
 import {
   type HeldToolDef,
@@ -84,6 +85,7 @@ export const simulatorSpec = (
   source: "ios-simulator",
   deviceType: binding.deviceType,
   runtime: binding.runtime,
+  ...(binding.dedicated ? { dedicated: true } : {}),
   label,
   scheme,
 });
@@ -92,22 +94,31 @@ export const simulatorSpec = (
 export const nativeOf = (binding: Binding, model: PhoneModel): readonly [number, number] =>
   (phoneById(binding.deviceType) ?? model).screen.px;
 
-/**
- * The held bar's tools — ONE, and it SAYS "View only" in words (ICE I49: its state, read with the anchor): touch, declared as
- * the act it will be when PT-S4's touch lands and disabled now, so the bar says beside the device's name why a tap reaches
- * nothing. It declares NO glyph, and its state none: the bar draws a slot with neither glyph nor swatch as its label, in
- * text (field-app's bar, R3) — so the state's label "View only" is what the bar SHOWS, not a tooltip under a pictogram
- * (DESIGN.md §9: "In hand the tools say **View only**").
- */
+/** Home is a hardware action on the held device. A window-only capture has no input connection. */
 export const SIMULATOR_TOOLS: readonly HeldToolDef[] = [
   {
-    id: "touch",
-    label: "Touch",
+    id: "home",
+    label: "Home",
     kind: "action",
-    run: () => {
-      // view-only until PT-S4's touch lands (the PT-S design §4) — a disabled tool's press does nothing
-    },
-    state: () => ({ enabled: false, label: VIEW_ONLY }),
+    run: (api) =>
+      phoneLocalOf(api.world)?.send(api.entity, {
+        kind: "key",
+        phase: "down",
+        key: "Home",
+        code: "Home",
+        mods: 0,
+        repeat: false,
+      }),
+    state: (api) =>
+      (api.local as SimulatorLocal | undefined)?.interactive(api.entity)
+        ? { enabled: true, label: "Home" }
+        : { enabled: false, label: VIEW_ONLY },
+  },
+  {
+    id: SETUP_ACT,
+    label: "Simulator settings…",
+    kind: "action",
+    run: (api) => configureSimulators(api.world, [api.entity]),
   },
 ];
 
@@ -133,13 +144,17 @@ export function simulatorOpening(): OpenBinding {
     extent: ({ rect, props }) => openExtent(rect, shapeOf(modelOf(modelPropOf(props)))),
     pose: "camera",
     tools: SIMULATOR_TOOLS,
+    wheel: "kind",
+    escape: "desk",
     // the face's act is a part in hand: a pointer over it
     cursor: ({ part }) => (part === "act" ? "pointer" : undefined),
     // the device's name: the host's word for it, else the phone's
     readout: ({ props, entity, local }) => {
       const p = props();
       const said = liveSimulatorFace((local as SimulatorLocal | undefined)?.screen(entity)?.info);
-      return said?.device ?? deviceName(bindingOf(p), modelOf(modelPropOf(p)));
+      const binding = bindingOf(p);
+      const name = deviceName(binding, modelOf(modelPropOf(p)));
+      return binding?.dedicated ? `${name} · ${iosLabel(binding.runtime)}` : (said?.device ?? name);
     },
   };
 }
@@ -150,10 +165,18 @@ function planOf(
   e: ObjectContext["entity"],
   name: string,
   law: PhoneLaw,
+  binding?: Binding,
 ): FacePlan {
   const screen = local?.screen(e);
   if (screen === undefined) return NO_FACE;
-  return facePlan(screen.info, screen.state, name, local?.texture(e) !== undefined, law);
+  const plan = facePlan(screen.info, screen.state, name, local?.texture(e) !== undefined, law);
+  if (binding?.dedicated && screen.info.extra?.configurationUnavailable === true)
+    return {
+      ...plan,
+      act: null,
+      line: `${name} with ${iosLabel(binding.runtime)} is unavailable on this Mac.`,
+    };
+  return plan;
 }
 
 /** What the hand points at on a phone IN HAND: its face's act (where it offers one), the phone (`content`), or nothing. */
@@ -206,7 +229,7 @@ export function simulatorKind(
       const plan =
         binding === undefined
           ? NO_FACE
-          : planOf(local, ctx.entity, deviceName(binding, model), law);
+          : planOf(local, ctx.entity, deviceName(binding, model), law, binding);
       // by night a BOUND phone's glow may reach round it: the quad grows to hold it, read from the props alone (the pane's `lit`).
       // Not from the face: the first resolve runs before the record has opened one, and a quad sized then would clip the glow
       // when the stream lands. A screen that is off draws no glow in the larger quad (the shader scales it by `on`); a still
@@ -242,8 +265,9 @@ export function simulatorKind(
           nativeOf(binding, model),
         );
       else local?.drop(ctx.entity);
-      const plan = face === undefined ? NO_FACE : planOf(local, ctx.entity, name, law);
+      const plan = face === undefined ? NO_FACE : planOf(local, ctx.entity, name, law, binding);
       local?.offer(ctx.entity, plan.act?.run);
+      if (G.held) local?.laid(ctx.entity, G, ctx.rect.cx, ctx.rect.cy, ctx.view.zoom);
       const t = face?.texture();
       // the face's words, light over the screen (drawn by the lent raster; none lent — a Node still — the committed raster
       // its key names, else no words)

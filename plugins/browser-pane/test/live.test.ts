@@ -405,7 +405,7 @@ describe("the pane's live page — its faces", () => {
     expect(local.faces()).toMatchObject({ landed: 4, redraws: 1, remakes: 3 });
   });
 
-  it("asks the LAW over the SIGHT, change-only: at rest the halving that covers the page, in the hand native at 60, unseen paused", () => {
+  it("asks the LAW over the SIGHT, change-only: at rest a capture covering the page, in the hand a fitted capture at 60, unseen paused", () => {
     const t = fakeHost();
     const local = createPaneLocal(t.host);
     local.face(1 as Entity, spec, S);
@@ -439,14 +439,14 @@ describe("the pane's live page — its faces", () => {
     local.tick?.(28);
     expect(f.demands).toHaveLength(1);
     expect(local.due?.(30)).toBe(Number.POSITIVE_INFINITY); // stepped: nothing owed, nothing polled
-    // in the hand: native at 60, interactive
+    // The held page covers more than half its native pixels at this zoom.
     t.draw(local, 1 as Entity, 1, "hand");
     local.tick?.(42);
     expect(f.demands.at(-1)).toMatchObject({
       mode: "live",
       fps: 60,
       interactive: true,
-      raster: [S.viewport[0] * S.device.dpr, S.viewport[1] * S.device.dpr],
+      raster: [1440, 900],
     });
     // panned away — a frame drawn without it: paused, its layout kept
     t.skip();

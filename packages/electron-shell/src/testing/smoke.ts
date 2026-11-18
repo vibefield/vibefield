@@ -12610,10 +12610,12 @@ export async function runLiveSurfacesLab(opts: {
           devices: new SimctlDeviceCatalog({
             ...(opts.sck.developerDir === undefined ? {} : { developerDir: opts.sck.developerDir }),
           }),
+          framebuffer: false,
           windows: sckSupervisor,
           viewport: captureAdapter,
         });
         simulatorResolution = await resolver.resolve(simulatorSource);
+        if (!simulatorResolution.window) throw new Error("The SCK lab requires window capture");
         sckSources.push(simulatorResolution.window);
         sckKinds.push("simulator");
         if (opts.sck.requireInactiveSpace && simulatorResolution.window.onScreen) {
@@ -12988,7 +12990,7 @@ export async function runLiveSurfacesLab(opts: {
           onScreen: source.onScreen,
           logicalSize:
             sckKinds[index] === "simulator" && simulatorResolution !== null
-              ? simulatorResolution.geometry.logicalSize
+              ? simulatorResolution.geometry?.logicalSize
               : { width: source.frame.width, height: source.frame.height },
         })),
         simulator:
@@ -13055,7 +13057,7 @@ export async function runLiveSurfacesLab(opts: {
       if (
         simulatorLab !== null &&
         (simulatorResolution === null ||
-          simulatorResolution.geometry.cropState !== "applied" ||
+          simulatorResolution.geometry?.cropState !== "applied" ||
           simulatorRuntime?.summary.geometry?.cropState !== "applied" ||
           (simulatorLab.rotate && simulatorRotation === null))
       ) {

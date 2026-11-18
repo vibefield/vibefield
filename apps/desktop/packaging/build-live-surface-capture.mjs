@@ -17,13 +17,18 @@ import { fileURLToPath } from "node:url";
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const sourceRoot = join(desktopRoot, "native", "macos", "live-surface-capture");
 const outputRoot = join(desktopRoot, "build", "native", "macos");
-const allowedArguments = new Set(["--with-fixture"]);
+const allowedArguments = new Set([
+  "--with-fixture",
+  "--with-simulator-framebuffer",
+  "--window-only",
+]);
 for (const argument of process.argv.slice(2)) {
   if (!allowedArguments.has(argument)) {
     throw new Error(`unknown native capture build option: ${argument}`);
   }
 }
 const withFixture = process.argv.includes("--with-fixture");
+const withFramebuffer = !process.argv.includes("--window-only");
 
 if (process.platform !== "darwin") {
   process.stdout.write("ScreenCaptureKit native build skipped — darwin only\n");
@@ -42,6 +47,7 @@ for (const source of [
   "helper.mm",
   "adapter.mm",
   ...(withFixture ? ["fixture.mm"] : []),
+  ...(withFramebuffer ? ["simulator-framebuffer.h", "simulator-framebuffer.mm"] : []),
 ]) {
   if (!existsSync(join(sourceRoot, source)))
     throw new Error(`native capture source missing: ${source}`);
@@ -156,6 +162,18 @@ try {
     [
       ...common,
       join(sourceRoot, "helper.mm"),
+      ...(withFramebuffer
+        ? [
+            "-DVF_SIMULATOR_FRAMEBUFFER_SUPPORT",
+            join(sourceRoot, "simulator-framebuffer.mm"),
+            "-framework",
+            "Metal",
+            "-framework",
+            "MetalPerformanceShaders",
+            "-framework",
+            "QuartzCore",
+          ]
+        : []),
       "-framework",
       "AppKit",
       "-framework",

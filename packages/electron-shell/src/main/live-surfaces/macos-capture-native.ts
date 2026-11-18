@@ -32,6 +32,7 @@ export interface MacosSimulatorViewportQuery {
 interface RawMacosCaptureAddon {
   start(serviceName: string, capabilityHex: string): void;
   setExpectedPeerPid(pid: number): void;
+  setFrameReadyCallback?(callback: () => void): void;
   drain(maximum: number): unknown;
   release(frameId: string): boolean;
   stats(): unknown;
@@ -114,6 +115,9 @@ export function loadMacosCaptureNativeAdapter(
   return {
     start: (serviceName, capabilityHex) => addon.start(serviceName, capabilityHex),
     setExpectedPeerPid: (pid) => addon.setExpectedPeerPid(pid),
+    ...(typeof addon.setFrameReadyCallback === "function"
+      ? { setFrameReadyCallback: addon.setFrameReadyCallback.bind(addon) }
+      : {}),
     drain: (maximum) => {
       const frames = addon.drain(maximum);
       if (!Array.isArray(frames)) throw new Error("native capture adapter returned a non-array");

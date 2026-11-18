@@ -8,6 +8,8 @@ import {
   RendererReplaceResult,
   type ScreenshotCaptureResult,
   ScreenshotPreviewResult,
+  type SimulatorSetupStatus,
+  SimulatorSetupTarget,
   type SoundAttention,
   type SoundPlayerState,
   type SoundPreviewCue,
@@ -267,6 +269,30 @@ export function registerRendererReplace(
     );
     reload(event.sender);
     return RendererReplaceResult.parse({ replacing: true });
+  });
+}
+
+/** The setup pane has two fixed native destinations. Only the focused product frame can open one. */
+export function registerSimulatorSetup(
+  registry: WindowRegistry,
+  setup: {
+    check(): Promise<SimulatorSetupStatus>;
+    open(target: SimulatorSetupTarget): Promise<void>;
+  },
+): void {
+  ipcMain.handle(IPC_CHANNELS.simulatorSetupCheck, (event) => {
+    if (!registry.owns(event.sender) || event.senderFrame !== event.sender.mainFrame)
+      throw new Error("Simulator setup requires a product window");
+    return setup.check();
+  });
+  ipcMain.handle(IPC_CHANNELS.simulatorSetupOpen, (event, target: unknown) => {
+    if (
+      !registry.owns(event.sender) ||
+      event.senderFrame !== event.sender.mainFrame ||
+      !event.sender.isFocused()
+    )
+      throw new Error("Simulator setup requires the focused product window");
+    return setup.open(SimulatorSetupTarget.parse(target));
   });
 }
 

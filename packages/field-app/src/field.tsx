@@ -266,6 +266,22 @@ export function FieldView({
         ce.ops.deleteSelection();
         return true;
       },
+      ...(new URLSearchParams(globalThis.location.search).get("simulatorBenchmark") === "1"
+        ? {
+            // Drive the same Open and Done operations as the selection bar without sending input to the Mac.
+            useWidget: (id: number | null): boolean => {
+              if (id === null) {
+                ce.ops.putDown();
+                return true;
+              }
+              const entity = id as Entity;
+              if (!Number.isInteger(id) || !ce.world.isAlive(entity)) return false;
+              ce.ops.setSelection([entity]);
+              ce.ops.open(entity);
+              return true;
+            },
+          }
+        : {}),
       frame: (entities: readonly string[]): void => {
         ce.ops.zoomToFit(entities.map((entity) => Number(entity) as Entity));
       },

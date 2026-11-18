@@ -58,20 +58,22 @@ let total = 0;
 for (const { device, url, info, what } of HEADS) {
   // the size a document holds for the device (a new pane's, a device switch's) — what a still spawns, so the keys agree
   const S = shapeOf(cutOf(device), device);
-  const st = headStateOf(url, S, info);
-  const tpu = bandDensity(S, bandFor(STILL_ZOOM_DPR));
-  const fav = st.favicon === "sample" ? (favicon as unknown as CanvasImageSource) : null;
-  const { width, height } = drawHead(canvas, ctx, S, st, tpu, fav);
-  const bm = headBitmap(ctx, width, height);
-  const engraving = base64(packRuns(bm.bytes, 0, width * bm.h, [3]));
-  const print = base64(packRuns(bm.bytes, bm.at * width, width * height, [0, 1, 2, 3]));
-  total += engraving.length + print.length;
-  rows.push(
-    `  // ${what}: ${width} × ${height} texels at ${tpu} a world unit\n  {\n    key: ${JSON.stringify(headKey(S, st, tpu))},\n    width: ${width},\n    height: ${height},\n    h: ${bm.h},\n    at: ${bm.at},\n    engraving:\n      ${JSON.stringify(engraving)},\n    print:\n      ${JSON.stringify(print)},\n  },`,
-  );
-  console.log(
-    `${what}: ${width} × ${height}, ${engraving.length + print.length} base64 characters`,
-  );
+  for (const interactive of [false, true]) {
+    const st = headStateOf(url, S, info, null, undefined, false, { interactive });
+    const tpu = bandDensity(S, bandFor(STILL_ZOOM_DPR));
+    const fav = st.favicon === "sample" ? (favicon as unknown as CanvasImageSource) : null;
+    const { width, height } = drawHead(canvas, ctx, S, st, tpu, fav);
+    const bm = headBitmap(ctx, width, height);
+    const engraving = base64(packRuns(bm.bytes, 0, width * bm.h, [3]));
+    const print = base64(packRuns(bm.bytes, bm.at * width, width * height, [0, 1, 2, 3]));
+    total += engraving.length + print.length;
+    rows.push(
+      `  // ${what}: ${width} × ${height} texels at ${tpu} a world unit\n  {\n    key: ${JSON.stringify(headKey(S, st, tpu))},\n    width: ${width},\n    height: ${height},\n    h: ${bm.h},\n    at: ${bm.at},\n    engraving:\n      ${JSON.stringify(engraving)},\n    print:\n      ${JSON.stringify(print)},\n  },`,
+    );
+    console.log(
+      `${what}: ${width} × ${height}, ${engraving.length + print.length} base64 characters`,
+    );
+  }
 }
 
 const out = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "head-still.gen.ts");

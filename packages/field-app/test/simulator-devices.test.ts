@@ -173,6 +173,19 @@ function service(over: { rows?: LiveSurfaceSimulatorDeviceRowV1[]; wanted?: bool
 }
 
 describe("PT-S2 (R11) — the host's devices: synchronous, from its last read, read while a phone stands", () => {
+  it("loads creation options on demand, coalesces simultaneous reads and refreshes after installation", async () => {
+    const s = service();
+    const a = { runtime: IOS_26_1, models: [{ deviceType: PRO, name: "iPhone 17 Pro" }] };
+    s.answer({ devices: [], configurations: [a] });
+    const load = () => s.devices.configurations!();
+    expect(await Promise.all([load(), load()])).toEqual([[a], [a]]);
+    expect(s.requests()).toHaveLength(1);
+    s.answer({ devices: [], configurations: [] });
+    expect(await load()).toEqual([]);
+    s.failWith(new Error("offline"));
+    await expect(load()).rejects.toThrow("offline");
+  });
+
   it("COLD it answers undefined — the act writes nothing — and nothing is read before a look", () => {
     const s = service();
     expect(s.devices.attachable(PRO)).toBeUndefined();
@@ -251,9 +264,12 @@ describe("PT-S2 (R11) — the host's devices: synchronous, from its last read, r
     expect(s.devices.attachable(PRO)).toBeUndefined();
   });
 
-  it("WATCH: the first look at once, then one each look's span on the window's timers; stopped, no timer stands", async () => {
+  it("polls only after a legacy plugin requests a synchronous device and stops with its last watcher", async () => {
     const s = service();
     const stop = s.devices.watch();
+    expect(s.manual.pending()).toEqual([]);
+    expect(s.devices.stats().reads).toBe(0);
+    s.devices.attachable(PRO);
     expect(s.devices.stats().looks).toBe(1);
     expect(s.manual.pending()).toEqual([SIMULATOR_DEVICES_LOOK_MS]);
     await vi.waitFor(() => expect(s.devices.stats().rows).toBe(1));

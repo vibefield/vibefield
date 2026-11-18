@@ -1,39 +1,19 @@
-// THE DEVICE SWITCH — the selection menu's acts (PT-1 scope 4: "Device ▸ Laptop · Desktop · iPad · iPhone"; core's
-// `MenuActionDef`, one undo step each). A device is a DENSITY as well as a viewport (devices.ts), so a switch re-cuts the
-// pane: to the device's own viewport at its density — a new `Size` — about the pane's centre (the prototype's
-// `setDevice`), and the `device` prop with it, ALL IN ONE TRANSACTION (PT-1 ruling 5: `Size` is the truth; a switch that
-// wrote the prop alone would leave a pane whose size reads another device's viewport).
-//
-// The act writes the object's `Position` and `Size` and its props' cell directly, through the menu's one transaction:
-// the `/desk` door carries no `Size` (a kind is handed its rect, never its components), so this module alone reads the
-// SDK's `/canvas` door — `Position`, `Size` and the widget catalog's read helper (said in the import wall and the note).
-//
-// PT-3 — the held bar's DEVICE tool runs the same switch on the pane in hand, to the next device (one undo step); and the
-// URL's cell is handed out from here (`urlCell` — the url lives in a cell of its own, the manifest's `page` group) for the
-// hand's one write of its own — a page's navigation into the `url` prop (hand.ts) — so this module stays the pane's only
-// reader of the `/canvas` door.
+// Object-menu settings write viewport size and emulation together, preserving the pane's centre
+// in one undo step. This module owns the canvas components; page navigation stays in its own URL cell.
 
 import { getWidgetType, Position, Size, type WidgetType } from "@vibefield/plugin-sdk/canvas";
 import type { Entity, HeldToolApi, MenuActionDef, World } from "@vibefield/plugin-sdk/desk";
-import { cutOf, DEVICES, type Device } from "./devices";
+import {
+  cutOf,
+  type Device,
+  deviceForProps,
+  deviceOf,
+  hundredth,
+  sizeOf,
+  viewportOf,
+} from "./devices";
 import { BROWSER_PANE_TYPE } from "./ids";
-
-/** Each device's word on the menu, and its glyph (the bar's 24-unit box, stroked). */
-const SWITCH: Readonly<Record<Device["id"], { readonly label: string; readonly path: string }>> = {
-  laptop: { label: "Laptop", path: "M5 6.5 H19 V15 H5 Z M3 18 H21" },
-  desktop: { label: "Desktop", path: "M3.5 5 H20.5 V16 H3.5 Z M12 16 V19.5 M8 19.5 H16" },
-  tablet: {
-    label: "iPad",
-    path: "M7 3.5 H17 A1.5 1.5 0 0 1 18.5 5 V19 A1.5 1.5 0 0 1 17 20.5 H7 A1.5 1.5 0 0 1 5.5 19 V5 A1.5 1.5 0 0 1 7 3.5 Z",
-  },
-  phone: {
-    label: "iPhone",
-    path: "M9 3.5 H15 A1.5 1.5 0 0 1 16.5 5 V19 A1.5 1.5 0 0 1 15 20.5 H9 A1.5 1.5 0 0 1 7.5 19 V5 A1.5 1.5 0 0 1 9 3.5 Z M11 18 H13",
-  },
-};
-
-/** The act id that switches a pane to `device`. */
-export const deviceActId = (device: Device["id"]): string => `device-${device}`;
+import { paneMenuOf } from "./menu-host";
 
 /** The cut a device switch lands: the device's own viewport at its density, about the old centre — a pane's Position and Size. */
 export function switchedRect(
@@ -59,44 +39,131 @@ export const urlCell = (): WidgetType["groups"][number]["component"] | undefined
   return group === undefined ? undefined : type?.groups.find((g) => g.name === group)?.component;
 };
 
-/** A switch to `device` of each pane named, in ONE transaction of the act's (one undo step). */
-function switchTo(
-  api: Pick<HeldToolApi, "transact"> & { readonly world: World },
-  entities: readonly Entity[],
-  device: Device,
-): void {
+export type PaneSettingsApi = Pick<HeldToolApi, "world" | "transact">;
+export const DEVICE_GLYPH = {
+  path: "M3 5 H16 V15 H3 Z M6 19 H12 M9 15 V19 M17 9 H21 V20 H14 V9 Z",
+};
+export const SOUND_ON = {
+  path: "M3 9 H7 L12 5 V19 L7 15 H3 Z M16 8 C19 10 19 14 16 16 M18 5 C23 8 23 16 18 19",
+};
+export const SOUND_OFF = { path: "M3 9 H7 L12 5 V19 L7 15 H3 Z M16 9 L22 15 M22 9 L16 15" };
+
+export const configureDevice = (api: PaneSettingsApi, entities: readonly Entity[]): void =>
+  paneMenuOf(api.world)?.configure(api, entities);
+
+/** A mixed selection mutes together; a silent selection turns sound on together. */
+export function togglePaneSound(api: PaneSettingsApi, entities: readonly Entity[]): void {
   const cell = propsCell();
-  if (cell === undefined) return;
-  api.transact((tx) => {
-    for (const e of entities) {
-      const at = api.world.get(e, Position);
-      const size = api.world.get(e, Size);
-      if (at === undefined || size === undefined) continue;
-      const next = switchedRect(at, size, device);
-      const props = (api.world.get(e, cell) ?? {}) as Record<string, unknown>;
-      tx.edit(e)
-        .set(Position, { x: next.x, y: next.y })
-        .set(Size, { w: next.w, h: next.h })
-        .set(cell, { ...props, device: device.id });
-    }
-  });
+  if (cell === undefined || entities.length === 0) return;
+  const muted = !entities.every(
+    (e) => (api.world.get(e, cell) as { muted?: boolean } | undefined)?.muted === true,
+  );
+  if (
+    api.transact((tx) => {
+      for (const e of entities) tx.edit(e).set(cell, { ...(api.world.get(e, cell) ?? {}), muted });
+    })
+  )
+    paneMenuOf(api.world)?.say(muted ? "Sound muted" : "Sound on");
 }
 
-/** The four acts: each re-cuts every selected pane to its device in ONE transaction (one undo step). */
-export const DEVICE_ACTS: readonly MenuActionDef[] = DEVICES.map((device) => ({
-  id: deviceActId(device.id),
-  label: SWITCH[device.id].label,
-  glyph: { path: SWITCH[device.id].path },
-  run: (api) => switchTo(api, api.entities, device),
-}));
+/** The object menu configures the browser environment. Navigation stays on the pane. */
+export const DEVICE_ACTS: readonly MenuActionDef[] = [
+  {
+    id: "device",
+    label: "Device emulation",
+    glyph: DEVICE_GLYPH,
+    run: (api) => configureDevice(api, api.entities),
+  },
+  {
+    id: "sound",
+    label: "Toggle sound",
+    glyph: SOUND_ON,
+    run: (api) => togglePaneSound(api, api.entities),
+  },
+];
 
-/** PT-3 — the held bar's DEVICE tool: the pane in hand to the NEXT device (laptop → desktop → iPad → iPhone → laptop), one undo step. */
-export function nextDevice(api: HeldToolApi): void {
+export interface PaneSettings {
+  readonly device: Device["id"];
+  readonly width: number;
+  readonly height: number;
+  readonly deviceScaleFactor: number;
+  readonly inputMode: string;
+  readonly userAgentMode: string;
+  readonly userAgent: string;
+  readonly navigatorPlatform: string;
+}
+export function readPaneSettings(world: World, entity: Entity): PaneSettings | undefined {
   const cell = propsCell();
-  const props = (cell === undefined ? undefined : api.world.get(api.entity, cell)) as
-    | Readonly<Record<string, unknown>>
-    | undefined;
-  const at = DEVICES.findIndex((d) => d.id === props?.device);
-  const next = DEVICES[(Math.max(at, 0) + 1) % DEVICES.length];
-  if (next !== undefined) switchTo(api, [api.entity], next);
+  const size = world.get(entity, Size);
+  if (cell === undefined || size === undefined) return undefined;
+  const props = (world.get(entity, cell) ?? {}) as Record<string, unknown>;
+  const device = deviceForProps(props);
+  const [width, height] = viewportOf(size, device);
+  return {
+    device: device.id,
+    width,
+    height,
+    deviceScaleFactor: device.dpr,
+    inputMode: device.mobile
+      ? device.touch
+        ? "mobile"
+        : "mobile-pointer"
+      : device.touch
+        ? "desktop-touch"
+        : "desktop",
+    userAgentMode: typeof props.userAgentMode === "string" ? props.userAgentMode : "device",
+    userAgent: typeof props.userAgent === "string" ? props.userAgent : "",
+    navigatorPlatform: typeof props.navigatorPlatform === "string" ? props.navigatorPlatform : "",
+  };
+}
+
+/** Resize and emulation changes are one undo step. Pixel-ratio changes may recreate the source. */
+export function applyPaneSettings(
+  api: PaneSettingsApi,
+  entities: readonly Entity[],
+  settings: PaneSettings,
+): boolean {
+  const { width, height, deviceScaleFactor: dpr } = settings;
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width < 320 ||
+    height < 240 ||
+    width > 8192 ||
+    height > 8192 ||
+    !Number.isFinite(dpr) ||
+    dpr < 0.5 ||
+    dpr > 8
+  )
+    return false;
+  if (
+    !["desktop", "desktop-touch", "mobile", "mobile-pointer"].includes(settings.inputMode) ||
+    !["device", "browser", "custom"].includes(settings.userAgentMode)
+  )
+    return false;
+  // Reject control characters before they reach the host's bounded device reader.
+  if (
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: user-agent headers cannot carry control characters
+    /[\u0000-\u001f\u007f]/u.test(settings.userAgent + settings.navigatorPlatform) ||
+    settings.userAgent.length > 512 ||
+    settings.navigatorPlatform.length > 32 ||
+    (settings.userAgentMode === "custom" && !settings.userAgent.trim())
+  )
+    return false;
+  const cell = propsCell();
+  if (cell === undefined || entities.length === 0) return false;
+  const cut = sizeOf([width, height], deviceOf(settings.device));
+  const next = { w: hundredth(cut.w), h: hundredth(cut.h) };
+  const { width: _w, height: _h, ...props } = settings;
+  return api.transact((tx) => {
+    for (const e of entities) {
+      const at = api.world.get(e, Position),
+        size = api.world.get(e, Size);
+      if (at === undefined || size === undefined) continue;
+      tx.edit(e)
+        .set(Position, { x: at.x + (size.w - next.w) / 2, y: at.y + (size.h - next.h) / 2 })
+        .set(Size, next)
+        .set(cell, { ...(api.world.get(e, cell) ?? {}), ...props });
+    }
+  });
 }

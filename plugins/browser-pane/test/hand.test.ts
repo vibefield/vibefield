@@ -53,7 +53,11 @@ function fakeLocal() {
   /** PT-6a (M7 C1): when pane 1's page last stirred it (the faces' stamp), and the clock a send stamps by */
   let stirredAt: number | undefined;
   let clock: () => number = () => 0;
-  const info = { address: PAGE, loading: undefined as number | undefined };
+  const info = {
+    address: PAGE,
+    loading: undefined as number | undefined,
+    extra: undefined as Record<string, unknown> | undefined,
+  };
   const local = {
     send: (e: Entity, input: LiveInput) => {
       calls.sent.push({ e, input });
@@ -97,7 +101,11 @@ function fakeEditor() {
   const listeners = new Map<string, (ev: KeyboardEvent) => void>();
   let held: EditorLease | undefined;
   const lends: { lease: EditorLease; caret: number | undefined }[] = [];
+  const attributes = new Map<string, string>();
   const element = {
+    getAttribute: (key: string) => attributes.get(key) ?? null,
+    setAttribute: (key: string, value: string) => attributes.set(key, value),
+    removeAttribute: (key: string) => attributes.delete(key),
     value: "",
     selected: 0,
     toggleAttribute() {},
@@ -214,8 +222,8 @@ function setup(opts: { inHand?: boolean; readOnly?: boolean; now?: () => number 
     writes,
     props,
     lease,
-    press: (x: number, y: number) => {
-      const ev = { clientX: x, clientY: y, preventDefault: vi.fn() };
+    press: (x: number, y: number, target?: unknown) => {
+      const ev = { clientX: x, clientY: y, target, preventDefault: vi.fn() };
       for (const fn of downs) fn(ev as unknown as PointerEvent);
       return ev.preventDefault;
     },
@@ -260,6 +268,18 @@ describe("the pane's hand on the editor (PT-3 rulings 6–9)", () => {
     t.editor.release();
     expect(t.hand.idle?.()).toBe(true);
     expect(t.hand.stats()).toMatchObject({ pageLeases: 2, addressLeases: 0 });
+  });
+
+  it("uses Escape to exit page fullscreen, then lets a subsequent Escape put the pane down", () => {
+    const t = setup();
+    t.hand.follow(0);
+    t.info.extra = { fullscreen: true };
+    expect(t.lease().keydown(key("Escape"))).toBe(true);
+    expect(t.calls.sent.at(-1)?.input).toMatchObject({ kind: "key", key: "Escape", phase: "down" });
+    t.info.extra = undefined;
+    const sent = t.calls.sent.length;
+    expect(t.lease().keydown(key("Escape"))).toBe(false);
+    expect(t.calls.sent).toHaveLength(sent);
   });
 
   it("PT-6a (M7, C1) — a HELD pane lets the desk SLEEP once its lease is the hand's and its page has not stirred it for 250 ms; a frame's arrival, a key, a wheel and the lease's end each wake it (before: never idle while held — a still page held stepped the desk every frame)", () => {
@@ -390,7 +410,12 @@ describe("the pane's hand on the editor (PT-3 rulings 6–9)", () => {
     const place = lease.place() as EditorPlace;
     expect(place.x).toBeCloseTo(FRAME.cx + (ax - ahx) * FRAME.s, 9);
     expect(place.y).toBeCloseTo(FRAME.cy + (ay - extentV - ahy) * FRAME.s, 9);
-    expect(place.w).toBeCloseTo(2 * ahx * FRAME.s, 9);
+    const L = bandLayout(S);
+    expect(place.w).toBeCloseTo((L.reload![0] - L.glyph * 0.8 - (ax - ahx)) * FRAME.s, 9);
+    expect(t.element.getAttribute("inputmode")).toBe("url");
+    // Clicking the editor keeps native caret/selection handling; clicking the page cancels the draft.
+    expect(t.press(610, 420, t.element)).not.toHaveBeenCalled();
+    expect(t.lease().part).toBe("vibefield.browser-pane.address");
     // typing goes to the field, never the page
     lease.input("http://127.0.0.1:4321/n");
     expect(t.calls.sent).toEqual([]);
@@ -405,12 +430,12 @@ describe("the pane's hand on the editor (PT-3 rulings 6–9)", () => {
     t.hand.address(1 as Entity);
     expect(t.lease().keydown(key("Escape"))).toBe(true);
     expect(t.hand.stats().pageLeases).toBe(3);
-    // an address that is not a web page (nothing typed: the sample) is the pane's url, written — never sent to the page
+    // Empty Enter returns to the current page without replacing it with a sample.
     t.hand.address(1 as Entity);
     t.element.value = "";
     t.lease().keydown(key("Enter"));
     expect(t.calls.navigations).toHaveLength(1);
-    expect(t.writes.at(-1)?.value).toMatchObject({ url: "https://lumen.example/" });
+    expect(t.writes).toEqual([]);
   });
 
   it("a press over the held pane keeps the editor's focus; one beside it does not", () => {
@@ -421,6 +446,21 @@ describe("the pane's hand on the editor (PT-3 rulings 6–9)", () => {
     expect(
       t.press(FRAME.cx + 10 + (EXT.w / 2) * FRAME.s + 5, FRAME.cy + 20),
     ).not.toHaveBeenCalled();
+  });
+
+  it("re-focuses the page on a pane press without sending already typed text again", () => {
+    const t = setup();
+    t.hand.follow(0);
+    const page = t.lease();
+    page.input("a");
+    t.press(FRAME.cx + 10, FRAME.cy + 20);
+    expect(t.lends).toHaveLength(2);
+    expect(t.lease()).toBe(page);
+    page.input("ab");
+    expect(t.calls.sent.map((call) => call.input)).toEqual([
+      { kind: "text", text: "a" },
+      { kind: "text", text: "b" },
+    ]);
   });
 
   it("a page's own NAVIGATION writes its url NOT undoably (ruling 9), once per address — and nothing into a read-only document", () => {

@@ -9,7 +9,7 @@
 //   IDLE    — the page still: no desk frame and no present over 1.2 s;
 //   PLAYING — the fixture's runner crossing at ~30 a second: the face presented at the source's rate (18–40 a second), the desk
 //             drawing as many frames give or take a few, its writer never remade (one writer, one texture epoch);
-//   HELD    — ⏎ picks it up: the kind asks the native raster at 60, interactive, and the pool's wire says 60, interactive,
+//   HELD    — ⏎ picks it up: the kind asks for its displayed raster at 60, interactive, and the pool's wire says 60, interactive,
 //             priority 80; Esc puts it down;
 //   UNSEEN  — the view panned until the pane is off screen: the kind's ask and the wire paused, and no frame ARRIVES over
 //             1.2 s though the page still plays (the source paused, not merely undrawn); panned back;
@@ -238,7 +238,7 @@ export function judgePlaying(seen: LiveSeen["playing"]): string[] {
   return out;
 }
 
-/** HELD: the kind asks native at 60, interactive; the wire says 60, interactive, priority 80. */
+/** HELD: the kind asks for interactive frames at 60, interactive; the wire says 60, interactive, priority 80. */
 export function judgeHeld(seen: LiveSeen["held"]): string[] {
   const out: string[] = [];
   if (!seen.held) out.push("HELD: the pane never came into the hand");

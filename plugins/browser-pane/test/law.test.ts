@@ -423,25 +423,24 @@ describe("resizing and the stream", () => {
     expect(edgeAt(G, middle[0], middle[1], 9, 1)).toBeNull();
   });
 
-  it("the demand: at rest a halving of the native capture that covers the page's pixels at 30 or 12 fps; in use the native at 60; off screen 0; a rung held through a wobble", () => {
+  it("the demand: at rest a capture that covers the page's pixels at the preview rate; in use a capture covering the page at 60; off screen 0; a rung held through a wobble", () => {
     const { S, G } = pane("laptop");
     const [nw, nh] = nativeOf(S);
     expect([nw, nh]).toEqual([2560, 1600]);
     const d1 = pageDemand(G, view(0, 0, 1), 2, false);
-    expect(d1.width).toBe(2560);
-    expect(d1.fps).toBe(30); // ~1344 device px wide at zoom 1: the native rung covers it, the half does not
+    expect(d1.width).toBe(1440);
+    expect(d1.fps).toBe(30); // about 1344 device pixels across at zoom 1
     const d03 = pageDemand(G, view(0, 0, 0.3), 2, false);
-    expect(d03.width).toBe(640);
-    expect(d03.height).toBe(400);
+    expect(d03.width).toBe(480);
+    expect(d03.height).toBe(300);
     expect(d03.fps).toBe(30);
     const d01 = pageDemand(G, view(0, 0, 0.1), 2, false);
     expect(d01.width).toBe(320);
     expect(d01.fps).toBe(15); // the prototype's 12 is no LSF bucket (PT-2 ruling 5)
     const use = pageDemand(G, view(0, 0, 1), 2, true);
-    expect([use.width, use.height, use.fps]).toEqual([2560, 1600, 60]);
+    expect([use.width, use.height, use.fps]).toEqual([1440, 900, 60]);
     expect(pageDemand(G, view(5000, 0, 1), 2, false).fps).toBe(0);
-    // held: the half rung stays while it still covers the page and is under 2.3× it
-    expect(pageDemand(G, view(0, 0, 0.45), 2, false, BROWSER, 1280).width).toBe(1280);
+    expect(pageDemand(G, view(0, 0, 0.45), 2, false, BROWSER, 1280).width).toBe(640);
     expect(glowLevel(2560)).toBeCloseTo(Math.log2(2560 / 24), 9);
   });
 });
@@ -518,26 +517,32 @@ describe("the live page's demand over the SIGHT (PT-2 ruling 5)", () => {
     });
   });
 
-  it("held is the native capture at 60, interactive", () => {
+  it("fits a held desktop capture to both displayed dimensions and keeps mobile emulation native", () => {
     expect(paneDemand(at(900, true), laptop())).toEqual({
       mode: "live",
       fps: 60,
-      raster: [2560, 1600],
+      raster: [960, 600],
       viewport: [1280, 800],
       interactive: true,
     });
-    // a phone's native is its own 3× capture
+    expect(paneDemand({ ...at(800, true), px: [800, 1180] }, laptop()).raster).toEqual([
+      1920, 1200,
+    ]);
+    expect(paneDemand(at(2880, true), laptop()).raster).toEqual([2560, 1600]);
+    expect(paneDemand(at(1270, true), laptop(), 1440).raster).toEqual([1440, 900]);
+    expect(paneDemand(at(1190, true), laptop(), 1440).raster).toEqual([1280, 800]);
+    // Mobile input and visual viewport emulation share the native capture.
     expect(paneDemand(at(300, true), phone()).raster).toEqual([1206, 2622]);
   });
 
-  it("at rest: the halving of native that covers the page's device px — at most three — 30 fps from 320 device px, 15 under", () => {
+  it("fits desktop previews to displayed pixels and preserves the near and far rates", () => {
     const S = laptop();
     expect(paneDemand(at(2560), S)).toMatchObject({ mode: "live", fps: 30, raster: [2560, 1600] });
-    expect(paneDemand(at(1500), S).raster).toEqual([2560, 1600]); // 1280 does not cover 1500
+    expect(paneDemand(at(1500), S).raster).toEqual([1600, 1000]);
     expect(paneDemand(at(1280), S).raster).toEqual([1280, 800]);
-    expect(paneDemand(at(700), S).raster).toEqual([1280, 800]);
+    expect(paneDemand(at(700), S).raster).toEqual([800, 500]);
     expect(paneDemand(at(640), S).raster).toEqual([640, 400]);
-    expect(paneDemand(at(330), S)).toMatchObject({ fps: 30, raster: [640, 400] });
+    expect(paneDemand(at(330), S)).toMatchObject({ fps: 30, raster: [480, 300] });
     expect(paneDemand(at(300), S)).toMatchObject({ fps: 15, raster: [320, 200] });
     // never past three halvings, however small
     expect(paneDemand(at(40), S)).toMatchObject({
@@ -549,16 +554,14 @@ describe("the live page's demand over the SIGHT (PT-2 ruling 5)", () => {
       expect(paneDemand(at(px), S).viewport).toEqual([1280, 800]);
   });
 
-  it("holds a rung through a wobble: kept while it still covers the page and is under 2.3× it", () => {
+  it("keeps a desktop capture through a small boundary crossing and resizes when coverage changes", () => {
     const S = laptop();
-    // zooming out from 1280 → 1100 px: 1280 still covers and is under 2.3×, so it stays (fresh, 1280 too)
     expect(paneDemand(at(1100), S, 1280).raster).toEqual([1280, 800]);
-    // at 600 px a fresh ask is 640, but the held 1280 is under 2.3 × 600 = 1380: it stays
-    expect(paneDemand(at(600), S, 1280).raster).toEqual([1280, 800]);
-    // at 500 px the held 1280 is past 2.3 × 500 = 1150: it drops to the rung that covers
-    expect(paneDemand(at(500), S, 1280).raster).toEqual([640, 400]);
-    // a held rung that no longer covers the page is dropped
-    expect(paneDemand(at(900), S, 640).raster).toEqual([1280, 800]);
+    expect(paneDemand(at(1030), S, 1280).raster).toEqual([1120, 700]);
+    expect(paneDemand(at(600), S, 1280).raster).toEqual([640, 400]);
+    expect(paneDemand(at(900), S, 640).raster).toEqual([960, 600]);
+    expect(paneDemand(at(2500), phone()).raster).toEqual([1206, 2622]);
+    expect(paneDemand(at(299), phone(), 603).raster).toEqual([603, 1311]);
   });
 
   it("speaks change-only: the same ask is the same demand", () => {

@@ -54,6 +54,7 @@ class FakeNativeAdapter implements MacosCaptureNativeAdapter {
 }
 
 interface FakeHelperOptions {
+  readonly frameSource?: "simulator-framebuffer" | "window";
   readonly sourceRef?: string;
   readonly readyPid?: number;
   readonly windowId?: number;
@@ -160,7 +161,14 @@ class FakeHelper extends EventEmitter {
     };
     const event = events[String(type)];
     if (event !== undefined) {
-      this.output({ ...base, event, ...(type === "request-permission" ? { granted: true } : {}) });
+      this.output({
+        ...base,
+        event,
+        ...(type === "start" && this.options.frameSource
+          ? { frameSource: this.options.frameSource }
+          : {}),
+        ...(type === "request-permission" ? { granted: true } : {}),
+      });
     }
   }
 
@@ -295,6 +303,82 @@ describe("MacosCaptureHelperSupervisor", () => {
       nativeOutstandingPeak: 1,
     });
     await result.supervisor.dispose();
+  });
+
+  it("drains only on native notifications and ignores notifications from a retired receiver", async () => {
+    vi.useFakeTimers();
+    const { adapter, supervisor, helpers } = setup();
+    const listeners: Array<() => void> = [];
+    Object.assign(adapter, { setFrameReadyCallback: (ready: () => void) => listeners.push(ready) });
+    const drain = vi.spyOn(adapter, "drain");
+    const frames: SckCaptureFrame[] = [];
+    const start = async () => {
+      const [source] = await supervisor.enumerateWindows();
+      await supervisor.startSession(request(source!.sourceRef, (frame) => frames.push(frame)));
+      const command = helpers.at(-1)!.commands.find((item) => item["type"] === "start")!;
+      return command["sessionKey"] as string;
+    };
+    const first = await start();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(drain).not.toHaveBeenCalled();
+    adapter.queue.push(nativeFrame(first));
+    listeners[0]!();
+    expect(frames).toHaveLength(1);
+    frames[0]!.releaseLocal();
+    frames[0]!.releaseLease("released");
+
+    helpers[0]!.crash();
+    const next = await start();
+    adapter.queue.push(nativeFrame(next));
+    listeners[0]!();
+    expect(drain).toHaveBeenCalledTimes(1);
+    listeners[1]!();
+    expect(frames).toHaveLength(2);
+    frames[1]!.releaseLocal();
+    frames[1]!.releaseLease("released");
+    await supervisor.dispose();
+    listeners[1]!();
+    expect(drain).toHaveBeenCalledTimes(2);
+  });
+
+  it("requires native confirmation and uses the device geometry for direct frames", async () => {
+    vi.useFakeTimers();
+    const direct = setup(() => ({ frameSource: "simulator-framebuffer" }));
+    const [source] = await direct.supervisor.enumerateWindows();
+    const frames: SckCaptureFrame[] = [];
+    const options = {
+      ...request(source!.sourceRef, (frame) => frames.push(frame)),
+      simulatorFramebufferDevice: "F93EABF3-4281-4EB5-A5F6-A550FBE95CDC",
+      geometry: {
+        logicalSize: { width: 400, height: 800 },
+        orientation: 0 as const,
+        cropState: "degraded" as const,
+      },
+    };
+    await direct.supervisor.startSession(options);
+    const start = direct.helpers[0]!.commands.find((c) => c["type"] === "start")!;
+    expect(start["simulatorDevice"]).toBe(options.simulatorFramebufferDevice);
+    direct.adapter.queue.push(nativeFrame(start["sessionKey"] as string));
+    await vi.advanceTimersByTimeAsync(10);
+    expect(frames[0]).toMatchObject({
+      logicalSize: { width: 320, height: 180 },
+      cropState: "applied",
+    });
+    expect(direct.supervisor.stats.simulatorFramebufferStarts).toBe(1);
+    frames[0]!.releaseLocal();
+    frames[0]!.releaseLease("released");
+    await direct.supervisor.dispose();
+
+    const ordinary = setup(() => ({ frameSource: "window" }));
+    const [other] = await ordinary.supervisor.enumerateWindows();
+    await expect(
+      ordinary.supervisor.startSession({
+        ...options,
+        source: { ...options.source, sourceRef: other!.sourceRef },
+      }),
+    ).rejects.toThrow(/did not confirm/);
+    expect(ordinary.supervisor.stats.simulatorFramebufferStarts).toBe(0);
+    await ordinary.supervisor.dispose();
   });
 
   it("applies a main-proven logical Simulator geometry without changing native pixels", async () => {

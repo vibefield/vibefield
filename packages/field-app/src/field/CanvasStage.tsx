@@ -6,6 +6,7 @@ import {
   objectKindOf,
 } from "@vibecook/ice/desk";
 import { Desk, type LayerFactory } from "@vibecook/ice/react";
+import type { LiveSurfaceFrameMetadataV1 } from "@vibefield/contracts";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type ReactElement,
@@ -49,6 +50,17 @@ import { objectWords, stagedTitles } from "./desk/desk-object-words";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
 import { PeersOnTheMat } from "./desk/peers/PeersOnTheMat";
 import { bindDeskZoomFeedback } from "./desk/zoom-feedback";
+
+interface BenchFaceClock {
+  arrived: number | null;
+  frames: { source: number | null; host: number; arrived: number | null; presented: number }[];
+}
+
+function timingFace(key: string): BenchFaceClock | undefined {
+  return (globalThis as { __vfSurfaceClocks?: Record<string, BenchFaceClock> }).__vfSurfaceClocks?.[
+    key
+  ];
+}
 
 // THE CANVAS STAGE (§5.4.3; DK-3, the host swap): the DESK drawn — ICE's `<Desk engine layer>` over
 // this generation's engine, mounted INSIDE the generation-keyed recede wrapper, so one stage lifetime
@@ -163,7 +175,11 @@ export function CanvasStage({
     devices: DeskSimulatorDevices | undefined;
   }>(() => {
     const dressed = themeRef.current;
-    const gpu = deskGpu(mount, typeof location === "undefined" ? "" : location.search);
+    const search = typeof location === "undefined" ? "" : location.search;
+    const query = new URLSearchParams(search);
+    const benchmark = query.get("simulatorBenchmark") === "1";
+    const previewBatch = query.get("simulatorPreviewBatch");
+    const gpu = deskGpu(mount, search);
     // PT-2 — THE DESK'S LIVE PAGES, one service per mount: its writers on THIS mount's device (`onDevice`), its pages in the
     // window's LSF pool (whose grace keeps a page attached across a remount), its gate the window's registry — by the object
     const eyes = createLiveEyes(ce);
@@ -182,6 +198,36 @@ export function CanvasStage({
             gate: createLiveGate({ engine: ce, registry }),
             device: () => deviceRef.current ?? undefined,
             writer: createLiveTexture,
+            ...(previewBatch !== "0"
+              ? {
+                  // Two moving phones can share a redraw. The diagnostic override also compares a lone phone and browser.
+                  minimumMovingSimulators: previewBatch === "1" ? 1 : 2,
+                  batchPreviews: () =>
+                    !benchmark ||
+                    (globalThis as { __vfImmediatePreviews?: boolean }).__vfImmediatePreviews !==
+                      true,
+                }
+              : {}),
+            ...(benchmark
+              ? {
+                  onArrived(key: string) {
+                    const face = timingFace(key);
+                    if (face) face.arrived = performance.now();
+                  },
+                  onPresented(key: string, frame: LiveSurfaceFrameMetadataV1) {
+                    const face = timingFace(key);
+                    if (!face || face.frames.length >= 2048) return;
+                    face.frames.push({
+                      source: frame.producerTimestamp
+                        ? Number(frame.producerTimestamp.timestampUs) / 1000
+                        : null,
+                      host: Number(frame.hostReceivedAtUs) / 1000,
+                      arrived: face.arrived,
+                      presented: performance.now(),
+                    });
+                  },
+                }
+              : {}),
             // PT-5b — the last still (kept on this device's shelf under the document and the object; the host's two hands
             // on a page's pixels) and the cap's eyes (how near the view's centre a pane lies; whether its object stands)
             docId: () => docIdRef.current,
@@ -199,6 +245,7 @@ export function CanvasStage({
         ? undefined
         : createSimulatorDevices({
             mintClient: currentWindowClient,
+            setup: peekHost()?.simulatorSetup,
             wanted: simulatorObjectsStand({ engine: ce, registry }),
           });
     const factory = fieldDeskLayer({

@@ -38,6 +38,7 @@ import {
 import * as pane from "@vibefield/plugin-browser-pane";
 import { productPalette } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it, vi } from "vitest";
+import { bindPaneMenu } from "../../../plugins/browser-pane/src/menu-host";
 import { buildDevRegistry, buildRegistry, createFieldEngine } from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
 
@@ -59,6 +60,33 @@ const withPane = () =>
   });
 
 const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
+
+/** The settings dialog submits through the real menu's document transaction. */
+function applyPreset(ce: ReturnType<typeof createFieldEngine>, id: pane.Device["id"]) {
+  let applied = false;
+  bindPaneMenu(ce.world, {
+    configure(api, entities) {
+      const device = pane.deviceOf(id);
+      applied = pane.applyPaneSettings(api, entities, {
+        device: id,
+        width: device.width,
+        height: device.height,
+        deviceScaleFactor: device.dpr,
+        inputMode: device.mobile ? "mobile" : "desktop",
+        userAgentMode: "device",
+        userAgent: "",
+        navigatorPlatform: "",
+      });
+    },
+    say() {},
+  });
+  try {
+    expect(ce.ops.runMenuAction("device")).toBe(true);
+    expect(applied).toBe(true);
+  } finally {
+    bindPaneMenu(ce.world, undefined);
+  }
+}
 
 /** A fresh pane on a real document with ICE's real editor. Only the live-page producer is a test double. */
 function firstUse() {
@@ -267,9 +295,10 @@ describe("the host compiles VibeField's browser pane as ICE compiles a built-in 
       ["reload", "action", ["mod+r"]],
       ["address", "action", ["mod+l"]],
       ["device", "action", []],
+      ["sound", "action", []],
     ]);
     // the device switch on the selection menu
-    expect(widget?.menu.map((a) => a.label)).toEqual(["Laptop", "Desktop", "iPad", "iPhone"]);
+    expect(widget?.menu.map((a) => a.label)).toEqual(["Device emulation", "Toggle sound"]);
     // its interaction: carried by core's drag, resized by core's handles (they write Size — the viewport follows)
     const ce = createFieldEngine(withPane());
     ce.docs.create();
@@ -307,7 +336,7 @@ describe("the host compiles VibeField's browser pane as ICE compiles a built-in 
     const centre = { x: at.x + pane.PANE_SIZE.w / 2, y: at.y + pane.PANE_SIZE.h / 2 };
 
     ce.ops.setSelection([e]);
-    expect(ce.ops.runMenuAction(pane.deviceActId("phone"))).toBe(true);
+    applyPreset(ce, "phone");
     ce.world.sync();
     const phone = pane.deviceById("phone");
     if (phone === undefined) throw new Error("phone");
@@ -382,7 +411,7 @@ describe("the host compiles VibeField's browser pane as ICE compiles a built-in 
 
     // a device switch (one transaction, one undo step), then the page goes of its own again: its undo leaves the url too
     ce.ops.setSelection([e]);
-    expect(ce.ops.runMenuAction(pane.deviceActId("phone"))).toBe(true);
+    applyPreset(ce, "phone");
     ce.world.sync();
     navigate(PEER);
     expect(props()).toMatchObject({ url: PEER, device: "phone" });

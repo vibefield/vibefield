@@ -97,8 +97,9 @@ describe("the SDK's /desk door", () => {
     // the spec names the binding's two CoreSimulator ids — never a UDID — the device's name and the desk's scheme
     expectTypeOf<door.LiveSimulatorSpec["source"]>().toEqualTypeOf<"ios-simulator">();
     expectTypeOf<keyof door.LiveSimulatorSpec>().toEqualTypeOf<
-      "source" | "deviceType" | "runtime" | "label" | "scheme"
+      "source" | "deviceType" | "runtime" | "dedicated" | "label" | "scheme"
     >();
+    expectTypeOf<door.LiveSimulatorSpec["dedicated"]>().toEqualTypeOf<boolean | undefined>();
     expectTypeOf<door.LiveSimulatorSpec["scheme"]>().toEqualTypeOf<"light" | "dark">();
     // the face's words ride ICE's own `LiveInfo.extra` (the desk never reads them); the act is the host's, run by the kind
     expectTypeOf<iceKit.LiveInfo>().toMatchTypeOf<Parameters<typeof door.liveSimulatorFace>[0]>();
@@ -110,12 +111,19 @@ describe("the SDK's /desk door", () => {
     expect(typeof door.liveSimulatorFace).toBe("function");
   });
 
-  it("PT-S2: keys this Mac's attachable devices beside LIVE — a synchronous answer, a binding and never a UDID (R11)", () => {
+  it("exposes the installed runtime catalog and preserves the synchronous device lookup", () => {
     // the phone's second service: its own key, never LIVE's nor a page's navigation
     expect(door.SIMULATOR_DEVICES.name).toBe("vibefield.simulator.devices");
     expect(door.SIMULATOR_DEVICES).not.toBe(door.LIVE);
     expect(door.SIMULATOR_DEVICES.name).not.toBe(door.BROWSER_NAVIGATION.name);
-    // a menu act runs once and writes in its own transaction: the answer is the host's last read, never a promise
+    expectTypeOf<door.SimulatorDevices["configurations"]>().toEqualTypeOf<
+      (() => Promise<readonly door.SimulatorRuntimeOption[]>) | undefined
+    >();
+    expectTypeOf<door.SimulatorRuntimeOption["models"][number]>().toEqualTypeOf<{
+      readonly deviceType: string;
+      readonly name: string;
+    }>();
+    // Older plugins can continue reading the last device snapshot synchronously.
     expectTypeOf<door.SimulatorDevices["attachable"]>().toEqualTypeOf<
       (prefer: string) => door.LiveSimulatorBinding | undefined
     >();

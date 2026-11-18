@@ -1,3 +1,5 @@
+import type { LiveInput } from "@vibefield/plugin-sdk/desk";
+import { type PhoneGeometry, pickPhone } from "./law";
 // The phone's DESK STATE — the kind's own state on ONE desk (`ObjectKind.local`): flux, never a world fact (the facts are the
 // phone's props and its rect).
 //  - Each bound phone's LIVE FACE (live.ts): opened by the object's durable key on the host's `LIVE` service, taken when it
@@ -8,11 +10,8 @@
 //    Node still), the committed raster their key names (face-words.ts), else none — cached by what they say, their texture
 //    charged to the desk's raster budget under the kind's name (`notice <key>`) and let go at its eviction — laid again from
 //    its record when the phone is next drawn;
-//  - IN HAND (used — the open binding): the hand's press on the face's act's capsule runs the act on its release over it
-//    (the host's — it manages the device, never iOS); every other press is the desk's (view-only until PT-S4's touch
-//    lands);
-//  - PT-S2 — THIS MAC'S DEVICES (`devices()`): what the host lends under `SIMULATOR_DEVICES`, read by the menu's Attach
-//    (attach.ts) — the device a phone binds to, answered from the host's last read.
+//  - In hand, status actions own their presses. The live glass forwards pointer and wheel input in guest coordinates.
+//  - Simulator settings reads compatible iPhone models and installed iOS runtimes through the host's device service.
 // A loop at rest ticks the kind only when it is due: nothing is polled.
 
 import {
@@ -91,6 +90,9 @@ export interface SimulatorLocal extends KindLocal {
   /** What the faces did (a test's and a smoke's witness). */
   faces(): PhoneFaceStats;
   /** PT-S2 — this Mac's devices as the host lends them (`SIMULATOR_DEVICES`), or undefined: none lent on this desk. */
+  laid(e: Entity, geometry: PhoneGeometry, cx: number, cy: number, zoom: number): void;
+  interactive(e: Entity): boolean;
+  send(e: Entity, event: LiveInput): void;
   devices(): SimulatorDevices | undefined;
   /** Words drawn, and acts run, since the desk was made (a test's witness). */
   readonly notices: number;
@@ -114,6 +116,14 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
   const offers = new Map<Entity, () => void>();
   /** A press in hand on the act's capsule, until its release. */
   const pressing = new Set<Entity>();
+  const layouts = new Map<
+    Entity,
+    { geometry: PhoneGeometry; cx: number; cy: number; zoom: number }
+  >();
+  const fingers = new Map<Entity, readonly [number, number]>();
+  const interactive = (e: Entity): boolean =>
+    live.opened(e)?.info().extra?.deviceInput === true && live.opened(e)?.state().is === "live";
+  const send = (e: Entity, event: LiveInput): void => live.opened(e)?.input?.(event);
   let notices = 0;
   let acts = 0;
 
@@ -160,10 +170,17 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
     drop(e) {
       live.drop(e);
       noticed.delete(e);
+      layouts.delete(e);
+      fingers.delete(e);
       offers.delete(e);
       pressing.delete(e);
       release(e);
     },
+    laid: (e, geometry, cx, cy, zoom) => {
+      layouts.set(e, { geometry, cx, cy, zoom });
+    },
+    interactive,
+    send,
     sight: live.sight,
     screen: (e) => live.words(e),
     texture: (e) => live.opened(e)?.texture(),
@@ -227,10 +244,43 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
     due: (now) => (morphs.running() ? now : live.due(now)),
     // words laid after their record change how the phone looks with no fact of its own moving
     landed: (e) => doors()?.made(e as number) ?? 0,
-    // THE HAND (view-only until PT-S4's touch lands): a press on the act's capsule is the act's, run on its release over
-    // it; nothing else is the kind's
+    // Project input into the displayed device frame. A status action owns its own press and release.
     held(e, events: readonly HeldEvent[]) {
       for (const ev of events) {
+        const layout = layouts.get(e);
+        if (layout && interactive(e)) {
+          const hit = pickPhone(layout.geometry, layout.cx + ev.x, layout.cy + ev.y);
+          const points = layout.geometry.shape.points;
+          const logical = live.opened(e)?.texture()?.logical ?? points;
+          const xy: readonly [number, number] | undefined =
+            hit?.part === "screen"
+              ? [(hit.point[0] * logical[0]) / points[0], (hit.point[1] * logical[1]) / points[1]]
+              : fingers.get(e);
+          if (xy && ev.type === "wheel") {
+            const scale = logical[0] / (2 * layout.geometry.shape.display[0] * layout.zoom);
+            send(e, { kind: "wheel", x: xy[0], y: xy[1], dx: ev.dx * scale, dy: ev.dy * scale });
+            continue;
+          }
+          if (
+            xy &&
+            ev.type === "pointer" &&
+            ev.part !== "act" &&
+            (ev.phase === "down" ? ev.button === 0 && hit?.part === "screen" : fingers.has(e))
+          ) {
+            if (ev.phase === "up") fingers.delete(e);
+            else fingers.set(e, xy);
+            send(e, {
+              kind: "pointer",
+              phase: ev.phase,
+              x: xy[0],
+              y: xy[1],
+              button: ev.button,
+              buttons: ev.buttons,
+              count: ev.count,
+            });
+            continue;
+          }
+        }
         if (ev.type !== "pointer") continue;
         if (ev.phase === "down" && ev.part === "act") pressing.add(e);
         else if (ev.phase === "up" && pressing.delete(e) && ev.part === "act") {
@@ -247,6 +297,8 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
       live.forget(e);
       morphs.forget(e);
       noticed.delete(e);
+      layouts.delete(e);
+      fingers.delete(e);
       offers.delete(e);
       pressing.delete(e);
       release(e);
@@ -255,6 +307,8 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
       for (const e of [...rows.keys()]) release(e);
       live.dispose();
       noticed.clear();
+      layouts.clear();
+      fingers.clear();
       offers.clear();
       pressing.clear();
       wired?.onNotice(undefined);

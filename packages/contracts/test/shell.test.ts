@@ -249,7 +249,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   // meet at it in a merge and conflict out loud, where a number in the title
   // went stale in silence (item 102, found at HN's rebase rehearsal).
   it("exposes exactly its channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toHaveLength(43);
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(45);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "zoomHaptic",
       "windowBootstrap",
@@ -292,6 +292,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "handFileKept",
       "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
       "browserDataClear", // BP-D4 — Settings' Clear browsing data: the desk's profile cleared, its pages reloaded
+      "simulatorSetupCheck",
+      "simulatorSetupOpen",
       "clipboardRead", // item 102 — a paste's read through main, for the focused product window
       // HN-5 — a copy's picture written through main, for a registered window (no focus, LC-18)
       "clipboardWriteImage",
@@ -342,6 +344,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       handFileKept: "vibefield:screenshot:hand-file-kept",
       rendererReplace: "vibefield:shell:renderer-replace",
       browserDataClear: "vibefield:browser:clear-data",
+      simulatorSetupCheck: "vibefield:simulator:setup-check",
+      simulatorSetupOpen: "vibefield:simulator:setup-open",
       clipboardRead: "vibefield:clipboard:read",
       clipboardWriteImage: "vibefield:clipboard:write-image",
       soundAttention: "vibefield:sound:attention",

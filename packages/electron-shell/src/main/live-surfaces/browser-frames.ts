@@ -409,18 +409,19 @@ export class BrowserFrames {
    * `WHEEL_LATCH_MS` after the last goes where it went, the point carried into it (a frame the page scrolls under the
    * pointer mid-gesture takes none of it: the page's scroll went on through every embed it passed); its target gone, a new
    * gesture; a frame's late answer moves it to the frame's parent (PT-6a M1, `wheelAnswered`). `now`: when the wheel
-   * ARRIVED (ms) — M12 J9: never when its turn ran. */
-  wheel(x: number, y: number, now: number): FrameRouted {
+   * ARRIVED (ms) — M12 J9: never when its turn ran. `until` is the last arrival in a coalesced batch: compare its first
+   * event against the previous gesture, then retain its last event for the next gesture decision. */
+  wheel(x: number, y: number, now: number, until = now): FrameRouted {
     const latched = this.#wheel;
     if (latched !== undefined && now - latched.at < WHEEL_LATCH_MS) {
       const routed = this.to(latched.target, x, y);
       if (routed !== null) {
-        latched.at = now;
+        latched.at = until;
         return routed;
       }
     }
     const routed = this.at(x, y);
-    this.#wheel = { target: routed.target, at: now };
+    this.#wheel = { target: routed.target, at: until };
     return routed;
   }
 

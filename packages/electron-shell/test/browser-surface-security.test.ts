@@ -103,6 +103,35 @@ describe("Browser Live Surface security", () => {
     });
     expect(granted).toBe(false);
     expect(permissionCheck({}, "media")).toBe(false);
+    const contents = {
+      on() {
+        return contents;
+      },
+      setWindowOpenHandler() {},
+    };
+    installGuardedBrowserSurfaceContents(contents);
+    permissionRequest(contents, "fullscreen", (value) => {
+      granted = value;
+    });
+    expect(granted).toBe(true);
+    expect(permissionCheck(contents, "fullscreen")).toBe(true);
+    // No permission for an unrelated page, or for gesture-free fullscreen.
+    expect(permissionCheck({}, "fullscreen")).toBe(false);
+    expect(permissionCheck(null, "fullscreen")).toBe(false);
+    for (const permission of [
+      "automatic-fullscreen",
+      "media",
+      "geolocation",
+      "notifications",
+      "pointerLock",
+    ]) {
+      permissionRequest(contents, permission, (value) => {
+        granted = value;
+      });
+      expect(granted).toBe(false);
+      expect(permissionCheck(contents, permission)).toBe(false);
+    }
+
     let decision: { cancel: boolean } | null = null;
     hooks.requestGuard?.({ url: "file:///etc/passwd", resourceType: "image" }, (value) => {
       decision = value;

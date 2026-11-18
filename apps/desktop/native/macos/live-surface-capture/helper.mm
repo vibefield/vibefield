@@ -23,6 +23,9 @@
 #include <string>
 
 #include "protocol.h"
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+#import "simulator-framebuffer.h"
+#endif
 
 namespace {
 
@@ -283,6 +286,10 @@ bool ParseCrop(id raw, CaptureCrop* output) {
            sequence:(uint64_t)sequence
         disposition:(NSString*)disposition;
 - (void)stopWithCompletion:(void (^)(void))completion;
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+@property(nonatomic, copy) NSString* simulatorDevice;
+- (void)guestInput:(NSDictionary*)event;
+#endif
 @property(nonatomic, readonly) NSString* sessionKey;
 @property(nonatomic, readonly) uint64_t epoch;
 @property(nonatomic, copy) void (^faultHandler)(NSDictionary<NSString*, id>* error);
@@ -295,6 +302,9 @@ bool ParseCrop(id raw, CaptureCrop* output) {
   SCWindow* _window;
   CaptureCrop _crop;
   BOOL _captureCursor;
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+  VfSimulatorFramebuffer* _framebuffer;
+#endif
   CaptureDemand _demand;
   uint64_t _lastDemandRevision;
   mach_port_t _destination;
@@ -309,7 +319,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
   double _logicalWidth;
   double _logicalHeight;
   struct {
-    CMSampleBufferRef sample;
+    CFTypeRef backing;
     uint64_t sequence;
     bool leased;
     bool quarantined;
@@ -357,12 +367,20 @@ bool ParseCrop(id raw, CaptureCrop* output) {
         [[NSString stringWithFormat:@"com.jamesyong.vibefield.capture.%@", session_key]
             UTF8String],
         DISPATCH_QUEUE_SERIAL);
-    _logicalWidth = crop.explicit_crop ? crop.rect.size.width : window.frame.size.width;
-    _logicalHeight = crop.explicit_crop ? crop.rect.size.height : window.frame.size.height;
+    _logicalWidth = crop.explicit_crop ? crop.rect.size.width : (window ? window.frame.size.width : 0);
+    _logicalHeight = crop.explicit_crop ? crop.rect.size.height : (window ? window.frame.size.height : 0);
     for (auto& slot : _slots) slot = {nullptr, 0, false, false};
   }
   return self;
 }
+
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+- (void)guestInput:(NSDictionary*)event {
+  dispatch_async(_sampleQueue, ^{
+    if (!self->_stopping && self->_framebuffer) [self->_framebuffer input:event];
+  });
+}
+#endif
 
 - (NSString*)sessionKey {
   return _sessionKey;
@@ -394,6 +412,31 @@ bool ParseCrop(id raw, CaptureCrop* output) {
 
 - (void)startWithCompletion:(void (^)(NSError* _Nullable error))completion {
   [self beginCaptureActivity];
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+  if (_simulatorDevice != nil) {
+    dispatch_async(_sampleQueue, ^{
+      __weak VfCaptureSession* weakSelf = self;
+      self->_framebuffer = [[VfSimulatorFramebuffer alloc] initWithDevice:self.simulatorDevice
+          queue:self->_sampleQueue
+          hasSpace:^BOOL{ return [weakSelf canReceiveFramebuffer]; }
+          deliver:^(CVPixelBufferRef image, double width, double height) {
+            [weakSelf offerImage:image backing:image time:CMClockGetTime(CMClockGetHostTimeClock())
+                    logicalWidth:width logicalHeight:height];
+          }];
+      if (![self->_framebuffer start]) {
+        [self->_framebuffer stop];
+        self->_framebuffer = nil;
+        [self endCaptureActivity];
+        completion([NSError errorWithDomain:@"VfSimulatorFramebuffer" code:1 userInfo:nil]);
+        return;
+      }
+      self->_capturing = YES;
+      [self->_framebuffer setFPS:self->_demand.fps width:self->_demand.width height:self->_demand.height];
+      completion(nil);
+    });
+    return;
+  }
+#endif
   SCContentFilter* filter = [[SCContentFilter alloc] initWithDesktopIndependentWindow:_window];
   _stream = [[SCStream alloc] initWithFilter:filter
                                configuration:[self configurationForDemand:_demand]
@@ -425,6 +468,16 @@ bool ParseCrop(id raw, CaptureCrop* output) {
     }
     self->_lastDemandRevision = demand.revision;
     self->_demand = demand;
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+    if (self->_framebuffer != nil) {
+      self->_capturing = demand.fps > 0;
+      if (self->_capturing) [self beginCaptureActivity];
+      else [self endCaptureActivity];
+      [self->_framebuffer setFPS:demand.fps width:demand.width height:demand.height];
+      completion(nil);
+      return;
+    }
+#endif
     if (![demand.mode isEqualToString:@"live"]) {
       if (!self->_capturing) {
         [self endCaptureActivity];
@@ -477,7 +530,19 @@ bool ParseCrop(id raw, CaptureCrop* output) {
   NSNumber* raw_status = attachments[SCStreamFrameInfoStatus];
   if (raw_status == nil || raw_status.integerValue != SCFrameStatusComplete) return;
   if (!CMSampleBufferIsValid(sample_buffer)) return;
-  CVImageBufferRef image = CMSampleBufferGetImageBuffer(sample_buffer);
+  [self offerImage:CMSampleBufferGetImageBuffer(sample_buffer) backing:sample_buffer
+              time:CMSampleBufferGetPresentationTimeStamp(sample_buffer)
+      logicalWidth:_logicalWidth logicalHeight:_logicalHeight];
+}
+
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+- (BOOL)canReceiveFramebuffer {
+  return !_stopping && !_faulted && _capturing && (!_slots[0].leased || !_slots[1].leased);
+}
+#endif
+
+- (void)offerImage:(CVPixelBufferRef)image backing:(CFTypeRef)backing time:(CMTime)time
+      logicalWidth:(double)logicalWidth logicalHeight:(double)logicalHeight {
   if (image == nullptr || CVPixelBufferGetPixelFormatType(image) != kCVPixelFormatType_32BGRA) return;
   IOSurfaceRef surface = CVPixelBufferGetIOSurface(image);
   if (surface == nullptr) return;
@@ -494,8 +559,8 @@ bool ParseCrop(id raw, CaptureCrop* output) {
     return;
   }
   const uint64_t sequence = ++_sequence;
-  CFRetain(sample_buffer);
-  _slots[slot_index] = {sample_buffer, sequence, true, false};
+  CFRetain(backing);
+  _slots[slot_index] = {backing, sequence, true, false};
 
   VfCaptureFramePayload payload{};
   payload.magic = VF_CAPTURE_FRAME_MAGIC;
@@ -504,16 +569,16 @@ bool ParseCrop(id raw, CaptureCrop* output) {
   std::memcpy(payload.session_key, _sessionBytes.data(), _sessionBytes.size());
   payload.producer_epoch = _epoch;
   payload.sequence = sequence;
-  payload.timestamp_us = TimestampUs(CMSampleBufferGetPresentationTimeStamp(sample_buffer));
+  payload.timestamp_us = TimestampUs(time);
   payload.slot = static_cast<uint32_t>(slot_index);
   payload.width = static_cast<uint32_t>(CVPixelBufferGetWidth(image));
   payload.height = static_cast<uint32_t>(CVPixelBufferGetHeight(image));
   payload.bytes_per_row = static_cast<uint32_t>(CVPixelBufferGetBytesPerRow(image));
   payload.pixel_format = kCVPixelFormatType_32BGRA;
-  payload.logical_width = _logicalWidth;
-  payload.logical_height = _logicalHeight;
+  payload.logical_width = logicalWidth;
+  payload.logical_height = logicalHeight;
   if (!SendFrame(_destination, surface, payload)) {
-    CFRelease(_slots[slot_index].sample);
+    CFRelease(_slots[slot_index].backing);
     _slots[slot_index] = {nullptr, 0, false, false};
     [self fault:SurfaceError(@"producer-crashed", @"Capture frame handoff failed", @"automatic")];
   }
@@ -546,8 +611,11 @@ bool ParseCrop(id raw, CaptureCrop* output) {
       return;
     }
     if (self->_slots[slot].quarantined) return;
-    CFRelease(self->_slots[slot].sample);
+    CFRelease(self->_slots[slot].backing);
     self->_slots[slot] = {nullptr, 0, false, false};
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+    [self->_framebuffer capacityAvailable];
+#endif
   });
 }
 
@@ -558,12 +626,19 @@ bool ParseCrop(id raw, CaptureCrop* output) {
       return;
     }
     self->_stopping = YES;
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+    if (self->_framebuffer != nil) {
+      [self->_framebuffer stop];
+      self->_framebuffer = nil;
+      self->_capturing = NO;
+    }
+#endif
     void (^finish)(void) = ^{
       dispatch_async(self->_sampleQueue, ^{
         self->_capturing = NO;
         [self endCaptureActivity];
         for (auto& slot : self->_slots) {
-          if (slot.sample != nullptr) CFRelease(slot.sample);
+          if (slot.backing != nullptr) CFRelease(slot.backing);
           slot = {nullptr, 0, false, false};
         }
         completion();
@@ -583,8 +658,8 @@ bool ParseCrop(id raw, CaptureCrop* output) {
 - (void)dealloc {
   [self endCaptureActivity];
   for (auto& slot : _slots) {
-    if (slot.sample != nullptr) CFRelease(slot.sample);
-    slot.sample = nullptr;
+    if (slot.backing != nullptr) CFRelease(slot.backing);
+    slot.backing = nullptr;
   }
 }
 
@@ -646,6 +721,13 @@ bool ParseCrop(id raw, CaptureCrop* output) {
     else if ([type isEqualToString:@"request-permission"]) [self requestPermission:command];
     else if ([type isEqualToString:@"start"]) [self start:command];
     else if ([type isEqualToString:@"demand"]) [self demand:command];
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+    else if ([type isEqualToString:@"guest-input"]) {
+      VfCaptureSession* session = [self sessionForCommand:command requestId:nil];
+      if (session.simulatorDevice && [command[@"input"] isKindOfClass:NSDictionary.class])
+        [session guestInput:command[@"input"]];
+    }
+#endif
     else if ([type isEqualToString:@"release"]) [self release:command];
     else if ([type isEqualToString:@"stop"]) [self stop:command];
     else if ([type isEqualToString:@"shutdown"]) [self shutdownNow];
@@ -791,12 +873,72 @@ bool ParseCrop(id raw, CaptureCrop* output) {
   CaptureCrop crop;
   if (!BoundedString(request_id, 128) ||
       !DecodeHex(session_key, session_bytes.data(), session_bytes.size()) ||
-      !SafeInteger(command[@"producerEpoch"]) || !BoundedString(source_ref) ||
+      !SafeInteger(command[@"producerEpoch"]) || (command[@"simulatorDevice"] == nil && !BoundedString(source_ref)) ||
       !ParseDemand(command[@"demand"], &demand) || ![demand.mode isEqualToString:@"live"] ||
       !ParseCrop(command[@"crop"], &crop) ||
       ![command[@"captureCursor"] isKindOfClass:[NSNumber class]] ||
       _sessions.count >= kMaximumSessions || _sessions[session_key] != nil) {
     [self fatalProtocol:@"Capture start request was invalid"];
+    return;
+  }
+  void (^begin)(SCWindow*) = ^(SCWindow* current) {
+  const uint64_t epoch = [command[@"producerEpoch"] unsignedLongLongValue];
+  VfCaptureSession* session = [[VfCaptureSession alloc]
+      initWithSessionKey:session_key
+           sessionBytes:session_bytes.data()
+                  epoch:epoch
+                 window:current
+                   crop:crop
+          captureCursor:[command[@"captureCursor"] boolValue]
+                 demand:demand
+            destination:self->_destination
+             capability:self->_capability.data()];
+  if (command[@"simulatorDevice"] != nil) {
+#ifdef VF_SIMULATOR_FRAMEBUFFER_SUPPORT
+    session.simulatorDevice = command[@"simulatorDevice"];
+#else
+    EmitError(request_id, SurfaceError(@"unsupported", @"Device streaming is unavailable in this helper build", @"user-action"));
+    return;
+#endif
+  }
+  __weak VfCaptureHelper* weak_self = self;
+  session.faultHandler = ^(NSDictionary<NSString*, id>* session_error) {
+    VfCaptureHelper* strong_self = weak_self;
+    if (strong_self == nil) return;
+    dispatch_async(strong_self->_controlQueue, ^{
+      if (strong_self->_sessions[session_key] != session) return;
+      Emit(@{ @"v" : @1, @"event" : @"session-fault", @"sessionKey" : session_key,
+              @"error" : session_error });
+    });
+  };
+  self->_sessions[session_key] = session;
+  [session startWithCompletion:^(NSError* start_error) {
+    dispatch_async(self->_controlQueue, ^{
+      if (start_error != nil) {
+        [self->_sessions removeObjectForKey:session_key];
+        EmitError(request_id,
+                  command[@"simulatorDevice"] != nil
+                      ? SurfaceError(@"source-not-found", @"Could not attach to the booted simulator display", @"automatic")
+                      : !CGPreflightScreenCaptureAccess()
+                      ? SurfaceError(@"permission-denied", @"Screen Recording permission is required",
+                                     @"user-action")
+                      : SurfaceError(@"producer-crashed", @"Screen capture could not start",
+                                     @"automatic"));
+        return;
+      }
+      Emit(@{ @"v" : @1, @"event" : @"started", @"requestId" : request_id,
+              @"sessionKey" : session_key, @"frameSource" : command[@"simulatorDevice"] ? @"simulator-framebuffer" : @"window" });
+    });
+  }];
+  };
+  if (command[@"simulatorDevice"] != nil) {
+    if (source_ref != nil || crop.explicit_crop || [command[@"captureCursor"] boolValue] ||
+        !BoundedString(command[@"simulatorDevice"], 36) ||
+        [[NSUUID alloc] initWithUUIDString:command[@"simulatorDevice"]] == nil) {
+      [self fatalProtocol:@"Invalid simulator display identity"];
+      return;
+    }
+    begin(nil);
     return;
   }
   NSDictionary* source = _sources[source_ref];
@@ -840,44 +982,7 @@ bool ParseCrop(id raw, CaptureCrop* output) {
                                            @"user-action"));
         return;
       }
-      const uint64_t epoch = [command[@"producerEpoch"] unsignedLongLongValue];
-      VfCaptureSession* session = [[VfCaptureSession alloc]
-          initWithSessionKey:session_key
-               sessionBytes:session_bytes.data()
-                      epoch:epoch
-                     window:current
-                       crop:crop
-              captureCursor:[command[@"captureCursor"] boolValue]
-                     demand:demand
-                destination:self->_destination
-                 capability:self->_capability.data()];
-      __weak VfCaptureHelper* weak_self = self;
-      session.faultHandler = ^(NSDictionary<NSString*, id>* session_error) {
-        VfCaptureHelper* strong_self = weak_self;
-        if (strong_self == nil) return;
-        dispatch_async(strong_self->_controlQueue, ^{
-          if (strong_self->_sessions[session_key] != session) return;
-          Emit(@{ @"v" : @1, @"event" : @"session-fault", @"sessionKey" : session_key,
-                  @"error" : session_error });
-        });
-      };
-      self->_sessions[session_key] = session;
-      [session startWithCompletion:^(NSError* start_error) {
-        dispatch_async(self->_controlQueue, ^{
-          if (start_error != nil) {
-            [self->_sessions removeObjectForKey:session_key];
-            EmitError(request_id,
-                      !CGPreflightScreenCaptureAccess()
-                          ? SurfaceError(@"permission-denied", @"Screen Recording permission is required",
-                                         @"user-action")
-                          : SurfaceError(@"producer-crashed", @"Screen capture could not start",
-                                         @"automatic"));
-            return;
-          }
-          Emit(@{ @"v" : @1, @"event" : @"started", @"requestId" : request_id,
-                  @"sessionKey" : session_key });
-        });
-      }];
+      begin(current);
     });
   }];
 }

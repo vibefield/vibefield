@@ -1391,22 +1391,6 @@ export async function stoppedWord(
   };
 }
 
-/** The host's device reads as the desk's door counts them (D5): reads BEGUN, those that failed, the last one's rows
- * (null: none read yet). */
-export interface DeviceReads {
-  readonly reads: number;
-  readonly failures: number;
-  readonly rows: number | null;
-}
-
-/** SIM-ATTACH's poll (the grade's R-4, RM6): the attachable answer is read only once a device read BEGUN after `base`
- * (taken when R's boot returned) has LANDED — `reads` counts a read as it begins, one may be in flight (they never
- * overlap), and a failed one leaves the last snapshot standing — so tier 1's leg never judges a snapshot from before
- * the boot (where no booted model would answer tier 3, the same `deviceType`). */
-export function readSince(base: DeviceReads, now: DeviceReads): boolean {
-  return now.rows !== null && now.reads - base.reads - 1 - (now.failures - base.failures) >= 1;
-}
-
 /** SIM-ATTACH: ONE undo step binds; ONE undoes; Finish cycles and reverts. */
 export interface AttachSeen {
   readonly bound: { readonly deviceType: string; readonly runtime: string } | null;
@@ -3288,33 +3272,11 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
     await row("SIM-ATTACH", "MUST", async () => {
       const staged0 = await ensure(3, "Booted");
       if (staged0 !== null) return { problems: [], staging: staged0 };
-      // the host's device reads as R's boot left them: the answer is polled from a read begun after it (R-4)
-      const devicesRead = (): Promise<DeviceReads | null> =>
-        js("globalThis.__vfDesk.simulatorDevices()");
-      const base = await devicesRead();
       // φA's attachment to R, released at ⌘Z, reaped at once: never warm on R's session in SIM-GONE (R5)
       await js("globalThis.__vfDesk.liveGrace(1000)");
       const a = await placePhone("φA", 4, typeOf(3), false);
       try {
         await view([a]);
-        const tr = JSON.stringify(typeOf(3));
-        let answer: { deviceType: string; runtime: string } | null = null;
-        // two reads begun after the boot at the host's cadence (a look each 2 s, a read once the last is 5 s old): ~14 s
-        const deadline = Date.now() + 30_000;
-        while (Date.now() < deadline && answer === null) {
-          const now = await devicesRead();
-          if (base !== null && now !== null && readSince(base, now))
-            answer = await js(
-              `globalThis.__vfDesk.local(${T})?.devices?.()?.attachable(${tr}) ?? null`,
-            );
-          if (answer === null) await sleep(500);
-        }
-        // THE GATE (§4), its first leg: the answer its own type (tier 1). Its second is the door's, right before the
-        // press: R Booted and the host's booted set ⊆ the run's own. Any miss STOPs the run without pressing.
-        if (answer?.deviceType !== typeOf(3))
-          throw new PhoneStop(
-            `SIM-ATTACH: the attach gate: the host answers ${JSON.stringify(answer)}, not tier 1`,
-          );
         const e = await entityOf(a);
         const at = await placeOf(a);
         if (e === null || at === null) throw new Error("φA left the board");
@@ -3324,9 +3286,9 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         const act = (id: string): string =>
           `[data-selection-bar] .vf-bar-row [data-act="act:${id}"]`;
         await until(
-          "the bar's Attach",
+          "the bar's Simulator settings",
           5_000,
-          `document.querySelector(${JSON.stringify(act("attach"))}) !== null && document.querySelector("[data-selection-bar]")?.getAttribute("data-shown") === "true"`,
+          `document.querySelector(${JSON.stringify(act("simulator-settings"))}) !== null && document.querySelector("[data-selection-bar]")?.getAttribute("data-shown") === "true"`,
         );
         const props = async (): Promise<Record<string, unknown>> =>
           (await objectsOf(PHONE.type)).find((o) => o.key === a)?.props ?? {};
@@ -3336,7 +3298,25 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         });
         if (gate.stop !== null)
           throw new PhoneStop(`SIM-ATTACH: the door's attach gate: ${gate.stop}`);
-        await h.pressSelector(act("attach"));
+        await h.pressSelector(act("simulator-settings"));
+        const form = "dialog.vf-sim-setup[open]";
+        await until(
+          "the installed simulator configurations",
+          10_000,
+          `document.querySelector(${JSON.stringify(`${form} select[name="runtime"]`)})?.disabled === false`,
+        );
+        const selected = await js<boolean>(`(() => {
+          const form = document.querySelector(${JSON.stringify(form)});
+          const runtime = form.querySelector('[name="runtime"]');
+          const model = form.querySelector('[name="model"]');
+          runtime.value = ${JSON.stringify(env.runtime)};
+          runtime.dispatchEvent(new Event('change'));
+          model.value = ${JSON.stringify(typeOf(3))};
+          model.dispatchEvent(new Event('change'));
+          return !!runtime.value && !!model.value;
+        })()`);
+        if (!selected) throw new PhoneStop("The fixture model and iOS version are unavailable");
+        await h.pressSelector(`${form} button[type="submit"]`);
         await sleep(1_000);
         const bound = bindingRead((await props())["binding"]);
         await undoKey();

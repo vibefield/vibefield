@@ -164,6 +164,8 @@ export interface LiveBrowserSpec {
   readonly deviceScaleFactor: number;
   readonly scheme: "light" | "dark";
   readonly label: string;
+  /** The pane’s own sound preference, independent of visibility. */
+  readonly muted?: boolean;
   /** PT-4 — the device the page is seen as. Absent: a pointer device of the host's engine's own agent. */
   readonly device?: LiveBrowserDevice;
 }
@@ -217,6 +219,7 @@ export function liveBrowserSpec(
     return undefined;
   if (scheme !== "light" && scheme !== "dark") return undefined;
   if (typeof label !== "string") return undefined;
+  if (spec.muted !== undefined && typeof spec.muted !== "boolean") return undefined;
   // PT-4: a device named must be one the host can read whole — never half a device
   const device = spec.device === undefined ? undefined : liveBrowserDevice(spec.device);
   if (spec.device !== undefined && device === undefined) return undefined;
@@ -228,6 +231,7 @@ export function liveBrowserSpec(
     scheme,
     label,
     ...(device === undefined ? {} : { device }),
+    ...(spec.muted === undefined ? {} : { muted: spec.muted as boolean }),
   };
 }
 
@@ -390,6 +394,7 @@ export interface LiveSimulatorSpec {
   readonly source: "ios-simulator";
   readonly deviceType: string;
   readonly runtime: string;
+  readonly dedicated?: boolean;
   readonly label: string;
   readonly scheme: "light" | "dark";
 }
@@ -404,7 +409,14 @@ export function liveSimulatorSpec(
   if (!told(runtime, 128) || runtime.length === 0) return undefined;
   if (!told(label, 128)) return undefined;
   if (scheme !== "light" && scheme !== "dark") return undefined;
-  return { source, deviceType, runtime, label, scheme };
+  return {
+    source,
+    deviceType,
+    runtime,
+    label,
+    scheme,
+    ...(spec.dedicated === true ? { dedicated: true } : {}),
+  };
 }
 
 /**
@@ -444,6 +456,8 @@ export type LiveSimulatorState = (typeof LIVE_SIMULATOR_STATES)[number];
  */
 export interface LiveSimulatorFace {
   readonly is: LiveSimulatorState;
+  /** Present only on a headless boot. Live means a frame from this boot reached the pane. */
+  readonly bootDisplay?: "starting" | "live";
   readonly device?: string;
   readonly act?: () => void;
 }
@@ -458,9 +472,11 @@ export function liveSimulatorFace(
 ): LiveSimulatorFace | undefined {
   const said = info?.extra?.simulator;
   if (typeof said !== "object" || said === null) return undefined;
-  const { is, device, act } = said as Readonly<Record<string, unknown>>;
+  const { is, device, act, bootDisplay } = said as Readonly<Record<string, unknown>>;
   if (!isSimulatorState(is)) return undefined;
   let face: LiveSimulatorFace = { is };
+  if (is === "booting" && (bootDisplay === "starting" || bootDisplay === "live"))
+    face = { ...face, bootDisplay };
   if (device !== undefined) {
     if (!told(device, 128) || device.length === 0) return undefined;
     face = { ...face, device };
@@ -480,15 +496,14 @@ export interface LiveSimulatorBinding {
 }
 
 /**
- * THE DEVICES A PHONE MAY ATTACH (PT-S2; R11) — the second service VibeField lends a simulator kind beside `LIVE`, as
- * `BROWSER_NAVIGATION` is a browser kind's. A kind cannot know which devices this Mac holds (its catalog knows models, never
- * the runtimes installed here, and a binding's runtime is a concrete id), so its ATTACH asks the host here. SYNCHRONOUS: a
- * menu act runs once, outside the tick, and writes in its own transaction — so the host answers from what it last read of
- * this Mac's devices (it reads them while a phone stands on the desk), never by asking now: before its first read it answers
- * undefined, and the act writes nothing. Its answer is a binding, never a UDID: each Mac attaches its OWN simulator of the
- * bound type, so a peer's phone shows the peer's.
+ * Xcode's simulator inventory on this Mac. The setup picker requests compatible models for every installed iOS runtime.
+ * Plugins using the older synchronous device lookup can still read the host's last snapshot.
  */
 export interface SimulatorDevices {
+  /** Native prerequisite setup when offered by the host. Checks only read this Mac. */
+  readonly setup?: SimulatorSetup;
+  /** Read installed iOS versions and their compatible iPhones, newest runtime first. */
+  configurations?(): Promise<readonly SimulatorRuntimeOption[]>;
   /**
    * The device a phone of model `prefer` (a CoreSimulator device type) attaches here: this Mac's BOOTED device of that
    * type; else its first booted iPhone (the phone takes that iPhone's model); else `prefer` on the newest runtime this Mac
@@ -496,6 +511,34 @@ export interface SimulatorDevices {
    * this Mac's devices yet, or it holds none to offer.
    */
   attachable(prefer: string): LiveSimulatorBinding | undefined;
+}
+
+export type SimulatorSetupStatus =
+  | {
+      readonly stage: "ready";
+      readonly xcodeVersion?: string | undefined;
+      readonly configurations: readonly SimulatorRuntimeOption[];
+    }
+  | {
+      readonly stage:
+        | "install-xcode"
+        | "select-xcode"
+        | "accept-license"
+        | "finish-xcode"
+        | "install-runtime"
+        | "unsupported"
+        | "unavailable";
+      readonly xcodeVersion?: string | undefined;
+    };
+
+export interface SimulatorSetup {
+  check(): Promise<SimulatorSetupStatus>;
+  open(target: "app-store" | "xcode"): Promise<void>;
+}
+
+export interface SimulatorRuntimeOption {
+  readonly runtime: string;
+  readonly models: readonly { readonly deviceType: string; readonly name: string }[];
 }
 
 /** The key the host lends a simulator kind this Mac's devices under (`KindHost.use(SIMULATOR_DEVICES)`). */

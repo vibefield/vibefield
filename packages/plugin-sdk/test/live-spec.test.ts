@@ -26,6 +26,8 @@ const PAGE: LiveBrowserSpec = {
 describe("liveBrowserSpec — the host reads a browser face's page", () => {
   it("reads the page a browser kind sends, whole", () => {
     expect(liveBrowserSpec({ ...PAGE })).toEqual(PAGE);
+    expect(liveBrowserSpec({ ...PAGE, muted: true })).toEqual({ ...PAGE, muted: true });
+    expect(liveBrowserSpec({ ...PAGE, muted: "yes" })).toBeUndefined();
     expect(liveBrowserSpec({ ...PAGE, viewport: [402, 874], scheme: "dark" })).toEqual({
       ...PAGE,
       viewport: [402, 874],

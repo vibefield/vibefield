@@ -81,7 +81,7 @@ export function installLifecycle(opts: {
   openPrimaryWindow: () => Promise<void>;
   keepAliveWithoutWindows: () => boolean;
   onQuitRequested: () => void;
-  disposeShell: () => void;
+  disposeShell: () => void | Promise<void>;
   logger: Logger;
   closeLogging: () => Promise<void>;
   /** AL-3 — the quit gate, late-bound (it is built with the pairs, after boot); null or absent = no gate (smokes,
@@ -106,10 +106,12 @@ export function installLifecycle(opts: {
     closeWindows: () => opts.registry.disposeAll(),
     dispose: async () => {
       logger.info("desktop.lifecycle.stopping", "Electron shell is stopping");
-      opts.disposeShell();
+      const shellStopped = opts.disposeShell();
       const leave = leaveReason();
-      await (opts.getSupervisor()?.dispose(leave === undefined ? undefined : { leave }) ??
-        Promise.resolve());
+      await Promise.all([
+        shellStopped,
+        opts.getSupervisor()?.dispose(leave === undefined ? undefined : { leave }),
+      ]);
       logger.info("desktop.lifecycle.stopped", "Electron shell teardown completed");
       await opts.closeLogging();
     },

@@ -10,6 +10,8 @@ import type {
   ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
+  SimulatorSetupStatus,
+  SimulatorSetupTarget,
   SoundAttention,
   SoundPlayerState,
   SoundPreviewCue,
@@ -145,6 +147,10 @@ declare global {
         doctor(): Promise<UpdateDoctorResult>;
         /** AU-7 (AU-G8) — Move to Applications through the quit gate */
         moveToApplications(): Promise<UpdateMoveResult>;
+      };
+      simulatorSetup: {
+        check(): Promise<SimulatorSetupStatus>;
+        open(target: SimulatorSetupTarget): Promise<void>;
       };
       /** BP-D4 — Settings' Clear browsing data (counts only; main owns the profiles). */
       browserData: {

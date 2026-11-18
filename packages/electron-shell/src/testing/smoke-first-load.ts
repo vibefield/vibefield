@@ -44,6 +44,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { choosePaneDevice } from "./browser-pane-chrome";
 import { FIXTURE_HOLD_MS, type FixtureReport, ZOOM_SCALE } from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
 import {
@@ -1347,7 +1348,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       (await js<Record<string, number>>("globalThis.__vfDesk.live()?.stats ?? {}")).emulations ?? 0;
     // the bar's own act, on the pane at rest
     await select(waiter);
-    const act = `[data-selection-bar] .vf-bar-row [data-act="act:device-${FIRST_ROWS.switchTo}"]`;
+    const act = `[data-selection-bar] .vf-bar-row [data-act="act:device"]`;
     const offered = await h
       .until(
         `the bar's ${FIRST_ROWS.switchTo} act`,
@@ -1360,7 +1361,7 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
       );
     if (offered) {
       await sleep(300);
-      await h.pressSelector(act);
+      await choosePaneDevice(h, FIRST_ROWS.switchTo);
     }
     // its address asked for again (the load before given up) — or, were the blank reloaded, the page says there is none
     await waitFor(

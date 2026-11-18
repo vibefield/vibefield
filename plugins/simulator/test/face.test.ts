@@ -91,6 +91,28 @@ describe("the nine faces, drawn as the pane's laws say", () => {
     expect(plan("at-rest", false)).toMatchObject({ frame: false, mark: "none" });
   });
 
+  it("shows a fresh headless boot frame at full brightness and a status until one arrives", () => {
+    const boot = (bootDisplay: string, texture: boolean) =>
+      facePlan(
+        { extra: { simulator: { is: "booting", bootDisplay } } },
+        LIVE,
+        "iPhone 11",
+        texture,
+      );
+    expect(boot("starting", true)).toMatchObject({
+      frame: false,
+      line: "Starting iOS…",
+      act: null,
+    });
+    expect(boot("live", false)).toMatchObject({ frame: false, line: "Starting iOS…" });
+    expect(boot("live", true)).toMatchObject({
+      frame: true,
+      brightness: 1,
+      mark: "none",
+      line: null,
+    });
+  });
+
   it("offers a state's act only where the host can run it — and names the device by the host's word for it, else the phone's", () => {
     const boot = () => {};
     expect(facePlan(words("off"), LIVE, "iPhone 8", true).act).toBeNull();

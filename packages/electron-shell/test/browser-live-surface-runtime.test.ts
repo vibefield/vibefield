@@ -533,6 +533,136 @@ afterEach(() => {
 });
 
 describe("BrowserLiveSurfaceRuntime", () => {
+  describe("continuous input under CDP backpressure", () => {
+    async function slowInput() {
+      const result = setup();
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "live"));
+      await flush();
+      const window = result.native.windows[0]!;
+      window.paint(sharedPaint().paint);
+      const revision = result.runtime.summary.geometry!.revision;
+      let release!: () => void;
+      const blocked = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      const original = window.dispatchMouse.bind(window);
+      let first = true;
+      window.dispatchMouse = async (input) => {
+        await original(input);
+        if (first) {
+          first = false;
+          await blocked;
+        }
+      };
+      const wheel = (dy: number) =>
+        result.runtime.dispatchInput({
+          kind: "wheel",
+          geometryRevision: revision,
+          x: 20,
+          y: 30,
+          deltaX: 0,
+          deltaY: dy,
+        });
+      const initial = wheel(1);
+      await delivered();
+      return { ...result, window, renderer, revision, release, wheel, initial };
+    }
+    it("bounds a stalled wheel burst, preserves its travel, and keeps the following key ordered", async () => {
+      const p = await slowInput();
+      const queued = Array.from({ length: 100 }, () => p.wheel(2));
+      const key = p.runtime.dispatchInput({
+        kind: "key",
+        geometryRevision: p.revision,
+        type: "down",
+        key: "a",
+        code: "KeyA",
+      });
+      const after = p.wheel(3);
+      expect(p.window.mouseInputs).toHaveLength(1);
+      p.release();
+      await Promise.all([p.initial, ...queued, key, after]);
+      expect(p.window.mouseInputs.map((i) => i.deltaY)).toEqual([1, 200, 3]);
+      expect(p.window.hand).toEqual([
+        "mouse mouseWheel",
+        "mouse mouseWheel",
+        "focus true",
+        "key keyDown",
+        "mouse mouseWheel",
+      ]);
+      expect(p.runtime.stats.inputCoalesced).toBe(99);
+      p.runtime.dispose();
+    });
+    it("keeps only the newest waiting hover, with a click as a hard barrier", async () => {
+      const p = await slowInput();
+      const send = (type: "move" | "down" | "up", x: number) =>
+        p.runtime.dispatchInput({
+          kind: "mouse",
+          geometryRevision: p.revision,
+          type,
+          x,
+          y: 30,
+          ...(type === "move" ? {} : { button: "left" as const }),
+        });
+      const a = send("move", 20),
+        b = send("move", 30),
+        down = send("down", 30),
+        drag1 = send("move", 40),
+        drag2 = send("move", 50),
+        up = send("up", 50);
+      p.release();
+      await Promise.all([p.initial, a, b, down, drag1, drag2, up]);
+      expect(p.window.mouseInputs.map((i) => [i.type, i.x])).toEqual([
+        ["mouseWheel", 20],
+        ["mouseMoved", 30],
+        ["mousePressed", 30],
+        ["mouseMoved", 40],
+        ["mouseMoved", 50],
+        ["mouseReleased", 50],
+      ]);
+      p.runtime.dispose();
+    });
+    it("does not coalesce a drag behind a right-button press that has not run yet", async () => {
+      const p = await slowInput();
+      const send = (type: "down" | "move" | "up", x: number) =>
+        p.runtime.dispatchInput({
+          kind: "mouse",
+          type,
+          x,
+          y: 30,
+          geometryRevision: p.revision,
+          ...(type === "move" ? {} : { button: "right" as const }),
+        });
+      const press = send("down", 30),
+        a = send("move", 40),
+        b = send("move", 50),
+        release = send("up", 50);
+      p.release();
+      await Promise.all([p.initial, press, a, b, release]);
+      expect(p.window.mouseInputs.filter((i) => i.type === "mouseMoved").map((i) => i.x)).toEqual([
+        40, 50,
+      ]);
+      p.runtime.dispose();
+    });
+
+    it("does not combine two attachments", async () => {
+      const p = await slowInput();
+      const second = attach(p.runtime, "attachment_browser_00000002");
+      second.attachment.setDemand(demand(1, "live"));
+      const send = (by: string) =>
+        p.runtime.dispatchInput(
+          { kind: "wheel", geometryRevision: p.revision, x: 20, y: 30, deltaX: 0, deltaY: 2 },
+          by,
+        );
+      const a = send("attachment_browser_00000001"),
+        b = send("attachment_browser_00000002");
+      p.release();
+      await Promise.all([p.initial, a, b]);
+      expect(p.window.mouseInputs.map((i) => i.deltaY)).toEqual([1, 2, 2]);
+      p.runtime.dispose();
+    });
+  });
+
   it("measures the full paint callback without letting the observer affect delivery", async () => {
     const durations: bigint[] = [];
     const result = setup({
@@ -650,6 +780,29 @@ describe("BrowserLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
+  it("pauses invisible page animation at 1 Hz and restores live cadence without replacing its document or agent target", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 60));
+    await flush();
+    const first = result.native.windows[0]!;
+    first.paint(sharedPaint(640, 360).paint);
+    const target = result.controlTargets.status(SURFACE_ID);
+    const loads = [...first.loadedUrls];
+    expect(first.frameRates.at(-1)).toBe(60);
+    renderer.attachment.setDemand(demand(2, "paused"));
+    expect(first.frameRates.at(-1)).toBe(1);
+    expect(first.stopPainting).toHaveBeenCalledOnce();
+    expect(result.controlTargets.status(SURFACE_ID)).toEqual(target);
+    renderer.attachment.setDemand(demand(3, "live", 30));
+    expect(first.frameRates.at(-1)).toBe(30);
+    expect(first.startPainting).toHaveBeenCalled();
+    expect(first.loadedUrls).toEqual(loads);
+    expect(result.native.windows).toHaveLength(1);
+    expect(result.controlTargets.status(SURFACE_ID)).toEqual(target);
+    result.runtime.dispose();
+  });
+
   it("a renderer that LEAVES pauses the page and keeps it — one re-attaching within the grace finds the SAME page; none back, hibernated after it (PT-2)", async () => {
     // a window reload: the document's attachment goes and the next one's comes; the page (its memory, its WebContents) must be
     // there for it — main's custody re-binds the surface by its reuse key, and the runtime must not have destroyed the page
@@ -746,6 +899,59 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(lab.result.runtime.summary.state).toBe("hibernated");
       lab.result.runtime.dispose();
     } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps a user mute across pause, navigation, and producer restart without reloading to toggle it", async () => {
+    vi.useFakeTimers();
+    const result = setup({ source: { ...source(), muted: true } });
+    try {
+      const a = attach(result.runtime);
+      a.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      const window = result.native.windows[0]!;
+      window.paint(sharedPaint(320, 180).paint);
+      expect(window.muted).toBe(true);
+      const order = [...window.order];
+      await result.runtime.navigate({ action: "mute", muted: false });
+      expect(window.muted).toBe(false);
+      await result.runtime.navigate({ action: "mute", muted: true });
+      expect(window.muted).toBe(true);
+      expect(window.order).toEqual(order);
+      expect(result.native.windows).toHaveLength(1);
+      a.attachment.setDemand(demand(2, "paused"));
+      a.attachment.setDemand(demand(3, "live", 30, { width: 640, height: 360 }));
+      expect(window.muted).toBe(true);
+      await result.runtime.navigate({ action: "reload" });
+      expect(window.muted).toBe(true);
+      a.attachment.setDemand(demand(4, "hibernated"));
+      a.attachment.setDemand(demand(5, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(result.native.windows[1]?.muted).toBe(true);
+    } finally {
+      result.runtime.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it("unmuting a hidden pane cannot make it audible until it is visible again", async () => {
+    vi.useFakeTimers();
+    const result = setup();
+    try {
+      const a = attach(result.runtime);
+      a.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      const window = result.native.windows[0]!;
+      window.paint(sharedPaint(320, 180).paint);
+      await result.runtime.navigate({ action: "mute", muted: true });
+      a.attachment.setDemand(demand(2, "paused"));
+      await result.runtime.navigate({ action: "mute", muted: false });
+      expect(window.muted).toBe(true);
+      a.attachment.setDemand(demand(3, "live", 30, { width: 640, height: 360 }));
+      expect(window.muted).toBe(false);
+    } finally {
+      result.runtime.dispose();
       vi.useRealTimers();
     }
   });
@@ -1515,14 +1721,6 @@ describe("BrowserLiveSurfaceRuntime", () => {
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36",
       navigatorPlatform: "MacIntel",
       metadata: {
-        brands: [
-          { brand: "Chromium", version: "150" },
-          { brand: "Not?A_Brand", version: "99" },
-        ],
-        fullVersionList: [
-          { brand: "Chromium", version: "150.0.7871.114" },
-          { brand: "Not?A_Brand", version: "99.0.0.0" },
-        ],
         platform: "macOS",
         platformVersion: "26.5.2",
         architecture: "arm",
@@ -1545,7 +1743,9 @@ describe("BrowserLiveSurfaceRuntime", () => {
       "Windows",
       "x86",
     ]);
-    expect(win.metadata.brands[0]).toEqual({ brand: "Chromium", version: "151" });
+    // Chromium supplies native brand/version lists, including current GREASE values.
+    expect(win.metadata.brands).toBeUndefined();
+    expect(win.metadata.fullVersionList).toBeUndefined();
     const linux = engineAgentOf({
       chrome: "150.0.0.1",
       platform: "linux",
@@ -5405,7 +5605,7 @@ describe("BrowserLiveSurfaceRuntime", () => {
               { kind: "pointer", action: "move", x: 1 + (i % 100), y: 10 },
               r,
             );
-            if (i % 100 === 99) await drained();
+            await delivered(); // Exercise 10,000 dispatched turns, independent of coalescing.
           }
           await drained();
         };

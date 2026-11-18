@@ -6,7 +6,7 @@
 //    text), the IME's composition as `compose` and its commit as text;
 //  - the browser's CHORDS stay the browser's (ruling 7): ⌘L the address, ⌘R reload (stop while it loads), ⌘[ / ⌘] back and
 //    forward — the lease runs them and takes the key; every other key is the page's;
-//  - ESC stays the desk's (`open.escape: "desk"`): declined, so the keymap puts the pane down in one press;
+//  - ESC first exits page fullscreen, otherwise stays the desk's (`open.escape: "desk"`) to put the pane down;
 //  - a press over the held pane keeps the editor's focus (its default would move the focus off the textarea and end the lease).
 // A second LEASE MODE is the ADDRESS (ruling 8): the editor placed over the head's capsule, holding the page's address; ⏎ goes
 // where it says (`resolveAddress`), through the page's navigation; Esc cancels back to the page's lease (the pane stays in hand).
@@ -32,10 +32,12 @@ import {
 import { resolveAddress } from "./address";
 import { mountAddressEditor } from "./address-editor";
 import { urlCell } from "./device";
+import { mountDeviceMenu } from "./device-menu";
 import { SAMPLE_URL } from "./ids";
 import { bandLayout, type HeldPart } from "./law";
 import { isPageUrl } from "./live";
 import type { PaneLocal } from "./local";
+import { bindPaneMenu } from "./menu-host";
 
 /** The pane's hand on a desk: its driver, which its DOM half joins at the mount. */
 export interface PaneHand extends KindDriver {
@@ -114,6 +116,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
   const cellOf = opts.cell ?? urlCell;
   const now = opts.now ?? (() => performance.now());
   let dom: ObjectDomHost | undefined;
+  let deviceMenu: ReturnType<typeof mountDeviceMenu> | undefined;
   let addressEditor: ReturnType<typeof mountAddressEditor> | undefined;
   /** The pane the editor is lent for, and the lease holding it — the page's or the address's (two leases: ICE's editor keeps a
    * lease it already holds and never asks its value again, so a switch of mode is a hand-over from one lease to the other). */
@@ -141,6 +144,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
   };
   /** A press over the held pane keeps the editor's focus: its default would blur the field and end the lease mid-typing. */
   const onDown = (ev: PointerEvent): void => {
+    if (deviceMenu?.open || (current === addressLease && ev.target === dom?.editor.element)) return;
     const e = leased;
     const hand = h.hand();
     const at = e === undefined ? undefined : local()?.layout(e);
@@ -158,8 +162,13 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     if (
       Math.abs(x - hand.frame.cx) <= (at.ext.w / 2) * hand.frame.s &&
       Math.abs(y - hand.frame.cy) <= (at.ext.h / 2) * hand.frame.s
-    )
+    ) {
+      if (current === addressLease) lend(e, pageLease);
+      // A toolbar action or inactive native window can leave the lease held while
+      // focus is elsewhere. Re-focus it without resetting the pending text buffer.
+      else if (current === pageLease) dom.editor.lend(pageLease);
       ev.preventDefault();
+    }
   };
 
   /** The editor lent for pane `e` — its page's lease or its address's; the one holding it hands over (the focus stays). */
@@ -168,7 +177,12 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     leased = e;
     current = lease;
     sent = "";
-    if (lease === addressLease) seed = local()?.page(e)?.info.address ?? "";
+    if (lease === addressLease) {
+      const cell = cellOf();
+      const saved =
+        cell === undefined ? undefined : (h.world.get(e, cell) as { url?: string } | undefined);
+      seed = local()?.page(e)?.info.address ?? saved?.url ?? "";
+    }
     dom.editor.lend(lease, lease === addressLease ? seed.length : undefined);
     if (lease === addressLease) {
       addressEditor?.show(true);
@@ -227,8 +241,11 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     const S = at.G.shape;
     const extentV = at.ext.cy - at.G.centre[1];
     if (over === "address") {
-      const [ax, ay, ahx, ahy] = bandLayout(S).address;
-      return onScreen(hand.frame, extentV, ax, ay, ahx, ahy);
+      const L = bandLayout(S);
+      const [ax, ay, ahx, ahy] = L.address;
+      const right = L.reload === null ? ax + ahx : L.reload[0] - L.glyph * 0.8;
+      const left = ax - ahx;
+      return onScreen(hand.frame, extentV, (left + right) / 2, ay, (right - left) / 2, ahy);
     }
     const [px, py, phx, phy] = S.page;
     const line = Math.min(phy, 10 * S.scale);
@@ -259,8 +276,8 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     keydown(ev) {
       const e = leased;
       if (e === undefined) return false;
-      // Esc is the desk's: declined, the keymap puts the pane down in one press
-      if (ev.key === "Escape") return false;
+      // Exit page fullscreen first; otherwise Escape puts the pane back on the canvas.
+      if (ev.key === "Escape" && local()?.page(e)?.info.extra?.fullscreen !== true) return false;
       const chord = chordOf(ev);
       if (chord !== undefined) {
         counts.chords += 1;
@@ -300,12 +317,22 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
       const e = leased;
       if (e === undefined) return false;
       if (ev.key === "Enter" && !ev.isComposing) {
-        go(e, dom?.editor.element.value ?? "");
+        const text = dom?.editor.element.value ?? "";
+        if (text.trim() !== "") go(e, text);
         lend(e, pageLease);
         return true;
       }
-      // Esc cancels back to the page — taken: the pane stays in hand
-      if (ev.key === "Escape") {
+      const chord = chordOf(ev);
+      if (chord === "address") {
+        dom?.editor.element.select();
+        return true;
+      }
+      if (chord !== undefined) {
+        run(e, chord);
+        return true;
+      }
+      // Escape cancels; Tab returns keyboard focus to the page.
+      if (ev.key === "Escape" || ev.key === "Tab") {
         lend(e, pageLease);
         return true;
       }
@@ -322,6 +349,11 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     join(d) {
       dom = d;
       addressEditor = mountAddressEditor(d);
+      const menu = () => (deviceMenu ??= mountDeviceMenu(d));
+      bindPaneMenu(h.world, {
+        configure: (api, entities) => menu().configure(api, entities),
+        say: (message) => menu().say(message),
+      });
       d.container.addEventListener("pointerdown", onDown, { capture: true });
       local()?.bind({ address: (e) => lend(e, addressLease) });
     },
@@ -338,7 +370,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
           write(e, url);
         }
       const e = inHand();
-      if (dom === undefined || e === undefined) return;
+      if (dom === undefined || e === undefined || deviceMenu?.open) return;
       const holding = dom.editor.lease();
       if (leased === e && (holding === pageLease || holding === addressLease)) return;
       lend(e, pageLease);
@@ -351,6 +383,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     idle: () => {
       for (const [e, url] of local()?.addressed() ?? []) if (written.get(e) !== url) return false;
       const e = inHand();
+      if (deviceMenu?.open) return true;
       if (e === undefined) return leased === undefined;
       // (the lease's end clears `leased` — `ended` — so a hand whose lease went is not idle until it lends again)
       if (leased !== e) return false;
@@ -358,6 +391,8 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     },
     dispose() {
       hands.delete(h.world);
+      bindPaneMenu(h.world, undefined);
+      deviceMenu?.dispose();
       dom?.container.removeEventListener("pointerdown", onDown, { capture: true });
       const holding = dom?.editor.lease();
       if (holding === pageLease || holding === addressLease) dom?.editor.release(holding);

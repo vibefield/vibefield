@@ -28,6 +28,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
+import { choosePaneDevice } from "./browser-pane-chrome";
 
 /** The flag beside `--smoke-canvas` that runs these rows alone after the boot's (the author's loop). */
 export const PANE_FLAG = "--browser-pane";
@@ -49,7 +50,7 @@ export const PANE = {
   phoneViewport: [402, 874],
   /** the address the default pane's head prints, and the held tools it declares (ids, in order) */
   display: "lumen.example",
-  tools: ["back", "forward", "reload", "address", "device"],
+  tools: ["device", "sound"],
   /** the face's floors — a page, not a fill: its distinct colours (5 bits a channel) and its luma range */
   minColors: 40,
   minLumaRange: 120,
@@ -815,21 +816,7 @@ export async function paneToMiddle(h: PaneHands, e: number, at: LaidAt): Promise
 export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
   const { win, say } = d;
   const h = paneHands(d);
-  const {
-    js,
-    until,
-    press,
-    drag,
-    key,
-    undoKey,
-    pressSelector,
-    census,
-    rows,
-    said,
-    frame,
-    theme,
-    shoot,
-  } = h;
+  const { js, until, press, drag, key, undoKey, census, rows, said, frame, theme, shoot } = h;
   const problems: string[] = [];
   const ambient = await js<string>("globalThis.__vfDesk.ambient()");
   const themeWas = await js<string>("globalThis.__vfDesk.theme()");
@@ -895,10 +882,10 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
     await until(
       "the selection bar over the pane",
       10_000,
-      `document.querySelector('[data-selection-bar] .vf-bar-row [data-act="act:device-phone"]') !== null && document.querySelector("[data-selection-bar]")?.getAttribute("data-shown") === "true"`,
+      `document.querySelector('[data-selection-bar] .vf-bar-row [data-act="act:device"]') !== null && document.querySelector("[data-selection-bar]")?.getAttribute("data-shown") === "true"`,
     );
     await sleep(300);
-    await pressSelector('[data-selection-bar] .vf-bar-row [data-act="act:device-phone"]');
+    await choosePaneDevice(h, "phone");
     await sleep(900);
     const switched = (await rows()).find((r) => r.entity === e);
     const saidPhone = await said(e);

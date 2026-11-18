@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const captured = vi.hoisted(() => ({ options: [] as Electron.BrowserWindowConstructorOptions[] }));
 vi.mock("electron", () => ({
@@ -12,7 +12,7 @@ vi.mock("electron", () => ({
   screen: { getPrimaryDisplay: () => ({ workArea: { x: 0, y: 0, width: 1280, height: 800 } }) },
 }));
 
-import { createMainWindow } from "../src/main/windows";
+import { createMainWindow, loadRenderer } from "../src/main/windows";
 
 describe("main window branding", () => {
   beforeEach(() => {
@@ -40,4 +40,32 @@ describe("main window branding", () => {
     });
     expect(captured.options[0]).not.toHaveProperty("icon");
   });
+});
+
+describe("preview batching on the canvas window", () => {
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(["production", "dev"] as const)(
+    "uses automatic preview batching and supports explicit overrides in %s",
+    async (mode) => {
+      const win = createMainWindow({ mode, preloadPath: "/app/preload.cjs", show: false });
+      const load = vi.fn<(href: string) => Promise<void>>().mockResolvedValue(undefined);
+      win.loadURL = load;
+      const vite = "http://localhost:5173/?existing=1";
+      vi.stubEnv("VF_SIMULATOR_PREVIEW_BATCHING", undefined);
+      await loadRenderer(win, mode, vite);
+      vi.stubEnv("VF_SIMULATOR_PREVIEW_BATCHING", "1");
+      await loadRenderer(win, mode, vite);
+      vi.stubEnv("VF_SIMULATOR_PREVIEW_BATCHING", "0");
+      await loadRenderer(win, mode, vite);
+      const urls = load.mock.calls.map(([href]) => new URL(href));
+      expect(urls.map((url) => url.searchParams.get("simulatorPreviewBatch"))).toEqual([
+        null,
+        "1",
+        "0",
+      ]);
+      if (mode === "dev")
+        expect(urls.every((url) => url.searchParams.get("existing") === "1")).toBe(true);
+    },
+  );
 });

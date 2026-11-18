@@ -115,8 +115,9 @@ describe("the browser pane's kind, judged by the kind-conformance harness WITH t
       "reload",
       "address",
       "device",
+      "sound",
     ]);
-    expect(type.menu.map((a) => a.label)).toEqual(["Laptop", "Desktop", "iPad", "iPhone"]);
+    expect(type.menu.map((a) => a.label)).toEqual(["Device emulation", "Toggle sound"]);
   });
 });
 
@@ -344,6 +345,7 @@ describe("the browser pane's world half", () => {
       reload: ["mod+r"],
       address: ["mod+l"],
       device: [],
+      sound: [],
     });
   });
 

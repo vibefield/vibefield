@@ -18,6 +18,7 @@ import {
   type IosSimulatorResolutionProvider,
   type ResolvedIosSimulatorCapture,
 } from "./ios-simulator-producer";
+import { OwnedSimulatorDevices, type OwnedSimulatorLease } from "./owned-simulator-devices";
 import type { LiveSurfaceRuntimeAttachContext, LiveSurfaceRuntimeAttachment } from "./runtime";
 import {
   createLiveSurfaceRuntimeSupportSnapshot,
@@ -73,7 +74,8 @@ type WindowVerdict = "unknown" | "found" | "none" | "ambiguous" | "denied";
 export type SimulatorDeviceSimctl = Pick<
   SimctlService,
   "list" | "invalidate" | "boot" | "create" | "show"
->;
+> &
+  Partial<Pick<SimctlService, "waitUntilReady" | "shutdown">>;
 
 /** The capture half a bound simulator streams through: the UDID resolver and the helper's client. */
 export interface SimulatorDeviceCapture {
@@ -82,6 +84,8 @@ export interface SimulatorDeviceCapture {
 }
 
 export interface SimulatorDeviceSessionsOptions {
+  readonly framebuffer?: boolean;
+  readonly ownedIdleMs?: number;
   readonly simctl: SimulatorDeviceSimctl;
   /** Built lazily, at the first look; THROWS on a shell with no capture half (not a Mac, or no helper) — the face's
    * `no-simulator` (R5), never a mint error. */
@@ -111,6 +115,7 @@ export interface IosSimulatorDeviceLiveSurfaceRuntime extends LiveSurfaceRuntime
 /** The pool's half a session reaches: R3's host search, a strayed member's own session, its own leaving, and the inner
  * attachments' ids. */
 interface SessionPool {
+  own(binding: LiveSurfaceIosSimulatorBindingV1): OwnedSimulatorLease;
   hostFor(joiner: DeviceSession, udid: string): DeviceSession | undefined;
   split(member: SessionMember): void;
   forget(session: DeviceSession): void;
@@ -181,7 +186,11 @@ function sameBinding(
   left: LiveSurfaceIosSimulatorBindingV1,
   right: LiveSurfaceIosSimulatorBindingV1,
 ): boolean {
-  return left.deviceType === right.deviceType && left.runtime === right.runtime;
+  return (
+    left.deviceType === right.deviceType &&
+    left.runtime === right.runtime &&
+    left.instance === right.instance
+  );
 }
 
 /** Two picks land in one place: the same device — or, with none, the same one "Create it" would make. */
@@ -191,7 +200,8 @@ function samePlace(left: SimctlDevicePick, right: SimctlDevicePick): boolean {
   }
   return (
     left.create?.deviceType === right.create?.deviceType &&
-    left.create?.runtime === right.create?.runtime
+    left.create?.runtime === right.create?.runtime &&
+    left.create?.name === right.create?.name
   );
 }
 
@@ -214,6 +224,7 @@ class DeviceSession {
   readonly members = new Set<SessionMember>();
   readonly records = new Set<DeviceAttachmentRecord>();
   readonly #pool: SessionPool;
+  readonly #owned: OwnedSimulatorLease | undefined;
   readonly #options: SimulatorDeviceSessionsOptions;
   /** what every look picks by: a member's own binding — the opener's, re-keyed when its holder leaves (`rekey`) */
   #binding: LiveSurfaceIosSimulatorBindingV1;
@@ -225,6 +236,10 @@ class DeviceSession {
   #verdict: WindowVerdict = "unknown";
   #degraded = false;
   /** the inner went live on the picked device — its window going then is `stopped`, not `no-window` */
+  #autoStarted = false;
+  #readyUdid: string | undefined;
+  #guestCheck: symbol | undefined;
+  #readyFailed = false;
   #streamed = false;
   /** the inner failed with the window found, at a look: `stopped` until a retry (or a device change) */
   #stalled = false;
@@ -314,6 +329,8 @@ class DeviceSession {
     this.#options = options;
     this.#binding = source.binding;
     this.#crop = source.crop;
+    this.#owned =
+      this.deviceInput && source.binding.instance ? pool.own(source.binding) : undefined;
     this.cropKey = JSON.stringify(source.crop);
     this.#now = options.now ?? Date.now;
     this.#inner = new IosSimulatorLiveSurfaceRuntime({
@@ -337,6 +354,10 @@ class DeviceSession {
   }
 
   /** The device this session streams, upper-cased — an R3 join's key. */
+  get deviceInput(): boolean {
+    return this.#options.framebuffer === true && this.#crop.mode === "auto";
+  }
+
   get attachedUdid(): string | undefined {
     return this.#pick?.device?.udid.toUpperCase();
   }
@@ -345,6 +366,16 @@ class DeviceSession {
     return {
       ...this.#inner.summary,
       surfaceId,
+      ...(this.deviceInput
+        ? {
+            capabilities: {
+              ...this.#inner.summary.capabilities,
+              pointer: true,
+              wheel: true,
+              keyboard: true,
+            },
+          }
+        : {}),
       ...(this.#facts === undefined ? {} : { simulator: this.#facts }),
     };
   }
@@ -391,6 +422,10 @@ class DeviceSession {
         if (!record.active) return;
         record.ask = demand;
         record.member.session.asked(record);
+      },
+      dispatchInput(event, revision) {
+        if (record.active && record.member.session.deviceInput)
+          record.inner?.dispatchInput?.(event, revision);
       },
       device(command: LiveSurfaceDeviceCommandV1) {
         if (!record.active) return;
@@ -466,7 +501,7 @@ class DeviceSession {
     this.records.clear();
     this.members.clear();
     this.#pool.forget(this);
-    // an act in flight is allowed to finish (a spawned boot is CoreSimulator's); nothing is shut down
+    this.#owned?.release();
     this.#inner.dispose();
   }
 
@@ -568,12 +603,17 @@ class DeviceSession {
   private async run(verb: LiveSurfaceDeviceVerbV1): Promise<void> {
     const simctl = this.#options.simctl;
     const device = this.#pick?.device;
+    if (this.#owned && (verb === "create" || verb === "boot")) {
+      await this.#owned.start();
+      this.#graceUntil = this.#now() + (this.#options.bootGraceMs ?? BOOT_GRACE_MS);
+      return;
+    }
     switch (verb) {
       case "boot": {
         if (device === undefined) return;
         await simctl.boot(device.udid);
         this.#graceUntil = this.#now() + (this.#options.bootGraceMs ?? BOOT_GRACE_MS);
-        await simctl.show(device.udid);
+        if (!this.deviceInput) await simctl.show(device.udid);
         return;
       }
       case "create": {
@@ -583,7 +623,7 @@ class DeviceSession {
         const udid = await simctl.create(plan.name, plan.deviceType, plan.runtime);
         await simctl.boot(udid);
         this.#graceUntil = this.#now() + (this.#options.bootGraceMs ?? BOOT_GRACE_MS);
-        await simctl.show(udid);
+        if (!this.deviceInput) await simctl.show(udid);
         return;
       }
       case "show": {
@@ -599,6 +639,7 @@ class DeviceSession {
           this.#graceUntil = this.#now() + (this.#options.showGraceMs ?? SHOW_GRACE_MS);
         }
         this.#stalled = false;
+        this.#readyFailed = false;
         this.#verdict = "unknown";
         for (const record of this.records) record.forceForward = true;
         return;
@@ -634,6 +675,32 @@ class DeviceSession {
     this.refresh();
   }
 
+  /** CoreSimulator can publish the boot display while iOS is still migrating data and starting SpringBoard. */
+  private async checkGuestReadiness(udid: string): Promise<void> {
+    const simctl = this.#options.simctl;
+    if (!simctl.waitUntilReady || this.#readyUdid === udid || this.#guestCheck) return;
+    const check = Symbol();
+    this.#guestCheck = check;
+    this.refresh();
+    try {
+      await simctl.waitUntilReady(udid);
+      if (this.#disposed || this.#guestCheck !== check) return;
+      this.#readyUdid = udid;
+      // Display services may have been unavailable during the producer's early attempts.
+      if (this.#inner.summary.state === "failed") {
+        this.#stalled = false;
+        for (const record of this.records) record.forceForward = true;
+      }
+    } catch {
+      if (this.#guestCheck === check) this.#readyFailed = true;
+    } finally {
+      if (this.#guestCheck === check) {
+        this.#guestCheck = undefined;
+        this.refresh();
+      }
+    }
+  }
+
   private async lookOnce(): Promise<void> {
     const capture = this.captureOrNull();
     if (capture === null) return;
@@ -658,9 +725,35 @@ class DeviceSession {
     // a failure the window does not explain (the helper, the stream): the face's `stopped`, until a retry
     if (
       this.#inner.summary.state === "failed" &&
+      !this.#guestCheck &&
       (this.#verdict === "found" || this.#verdict === "unknown")
     ) {
       this.#stalled = true;
+    }
+    if (this.#binding.instance && this.deviceInput && !this.#autoStarted && this.hasLiveAsk()) {
+      const condition = this.derive();
+      const verb =
+        condition === "no-device" && this.#pick?.create
+          ? "create"
+          : condition === "off"
+            ? "boot"
+            : undefined;
+      if (verb) {
+        this.#autoStarted = true;
+        this.#condition = condition;
+        this.act(verb);
+        return;
+      }
+    }
+    const device = this.#pick?.device;
+    if (
+      this.deviceInput &&
+      device?.state === "Booted" &&
+      this.#acting === null &&
+      this.hasLiveAsk() &&
+      !this.#readyFailed
+    ) {
+      void this.checkGuestReadiness(device.udid);
     }
     if (this.shouldProbe()) await this.probe(capture);
   }
@@ -668,8 +761,14 @@ class DeviceSession {
   /** true when this session joined another (R3) and is gone */
   private setPick(pick: SimctlDevicePick): boolean {
     const before = this.attachedUdid;
+    const wasBooted = this.#pick?.device?.state === "Booted";
     this.#pick = pick;
     const after = this.attachedUdid;
+    if (before !== after || (wasBooted && pick.device?.state !== "Booted")) {
+      this.#guestCheck = undefined;
+      this.#readyUdid = undefined;
+      this.#readyFailed = false;
+    }
     if (before === after) return false;
     // another device: nothing known of the last one's window says anything of this one's
     this.#verdict = "unknown";
@@ -742,7 +841,7 @@ class DeviceSession {
 
   private noteResolved(udid: string, resolved: ResolvedIosSimulatorCapture): void {
     if (this.#disposed || !sameUdid(udid, this.attachedUdid)) return;
-    const degraded = resolved.geometry.cropState === "degraded";
+    const degraded = resolved.geometry?.cropState === "degraded";
     if (this.#verdict === "found" && this.#degraded === degraded) return;
     if (this.#verdict !== "found") this.#stalled = false;
     this.#verdict = "found";
@@ -798,8 +897,11 @@ class DeviceSession {
     const device = pick.device;
     if (device === undefined) return "no-device";
     if (this.#acting === "boot") return "booting";
+    if (this.#readyFailed && device.state === "Booted") return "stopped";
     if (device.state === "Booting" || device.state === "Creating") return "booting";
     if (device.state !== "Booted") return "off";
+    if (this.deviceInput && this.#options.simctl.waitUntilReady && this.#readyUdid !== device.udid)
+      return "booting";
     switch (this.#verdict) {
       case "denied":
         return "no-permission";
@@ -827,6 +929,9 @@ class DeviceSession {
         : {}),
       ...(device === undefined ? {} : { deviceType: device.deviceType, runtime: device.runtime }),
       ...(this.#acting === null ? {} : { acting: this.#acting }),
+      ...(condition === "no-device" && this.#binding.instance && !this.#pick?.create
+        ? { configurationUnavailable: true }
+        : {}),
       ...(condition === "streaming" && this.#degraded ? { degraded: true } : {}),
     });
   }
@@ -867,13 +972,18 @@ class DeviceSession {
     record.context.publishSummary(summary);
   }
 
-  /** Demand reaches the inner only while `streaming`; else main's own hibernated demand. Forwarded on change, with
-   * main's own monotonic revision. */
+  /** Show the guest's own boot animation at low cadence. Interactive demand starts when iOS is ready. */
   private gate(record: DeviceAttachmentRecord): void {
     const ask = record.ask;
     const inner = record.inner;
     if (!record.active || ask === null || inner === null) return;
-    const demand = this.#condition === "streaming" ? ask : withheld(ask);
+    let demand = ask;
+    if (this.#condition !== "streaming") {
+      const bootDisplay = this.#condition === "booting" && this.#guestCheck && ask.mode === "live";
+      demand = bootDisplay
+        ? { ...ask, interactive: false, targetFps: ask.targetFps > 5 ? 5 : ask.targetFps }
+        : withheld(ask);
+    }
     const shape = demandShape(demand);
     if (shape === record.forwardedShape && !record.forceForward) return;
     record.forceForward = false;
@@ -920,6 +1030,10 @@ class BoundSimulatorSurface implements IosSimulatorDeviceLiveSurfaceRuntime {
     this.#member = member;
   }
 
+  get deviceInput(): boolean {
+    return this.#member.session.deviceInput;
+  }
+
   get summary(): LiveSurfaceRuntimeSummaryV1 {
     return this.#member.session.summaryFor(this.surfaceId);
   }
@@ -945,6 +1059,7 @@ class BoundSimulatorSurface implements IosSimulatorDeviceLiveSurfaceRuntime {
  * one already streaming the device it picked (R3). `open` is the authority's factory.
  */
 export class SimulatorDeviceSessions {
+  readonly #owned: OwnedSimulatorDevices;
   readonly #options: SimulatorDeviceSessionsOptions;
   readonly #sessions = new Set<DeviceSession>();
   /** PT-S3 (D1): every session ever made — each makes its ONE inner at birth, so this counts inners made (R7) */
@@ -952,6 +1067,7 @@ export class SimulatorDeviceSessions {
   #attachments = 0;
   #disposed = false;
   readonly #pool: SessionPool = {
+    own: (binding) => this.#owned.acquire(binding),
     hostFor: (joiner, udid) => {
       for (const session of this.#sessions) {
         if (
@@ -993,6 +1109,12 @@ export class SimulatorDeviceSessions {
       if (value !== undefined) positive(value, `bound Simulator ${name}`);
     }
     this.#options = options;
+    this.#owned = new OwnedSimulatorDevices(options.simctl, options.ownedIdleMs, () =>
+      options.logger?.warn(
+        "desktop.live_surfaces.simulator_shutdown_failed",
+        "Could not shut down a pane-owned simulator",
+      ),
+    );
   }
 
   /** the sessions alive — one a device being streamed, after R3's joins */
@@ -1018,9 +1140,9 @@ export class SimulatorDeviceSessions {
     return new BoundSimulatorSurface(id, source, member);
   }
 
-  dispose(): void {
-    if (this.#disposed) return;
+  async dispose(): Promise<void> {
     this.#disposed = true;
     for (const session of [...this.#sessions]) session.dispose();
+    await this.#owned.dispose();
   }
 }

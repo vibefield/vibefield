@@ -1,20 +1,6 @@
-// PT-S2 (R11) — THE DEVICES A PHONE MAY ATTACH: what VibeField lends a simulator kind under the SDK's `SIMULATOR_DEVICES`,
-// beside `LIVE` (desk-layer.ts) — the phone's ATTACH reads it, and binds by what it answers.
-//  - SYNCHRONOUS, from a SNAPSHOT: a menu act runs once, outside the tick, and writes in its own transaction, so `attachable`
-//    answers from what the host last read of this Mac's devices — main's redacted rows (`surface.simulator.devices`, the
-//    window's product connection, under `surface.capture`: `{ deviceType, runtime, name, booted }`, never a UDID) and the
-//    runtimes installed here (ids only, the newest first). Before the first read it answers undefined (the act writes
-//    nothing).
-//  - READ WHILE A PHONE STANDS: the host looks every `SIMULATOR_DEVICES_LOOK_MS` whether an object that may show a Simulator
-//    stands on the open board — one whose plugin is granted the Simulator's scopes (live-gate.ts `SIMULATOR_SCOPES`: the host
-//    names no plugin's type, as the gate names none) — and while one does, reads the list again at most every
-//    `SIMULATOR_DEVICES_READ_MS` (main's one list a tick serves it: R8). No phone, no read. A read that fails leaves the last
-//    one standing. The looks are the window's timers, never the desk's loop: a desk at rest is never woken by them.
-//  - THE PICK (`attachableOf`, pure): the booted device of the phone's own model; else the first booted iPhone (the phone
-//    takes its model); else the phone's own model on the newest iOS runtime INSTALLED here, whether or not a device runs it
-//    yet (DESIGN.md §9) — main's R3 attaches the model's device on any runtime, a booted one first, and its face then says
-//    honestly that it is off, or that there is none (and "Create it" makes one). Always a BINDING the contracts accept,
-//    never a UDID.
+// Simulator setup reads Xcode's installed runtimes and compatible iPhone models when opened or refreshed.
+// Concurrent requests share one read. Older plugins can still ask for a synchronous device snapshot, which
+// starts periodic reads while a simulator-capable object is on the board. Both APIs use the same redacted RPC.
 
 import {
   type CanvasEngine,
@@ -29,6 +15,7 @@ import {
 import {
   LiveSurfaceIosSimulatorBindingV1,
   type LiveSurfaceSimulatorDeviceRowV1,
+  type LiveSurfaceSimulatorRuntimeOptionV1,
   SurfaceSimulatorDevicesResultV1,
 } from "@vibefield/contracts";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
@@ -155,6 +142,7 @@ export function simulatorObjectsStand(deps: {
 }
 
 export interface DeskSimulatorDevicesDeps {
+  readonly setup?: SimulatorDevices["setup"];
   /** The WINDOW's product connection — the list rides it, as the desk's mint does (desk-live.ts). Null: daemon away. */
   readonly mintClient: () => { request(method: string, params?: unknown): Promise<unknown> } | null;
   /** Whether a phone stands on the board now (`simulatorObjectsStand`): no phone, no read. */
@@ -177,8 +165,7 @@ export interface DeskSimulatorDevicesStats {
 }
 
 export interface DeskSimulatorDevices extends SimulatorDevices {
-  /** Begin looking (the first look at once); the answer stops it. A mount calls it from its effect (a discarded memo's twin
-   * never starts a timer). */
+  /** Scope legacy snapshot polling to this mount. A caller of attachable starts the first read. */
   watch(): () => void;
   /** Look now: whether a phone stands, and — when one does and the last read is old — read the list (awaited). */
   look(): Promise<void>;
@@ -194,6 +181,7 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
   /** The last read: its rows, the runtimes installed here, and when it landed — undefined: cold. */
   let snapshot:
     | {
+        readonly configurations: readonly LiveSurfaceSimulatorRuntimeOptionV1[] | undefined;
         readonly rows: readonly LiveSurfaceSimulatorDeviceRowV1[];
         readonly runtimes: readonly string[];
         readonly at: number;
@@ -207,22 +195,29 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
   const read = (): Promise<void> => {
     if (reading !== null) return reading;
     const client = deps.mintClient();
-    if (client === null) return Promise.resolve();
+    if (client === null) return Promise.reject(new Error("Desktop connection unavailable"));
     counts.reads += 1;
     const run = (async () => {
       try {
         const raw = await client.request("surface.simulator.devices", {});
         const listed = SurfaceSimulatorDevicesResultV1.parse(raw);
-        snapshot = { rows: listed.devices, runtimes: listed.runtimes ?? [], at: now() };
-      } catch {
+        snapshot = {
+          rows: listed.devices,
+          runtimes: listed.runtimes ?? [],
+          configurations: listed.configurations,
+          at: now(),
+        };
+      } catch (error) {
         counts.failures += 1; // the last read stands: a phone attaches by type, and its face says what is true
+        throw error;
       }
     })();
     // let go once it lands (before the look that awaits it goes on) — never before it is held, should the ask throw at once
     reading = run;
-    void run.then(() => {
+    const finished = () => {
       if (reading === run) reading = null;
-    });
+    };
+    void run.then(finished, finished);
     return run;
   };
 
@@ -236,7 +231,7 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
     }
     if (!wanted) return;
     if (snapshot !== undefined && now() - snapshot.at < SIMULATOR_DEVICES_READ_MS) return;
-    await read();
+    await read().catch(() => {});
   };
 
   const step = (): void => {
@@ -247,11 +242,23 @@ export function createSimulatorDevices(deps: DeskSimulatorDevicesDeps): DeskSimu
   };
 
   return {
-    attachable: (prefer) =>
-      snapshot === undefined ? undefined : attachableOf(snapshot.rows, prefer, snapshot.runtimes),
+    ...(deps.setup ? { setup: deps.setup } : {}),
+    async configurations() {
+      // A user opening or refreshing setup should see a newly installed runtime immediately.
+      await read();
+      if (!snapshot?.configurations) throw new Error("Simulator catalog unavailable");
+      return snapshot.configurations;
+    },
+    attachable(prefer) {
+      // Older plugins read a synchronous device snapshot. Start their polling only
+      // when one actually asks. The configuration picker reads on open and refresh.
+      if (watching > 0 && timer === null) step();
+      return snapshot === undefined
+        ? undefined
+        : attachableOf(snapshot.rows, prefer, snapshot.runtimes);
+    },
     watch() {
       watching += 1;
-      if (watching === 1) step();
       let stopped = false;
       return () => {
         if (stopped) return;

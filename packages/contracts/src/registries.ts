@@ -2893,6 +2893,8 @@ export const IPC_CHANNELS = {
    * the desk's browser profile and reloads the open pages on it. No path, no
    * site, no size crosses; a registered window alone may ask. */
   browserDataClear: "vibefield:browser:clear-data",
+  simulatorSetupCheck: "vibefield:simulator:setup-check",
+  simulatorSetupOpen: "vibefield:simulator:setup-open",
   /** renderer → main invoke: ClipboardReadRequest → ClipboardReadResult — a paste
    * in the deck or the sign-in terminal (item 102; design-03 §5.1's
    * `shell.clipboard.*`, the product window's read half). Main reads the system

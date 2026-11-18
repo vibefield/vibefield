@@ -247,6 +247,71 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
     expect("input" in face).toBe(false);
   });
 
+  it("enables input only for a held device with a presented frame and the device input capability", () => {
+    const { face, presentation, handle } = phone();
+    Object.assign(presentation.summary, { capabilities: { pointer: true } });
+    simSays(presentation, handle, STREAMING);
+    const tap = {
+      kind: "pointer",
+      phase: "down",
+      x: 25,
+      y: 60,
+      button: 0,
+      buttons: 1,
+      count: 1,
+    } as const;
+    face.demand(PHONE_HELD);
+    face.input?.(tap);
+    expect(handle.inputs).toEqual([]);
+    presentation.land();
+    face.take();
+    face.input?.(tap);
+    expect(handle.inputs).toEqual([
+      { revision: 1, event: expect.objectContaining({ kind: "pointer", x: 25, y: 60 }) },
+    ]);
+    face.demand(PHONE_REST);
+    face.input?.(tap);
+    expect(handle.inputs).toHaveLength(1);
+    Object.assign(presentation.summary, { capabilities: { pointer: false } });
+    simSays(presentation, handle, STREAMING);
+    expect("input" in face).toBe(false);
+  });
+
+  it("distinguishes a presented boot screen from a retained texture and withholds input until ready", () => {
+    const t = setup({ gate });
+    const face = t.live.open(PHONE, { ...SIM, dedicated: true }, () => {});
+    const handle = t.handles[0]!;
+    const presentation = fakePresentation();
+    Object.assign(presentation.summary, { capabilities: { pointer: true } });
+    handle.set({ status: "live", presentation: presentation as never });
+    simSays(presentation, handle, { condition: "booting" });
+    face.demand(PHONE_HELD);
+    const display = () => liveSimulatorFace(face.info())?.bootDisplay;
+    expect(display()).toBe("starting");
+    presentation.land();
+    expect(display()).toBe("starting");
+    face.take();
+    expect(display()).toBe("live");
+    const tap = {
+      kind: "pointer",
+      phase: "down",
+      x: 25,
+      y: 60,
+      button: 0,
+      buttons: 1,
+      count: 1,
+    } as const;
+    face.input?.(tap);
+    expect(handle.inputs).toHaveLength(0);
+    simSays(presentation, handle, STREAMING);
+    expect(display()).toBeUndefined();
+    face.input?.(tap);
+    expect(handle.inputs).toHaveLength(1);
+    simSays(presentation, handle, { condition: "booting" });
+    expect(display()).toBe("starting");
+    face.close();
+  });
+
   it("the phone's law in the pool's words: in the hand 60 at its native raster, urgent; at rest 12 — bucketed to 10 — at priority 50; unseen paused; never a viewport", () => {
     const { face, handle } = phone();
     face.demand(PHONE_HELD);

@@ -51,7 +51,18 @@ describe("vibefield.browser-pane", () => {
   });
 
   it("keeps the address, the device, the glass and the scheme — never a viewport: Size is the truth and the viewport its derivation", () => {
-    expect(Object.keys(row?.props ?? {}).sort()).toEqual(["device", "finish", "scheme", "url"]);
+    expect(Object.keys(row?.props ?? {}).sort()).toEqual([
+      "device",
+      "deviceScaleFactor",
+      "finish",
+      "inputMode",
+      "muted",
+      "navigatorPlatform",
+      "scheme",
+      "url",
+      "userAgent",
+      "userAgentMode",
+    ]);
     const device = row?.props.device;
     expect(device?.kind === "enum" ? [device.options, device.default] : undefined).toEqual([
       [...DEVICE_IDS],

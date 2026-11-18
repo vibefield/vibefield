@@ -120,7 +120,7 @@ describe("the live page's rows", () => {
     ]);
   });
 
-  it("HELD: the kind asks native at 60, interactive, and the wire says so at priority 80", () => {
+  it("HELD: the kind asks for interactive frames at 60, interactive, and the wire says so at priority 80", () => {
     const ok: LiveSeen["held"] = {
       held: true,
       ask: { mode: "live", fps: 60, raster: [2560, 1600], interactive: true },

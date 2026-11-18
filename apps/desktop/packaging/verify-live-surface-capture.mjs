@@ -33,12 +33,14 @@ let adapter;
 function parseArguments(args) {
   const parsed = {
     enumerateOnly: false,
+    simulator: undefined,
     match: undefined,
     matchApp: undefined,
     matchTitle: undefined,
     nativeRoot: undefined,
   };
   const valueOptions = new Map([
+    ["--simulator", "simulator"],
     ["--match", "match"],
     ["--match-app", "matchApp"],
     ["--match-title", "matchTitle"],
@@ -74,6 +76,18 @@ function parseArguments(args) {
     (parsed.match !== undefined || parsed.matchApp !== undefined || parsed.matchTitle !== undefined)
   ) {
     throw new Error("capture match options cannot be combined with --enumerate-only");
+  }
+  if (
+    parsed.simulator !== undefined &&
+    (!/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/iu.test(parsed.simulator) ||
+      parsed.enumerateOnly ||
+      parsed.match ||
+      parsed.matchApp ||
+      parsed.matchTitle)
+  ) {
+    throw new Error(
+      "--simulator requires a booted device UUID and cannot be combined with window options",
+    );
   }
   if (parsed.nativeRoot !== undefined) parsed.nativeRoot = resolve(parsed.nativeRoot);
   return parsed;
@@ -215,7 +229,9 @@ try {
   const ready = await request("hello", "ready", { expectedParentPid: process.pid });
   if (ready.pid !== child.pid || ready.protocolVersion !== 1)
     fail("capture helper identity mismatch");
-  const listed = await request("enumerate", "sources", { allSpaces: true });
+  const listed = options.simulator
+    ? { sources: [] }
+    : await request("enumerate", "sources", { allSpaces: true });
   if (!Array.isArray(listed.sources)) fail("capture helper returned invalid sources");
   if (options.enumerateOnly) {
     process.stdout.write(
@@ -246,11 +262,13 @@ try {
                 candidate.applicationName !== "Dock" &&
                 candidate.applicationName !== "Wallpaper",
             );
-    if (source === undefined) fail("no capturable application window is available");
-    await request("start", "started", {
+    if (!options.simulator && !source) fail("no capturable application window is available");
+    const started = await request("start", "started", {
       sessionKey,
       producerEpoch: 1,
-      sourceRef: source.sourceRef,
+      ...(options.simulator
+        ? { simulatorDevice: options.simulator }
+        : { sourceRef: source.sourceRef }),
       crop: { mode: "none" },
       captureCursor: false,
       demand: {
@@ -260,6 +278,8 @@ try {
         targetRasterSize: { width: 320, height: 180 },
       },
     });
+    if (options.simulator && started.frameSource !== "simulator-framebuffer")
+      fail("unexpected simulator frame source");
     const frame = await waitForFrame();
     const localReleased = adapter.release(frame.frameId);
     write({
@@ -291,7 +311,9 @@ try {
         handshake: true,
         sourceCount: listed.sources.length,
         captured: {
-          applicationName: source.applicationName,
+          ...(options.simulator
+            ? { frameSource: started.frameSource }
+            : { applicationName: source.applicationName }),
           width: frame.width,
           height: frame.height,
           logicalWidth: frame.logicalWidth,

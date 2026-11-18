@@ -4,14 +4,13 @@ import { CustodyLevel } from "./custody";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind, UnavailableDetails } from "./errors";
 import {
-  CoreSimulatorRuntimeIdV1,
   LiveSurfaceAttachTicketV1,
   LiveSurfaceIdV1,
-  LiveSurfaceSimulatorDeviceRowV1,
   LiveSurfaceSourceSpecV1,
   SURFACE_LIMITS,
   SurfaceEnumerationKindV1,
   SurfaceReuseKeyV1,
+  SurfaceSimulatorDevicesResultV1,
   SurfaceSourceDescriptorV1,
 } from "./live-surfaces";
 import { PagesNeed } from "./pages";
@@ -1086,15 +1085,7 @@ export type ShellSurfacesSimulatorDevicesParams = z.infer<
 /** PT-S2 (R11) — this Mac's simulator devices, the booted first, REDACTED at main's boundary to the row (a UDID on a
  * row is refused here too: it can never reach fieldd, let alone a window). Empty: no Simulator here, or none of its
  * devices. With them the runtimes installed here, the newest first (ids only): the attach's third pick. */
-export const ShellSurfacesSimulatorDevicesResult = z
-  .object({
-    devices: z.array(LiveSurfaceSimulatorDeviceRowV1).max(SURFACE_LIMITS.MAX_SIMULATOR_DEVICES),
-    runtimes: z
-      .array(CoreSimulatorRuntimeIdV1)
-      .max(SURFACE_LIMITS.MAX_SIMULATOR_RUNTIMES)
-      .optional(),
-  })
-  .passthrough();
+export const ShellSurfacesSimulatorDevicesResult = SurfaceSimulatorDevicesResultV1;
 export type ShellSurfacesSimulatorDevicesResult = z.infer<
   typeof ShellSurfacesSimulatorDevicesResult
 >;

@@ -104,6 +104,7 @@ import {
   registerScreenshotPreview,
   registerScreenshotStillBytes,
   registerScreenshotStillKept,
+  registerSimulatorSetup,
   registerSoundDoors,
   registerThemeSet,
   registerUpdateDoors,
@@ -120,6 +121,7 @@ import {
   createProductionLiveSurfaceSupport,
   type ProductionLiveSurfaceSupport,
 } from "./live-surfaces/authority-production";
+import { configureBrowserEngineIdentity } from "./live-surfaces/browser-electron-native";
 import {
   browserProfilesPlacement,
   sayBrowserProfilesPlacement,
@@ -364,7 +366,7 @@ async function revealPrimaryWindow(): Promise<Electron.BrowserWindow> {
   return primaryWindowOpener();
 }
 
-function disposeShellState(): void {
+function disposeShellState(): Promise<void> {
   DEVELOPMENT_EXTENSION?.dispose();
   trayController?.dispose();
   trayController = null;
@@ -385,13 +387,14 @@ function disposeShellState(): void {
   shellDisposers.clear();
   liveSurfaceAuthority?.dispose();
   liveSurfaceAuthority = null;
-  void liveSurfaceSupport?.dispose();
+  const surfacesStopped = liveSurfaceSupport?.dispose();
   liveSurfaceSupport = null;
   liveSurfaceWindowHosts.clear();
   liveSurfaceTextureBudgets.clear();
   liveSurfaceTickets.clear();
   fielddHandles?.dispose();
   fielddHandles = null;
+  return surfacesStopped ?? Promise.resolve();
 }
 
 function installLiveSurfaceHost(window: Electron.BrowserWindow, logger: Logger): void {
@@ -2009,6 +2012,13 @@ async function main(
   registerDeckSet(registry, windowLights, logger.child({ component: "ipc.deck" }));
   // DK-9: a window replaces its renderer at its own asking (a plugin's kinds changed)
   registerRendererReplace(registry, logger.child({ component: "ipc.renderer" }));
+  registerSimulatorSetup(registry, {
+    check: async () => liveSurfaceSupport?.checkSimulatorSetup() ?? { stage: "unavailable" },
+    open: async (target) => {
+      if (!liveSurfaceSupport) throw new Error("Simulator setup is unavailable");
+      await liveSurfaceSupport.openSimulatorSetup(target);
+    },
+  });
   // BP-D4: Settings' Clear browsing data — the live-surface support clears this shell's profiles (none before it exists)
   registerBrowserDataClear(
     registry,
@@ -3259,6 +3269,7 @@ async function main(
 }
 
 app.setName("VibeField");
+configureBrowserEngineIdentity();
 if (process.platform === "win32") app.setAppUserModelId(DESKTOP_APP_ID);
 // ESP §6.1 step 2 — privileged schemes MUST be declared before ready; Electron
 // refuses the registration afterwards, and a scheme that is not `standard`

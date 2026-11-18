@@ -34,6 +34,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { choosePaneDevice } from "./browser-pane-chrome";
 import {
   FIXTURE_COOKIE,
   FIXTURE_EDGE,
@@ -695,7 +696,7 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     ok: (r: FixtureReport) => boolean,
   ): Promise<{ heard: FixtureReport | null; loads: number; favicon: string | null }> => {
     await select(e);
-    const act = `[data-selection-bar] .vf-bar-row [data-act="act:device-${device}"]`;
+    const act = `[data-selection-bar] .vf-bar-row [data-act="act:device"]`;
     await until(
       `the bar's ${device} act`,
       10_000,
@@ -703,7 +704,7 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     );
     await sleep(300);
     const loads = d.fixture.served("/page");
-    await h.pressSelector(act);
+    await choosePaneDevice(h, device);
     const heard = await hear(`the page seen as a ${device}`, ok);
     // a second load would follow the first within a moment: listened for before the count is read
     await sleep(1500);

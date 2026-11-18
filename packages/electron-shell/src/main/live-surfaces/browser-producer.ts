@@ -22,6 +22,7 @@ import type {
   BrowserControlTargetRegistry,
   BrowserControlTargetWebContents,
 } from "./browser-control-target";
+import { coalesceBrowserInput } from "./browser-input-coalescing";
 import {
   browserSurfacePartition,
   browserSurfaceProfileName,
@@ -118,7 +119,11 @@ export interface BrowserSurfaceNativeWindow {
   setEmulation(emulation: BrowserSurfaceNativeEmulation): Promise<void>;
   /** PT-6a (K2): `heardAt` — when the producer HEARD the event (`performance.now()`): a wheel's gesture is measured by it (the
    * producer calls this once per answer — its one chain awaits each dispatch); absent, the call's own moment. */
-  dispatchMouse(input: BrowserSurfaceNativeMouseInput, heardAt?: number): Promise<void>;
+  dispatchMouse(
+    input: BrowserSurfaceNativeMouseInput,
+    heardAt?: number,
+    heardUntil?: number,
+  ): Promise<void>;
   /** PT-4: a finger on a touch device's page (CDP `Input.dispatchTouchEvent`). */
   dispatchTouch(input: BrowserSurfaceNativeTouchInput): Promise<void>;
   dispatchKey(input: BrowserSurfaceNativeKeyInput): Promise<void>;
@@ -209,6 +214,7 @@ export interface BrowserSurfaceNavigationState {
   readonly loading: boolean;
   readonly canGoBack: boolean;
   readonly canGoForward: boolean;
+  readonly fullscreen?: boolean;
   /** PT-5b3 (ruling 4): how many DOCUMENTS of the page this window has committed (0: none yet) — one more at a
    * navigation's commit and at a failed load's error page; never at a move within a document (a hash, `pushState`,
    * `replaceState`), a load that only began, or one that was aborted — nor (PT-5c2, F1) at a committed document's load
@@ -222,7 +228,7 @@ export interface BrowserSurfaceNavigationState {
 
 /** PT-5a: a page's state as a producer started again finds it — its address kept, its last load's failure forgotten. */
 function loadingAgain(state: LiveSurfaceBrowserStateV1): LiveSurfaceBrowserStateV1 {
-  const { failure: _failure, ...rest } = state;
+  const { failure: _failure, fullscreen: _fullscreen, ...rest } = state;
   return { ...rest, loading: true, canGoBack: false, canGoForward: false };
 }
 
@@ -252,8 +258,9 @@ export function loadFailureOf(code: number): LiveSurfaceLoadFailureV1 {
 
 /** CDP's `userAgentMetadata` — the client hints an agent ships with. */
 export interface BrowserSurfaceUserAgentMetadata {
-  readonly brands: readonly { readonly brand: string; readonly version: string }[];
-  readonly fullVersionList: readonly { readonly brand: string; readonly version: string }[];
+  /** Omit for the engine identity so Chromium supplies its current brand/version lists. */
+  readonly brands?: readonly { readonly brand: string; readonly version: string }[];
+  readonly fullVersionList?: readonly { readonly brand: string; readonly version: string }[];
   readonly platform: string;
   readonly platformVersion: string;
   readonly architecture: string;
@@ -339,14 +346,8 @@ export function engineAgentOf(host: {
     userAgent: `Mozilla/5.0 (${os.token}) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${major}.0.0.0 Safari/537.36`,
     navigatorPlatform: os.navigator,
     metadata: {
-      brands: [
-        { brand: "Chromium", version: major },
-        { brand: "Not?A_Brand", version: "99" },
-      ],
-      fullVersionList: [
-        { brand: "Chromium", version: host.chrome },
-        { brand: "Not?A_Brand", version: "99.0.0.0" },
-      ],
+      // CDP fills these optional brand/version lists from Chromium, including current GREASE values.
+      // A fixed list would disagree with the native metadata seen by profile-owned service workers.
       platform: os.hint,
       platformVersion: host.systemVersion,
       architecture: host.arch.startsWith("arm") ? "arm" : "x86",
@@ -511,6 +512,7 @@ export interface BrowserLiveSurfaceRuntimeStats {
   readonly importedReferencesReleased: number;
   readonly inputRequests: number;
   readonly inputDropped: number;
+  readonly inputCoalesced: number;
   /** PT-5d (M15): the key-like events refused because a frame of another site held the focus — counted in `inputDropped`
    * too (typing into such a frame is off: `BrowserFrameKeysRefused`). */
   readonly frameKeysRefused: number;
@@ -581,13 +583,6 @@ function roundedViewport(
     width: Math.max(1, Math.min(16_384, Math.round(viewport.width))),
     height: Math.max(1, Math.min(16_384, Math.round(viewport.height))),
   };
-}
-
-function sameViewport(
-  left: LiveSurfaceBrowserSourceV1["logicalViewport"],
-  right: LiveSurfaceBrowserSourceV1["logicalViewport"],
-): boolean {
-  return left.width === right.width && left.height === right.height;
 }
 
 function clampCpuRaster(size: LiveSurfacePixelSizeV1): LiveSurfacePixelSizeV1 {
@@ -754,6 +749,7 @@ function clampBrowserState(
     loading: state.loading,
     canGoBack: state.canGoBack,
     canGoForward: state.canGoForward,
+    ...(state.fullscreen ? { fullscreen: true } : {}),
     ...(state.failure === undefined ? {} : { failure: { reason: loadFailureOf(state.failure) } }),
   };
 }
@@ -1009,8 +1005,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #rasterTimer: ReturnType<typeof setTimeout> | null = null;
   #restartTimer: ReturnType<typeof setTimeout> | null = null;
   #hibernateTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Muted because no renderer is attached (the grace's page); unmuted when one comes back. */
+  /** Native mute combines the user preference with the source’s current visibility. */
   #muted = false;
+  #userMuted = false;
   #effectiveDemand: LiveSurfaceDemandV1 | null = null;
   #transport: "shared-texture" | "cpu-bgra" | undefined;
   /** The logical viewport the page is CURRENTLY laid out at (DT-3f): starts as
@@ -1092,6 +1089,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #importedReferencesReleased = 0;
   #inputRequests = 0;
   #inputDropped = 0;
+  #inputCoalesced = 0;
+  #pendingPointerPresses = 0;
   #frameKeysRefused = 0;
   #navigationRequests = 0;
   #navigationDropped = 0;
@@ -1130,6 +1129,18 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #documentBase = 0;
   /** PT-5b2 (ruling 4) — ONE CHAIN a page: the hand's events take their turn here, in the order they were sent. */
   #inputTail: Promise<void> = Promise.resolve();
+  #pendingContinuous:
+    | {
+        request: BrowserSurfaceInputRequest;
+        window: BrowserSurfaceNativeWindow | null;
+        document: number;
+        by: string | undefined;
+        device: string;
+        firstHeard: number;
+        lastHeard: number;
+        turn: Promise<void>;
+      }
+    | undefined;
   /**
    * PT-5b3 (ruling 5) — A TURN PENDING ON A WINDOW ENDS WHEN THE PRODUCER LETS THAT WINDOW GO (a remake, a rest, a crash
    * and its restart, a failure, the end). (The engine rejects a command pending at a detach or a destroy — "target closed
@@ -1200,6 +1211,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     this.#viewport = roundedViewport(this.source.logicalViewport);
     this.#emulation = this.source.emulation;
+    this.#userMuted = this.source.muted ?? false;
     this.#profilesRoot = options.profilesRoot;
     this.#profilesPackaged = options.profilesPackaged === true;
     this.#native = options.native;
@@ -1283,6 +1295,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       importedReferencesReleased: this.#importedReferencesReleased,
       inputRequests: this.#inputRequests,
       inputDropped: this.#inputDropped,
+      inputCoalesced: this.#inputCoalesced,
       frameKeysRefused: this.#frameKeysRefused,
       navigationRequests: this.#navigationRequests,
       navigationDropped: this.#navigationDropped,
@@ -1444,7 +1457,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * Main-private input seam; authorization is deliberately outside LiveSurfaceAttachment.
    *
    * PT-5b2 (ruling 4) — THE HAND'S EVENTS REACH THE PAGE IN THE ORDER THEY WERE SENT, whatever is awaited on the way:
-   * one chain a page. An event takes its turn behind the one before it — a pointer, a wheel, a key, text, a composition
+   * one chain a page. Adjacent waiting hovers keep their latest point and compatible wheels preserve their summed travel;
+   * discrete events and gesture boundaries retain their order — a pointer, a wheel, a key, text, a composition
    * alike — and a dispatch that rejects (a command the window refuses) is its own caller's, never the chain's. PT-5c
    * routes on this chain.
    *
@@ -1487,13 +1501,73 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       if (move && gesture !== undefined) gesture.refused = true;
       return Promise.reject(new Error("Browser input named a stale geometry revision"));
     }
-    const turn = this.#inputTail.then(() =>
-      this.onWindow(window, document, (standing) =>
+    // Keep at most the latest adjacent hover / accumulated wheel while a
+    // previous command waits for Chromium. Never replace an in-flight command.
+    const device = toldKey(this.#told);
+    const continuous =
+      this.#pendingPointerPresses === 0 &&
+      this.#gestures.size === 0 &&
+      this.#pressed.size === 0 &&
+      !this.#touching &&
+      geometry !== undefined &&
+      (request.kind === "mouse" || request.kind === "wheel") &&
+      request.x <= geometry.logicalSize.width &&
+      request.y <= geometry.logicalSize.height &&
+      coalesceBrowserInput(request, request) !== undefined;
+    const pending = this.#pendingContinuous;
+    if (
+      continuous &&
+      pending !== undefined &&
+      pending.window === window &&
+      pending.document === document &&
+      pending.by === by &&
+      pending.device === device &&
+      heard - pending.lastHeard < 100
+    ) {
+      const merged = coalesceBrowserInput(pending.request, request);
+      if (merged !== undefined) {
+        pending.request = merged;
+        pending.lastHeard = heard;
+        this.#inputCoalesced += 1;
+        return pending.turn;
+      }
+    }
+    this.#pendingContinuous = undefined;
+    const queued = {
+      request,
+      window,
+      document,
+      by,
+      device,
+      firstHeard: heard,
+      lastHeard: heard,
+      turn: Promise.resolve(),
+    };
+    const turn = this.#inputTail.then(() => {
+      if (this.#pendingContinuous === queued) this.#pendingContinuous = undefined;
+      return this.onWindow(window, document, (standing) =>
         release
           ? this.release(request, standing, gesture)
-          : this.dispatchInTurn(request, geometry, standing, document, by, heard),
-      ),
-    );
+          : this.dispatchInTurn(
+              queued.request,
+              geometry,
+              standing,
+              document,
+              by,
+              queued.firstHeard,
+              queued.lastHeard,
+            ),
+      );
+    });
+    queued.turn = turn;
+    if (request.kind === "mouse" && request.type === "down") {
+      this.#pendingPointerPresses += 1;
+      const ended = (): void => {
+        this.#pendingPointerPresses -= 1;
+      };
+      void turn.then(ended, ended);
+    }
+    if (continuous) this.#pendingContinuous = queued;
     // (F8: a move of the gesture refused at its turn marks it — before the next turn starts)
     if (move && gesture !== undefined)
       turn.catch(() => {
@@ -1671,6 +1745,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * dragged the page with its first hover: the third grade's P3.)
    */
   private letGo(by: string): void {
+    this.#pendingContinuous = undefined;
     // (F8: its gesture ends with it)
     this.#gestures.delete(by);
     // PT-5d (M9): the attachment that took the page goes — the hand has left it
@@ -1758,6 +1833,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     by: string | undefined,
     /** PT-6a (K2): when the producer heard it */
     heard: number,
+    heardUntil = heard,
   ): Promise<void> {
     // PT-5c (R1) — AN EVENT IS SENT ONLY WHILE ITS PAGE IS LIVE AND THE ATTACHMENT THAT SENT IT STANDS (every event but a
     // release), read when it is sent: here for what waits for nothing, and again after a wait (below). (Before: judged
@@ -1896,12 +1972,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ) {
         throw new Error("Browser wheel input is outside the bounded contract");
       }
-      // The wire's deltas are the page's CSS px (what the finger moved on screen, PT-3 ruling 4), and CDP's `mouseWheel`
-      // takes CSS px too — never device px: the PT-3 smoke's WHEEL row measured a page at density 2 scrolled by twice the
-      // finger's travel when its density multiplied them here (LT2's probe said device px; the page said otherwise).
-      // PT-5b: WHERE the wheel is — the page's px, as a press's — but never how far: the engine takes a wheel's travel in
-      // the VIEW's px and scrolls the document by it over the page's scale itself (the LEGACY row: a travel divided here
-      // too scrolled a page shown at 0.41 by 1/0.41² of the finger's)
+      // The wire carries CSS wheel travel. Chromium applies the page's visual viewport scale.
+      // The native adapter maps the root target into the scaled offscreen view when needed.
       await window.dispatchMouse(
         {
           type: "mouseWheel",
@@ -1911,6 +1983,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
           deltaY: request.deltaY,
         },
         heard,
+        heardUntil,
       );
       return;
     }
@@ -1974,6 +2047,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
    * beneath both paths; history/loading actions carry no URL at all.
    */
   async navigate(command: LiveSurfaceNavigationCommandV1): Promise<void> {
+    if (command.action === "mute") {
+      if (this.#closed) throw new Error("Browser surface is closed");
+      this.#userMuted = command.muted;
+      this.mute(this.#userMuted || this.#effectiveDemand?.mode !== "live");
+      return;
+    }
     if (command.action === "emulate") {
       if (this.#closed) throw new Error("Browser surface is not available for navigation");
       this.emulate(command.emulation);
@@ -2443,6 +2522,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
 
   /** PT-5c (ruling 1): at a commit — the finger cancelled on the chain, the buttons forgotten, the old document's waits ended. */
   private endDown(window: BrowserSurfaceNativeWindow): void {
+    this.#pendingContinuous = undefined;
     this.scaleWaitsEnd(
       (waiter) => waiter.document !== this.#document,
       "Browser input's document is gone",
@@ -2664,7 +2744,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     // PT-5a (ruling 4) — WHO HEARS A PAGE: one asked for LIVE — its pane seen, or held — and no other. An ATTACHED pause is
     // silent too: a pane off the view, a parked desk, and a deleted pane's page in the pool's grace (the pool's idle demand
     // is a paused one, written the moment its last face lets go: silent AT ONCE). Seen live again, it is heard again.
-    this.mute(demand.mode !== "live");
+    this.mute(this.#userMuted || demand.mode !== "live");
     if (demand.mode === "live") {
       if (
         state === "created" ||
@@ -2682,8 +2762,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       }
       if (state === "paused") {
         this.#lifecycle.transition("live");
-        this.#window?.startPainting();
         this.applyFrameRate();
+        this.#window?.startPainting();
         this.#window?.invalidate();
         this.publishSummary();
       } else {
@@ -2742,6 +2822,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#viewport = viewport;
       this.#window = window;
+      this.mute(this.#userMuted || this.#effectiveDemand?.mode !== "live");
       this.#windowDensity = this.density();
       const removePaint = window.onPaint((paint) => this.acceptPaint(window, epoch, paint));
       const removeGone = window.onRenderProcessGone((reason) =>
@@ -3074,6 +3155,12 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       clearTimeout(this.#rasterTimer);
       this.#rasterTimer = null;
     }
+    // stopPainting only stops capture. Chromium keeps running rAF/WebGL at
+    // the previous cadence, so invisible panes otherwise consume full GPU
+    // time behind the held page. Keep the document and CDP target alive, with
+    // a 1 Hz compositor; timers/network stay active. Resume restores demand
+    // before capture starts again.
+    this.#window?.setFrameRate(1);
     this.#window?.stopPainting();
     this.#lifecycle.transition("paused");
     // PT-5c (R1): nothing waiting for its page's word is sent to a page at rest — every such wait ends here, refused
@@ -3095,7 +3182,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }, this.#detachedHibernateMs);
   }
 
-  /** A page whose renderer left is silent until one is attached again (an attached pause keeps its sound — PT-5's call). */
+  /** Apply the combined preference without restarting the page or its media. */
   private mute(muted: boolean): void {
     if (this.#muted === muted) return;
     const window = this.#window;
@@ -3217,6 +3304,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     try {
       const window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#window = window;
+      this.mute(this.#userMuted || this.#effectiveDemand?.mode !== "live");
       this.#viewport = viewport;
       this.#windowDensity = this.density();
       this.#callbacks = {

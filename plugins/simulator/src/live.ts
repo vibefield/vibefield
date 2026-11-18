@@ -105,7 +105,8 @@ const wordsOf = (face: LiveFace): string => {
 };
 
 /** The device a spec names, as one string (its binding and the name it says). */
-const deviceOf = (spec: LiveSimulatorSpec): string => `${spec.deviceType}|${spec.runtime}`;
+const deviceOf = (spec: LiveSimulatorSpec): string =>
+  `${spec.deviceType}|${spec.runtime}|${Boolean(spec.dedicated)}`;
 
 export function createPhoneFaces(host: KindHost | undefined, law: PhoneLaw = PHONE): PhoneFaces {
   const live = host?.use?.(LIVE);

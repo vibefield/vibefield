@@ -24,9 +24,7 @@ export const PHONE_SIZE = {
 const HANG = 0.4;
 
 /**
- * THE iOS SIMULATOR ON THE DESK (PT-S1, PORTALS — the PT-S design, ruled 2026-10-18): a phone lying face up at its true
- * size, its screen a Simulator's, view-only until PT-S4's touch lands — a plugin kind built exactly as a third party builds
- * one (the browser pane's shape).
+ * A canvas iPhone with a live, interactive CoreSimulator display.
  *
  * This manifest is the phone's DURABLE half: its `model` (the CoreSimulator device type it IS — a free string: Xcode's set
  * grows and drops, and an enum may only grow), its `finish` (one of its model's launch colours) and its `binding` (the device
@@ -36,8 +34,8 @@ const HANG = 0.4;
  * no mini mat yet — no chip); and its tray entry — a phone on a shelf under a NEW category, `devices`, its specimen drawn by
  * its own pass with the screen off (a specimen is bound to nothing). Its CAPABILITIES (PT-S2): `surface.attach` and
  * `surface.capture` — a bound phone's live device: the desk's `LIVE` service opens a Simulator only for an object whose
- * plugin is granted both (capture is the Screen Recording consent class), and the host reads this Mac's devices for the
- * attach only while such an object stands. The code half is the export `binding.kind` names (object.ts). Emitted to
+ * plugin is granted both. The setup dialog reads compatible models and installed runtimes from the host on demand.
+ * The code half is the export `binding.kind` names (object.ts). Emitted to
  * `vibefield.plugin.json` by `pnpm gen:manifest`.
  */
 export const simulatorManifest: PluginManifestV1 = {
@@ -46,7 +44,7 @@ export const simulatorManifest: PluginManifestV1 = {
   version: "0.1.0",
   title: "iOS Simulator",
   description:
-    "An iPhone on the desk at its true size — any of the models Xcode's Simulator knows — its screen a Simulator's, view-only",
+    "Create interactive iPhones on the canvas using the iOS simulator runtimes installed in Xcode.",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
   activation: [`onObject:${SIMULATOR_TYPE}`],
@@ -57,7 +55,7 @@ export const simulatorManifest: PluginManifestV1 = {
         type: SIMULATOR_TYPE,
         title: "Phone",
         description:
-          "An iPhone lying face up at its true size, its screen a Simulator's: double-click to use it — view-only",
+          "Double-click to choose an iPhone model and iOS version, then use the simulator on the canvas.",
         schemaVersion: 1,
         size: { w: PHONE_SIZE.w, h: PHONE_SIZE.h },
         interaction: { selectable: true, movable: true, resizable: false, snap: "both" },

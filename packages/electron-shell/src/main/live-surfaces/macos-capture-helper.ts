@@ -46,6 +46,8 @@ export interface MacosCaptureNativeFrame {
   readonly logicalWidth: number;
   readonly logicalHeight: number;
   readonly timestampUs?: string;
+  /** Time on the native receiver queue before the main thread drained it. */
+  readonly queueWaitUs?: number;
   readonly ioSurface: Buffer;
 }
 
@@ -62,6 +64,7 @@ export interface MacosCaptureNativeAdapterStats {
 export interface MacosCaptureNativeAdapter {
   start(serviceName: string, capabilityHex: string): void;
   setExpectedPeerPid(pid: number): void;
+  setFrameReadyCallback?(callback: () => void): void;
   drain(maximum: number): readonly MacosCaptureNativeFrame[];
   release(frameId: string): boolean;
   stats(): MacosCaptureNativeAdapterStats;
@@ -85,6 +88,7 @@ export interface MacosCaptureHelperSupervisorStats {
   readonly helperGeneration: number;
   readonly activeSessions: number;
   readonly helperStarts: number;
+  readonly simulatorFramebufferStarts: number;
   readonly helperExits: number;
   readonly framesReceived: number;
   readonly framesRejected: number;
@@ -291,6 +295,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   #requestSequence = 0;
   #helperGeneration = 0;
   #helperStarts = 0;
+  #simulatorFramebufferStarts = 0;
   #helperExits = 0;
   #framesReceived = 0;
   #framesRejected = 0;
@@ -340,6 +345,7 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       helperGeneration: this.#helperGeneration,
       activeSessions: this.#sessions.size,
       helperStarts: this.#helperStarts,
+      simulatorFramebufferStarts: this.#simulatorFramebufferStarts,
       helperExits: this.#helperExits,
       framesReceived: this.#framesReceived,
       framesRejected: this.#framesRejected,
@@ -387,7 +393,10 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
   async startSession(request: SckCaptureClientStartRequest): Promise<SckCaptureSession> {
     const helper = await this.ensureRunning();
     const sessionKey = this.uniqueSessionKey();
-    const sourceRef = await this.currentSourceRef(helper, request.source.sourceRef);
+    const sourceIdentity =
+      request.simulatorFramebufferDevice === undefined
+        ? { sourceRef: await this.currentSourceRef(helper, request.source.sourceRef) }
+        : { simulatorDevice: request.simulatorFramebufferDevice };
     // Capacity is checked after every asynchronous source/helper operation and
     // immediately before reservation. Concurrent starts therefore cannot all
     // pass a stale pre-await size check and overrun the native fixed bound.
@@ -409,14 +418,24 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
     };
     this.#sessions.set(sessionKey, active);
     try {
-      await this.request(helper, "start", "started", {
+      const started = await this.request(helper, "start", "started", {
         sessionKey,
         producerEpoch: request.producerEpoch,
-        sourceRef,
+        ...sourceIdentity,
         crop: request.source.crop ?? { mode: "none" },
         captureCursor: request.source.captureCursor,
         demand: request.demand,
       });
+      if (
+        request.simulatorFramebufferDevice !== undefined &&
+        started["frameSource"] !== "simulator-framebuffer"
+      ) {
+        throw this.protocolFailure(
+          helper,
+          "Native helper did not confirm the requested simulator framebuffer",
+        );
+      }
+      if (request.simulatorFramebufferDevice !== undefined) this.#simulatorFramebufferStarts++;
     } catch (error) {
       this.#sessions.delete(sessionKey);
       if (error instanceof SckCaptureClientError) throw error;
@@ -428,6 +447,21 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
     }
     let disposed = false;
     return {
+      ...(request.simulatorFramebufferDevice === undefined
+        ? {}
+        : {
+            guestInput: (input: import("./simulator-input").SimulatorInput) => {
+              if (disposed || active.disposed || this.#running !== helper) return;
+              this.writeCommand(helper, {
+                v: PROTOCOL_VERSION,
+                type: "guest-input",
+                token: helper.capabilityHex,
+                sessionKey,
+                producerEpoch: request.producerEpoch,
+                input,
+              });
+            },
+          }),
       setDemand: async (demand) => {
         if (disposed || active.disposed) return;
         if (demand.revision <= active.lastActuationRevision) {
@@ -576,7 +610,14 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
       if (response["protocolVersion"] !== PROTOCOL_VERSION || response["pid"] !== child.pid) {
         throw this.protocolFailure(helper, "capture helper identity handshake did not match");
       }
-      this.startPolling();
+      if (this.#adapter.setFrameReadyCallback) {
+        this.#adapter.setFrameReadyCallback(() => {
+          if (this.#running === helper) this.drainFrames();
+        });
+      } else {
+        // A development checkout can still have a previously built capture addon.
+        this.startPolling();
+      }
       return helper;
     } catch (error) {
       this.onHelperExit(helper, error instanceof Error ? error : new Error(String(error)));
@@ -793,16 +834,20 @@ export class MacosCaptureHelperSupervisor implements SckCaptureClient {
         producerEpoch: frame.producerEpoch,
         sequence: BigInt(frame.sequence),
         codedSize: { width: frame.width, height: frame.height },
-        logicalSize: session.request.geometry?.logicalSize ?? {
+        logicalSize: (session.request.simulatorFramebufferDevice
+          ? undefined
+          : session.request.geometry?.logicalSize) ?? {
           width: frame.logicalWidth,
           height: frame.logicalHeight,
         },
-        ...(session.request.geometry === undefined
-          ? {}
-          : {
-              orientation: session.request.geometry.orientation,
-              cropState: session.request.geometry.cropState,
-            }),
+        ...(session.request.simulatorFramebufferDevice !== undefined
+          ? { cropState: "applied" as const }
+          : session.request.geometry === undefined
+            ? {}
+            : {
+                orientation: session.request.geometry.orientation,
+                cropState: session.request.geometry.cropState,
+              }),
         ...(frame.timestampUs === undefined ? {} : { timestampUs: BigInt(frame.timestampUs) }),
         textureInfo: {
           codedSize: { width: frame.width, height: frame.height },

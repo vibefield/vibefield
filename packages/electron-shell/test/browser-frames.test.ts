@@ -732,3 +732,15 @@ describe("PT-5d (M7 H8) — a release of what is down is always sent, never judg
     expect(f.release("left", 180, 120)).toBeNull();
   });
 });
+
+describe("coalesced wheel arrival range", () => {
+  it("latches using the first arrival and remembers the last, even across a slow acknowledgement", () => {
+    const f = page();
+    const b = f.wheel(360, 285, 0);
+    f.wheelAnswered(b.target, WHEEL_BUBBLED_MS + 1);
+    const a = f.wheel(360, 285, 40, 400);
+    expect(a.target.session).toBe("A");
+    expect(f.wheel(360, 285, 430, 800).target.session).toBe("A");
+    expect(f.wheel(360, 285, 800 + WHEEL_LATCH_MS).target.session).toBe("B");
+  });
+});

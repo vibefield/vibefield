@@ -135,6 +135,10 @@ export function facePlan(
   if (read === undefined) return NO_FACE;
   const { face } = read;
   const is = face.is;
+  if (is === "booting" && face.bootDisplay) {
+    const frame = face.bootDisplay === "live" && texture;
+    return { ...NO_FACE, state: is, frame, line: frame ? null : "Starting iOS…" };
+  }
   const name = face.device ?? device;
   const line = FACE_LINES[is]?.(name) ?? null;
   const label = FACE_ACTS[is];

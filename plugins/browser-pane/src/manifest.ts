@@ -58,6 +58,20 @@ export const browserPaneManifest: PluginManifestV1 = {
         props: {
           url: { kind: "string", default: SAMPLE_URL, maxLength: URL_MAX },
           device: { kind: "enum", options: [...DEVICE_IDS], default: "laptop" },
+          deviceScaleFactor: { kind: "number", default: 0, min: 0, max: 8 },
+          inputMode: {
+            kind: "enum",
+            options: ["device", "desktop", "desktop-touch", "mobile", "mobile-pointer"],
+            default: "device",
+          },
+          userAgentMode: {
+            kind: "enum",
+            options: ["device", "browser", "custom"],
+            default: "device",
+          },
+          userAgent: { kind: "string", default: "", maxLength: 512 },
+          navigatorPlatform: { kind: "string", default: "", maxLength: 32 },
+          muted: { kind: "boolean", default: false },
           finish: { kind: "enum", options: [...PANE_FINISHES], default: "low-iron" },
           scheme: { kind: "enum", options: [...PANE_SCHEMES], default: "desk" },
         },

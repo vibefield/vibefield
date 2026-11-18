@@ -20,6 +20,8 @@ import type {
   ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
+  SimulatorSetupStatus,
+  SimulatorSetupTarget,
   SoundAttention,
   SoundPlayerState,
   SoundPreviewCue,
@@ -252,6 +254,10 @@ export interface FieldHost {
   readonly updates?: FieldUpdatesHost;
   /** BP-D4 — the desk browser's data (`FieldBrowserDataHost`); absent where main owns no browser profile. */
   readonly browserData?: FieldBrowserDataHost;
+  readonly simulatorSetup?: {
+    check(): Promise<SimulatorSetupStatus>;
+    open(target: SimulatorSetupTarget): Promise<void>;
+  };
   /** Item 102 — the clipboard's read (`FieldClipboardHost`); absent where no main reads it. */
   readonly clipboard?: FieldClipboardHost;
   /** Optional native tactile feedback; browser hosts provide no implementation. */

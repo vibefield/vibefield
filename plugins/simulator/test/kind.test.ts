@@ -104,10 +104,11 @@ describe("the phone's kind, judged by the kind-conformance harness WITH the prod
     });
     expect(objectKindOf(type)?.name).toBe("vibefield.simulator");
     expect(type.openable).toBe(true);
-    expect(type.heldTools.map((t) => t.id)).toEqual(["touch"]);
+    expect(simulator.kind.open?.wheel).toBe("kind");
+    expect(type.heldTools.map((t) => t.id)).toEqual(["home", "simulator-settings"]);
     // PT-S2 — its menu (R11: the attach, and the finish; no Model act), each in the words DESIGN.md §9 says, with no glyph
-    expect(type.menu.map((a) => a.id)).toEqual(["attach", "finish"]);
-    expect(type.menu.map((a) => a.label)).toEqual(["Attach", "Finish"]);
+    expect(type.menu.map((a) => a.id)).toEqual(["simulator-settings", "finish"]);
+    expect(type.menu.map((a) => a.label)).toEqual(["Simulator settings…", "Finish"]);
     expect(type.menu.map((a) => a.glyph)).toEqual([undefined, undefined]);
     // and its driver factory is the menu's bridge alone: core's drag carries the phone, no driver of its own is made
     expect(typeof simulator.drivers).toBe("function");
@@ -365,10 +366,12 @@ describe("the phone's world half", () => {
     // the one tool: touch, declared and DISABLED, saying View only (ICE I49) — IN WORDS: neither it nor its state names a
     // glyph, so the bar draws the state's label as the slot's text (field-app's bar, R3), never a pictogram with "View only"
     // only in its tooltip
-    expect(SIMULATOR_TOOLS.map((tool) => tool.id)).toEqual(["touch"]);
+    expect(SIMULATOR_TOOLS.map((tool) => tool.id)).toEqual(["home", "simulator-settings"]);
     const tool = SIMULATOR_TOOLS[0];
     const state = tool?.state?.({} as HeldToolStateContext);
     expect(state).toEqual({ enabled: false, label: VIEW_ONLY });
+    const interactive = { local: { interactive: () => true } } as unknown as HeldToolStateContext;
+    expect(tool?.state?.(interactive)).toEqual({ enabled: true, label: "Home" });
     expect(tool?.glyph).toBeUndefined();
     expect(state?.glyph).toBeUndefined();
     expect(VIEW_ONLY).toBe("View only");

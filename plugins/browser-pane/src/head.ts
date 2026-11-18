@@ -23,6 +23,10 @@ import type { NoticeBitmap, NoticeSpec } from "./notice";
 export interface HeadState {
   /** The address as it is cut ("" = none: the start page's prompt). */
   readonly display: string;
+  /** Only an opened pane presents interactive chrome. */
+  readonly interactive?: true;
+  readonly hint?: true;
+  readonly muted?: true;
   readonly secure: boolean;
   /** The favicon on the capsule, by id (null: none): the sample's (`"sample"`), a page's own once its picture is decoded
    * (`faviconId(key)` — PT-4), or the GENERIC mark (`"generic"` — a page with none, or one whose picture cannot be read). */
@@ -54,10 +58,18 @@ export function headStateOf(
   saying?: string,
   /** PT-5b: the page shown is its last still (`pageStill`) — the head carries the rest mark. */
   rest = false,
+  chrome: {
+    readonly interactive?: boolean;
+    readonly hint?: boolean;
+    readonly muted?: boolean;
+  } = {},
 ): HeadState {
   const at = info?.address ?? url;
   return {
     display: displayOf(at),
+    ...(chrome.interactive ? { interactive: true as const } : {}),
+    ...(chrome.hint && !chrome.interactive ? { hint: true as const } : {}),
+    ...(chrome.muted ? { muted: true as const } : {}),
     secure: isSecure(at),
     favicon: info === undefined ? (url === SAMPLE_URL ? "sample" : null) : icon,
     loading: info?.loading !== undefined,
@@ -231,6 +243,9 @@ export const headKey = (S: PaneShape, st: HeadState, tpu: number): string => {
     // (only when it says something: the committed heads' keys stand as they were cut)
     ...(st.saying === undefined ? [] : [`say:${st.saying}`]),
     ...(st.rest === true ? ["rest"] : []),
+    ...(st.interactive === true ? ["interactive"] : []),
+    ...(st.hint === true ? ["hint"] : []),
+    ...(st.muted === true ? ["muted"] : []),
   ].join("|");
 };
 

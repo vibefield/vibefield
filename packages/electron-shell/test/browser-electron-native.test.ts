@@ -46,13 +46,17 @@ const electron = vi.hoisted(() => {
     isDestroyed = (): boolean => false;
     getURL = (): string => this.url;
     getTitle = (): string => "a title";
+    readonly frameRates: number[] = [];
+    setFrameRate = (fps: number): void => {
+      this.frameRates.push(fps);
+    };
     isLoading = (): boolean => this.loading;
   }
-  const made: { webContents: Contents; loads: string[] }[] = [];
+  const made: { webContents: Contents; loads: string[]; options: Record<string, unknown> }[] = [];
   class BrowserWindow {
     readonly webContents = new Contents();
     readonly loads: string[] = [];
-    constructor() {
+    constructor(readonly options: Record<string, unknown>) {
       made.push(this);
     }
     loadURL(url: string): Promise<void> {
@@ -109,6 +113,60 @@ const window = (options: { readonly hungInputMs?: number } = {}) => {
 };
 
 describe("the Electron adapter counts the page's documents (PT-5b3, ruling 4)", () => {
+  it("keeps HTML fullscreen inside the fixed viewport and publishes entry/exit without a navigation", async () => {
+    const w = window();
+    expect(electron.made.at(-1)?.options.webPreferences).toMatchObject({
+      disableHtmlFullscreenWindowResize: true,
+    });
+    await w.native.loadURL("https://example.test/video");
+    w.at("https://example.test/video");
+    w.contents.emit("did-navigate", {}, "https://example.test/video");
+    const document = w.said.at(-1)?.document;
+    w.contents.emit("enter-html-full-screen");
+    expect(w.said.at(-1)).toMatchObject({ fullscreen: true, document });
+    w.contents.emit("page-title-updated");
+    expect(w.said.at(-1)?.fullscreen).toBe(true);
+    w.contents.emit("leave-html-full-screen");
+    expect(w.said.at(-1)?.fullscreen).toBeUndefined();
+    expect(w.said.at(-1)?.document).toBe(document);
+    w.contents.emit("enter-html-full-screen");
+    w.contents.emit("did-navigate", {}, "https://example.test/next");
+    expect(w.said.at(-1)?.fullscreen).toBeUndefined();
+  });
+
+  it("exits fullscreen in the isolated document and consumes the Escape release", async () => {
+    const w = window();
+    const sent: { method: string; params: unknown }[] = [];
+    w.contents.debugger.sendCommand = async (method?: string, params?: unknown) => {
+      sent.push({ method: method ?? "", params });
+      return {};
+    };
+    await w.native.loadURL("https://example.test/video");
+    w.contents.debugger.emit("message", {}, "Page.frameNavigated", { frame: { id: "root" } });
+    w.contents.debugger.emit("message", {}, "Runtime.executionContextCreated", {
+      context: { id: 77, name: WORDS_WORLD, auxData: { frameId: "root" } },
+    });
+    w.contents.emit("enter-html-full-screen");
+    const escapeKey = { key: "Escape", code: "Escape", modifiers: 0 };
+    await w.native.dispatchKey({ ...escapeKey, type: "keyDown" });
+    expect(sent.filter((c) => c.method === "Runtime.evaluate")).toEqual([
+      {
+        method: "Runtime.evaluate",
+        params: {
+          expression: "document.fullscreenElement ? document.exitFullscreen() : undefined",
+          contextId: 77,
+          awaitPromise: true,
+          returnByValue: true,
+        },
+      },
+    ]);
+    w.contents.emit("leave-html-full-screen");
+    await w.native.dispatchKey({ ...escapeKey, type: "keyUp" });
+    expect(sent.some((c) => c.method === "Input.dispatchKeyEvent")).toBe(false);
+    await w.native.dispatchKey({ ...escapeKey, type: "keyDown" });
+    expect(sent.at(-1)).toMatchObject({ method: "Input.dispatchKeyEvent" });
+  });
+
   it("a commit of the page's own moves the serial — the blank's does not, a move WITHIN a document does not; a failed load's error page does, an aborted load does not; every state says the count", async () => {
     const w = window();
     // the bootstrap blank commits: plumbing — nothing is said, nothing counted
@@ -310,6 +368,145 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
   const turns = async (): Promise<void> => {
     for (let i = 0; i < 20; i += 1) await Promise.resolve();
   };
+
+  it("downscales capture without changing CSS layout, DPR or page zoom, then clears capture scaling at full size", async () => {
+    const r = recording();
+    expect(
+      await r.native.setBackingRaster(
+        { width: 320, height: 180 },
+        { width: 320, height: 180 },
+        2,
+        false,
+      ),
+    ).toEqual({ width: 320, height: 180 });
+    expect(r.sent.find((c) => c.method === "Emulation.setDeviceMetricsOverride")?.params).toEqual({
+      width: 320,
+      height: 180,
+      deviceScaleFactor: 2,
+      mobile: false,
+      screenWidth: 320,
+      screenHeight: 180,
+      scale: 0.5,
+      dontSetVisibleSize: true,
+    });
+    expect(r.sent.find((c) => c.method === "Emulation.setPageScaleFactor")?.params).toEqual({
+      pageScaleFactor: 1,
+    });
+    await r.native.setBackingRaster(
+      { width: 640, height: 360 },
+      { width: 320, height: 180 },
+      2,
+      false,
+    );
+    expect(
+      r.sent.filter((c) => c.method === "Emulation.setDeviceMetricsOverride").at(-1)?.params,
+    ).toMatchObject({ scale: 1 });
+  });
+
+  it("maps root input coordinates and wheel travel into the scaled view image", async () => {
+    const r = recording();
+    await r.native.setBackingRaster(
+      { width: 320, height: 180 },
+      { width: 320, height: 180 },
+      2,
+      false,
+    );
+    await r.native.dispatchMouse({ type: "mouseMoved", x: 200, y: 100, button: "none" });
+    await r.native.dispatchMouse({ type: "mouseWheel", x: 200, y: 100, deltaX: -8, deltaY: 24 });
+    const sent = r.sent.filter((c) => c.method === "Input.dispatchMouseEvent");
+    expect(sent[0]?.params).toMatchObject({ x: 100, y: 50 });
+    expect(sent[1]?.params).toMatchObject({ x: 100, y: 50, deltaX: -4, deltaY: 12 });
+    await r.native.setBackingRaster(
+      { width: 640, height: 360 },
+      { width: 320, height: 180 },
+      2,
+      false,
+    );
+    await r.native.dispatchMouse({ type: "mouseMoved", x: 200, y: 100, button: "none" });
+    expect(
+      r.sent.filter((c) => c.method === "Input.dispatchMouseEvent").at(-1)?.params,
+    ).toMatchObject({ x: 200, y: 100 });
+    await r.native.dispatchMouse({ type: "mouseWheel", x: 200, y: 100, deltaX: -8, deltaY: 24 });
+    expect(
+      r.sent.filter((c) => c.method === "Input.dispatchMouseEvent").at(-1)?.params,
+    ).toMatchObject({ x: 200, y: 100, deltaX: -8, deltaY: 24 });
+  });
+
+  it("reapplies the current pacing after an asynchronous emulation resize, including a pause while it waits", async () => {
+    const r = recording(["Emulation.setDeviceMetricsOverride"]);
+    r.native.setFrameRate(120);
+    const resized = r.native.setBackingRaster(
+      { width: 320, height: 180 },
+      { width: 320, height: 180 },
+      2,
+      false,
+    );
+    await turns();
+    r.native.setFrameRate(1);
+    r.release("Emulation.setDeviceMetricsOverride");
+    await resized;
+    expect(r.contents.frameRates).toEqual([120, 1, 1]);
+  });
+
+  it("restores the latest pacing after a navigation loads, without waking a paused pane", () => {
+    const r = recording();
+    r.contents.emit("did-finish-load");
+    expect(r.contents.frameRates).toEqual([]);
+    r.native.setFrameRate(120);
+    r.contents.emit("did-finish-load");
+    expect(r.contents.frameRates).toEqual([120, 120]);
+    r.native.setFrameRate(1);
+    r.contents.emit("did-finish-load");
+    expect(r.contents.frameRates).toEqual([120, 120, 1, 1]);
+  });
+
+  it("retains native mobile raster and the page's own viewport zoom", async () => {
+    const r = recording();
+    expect(
+      await r.native.setBackingRaster(
+        { width: 320, height: 180 },
+        { width: 320, height: 180 },
+        2,
+        true,
+      ),
+    ).toEqual({ width: 640, height: 360 });
+    expect(r.sent.find((c) => c.method === "Emulation.setDeviceMetricsOverride")?.params).toEqual({
+      width: 320,
+      height: 180,
+      deviceScaleFactor: 2,
+      mobile: true,
+      screenWidth: 320,
+      screenHeight: 180,
+    });
+    expect(r.methods()).not.toContain("Emulation.setPageScaleFactor");
+  });
+
+  it("rejects aspect-distorted capture requests while accepting resized desktop layout", async () => {
+    const r = recording();
+    expect(
+      await r.native.setBackingRaster(
+        { width: 320, height: 320 },
+        { width: 320, height: 180 },
+        2,
+        false,
+      ),
+    ).toEqual({ width: 640, height: 360 });
+    expect(
+      await r.native.setBackingRaster(
+        { width: 400, height: 300 },
+        { width: 800, height: 600 },
+        2,
+        false,
+      ),
+    ).toEqual({ width: 400, height: 300 });
+    expect(
+      r.sent.filter((c) => c.method === "Emulation.setDeviceMetricsOverride").at(-1)?.params,
+    ).toMatchObject({
+      width: 800,
+      height: 600,
+      scale: 0.25,
+    });
+  });
 
   it("the page's session turns its Runtime on and takes a BINDING for the page's word — before the guard said to every new document, which carries the word's reporter; all of it before the device's first command; PT-5d (M7 H1): the bindings and the words in an ISOLATED world, the guard in the page's own", async () => {
     const r = recording();
@@ -714,7 +911,7 @@ describe("PT-6a (K2) — the producer over this adapter: a wheel's gesture is me
     });
     try {
       const adapter = new ElectronBrowserSurfaceNative();
-      const sent: { method: string; session?: string }[] = [];
+      const sent: { method: string; params?: Record<string, unknown>; session?: string }[] = [];
       let made: (typeof electron.made)[number] | undefined;
       const runtime = new BrowserLiveSurfaceRuntime({
         surfaceId: "browser_surface_0123456789",
@@ -748,7 +945,11 @@ describe("PT-6a (K2) — the producer over this adapter: a wheel's gesture is me
                 _params?: unknown,
                 session?: string,
               ) => {
-                sent.push({ method: method ?? "", ...(session === undefined ? {} : { session }) });
+                sent.push({
+                  method: method ?? "",
+                  params: _params as Record<string, unknown>,
+                  ...(session === undefined ? {} : { session }),
+                });
                 // (the page answers each wheel 300 ms after it is sent — a listener that is not passive, a busy thread)
                 if (method === "Input.dispatchMouseEvent")
                   return new Promise((resolve) => setTimeout(() => resolve({}), 300));
@@ -852,7 +1053,12 @@ describe("PT-6a (K2) — the producer over this adapter: a wheel's gesture is me
       await vi.advanceTimersByTimeAsync(2_000);
       expect(
         sent.filter((c) => c.method === "Input.dispatchMouseEvent").map((c) => c.session ?? "page"),
-      ).toEqual(["page", "page", "page"]);
+      ).toEqual(["page", "page"]);
+      expect(
+        sent
+          .filter((c) => c.method === "Input.dispatchMouseEvent")
+          .map((c) => c.params?.["deltaY"]),
+      ).toEqual([10, 20]);
       runtime.dispose();
     } finally {
       vi.useRealTimers();
@@ -1016,7 +1222,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       autoAttach: true,
       waitForDebuggerOnStart: true,
       flatten: true,
-      filter: [{ type: "iframe" }],
+      filter: [{ type: "iframe" }, { type: "worker" }],
     });
     // its guard and its words run in the document it already holds too
     for (const c of r.sent.filter(
@@ -1050,7 +1256,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(r.on("frame-1").at(-1)).toBe("Runtime.runIfWaitingForDebugger");
   });
 
-  it("M6.5b (i) — a frame STARTS PAUSED: the page's auto-attach and each frame's wait for the debugger, FILTERED to frames (no worker is ever attached, paused or sent anything); each step before the resume sent INDEPENDENTLY and BOUNDED (2 s): one never answered keeps none of the others from going (M12 J4 — its guard script, its words, its device, its own auto-attach all sent), and the frame is resumed after them all; a frame whose session went meanwhile is not resumed", async () => {
+  it("M6.5b (i) — a frame STARTS PAUSED: the page's auto-attach and each frame's wait for the debugger, frames stay paused until configured, workers are released without frame commands; each step before the resume sent INDEPENDENTLY and BOUNDED (2 s): one never answered keeps none of the others from going (M12 J4 — its guard script, its words, its device, its own auto-attach all sent), and the frame is resumed after them all; a frame whose session went meanwhile is not resumed", async () => {
     vi.useFakeTimers();
     try {
       const r = recording((method, _params, session) =>
@@ -1074,7 +1280,7 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         autoAttach: true,
         waitForDebuggerOnStart: true,
         flatten: true,
-        filter: [{ type: "iframe" }],
+        filter: [{ type: "iframe" }, { type: "worker" }],
       });
       r.attach("F");
       await vi.advanceTimersByTimeAsync(1_999);
@@ -1348,13 +1554,32 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     expect(r.hand()).toEqual(["mousePressed@page 180,120"]);
   });
 
-  it("ruling 4 — a WORKER, a service worker attached under the page's debugger is no frame: not guarded as one, never a target", async () => {
+  it("resumes and detaches non-frame targets without page guards, emulation, or input routing", async () => {
     const r = recording();
-    r.attach("W", undefined, "worker");
-    r.attach("S", undefined, "service_worker");
-    await turns();
-    expect(r.on("W")).toEqual([]);
-    expect(r.on("S")).toEqual([]);
+    await r.native.setFocused(true);
+    r.sent.length = 0;
+    for (const [session, type, parent] of [
+      ["W", "worker", undefined],
+      ["S", "service_worker", undefined],
+      ["N", "worker", "frame-parent"],
+    ] as const) {
+      r.emit(
+        "Target.attachedToTarget",
+        {
+          sessionId: session,
+          targetInfo: { type, targetId: `t-${session}` },
+          waitingForDebugger: true,
+        },
+        parent,
+      );
+      await turns();
+      expect(r.on(session)).toEqual(["Runtime.runIfWaitingForDebugger"]);
+      expect(r.sent).toContainEqual({
+        method: "Target.detachFromTarget",
+        params: { sessionId: session },
+        ...(parent === undefined ? {} : { session: parent }),
+      });
+    }
     await r.native.dispatchMouse({
       type: "mousePressed",
       x: 1,
@@ -1363,6 +1588,54 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
       clickCount: 1,
     });
     expect(r.hand()).toEqual(["mousePressed@page 1,1"]);
+  });
+
+  it("detaches an already-running worker without sending it a Runtime command", async () => {
+    const r = recording();
+    await r.native.setFocused(true);
+    r.sent.length = 0;
+    r.emit("Target.attachedToTarget", {
+      sessionId: "W",
+      targetInfo: { type: "worker" },
+      waitingForDebugger: false,
+    });
+    await turns();
+    expect(r.sent).toEqual([{ method: "Target.detachFromTarget", params: { sessionId: "W" } }]);
+  });
+
+  it("detaches a worker when resume fails or never answers, once even after a late answer", async () => {
+    vi.useFakeTimers();
+    try {
+      let release: (() => void) | undefined;
+      const r = recording((method, _params, session) => {
+        if (method !== "Runtime.runIfWaitingForDebugger") return {};
+        if (session === "failed") throw Error("target gone");
+        return new Promise<void>((resolve) => {
+          release = resolve;
+        });
+      });
+      await r.native.setFocused(true);
+      r.sent.length = 0;
+      for (const sessionId of ["failed", "hung"])
+        r.emit("Target.attachedToTarget", {
+          sessionId,
+          targetInfo: { type: "worker" },
+          waitingForDebugger: true,
+        });
+      await turns();
+      const detached = () =>
+        r.sent.filter((c) => c.method === "Target.detachFromTarget").map((c) => c.params);
+      expect(detached()).toEqual([{ sessionId: "failed" }]);
+      await vi.advanceTimersByTimeAsync(1999);
+      expect(detached()).toEqual([{ sessionId: "failed" }]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(detached()).toEqual([{ sessionId: "failed" }, { sessionId: "hung" }]);
+      release?.();
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(detached()).toEqual([{ sessionId: "failed" }, { sessionId: "hung" }]);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("PT-6a (M4, M5 — F1) — the words RE-ARM their window's listeners when its document is OPENED (the document-open steps erase them, the focus words' too): their MutationObserver sees the root replaced, and adds each again — never twice; and they name their own `where()` in their isolated world, for a PULLED word", () => {
@@ -3945,6 +4218,26 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         touchPoints: [{ x: 180, y: 120, id: 0 }],
       });
       expect(one.hand()).toEqual(["touchStart@F 80,40"]);
+    });
+
+    it("keeps cross-site wheel travel in the child frame's CSS pixels at half capture scale", async () => {
+      const r = await scaled(1);
+      await r.native.setBackingRaster(
+        { width: 320, height: 180 },
+        { width: 320, height: 180 },
+        2,
+        false,
+      );
+      await r.native.dispatchMouse({
+        type: "mouseWheel",
+        x: 180,
+        y: 120,
+        deltaX: -8,
+        deltaY: 24,
+      });
+      expect(r.hand()).toEqual(["mouseWheel@F 80,40"]);
+      const wheel = r.sent.find((c) => c.method === "Input.dispatchMouseEvent");
+      expect(wheel?.params).toMatchObject({ deltaX: -8, deltaY: 24 });
     });
 
     it("a scale said of the document BEFORE is not this one's: the page commits, a frame of the new document — its input as carried until the new document says its own", async () => {

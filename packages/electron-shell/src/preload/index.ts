@@ -34,6 +34,8 @@ import {
   SHELL_CLIPBOARD,
   type ShellCommand,
   ShellPlatform,
+  SimulatorSetupStatus,
+  SimulatorSetupTarget,
   type SoundAttention,
   SoundAttention as SoundAttentionSchema,
   type SoundPlayerState,
@@ -442,6 +444,13 @@ contextBridge.exposeInMainWorld("vibefield", {
     } catch {
       return null;
     }
+  },
+  simulatorSetup: {
+    check: async (): Promise<SimulatorSetupStatus> =>
+      SimulatorSetupStatus.parse(await ipcRenderer.invoke(IPC_CHANNELS.simulatorSetupCheck)),
+    open: async (target: SimulatorSetupTarget): Promise<void> => {
+      await ipcRenderer.invoke(IPC_CHANNELS.simulatorSetupOpen, SimulatorSetupTarget.parse(target));
+    },
   },
   /** BP-D4 — Settings' Clear browsing data: main clears this shell's browser profiles and reloads their open pages; the
    * answer is counts only (no path, no site, no size), parsed here before it crosses. */

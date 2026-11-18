@@ -734,6 +734,25 @@ describe("PT-4 — the page as a device sees it", () => {
     });
   });
 
+  it("applies pane sound preferences on the existing lane, defers until live, and remints with the latest preference", async () => {
+    const t = setup();
+    t.live.open(KEY, { ...PAGE, muted: true }, () => {});
+    const handle = t.handles[0]!;
+    expect(handle.navigations).toEqual([]);
+    handle.set({ status: "live", presentation: fakePresentation() as never });
+    expect(handle.navigations).toEqual([{ action: "mute", muted: true }]);
+    expect(t.live.navigation.respec(KEY, { ...PAGE, muted: false })).toBe(true);
+    expect(t.live.navigation.respec(KEY, { ...PAGE, muted: false })).toBe(true);
+    expect(handle.navigations).toEqual([
+      { action: "mute", muted: true },
+      { action: "mute", muted: false },
+    ]);
+    expect(handle.emulations).toHaveLength(1);
+    expect(t.handles).toHaveLength(1);
+    await handle.opts.tickets.mint();
+    expect(t.requests.at(-1)?.params).toMatchObject({ source: { muted: false } });
+  });
+
   it("a lane gone LIVE is told the spec's device once — owed until then, never again while the spec stands", () => {
     const t = setup();
     t.live.open(KEY, PHONE_PAGE, () => {});
@@ -1029,6 +1048,14 @@ describe("PT-5a — a page's failures are said (ruling 3)", () => {
       permission: "camera",
       serial: 3,
     });
+  });
+
+  it("publishes pane fullscreen so Escape can exit the page before putting the pane down", () => {
+    const { face, handle } = attached();
+    handle.set({ browser: { ...NAV, fullscreen: true } as never });
+    expect(face.info().extra?.fullscreen).toBe(true);
+    handle.set({ browser: NAV as never });
+    expect(face.info().extra?.fullscreen).toBeUndefined();
   });
 
   it("PT-5d (M7 H10): the page's DOCUMENT, as its producer counts it, rides the face's words (`extra.document`) — the pane's wait for a page the document sent elsewhere ends by it moving; a producer that counts none says none", () => {

@@ -171,10 +171,12 @@ export class SimctlDeviceCatalog implements SimulatorDeviceCatalog {
 
 export interface ResolvedIosSimulatorCapture {
   readonly device: BootedSimulatorDevice;
-  readonly window: MacosCaptureSource;
+  readonly window?: MacosCaptureSource;
   readonly source: ReturnType<typeof LiveSurfaceSckWindowSourceV1.parse>;
-  readonly geometry: SckCaptureGeometryOverride;
+  readonly geometry?: SckCaptureGeometryOverride;
   readonly fingerprint: string;
+  /** Main-only identity for the device framebuffer, which supplies its own geometry. */
+  readonly framebufferDevice?: string;
 }
 
 export interface IosSimulatorResolutionProvider {
@@ -183,6 +185,7 @@ export interface IosSimulatorResolutionProvider {
 
 export interface IosSimulatorSourceResolverOptions {
   readonly devices: SimulatorDeviceCatalog;
+  readonly framebuffer?: boolean;
   readonly windows: SimulatorWindowCatalog;
   readonly viewport: MacosSimulatorViewportQuery;
 }
@@ -255,23 +258,27 @@ function fingerprint(
 
 export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvider {
   readonly #devices: SimulatorDeviceCatalog;
+  readonly #framebuffer: boolean;
   readonly #windows: SimulatorWindowCatalog;
   readonly #viewport: MacosSimulatorViewportQuery;
 
   constructor(options: IosSimulatorSourceResolverOptions) {
     this.#devices = options.devices;
+    this.#framebuffer = options.framebuffer ?? process.env["VF_SIMULATOR_FRAMEBUFFER"] === "1";
     this.#windows = options.windows;
     this.#viewport = options.viewport;
   }
 
   async resolve(rawSource: IosSimulatorSource): Promise<ResolvedIosSimulatorCapture> {
     const source = LiveSurfaceIosSimulatorSourceV1.parse(rawSource);
+    const direct =
+      this.#framebuffer && source.crop.mode === "auto" && source.windowRef === undefined;
     let devices: readonly BootedSimulatorDevice[];
     let windows: readonly MacosCaptureSource[];
     try {
       [devices, windows] = await Promise.all([
         this.#devices.enumerateBootedDevices(),
-        this.#windows.enumerateWindows(true),
+        direct ? [] : this.#windows.enumerateWindows(true),
       ]);
     } catch (error) {
       if (error instanceof SckCaptureClientError) throw error;
@@ -284,6 +291,18 @@ export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvide
       throw unresolved("not-booted", "The selected Simulator device is not booted");
     }
     const device = matches[0]!;
+    if (direct) {
+      return {
+        device,
+        source: {
+          kind: "sck-window",
+          sourceRef: `ios-simulator-${device.udid}`,
+          captureCursor: false,
+        },
+        framebufferDevice: device.udid,
+        fingerprint: `framebuffer:${device.udid}`,
+      };
+    }
     const candidates = windows.filter(
       (window) =>
         window.bundleIdentifier === SIMULATOR_BUNDLE_IDENTIFIER && window.title === device.name,
@@ -416,7 +435,10 @@ export class IosSimulatorCaptureClient implements SckCaptureClient {
     const session = await this.#delegate.startSession({
       ...request,
       source: resolved.source,
-      geometry: resolved.geometry,
+      ...(resolved.geometry === undefined ? {} : { geometry: resolved.geometry }),
+      ...(resolved.framebufferDevice === undefined
+        ? {}
+        : { simulatorFramebufferDevice: resolved.framebufferDevice }),
     });
     let disposed = false;
     let faulted = false;
@@ -481,6 +503,9 @@ export class IosSimulatorCaptureClient implements SckCaptureClient {
     };
     schedule();
     return {
+      ...(session.guestInput && resolved.framebufferDevice
+        ? { guestInput: session.guestInput }
+        : {}),
       setDemand: async (demand) => {
         if (disposed || faulted) return;
         live = demand.mode === "live";

@@ -230,7 +230,7 @@ describe("PT-4 — the generic mark: a globe engraved in the favicon's place", (
   };
   const cut = (st: HeadState, picture: CanvasImageSource | null = null) => {
     const r = recorder();
-    drawHead({ width: 0, height: 0 }, r.ctx, S, st, 2, picture);
+    drawHead({ width: 0, height: 0 }, r.ctx, S, { ...st, interactive: true }, 2, picture);
     const text = r.calls.find((c) => c.name === "fillText" && c.args[0] === "example.org");
     if (text === undefined) throw new Error("no address cut");
     return { calls: r.calls, textAt: text.args[1] as number };
@@ -293,7 +293,7 @@ describe("PT-5b — the rest mark: two short bars cut at the capsule's leading e
   /** A head cut: the upright strokes CUT OUT of its frost (a move, then a line straight down from it), and where its text is. */
   const cut = (shape: typeof S, st: HeadState) => {
     const r = recorder();
-    drawHead({ width: 0, height: 0 }, r.ctx, shape, st, 2, null);
+    drawHead({ width: 0, height: 0 }, r.ctx, shape, { ...st, interactive: true }, 2, null);
     const bars: { x: number; y0: number; y1: number }[] = [];
     r.calls.forEach((c, i) => {
       const next = r.calls[i + 1];
@@ -334,8 +334,8 @@ describe("PT-5b — the rest mark: two short bars cut at the capsule's leading e
       expect(rest.textAt, tag).toBeGreaterThan(b.x);
       expect(rest.textAt, tag).toBeGreaterThanOrEqual(plain.textAt);
     }
-    // a phone's head has no ↻ to carry a mark: the capsule alone carries it
-    expect(bandLayout(NARROW).reload).toBeNull();
+    // Phone panes keep reload accessible on their own head too.
+    expect(bandLayout(NARROW).reload).not.toBeNull();
   });
 
   it("while the capsule SAYS something else (a download refused) it carries no mark: the words alone", () => {

@@ -80,7 +80,6 @@ import {
   phoneRows,
   pressInHand,
   quitStaging,
-  readSince,
   rowLedger,
   rowMark,
   type StillSeen,
@@ -1377,74 +1376,27 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
   });
 });
 
-describe("PT-S3 — SIM-ATTACH's poll: an answer from a read taken after R's boot (R-4, RM6)", () => {
-  // `reads` counts a read as it BEGINS (one may be in flight, and they never overlap); a failed one leaves the last
-  // snapshot standing — so the answer is a post-boot read's only once one begun after the baseline has LANDED, not failed
-  const base = { reads: 4, failures: 1, rows: 3 };
-  it("waits past a read begun but maybe in flight, and past one that may have failed", () => {
-    expect(readSince(base, base)).toBe(false);
-    expect(readSince(base, { ...base, reads: 5 })).toBe(false);
-    expect(readSince(base, { ...base, reads: 6 })).toBe(true);
-    expect(readSince(base, { ...base, reads: 6, failures: 2 })).toBe(false);
-    expect(readSince(base, { ...base, reads: 7, failures: 2 })).toBe(true);
-    expect(readSince(base, { reads: 9, failures: 1, rows: null })).toBe(false);
-  });
-
-  /** The row body as the runner's source must hold it (RM7.2c): the baseline read taken AFTER R's boot (`ensure(3)`),
-   * and the poll's ONE answer read only once `readSince(base, now)` says a read begun after it has landed. `readSince`
-   * is unit-held above; this holds that the poll decides by it. */
-  const attachPollHeld = (src: string): void => {
-    const body = rowBodies(src).find((r) => r.name === "SIM-ATTACH")?.body ?? "";
-    expect(body).toMatch(
-      /const devicesRead = \(\): Promise<DeviceReads \| null> =>\s*js\("globalThis\.__vfDesk\.simulatorDevices\(\)"\);/u,
+describe("the simulator setup smoke", () => {
+  it("selects the staged runtime and model before committing through the real form", () => {
+    const row = SOURCE.slice(
+      SOURCE.indexOf('await row("SIM-ATTACH"'),
+      SOURCE.indexOf('await row("SIM-GONE"'),
     );
-    const boot = body.indexOf('await ensure(3, "Booted");');
-    const baseAt = body.indexOf("const base = await devicesRead();");
-    expect(boot).toBeGreaterThan(0);
-    expect(baseAt).toBeGreaterThan(boot);
-    const loopAt = body.indexOf("while (Date.now() < deadline && answer === null) {");
-    expect(loopAt).toBeGreaterThan(baseAt);
-    const loop = body.slice(loopAt, body.indexOf("// THE GATE", loopAt));
-    expect(loop).toMatch(
-      /^while \(Date\.now\(\) < deadline && answer === null\) \{\s*const now = await devicesRead\(\);\s*if \(base !== null && now !== null && readSince\(base, now\)\)\s*answer = await js\(/u,
-    );
-    // the poll's assignment is the row's ONE (`=`, `??=`, `||=`, `&&=`): the gate reads no answer taken another way
-    expect(body.match(/\banswer\s*(?:\?\?|\|\||&&)?=(?!=)/gu)).toHaveLength(1);
-  };
-
-  it("SIM-ATTACH's poll decides by readSince over a baseline read after R's boot (RM7.2c)", () => {
-    attachPollHeld(SOURCE);
-  });
-
-  it("an edit whose poll stops asking readSince, reads ungated, or takes its baseline before the boot is caught (RM7.2c)", () => {
-    // the check's probe (R-4b): any rows read, the reads never counted
-    const anyRows = SOURCE.replace(
-      "if (base !== null && now !== null && readSince(base, now))",
-      "if (now !== null && now.rows !== null)",
-    );
-    expect(anyRows).not.toBe(SOURCE);
-    expect(() => attachPollHeld(anyRows)).toThrow();
-    const ungated = SOURCE.replace(
-      /if \(base !== null && now !== null && readSince\(base, now\)\)\s*answer = /u,
-      "answer = ",
-    );
-    expect(ungated).not.toBe(SOURCE);
-    expect(() => attachPollHeld(ungated)).toThrow();
-    const self = SOURCE.replace("readSince(base, now))", "readSince(now, now))");
-    expect(self).not.toBe(SOURCE);
-    expect(() => attachPollHeld(self)).toThrow();
-    const early = SOURCE.replace("      const base = await devicesRead();\n", "").replace(
-      '      const staged0 = await ensure(3, "Booted");',
-      '      const base = await devicesRead();\n      const staged0 = await ensure(3, "Booted");',
-    );
-    expect(early).not.toBe(SOURCE);
-    expect(() => attachPollHeld(early)).toThrow();
-    const twice = SOURCE.replace(
-      "        // THE GATE (§4), its first leg",
-      `        answer ??= await js(\`globalThis.__vfDesk.local(\${T})?.devices?.()?.attachable(\${tr}) ?? null\`);\n        // THE GATE (§4), its first leg`,
-    );
-    expect(twice).not.toBe(SOURCE);
-    expect(() => attachPollHeld(twice)).toThrow();
+    const stages = [
+      'door.row("SIM-ATTACH", "press"',
+      'h.pressSelector(act("simulator-settings"))',
+      "JSON.stringify(env.runtime)",
+      "JSON.stringify(typeOf(3))",
+      "if (!selected) throw",
+      "await h.pressSelector(",
+      "await undoKey()",
+    ];
+    let start = 0;
+    for (const stage of stages) {
+      const at = row.indexOf(stage, start);
+      expect(at, stage).toBeGreaterThanOrEqual(start);
+      start = at + stage.length;
+    }
   });
 });
 

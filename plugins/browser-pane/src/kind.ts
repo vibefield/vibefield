@@ -30,8 +30,8 @@ import {
   stringProp,
 } from "@vibefield/plugin-sdk/desk";
 import { displayOf, PROMPT } from "./address";
-import { nextDevice } from "./device";
-import { deviceIdentity, deviceOf } from "./devices";
+import { configureDevice, DEVICE_GLYPH, SOUND_OFF, SOUND_ON, togglePaneSound } from "./device";
+import { deviceForProps, deviceIdentity } from "./devices";
 import { handOf } from "./hand";
 import { bandDensity, bandFor, headKey, headStateOf, pageStill, rungFor } from "./head";
 import { stillSplit } from "./head-still";
@@ -111,17 +111,12 @@ const infoOf = (c: HeldToolStateContext): LiveInfo | undefined => pageOf(c)?.inf
 /** ↻ while the page loads: Stop — the head's ✕. */
 export const STOP_GLYPH = { path: "M7 7 L17 17 M17 7 L7 17" } as const;
 
-/**
- * The held bar's tools (PT-3 ruling 8) — ACTIONS: ‹ back, › forward, ↻ reload through the page's navigation, the ADDRESS (the
- * one editor over the head's capsule), the DEVICE (PT-1's switch, to the next device). The chords are the browser's (⌘[ ⌘] ⌘R
- * ⌘L) — while the page's lease holds the keys, the lease runs them (ruling 7). PT-5a (ruling 2; ICE I49) — each SAYS ITS STATE,
- * read with the anchor: ‹ and › are DISABLED where the page has nowhere to go (a still has nowhere), and ↻ reads STOP — its
- * glyph the head's ✕, its label — while the page loads. The bar and the head say the same truth now. On a FAILED page ↻ is
- * the face's "Try again" (ruling 3) — and DISABLED where there is nothing to try (a page the desk may not open).
- */
+/** Navigation stays on the GPU header; hidden tool definitions retain standard browser shortcuts.
+ * The object toolbar exposes device emulation and sound. A loading page offers Stop in place of Reload. */
 export const PANE_TOOLS: readonly HeldToolDef[] = [
   {
     id: "back",
+    bar: false,
     label: "Back",
     kind: "action",
     keys: ["mod+["],
@@ -132,6 +127,7 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
   },
   {
     id: "forward",
+    bar: false,
     label: "Forward",
     kind: "action",
     keys: ["mod+]"],
@@ -142,6 +138,7 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
   },
   {
     id: "reload",
+    bar: false,
     label: "Reload",
     kind: "action",
     keys: ["mod+r"],
@@ -157,6 +154,7 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
   },
   {
     id: "address",
+    bar: false,
     label: "Address",
     kind: "action",
     keys: ["mod+l"],
@@ -166,10 +164,19 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
   },
   {
     id: "device",
-    label: "Device",
+    label: "Device emulation",
     kind: "action",
-    glyph: { path: "M6 6.5 H18 V15.5 H6 Z M3.5 18.5 H20.5" },
-    run: nextDevice,
+    glyph: DEVICE_GLYPH,
+    run: (api) => configureDevice(api, [api.entity]),
+  },
+  {
+    id: "sound",
+    label: "Mute sound",
+    kind: "action",
+    glyph: SOUND_ON,
+    run: (api) => togglePaneSound(api, [api.entity]),
+    state: (c) =>
+      c.props().muted === true ? { label: "Unmute sound", glyph: SOUND_OFF } : undefined,
   },
 ];
 
@@ -192,7 +199,7 @@ export interface BrowserPaneKindOptions {
 export function paneOpening(law: BrowserLaw = BROWSER): OpenBinding {
   return {
     // the page plus the head, in the pane's own desk units, centred as its rect is
-    extent: ({ rect, props }) => openExtent(rect, shapeOf(rect, deviceOf(props.device), law)),
+    extent: ({ rect, props }) => openExtent(rect, shapeOf(rect, deviceForProps(props), law)),
     pose: "camera",
     tools: PANE_TOOLS,
     // PT-3 — the wheel over it is its page's (the hand never pans for it); Esc the desk's (one press puts it down)
@@ -227,7 +234,7 @@ export function browserPaneKind(
     rung: (c: RungContext): number => rungFor(c.zoom * c.dpr),
     local: (host) => createPaneLocal(host),
     resolve(ctx: ObjectContext): PaneGeometry {
-      const S = shapeOf(ctx.rect, deviceOf(ctx.props.device), law);
+      const S = shapeOf(ctx.rect, deviceForProps(ctx.props), law);
       // by night a lit page's glow reaches round the pane: the quad grows to hold it (a still's, or a live page's)
       const url = urlOf(ctx.props);
       const lit = ctx.theme.name === "dark" && (url === SAMPLE_URL || isPageUrl(url, SAMPLE_URL));
@@ -266,6 +273,7 @@ export function browserPaneKind(
             deviceScaleFactor: S.device.dpr,
             scheme,
             label: displayOf(url) || "Browser",
+            muted: ctx.props.muted === true,
             // PT-4 — the device the page is seen as: its layout, its fingers, the agent it announces
             device: deviceIdentity(S.device),
           },
@@ -295,6 +303,11 @@ export function browserPaneKind(
         local?.icon(ctx.entity, words?.info),
         face === undefined ? undefined : local?.saying(ctx.entity),
         still !== undefined && failed === undefined,
+        {
+          interactive: ctx.held !== undefined,
+          hint: ctx.flux.hover > 0.85,
+          muted: ctx.props.muted === true,
+        },
       );
       const tpu = bandDensity(S, bandFor(ctx.view.zoom * ctx.view.dpr));
       const laid = local?.head(ctx.entity, S, state, tpu);

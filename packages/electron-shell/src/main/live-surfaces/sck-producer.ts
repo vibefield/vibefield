@@ -23,6 +23,7 @@ import {
   type LiveSurfaceRuntimeSourceKind,
   type LiveSurfaceRuntimeSupportSnapshot,
 } from "./runtime-support";
+import { type SimulatorInput, simulatorInput } from "./simulator-input";
 import type {
   LiveSurfaceMainFrameDropReason,
   LiveSurfaceProducerTextureFrame,
@@ -76,6 +77,7 @@ export interface SckCaptureSessionDemand {
 }
 
 export interface SckCaptureSession {
+  guestInput?(event: SimulatorInput): void;
   setDemand(demand: SckCaptureSessionDemand): Promise<void>;
   dispose(): Promise<void>;
 }
@@ -85,6 +87,8 @@ export interface SckCaptureClientStartRequest {
   readonly source: SckWindowSource;
   readonly demand: SckCaptureSessionDemand;
   readonly geometry?: SckCaptureGeometryOverride;
+  /** Main supplies this only after resolving the requested booted simulator. */
+  readonly simulatorFramebufferDevice?: string;
   readonly onFrame: (frame: SckCaptureFrame) => void;
   readonly onFault: (error: LiveSurfaceErrorV1) => void;
 }
@@ -255,6 +259,7 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #lastDemandShape = "";
   #actuationRevision = 0;
   #geometry: LiveSurfaceGeometryV1 | undefined;
+  #inputOwner: AttachmentRecord | undefined;
   #geometryKey = "";
   #geometryRevision = 0;
   #transport: "shared-texture" | undefined;
@@ -367,14 +372,41 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       get summary() {
         return runtime.summary;
       },
+      dispatchInput(input, revision) {
+        const geometry = runtime.#geometry;
+        const ask = record.demand.current;
+        const session = runtime.#run?.session;
+        if (
+          disposed ||
+          !record.active ||
+          !session?.guestInput ||
+          !geometry ||
+          geometry.revision !== revision ||
+          ask?.mode !== "live" ||
+          !ask.interactive ||
+          runtime.#lifecycle.snapshot.state !== "live"
+        )
+          return;
+        const event = simulatorInput(input, geometry.logicalSize);
+        if (!event) return;
+        if (runtime.#inputOwner !== record) {
+          if (runtime.#inputOwner) session.guestInput({ kind: "release" });
+          runtime.#inputOwner = record;
+        }
+        session.guestInput(event);
+      },
       setDemand(demand) {
         if (disposed || !record.active) return;
         const result = record.demand.update(demand);
-        if (result.kind === "accepted") runtime.reconcileDemand();
+        if (result.kind === "accepted") {
+          if (!demand.interactive || demand.mode !== "live") runtime.releaseInput(record);
+          runtime.reconcileDemand();
+        }
       },
       dispose() {
         if (disposed) return;
         disposed = true;
+        runtime.releaseInput(record);
         record.active = false;
         runtime.#attachments.delete(context.attachmentId);
         runtime.reconcileDemand();
@@ -390,6 +422,12 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.cancelRun();
     this.#attachments.clear();
     if (this.#lifecycle.snapshot.state !== "closed") this.#lifecycle.transition("closed");
+  }
+
+  private releaseInput(record: AttachmentRecord): void {
+    if (this.#inputOwner !== record) return;
+    this.#inputOwner = undefined;
+    this.#run?.session?.guestInput?.({ kind: "release" });
   }
 
   private reconcileDemand(): void {
@@ -631,6 +669,7 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     });
     if (!parsed.success) return null;
     if (key !== this.#geometryKey) {
+      if (this.#inputOwner) this.releaseInput(this.#inputOwner);
       this.#geometryRevision = increment(this.#geometryRevision, "SCK geometry revision");
       this.#geometryKey = key;
     }
@@ -747,6 +786,7 @@ export class SckLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   private cancelRun(): void {
     const run = this.#run;
     this.#run = null;
+    this.#inputOwner = undefined;
     if (run === null) return;
     run.canceled = true;
     const session = run.session;

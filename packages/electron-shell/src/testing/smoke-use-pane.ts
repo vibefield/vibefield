@@ -25,6 +25,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { paneHeadPoint } from "./browser-pane-chrome";
 import { FIXTURE_PARTS, type FixtureRect, type FixtureReport } from "./live-fixture";
 import { layPane, PANE, paneHands, paneToMiddle } from "./smoke-browser-pane";
 import type { LiveRowsDriver } from "./smoke-live-pane";
@@ -684,16 +685,8 @@ export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
     problems.push(...judgeWheel(wheel));
 
     // ── TOOLS: ‹ back; ↻ reload; ⌘L the address over the capsule, typed, ⏎; ⌘L then Esc the page's again ─────────────
-    const pressTool = async (id: string): Promise<void> => {
-      const p = await js<{ x: number; y: number } | null>(`(() => {
-        const row = document.querySelector('[data-selection-bar] [data-face-row="hand"]');
-        const el = [...(row?.querySelectorAll("[data-tool]") ?? [])].find((t) => t.getAttribute("data-tool") === ${JSON.stringify(id)});
-        if (el === undefined) return null;
-        const r = el.getBoundingClientRect();
-        return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
-      })()`);
-      if (p === null) throw new Error(`the held bar has no ${id}`);
-      await press(p);
+    const pressTool = async (id: "back" | "reload"): Promise<void> => {
+      await press(await paneHeadPoint(h, id));
     };
     // each a NEW document (a new memory token) — never the page already where the act would take it
     const tokenAt = report()?.token;

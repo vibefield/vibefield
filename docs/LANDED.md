@@ -4759,7 +4759,7 @@ the both-themes eyeball, now with a working thing to look at.
 ## DT-3f — the page lays out at the card: the logical viewport follows demand
 
 2026-08-29 evening. James's second live report: "when a url is loaded, it is not filling
-up the entire card size." Right again — oryzo.ai sat as a 1024×768 picture in the
+up the entire card size." Right again — the test page sat as a 1024×768 picture in the
 top-left of his resized card, spilling over the foot. Two defects locked together, and
 the DT-3e smoke could not have seen either: its 640×480 spawn was exactly the producer's
 4:3 default aspect.

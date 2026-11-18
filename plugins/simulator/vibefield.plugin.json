@@ -12,7 +12,7 @@
         "binding": {
           "kind": "simulator"
         },
-        "description": "An iPhone lying face up at its true size, its screen a Simulator's: double-click to use it — view-only",
+        "description": "Double-click to choose an iPhone model and iOS version, then use the simulator on the canvas.",
         "groups": {},
         "interaction": {
           "movable": true,
@@ -84,7 +84,7 @@
       }
     ]
   },
-  "description": "An iPhone on the desk at its true size — any of the models Xcode's Simulator knows — its screen a Simulator's, view-only",
+  "description": "Create interactive iPhones on the canvas using the iOS simulator runtimes installed in Xcode.",
   "engines": {
     "app": ">=0.0.0",
     "contracts": "^0.1.0"

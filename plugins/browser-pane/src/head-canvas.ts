@@ -116,19 +116,23 @@ export function drawHead(
     ctx.stroke();
     ctx.globalAlpha = 1;
   };
-  if (L.back) chevron(L.back, -1, st.canBack);
-  if (L.forward) chevron(L.forward, 1, st.canForward);
+  const active = st.interactive === true;
+  if (active && L.back) chevron(L.back, -1, st.canBack);
+  if (active && L.forward) chevron(L.forward, 1, st.canForward);
 
   // the address field: a capsule frosted whole
-  const [cx, cy, chx, chy] = L.address;
-  ctx.beginPath();
-  ctx.roundRect(cx - chx, cy - chy, chx * 2, chy * 2, chy);
-  ctx.fill();
+  const [cx, cy, chx, chy] =
+    !active && L.compact ? [0, L.cy, S.half[0] - S.border, L.address[3]] : L.address;
+  if (active) {
+    ctx.beginPath();
+    ctx.roundRect(cx - chx, cy - chy, chx * 2, chy * 2, chy);
+    ctx.fill();
+  }
 
-  if (L.reload) {
+  if (active && L.reload) {
     // the reload sits at the capsule's end, cut back out of its frost
     const [x, y] = L.reload;
-    ctx.globalCompositeOperation = "destination-out";
+    ctx.globalCompositeOperation = active ? "destination-out" : "source-over";
     ctx.lineWidth = 0.36 * mm;
     ctx.beginPath();
     if (st.loading) {
@@ -157,13 +161,13 @@ export function drawHead(
   }
 
   // the address, cut back out of the capsule to clear glass: [lock] [favicon's place] address, centred clear of the reload
-  const reserve = L.reload ? L.glyph * 1.25 : 0;
+  const reserve = active && L.reload ? L.glyph * 1.25 : 0;
   // PT-5b — AT REST (the page shown is a photograph of it): two short bars cut at the capsule's leading end — on every
   // pane, a phone's too (its head carries the capsule alone); never while the capsule says something else
   const rest = st.rest === true && st.saying === undefined;
   if (rest) {
     const rx = cx - chx + 2.0 * mm;
-    ctx.globalCompositeOperation = "destination-out";
+    ctx.globalCompositeOperation = active ? "destination-out" : "source-over";
     ctx.lineWidth = 0.44 * mm;
     ctx.beginPath();
     ctx.moveTo(rx, cy - 0.82 * mm);
@@ -175,17 +179,19 @@ export function drawHead(
   }
   const left = cx - chx + 1.7 * mm + (rest ? 2.3 * mm : 0);
   const right = cx + chx - 1.7 * mm - reserve;
-  const size = 2.5 * mm;
+  const size = (active ? 3.6 : 2.5) * mm;
   // PT-5a: for a moment the capsule SAYS something instead (a download refused) — alone: no lock, no favicon
   const saying = st.saying !== undefined;
   if (saying) favicon = null;
-  const text = st.saying ?? (st.display || PROMPT);
+  const compactHint = !active && L.compact && st.hint === true;
+  const text = compactHint ? "Double-click to browse" : (st.saying ?? (st.display || PROMPT));
+  if (compactHint) favicon = null;
   ctx.font = `${st.display || saying ? 600 : 500} ${size}px ${SANS}`;
   ctx.textBaseline = "middle";
-  const generic = !saying && favicon === null && st.favicon === GENERIC_FAVICON;
+  const generic = !compactHint && !saying && favicon === null && st.favicon === GENERIC_FAVICON;
   const icon = favicon || generic ? 2.8 * mm : 0;
   const gap = favicon || generic ? 1.15 * mm : 0;
-  const lock = !saying && st.secure && st.display ? 1.95 * mm : 0;
+  const lock = !compactHint && !saying && st.secure && st.display ? 1.95 * mm : 0;
   const room = right - left - icon - gap - lock;
   let shown = text;
   if (ctx.measureText(shown).width > room) {
@@ -195,7 +201,7 @@ export function drawHead(
   }
   const tw = ctx.measureText(shown).width;
   let x = Math.max(left, (left + right) / 2 - (tw + icon + gap + lock) / 2);
-  ctx.globalCompositeOperation = "destination-out";
+  ctx.globalCompositeOperation = active ? "destination-out" : "source-over";
   if (lock) {
     ctx.lineWidth = 0.24 * mm;
     ctx.beginPath();
@@ -228,6 +234,26 @@ export function drawHead(
   ctx.fillText(shown, x, cy + 0.08 * mm);
   ctx.globalAlpha = 1;
   ctx.globalCompositeOperation = "source-over";
+
+  if (!active && !L.compact && st.hint) {
+    ctx.font = `500 ${2.0 * mm}px ${SANS}`;
+    ctx.globalAlpha = 0.8;
+    ctx.fillText(
+      "Double-click to browse",
+      -S.half[0] + S.border,
+      cy + 0.08 * mm,
+      Math.max(0, S.half[0] - S.border - chx - 3 * mm),
+    );
+    ctx.globalAlpha = 1;
+  }
+  if (st.muted && L.size !== null) {
+    ctx.font = `500 ${1.8 * mm}px ${SANS}`;
+    ctx.textAlign = "right";
+    ctx.globalAlpha = 0.7;
+    ctx.fillText("Muted", L.size - 24 * mm, cy + 0.08 * mm);
+    ctx.globalAlpha = 1;
+    ctx.textAlign = "left";
+  }
 
   // the viewport, flush right, engraved: the dev browser's size readout
   if (L.size !== null) {

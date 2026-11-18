@@ -364,6 +364,90 @@ describe("IosSimulatorDeviceLiveSurfaceRuntime — the conditions (R2)", () => {
     });
   });
 
+  it("streams the boot framebuffer while guest readiness is pending, then restores the interactive demand", async () => {
+    const fixture = setup();
+    let ready!: () => void;
+    const readiness = new Promise<void>((resolve) => {
+      ready = resolve;
+    });
+    const waitUntilReady = vi.fn(() => readiness);
+    const sessions = new SimulatorDeviceSessions({
+      framebuffer: true,
+      simctl: Object.assign(fixture.simctl, { waitUntilReady }),
+      capture: () => fixture.capture!,
+      openSettings: async () => {},
+    });
+    const runtime = open(sessions);
+    const face = attach(runtime);
+    face.attachment.setDemand({ ...demand(1), interactive: true });
+    await settle();
+    expect(face.latest().simulator?.condition).toBe("booting");
+    expect(waitUntilReady).toHaveBeenCalledExactlyOnceWith(UDID);
+    const request = fixture.capture!.client.requests[0]!;
+    expect(request.demand.targetFps).toBe(5);
+    request.onFrame(captureFrame(request.producerEpoch));
+    expect(face.frames).toHaveLength(1);
+    expect(runtime.supportSnapshot().effectiveDemand?.interactive).toBe(false);
+    await vi.advanceTimersByTimeAsync(2500);
+    expect(waitUntilReady).toHaveBeenCalledTimes(1);
+    ready();
+    await settle();
+    expect(face.latest().simulator?.condition).toBe("streaming");
+    expect(runtime.supportSnapshot().effectiveDemand).toMatchObject({
+      interactive: true,
+      targetFps: 30,
+    });
+    expect(fixture.capture!.client.requests).toHaveLength(1);
+    await sessions.dispose();
+  });
+
+  it("ignores readiness from an earlier boot and offers retry if the current boot fails", async () => {
+    const fixture = setup();
+    let previousReady!: () => void;
+    let currentFailed!: (error: Error) => void;
+    const waitUntilReady = vi
+      .fn<() => Promise<void>>()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            previousReady = resolve;
+          }),
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            currentFailed = reject;
+          }),
+      )
+      .mockResolvedValue(undefined);
+    const sessions = new SimulatorDeviceSessions({
+      framebuffer: true,
+      simctl: Object.assign(fixture.simctl, { waitUntilReady }),
+      capture: () => fixture.capture!,
+      openSettings: async () => {},
+      watchUnreadyMs: 50,
+    });
+    const face = attach(open(sessions));
+    face.attachment.setDemand({ ...demand(1), interactive: true });
+    await settle();
+    fixture.simctl.raw = listJson({ [IOS_26_5]: [rawDevice(UDID, "Shutdown")] });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(face.latest().simulator?.condition).toBe("off");
+    fixture.simctl.raw = listJson({ [IOS_26_5]: [rawDevice(UDID, "Booted")] });
+    await vi.advanceTimersByTimeAsync(50);
+    previousReady();
+    await settle();
+    expect(face.latest().simulator?.condition).toBe("booting");
+    currentFailed(new Error("bootstatus failed"));
+    await settle();
+    expect(face.latest().simulator?.condition).toBe("stopped");
+    face.act("retry");
+    await settle();
+    expect(waitUntilReady).toHaveBeenCalledTimes(3);
+    expect(face.latest().simulator?.condition).toBe("streaming");
+    await sessions.dispose();
+  });
+
   it("no-simulator: a shell with no capture half never runs simctl (R5), and simctl's failed probe says the same", async () => {
     const helperless = setup({ capture: null });
     const face = attach(open(helperless.sessions));

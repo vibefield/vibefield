@@ -7,6 +7,7 @@
 #include <node_api.h>
 
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdint>
 #include <cstring>
@@ -30,6 +31,7 @@ static_assert(sizeof(void*) == 8, "Electron IOSurface handles require a 64-bit p
 struct FrameRecord {
   uint64_t id = 0;
   VfCaptureFramePayload payload{};
+  std::chrono::steady_clock::time_point queued_at;
   IOSurfaceRef surface = nullptr;
 };
 
@@ -50,6 +52,8 @@ struct AdapterState {
   uint64_t rejected_capability = 0;
   uint64_t rejected_protocol = 0;
   std::string fatal_error;
+  napi_threadsafe_function frame_ready = nullptr;
+  napi_env notification_env = nullptr;
 };
 
 AdapterState g_state;
@@ -112,8 +116,33 @@ bool ValidPayload(const VfCaptureFramePayload& payload) {
   return true;
 }
 
+// Only a wakeup crosses into JS. drain() still owns the validated, bounded IOSurface queue.
+void NotifyFramesReadyLocked() {
+  if (g_state.frame_ready == nullptr) return;
+  const auto status = napi_call_threadsafe_function(g_state.frame_ready, nullptr, napi_tsfn_nonblocking);
+  // A full one-entry notification queue already has a wakeup in flight.
+  if (status == napi_closing) g_state.frame_ready = nullptr;
+}
+
+void StopNotificationsLocked() {
+  if (g_state.frame_ready != nullptr) {
+    napi_release_threadsafe_function(g_state.frame_ready, napi_tsfn_abort);
+    g_state.frame_ready = nullptr;
+  }
+  g_state.notification_env = nullptr;
+}
+
+// Registered after the TSFN, so the receiver loses access before Node tears down that function.
+void CleanupNotifications(void*) {
+  std::lock_guard<std::mutex> lock(g_state.mutex);
+  StopNotificationsLocked();
+}
+
 void SetFatalLocked(const char* message) {
-  if (g_state.fatal_error.empty()) g_state.fatal_error = message;
+  if (g_state.fatal_error.empty()) {
+    g_state.fatal_error = message;
+    NotifyFramesReadyLocked();
+  }
   g_state.rejected_protocol += 1;
 }
 
@@ -220,7 +249,9 @@ void ReceiveFrames() {
       }
       record->id = g_state.next_frame_id++;
       g_state.accepted += 1;
+      record->queued_at = std::chrono::steady_clock::now();
       g_state.pending.push_back(std::move(record));
+      if (g_state.pending.size() == 1) NotifyFramesReadyLocked();
     }
   }
 }
@@ -234,6 +265,10 @@ void StopAdapter() {
     g_state.receive_port = MACH_PORT_NULL;
   }
   std::lock_guard<std::mutex> lock(g_state.mutex);
+  if (g_state.notification_env != nullptr) {
+    napi_remove_env_cleanup_hook(g_state.notification_env, CleanupNotifications, nullptr);
+    StopNotificationsLocked();
+  }
   for (auto& record : g_state.pending) ReleaseRecord(record);
   g_state.pending.clear();
   for (const auto& [id, surface] : g_state.outstanding) {
@@ -585,6 +620,40 @@ napi_value Start(napi_env env, napi_callback_info info) {
   return undefined;
 }
 
+napi_value SetFrameReadyCallback(napi_env env, napi_callback_info info) {
+  size_t argc = 1;
+  napi_value argv[1];
+  napi_valuetype type;
+  if (napi_get_cb_info(env, info, &argc, argv, nullptr, nullptr) != napi_ok || argc != 1 ||
+      napi_typeof(env, argv[0], &type) != napi_ok || type != napi_function) {
+    Throw(env, "setFrameReadyCallback requires a function");
+    return nullptr;
+  }
+  std::lock_guard<std::mutex> lock(g_state.mutex);
+  if (!g_state.running.load() || g_state.notification_env != nullptr) {
+    Throw(env, "frame-ready callback requires an active receiver with no listener");
+    return nullptr;
+  }
+  napi_value name;
+  if (napi_create_string_utf8(env, "VibeField capture frame ready", NAPI_AUTO_LENGTH, &name) != napi_ok ||
+      napi_create_threadsafe_function(env, argv[0], nullptr, name, 1, 1, nullptr, nullptr, nullptr,
+                                      nullptr, &g_state.frame_ready) != napi_ok) {
+    Throw(env, "could not create the frame-ready notification");
+    return nullptr;
+  }
+  if (napi_unref_threadsafe_function(env, g_state.frame_ready) != napi_ok ||
+      napi_add_env_cleanup_hook(env, CleanupNotifications, nullptr) != napi_ok) {
+    StopNotificationsLocked();
+    Throw(env, "could not register the frame-ready notification");
+    return nullptr;
+  }
+  g_state.notification_env = env;
+  if (!g_state.pending.empty() || !g_state.fatal_error.empty()) NotifyFramesReadyLocked();
+  napi_value undefined;
+  napi_get_undefined(env, &undefined);
+  return undefined;
+}
+
 napi_value SetExpectedPeerPid(napi_env env, napi_callback_info info) {
   size_t argc = 1;
   napi_value argv[1];
@@ -617,16 +686,19 @@ napi_value Drain(napi_env env, napi_callback_info info) {
     return nullptr;
   }
   std::deque<std::unique_ptr<FrameRecord>> records;
+  std::chrono::steady_clock::time_point drained_at;
   {
     std::lock_guard<std::mutex> lock(g_state.mutex);
     if (!g_state.fatal_error.empty()) {
       Throw(env, g_state.fatal_error.c_str());
       return nullptr;
     }
+    if (!g_state.pending.empty()) drained_at = std::chrono::steady_clock::now();
     while (!g_state.pending.empty() && records.size() < maximum) {
       records.push_back(std::move(g_state.pending.front()));
       g_state.pending.pop_front();
     }
+    if (!g_state.pending.empty()) NotifyFramesReadyLocked();
   }
 
   napi_value array;
@@ -656,6 +728,8 @@ napi_value Drain(napi_env env, napi_callback_info info) {
         SetNumber(env, object, "logicalWidth", payload.logical_width) &&
         SetNumber(env, object, "logicalHeight", payload.logical_height) &&
         SetString(env, object, "timestampUs", std::to_string(payload.timestamp_us)) &&
+        SetNumber(env, object, "queueWaitUs",
+                  std::chrono::duration<double, std::micro>(drained_at - record->queued_at).count()) &&
         SetNamed(env, object, "ioSurface", handle) &&
         napi_set_element(env, array, index, object) == napi_ok;
     if (!created) {
@@ -731,6 +805,7 @@ NAPI_MODULE_INIT() {
       {"start", nullptr, Start, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"setExpectedPeerPid", nullptr, SetExpectedPeerPid, nullptr, nullptr, nullptr, napi_default,
        nullptr},
+      {"setFrameReadyCallback", nullptr, SetFrameReadyCallback, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"drain", nullptr, Drain, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"release", nullptr, Release, nullptr, nullptr, nullptr, napi_default, nullptr},
       {"stats", nullptr, Stats, nullptr, nullptr, nullptr, napi_default, nullptr},
