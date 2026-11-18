@@ -8,8 +8,8 @@
       "userId": "01J9USERAAAAAAAAAAAAAAAAAA",
       "nonce": "9f8e7d6c5b4a39281706f5e4d3c2b1a0",
       "ts": 1784930400,
-      "mac": "TO-BE-COMPUTED",
-      "ackMac": "TO-BE-COMPUTED"
+      "mac": "f8d9025c1836ecc56b787284e1cabd9f8d6926ae60b0a92edf4fe8181fb49061",
+      "ackMac": "292bedc54ae07cc4e56ed77884c31d981a7e0126a887a8435490324a7bf9331d"
     },
     {
       "secretHex": "5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c5c",
@@ -18,8 +18,8 @@
       "userId": "",
       "nonce": "0a1b2c3d4e5f60718293a4b5c6d7e8f9",
       "ts": 1784934000,
-      "mac": "TO-BE-COMPUTED",
-      "ackMac": "TO-BE-COMPUTED"
+      "mac": "9c1548dffaa902ac3938ae9bf2a5b3826811b58511e3b2fb3375cf17667b4bc6",
+      "ackMac": "bcedbb5f0b92b73ab63931b8a1c3a656f6b688971397552734031205ccefbaa6"
     }
   ]
 }
