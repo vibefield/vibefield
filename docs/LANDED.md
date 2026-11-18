@@ -2049,6 +2049,9 @@ vacuous. Still open and recorded: `artifact-preview-capture`'s thumbnail commit 
 rename (a lost thumbnail is a blemish, not evidence); `McpService.startServer` has no production
 caller yet, so its door is test-reachable only; and the stale "proven by the packaged gate" comment
 survives in four fieldd test files (audit's copy was corrected at source).
+*Corrected 2026-11-18 (LANDED "AH-4 — a live app's preview"): the thumbnail's "plain rename" was false
+when written. WIN-10's own commit, `cfd11e467`, had already replaced that `rename` with `durableRename`
+in `artifact-preview-capture.ts`.*
 
 ## WIN-11 — the Godview deck's smoke passes on Windows, and two product findings fall out
 
@@ -44508,6 +44511,10 @@ started, and the handle's has a puppeteer seam. No product file names an agent i
   `Sources/FieldHome/Fixtures`, the catalog `ChatFixtureDoor` answers `agent.catalog` from (its `chat` row in
   `scripts/check-ios-fixtures.mjs`). The proposal and VF-PM's GO said six; check:ios-fixtures names seven, and all
   seven moved.
+- *Corrected 2026-11-18 (train 10's fact-check; LANDED "AC (erratum)"):* "check:ios-fixtures names seven" (above)
+  does not hold. Its `requiredMirrors`, which checks only that a copy exists, names four of the seven: the
+  `workspace` row's two, `chat`'s and `usage`'s (read at `8064bbdec` and at train 10's top). Its walk compares all
+  seven, byte for byte, to the contracts fixture.
 - CLAUDE.md's AC paragraph still says "the kit's six mirrors" (`CLAUDE.md:318`). Its erratum is owed at its source,
   on James's own word, never on a peer's (below).
 - fieldd's door test built field-native fresh into the lane's own target, about 83 s, by `nativeBuildEnv`'s
@@ -52422,6 +52429,38 @@ the one file placed in the working tree, 2026-11-17 02:52:17Z → 03:00:05Z, thr
 **Not done, and not claimed:** the root (above); the settling measurement, owed; the landing-only gates
 (`pnpm gate:landing`) were not run and are owed at the landing; nothing pushed.
 
+**Addendum (2026-11-18): the settling measurement, RUN: at the test Mac's scale the spend tick is NOT the root**
+(VF-PM's words 05:32:30Z, the row to the test Mac, and 05:41:50Z, its judge; c2's row, its judge written before the
+run, `JUDGE.md` `2fa178808b12b25d`; run on the test Mac 08:37:19Z → 08:38:20Z, at `fa6c1ea15e8b`, train 10's assembled
+top on branch `fixer/train10b-on-8064bbdec`, where this file has ten rows; the stage `rows-499s.remote.sh`
+`ae1aa6efebf97e01`, its run.log `0d42ad3f6e0d31e0`.)
+- Two throwaway copies of the file, never committed, were made there from the tree's own file (`8e686e32…`) and held to
+  the sums made beforehand. PLAIN has the I499 timings and a count of the real intervals standing at each page row's
+  start. FAKE has the same, with `setInterval` and `clearInterval` faked by `vi.useFakeTimers` before each page row's
+  render. They were alternated three times each, with no clamp. That departs from the ruling above ("under the
+  efficiency cores"), which was made for this Mac. **GREEN**: six of six runs, "Tests 10 passed (10)".
+- The fake reached every page row: each fake run printed "faked: global true, window's setInterval is global's true"
+  three times.
+- The three page rows' summed times (the inventory, theme and component-state rows; a row's time includes its
+  beforeEach render): plain 6187, 5595 and 5798 ms; fake 6023, 5690 and 5614 ms. Median fake over median plain:
+  5690 / 5798 = 0.981. The ranges overlap.
+- **The verdict, by the judge fixed before the run: NOT THE ROOT, at the test Mac's scale.** Faking the spend tick for
+  the page rows changed their time by under 2%, inside the runs' own spread. Those rows ran 1.3–2.7 s, so the 1 s
+  tick fired at most two or three times in each. The run does not reach the 20–200 s rows on GitHub's runner where the
+  suspicion arose. No mend of the test's timers or of the catalog's clock is drafted; what follows is VF-PM's to rule.
+- Both copies counted 0 intervals standing at every page row's start, in all six runs (18 of 18 lines; the fake copy
+  counts before its fake): no interval outlives a page row into the next page row. The count is read before the row's
+  render, so it says nothing of the tick during a row. The judge also named that count as a second ground for the
+  verdict, which it cannot carry; the verdict rests on the timings.
+- The page-scale time did not reproduce on the test Mac. There the inventory row took 2618–2726 ms and its render
+  1082–1130 ms. On this Mac on 2026-11-17, on main `8bb55de91`'s tree (eight rows), the same-named row took 5.1–5.8 s
+  unclamped and 31.4 s under `taskpolicy -c background`, its render 20.5 s (`rows-499.sh`'s runs 3 and 2). On GitHub's
+  runner the render took about 45 s (above). The row's time follows the CPU it gets. What remains of the root is the
+  whole-page render's own cost on a slow or shared CPU; whether the split keeps each row inside its budget there is
+  not shown here (Not covered, above).
+- The run left the tree as found (HEAD `fa6c1ea15e8b`, porcelain 0, the file at its sum), its refs equal (111 = 111),
+  and the Keychains listing unmoved.
+
 ## Item 504 — the phone's gate: no desktop answering, or no network, and the splash stands; with ios/rb2 (M339)
 
 (2026-11-17; 26 commits, 64 paths. ios/rb2's eleven and the gate's fifteen, carried by c2 onto main `8bb55de91` as
@@ -52547,3 +52586,7914 @@ the one file placed in the working tree, 2026-11-17 02:52:17Z → 03:00:05Z, thr
 
 **Not done, and not claimed:** the reason (queued); the kit's tests; its DECISIONS row is owed, in the next records
 commit; the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing; nothing pushed.
+
+## Item 505 — History on the phone speaks as History: what arrives and from where, never a door or an index (M341)
+
+(2026-11-17; three commits, in order: `841d266ec` (doc, "505 (doc): DESIGN.md §8 says the phone's History
+standings…"), `db4a7a389` (red, "505 (red): the phone's History names its insides…") and `3a672a2df` (green,
+"505 (green): History on the phone speaks as History…"). Words alone: no state and no layout moves; the only
+logic that goes is what put fieldd's detail and reason into a sentence. The words are the ones James picked on
+2026-11-17.)
+
+**What a person sees.** The phone's History said VibeField's insides: a desktop's "door", its "index", the
+"ledger", the contracts versions, and fieldd's own detail and reason as sentences. It now says where History
+stands and what arrives, as History (DESIGN.md §9: item 280, IS-282-3, IS-282-7). With a desktop named studio:
+- A project whose sessions have not arrived: "Reading the sessions…" / "They arrive as studio answers." while
+  studio answers, and "No sessions read for this project" / "They arrive once studio answers." while it does not.
+- The line under a page's head: "History on studio is opening", "is updating", "has stopped", "is stopped";
+  "studio is reading its history · 61%"; "studio keeps no history".
+- An empty first page, by the same standings: "Its projects arrive when it is open."; "Its projects arrive when
+  the update ends."; "Nothing new arrives on this iPhone until it runs again. Try again from History on
+  studio."; "History is off on studio."; and "No projects yet" / "Your desktops have recorded none. Choose whose
+  history they keep on a desktop (Settings → Agents)."
+- No desktop answering, or one on another VibeField: "Nothing of your history is on this iPhone yet; your
+  projects arrive when one of your desktops answers." With none ever read: "History comes from your desktops" /
+  "None of them is answering right now, and this iPhone has read none before. Your projects and sessions arrive
+  from the first one that answers."
+- A project the phone holds nothing for: "This project has not been read here".
+- The root head: "studio is reading its history · 61%", and on a version mismatch "studio needs the same
+  VibeField as this iPhone"; the two contracts versions are no longer shown.
+- fieldd's detail and reason are no longer shown, and the phone does not log them: `HistoryProjects.readIndex`
+  keeps the detail in `index` alone, and nothing logs it. No log call was added; that line is item 512.
+- Item 516 (2026-11-18) puts some of these waits in the living mark instead; its entry names the notes it
+  retires.
+
+**The seams.**
+- `DESIGN.md` §8: fix7's paragraph says the standings in History's words, with a dated amendment at the
+  paragraph that keeps the old ones.
+- `ProjectFold.swift`: `indexSentence`, `emptyLedger`, `projectNotRead` and `noDesktopRead`, and the new
+  `FieldHistoryModel.projectSessionsNote(awake:desktop:)`. The project page (`HistoryProjectView.swift`) draws
+  that note instead of its own two; the red moved them word for word so a row can read them. `sentence(_:)`,
+  which put fieldd's words on screen, lost its last caller and is gone.
+- `FieldHistoryModel.swift`: `headNote`'s reading line and its mismatch line.
+
+**The rows** (FieldHistoryTests).
+- FieldHistoryModelTests: `deviceNamed` now holds that no word it lists says "door", "index" or "ledger", and
+  pins the new sentences; `headNote` pins the new reading line. New rows: `projectSessionsWait`;
+  `indexSentenceWords`, every standing and none (eight cases); and `emptyLedgerWords`, nine cases over every
+  standing and none (`unconfigured` with its reason and without), with a detail or reason given wherever a
+  standing carries one, so the row shows it stays off the screen.
+- HistoryProjectsTests (three of fix7's four rows: `indexFailed`, `indexComing`, `indexReadyEmpty`) and
+  HistoryFoldTests (`standing`) pin the new words. Where they read fieldd's reason or detail on screen, they
+  now read that it is absent; the reader still holds it in `index`.
+
+**Proved.**
+- The cut (07:05:17Z to 07:05:22Z) made the three commits on `63c128fd7`, main at the time, from files
+  prepared and summed beforehand, and held each to its parent, its message and its blobs. It ran no test.
+  The train carried them to main as cut: the same trees, messages and author times.
+- Every target of the kit on the test Mac's simulator at the train's top, after it landed (2026-11-17,
+  22:15:53Z to 22:18:17Z): FieldHistoryTests 497 of 497, every row above among them. Of the kit's 3,007 rows,
+  3,003 passed, 3 were skipped and 1 failed: FieldWebTests' R4 row (item 522), not History's.
+- The train's verify:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+- The phone build, where the kit's tests type-check:
+  The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is
+  the landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no
+  error line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on
+  a phone.
+
+**Not run, and owed.**
+- The red was never run, so its failing on the old words is not witnessed.
+- No still of the phone's History with the new words was taken; they are for the eye on a phone.
+- `pnpm gate:landing` not run (owed).
+- A log line for the dropped detail is item 512, its own pick; nothing in this entry logs it.
+
+## Item 367 (C, E5) — the kit's mock paths are nobody's, and no archive leaves this Mac with a real string (M342)
+
+(2026-11-17; 1b97b6125 "367 (C): the mock History's folders…", 3e1083090 "367 (E5): no archive leaves this Mac…".
+Item 367 asked, on 2026-11-13, that every real string give way to a made-up name before build 6 goes to
+App Review. These two pieces finish the real strings. The item's later pieces, E4 (the Developer page's demos
+compiled into TestFlight builds) and E3 (the Input card states lab), have their own entries. Both were cut on
+`63c128fd7` through the pre-commit hook; main holds copies with the same patches, on `3a672a2df` (item 505's
+green, three commits over `63c128fd7`).)
+
+**What landed.**
+- 1b97b6125, the kit's Sources. History's mock (`HistoryCorpus.swift`) names the five folders that held a census
+  string `~/code/<name>`; its other two projects keep `~/ice` and `~/jabali`. The mock is a plain `static let`,
+  compiled into every build, and two comment lines say why it carries no real path. At main every reference to
+  it is a DEBUG line, so a TestFlight build and the review build compile it and reach it from nowhere. The input
+  card demo's two `cd` lines name `~/code/vibe-field`, and `-vf-demo-remote`'s three cwd labels name `~/code/…`,
+  both inside `#if DEBUG` (`HomeScreen.swift`). The project names and ids stay. After it, none of the census's
+  literals stands under `apps/ios/VibeFieldKit/Sources` or `apps/ios/App`.
+- 1b97b6125, `scripts/check-ios-fixtures.mjs`: `index-projects.mesh.json` joins the required mirrors, so each of its
+  three kit copies must stand. The check already held every kit copy byte for byte to its golden.
+- Neither commit changes an `#if` condition. What a TestFlight build compiles is as before.
+- 3e1083090, `apps/ios/scripts/testflight.sh`. **The helper now refuses an archive of either kind, review or
+  TestFlight, that carries one of item 367's real strings.**
+  - Before `xcodebuild`, at `archive`, `real_sources_check` reads `apps/ios/VibeFieldKit/Sources` and
+    `apps/ios/App`, untracked files included. The reason given is that a literal of 15 bytes or fewer can compile
+    to instruction bytes that a search of the app cannot see.
+  - After the marker checks, at `archive` and again at `upload`, `real_strings_check` reads every file of the
+    archive's app for the census's literals and for this Mac's own home and checkout.
+  - It also reads the app's Mach-O files for another account's home (item 374). It exempts a CI runner's home,
+    this Mac's own account and the made-up users `me you test kim ada`. A CI runner's home, a prebuilt library's
+    own paths, is printed as a notice.
+  - Every count names its path, and no derived path is printed.
+- 3e1083090, `apps/ios/TESTFLIGHT.md`: one paragraph after the archive kinds says so.
+
+**From this landing**, the next archive from main runs both reads, and a real string that comes back is red at
+the archive, not found in a build. A TestFlight archive from main also waits for item 532, which closes the
+launch-argument reads that E4's widening compiles into TestFlight builds.
+
+**Proved.**
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is the
+landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no error
+line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on a phone.
+
+- No row of the cut's own ran: the cut held each path to the blob its apply script wrote on `63c128fd7`,
+  and its commits went through the pre-commit hook's sibling check (ended 07:07:25Z).
+- Run since, on the test Mac, at main `8064bbdec` (the kit, whole): FieldHistoryTests 497 of 497, which holds
+  every suite that reads `HistoryCorpus.mock`, and FieldHomeTests 809 of 809. The run's one red is FieldWebTests R4,
+  main's own (item 522).
+- Run since, at main `8064bbdec`: `pnpm verify` exit 0, its `check:ios-fixtures` reading "460 copies identical to
+  packages/contracts/fixtures".
+
+**Not run, and owed.**
+- `real_sources_check` and `real_strings_check` have not run on an archive: no archive of either kind
+  was made. The first archive from main is their first run.
+- No still or golden moves.
+- `pnpm gate:landing` not run (owed).
+
+## Item 41 — on the phone, another device's held screen anchors at the grid's foot, its empty rows on top (M343)
+
+(2026-11-17; bf3f28dc6 "41: another client's held screen anchors…", 308650586 "41 + 242: two comments say the
+item…", one commit shared with item 242's entry: one comment here and one there, each rewrapped over two lines.
+Both were cut on `63c128fd7` through the pre-commit hook; main holds copies with the same patches, on
+`3a672a2df` (item 505's green, three commits over `63c128fd7`).)
+
+**What landed.**
+- What a person sees: while another device holds a session's seat, the phone's live card draws the held
+  screen anchored at the grid's foot, so its empty rows are at the top, as DESIGN.md §8 has asked since
+  2026-10-19. This phone's own seat, an empty seat and no seat keep the grid at its top.
+- bf3f28dc6: `TerminalSurface` takes `anchorsGridAtFoot` and sets ghosttea's `gridAlignment` to `.bottom` or
+  `.top`, written only when it differs, beside the scroll focus switch (`focusesInputOnScroll`, on main since
+  `0c4590d7a`). `FieldHomeModel.anchorsGridAtFoot(seat)` is true only while another client holds the
+  seat; HomeScreen's live card passes it. In `LiveCardSeatTests.swift`, the row `onlyAnotherAnchorsAtTheFoot`
+  (suite "item 42 — the readout while another client drives") holds the six cases.
+- bf3f28dc6, DESIGN.md: §8's status line of 2026-10-19 becomes a dated note at its source.
+- 308650586: `anchorsGridAtFoot`'s comment says the readout's words stand centred by the review of 2026-11-02.
+- Not carried: an older branch's centring of the readout's words in the empty rows. The review of
+  2026-11-02 asked for them centred between the header and the input controls, whatever the holder's
+  rows; that landed in `0c4590d7a` and stands.
+
+**Proved.**
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is the
+landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no error
+line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on a phone.
+
+- No row of the cut's own ran; its commits went through the pre-commit hook's sibling check (ended
+  07:08:06Z, and 07:18:25Z for 308650586).
+- Run since, on the test Mac's simulator: the row "item 41: only another client's hold anchors the held screen at
+  the grid's foot…" passed at main `8064bbdec` (the kit, whole), and again in later kit runs over main.
+
+**Not run, and owed.**
+- No phone has drawn a held screen at the grid's foot: a held seat on a real phone, by day and by night,
+  is owed to the eye.
+- `pnpm gate:landing` not run (owed).
+
+## Item 242 — the phone kit's faint words are sorted: 42 words that must be read take t3, 19 marks take t4 (M344)
+
+(2026-11-17; 53adc6a20 "242 (doc): the phone kit's faint words…", a08b2d073 "242 (red): no kit source names…",
+957518c65 "242 (green): the phone kit's faint words, sorted…", 308650586 "41 + 242: two comments say the item…"
+(one commit shared with item 41's entry), a742a0976 "242: a test comment names its census…". Asked for
+2026-11-08: §2.4's law binds, and every use is sorted by its test. All five were cut on `63c128fd7` through
+the pre-commit hook; main holds copies with the same patches, on `3a672a2df` (item 505's green, three commits
+over `63c128fd7`). The first cut, of 2026-11-08 (40 uses), never landed.)
+
+**What landed.**
+- What a person sees: on the phone, a word that must be read takes t3 (`ChromePalette.inkTertiary`) and
+  a mark takes t4 (`ChromePalette.inkT4`). By day the words go from `#1C1C1E` at 30% to black at 50%, and by
+  night from white at 32% to 55%. Marks go from 30% to 50% by day and from 32% to 38% by night.
+- 53adc6a20, DESIGN.md. §7 gains "The phone kit's faint words, sorted": the kit's `inkFaint` (30% by day, 32%
+  by night) retires, and its table names each of the 61 uses with its tier. §7's Off row says the older
+  `inkFaint` was another ink. The seven places in §8 that named `inkFaint` name their tier, with six dated
+  notes (the unit and its label share one). Item 248's erratum stands in the new table's t3 row: t3 by day
+  reads 3.98:1 on the paper and 3.89:1 on the fill, under §2.4's 4.5:1 floor; by night 6.0 and 5.2 hold.
+  §2.4's own t3 line is unchanged.
+- a08b2d073, `KitFaintWordsTests`: it reads the kit's Sources from its own path and holds that no source
+  names `inkFaint`, the palette's declaration among them, and that each of the 15 files that held it
+  reads its t3 and t4 inks on code lines in the table's order.
+- 957518c65: each of the 61 uses takes its class, one name on each line, made by a script that asserts one
+  `inkFaint` a line and none off the table. ChromePalette's `inkFaint` and its doc retire, and `inkT4`'s
+  doc says it is the kit's t4, never a word that must be read. Three classes were judgment calls: the
+  older pull's words while not pressed and a diff line's number take t3; the look preview's body spots
+  take t4. The 15 files are History's views, ChromeList, About, the Apps folder, search, the Way In and
+  the terminal look preview.
+- 308650586 and a742a0976: the test's comments say the item and its day, and name the census taken for item 242
+  on 2026-11-17 in place of a file path.
+
+**Proved.**
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is the
+landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no error
+line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on a phone.
+
+- No row of the cut's own ran. a08b2d073's red was counted on the sources at the cut (63 lines name
+  `inkFaint`), not run. The cuts ended 07:08:06Z, 07:18:25Z (308650586) and 09:14:24Z (a742a0976).
+- Run since, on the test Mac's simulator, at main `8064bbdec` (the kit, whole): the green's three rows of "the phone
+  kit's faint words, sorted" passed, and again in later kit runs over main.
+
+**Not run, and owed.**
+- a08b2d073's red has not run; its count stands as read.
+- Item 248 stays open: whether t3 darkens by day. This entry sorts into t3 and does not change it.
+- No still of the phone's sorted words, by day or by night, was taken (owed to the eye).
+- `pnpm gate:landing` not run (owed).
+
+## Item 508 — the Developer page's comments and its own design words name no board card and no person (M345)
+
+(2026-11-17; c0592b011 "508: the Developer page's comments…". Asked for 2026-11-17. Comments and DESIGN.md
+only; no line of code moves. Cut on `63c128fd7` through the pre-commit hook; main holds a copy with the same
+patch, on `3a672a2df` (item 505's green, three commits over `63c128fd7`).)
+
+**What landed.**
+- `DeveloperPage.swift`, `DeveloperWords.swift`, `DeveloperWordsTests.swift` and `DemoActsTests.swift`:
+  each header says what was asked for and the day, in place of board cards' ids, their clocks and who
+  chose. `DemoActsTests`' note on `bothLinksAsk` quotes no one.
+- DESIGN.md: the RB-2 amendment of "The phone's Settings" and §9's Developer words say the same, a dated
+  ruling with no card id. The made-up names' line keeps its day and says what it asks. Two other amendments of
+  the same entry still name who chose, one of 2026-11-11 and the Developer row's builds of 2026-11-12; they are
+  outside this item.
+- Held by a tool before the commit: every changed Swift line is a comment line.
+
+**Proved.**
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is the
+landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no error
+line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on a phone.
+
+- No row of the cut's own ran; its commit went through the pre-commit hook's sibling check (ended
+  07:08:06Z).
+- Run since, on the test Mac's simulator, at main `8064bbdec` (the kit, whole): `DeveloperWordsTests` 2 of 2 and
+  `DemoActsTests` 13 of 13 passed, and again in later kit runs over main.
+
+**Not run, and owed.**
+- `pnpm gate:landing` not run (owed).
+
+## PU-R, the doc — the design record says a spawn bloom bud wears its profile's Bands circle (M346)
+
+(2026-11-17; e90c760e2, its one commit, "PU-R (doc): a spawn bloom bud wears its profile's Bands circle".
+A design record alone: DESIGN.md, 35 lines in and 6 out, and no code. Nothing draws the circle yet:
+the desktop's spawn bloom keeps the plain bud. The EL8 to puppeteer 0.4.2 landed after it, in the same
+train. Slice B, the code that draws the circle, follows in the next train, on item 274 ("PU-R, the bands").)
+
+**What landed, all of it in DESIGN.md.**
+- §8 "Hold, reach, let go": a profile's bud in the desktop's spawn bloom wears its fuel, the
+  profile's Bands circle at the bud's own size, 48 and 42. VibeField draws it with the column's own
+  geometry (`bandsGeometry`, nothing in its middle) and hands the bloom the drawn arcs and notches as
+  `MonitorSpawnFuel.drawn`, the view SDK's type that puppeteer-views paints, which puppeteer 0.4.1
+  shipped. Both sizes are the 38-to-71 level; a plan that needs you is a dashed thread at 46%, 38% for a
+  retry or while usage cannot be read; a first read and a profile with no meters keep the plain bud.
+  The bud keeps its glyph, 20 at 48 and 18 at 42. While a plan's row filters the stage, a bud still
+  wears every plan its profile holds, the same circle the profiles column draws. These are James's
+  picks of 2026-11-09 and 2026-11-11 and his ruling of 2026-11-17, as DESIGN.md records them. An
+  italic note there says the bud stays plain until the build lands; slice B's commit drops it.
+- §8 "The Bands circle": 42 and 48 join the sizes in use. The bloom's buds wear no hot dot; their top
+  right is the blocked dot, and the orange fill says it. The bloom paints the two tones it is handed:
+  the ink as `--mv-swarm-bloom-fuel-ink`, which inverts with the reached bud, and the hot fill as
+  `--mv-swarm-orange`, puppeteer-views' read of `--vf-orange`.
+- §9 "The meters' words": the spawn bloom's words, one line per profile bud naming its deciding plan
+  and its percent, with the column's words when there is no reading.
+
+**What was proved.** No row of its own, and no test ran for this commit alone. 40 vitest files open
+DESIGN.md by path (field-app 28, fieldd 6, electron-shell 2, plugins/simulator 2, contracts 1, sound 1).
+The commit's message says 36: it missed five field-app files that name the path on a line of its own.
+None of the 40 quotes a line this commit moves (read by git grep at the base, before the cut, and
+again over all 40 for this record). They ran in the verify of the train that landed it:
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train). No Swift test opens DESIGN.md.
+
+**Not run, and owed.**
+- `pnpm gate:landing` not run (owed).
+- No still or smoke: the commit moves no pixel.
+- Slice B, the consumer: VibeField hands the bloom the drawn circle at 48 and 42, with its tests, in
+  the next train (its entry, "PU-R, the bands").
+- The real window at 48 and 42, light and dark, is owed with slice B: no still or smoke draws the bud.
+- The UM row's words on D7 in DECISIONS, and ROADMAP's "then PU-R's consumer", move with slice B, not
+  with this record.
+
+## Q4 errata — the wind's comment at its source now gives the whole logged range, 22,026–22,116 ms (M347)
+
+(2026-11-17; one commit: 443f4760c, the one whose subject begins "Q4 (errata): the wind's comment". A comment-only
+change of one file, with no row of its own: no lint, typecheck or test ran for it, and no code moves with it.)
+
+**What landed.** In `packages/field-app/src/field/desk/desk-layer.ts`, the comment on `DESK_WIND_IDLE_MS` (line
+53). It said that before Q4, ICE's default wind (`ambientIdleMs` 20 000) read "22,033–22,085 ms on smoke:canvas's
+REST row". It now says 22,026–22,116 ms (79 rows at the 20 s budget, in 76 saved logs), with a dated correction:
+the old range was made of real readings, but it was narrower than the logs hold. One line out, two in.
+
+**The witness.** Every SMOKE_CANVAS_REST row at the 20 s budget in the smoke:canvas logs kept from the runs before
+Q4 (the list M246's entry names), read on 2026-11-09 when M246's records landed: 79 rows in 76 log files (copies
+of one run counted apart; 5 more files read `null`). M246's entry here already gave 22,026–22,116 ms. The source
+now agrees with the ledger, which pays the correction owed at the source since that day.
+
+**Unchanged.** `DESK_WIND_IDLE_MS` stays `PEERS.idleMs` (8,000 ms). The REST row's budget and its test are
+untouched. `docs/desk-gates.md`'s REST winds (22,041, 22,033 and 22,046 ms) and `smoke-rest.test.ts`'s 22,033 ms
+are each one run's own reading, all inside the range, and they stand. The logs kept do not hold the runs that read
+22,041 and 22,033 ms.
+
+**The cut.** One commit, `443f4760c`, on train 9's base `63c128fd7`, through the repo's pre-commit hook: its
+siblings render check said the staged rows are the lock's. The cut's START was 07:19:27Z and its END 07:19:30Z on
+2026-11-17 (exit 0); the commit is dated 07:19:29Z. The one path moved and nothing else did. Train 9 carried it
+onto main as 443f4760c with the same patch.
+
+**Proved, and not run.**
+- No row of its own; no biome, typecheck or test ran for it at the cut. The hook's render check is the one check
+  that ran.
+- The train's verify:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+- smoke:canvas was not run for it; no new REST reading was taken.
+- `pnpm gate:landing` not run (owed).
+
+## MA-6e — two phone test rows are named for what they prove, not for "interim" words (M348)
+
+(2026-11-17; one commit: c6c1d7ac6, `MA-6e (tests): two rows' names say what each row proves, not "interim"`.
+It moves one line in each of two files of the kit's tests: no code, no row's body and no word a person reads.)
+
+**What landed.** Someone who runs the kit's FieldHomeTests, or reads a red row in its report, sees two rows named
+for what they hold. The phone app's own words do not move. Both files are in
+`apps/ios/VibeFieldKit/Tests/FieldHomeTests/`.
+- `AppsOpenTests.swift`: "an app that could open says the phone cannot run it yet, in the interim words"
+  becomes "an app that could open says the phone can't run it yet, and gives no detail". The row holds
+  AppsHonest's title to `cannotRunYet` and its detail to nil.
+- `AppsShelfStandingTests.swift`: "a shelf with no apps says why, in the home's words and the interim ones"
+  becomes "an empty shelf says why for each state of the home, and says nothing while it reads". The
+  row holds `emptyLine` for off, unavailable, waiting and live, and nil while a desktop's apps are read.
+  Its "says nothing" is the empty line's alone: a desktop still reading shows its own line (`readingLines`).
+- Why: "interim" said when the words were written, not what the row holds, so a red row's name would not say
+  what broke.
+
+**What was proved.** The change was cut as `c6c1d7ac6` on the train's base `63c128fd7`, 2026-11-17 07:20:31Z to
+07:20:33Z; on main it is c6c1d7ac6, the same patch (patch-id `839afe48`) picked onto the train.
+At the cut the repo's pre-commit hook passed, and the cut held its tree to the base's with the two paths alone
+moved, one line out and one line in each. No test row ran for it before the train. The train's verify compiles
+no Swift, and none of its iOS steps (the fixtures check, the web-markers check, preflight's kit pins) reads
+either file, so it does not read these names. The Debug build of an earlier assembly with the landed `apps/ios`
+tree type-checked them.
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train). The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`)
+is the landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no
+error line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on a
+phone.
+
+**Run since, and owed.**
+- The two rows ran by their new names on the test Mac's simulator at the landed top `8064bbdec`, 2026-11-17
+  22:15:53Z → 22:18:17Z: both Passed, FieldHomeTests 809 of 809 (the run's exit 65 is one FieldWebTests row's).
+- `pnpm gate:landing` not run (owed). No smoke reads the kit's test names.
+
+## Item 268 — four schema files no generator writes are gone from contracts' generated folder (M349)
+
+(2026-11-17; one commit, `3c5c1e8ca` ("268: remove the four orphan lane-*.json schemas"), cut on main `63c128fd7` as
+`3c5c1e8ca`: four files deleted, nothing added, no source line moved. 3c5c1e8ca carries the cut unchanged, its patch-id
+and message equal; every other id here is the cut's, where the row ran.)
+
+**What landed.**
+- `packages/contracts/gen/jsonschema/` loses `lane-close-request.json`, `lane-closed.json`, `lane-open-request.json`
+  and `lane-peer-opened.json`, removed by `git rm` and nothing else.
+- They were orphans. `gen-jsonschema.ts` writes one file per ENTRIES key (50), plus `bundle.json`, and the lane
+  rows' keys are `mesh-lane-open-request`, `mesh-lane-close-request`, `mesh-lane-peer-opened` and
+  `mesh-lane-closed`. No key is a bare `lane-*`, and `gen-catalog.ts` and `gen-tools.ts` write outside
+  `jsonschema/`. `bundle.json`, typify's one input, names `MeshLane*` alone. The four still defined `LaneClosed` and
+  its kin; their last commit was C6-1's (`c5b14fc75`, 2026-07-25).
+- No code read them. The ledger's one older entry that names them (MA-3f's) stays as written.
+- Why gen:check never saw them: it runs `pnpm gen`, then `git diff --exit-code` over five generated paths, which
+  compares each tracked file there with the index. A tracked file the generators never write never differs, so it
+  stays green, and an untracked file is not compared at all.
+- Found along the way in MA-3f.
+
+**What was proved, by one row at the cut `3c5c1e8ca`** (09:16:15Z to 09:16:52Z, on the development Mac, in an installed
+worktree at the base's lock, under `env -i` with an empty home, offline):
+- A control at the base `63c128fd7`: contracts' suite whole, 70 files and 2075 tests passed; plugin-cli's suite
+  whole, 9 files and 115 tests passed.
+- At the cut: contracts' typecheck, exit 0. Contracts' suite whole, 70 files and 2075 tests passed, equal to the
+  control. Plugin-cli's suite whole (its docs test holds `docs/plugin-authoring` fresh), 9 files and 115 tests
+  passed, equal to the control.
+- Then `pnpm gen`, exit 0, and the whole tree unmoved after it, untracked files included: none of the four came
+  back, and gen:check's own `git diff --exit-code` over its five paths exited 0.
+- `cargo fmt --check`, exit 0.
+- Seven tool steps ran; six print a header of their own, and `cargo fmt --check` prints none. Each suite's count
+  above is read under its own run header.
+- Over the row's tool logs: no failed test, no package-manager update notice and no download line. The worktree
+  was returned to the commit it was found at, clean, and no ref was written.
+- The generators, `bundle.json` and gen:check are unchanged from the cut's base `63c128fd7` to main `8064bbdec`,
+  where 3c5c1e8ca stands.
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+**Not run, and owed.**
+- `pnpm gate:landing` not run (owed).
+- No other package's suite, no `test:rust`, no field-native build and no smoke ran in the row. The joined verify,
+  above, is the whole-tree read.
+- The four are not re-made by `pnpm gen`: proved for the generators at the cut, which main still has unchanged. A
+  future generator that writes a bare `lane-*` file would bring the question back, and nothing guards it:
+  gen:check's `git diff` shows neither an untracked file nor a tracked one the generators stop writing. Only a
+  whole-tree porcelain read after `pnpm gen`, as this row made, sees either.
+
+## SP-4 — a made app's page has a fenced web view on the phone, in the kit, mounted by no screen yet (M350)
+
+(2026-11-17; six commits on main, in this order, MA-5's three between 75cb1b9a9 and 6cbf6b717:
+- 0bc52c15e "SP-4 (red): the phone opens its apps": FieldWeb's decisions as stubs (the ship gate, the store, the rig and
+  the gate's check whole), their rows red;
+- 1581fb3c3 "SP-4 (green): the phone opens its apps": the implementations behind the stubs;
+- c63e21a6d "SP-4 (red): a page's loads to the phone's own loopback reach nothing": R9, `literals`, W4;
+- 75cb1b9a9 "SP-4 (green): a declared name ends at its port or its path": the rule list's fix, and the rig's one reply
+  per CONNECT (W4);
+- 6cbf6b717 "SP-4: the stack's comments say what holds": comment lines only, no code line changed;
+- 621ebbf67 "SP-4 (format): check-web-markers.mjs's one self-test row": one row re-flowed as biome prints it.
+0bc52c15e and 1581fb3c3 also carry MA-5's open model, which is in MA-5's entry with the camera pair and the
+usage strings.)
+
+**What a person has.** Nothing on the phone's screen changes: no screen opens a made app yet. MA-5b, the Apps
+screen's open, mounts it next. What the kit now holds is the view that will open one:
+- **FieldWeb**, a new kit target that depends on FieldProduct alone, and on which FieldHome now depends (MA-5's open
+  model imports it). An app's page opens in one ephemeral web view whose only way out is the one proxy it is handed
+  (reading it back from the phone's node is MA-5b's), with failover off, so a dead or stale proxy fails the load
+  instead of going direct.
+- **`WebNavigationPolicy`** decides every navigation, redirects included, on the parsed host: the app's own
+  origin, a declared public host for loads, and nothing else (no other tailnet name, no private name, no
+  downgrade); a public link at the top is handed out to Safari's sheet (`.outside`). It takes http, https, ws and
+  wss, about only as about:blank and about:srcdoc, and data and the origin's own blob only in a frame; no other
+  scheme.
+- **`WebRuleList`**, a content rule list in place before the first load, blocks everything, then admits the
+  origin and each declared host (over https and wss) ending at its port or its path, and the about, data and blob
+  schemes. WebKit sends a loopback address around its
+  proxy, so for a page's own loads this list is the only fence in front of the phone's loopback.
+  Before 75cb1b9a9, a declared host's admit read the `:` of a userinfo password as a port, so
+  `https://name:x@127.0.0.1/` passed; a row found it before any build shipped the list. Navigations were
+  never open to it: the policy reads the parsed host.
+- **The host** (`FieldWebAppHost`, `WebDocumentStart`): it answers no authentication challenge, and the system
+  evaluates every certificate. Attachments and downloads are cancelled, and popups get no second web view. It
+  keeps counts (`WebAppCounts`), never a URL, a host or content, and writes no log. No script opens a window by
+  itself, and no media plays without a tap; a content process that dies is reloaded once, then the page ends. A
+  Debug build opens it to the Web Inspector under `-vf-web-inspect`. WebRTC stands as on any website (MA-D14,
+  2026-11-14).
+- **Item 373's ship gate:** `apps/ios/ship-gates.txt` holds it OPEN. The host compiles only in a Debug build or
+  under SP-4d's relay define, and `WebShipGate` derives from that condition, so a Release archive without the
+  relay carries none of it. `pnpm verify` gains `check:web-markers`: each web marker only inside the gate, and each
+  standing somewhere; no server-trust override in the app's sources or plists; the ship-gates file in its four
+  forms.
+- **FieldProduct's `ArtifactOpenShapes`**, for `artifact.open`'s ask and answer, over three copies of the
+  contracts fixtures.
+- **The rows**, red first in each pair (but R2, MA-D14's pin, green from 0bc52c15e): FieldWebTests, the kit's
+  seventeenth test target (the policy, the rule list, and the host's W1–W4 and R1–R9 on a loopback rig: a SOCKS5
+  stand-in, a TLS server and counting traps), and FieldProductTests' open shapes. The rig's test identity is made
+  per run outside the tree and never committed; without it W2 fails and the rows that need it are skipped by name.
+  No row makes a Tailscale node.
+
+**What was proved.**
+- The first compile of these trees: a device row on the stack's first eight commits (through 6cbf6b717; 621ebbf67
+  changes only a script), on this train's base, before the train (the Debug device build, and the kit's
+  seventeen test targets type-checked, FieldWebTests among them). Green at 07:39:36Z.
+- The phone build on the train's top:
+  The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is
+  the landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no
+  error line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on
+  a phone.
+- The train's verify:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+- What the design stands on, not these commits: two probe runs on 2026-11-13 on the developer's phone, a scratch
+  build that never landed (one proxy read back, the load through it, a dead proxy failing, the system's own
+  trust); a simulator run on the earlier test Mac on 2026-11-14 (WebKit sends a loopback address around its proxy,
+  which R9 answers). That Mac's one kit run, on 2026-11-14 on an earlier cut, stopped at its first build on
+  seven compile errors in HostRowsTests; they were fixed by reading alone, before the row above.
+- The kit's tests on the second Mac's simulator, every test target, the rig's per-run test identity given: at main
+  8064bbdec8e3 (22:15:53Z to 22:18:17Z on 2026-11-17), 3,003 passed, 3 skipped (the two Workspace loopback rows and
+  SP-7a W1, none of this stack's) and one failed, R4 (item 522); at the MA-5b-1 forty 9e694af15cb1, two commits
+  over main that touch no FieldWeb file and no existing test, the same with 3,011 passed. At main a popup or
+  `window.open` to an undeclared host still reaches the proxy: R4 counts one CONNECT and no second web view. Item
+  522's front closes it.
+
+**Not run, and owed.**
+- A green kit run at main stays owed until item 522's front lands. On its own branch it ran green (i522f-green-1 at
+  7859af4d3b0b, 2026-11-18: 3,042 passed, 3 skipped, none failed).
+- `pnpm gate:landing` not run (owed).
+- Nothing was installed on a phone, and nothing was looked at on a screen.
+- Two markers of words still owed stand in the tree, in `WebNavigationPolicy.swift`; the words are DESIGN.md's
+  to give.
+- SP-4d, the relay item 373 waits on, is not built; until it is, no build carrying this view leaves the
+  developer's own phone.
+- The store is ephemeral by the one line `WebAppStore.chosen`; a store that survives launches is not built.
+- The fixtures check's row for the three contract copies, and its two registry pins, are not added;
+  `check:ios-fixtures` is green without them by reading.
+
+## MA-5's kit half — the phone's open model for a made app, and iOS's own ask for its camera and mic (M351)
+
+(2026-11-17; three commits on main, in this order:
+- 2265a42e0 "SP-4 (red): an app's page may ask for the camera and the mic": rows R2b (re-pinned) and R2c (new), red, and
+  the decision seam, its answers unchanged;
+- 138358a89 "SP-4 (green): an app's page gets iOS's own ask for the camera and the mic…": the seam answers `.prompt`,
+  and the document-start script removes nothing and stops hiding `mediaDevices`;
+- 0f4215072 "SP-4: the camera and microphone prompts name an app you made": the two usage strings.
+The open model itself rode in SP-4's first two commits, "SP-4 (red)" and "SP-4 (green): the phone opens its
+apps", which are in SP-4's entry, as are the web view these commits change.)
+
+**What a person has.** One thing shows on the phone: iOS's camera and microphone prompts, wherever VibeField
+asks for them, now say that an app you made can ask too, and sees or hears nothing until you allow it. No
+screen opens a made app yet: MA-5b, the Apps screen's open, mounts the model below and SP-4's view next.
+- **MA-5a's open model**, in FieldHome/Apps/Open (`AppOpen`, `AppWarm`, `AppOpenModel`): "Opening on" and the
+  desktop's name appear after 120 ms; `artifact.open` is asked at most fifteen times, a second apart, while it
+  answers `starting` (the bound awaits its ruling); each refusal is said in MadeAppFacts' and DESIGN.md §8's words,
+  but still-starting's reason, which is owed; an answer to a superseded open is never drawn; the warm app reopens
+  within ten minutes without asking; a Release build without the relay opens nothing.
+- **MA-D15 (2026-11-14):** a page's ask for the camera, the microphone or both gets iOS's own prompt, naming the
+  page, and nothing is granted without a tap (`mediaCaptureDecision` answers `.prompt`). Device motion stays
+  denied. The document-start script removes no global now, so WebTransport and `navigator.mediaDevices` stand;
+  `sendBeacon` stays stubbed. The two permission answers go through nonisolated static functions, so a row
+  reads the decision without a live origin.
+- **The usage strings** (`NSCameraUsageDescription` and `NSMicrophoneUsageDescription`, both build
+  configurations): each adds the made-app sentence above, and the microphone's first sentence is reworded: its
+  promise, now "VibeField keeps nothing it hears", belongs to VibeField's dictation, since a made app's page is not
+  bound by it. Every other usage string is untouched. No row reads these strings.
+- **The rows:** FieldHomeTests' `AppOpenModelTests` and `AppWarmTests`, red first with SP-4's first pair;
+  HostRowsTests' R2b (WebTransport a "function" and `navigator.mediaDevices` an "object" in the main frame, a
+  same-origin frame and a srcdoc frame, and `sendBeacon` returning false in each) and R2c (the camera, the
+  microphone and both answer `.prompt`, motion `.deny`), red in 2265a42e0, wanted green in 138358a89.
+
+**What was proved.**
+- The first compile of these trees: a device row on the stack's first eight commits (these three among them), on
+  this train's base, before the train (the Debug device build, and the kit's seventeen test targets type-checked,
+  FieldHomeTests and FieldWebTests among them). Green at 07:39:36Z.
+- The phone build on the train's top:
+  The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is
+  the landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no
+  error line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on
+  a phone.
+- The train's verify:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+- The kit's tests on the second Mac's simulator, every test target, the rig's per-run test identity given: at main
+  8064bbdec8e3 (22:15:53Z to 22:18:17Z on 2026-11-17), 3,003 passed, 3 skipped (the two Workspace loopback rows and
+  SP-7a W1, none of these commits') and one failed, R4 (item 522); at the MA-5b-1 forty 9e694af15cb1, two commits
+  over main that touch no FieldWeb file and no existing test (they add `pageFell` to `AppOpenModel.swift`), the
+  same with 3,011 passed. The open model's rows (MA-5a's 13 and the warm app's 4), R2b and R2c passed in both.
+
+**Not run, and owed.**
+- A green kit run at main stays owed until item 522's front lands. On its own branch it ran green (i522f-green-1 at
+  7859af4d3b0b, 2026-11-18: 3,042 passed, 3 skipped, none failed).
+- MA-D15's DECISIONS row is not on main: it rides its own record, and the MA row's range then reads MA-D1…MA-D15.
+- `pnpm gate:landing` not run (owed).
+- Nothing was installed on a phone. iOS's prompt with the new words has not been seen on a device.
+- Three markers of words still owed stand in the tree, in `AppOpen.swift`; the words are DESIGN.md's to give.
+- MA-5b, the Apps screen's open, is not on main: its first slice, MA-5b-1, is cut on its own branch (9e694af15cb1)
+  and not landed. On main nothing mounts the open model or SP-4's view.
+
+## TP-S3d — a SIGTERM to `pnpm dev`'s runner stops Electron and the daemon pair before the runner exits (M352)
+
+(2026-11-17; one commit: `19c16030a` "TP-S3d (dev runner): a SIGTERM to the runner stops Electron and
+the daemon pair before it exits". Carried from a branch of 2026-10-20 onto 2026-11-17's main `63c128fd7` as
+`19c16030a` on branch `focus/dev-runner-sigterm-on-63c128fd7`; one import line in the test file was resolved by
+hand, both imports kept. Every other id here is a side commit's.)
+
+**What landed.**
+- A SIGTERM to the dev runner now runs the runner's own teardown to its end: Electron main, fieldd, the floor and
+  its cells, and `pnpm nx watch` are stopped before it exits. Before, the runner exited 143 part-way, with all of
+  them, and the nx daemon, left running. The nx daemon, which `nx watch` needs, is Nx's own: the runner does not
+  stop it, before or after.
+- The cause: Vite 8.1.5's dev server, hosted in the runner's own process, adds a SIGTERM listener and (outside CI)
+  a stdin-end listener that close the server and call `process.exit()`. Both ran beside the runner's own teardown,
+  and Vite's exit won before `electron.stop({ stopDaemons: true })`.
+- The fix: `withoutProcessExits(create)` in `tooling/dev-runner/src/vite-server.mjs` snapshots the SIGTERM and
+  stdin-end listeners, runs `createServer`, and removes only the ones that call added, in a `finally`, so a failed
+  start leaves none. The runner's teardown closes Vite after the pair, as it was written to.
+- Middleware mode was not taken: it changes how HMR is wired and reloads every page on an HTML change.
+
+**What was proved,** by the commit's own row on the development Mac, 08:26:26Z to 08:26:38Z, at the carry
+`19c16030a` in an installed tree, with no install:
+- the three tests the commit brings, by name: 3 passed, 0 failed (they were written green with the fix; a red
+  first is not possible for a carried change);
+- the dev runner's whole suite (`node --test test/*.test.mjs`): 495 passed, 0 failed;
+- biome over the two files: clean.
+- Two earlier tries of the row stopped for reasons outside the change. At 07:44:57Z the three tests' step exited
+  0, but the row's judge read only TAP's summary and node 26 prints its spec summary, so it found no count and
+  stopped before the suite. At 07:52:17Z the suite's three cargo-target rows failed because the row gave rustup no
+  toolchain home.
+- At main `8064bbdec`, `pnpm verify` whole passed on the development Mac (2026-11-17 16:56:25Z to 17:40:10Z) and
+  on the test Mac (17:45:34Z to 17:55:02Z); in each, the dev runner's `node --test` 501 passed, 0 failed, the three
+  tests among them.
+
+**Not run, owed.**
+- `pnpm dev` on a fresh dev root, a SIGTERM to the runner, and nothing of its stack left: not run (owed).
+- `pnpm smoke:studio`, the runner's own end-to-end row: not run (owed).
+- `pnpm gate:landing` not run (owed).
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+## Item 327 — a smoke's timed-out wait says the desk's state, and its press says when it took no selection (M353)
+
+(2026-11-17; two commits, red then green: 887ca8bd8 (327's red, "a timed-out HN-3 wait says only the copy
+record") and f2fdd4860 (327's green, "a timed-out HN-3 wait says the desk's state"). Two files under
+`packages/electron-shell`.)
+
+**What it fixes.**
+- Found by item 325: smoke:canvas went red on HN-3's HAND row with "the bar over the whiteboard did not happen within
+  10000ms", and the cause could not be traced, because the timeout's line held the copy record alone. It could not
+  say whether the press took no selection or the bar stood aside.
+- HN-3's `until` now adds `(desk ‹words›)` after the copy record when a wait runs out, read once at the throw:
+  `DESK_FACTS`, one page read of the desk door and the bar, said by `deskFactsWords` as counts, booleans and one-word
+  data-attributes in a fixed order. A red's line travels, so it says no object's text.
+- `select()` reads the count before its press and, after the press as before, waits up to 5 s for 1 (or one more
+  under ⇧) as its row's bar asks next. Otherwise it throws `judgeSelectionTook`'s words with the press point's two
+  booleans and the facts. A green run passes both at once; no press, bound, order or judge already there moves.
+- What a person sees: nothing. This is the smoke's harness alone.
+
+**The proof.**
+- The red commit adds `deskFactsWords` and `judgeSelectionTook` as stubs, beside `DeskFacts` (the facts' shape), and
+  two describes in `electron-shell/test/smoke-desk-copy.test.ts`: the desk's facts at a wait's end, and a press's
+  count against the one its row's bar asks next. Four rows are red at their own `toBe`; the fifth is a guard, green on
+  arrival.
+- The row, on the development Mac through the door, in a lane at main `63c128fd7`, under the env -i harness, a 48-byte
+  TMPDIR and three vitest workers, 2026-11-17 08:42:29Z → 08:44:07Z: **GREEN**.
+  - The two commits were cut on main `63c128fd7`, and the trees named here are the cut's. They landed patch-equal on
+    `19c16030a`, where no path of theirs had moved.
+  - At the red commit's tree (`6fbc1816bc5d`): the test file once, 4 failed and 14 passed of 18, each of the four an
+    `AssertionError` at its own `toBe`, the guard passed, no TypeError. electron-shell's typecheck 0 errors; biome
+    over the two files exit 0.
+  - At the green's tree (`e6b83cb8be5e`): typecheck 0 errors; biome exit 0; the test file five times in a row, 18 of
+    18 each time, no socket left; electron-shell's whole suite once, 191 files, 2943 passed, 2 pending, 0 failed.
+  - The product's socket folder's links into a temp root 0 before and 0 after; the lane returned with its refs equal.
+- The train's V:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+
+**Not covered.**
+- `select()` now FAILS a landing-table run whose press took no selection within 5 s, where the run went on to the
+  bar's 10 s wait before. Only a green landing-table run proves it, and none has run on it.
+- Under ⇧ the count asked is the count before plus one, which assumes no row shift-presses a kind already selected.
+  All four callers were read; one presses under ⇧, while the clock alone stands selected.
+- Not run: smoke:canvas, the landing table's own row. `smoke-selection-bar.ts`'s own `select` is item 327's second
+  half, its own entry.
+- Item 325's red stays not traced: this makes its next red say more; it names no cause by itself.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** no push of its own; it reached origin with its train on 2026-11-17 (`8064bbdec`).
+
+## Item 382 — a hold's terminal carries its release point the first time a view is handed its row (M354)
+
+(2026-11-17; two commits, field-app only. 1ea5deeb0 is the red row, "382 (red): a hold's terminal carries its
+release point". d5edeb73c is the fix, "382 (green): the window's rows stamp a hold's release point". One test file
+and two files under `src/godview/monitor`.)
+
+**What was wrong.** Reported from the desktop on 2026-11-13: at an empty swarm view a long press to spawn drew
+two bubbles, then one went away and the spawned one stayed.
+
+**The cause.**
+- The swarm takes a birth over only where it first makes a row's body, and only when the row carries its
+  `spawnHint` then (puppeteer-views 0.4.0, `AgentSwarm.tsx` and `bloom/birth.ts`; the same in 0.4.2, which
+  main now pins).
+- From an empty Godview the terminal asked for is the deck's opening shell (L20). Its create waits for the whole
+  deck, so the shell's board row arrives while the create is still in flight.
+- For a create in flight the hint was a claim made in a render of this window and joined by `replica.setLocal`
+  in a layout effect. The replica and the view slot share one frame scheduler (M7), so the slot was handed the
+  new row before that render.
+- So the row first appeared with no hint. The physics placed a second body at a free spot, and the birth drawn
+  at the release point was given up `BIRTH_WAIT_MS` (4 s) after the door answered.
+
+**What landed.**
+- `window-rows.ts`: `WindowRowFacts.spawnHintFor(session)`, asked when the rows are built. `rowsFor` stamps
+  `spawnHint` on one of this desktop's terminal rows that has none. A row the replica has already joined keeps
+  the replica's. A stamped row keeps its identity while its patch stands (MV-D21).
+- `useMonitorAgents.ts`: `hintFor` reads refs alone (the creates in flight, and the answered hints, set with the
+  door's answer before any render), so it is one stable function handed to the rows' facts. The `setLocal` path
+  stays: the replica's row carries the point from the next publish on.
+- `test/godview-monitor.test.tsx`: one new row. A create is in flight, the board alone publishes the new shell
+  with no render of the window between, and the first input a view is handed with that row must carry the
+  release point.
+- No contract moves, nothing in puppeteer moves, no visual constant moves.
+
+**What was proved.** One row for this item and item 394 together, 2026-11-17, START 09:05:36Z, END 09:10:47Z,
+green. Each step ran on main `63c128fd7` with the six patches applied in order (these two, then item 394's
+four), up to the patch named; each patch's patch-id is its commit's here. Main's own trees for these commits,
+which sit over other commits landed with them, were not run by this row:
+- up to 1ea5deeb0's patch: field-app's typecheck clean, biome clean on the path, and `test/godview-monitor.test.tsx`
+  with 129 tests and the new row alone failing (the row reached the view, its hint did not);
+- up to d5edeb73c's patch: field-app's typecheck clean, biome clean on the two paths, the same file with 129 tests
+  and 0 failed;
+- with all six patches (tree `aa61c0914eda`): `pnpm typecheck` whole clean, field-app's suite whole with 358
+  files, 5134 tests and 0 failed, and `pnpm check:walls` clean.
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+**Not run, and owed.**
+- Not watched in a running window: the one bubble at the release point is for the eye, on a desktop with an
+  empty swarm. The row reads what a view is handed, not the swarm.
+- `pnpm gate:landing` not run (owed); no smoke and no `pnpm still` either.
+- The row ran no electron-shell or fieldd suite. The landing's `pnpm verify` at main's top `8064bbdec` ran both,
+  green: electron-shell 2945 passed and 2 skipped of 2947, fieldd 4129 passed and 15 skipped of 4144.
+
+**Not covered, and not claimed.** A peer desktop's terminal (SB-D9: this desktop alone takes a terminal from
+here). The view-side rule itself, that a birth is taken over only where the body is first made, is puppeteer's
+and unchanged.
+
+## Item 394 — History's top fade on glass is the glass's own colour, at most 64%, eased over 96px (M355)
+
+(2026-11-17; four commits. 0dcba077c is DESIGN.md alone, "394 (doc): History's top fade on glass is the glass's own
+colour". af457ed7e is the red row, "394 (red): a row holds the top fade's new recipe". 61a1c1f01 is the rule, "394
+(green): History's top fade on glass thins the lines". 6314e2519 is words alone, "394 (words): History's fades are
+said as they now are".)
+
+**What was wrong.** Reported from the desktop on 2026-11-13: the shadow fade at the top of History read too
+strong on the blurred ground. A screenshot came with it: History by night, one session's transcript on the
+cover's glass. As read from it, a dark band lay over the first lines under the column's head, and its lower
+edge cut across a line of text.
+
+**Why.** The fade was the cover's raw colour, `--vf-chrome-solid`, painted whole under the room's own mask on
+the room's 64px: 100% to 88% over the first 24px, then one straight ramp of 40px. The cover's raw colour is the
+glass with the desk taken out of it, so over the glass it stood as a slab, and a straight ramp ends in an edge.
+
+**What landed.**
+- **DESIGN.md first.** §8 "History is rosetta's room, on the cover's glass", under "Its ground", gains a dated
+  amendment. The old sentence is kept above it and named as overturned. §8's note on the terminal deck gains a
+  dated pointer at its source. "Never a frost" stands.
+- **The rule** (`packages/field-app/src/history/history-room-glass.css`, the one rule on the room's
+  `.tr-frost::before` under the host surface):
+  - its colour is `--vf-history-fade-glass`: `--vf-chrome-solid` at the view's own 72% over `--vf-mat-ground`,
+    the glass as it reads over the bare mat. Over the mat the paint moves the ground by nothing;
+  - its strength is the squares of 8 down to 0, a stop every 12px: 64% at the head's hairline, nothing at 96px.
+    A quadratic ease, so it has no level stretch and no edge at its foot;
+  - its height is 96px over the room's 64, and the room's mask is cleared in both spellings, so the stops are
+    the whole feather. `backdrop-filter: none` in both spellings, as before.
+- **What a line keeps of its ink, old against new** (worked from the rule and the tokens, not measured on a
+  screen): at the hairline 0% against 36%; at 24px 12% against 64%; at 64px 100% against 93%. It is weaker
+  everywhere above 60px and adds a tail of 9% or less below.
+- **The rows** (`packages/field-app/test/ui-system-boundaries.test.ts`): the DK-15 row keeps what still stands
+  (no backdrop filter on the fade, the day heads named nowhere, no blur in the sheet) and says "paint, never a
+  frost". A new row holds the recipe: the custom property tied to the view's 72, the two computed colours
+  within one a channel of DESIGN.md's measure, the eight stops and `transparent 96px`, the height, the cleared
+  mask, and that the cover's raw colour is not the rule's background.
+- **Words.** Five places that still called the room's fades the cover's tint (one comment said only "tint") now
+  say what they are: `HistoryRoomView.tsx` (two comments), `smoke-covers.ts` (a comment and a problem string;
+  its check is unchanged) and `HistorySection.tsx` (the catalog's description, which Studio's catalog renders).
+- Kept: paint and never a backdrop filter (R16; N3 (a) ruled the frost for the day heads alone). The room's
+  element, its place under the pinned pill and its rise over the first 24px of scroll are the room's and are not
+  touched. No new motion, no token added to `tokens.css`, no hex.
+
+**Its limit, as DESIGN.md states it.** Where the still under the cover is not the mat, the fade pulls that patch
+toward the mat's glass, by 64% at the hairline and less below. Paint cannot do better: a line dissolves exactly
+only under a mask on the rows, and a mask on the scroller fades the room's pinned chrome with them.
+
+**What was proved.** One row for this item and item 382 together, 2026-11-17, START 09:05:36Z, END 09:10:47Z,
+green. Each step ran on main `63c128fd7` with the six patches applied in order (item 382's two, then these
+four), up to the patch named; each patch's patch-id is its commit's here. Main's own trees for these commits,
+which sit over other commits landed with them, were not run by this row:
+- up to af457ed7e's patch (0dcba077c is docs alone): field-app's typecheck clean, biome clean on the path, and
+  `test/ui-system-boundaries.test.ts` with 61 tests and the new row alone failing, where it asks the sheet for
+  `--vf-history-fade-glass`;
+- up to 61a1c1f01's patch: the same file with 61 tests and 0 failed, the new row and the DK-15 row both passing;
+- up to 6314e2519's patch, all six (tree `aa61c0914eda`): `pnpm typecheck` whole clean, biome clean on the eight TS
+  and CSS paths, field-app's suite whole with 358 files, 5134 tests and 0 failed, and `pnpm check:walls` clean.
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+**Not run, and owed.**
+- Not seen in a running window, in either theme. vitest loads no CSS: the rows hold the rule's text, and the
+  look is for the eye.
+- `pnpm smoke:canvas` not run: its cover rows (`smoke-covers.ts`, the DK-15 COVER HISTORY row) read the top
+  fade's backdrop on a real window. They read its backdrop alone, not its colour, stops or height.
+- `pnpm gate:landing` not run (owed), and `pnpm still` not run.
+- The row ran no electron-shell or fieldd suite. The landing's `pnpm verify` at main's top `8064bbdec` ran both,
+  green: electron-shell 2945 passed and 2 skipped of 2947, fieldd 4129 passed and 15 skipped of 4144.
+
+**This change's own readings, not asked for in so many words:** the colour, the 64% peak, the 96px, the nine
+stops, and that a line keeps 36% of its ink at the hairline and is never taken to nothing.
+
+## EL8: puppeteer 0.4.2 — 0.4.1 and 0.4.2 ride one pin, and the phone goldens re-bless (M356)
+
+(2026-11-17; one commit, 787552155 ("EL8: puppeteer 0.4.2"), the second of the ten that carry it with
+items 278 and 354, in 23 files: the pin's three, the lock, the eight phone goldens and their nine kit mirrors, and
+the two that hold the three hand-edited strings.)
+
+**What moved.**
+- The pin, one EL8 event: v0.4.2 = `325b6770`, the release #86; all 20 `@vibefield/puppeteer-*` packages published
+  2026-11-13. Main pinned 0.4.0, and 0.4.1 was never pinned here, so both ride here.
+  - `pnpm-workspace.yaml`: the seven override rows 0.4.0 → 0.4.2 with a dated note naming 0.4.1 and 0.4.2, and the
+    20 `minimumReleaseAgeExclude` rows at @0.4.2. The 20 rows at @0.4.0 were kept for the one install that rewrote
+    the lock, then cut; a frozen install proves the lock without them.
+  - preflight's `PIN_EXPECTATIONS`: the seven rows, still end-anchored, with their dated sentence.
+  - `siblings.lock.json`, by exact text edits: puppeteer's `sha` `e6e4753d` → `325b6770`, `release.npm` 0.4.2, and
+    the `"//"` lead. `node scripts/siblings.mjs render --prod --check` agrees.
+  - `pnpm-lock.yaml` is pnpm's: the 20 packages swap (+131 −131) and no dependency edge is gained. It is byte for
+    byte the lock predicted from main's lock (`9cc2fafb`) and the 20 packuments' integrity (`bfee5e67`).
+- What 0.4.2 carries over 0.4.0 (#79–#85): the typed launch under a registered account (#79); Hermes's gateway runs
+  only the Python its own install names and refuses `INTERPRETER_UNAVAILABLE` (#80, item 278's half here); the spend
+  view's words (#81); the bloom's `drawn` fuel (#82, which VibeField does not pass); a host learns a run's helper
+  process, briefing settlement, `distribution.brewPrefixes` (item 354's half here), `serviceEnvironment` (item 357)
+  and the git observer's environment (item 361) (#85).
+- Nothing VibeField builds against breaks, by reading: every new option is optional, and the two exported names that
+  changed shape (`resolveGitState`, `PrepareAgentInvocationOptions`) are named in no VibeField file. No dependency
+  edge of the 20 packuments moved, and none has an install script. R23 composes the same 10 providers.
+- Re-bless: the 8 phone goldens regenerated and copied to their 9 kit mirrors. Six move by their stamp alone;
+  phone-timeline by its stamp and NOTE; phone-spend (21/21) is #81's own: the caption in all 18 frames ("Spent in
+  the last 10 minutes" → "Last 10 minutes"), " then" gone from the rate, the slim head, $0's label 4 px higher and
+  Back to now 20 px lower. Three hand-edited strings that cite the views now say 0.4.2.
+
+**The proof.**
+- The generated half, on the development Mac in a lane of its own at main `63c128fd7`, 2026-11-17 07:28:31Z → 07:32:17Z:
+  steps 1 to 7 as wanted. The install state applied and `render --check`; the ONE install at registry.npmjs.org alone
+  (20 packages downloaded; the lock as predicted, byte for byte); the commit state, a frozen install with the lock
+  unmoved, `render --check` again; the goldens and mirrors, 17 of 17 the bytes of the stack's earlier cut; the
+  generated 18 held by their sums; the lane put back at main's lock (20 reused, 0 downloaded). Every fetch was
+  anonymous; "Update available" 0 in all 13 logs; no Electron download.
+- An earlier attempt the same morning (07:09:43Z → 07:17:26Z) stopped before its online install, at the runner's
+  own swap gate (an old machine's number, 5,632 MiB, against the development Mac's steady 5,939 MiB). It was stopped by
+  its own stop file, not red, and left its lane at the install state; the counted run used a lane staged anew. The gate
+  became the door's swap rule (no swap traffic over 30 s), the runner also asking for normal memory pressure.
+- Part B, each commit's own row over the ten and the tip's rows, on the development Mac through the door, 07:56:06Z →
+  08:20:27Z, on the ten as cut on main `63c128fd7` (patch-equal to the ten landed; of their 40 paths only DESIGN.md had
+  moved):
+  - At this commit: the second install, the 0.4.2 lock, offline and with no contact; then
+    `agent-hermes-gateway.test.ts` RED AS WRITTEN (its second title alone: refused in puppeteer's sentence, until
+    item 278's green).
+  - Every per-commit row as written, and every suite at the ten's tip green: typecheck (28 projects), `gen:check`,
+    `phone:goldens` with porcelain 0 after it, `check-ios-fixtures` (457 copies identical), field-app 1323 of 1323,
+    contracts 865 of 865, fieldd's eleven files 314 passed and 3 pending, `cargo fmt --check`, plugin-cli 115 of
+    115, walls and `render --check`.
+  - The run ended RED by its own judge, on three held tip checks, each outside the change: `check:deps` found two
+    same-version copies of loro-crdt, ICE and strata through the lane's borrowed mille checkout; biome passed with
+    two warnings on lines of `docs/agent-plane/api.html` the stack does not move; and preflight passed without
+    printing the line the judge wanted, which it prints only on a failure. A control row at main `63c128fd7`, with
+    no stack, read all three the same (ended 08:24:14Z). `check:deps` reads one copy each since mille's EL8 to
+    0.3.6 (`0d1e63b07`), on main with this train.
+- The train's V:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+- The phone build on the train's top:
+  The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is
+  the landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no
+  error line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on
+  a phone.
+
+**Not covered.**
+- The kit's `SpendModelParityTests` P7 is red from this commit, by reading (no run sat at a commit with this one and
+  not item 291): the re-blessed spend golden carries 0.4.1's forms until the kit's port of #81, item 291's
+  `49dcef2d5`, on main with this train. At main `8064bbdec` a Mac mini ran the phone's spend parity suite, 49 of 49,
+  P7 among them (run pg-291-kit, xcodebuild exit 0). The kit's other tests were not run in these rows.
+- Item 357's fieldd half and item 372 (the typed half of the Hermes row) are their own; item 361 needs no line here.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** no push of its own; it reached origin with its train on 2026-11-17 (`8064bbdec`).
+
+## Item 278 — an agent whose own install can't be found is refused in VibeField's words (M357)
+
+(2026-11-17; five commits, carried with the EL8 to puppeteer 0.4.2: 0110d3ce1 (278's red, V1's row),
+a635efc83 (278's doc, V1), 6b64c6a70 (278's red, V1), 4eb57343a (278's green, V1) and fc1664e82 (278's comments, the
+tenth of the ten). The EL8 itself, between the first and the second, is its own entry.)
+
+**What a person sees.**
+- Since puppeteer 0.4.1 (#80) a Hermes launch starts Hermes only through the Python its own install names, and with
+  none it starts nothing. Hermes's adapter refuses with a neutral code, `INTERPRETER_UNAVAILABLE`, whose sentence
+  is about interpreters and wrappers. VibeField now says its own, naming the agent by its label: "Hermes was not
+  started: VibeField can't find this Mac's Hermes install. Reinstall Hermes, then try again."
+- DESIGN.md §9 gains "When an agent's own install can't be found" (the words asked for on 2026-11-13), and
+  `docs/agent-plane/api.html`'s AgentHost row says the refusal is said in §9's words.
+- fieldd's launch door answers the clause bare and not retryable, as it does the forwarder's refusal, but as
+  PRECONDITION_FAILED, with `refusal` and `reason: "agent-install-missing"` in its details. A name typed in a pane is
+  refused as every launcher's refusal is said: "‹command› was not started: … then run ‹command› again." No line
+  names an interpreter, a wrapper, a path or Python; any other adapter refusal keeps its own sentence.
+
+**The seams.** `roles.ts`: `INTERPRETER_UNAVAILABLE` beside the forwarder's code, and
+`agentInstallMissing(label, then)`, the clause; the agent is named by its label, never by a literal (R23b).
+`agent-runtime.ts` maps the refusal at the launch door; `agent-gateway.ts` says it for a typed name.
+
+**The rows.**
+- New `fieldd/test/agent-hermes-gateway.test.ts`, two rows over fieldd's real built-in providers on a mock floor:
+  the gateway runs the Python the `hermes` wrapper names, with no file, and hands it no daemon variable; and a Hermes
+  whose install names no Python is refused in §9's words and starts nothing. Nothing of the host is reached: the
+  stubs record by shape and names only, and every assert over their records compares a count or a boolean (the
+  refusal's words, kind and details are asserted as text).
+- V1's two rows, in `agent-session.test.ts` (the door) and `agent-gateway.test.ts` (a pane).
+- The comments commit mends eight lines the four before it added: seven comment lines in fieldd now say the item and
+  the day, and §9's line loses its card's id (the day was there; it still says whose the words are). No code line,
+  test row or string a person reads moves.
+
+**The proof.** Part B, each commit's own row over the ten and the tip's rows, on the development Mac through the door,
+2026-11-17 07:56:06Z → 08:20:27Z, offline, with the lane's installs at each commit's lock, on the ten as cut on main
+`63c128fd7` (patch-equal to the ten landed; of their 40 paths only DESIGN.md had moved):
+- At 0110d3ce1, before the EL8: the new file RED AS WRITTEN, both titles (puppeteer 0.4.0 runs `python3`
+  with a script file and never refuses). At the EL8: its second title alone RED AS WRITTEN.
+- At 6b64c6a70: V1's two titles RED AS WRITTEN, 194 passed beside them. At 4eb57343a: the three files GREEN,
+  198 passed and 2 pending of 200. At fc1664e82: the same three files GREEN again, 198 of 200 and 2 pending.
+- Every suite at the ten's tip green (typecheck, `gen:check`, the goldens, fieldd's eleven files 314 passed and 3
+  pending, field-app, contracts, plugin-cli, `cargo fmt --check`). The run ended RED by its own judge on three held
+  tip checks, each outside the change and each read the same at main `63c128fd7` by a control row (ended
+  08:24:14Z): `check:deps` (two same-version copies through the lane's borrowed mille checkout; one copy each since
+  mille's EL8 to 0.3.6, on main with this train), biome's two warnings on lines of `api.html` the stack does not
+  move, and preflight's line, printed only on a failure.
+- The train's V:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+
+**Not covered.**
+- The typed half, a `hermes` typed in a pane through the gateway's `prepareInvocation`: item 372, its own entry.
+- A real Hermes install with no Python was not tried; nothing was looked at in a window.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** no push of its own; it reached origin with its train on 2026-11-17 (`8064bbdec`).
+
+## Item 354 — a harness's Homebrew prefixes reach puppeteer's inventory, and a packaged fieldd ignores them (M358)
+
+(2026-11-17; four commits, carried with the EL8 to puppeteer 0.4.2, red then green twice: 265b3673d (354's red),
+df51d56fd (354's green 1), 5e32cab07 (354's red, R-c) and 7798b6ca0 (354's green 2).)
+
+**What moved.**
+- Puppeteer 0.4.2 (#85) lets a host hand its install inventory a list of Homebrew prefixes
+  (`distribution.brewPrefixes`). A test harness or a developer's fieldd can now name them with
+  `FIELDD_AGENT_BREW_PREFIXES`, and the runtime fieldd builds is handed exactly that list: as named, or empty, so a
+  harness's fieldd probes no prefix it was not given.
+- The name is in contracts' registry and in `.env.example`; fieldd's `bin.ts` reads it through boot-env's
+  `agentBrewPrefixes`, and the daemon passes it to the runtime.
+- A packaged app's fieldd ignores the name: Electron's main spawns a packaged fieldd without it.
+
+**The proof.** Part B, each commit's own row over the ten and the tip's rows, on the development Mac through the door,
+2026-11-17 07:56:06Z → 08:20:27Z, offline, with the lane's installs at each commit's lock, on the ten as cut on main
+`63c128fd7` (patch-equal to the ten landed; of their 40 paths only DESIGN.md had moved):
+- At 265b3673d: no row of its own; its two files ran GREEN at df51d56fd, and its red was not run in these rows.
+- At df51d56fd: fieldd's `agent-brew-prefixes.test.ts` GREEN, 4 of 4; electron-shell's `fieldd-brew-prefixes.test.ts`
+  GREEN, 2 of 2.
+- At 5e32cab07: fieldd's `agent-runtime-brew-prefixes.test.ts` RED AS WRITTEN, its two titles: "hands the harness's list
+  as it is named" and "hands an empty list as empty, so a harness's fieldd probes no prefix".
+- At 7798b6ca0: the same file GREEN, 3 of 3.
+- Every suite at the ten's tip green (typecheck, `gen:check` for the registry row, fieldd's eleven files 314 passed
+  and 3 pending, field-app, contracts, plugin-cli, `cargo fmt --check`). The run ended RED by its own judge on three
+  held tip checks, each outside the change and each read the same at main `63c128fd7` by a control row (ended
+  08:24:14Z): `check:deps` (two same-version copies through the lane's borrowed mille checkout; one copy each since
+  mille's EL8 to 0.3.6, on main with this train), biome's two warnings on lines of `docs/agent-plane/api.html` the
+  stack does not move, and preflight's line, printed only on a failure.
+- The train's V:
+  v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+  2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+  steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none);
+  27 vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+  field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+  `2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+  all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in
+  103 s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its
+  self-test row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test
+  that named mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8
+  left this train).
+
+**Not covered.**
+- No real Homebrew prefix was probed, and no packaged app was built or launched to see the name ignored.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** no push of its own; it reached origin with its train on 2026-11-17 (`8064bbdec`).
+
+## EL8 — mille 0.3.6: mille and mille-ui come from npm, and the files service's sibling window closes (M359)
+
+(2026-11-17; six commits. On the stack that carries puppeteer 0.4.2's EL8 (on main, 8cca9481a's parent is RV 278's
+comments, eight commits above that EL8), in order: 8cca9481a, "RD-5 (red): a released mille takes no aliases";
+536d3339a, "337 (red): the JS twin's named keeper"; 0d1e63b07, "EL8: mille 0.3.6 — @vibecook/mille and -ui exact";
+ccfab02a0, "EL8 (CI): prepare-mille retires"; aaa4c0ecc, "EL8 (comments): two comments name RD-5"; f968ca11b, "EL8
+(test): the files worker's READY row reads mille's version". This is RD-5's exit for mille's npm plane: the files
+service's sibling window (FS-1b), open since 2026-10-05, closes.)
+
+**What landed.** Nothing a person sees is meant to move: the Files service, History's worktree guest and the
+phone's picker read through the same engine, now installed from npm (no running app has read 0.3.6 yet; see
+gate:landing below). 0.3.6 is published from the tag v0.3.6 (`85c35e7d`), the commit npm's provenance names for
+all eleven packages it publishes; VibeField installs ten of them (mille, mille-ui and eight platform packages).
+Beyond the old pin (`c8160d5`) it carries the drive, the release build's path remap and each platform package's
+crate notices.
+- **The pins.** `siblings.lock.json`: mille's sha is the tag's, with `release.npm` "0.3.6"; the entry stays as the
+  dev overlay's coordinate (`pnpm siblings use mille`). `pnpm-workspace.yaml`: the two rows are exact 0.3.6 above
+  the SIBLING MODE fence, as `render --prod` writes them (the cut's edit wrote them; render then moved nothing);
+  `minimumReleaseAgeExclude` gains mille, mille-ui and the eight platform packages at 0.3.6 (there was no older
+  row to drop: the rows were `link:`). `scripts/preflight.mjs`: two `PIN_EXPECTATIONS` rows, anchored to the
+  line's end.
+- **check:deps.** In `scripts/mille-aliases.mjs`, `milleAliases` is empty unless mille is linked, and the new
+  `milleCopies` is check:deps' rule on both branches. Released: fieldd, field-app and the room each resolve the
+  version, `@vibecook/mille` is one real directory, and field-app's mille-ui is the room's. Linked: as before.
+  `scripts/check-single-copy.mjs` calls it.
+- **Item 337.** `files-host-build.mjs` names `test/workspace-units.test.ts`, the row that keeps its JS twin in
+  step. It named `test/files-host-launch.test.ts`, which never existed.
+- **What leaves.** The `../mille-pin` checkout: a fresh tree needs one sibling checkout, `../rosetta-pin`.
+  mille's `link:` rows. CI's `prepare-mille` composite (`.github/actions/prepare-mille`) and its four `uses:`
+  lines, in verify.yml, release.yml, affected.yml and package-preview.yml; verify.yml's header says so, dated.
+  package-preview's job compiles no Rust now (its one Rust build was mille's addon). `release-scripts.test.ts`
+  counts three rustup steps: verify, release and audit. `third-party-notices.mjs`: the release build builds
+  field-native and rosettad; mille's engine and its notices come from its platform package.
+- **Comments made true.** Past tense where a comment said mille comes from `../mille-pin`: `stage-package.mjs`
+  (0.3.6's macOS addon names `@rpath/libmille_binding.dylib`; the rewrite stays), `siblings.mjs` and
+  `siblings-shape.test.mjs`. `check-import-boundaries.mjs`'s comment now names 0.3.6 where it said "the pin"
+  (R24's verdict unchanged). README: one sibling checkout in its setup, a setup block without `fetch`,
+  `install-js` or `build-js mille` (that is for a linked mille), and dated corrections. aaa4c0ecc moves no code: two
+  comments say RD-5 and its day, and its message puts right 0d1e63b07's "The EL8's rows run them at this commit's tip"
+  and ccfab02a0's "The EL8's rows run the test at this commit": those ran in the train's verify. That message numbers
+  the commits as the lane did (C1a, C1b, C2, C3 for 8cca9481a to ccfab02a0) and names the stack's top by its lane id,
+  04235e30, which is ccfab02a0 on main.
+- **f968ca11b, the row the EL8 missed.** fieldd's files-worker row "says READY with its generation and the engine
+  it loaded" named mille 0.3.4 by literal, and the landing's verify went red on it (the worker loads 0.3.6). It
+  now reads the version from the installed `@vibecook/mille`'s own package.json and wants the package's and the
+  addon's own versions both to equal it, so the next pin move leaves it as it is. No other test names the old
+  mille as a value.
+- **The lock.** From one online install on the stack's base, under `env -i` with an empty home, empty npm
+  config files, the pinned store and scripts off, registry.npmjs.org the one registry named: 2026-11-17
+  07:48:09Z to 07:48:31Z, three tarballs downloaded by pnpm's own count. Every added key is
+  `@vibecook/mille*@0.3.6` (20: ten packages, each in `packages:` and `snapshots:`); none removed; every moved
+  line names 0.3.6; residue 0.
+
+**What was proved, and by which row.**
+- **The generated half**, 2026-11-17 07:48:06Z to 07:48:32Z, its judge GREEN over 30 needs, in a clone of its
+  own. 0d1e63b07's edits touched its eleven paths. `render --prod --check` printed the base's counts
+  (15 npm, 0 cargo + 6 released on the registry, 3 swift). fieldd, field-app and the room share one real
+  `@vibecook/mille`
+  directory, and field-app's mille-ui is the room's. A frozen offline install left the lock byte for byte.
+  check:deps said "mille@0.3.6 (daemon, renderer and room at the release, from npm: @vibecook/mille ×1,
+  @vibecook/mille-ui ×1)". The logs name no other host and no refused fetch; no update check; no Electron
+  download; nothing was written under `../rosetta-pin` or `../mille-pin`.
+- **The stack's own row**, 2026-11-17 08:29:13Z to 08:31:38Z, its judge GREEN over 14 needs, on the stack's top
+  before aaa4c0ecc (comments only):
+  - 8cca9481a's rows red at 8cca9481a (1 pass, 5 fail: one by ENOENT, four by the missing `milleCopies`),
+    then green at the top (6 of 6);
+  - one frozen offline install, the lock byte for byte, nothing downloaded;
+  - 536d3339a red at its own state (`files-host-build.mjs` put back: the keeper row fails, the layout row passes),
+    then `workspace-units.test.ts` green whole at the top (19 of 19);
+  - mille's addon as npm ships it: it loads only system and `@rpath` paths, its install name is
+    `@rpath/libmille_binding.dylib`, and its platform package carries THIRD_PARTY_NOTICES.txt;
+  - no update check, no cargo download, no Electron download, nothing written under either pinned checkout.
+- **f968ca11b's own row**, 2026-11-17 16:32:50Z to 16:33:21Z, its judge GREEN: one frozen offline install, nothing
+  downloaded; the READY row red at its base (0.3.4 wanted, 0.3.6 loaded), then `workspace-worker.test.ts` green
+  whole with the edit (10 of 10), fieldd's typecheck and biome on the file.
+- **The rest** (typecheck, biome, the TS and Rust suites with `release-scripts.test.ts`, the bundle, the package
+  census) ran in the train's verify, on the train's top:
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+**Not run, and owed.**
+- `stage-package --require-complete`: not run (it needs the release native build and the screenshot helper).
+- `pnpm gate:landing` not run (owed). Its smokes that start the files worker are the first to read 0.3.6's
+  addon in a running app.
+- The four workflows without `prepare-mille`: not run here. A push to main runs only verify.yml; release.yml
+  runs nightly, on a `v*` tag or by dispatch; affected.yml and package-preview.yml run on a pull request or by
+  dispatch. Whether each has since run green is not read here.
+- The git port stays the interim CLI port. The Files docket's R2 (2026-10-07) moved it to `GitService` "at
+  mille's release, with the pin's exit"; that move is not in this EL8 (owed).
+- `CLAUDE.md`'s Machine setup still describes mille as a `link:` sibling checkout and `prepare-mille` as CI's
+  step (owed: its dated correction).
+- Still stale at their sources, each owed its dated correction (lines at main `8064bbdec`): `docs/ROADMAP.md:2052`
+  (mille as `link:../mille-pin` at `c8160d5`, no release past v0.3.4); `docs/desk-gates.md:7` (`../mille-pin`
+  among the pinned checkouts); `docs/DECISIONS.md:154` (RT's row names `prepare-mille`); the seam owner's pages,
+  `docs/agent-plane/api.html:2994` and `architecture.html:2003` (the unreleased channel pinned at `c8160d5`);
+  `README.md:135` (the watcher's `../mille-pin`); and the comments in `scripts/build-paths.mjs:40` and
+  `scripts/host-links.mjs:28–34`.
+- Left as they are, each still true or a later cleanup: `scripts/gate-landing.mjs`'s `secondCopiesOutside`
+  still classifies the linked shape's second copies, which a tree on a pre-EL8 base still makes; the build-paths
+  and notices tests keep `mille-pin` as fixture paths for the overlay's branch, and the dev-runner's
+  `host-links.test.mjs:308` keeps one in a fixture install name.
+
+## Item 291's kit port — the phone's spend view says #81's words at a moment and on a narrow plot (M360)
+
+(2026-11-17; three commits, in order: 77510072d "291 (seam): the spend view takes a seeded state, so a test can
+still it at a set moment", 82f25bd6f "291 (red): at a set moment the phone's spend view keeps 0.4.0's words where #81
+moved them", 49dcef2d5 "291 (green): the kit ports puppeteer-views 0.4.1's #81 to the phone's spend view". They stand
+above the EL8 to puppeteer 0.4.2 (`787552155`), which carries 0.4.1's #81 and re-blessed `phone-spend.golden.json`
+in #81's forms; that EL8 is its own entry.)
+
+**What the phone now shows** (Godview's spend view, at a set moment, held or pointed on the chart, and where the
+plot is narrow):
+- The burn reads "by" the moment's clock and the rate, with no "then" (in the stills, "by 14:16 · $0/hr").
+- At a moment, once every agent has started, the list's head says only "Total by" the moment's clock; one not yet
+  started still gives "N of M started". Its two labels stand at least 8 pt apart; where both do not fit, the first
+  is cut and the second stays whole.
+- The chart's caption says "Last 10 minutes" wherever "Spent in the last 10 minutes", measured in caps in its own
+  face with its tracking, would overrun the plot. It keeps the long words where they fit.
+- The Now pill stands under the caption, 4 pt clear of its line. "$0" lifts 4 pt, clear of now's chip.
+- The pill keeps its mark with no legend, as item 291's first slice left it; only its top moves.
+
+**The seams and files** (ported from #81 as puppeteer-views 0.4.2's installed dist carries it; the green commit's
+message names 0.4.1's dist at `e940419d7`, which no lock or installed file records).
+- `SpendModel`: `heroRate` without "then"; the head's first label empty at a moment once every agent has started;
+  `colcapWords`; the Now pill's top at `g.y0 + 22`; "$0"'s label 11 pt above its line, the others' 7. `TextStyle`
+  gains `.colcap`.
+- `SpendWords.Colcap`: the long and the short words, and spend.css's size (10) and tracking (0.07 em). Its weight
+  (600) is `.colcap`'s and its caps are `colcapWords`'s. `colcapText` retires.
+- `SpendView`: `measure` gains `.colcap` (semibold 10). The head's labels: `Spacer(minLength: 8)`, the first
+  cut at its tail, the second at its own size.
+- `SpendView` also gains an internal `init(input:seed:)` (item 285's seam), so a test can seed the view's state at
+  a set moment. The one shipping caller keeps `SpendView(input:)`, so nothing the phone draws moves by it.
+- DESIGN.md, Godview's spend view: a dated bullet, "At a moment, and where the plot is narrow".
+
+**The rows it adds or changes** (kit tests; run on a simulator at main, below).
+- H19 `theCaptionSaysTheShortWordsWhereTheLongOverrun` (`SpendModelParityTests.swift`, host-buildable): the
+  short words at 402, the long at 1180.
+- R2 `theSpendHeroAtASetMomentIsStilled()` (`SpendKitTests.swift`, kit-only): with `VF_STILL_DIR` set, it draws
+  the shipping view at 402 × 781, light and dark, into two PNGs there and prints a `PG-HERO-MOMENT ` line for
+  each. Unset, it returns at once. It asserts nothing about the view; set, it fails only if the witness, the
+  frozen clock or the PNG is missing.
+- R3 `theSpendViewAtASetMomentKeepsItsWordsApart` (`SpendKitTests.swift`, kit-only): at 402 × 781, the burn ends
+  10 pt short of the list's column, the head's first label is empty and the second fits, the caption fits the
+  plot, the pill stands 4 pt under the caption's line, and "$0" ends above now's chip. It prints one `PG-CAP `
+  line: which caption words the phone drew, and the head's second label's width and room.
+- S1 (`SpendSceneTests.swift`): the grid is rebuilt from each money label's top plus 7, and $0's plus 11.
+
+**Proved, on the train's top:**
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+The Debug device build on an earlier assembly of this train, `926ed9707`, whose `apps/ios` tree (`965298a56d48`) is the
+landed top's, on the development Mac, 2026-11-17 09:23:24Z → 09:27:26Z: **GREEN**; the build exited 0 with no error
+line, and the kit's seventeen test targets type-checked (each swiftc exit 0; not run). Nothing was installed on a phone.
+
+- The cut (2026-11-17, 08:48:45Z to 08:48:48Z) made the three commits on a side branch at `fc1664e82`, the top of
+  the stack that carries the EL8 to puppeteer 0.4.2, and proved each message and each patch-id equal to the drafts
+  it was handed, the tip's tree equal to its base plus the three diffs, and seven paths. It ran no test, build or
+  typecheck. They were carried to main unchanged (16:42:21Z, onto `f968ca11b`): the same messages and patch-ids.
+- The kit's suite "PG-7 — the spend view", on a Mac mini kept for tests, at main `8064bbdec` (2026-11-17, 19:24:35Z
+  to 19:26:49Z; an iPhone 17 Pro simulator on iOS 27.2, Xcode 27.3): xcodebuild exit 0, 49 rows, all passed; H10,
+  H19, P7, R2, R3 and S1 among them. R3's `PG-CAP`: at 402 × 781 the phone drew "Last 10 minutes", 101.5 pt on a
+  166.0 pt plot, and the head's second label, "Total by 14:16", takes 91.8 of its 148.0 pt.
+- R2 drew its two stills there, light and dark: "TOTAL BY 14:16" alone, "LAST 10 MINUTES", the Now pill under the
+  caption with no ↘, and "$0" clear of now's chip. The witness had spent nothing by that moment, so the hero reads
+  "~$0.00+" and "$0/hr": the stills show the words' places, not a spent figure. The held moment's line runs through
+  the caption's word "MINUTES"; item 518 moves it below the caption (its own entry).
+
+**Not run, and owed.**
+- P7's red at the EL8's commit alone, and the red commit's reds, are declared by their messages and were never
+  seen: no run was made at either commit.
+- On a simulator, not a phone: nothing was installed on a device. How the figures look on a phone was not judged
+  (owed to the eye).
+- The long words' drawn width in SF is not printed; at 402 they overran the 166.0 pt plot. The golden and P7
+  measure in the view's fallback (6.4 a UTF-16 unit), so they say the short words at the golden's phone stages
+  (320 to 430 pt); by the model's geometry the fallback keeps the long words from a 435-pt stage up.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** the window's spend view is not this entry's; it takes #81 from the EL8 itself.
+
+## Item 50 — what puppeteer starts on its own inside fieldd runs with an agent terminal's environment (M361)
+
+(2026-11-17; one commit: `8064bbdec` "AR (item 50): what puppeteer starts on its own runs under the PTY path's
+law, never fieldd's own". Re-cut by hand from a branch of 2026-10-19, which waited for puppeteer's seam, onto
+puppeteer 0.4.2's stack, RV's `fc1664e82`, as `8064bbdec` on branch `focus/i50-service-environment-on-fc1664e82`.
+Every other id here is a side commit's.)
+
+**What landed.**
+- An EL7 gap closed: the catalog's probes and puppeteer's other service runs inside fieldd (an install's
+  `--version` and `--help`, the identity read, sign-in and sign-out, the update check, extension, model and usage
+  reads, Claude's launch preflight, Codex's prewarm) inherited fieldd's whole environment, its FIELDD_* keys among
+  it. They now run under an agent terminal's law: its allow-list, with no adapter's own variables.
+- The seam: `createBuiltinProviders({ …, serviceEnvironment: agentEnvironment(home) })` in
+  `packages/fieldd/src/agent-runtime.ts`, through puppeteer 0.4.2's `BuiltinProviderOptions.serviceEnvironment`.
+  It is the PTY path's own law: the allow-list AGENT_ENV_PASSTHROUGH, puppeteer's `buildAgentEnvironment`, and
+  FIELD_*/FIELDD_* stripped last; one snapshot, taken at composition.
+- What changes for a person: an identity read reads the config the agent will. A probe no longer sees what else
+  fieldd inherited (proxy variables, NODE_EXTRA_CA_CERTS, a hand-set config dir); a probe that needs one grows
+  AGENT_ENV_PASSTHROUGH, the one list both paths read.
+- The fixture: fieldd's scripted claude is installed by a wrapper (`packages/fieldd/test/fake-claude.ts`, new)
+  that names its state folder itself and records each run's variable NAMES, never a value.
+- The godview smoke holds `leakedVariables` over every recorded run of its typed-agent stub, not only the
+  managed launch.
+- Read since, from the installed puppeteer 0.4.2: it hands the claude, codex, opencode, antigravity and copilot
+  distribution services the environment with `inheritEnvironment: false`, and the grok, kimi, hermes and pi ones
+  without it (`8064bbdec`'s message says "the other six"; they are five). Those four adapters give their version run
+  the environment as its whole environment, so it replaces fieldd's there too. The commit's open question is
+  closed for the four adapters' version runs; other runs inside fieldd still receive its environment (item 537).
+
+**What was proved,** by the commit's own row on the development Mac, 08:58:02Z to 09:03:10Z, at the cut
+`8064bbdec` in an installed tree, with a frozen offline install at the cut's lock before and one back to the
+tree's own lock after:
+- the new test, "an install's probe runs under the PTY path's law, never the daemon's environment (item 50,
+  EL7)": 1 passed (written with the change, not run red first);
+- `agent-runtime.test.ts` whole: 40 passed, 2 skipped (the real-rosettad rows, which are opt-in), 0 failed;
+- fieldd's and electron-shell's typechecks: clean;
+- biome over the changed files: clean (the extensionless fixture script is not biome's).
+- fieldd's test setup built field-native with cargo offline. The row's own judge ended it red on a count that
+  matched its own report line; no tool log shows an update check.
+- At main `8064bbdec`, `pnpm verify` whole passed on the development Mac (2026-11-17 16:56:25Z to 17:40:10Z) and
+  on the test Mac (17:45:34Z to 17:55:02Z); in each, `agent-runtime.test.ts` ran its 42 tests and
+  `agent-session.test.ts` ran whole (91 tests, 2 skipped).
+
+**Not run, owed.**
+- `pnpm smoke:godview`, where the smoke's new hold runs: not run (owed).
+- The QA desktop's profile meters and sign-in states after its restart, the first live proof: not seen (owed).
+- `pnpm gate:landing` not run (owed).
+
+v-train9-r3, `pnpm verify` whole at the train's top `8064bbdec` on the development Mac, under the harness: its hold
+2026-11-17 16:56:25Z → 17:40:10Z, the verify itself 16:56:45Z → 17:36:40Z, **GREEN**, exit 0 in 2393 s; all sixteen
+steps run (fifteen print a header; `cargo fmt --check` is its own step, between lint and lint:rust, and prints none); 27
+vitest suites passed and none failed, fieldd's 293 files passed and 5 skipped (4,129 tests passed, 15 skipped) and
+field-app's 358 of 358 (5,134 tests); node:test 501 passed, 0 failed; cargo's 38 results ok, none failed (verify.log
+`2ddd4f9bcb915b21`). The same commit on the test Mac, v-train9-m2, 17:45:34Z → 17:55:02Z: **GREEN**, exit 0 in 567 s,
+all sixteen steps run. Two runs at earlier tops were red: v-train9 at `926ed9707` (09:30:10Z → 09:31:55Z, exit 1 in 103
+s) at lint, biome's one error, the next top differing from it in `scripts/check-web-markers.mjs` alone (its self-test
+row as biome prints it); and v-train9-r2 at `725a6e079` (09:49:56Z → 10:09:20Z, exit 1 in 1161 s) at a test that named
+mille's version by literal (mended), and at the Go record held to truffle 0.7.28's sidecar pin (that EL8 left this
+train).
+
+## AH-4 — a live app's preview: Electron photographs it once behind its own gate; fieldd moves only a revision (M362)
+
+(2026-11-17; records only: its code landed on 2026-08-03 as `cce684ce3`, "feat(artifacts): add desktop preview
+pipeline", 26 files, +1850 −70, and no entry was written here. The commit has no body and names no run. This entry
+is written from a read of that commit and of main `8bb55de910e9`: nothing was run for it, and no code moves with
+it. It rides a records commit.)
+
+**Why now.** Since the housekeeping pass of 2026-10-28, DECISIONS has held AH-4 "unrecorded in LANDED because its
+physical witnesses gate it", and they never ran. Since 2026-11-05, DECISIONS' AH row and ROADMAP's MA block have
+carried "AH-4's review, its LANDED entry and its physical witnesses" to MA. This pays the entry and the review. The
+witnesses stay owed, below.
+
+**What landed on 2026-08-03.**
+- **Contracts.** `shell.webcontents.captureArtifactPreview {artifactId, url}`, an internal provider method that is
+  not a ProductAPI method; its URL must be a root `https://‹name›.ts.net:‹port›/`. `ARTIFACT_PREVIEW_LIMITS`: 640 by
+  400, at most 256 KiB, 8 s, the JPEG ladder 82, 70, 55, 40. `ArtifactRefreshPreviewResult`, and
+  `artifact.refreshPreview` marked not idempotent, because each one makes a new image and a new revision.
+- **Electron main.** `artifact-preview-capture.ts`: one capture is one in-memory session and one hidden window,
+  sandboxed, with no Node, no permissions, no popups and no downloads. Top-level navigation and every request stay
+  on the artifact's own HTTPS origin, with `data:` and same-origin `blob:` for a subresource. A 4xx or 5xx document
+  is refused, not photographed. The picture is normalized to 640 by 400, encoded down the ladder, verified by
+  decoding, written to a dot-named temp file and renamed over `artifacts/previews/‹artifactId›/thumbnail.jpg`. A
+  page title comes back sanitized, at most 128 characters. The shell provider refuses a capture while the window is
+  hidden or minimized, and holds one capture at a time.
+- **fieldd.** ArtifactService asks for a capture after a first publish and at `artifact.refreshPreview`, and at no
+  other time: no timer. It asks only for a local intent's own last published URL on its reserved port. Previews
+  have their own queue, so a publish never waits for a page load. A capture moves `previewRevision` by one and may
+  replace a still-generated title, never a person's. An unpublish waits for a capture in flight before it removes
+  the preview folder. The call enters the broker by an internal door with an explicit fieldd caller, under the
+  8 s deadline, and is audited as `artifact.preview.capture`.
+- **The window.** The renderer's CSP gains `img-src https://*.ts.net:*` and nothing else. The panel draws
+  `thumbnailUrl`, which fieldd derives as `‹url›/.vibefield/preview/thumbnail.jpg?v=‹previewRevision›`, retries a
+  failed image read twice with a cache-busting key, then rests on the placeholder. Refresh preview is in the row's
+  menu for the desktop that owns the artifact.
+- No image bytes cross JSON-RPC or enter the synced store. Other devices read the JPEG from the artifact's own
+  listener, behind its allow-list.
+
+**What has moved under it since, each in its own entry.**
+- UA-0 (`fcd0af972`, 2026-08-05): the preview folder is a LAYOUT row. WIN-10 (`cfd11e467`, 2026-08-11): the commit
+  point is `durableRename`. WIN-10's own entry says the thumbnail "still uses a plain rename"; its commit had already
+  replaced it, and that side-find owes a dated correction at its source.
+- MA-3c (`32192ed1f`, M157): a made app's capture, with `allowHosts` and the JPEG's `digest`.
+- FL-2 (M267; the move at FL-2b, `b62e3842a`): the panel is field-app's `frame/apps/LiveApps.tsx`.
+  `plugins/browser`, with the `ArtifactPanel.tsx` that AH-3 wrote and this commit edited, is gone.
+- Item 378 (`1855d44f0`, M299) and item 415 (`6a07b1c71`, M304): the capture's WebRTC fence and its proxy bypass.
+  `artifact-preview-native.ts` was split out at `dcf62fca4`.
+
+**The review** (2026-11-17, by reading; every finding is unmeasured). The capture holds to AH-D8, to the spec's §4.2
+and §8, and to design-04 §7.1. Nothing found breaks a ratified rule on the live-artifact path. Seven findings: one
+is item 514, one is item 519, and item 517 takes the other five. It mends three in the same land, withdrew one on a
+second read, and sends the seventh's corrections through the draft queue:
+- A live artifact's add-time capture can lose Electron's one slot to a made app's capture. fieldd has two queues
+  for the one door (`artifact-service.ts`, `made-app-service.ts`), and the loser is not asked again: the row keeps
+  its placeholder until a person presses Refresh preview. Since MA-3e. Item 517 mends it.
+- `artifact.refreshPreview` is not audited at its door as publish, update and unpublish are (`daemon.ts`). The
+  capture it causes is audited as a system act, with no caller. Item 517 mends it.
+- After a capture, fieldd checks that the intent still has a valid URL, not that it is the URL and the source that
+  were photographed. An update during a capture moves the revision for a picture of the old source. Withdrawn on a
+  second read: Electron has already replaced the picture's bytes, so the revision must move, and an update takes no
+  new picture in any case.
+- ArtifactService's comment says the Electron operation has settled when its `finally` runs. On a timeout the
+  broker rejects on its own timer and Electron may still be writing. On a second read, an unpublish in that instant
+  can leave only an empty folder that no intent names, and nothing sweeps it. Item 517 corrects the comment.
+- Each capture makes one in-memory session, and Electron's API, as read, has no call that destroys one. Held as
+  item 519: its cost is to be measured on a real Electron first.
+- What the capture's session answers a client-certificate request was not measured on a real Electron (item 514).
+- design-03 and the AH spec still give the panel to `vibefield.browser`: design-03 at :54 and in its plugin table,
+  the spec at §1.1, AH-D7, §7 and §10's AH-3 row. The spec's §1.1 and AH-D7 are already FL-2's owed correction
+  (M267). Each place owes a dated correction at its source.
+
+**The rows it carries** (on main, named from their files; none was run for this entry).
+- `electron-shell/test/artifact-preview-capture.test.ts`: the guarded session and the atomic bounded JPEG; a
+  symlinked destination and a symlinked root refused; the exact-origin request rule; top-level confinement and the
+  title; the JPEG envelope; the response status rule; the privileged-session marker dropped when setup fails.
+- `contracts/test/shell.test.ts` and `contracts/test/registry.test.ts`: the capture confined to a local artifact id
+  and a canonical root URL; `artifact.refreshPreview` not replay-safe.
+- `electron-shell/test/security-policy.test.ts`: the CSP admits images only from custom-port MagicDNS hosts.
+- `electron-shell/test/shell-provider.test.ts`: one capture, aborted when fieldd cancels; no preview work while the
+  window is hidden.
+- `fieldd/test/artifact-service.test.ts`: the capture after a first publish, the title rule and the revision; the
+  preview queue beside publication; unpublish cleanup after an in-flight write; a person's title kept when the
+  capture is unavailable; no add-time capture with no provider; no image bytes on ProductAPI.
+- `fieldd/test/shell-provider.test.ts`: the capture dispatched only through the internal door; and
+  `shell-provider.integration.test.ts`: a plugin's capture call answers `NOT_FOUND`.
+- `field-app/test/live-apps.test.tsx`: refresh only through ArtifactService, and the bounded image retries (in
+  August the row was `field-app/test/artifact-panel.test.tsx`'s).
+
+**Owed: never witnessed.**
+- A second desktop sees the first one's preview, and fetches the new URL after a refresh.
+- Both themes, as two stills of the Live apps panel with a real preview.
+- A real cross-origin subresource blocked in a capture, and a real 403 from an allow-list mismatch.
+- A symlink in a preview folder answers a detail-free 404 from the listener. That half is Truffle's rooted static
+  route, and no row of this repo reads it.
+- A running Vite site and a folder, each published from the panel and photographed: the page is captured as its
+  load ends, and the guard refuses `wss:`, so what a dev server's page shows there is for the eye.
+- The capture and the panel's image both dial this desktop's own tailnet name through the OS Tailscale app.
+- A lost or failed provider leaves the placeholder, seen by eye (its rows stand; nobody has looked).
+- No landing gate ran for `cce684ce3`: `pnpm gate:landing` came on 2026-10-08, and its row that drives the capture
+  on a real Electron, row 38 `smoke:capture-webrtc`, reads "not yet run".
+
+**Not done, and not claimed:** no test, typecheck or build ran for this entry. The August tree was not checked
+out. AH-1's two-client witness, AH-3's physical closeout and device-retirement cleanup are not AH-4's and stay in
+ROADMAP's MA block. AH-5 was superseded by MA-5 and MA-6 on 2026-11-05 and is not owed.
+
+## EL8 to truffle 0.7.28 — the mesh sidecar is built with Go 1.27.4, and a failed start reports first (M363)
+
+(2026-11-18; two commits, 8 paths +77 −50. Cut on main `8064bbdec` as `651bf0892` (the EL8, 7 paths +69 −49) on
+branch `focus/el8-truffle-0728-on-8064bbdec`, then `3a9a05127` on it (TB's LP-5 rider, 1 path +8 −1) on branch
+`focus/lp5-go-record-0728-on-651bf0892`. On main they are `628233925` "EL8 (truffle 0.7.28): the crate and the five
+sidecars move together — Go 1.27.4 and T12's half", then `fc4434113` "LP-5 (truffle 0.7.28): the Go licence record
+names the 0.7.28 sidecar and Go 1.27.4". Every other id here is a side commit's.)
+
+**What landed.**
+- The cargo plane and the five npm sidecars move together, one event (TB): truffle-core `=0.7.27` → `=0.7.28`
+  in Cargo.toml, the five `@vibecook/truffle-sidecar-*` rows in apps/desktop/package.json, and
+  PIN_EXPECTATIONS's truffle-core row in scripts/preflight.mjs (with the Swift row's label; its pattern does not
+  move). Sidecar protocol 13 stands at both tags.
+- What 0.7.28 carries: #261, every sidecar built with Go 1.27.4 (GO-2026-6859, the net/http HTTP/1 server crash
+  the sidecar's egress proxy and loopback listener could meet); #263, T12's non-breaking half (a failed build
+  hands its status hook what the start reported, `LoggingRequired` and `SidecarExited` among them, before it
+  returns its error).
+- mesh.rs's two comments on `LoggingRequired` are corrected at their source, dated 2026-11-17: the refusal is
+  still read from the start error, now as a second reading.
+- The five 0.7.27 rows leave `minimumReleaseAgeExclude`: 0.7.28 was published 2026-11-12 08:06-08:09Z, outside
+  pnpm 11.13.1's default window of 1440 minutes, so it needs no row, and 0.7.27 is past the window too.
+- The locks were written by the tools: Cargo.lock moves by truffle-core's version and checksum alone, and
+  pnpm-lock.yaml by 25 lines out and 25 in, every one a sidecar's own.
+- The Go licence record (`apps/desktop/packaging/notices/go-modules.json`), by its generator
+  (`node scripts/third-party-notices.mjs --refresh-go-modules`), never by hand: the sidecar 0.7.27 → 0.7.28, and
+  Go go1.27.4 beside go1.27.3. Go 1.27.4's LICENSE and PATENTS are Go 1.27.3's two texts (`08c323783124`,
+  `f1a3af7e2570`); the 32 modules and 25 texts did not move, nor did TailscaleKit's row (truffle 0.7.26,
+  `d1dc45d039ed`). third-party-notices.test.mjs holds the record to the sidecar pin, so the EL8 cannot land
+  without it.
+- Unmoved: the kit's Swift plane stays 0.7.26, which ghosttea 0.15.0 declares exact. 0.7.28 changes nothing
+  under apple/, so the phone's TailscaleKit keeps go1.27.3 until truffle rebuilds it. The phone's
+  acknowledgements.json does not move; the desktop notices are staged from the record at package time.
+
+**What was proved.**
+- The EL8's own run on the development Mac, 2026-11-17 08:34:47Z to 08:39:39Z, at `df3fd3e29`, where the seven
+  paths it moves were byte for byte as at its base; from a fresh cargo target and its own cargo home:
+  - the two cargo steps reached index.crates.io (244 requests) and static.crates.io (261, one per crate
+    downloaded) alone; the one online install printed no host and passed pnpm's supply-chain check (668
+    entries);
+  - the installed darwin-arm64 0.7.28 sidecar reads go1.27.4 (`go version -m`; tailscale.com v1.104.1);
+  - `cargo build -p field-native` offline, `cargo fmt --check`, and clippy `--workspace --all-targets -D
+    warnings`: clean;
+  - `cargo test -p field-native --lib mesh`: 51 passed;
+  - the ten test binaries of mesh and the management server (`mgmt_server`): 119 passed, 0 failed; the nine
+    tailnet probes are `#[ignore]` as written, and the promotion row that runs `ps` was skipped by name;
+  - `pnpm preflight` and `pnpm check:deps`: passed.
+- The LP-5 rider, on the test Mac (a Mac mini), 2026-11-17 19:44Z, in an installed tree at `651bf0892`: it read
+  the kit's TailscaleKit from that Mac's own SwiftPM checkout and artifact, and Go 1.27.4's LICENSE and PATENTS
+  from a two-file module cache carried from the development Mac; the refresh exit 0; third-party-notices.test.mjs
+  whole, 28 passed, 0 failed. The row's biome step was red by its own fault: biome.jsonc excludes the generated
+  record, so it checked 0 files.
+- `pnpm verify` whole at `3a9a05127`, on the test Mac, 2026-11-17 21:08:42Z to 21:18:05Z: exit 0 in 561 s, every
+  stage; biome checked 3719 files; tooling's `node --test` 501 passed, 0 failed, among them "the committed
+  records are the pins' own: the iOS acknowledgements and the sidecar's Go record". Neither the verify nor its
+  fill downloaded anything: the test Mac had taken this piece's two downloads at its own earlier fill
+  (2026-11-17 19:43:52Z), `truffle-core v0.7.28` and the darwin-arm64 sidecar.
+- The train's second dress rehearsal passed with this piece joined (v-rehearsal-b at `dde7e69a5968`, on the test
+  Mac, 2026-11-18 03:41:21Z → 03:51:23Z, exit 0 in 601 s, sixteen stages); its fill downloaded nothing, and
+  rehearsal A's fill had downloaded `rustix v1.1.6` alone, another piece's, reusing the sidecar.
+
+**Not run, owed.**
+- `pnpm gate:landing`: not run (owed). It holds no mesh row. The live mesh's witnesses, the nine `#[ignore]`d
+  tailnet probes and desk-gates row 28 (the two-desktop check, on two Macs), did not run, and no row met #263's
+  new report (a failed start's `LoggingRequired` reaching the status hook): this event's repo side of #263 is
+  mesh.rs's two comments.
+- Only the darwin-arm64 sidecar was installed and read. The other four platforms' packages were never fetched:
+  their Go 1.27.4 is #261's word, and their lock integrity values are the registry's.
+- Cargo.toml's closure note for 0.7.28, written in `628233925`, still says the LP-5 rider is not run in this event
+  and that the record names sidecar 0.7.27; `fc4434113` ran it. The dated correction at that note is owed.
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+## Item 331 — Cargo.lock's rustix is 1.1.6, the version ghosttea 0.15.0's own lock names (M364)
+
+(2026-11-18; `80642df19`, the cut's "331: rustix 1.1.4 → 1.1.6 in Cargo.lock, alone — the version ghosttea 0.15.0's lock
+names". One commit, two files, +3 −2. It was first cut on the EL8 to truffle 0.7.28 and carried onto main on its
+own, unchanged.)
+
+**Why.** RUSTSEC-2026-0486 is against rustix < 1.1.6 (unsound: six xattr read functions, given a zero-length
+buffer), as ghosttea's own commit `f6b1b6f81` records it: its audit went red on 2026-11-11, before its 0.15.0.
+ghosttea 0.15.0 allows 1.1.6 and its own lock holds it. The EL8 to ghosttea 0.15.0 (M290) moved the six ghosttea
+crates alone and left this graph on 1.1.4, with a note in `Cargo.toml` naming this item.
+
+**What landed.**
+- `Cargo.lock`: the rustix block's `version` and `checksum` lines, 1.1.4 → 1.1.6 (2 out, 2 in). No other block
+  moves. The two lines were typed from ghosttea's lock at its tag v0.15.0, not written by `cargo update`.
+- `Cargo.toml`: one dated comment line under the EL8 note that said "this graph keeps 1.1.4 (item 331)". It is
+  the correction at its source. No rendered row moves.
+- Who pulls rustix here: tempfile (ghosttea-config's dependency, so the terminal binaries; and field-native's
+  dev-dependency) and xattr under tar (a build dependency of ghosttea-vt-sys, whose build script unpacks the VT
+  bundle with it).
+- Nothing is regenerated. The desktop's notices are made from this lock at stage time and will read 1.1.6 by
+  themselves. The phone's acknowledgements have named 1.1.6 since M290, from ghosttea's own notices.
+
+**What was proved, by one row on the development Mac** (2026-11-17, START 08:50:05Z, END 08:52:45Z, on the EL8 to
+truffle 0.7.28 as it was cut that day, whose `Cargo.lock` differs from this commit's parent's by truffle-core's version
+alone; under `env -i` with an empty HOME, a cargo home and a cargo target of its own; toolchain 1.99.1). The row
+never committed: it edited the two files, ran, and put them back.
+- `cargo fmt --check`: clean.
+- `cargo fetch --locked --target aarch64-apple-darwin`, the row's one step on the network: 205 crates from
+  static.crates.io and 244 index files from index.crates.io, counted by files. No other registry folder and no
+  git checkout appeared. The fetched `rustix-1.1.6.crate`'s sha256 equals the checksum typed into the lock.
+- `cargo build --locked -j 4 -p field-native`, offline: green in 148 s, 189 crates compiled, rustix 1.1.6 among
+  them and 1.1.4 nowhere. ghosttea-vt-sys's build script was handed the VT bundle from a copy held to the
+  published sha256, so the row fetched no archive, and the library it linked is the published one.
+- `cargo tree --locked -p field-native -i rustix@1.1.6`: 1.1.6 alone, under tempfile 3.27.0 and under xattr 1.6.1
+  (through tar 0.4.46, in ghosttea-vt-sys's build dependencies).
+- The commit's five changed lines are the first cut's, held equal by its cut. No row ran on its own parent: the
+  build there is this landing's verify's (below).
+
+**With the train joined.** The train's second dress rehearsal passed with this piece joined (`v-rehearsal-b` at
+`dde7e69a5968`, on the test Mac, 2026-11-18 03:41:21Z → 03:51:23Z, `pnpm verify` exit 0, sixteen stages; its fill
+downloaded `rustix v1.1.6` in rehearsal A's run and nothing in B's).
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**Found.** rustix is a build dependency of ghosttea-vt-sys's build script (under xattr, under tar). By cargo's rule
+a moved rustix rebuilds that script and runs it again. The script fetches the VT bundle (3,770,880 B) from
+ghosttea's GitHub release assets whenever it runs with neither `GHOSTTY_VT_PREFIX` nor `GHOSTTEA_GHOSTTY_VT_BUNDLE`
+named; with `GHOSTTEA_GHOSTTY_VT_OFFLINE` set it stops instead. Rehearsal A shows the rerun alone: its first build
+after this piece compiled rustix, xattr, tar and ghosttea-vt-sys again and fetched no archive, because the test
+Mac's verify names a bundle. Rehearsal B's compiled field-native alone. No script or workflow in this repo names a
+bundle, so the fetch comes once per cargo target, at that target's first build after this lands; the development Mac's
+shared target is one.
+
+**Not run, and owed.**
+- `cargo test --workspace` was not run in the row. Rehearsal B's verify ran it with this piece joined
+  (`test result: ok` 43 times, FAILED none), and the landing's verify runs it again (above).
+- Not run by the row: clippy, the JavaScript suites, a smoke, `pnpm verify` whole. Rehearsal B's verify ran all of
+  them but the smoke.
+- `pnpm gate:landing` not run (owed).
+- The advisory's own text was not read. Its range, rustix < 1.1.6, is as ghosttea's commit records it. The
+  evidence is the audit step's next log on main (`cargo audit --file Cargo.lock`, a step that gates nothing): it
+  should no longer print RUSTSEC-2026-0486. No rehearsal runs that step. That reading is owed.
+- Item 356: ghosttea-text reads `GHOSTTEA_FONT_FAMILY` at run time, a name in neither strip list (raised in item
+  355's commit); which process builds the text engine was not traced. A note: no code moves for it here.
+- `pnpm perf:terminal pane-regression` has never been read on ghosttea 0.15.0 on the development Mac. Owed.
+
+## OB-0 — the desk room's wire truth: six chip types, the ref, the eight desk tools, the window's door (M365)
+
+(2026-11-09; one commit, 5 paths +1267 −18: `716e98981` = `367b50661`.)
+
+**What landed.**
+- `contracts/src/objects.ts` (+354 −3). The six types (OB-D1) and the ref, `vf:obj/` and eight characters, a name and
+  never a grant (OB-L1), were on main already (item 405a, OB-0's types, trimmed); the commit's own message calls the
+  file new, which it was not. OB-0 adds:
+  - the eight tools' inputs and answers (§5.2);
+  - the manual, always answered with its tools unless the caller passes `tools: false`, because compaction can erase a
+    manual that lives only in the conversation;
+  - the window's door (intents, answers, hand, undo, take back, presence), per CP-D13.
+- `contracts/src/tools.ts`: the eight rows, slice OB-3, family `object`.
+  - `canvas_update` retires (planned, never served, no schema).
+  - `canvas_place` moves from CP-4 to OB-3 with §5.2's words.
+  - `object_act` carries `doing` first, because an approval prompt shows fields in order.
+
+**Stubbed.** Nothing answers here: the rows list and refuse until OB-3 serves them.
+
+**The proof.** contracts `tools.test.ts` and `objects.test.ts`, 25 passed; tsc; biome on the four files. Then the two
+whole runs.
+
+**Not covered.** Nothing live: these are schemas and rows.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## OB-1b — a card lands by the face you choose, and its seams meet the landed slices (M366)
+
+(2026-11-09; nine commits, 46 paths +2040 −267: `b27e7250a`, `a5cfd6c69`, `73701782b`, `3c51344e9`, `6b728e10f`,
+`ad7a711b1`, `faad8b9a4`, `615238398`, `0e7404c62` = `39073b60c`…`b6a02805e`. Its landing red and green (where a face
+lands, and a desk picture becoming a file at the play) are folded into OB-4's `c630028d1`.)
+
+**What landed.**
+- **The landing.**
+  - A `Bud` says its verb and its noun apart (DESIGN.md §8: the noun at full ink, the verb at 40%), and `dragLabelOf`
+    still joins them.
+  - A card let go on a bloom stands at the hub (`CarriedCard.phase` `"hub"`).
+  - `open-bloom.tsx` keeps the stub's signature for ow-design's view.
+- **The seams.**
+  - `kindFacesOf` reads a kind's agent half. With no half, a card gets a Picture only and no Live. Text is read at the
+    press unless past `OBJECT_LIMITS.TOOL_BYTES`; a file waits for the play; a face whose object has gone says so in
+    words.
+  - Make a card asks `objects.ref` beside the capture, waiting 1.5 s at most. With fieldd unreachable it deals no Live.
+  - `handOver`, `refFor` and `resolveRef` go over fieldd's doors. A stack hands every ref before a word goes in.
+  - A ref played on the desk takes the camera to it (`objects.resolve`).
+  - A file face is written at the play to the hand's folder under a safe name (`handFileWrite`), in the same twelve.
+- **One authority.** `doorCanName` lives once, in contracts, read by fieldd's briefing and the window's landing table.
+- **The review's five, each red first** (`ad7a711b1`, then `faad8b9a4`):
+  - a Live chip reaches a spark with no session yet (the grant waits for the wake; the run it names is the woken one
+    only since 293);
+  - a pane grants only after its input wait, and takes back what the play granted when its words could not follow;
+  - no Live for a selection only partly named;
+  - a kind's handlers read declared props, so a `json` prop is parsed;
+  - a Chat chip's picture or file is checked as still kept before a send (`handFileKept`).
+- **The take-back leaves what it did not make** (`615238398`, then `0e7404c62`): `objects.hand`'s `already: true`, read
+  as an optional field.
+
+**Stubbed.** Nothing, once ow-design's bloom replaces the stub (its own entry).
+
+**The proof.**
+- The commits' rows: field-app's named files, the last 35 files and 814 passed, with one failure in that row which the
+  commit names as another builder's (desk-agent-applier, its uncommitted edits); electron-shell's `hand-pictures` and
+  `preload-screenshot-still`, 19; fieldd `agent-model-board` and `agent-field`, 64; tsc in field-app, electron-shell
+  and contracts; biome; `check-import-boundaries`.
+- Every red commit ran red first, at the counts its message gives.
+- Then the two whole runs.
+- Carried later: rider `92700d14e` (the golden fixtures and the shell's pin of the hand's doors); 293 (`6fb238b2f`,
+  `d0c7805fb`: a Live card sent to a sleeping spark named the ended run, not the run its wake started); 303
+  (`194801564`: chat-thread-items' Send deps, red since OB-1b's green).
+
+**Not covered.**
+- None of this has run in a real window.
+- The manifest has no `lazy` flag, so only the byte budget moves text to the play.
+- `agent.providers` is read once per client: an agent upgraded under a running window keeps the old word.
+- An object inside a mini mat has frame-local coordinates, so the camera is right only in that frame.
+- A link on the desk opens a pane only in a dev run (`desk-card-target.ts:61`, at `35f292d4c`).
+- A picture in Chat goes to the hand's folder, refused when aged out, where §4.4 says the spark's folder.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## OB-2 — a kind's agent half: one declaration, an API that cannot write when it reads, and `check` holding them together (M367)
+
+(2026-11-09; four commits, 30 paths +2114 −52: `eb5203c7b`, `bd686569d`, `d0893322d`, `c8ad4cbd9` =
+`f28b87f8b`…`76babfaf5`.)
+
+**What landed.**
+- The manifest's `contributes.objects[].agent {summary, concurrency, faces[], guide, tools[]}` and its law
+  (`agentHalfProblems`):
+  - one ref first;
+  - at most one image;
+  - a text, file or link face has an id and a label;
+  - no duplicates and no destructive read;
+  - at most `TOOLS_PER_KIND`;
+  - a guide under `assets/`.
+- `ObjectBinding.agent` from `@vibefield/plugin-sdk/desk`.
+  - `AgentReadApi` is host-built: `props()`, a copy, and nothing else.
+  - `AgentActApi` adds `setProps`.
+  - `recordAgentAct` buffers every patch of an act into ONE change with the prior values kept for its inverse.
+- `vibefield-plugin check` holds tools and handlers, and faces and handlers, to each other both ways.
+  - A readOnly tool must be bound under read.
+  - Tool schemas compile under the daemon's settings.
+  - The guide must be on disk within `GUIDE_BYTES`.
+  - `runKindConformance` drives each tool over each playground state on an in-memory `agentToolHarness`.
+- `contracts/src/desk-kinds.ts`: the built-ins' halves (Note, Print, Whiteboard, Mini mat).
+  - Print is not placeable by an agent: it has no bytes to make one from.
+  - `DeskInverse` is the window's undo record, opaque to fieldd.
+  - Witnesses: the comment pad and the example clock.
+- **One schema rule** (`d0893322d`, then `c8ad4cbd9`): `AGENT_TOOL_SCHEMA_AJV` in contracts (`strictSchema`,
+  `addUsedSchema: false`).
+  - fieldd's desk room and plugin-cli's `schema-check.ts` both spread it, so `check` refuses an agent tool's schema the
+    room would refuse at every call.
+  - Settings, service and command schemas keep the registry's looser rule.
+
+**Stubbed, by the plan.**
+- An agent's API reads and writes props only (no children yet), so a whiteboard has no tools.
+- Handlers are synchronous.
+- The description-voice lint §5.3 mentions is not built.
+
+**The proof.**
+- OB-2's red ran against the tree with the code reversed: 35 failed, 7 passed trivially. The check red (`d0893322d`)
+  failed its four rule tests and the built-ins' test, for want of the rule.
+- The greens' rows: plugin-agent, agent-half, agent-rows, both witnesses' agent tests, plugins, kind-harness, check,
+  docs, docs-anchors, pack, the two manifest tests and the pad's kind test; fieldd desk-hardening; tsc on the five
+  packages; biome; docs regenerated.
+- Then the two whole runs.
+- Carried later: riders `645c82ea7` (the objects fixture in biome's form), `51e1037c7` (desk-clock's DK-7 pin counts
+  its agent half) and `9a3d6f4d7` (the playground's).
+
+**Not covered.** No plugin's agent half has been called by a live agent.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## OB-3a — the desk knows its objects: a signed registry of refs and grants, and the window's doors, held to its own token (M368)
+
+(2026-11-09; eleven commits, 26 paths +2487 −75: `6a4ee227f`, `a430b8af1`, `74e6686c5`, `7f5e747e1`, `5131b997e`,
+`8b9369979`, `8f538f0ac`, `4cb4eb054`, `7ffc6d31e`, `c0baa0ecf`, `cf6ccf16e` = `3f9d673e2`…`fd965a6f7`.)
+
+**What landed.**
+- **`fieldd/src/objects/store.ts`.**
+  - One record per object, its file named by its ref's eight characters.
+  - Each record is HMAC-signed under a key of its own, behind `StoreGuard`.
+  - An unsigned, forged, exposed or copied record is set aside and never served.
+  - Grants outlive the app (EY-D9 B).
+- **`registry.ts`.** A ref is minted once and maps to its docId and key. Grants are written through before anything
+  acts.
+- **`intents.ts`.**
+  - A pending table with deadlines.
+  - The most recently subscribed desk is `canvas_place`'s default.
+  - A closed subscription refuses its pending intents `UNAVAILABLE {desk, no-window}`.
+  - An answer is taken only from the window that was asked.
+- **`doors.ts`.** The window's ten rows, each local-only, never on the tailnet, and held to the window's own token.
+  - The person's acts are audited, never an object's contents.
+  - The tenth row is `objects.grants`.
+- **A spark's grants are the spark's** (`5131b997e`, then `8b9369979`).
+  - They survive a sleep, a wake and a restart.
+  - A plain run's grants end with it, including at the boot's settle for a run that ended while fieldd was down.
+  - `objects.grants` lists every grant with its holder, and take-back works by holder.
+- **A run replaced by a resume of its session hands on its grants, its place and its undo** (`4cb4eb054`, then
+  `7ffc6d31e`; `onRunReplaced`, bounded by `OBJECT_ROOM.ENDED_RUNS_KEPT`).
+- **`objects.hand` says `already: true`** when the holder held the object before (`c0baa0ecf`, then `cf6ccf16e`).
+- **DESIGN.md §9** (three small commits: a sentence, a word, a clause): the store's refusal sentence, the count of
+  eight signed kinds, and the list naming the desk's objects.
+- Contracts:
+  - `SCOPES` `objects.window`, in main's window list only;
+  - `LAYOUT.OBJECTS_DIR` and `OBJECTS_KEY_FILE`;
+  - `RECORD_STORES.SERVICE_OBJECTS`;
+  - `OBJECT_ROOM`'s limits;
+  - the rows, all local-only.
+
+**Corrected later.** `35f292d4c` spells the take-back's and the undo's audit actions `objects.take_back` and
+`objects.undo_agent`. As `a430b8af1` wrote them, the audit's grammar refused both, so every real take-back answered
+AUDIT_UNAVAILABLE. Its own entry tells it.
+
+**Stubbed.** Nothing at the land: OB-4 filled the presence and undo placeholders this slice left.
+
+**The proof.**
+- The greens' rows: contracts layout, objects, registry; fieldd objects-store, objects-doors, desk-grants,
+  desk-presence, desk-room, desk-kinds, tool-plane-desk, -service and record-stores (the last named run 8 files, 166
+  tests).
+- `agent-session` `-t 'resume hands the pane over|held PENDING across the restart'`, 2 passed.
+- tsc on contracts and fieldd; biome.
+- Each red ran red first, on the missing behaviour.
+- Then the two whole runs. custody-boot (on `ob/custody-b`, so in t10f alone) is the first row that sends a take-back
+  through the real audit writer.
+
+**Not covered.**
+- A plain run that ended and is resumed after a fieldd restart loses its grants: what it had was in memory.
+- Undo offers live in fieldd's memory.
+- With every VibeField process stopped, an older grants file put back is served, so a take-back can be undone that way
+  (OB-D19 A, a stated limit; not built).
+
+**Closed since 11-09 at `sealed` only, by the custody slices of this train (their entry):** the window's credential and
+the floor's pairing file readable by a same-uid agent (EL7). `sealed` is a signed macOS release build, not yet built or
+measured (OB-D20's witness is owed). At `files`, every other build, the token and the pairing file are as before.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## OB-3b — the desk room: eight tools, the checks before the window, and a refusal that says what to do (M369)
+
+(2026-11-09; four commits, 9 paths +1447 −8: `2daefda70`, `0c540c451`, `8720260de`, `b03cf4321` =
+`921880129`…`af3fee7dc`. Its serving, the plane's dispatch, words, facts and fieldd's doors, is folded into OB-4's
+`c630028d1`.)
+
+**What landed.**
+- `rooms/desk/verbs.ts`: `canvas_kinds`, `canvas_list`, `canvas_place`, `canvas_remove`, `object_open`, `object_read`,
+  `object_act` and `object_release`. A call's order is the room's law:
+  1. the caller holds the object (MT-L4; `not-handed` says to ask the user);
+  2. the tool is in the kind's manual (`no-tool`, naming the ones it has);
+  3. the input fits the kind's schema (`bad-input` with path and expected shape);
+  4. only then does the window see it.
+- The manual (§5.4): its tools always, unless `tools: false`, with no per-session dedupe.
+  - The answer stays within `MANUAL_BYTES`, with `leftOut` saying what went.
+  - Every tool result is marked as the object's content (MT-L6).
+- A remove keeps the object's registry row, so an undo can re-find it.
+  - `canvas_remove` on a handed object is refused and says to release it.
+- `rooms/desk/check.ts`: one Ajv per tool, compiled once. A schema that will not compile answers `failed`, never
+  unchecked.
+- `canvas_list` says `truncated` when the window capped the list as well as when the room did.
+- The store joins item 172's per-store rows (`b03cf4321`).
+
+**Stubbed.** Nothing at the land.
+
+**The proof.**
+- desk-room 27 and tool-plane-desk 6.
+- tool-plane-service, -mcp, -talk and -door (on the working tree's `index.ts`, as `0c540c451` says, not that commit's
+  tree).
+- record-stores, desk-room, desk-kinds, objects-store and desk-presence (5 files, 113 tests at `b03cf4321`).
+- biome; `check-import-boundaries`. Each red ran red first.
+- Then the two whole runs.
+
+**Not covered.** The room against a real board in a real window; `canvas_place` while the desk is frozen under another
+view.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## OB-3c — the window carries out what fieldd asks of its desk (M370)
+
+(2026-11-09; six commits, 10 paths +1459 −21: `c830d3b31`, `d621224f6`, `004ca151a`, `8ba14c4e9`, `25e77b642`,
+`3a0fdd4e8` = `5791c5795`…`0ef3a4579`.)
+
+**What landed.**
+- **The applier.** `field/desk/agent/applier.ts` subscribes `objects.intents.subscribe {docId}` for the mounted desk
+  and answers every intent through `objects.intent.answer`.
+  - Reads run over `AgentReadApi`.
+  - Acts commit as ONE transaction, `{undoable: false, meta: {run, intent}}`, with their inverse, so ⌘Z skips them
+    (OB-D11 A).
+  - An undo applies only while the object holds what the act set; otherwise it answers `conflict`.
+- **`held`.** It refuses act, remove and undo, and lets a read or an open pass, saying `heldByUser` (OB-L5).
+- **The handlers.** `agent-kinds/{note,print,board,minimat}.ts`, with a test pinning `DESK_KINDS`'s literal types to
+  ICE's constants, and handlers to declarations both ways.
+- **The frozen desk, decided.** A place under a cover is real. `place` and a remove's undo call `world.sync()` once,
+  the frame's first step alone, so a parked desk costs no frames. The answer says `onScreen: false`.
+- **The review's findings 1–3, each red first** (`004ca151a`, then `8ba14c4e9`):
+  - a removed object goes back into what it lay in, or answers `conflict` when that has gone;
+  - an intent at or past `expiresAt` applies nothing;
+  - `title` is used (`DeskKind.titleProp`, the mat's name) or refused in words.
+- **Finding 4** is a comment that claimed too much; the applier's header now says which commits carry `meta`.
+- **An agent's place goes on the board, whichever frame the person is in** (`25e77b642`, then `3a0fdd4e8`). `onScreen`
+  is honest inside a mat too.
+
+**The gap the review left: provenance.** A place, and a remove's undo, go through ICE's `ops.spawnWidget`, which drops
+`meta`, so those two commits carry none (the header at `applier.ts:51`, at `35f292d4c`). An ICE petition (let
+`SpawnWidgetOpts` carry `meta`) is owed.
+
+**Stubbed.** Nothing at the land; the presence feed it reads is OB-4's.
+
+**The proof.**
+- field-app desk-agent-kinds and desk-agent-applier (5 and 26 at the first green); contracts plugin-agent; tsc on
+  field-app (no errors in these files, as each commit says) and contracts; biome; check:walls.
+- Each red ran red first (the review's: 7 failed, 27 passed).
+- Then the two whole runs.
+
+**Not covered.** Only a real window can prove the desk's half under a cover:
+- its first frame after a thaw draws the object in place, without a GPU error;
+- `coverRecords` shows no frame or submit under the park across a place;
+- the person's undo works there.
+The world's half is tested headlessly.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## OB-3d, with PU-J — the door names a run's helper by a root on the floor (M371)
+
+(2026-11-09; eleven commits, 78 paths +5765 −153, of which `1951dff2a`'s +4379 is mostly regenerated JSON Schema:
+`1951dff2a`, `c8f9548a2`, `3297d6563`, `329ca61dc`, `1c4719e63`, `4a2241e4b`, `4f7c3eeaa`, `4e1f6eeb7` (PU-J),
+`6f284a776`, `054a9a6bd`, `02a449415` = `35ff8a6fb`…`ad4670c71`. fieldd's naming green and its entering red and green
+are folded into OB-4's `c630028d1`.)
+
+**What landed.**
+- **The wire.** `NativeDoorOpen.root`, `native.door.roots.set` and `.clear`, on the management channel only (EL7).
+- **The floor** (`329ca61dc`).
+  - `roots.set {rootId, pid}` reads the pid's start from the kernel. It refuses a pid it cannot read (`pid-unreadable`,
+    pid 1 included) or one another root holds (`pid-held`).
+  - The walk matches a root by pid AND start. A pane anywhere on the chain wins over a root, so a caller that reaches a
+    pane resolves as before.
+  - A root is dropped on `.clear`, or by `prune` when its process is gone or its pid is reused.
+  - A root in hand skips the census round.
+  - The door's kernel rules (`judge`, uid, delegation) are untouched.
+- **fieldd.**
+  - It names a run's helper root, and the door maps it to the run.
+  - A birth that has not verified is listed the agent rows, and its calls answer `unavailable` (`entering`).
+  - The helper hook cannot reject a launch.
+  - A run's end clears its root on every way out (`4a2241e4b`, then `4f7c3eeaa`: `closeRun` had removed the entry
+    first).
+- **PU-J** (`1c4719e63`, then `4e1f6eeb7`).
+  - A typed launch passes `forRun`'s briefing with `briefingRefusal: "withhold"`, so a person's own `--mcp-config`
+    never fails their launch.
+  - A receipt's `withheld` is logged once (`fieldd.agents.typed_briefing_withheld`) and never reaches the pane.
+- **The review's three, each red first** (`054a9a6bd`, then `02a449415`):
+  - a briefed typed launch that fails for what a briefing could cause is made once more with no briefing under a fresh
+    identity;
+  - a person's own `[mcp_servers.vibefield]` (`CONFLICTING_LAUNCH_FIELD`) is taken like item 124's refusal;
+  - `runForRoot` answers only attempts fieldd itself named.
+- **Docs** (`6f284a776`): `api.html`'s `native.door.*`, `architecture.html`'s door row, a dated correction in
+  `spark-briefings.md`, and the `AgentOffers.spark` comment in `contracts/src/agent-catalog.ts`.
+
+**Corrected later.** Corrected by `3016039a3`, told in the OB-3d correction entry. Also carried later:
+- `e7a8e3500` (item 443: the two door tests stop their floor);
+- rider `92700d14e` (the four root fixtures in the golden map);
+- 316 (`24660ba07`: the catalog projection's source hash, which the docs commit's comment edit left stale);
+- custody's `7728e59a7` (`nameAgain`), told in custody's entry.
+
+**At the pin, read 2026-11-18 in the installed 0.4.2 packages.** Claude declares `mcpServerProcess` `terminal`; Codex
+declares `run-helper`; and Grok declares `run-helper` too. `puppeteer-builtin-providers`' `grok` row carries
+`GROK_BRIEFING_CAPABILITIES`, ACP's capabilities with `mcpServerProcess: 'run-helper'` over ACP's own `external`;
+fieldd reads that value (`daemon.ts:1509` at `fa6c1ea15e8b`). So, at that pin:
+- Claude Code holds the door by its pane;
+- a Codex or a Grok plain run holds it through its helper root;
+- none but Claude's can be a spark (corrected by `3016039a3`).
+*Corrected 2026-11-18:* `c5abfe184`'s own message, a carried commit, says Grok's servers run `external`; that was wrong
+when it was written. A commit message cannot move, so its correction lives here; the test comment it shaped
+(agent-runtime.test.ts:2075) is owed a dated correction at its source (item 528).
+- **What holds the `run-helper` path.** By the capability's value: agent-briefing.test.ts's "names a run's helper
+  process as it names a pane's" and "gives a harness with no allowance field the door and no allowance", the second
+  Grok's own shape (servers, no allowance); and its spark refusal of `run-helper` (the CP-1d `it.each`, and
+  `sparkFactsRefusal` in the CP-5a row "exports the one predicate"). Never by the agent's id: the helper hook, which
+  every birth's ingress carries whatever the agent declares (agent-runtime.ts's `identity()`).
+  agent-door-launch.test.ts's OB-3d rows test the hook with no provider, and agent-session.test.ts's real-floor row
+  runs it on `scripted`, which declares no briefing. Grok rides the same code path as Codex.
+- PU-J is forwarded at 0.4.2: the runtime's `prepareInvocation` passes the briefing and `briefingRefusal` to
+  `prepareSession`, and the receipt `briefing: {applied, withheld}` comes back, with the adapter's `briefingWithheld`
+  folded into its `withheld`; `puppeteer-core`'s `HostIngress` declares `onHelperProcess`. Stale at their sources at
+  `fa6c1ea15e8b`, and owed a correction there (item 528): the door's docs from `6f284a776`; the comments at
+  `agent-door-launch.ts:87` and `:180`; and the test comments at agent-briefing.test.ts:33 (with its cast) and
+  agent-session.test.ts:543, which still describe the 0.3.3 pin.
+
+**The proof.**
+- `cargo test -p field-native --lib services::door` 23; `--test fixture_parity native_door` 1; `--test door` 10, two of
+  them on a real floor.
+- clippy `-D warnings` and rustfmt clean.
+- fieldd tool-plane-door, tool-plane-service, agent-briefing, agent-gateway and agent-door-launch (118 together at
+  PU-J) and `agent-session -t OB-3d` on the real floor.
+- field-app new-spark; `check-agent-catalog --self-test`.
+- Each red ran red first.
+- Then the two whole runs, test:rust in both.
+
+**Not covered.**
+- No live Codex or Grok helper has dialled the door. Grok's adapter says its leader's spawning of MCP children "has NOT
+  been observed against a live Grok". No real typed Claude or Codex launch has taken the briefing.
+- A fieldd restart forgot the attempts it named, so a helper that outlived fieldd was served nothing until a new
+  attempt named one. Closed since 11-09 for a re-attached run by custody's `7728e59a7` (`nameAgain`, its entry). A Grok
+  leader's lifetime across a restart is unobserved.
+- A Codex or Grok helper does not survive a graceful app restart: the run resumes with a new helper and a new root.
+- Item 528: a dated correction at each source where the door's docs, two comments and three test comments
+  (agent-runtime.test.ts:2075, agent-briefing.test.ts:33, agent-session.test.ts:543) still describe puppeteer 0.3.3, or
+  say Grok's servers run `external`.
+- A Codex run whose door cannot start comes up with no VibeField tools, and nothing yet tells the person.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## OB-4 — who is at work on what, the person's hand, one holder at a time, the agent's own undo; with OB-3/OB-4's twelve review findings (M372)
+
+(2026-11-09; three commits, 61 paths +3601 −395: `c630028d1`, `e1d7b9735`, `4bcfb3ad4` = `ea7807058`…`35dce4561`.)
+
+**`c630028d1` is one commit for a reason.** The partial commits it replaces did not build one at a time: a zero-context
+patch put hunks of `tool-plane/index.ts` and `daemon.ts` at the wrong lines. It folds eleven:
+- OB-4's red and green;
+- OB-3b's serving;
+- OB-3d's naming green, and its entering red and green;
+- OB-1b's landing red and green;
+- two format commits (OB-3b's import order, OB-3d's last hunks);
+- OB-1a's one line.
+Its tree is the tip of that range's, byte for byte.
+
+**What landed.**
+- Per-agent presence on each object.
+- The person's hand over everything (OB-L5).
+- One holder at a time for a one kind.
+- The agent's separate undo (OB-D11 A): bounded per object and holder by `UNDO_KEPT`, and per board by
+  `OBJECT_ROOM.UNDO_BOARD_CEILING`.
+- **The twelve, each red first** (33 failing rows across five files in `e1d7b9735`; green in `4bcfb3ad4`):
+  1. a refusal carries no `structuredContent`, and its fact leads the text (the older rooms too, through the shared
+     helper);
+  2. a late settle revives no departed agent, and `canvas_place` grants no ended run;
+  3. `canvas_place` checks the store before the window;
+  4. a one kind's lease is the holder's;
+  5. an intent carries `expiresAt`;
+  6. a second undo in flight is refused;
+  7. a shared `$id` compiles, and an unknown format or keyword fails at compile;
+  8. a guide is cut by bytes at a whole character;
+  9. an outer schema failure names its path;
+  10. undo is bounded;
+  11. a plugin kind with no agent half is not placeable;
+  12. a plugin's guide says whose it is.
+
+**Corrected later.** `0eec5d71d` (item 476: the desk's two subscriptions declare their admission) and 308 (`35aaf060b`:
+line-model's FR-2 row, red since this commit served the desk room), each in its own entry.
+
+**The proof.**
+- At `c630028d1`: fieldd tsc clean, and the named rows of OB-3b, OB-3d and OB-4.
+- At `4bcfb3ad4`: contracts objects, tools and registry 89; fieldd's 13 named files, 224 tests; `agent-session -t
+  'CP-1d and MT-0'`; field-app desk-agent-applier 36; tsc; biome.
+- Then the two whole runs.
+
+**Not covered.**
+- An act past its deadline, sent before the window had `expiresAt`, is still lost to the undo.
+- Undo offers live in fieldd's memory.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+---
+
+## OB-UI — the card's bloom: a card let go on a pane opens a ring of its faces, held open, and lands the one you choose (M373)
+
+(2026-11-18; seven commits in ob/ui's piece, cut by ow-design on `ob/ui` on 2026-11-09 and -10 and carried onto main
+`8064bbdec` for train 10: `2856a8fc3` (`476cfaabc` on the cut, "OB-UI (doc): the card's bloom, DESIGN.md first"),
+`a7ed76ebb` (`1ab401bcc`, the red), `95743eaa2` (`8e5352e2d`, the green: the bloom on a fixture), `a15af5592`
+(`09c1cae50`, the red: the carried card as the hub), `b6801e2da` (`bba16596b`, the green: the hub and the landing
+table), `0d817da48` (`9e1b3f8d1`, item 309's doc) and `c5764f710` (`1826093aa`, item 309's code).)
+
+**What it holds.**
+- **DESIGN.md first.** §8 "The hand" gains the bloom, by OB-D2 and OB-D3 (settled by James 2026-11-06) and OB-D12 A
+  (ruled 2026-11-09: on the drop, held open), as Card Stock round 5 drew it, in the spawn bloom's grammar:
+  - the hub at 0.42, the ring's geometry, the buds and their labels;
+  - choosing by direction or keys, the words, the veil, the motion and reduced motion.
+- **The tokens.** Four, one value for both themes, because the bloom always sits on the dark veil:
+  `--vf-card-bloom-veil`, `-ground`, `-bud` and `-ink` (design kit tokens.css).
+- **The bloom** (field-app `frame/cards/bloom/`):
+  - `bloom-geometry.ts`, pure: the spawn bloom's own numbers, written out (puppeteer's table, which the package does
+    not export; card-bloom-geometry.test.ts reads that file so the two cannot drift); the ring opening up, turned only
+    for the window's edges; direction, the dead zone and open ground; the words' size and place.
+  - `CardBloomView`, controller-free:
+    - every face in the card's order, the hub first;
+    - a face that cannot land is drawn faint, with the landing table's reason;
+    - arrows, Return, digits, Escape, direction and click choose; open ground lets go;
+    - the click that the drop's own release makes lands inside the 90 ms settle and takes nothing.
+  - `open-bloom.tsx`, `openBloom(card, model, at, choose) → {close()}`: the seam's one call.
+  - `bloom-model.ts` re-exports card-landing.ts's types, so the seam has one shape.
+- **The drop.** At OB-1b's `"hub"` phase the carried card stands straight where it was let go, centred on the point,
+  at 0.42, on the island curve, and says nothing over itself. `card-drag` calls `openBloom`, so a real drop opens the
+  real bloom.
+- **The catalog** mounts the shipping view with a fixture adapter (`CardBloomPlate`), never a copy.
+- **Item 309, before any landing.** The four inks were first named `--vf-bloom-*`, the spawn bloom's own name, which
+  Godview's W5 sweep refuses in any host stylesheet (godview-monitor.test.tsx). They are renamed `--vf-card-bloom-*`:
+  first in DESIGN.md, with a dated note, then in tokens.css and card-bloom.css (21 lines). The values are unchanged,
+  and no script reads the inks by name.
+- **What a person sees.** Item 400's entry (M306) owed this: "The card's bloom (OB-D12) waits for OB's custody fix.
+  Until it lands, a card let go flies home or plays directly, as before." With custody landing in the same train (the
+  objects stack's one piece), a card let go on a pane opens the bloom and lands the face chosen.
+
+**The rows.**
+- `field-app/test/card-bloom-geometry.test.ts`: the numbers equal puppeteer's own table; the ring and its turn;
+  direction, the dead zone and open ground; the words' size and place.
+- `field-app/test/card-bloom.test.tsx`: every face in order, faint with the table's reason, every way of choosing, open
+  ground, the 90 ms settle; the hub's stance.
+- Item 309's rows when it was cut (2026-11-10, James's Mac, nice 19): field-app's DESIGN.md readers 649 passed; the
+  stylesheets' 33 readers 895 passed; godview-monitor 107 of 107.
+
+**The proof.**
+- The whole verify, on a Mac mini, at the piece's tip `35f292d4c815` (71 on main `8064bbdec`): v-obui-c10e, 2026-11-18
+  00:11:34Z → 00:20:52Z, `pnpm verify` exit 0 in 558 s, all stages.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- Not looked at in a window, and no pointer has been driven through it. The rows hold the view and the geometry, not
+  the feel.
+- No row runs a drop into the real `openBloom`: card-drag.test.tsx holds the drop's seam with `open-bloom` mocked.
+- `2856a8fc3` through `0d817da48` are red at godview-monitor's W5 row (`--vf-bloom-*` in a host stylesheet), and
+  `c5764f710` mends it.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## Item 293 — a Live card sent to a sleeping spark is handed to the run its wake started, never the ended one (M374)
+
+(2026-11-18; two commits in ob/ui's piece, cut by ow-design on `ob/ui` on 2026-11-10: `2e690b429` (`6fb238b2f` on the
+cut, the red, chat-view.test.tsx alone) and `f3302d89f` (`d0c7805fb`, the green: sparks-feed.ts and ChatView.tsx).)
+
+**What it holds.**
+- **Before.** A Live card played on a sleeping spark's composer and sent by Return named the spark's ended run.
+  - Send woke the spark first (ChatView.tsx), then handed through `handToSpark`.
+  - That run came from `whenSparkEntry` (sparks-feed.ts), which resolves at once on the feed's old entry.
+- **Now.** The feed's opener (`SparkOpener`) answers the record the wake left (`Promise<SparkSummary>`, the
+  `compose.sparks.open` answer). Send keeps it as `woken`:
+  - A send that woke the spark hands to `woken.session.runtimeRunId`.
+  - With no session, it hands to none: the line says "Not handed over — this spark has no session yet", and fieldd is
+    asked nothing.
+  - A spark already awake reads the feed as before.
+  - Unchanged: thread-send.ts, and the thread line's Wake.
+- **What a person saw before**, on this stack: nothing drawn. fieldd's hand skips a run's state when `sparkOf(run)`
+  names a spark (objects/desk-objects.ts), so the ended run's name was absorbed and the spark was granted. Now the
+  hand names the run the wake started. fieldd's grant is the spark's either way (desk-objects.ts `holder`).
+
+**The rows.**
+- `field-app/test/chat-view.test.tsx`, "Chat, live", a new describe, with Kiwi asleep and its one own run ended:
+  - Row 1: the hand names the run the wake answered, the send is queued, and nothing on the line speaks of a hand.
+  - Row 2: a wake that answers no session gives the line's words, and fieldd is asked nothing.
+- Red first, both rows at their `asked` assertions, each receiving the ended run. Then green: chat-view 50 passed;
+  the two files' 42 readers green but for two rows that were not this item's (items 303 and 304).
+
+**The proof.**
+- The whole verify, on a Mac mini, at the piece's tip `35f292d4c815` (71 on main `8064bbdec`): v-obui-c10e, 2026-11-18
+  00:11:34Z → 00:20:52Z, `pnpm verify` exit 0 in 558 s, all stages.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- Row 2 is the defensive case. On fieldd's SparkService no path answers a wake with no session.
+- Row 2's words put "session" in front of a person (`noRun`, frame/cards/hand-over.ts:36). They are on the Insides on
+  Screen errata list (draft/insides-on-screen/errata.md), owed there.
+- Not looked at in a window.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## ob/ui's riders — seven test, fixture and projection lines that follow the stack's own slices (items 303, 308, 316) (M375)
+
+(2026-11-18; seven commits in ob/ui's piece, cut on `ob/ui` on 2026-11-10, each on its own item or rider word. None
+moves a product line. Each pin was red on ob/ui from the commit that grew what it pins, and no row of the branch had
+run it until a wider row did.)
+
+**What it holds.**
+- `5f23298d2` (`194801564` on the cut, item 303): chat-thread-items.test.tsx's Send row names Send's seven deps. Since
+  OB-1b Send also passes the card road's two hands, `hand` (the grant) and `handFileKept` (the kept file).
+- `48b65968b` (`35aaf060b`, item 308): line-model.test.ts's FR-2 row expects `agent: "claude"` on its one agent pane.
+  Since OB's join (`c630028d1`: OB-3b, OB-3d, OB-1b, OB-4), linePanesOf names an agent's pane by its provider.
+- `c83be63b1` (`24660ba07`, item 316): `packages/contracts/gen/agent-catalog.json` records its source's hash again. A
+  comment edit in `src/agent-catalog.ts` regenerated nothing, so preflight's R23 would have judged the projection
+  `catalog-stale` and gen:check would have been red. This is the generator's own one line; no catalog row moves.
+- `2abffc37d` (`645c82ea7`, OB-2): `contracts/fixtures/plugin-manifest.objects.json` in biome's own print (its agent's
+  two faces on one line). This was the first V's one lint red; the JSON value does not move.
+- `1d9736e71` (`92700d14e`, OB-1b and OB-3d):
+  - fixtures.test.ts maps the four `native.door.roots.set` / `.clear` fixtures to their mgmt.ts schemas;
+  - shell.test.ts pins IPC_CHANNELS at 43, with the hand's three doors (`handPictureWrite`, `handFileWrite`,
+    `handFileKept`), which the spec table already names (electron-shell-refactor.md §6.2).
+- `589e532b9` (`51e1037c7`, OB-2): desk-clock's DK-7 pin (broken.test.ts) counts five verdicts. The fifth is its one
+  fixture's agent half.
+- `9f59858c0` (`9a3d6f4d7`, OB-2): the playground's DK-7 pin of the clock (runner.test.ts) counts five kind rows and
+  four passes.
+
+**The rows.** Each ran at its cut, on James's Mac at nice 19 (the commits' bodies):
+- chat-thread-items 26 passed; line-model 20 passed;
+- contracts' agent-catalog.test.ts 16 passed, and gen:check's chain, every command but `cargo typify` (not run on the
+  Mac), rc 0;
+- contracts whole 1987 passed (fixtures 726, shell 70);
+- desk-clock whole 38 passed; plugin-playground whole 68 passed;
+- biome over every path the branch adds or changes, no fixes.
+
+**The proof.**
+- The whole verify, on a Mac mini, at the piece's tip `35f292d4c815` (71 on main `8064bbdec`): v-obui-c10e, 2026-11-18
+  00:11:34Z → 00:20:52Z, `pnpm verify` exit 0 in 558 s, all stages. That covers `cargo typify` and R23, which the Mac
+  rows left to it, and gen:check whole.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- Nothing a person sees moves, and none was looked at in a window.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## ob/ui on train 10's base — the door tests stop their floor (item 443), and the desk's two subscriptions are admitted (item 476) (M376)
+
+(2026-11-18; two commits in ob/ui's piece, made by ow-design on 2026-11-17 after ob/ui was carried onto main
+`8064bbdec`: `33a9abc77` (`e7a8e3500` on the cut, field-native/tests/door.rs alone) and `0982f511a` (`0eec5d71d`,
+contracts' subscription-admission.ts and its test). Each mends one red of the carried stack's lane V. The two gates
+landed on main after the OB slices were cut.)
+
+**What it holds.**
+- **The carry.** ob/ui (79 commits over `8fffb13c7`), less the 14 that landed whole in M306, is 65 commits. They were
+  carried by cherry-pick onto main `8064bbdec`, every commit keeping its message and author. Prepared files resolved
+  two steps (OB-0's contracts objects.ts and its test; the bloom's ChromeSection caption), and two paths were already
+  on main from M306 (contracts index.ts; Cards.tsx), so those three commits' changes differ from their ob/ui originals.
+- **`33a9abc77`, item 443's gate (M311).** check-floor-shutdown holds every field-native test that boots a floor to end
+  with `daemon.shutdown().await`. It refused two OB-3d door tests in check:walls on the carry's first lane V
+  (v-obui-c10, 2026-11-17 19:45:27Z → 19:45:32Z):
+  - `a_door_from_a_named_helper_says_its_root_and_a_cleared_root_says_nothing`;
+  - `a_pid_the_kernel_cannot_read_or_another_root_holds_is_refused_by_name`.
+  - Each now stops its floor before its TempDir drops. Two lines; nothing else moves.
+- **`0982f511a`, item 476's census.** Every product `.subscribe` row of METHODS needs a row of SUBSCRIPTION_ADMISSION.
+  OB-3 and OB-4 had added two without one, so the census was red on the second lane V (v-obui-c10b, at `e7a8e3500` on
+  the cut, 21:26:47Z). The same V was red at fieldd's agent-runtime spark case too; the spark-gate entry's first commit
+  (`c5abfe184` on the cut) mends that one.
+  - `objects.presence.subscribe` is `one`: its handler reads no param and answers one whole list.
+  - `objects.intents.subscribe` is `bounded`, bound 4. Its identity is a board's open id, and the handler opens a
+    board's feed without asking whether the board exists, so it cannot be a `things` row. A window follows the one
+    desk mounted now: 1 held, 2 for a moment at a board switch, twice that under StrictMode in a development window.
+  - The figures move with the table, where they are stated: 34 closed keys, 300 holders at most on one connection. A
+    row pins the new bound and that two boards share its key.
+- **What a person sees.** Nothing moves. The bound of 4 is never exceeded: each window has its own connection
+  (field-app mount.tsx) and follows one desk, and a development window at a board switch holds 4 at most.
+
+**The rows.**
+- `node scripts/check-floor-shutdown.mjs` on the mend's tree: "clean — 162 floors booted in 37 field-native test files;
+  all stopped" (FAIL on the same two before it).
+- contracts' `subscription-admission.test.ts`: 19 of 19 on James's Mac before `0eec5d71d` was committed on the cut,
+  and 19 of 19 in v-obui-c10c.
+
+**The proof.**
+- v-obui-c10c, at `c5abfe1845f0` on the cut (68 on main: the two mends, and one commit above them, the spark-gate
+  entry's first commit, which mends v-obui-c10b's other red), 2026-11-17 21:40:17Z → 21:49:33Z: `pnpm verify` exit 0
+  in 554 s, all 16 stages.
+- The whole verify, on a Mac mini, at the piece's tip `35f292d4c815` (71 on main `8064bbdec`): v-obui-c10e, 2026-11-18
+  00:11:34Z → 00:20:52Z, `pnpm verify` exit 0 in 558 s, all stages.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**For the records.** DECISIONS' item 476 row names the bounded methods by example (diagnostics 4, index.session 8, a
+plugin's `x.` 32). If `objects.intents.subscribe` 4 should be named there too, the records add it.
+
+**Not covered.**
+- A window's intents feed that is refused or closed ends silently. It is only logged
+  (`renderer.desk.agent_door_refused`) and never retried, so an agent is told its open desk "is not open". That is ITEM
+  521, after train 10. Its root option is for the handler to answer NOT_FOUND for a board fieldd does not know, making
+  intents a `things` row with no method-wide bound.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## OB-3d on this stack: a run's own helper holds a plain run's door and no more — a spark stays a pane's, and R23 is main's (M377)
+
+(2026-11-18; three commits in ob/ui's piece: `1afacbeb5` (`c5abfe184` on the cut, 2026-11-17, fieldd
+agent-runtime.test.ts alone), `4d330e95a` (`3016039a3`, OB-3d's correction of 2026-11-09, ob-foundation's, eight files)
+and `28dfe2961` (`f67b4dc24`, 2026-11-17, agent-runtime.test.ts alone). The correction is told here, once. OB-3d's own
+entry, ob-foundation's, points here for it.)
+
+**What it holds.**
+- **Against main, the spark gate does not move.** `sparkFactsRefusal` (fieldd agent-briefing.ts) and field-app's
+  `canBeSpark` fallback require `terminal`, as on main.
+- **What does move.** `forRun` alone reads `doorCanName`: the plain run's door accepts `terminal` or `run-helper`, and
+  needs only `mcpServers`. At puppeteer 0.4.2 codex's `mcpServerProcess` is `run-helper` (one private app-server per
+  run, named to the host through `HostIngress.onHelperProcess` before a thread opens). So a codex run gets a plain
+  run's door and is refused as a spark (`spark-door-identity-unsupported`), even under a row that claims it.
+- `scripts/check-agent-catalog.mjs` (R23) is main's blob. `agent-catalog.ts`'s `AgentOffers.spark` comment and
+  `docs/agent-plane/spark-briefings.md` say so, and `gen/agent-catalog.json`'s source hash follows.
+- **Why it rides here.**
+  - ob/ui had carried OB-3d's first brief, which widened the spark gate to `run-helper` and loosened R23
+    (+24 −10 against main). `1afacbeb5` had moved the spark case onto that widened gate.
+  - The correction lived only on ob-foundation's line, as the custody carry's row 0. Custody's first whole verify to
+    reach its tests, v-custody-t10e (2026-11-17 23:21:55Z → 23:29:17Z, exit 1), was red at `1afacbeb5`'s OB-3d case.
+    Read against it, ob/ui landing alone would have loosened R23 on main with nobody having ruled it, while ROADMAP
+    holds Codex's spark claim for CP-5c's own step.
+  - VF-PM ruled that the correction stands. On the cut, `3016039a3` is that same commit object; the train carries it
+    as `4d330e95a`, and `28dfe2961` is the row that follows it.
+- **The spark case** (`agent.providers says spark as the hatch would`) keeps three halves on rows that mean them:
+  - claimed and passing: claude, `terminal`;
+  - claimed on a pin that lacks the facts: grok (`1afacbeb5`'s message says its servers run `external`; at 0.4.2 they
+    run in a run helper, and grok's pin still lacks a spark's facts);
+  - unclaimed: codex, the table's own false.
+  - A second case says a codex claim is refused: a run helper holds a plain run's door, never a spark's.
+- **What a person sees.** Nothing moves. The catalog claims spark for claude alone, and fieldd offers a row's spark only
+  where the table claims it.
+
+**The rows.**
+- `1afacbeb5` mends the second red of v-obui-c10b (fieldd agent-runtime.test.ts, `offered("codex")` true where false was
+  wanted). v-obui-c10c is green at `c5abfe184` on the cut (2026-11-17 21:40:17Z → 21:49:33Z, exit 0, 554 s).
+- `4d330e95a`'s own, at its cut on ob-foundation's line:
+  - red first (agent-briefing 2 failed, new-spark 1 failed), then agent-briefing 26 passed and new-spark 16 passed;
+  - `check-agent-catalog.mjs --self-test` 30 PASS.
+- At `3016039a3` on the cut, read: R23's script is main's blob, and gen's source hash is the sha256 of its
+  agent-catalog.ts.
+- At `3016039a3` on the cut the piece is red at agent-runtime's OB-3d case (the second case `c5abfe184` added, still
+  wanting codex true), as v-custody-t10e shows on the custody line, which holds `c5abfe184` then `3016039a3` with the
+  same file. `28dfe2961` mends it. No V ran at `3016039a3` on this piece.
+- `28dfe2961`'s bytes ran on the custody line as custody-tests-t6, GREEN (2026-11-17 23:53:04Z → 23:53:24Z):
+  agent-runtime.test.ts 43 passed, agent-briefing.test.ts 26 passed.
+
+**The proof.**
+- The whole verify, on a Mac mini, at the piece's tip `35f292d4c815` (71 on main `8064bbdec`): v-obui-c10e, 2026-11-18
+  00:11:34Z → 00:20:52Z, `pnpm verify` exit 0 in 558 s, all stages, preflight's R23 and gen:check among them.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- No Codex run was started as a spark or as a plain run with the door; that is CP-5c's step.
+- `docs/agent-plane/spark-briefings.md`'s OB-3d correction still says Codex and Grok "declare `run-helper` on
+  puppeteer's `ob/foundations` branch, not yet on the installed pin (0.3.3)". The pin is 0.4.2, and both codex and grok
+  declare `run-helper` there: grok's `GROK_BRIEFING_CAPABILITIES` overrides ACP's `external` (puppeteer-adapter-grok
+  0.4.2, dist/launch/briefing.js, read in the installed package on 2026-11-18). A dated correction at its source is
+  owed (item 528, after this train). `1afacbeb5`'s message says grok's servers run `external`; that is wrong, and the
+  correction is carried, dated, in OB-3d's own entry. Codex's 0.4.2 fact is read from `1afacbeb5`'s message and its
+  green case.
+- Not looked at in a window.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## OB-3a's take-back and the agent's undo are audited in the audit's own grammar — `objects.take_back`, `objects.undo_agent` (M378)
+
+(2026-11-18; one commit in ob/ui's piece, `fca0ef6c8` (`35f292d4c` on the cut, 2026-11-17, "OB-3a (fieldd): the
+take-back and the agent's undo are audited in the audit's own grammar — `objects.take_back`, `objects.undo_agent`"), in
+fieldd's `src/objects/doors.ts` and
+`test/objects-doors.test.ts`. The bytes are ob-foundation's patch, ruled ob/ui's own commit by VF-PM, 2026-11-17
+23:55Z.)
+
+**What it holds.**
+- **The cause.** OB-3a (`a430b8af1`, in ob-foundation's slices) audited the person's take-back as `objects.takeBack`
+  and the agent's undo as `objects.undoAgent`. `AuditActionV1` (`^[a-z][a-z0-9_]*(?:\.[a-z][a-z0-9_]*)+$`, on main
+  since 2026-07-23) refuses an upper-case letter.
+- **The effect.** The real writer refused the attempt record before the act, so every take-back through a real daemon
+  answered AUDIT_UNAVAILABLE and did nothing. The writer's refusal was read in a test run on a Mac mini:
+  AUDIT_UNAVAILABLE, code ZodError, operation write.
+- **The fix.** The two audit actions are spelled as main spells its own (`agents.set_active`): `objects.take_back` and
+  `objects.undo_agent`. The RPC method names are unchanged.
+- **Why the rows missed it.** objects-doors.test.ts's fake audit parsed nothing. It now runs
+  `AuditActionV1.parse(mutation.action)` before the effect, as the real writer holds it, and the take-back's
+  expectation follows.
+- **What a person saw before.** No surface ever said "taken back".
+  - The window's take-back door (field-app frame/cards/hand-over.ts) catches a refusal and says nothing.
+  - Its one caller is the Live play's roll-back (godview/pane-card-target.ts). When a play cannot finish (a hand
+    refused partway, the pane moved, the paste refused, the pane not taking the words), it takes back what the play
+    had granted.
+  - So the person saw the play's failure note and believed nothing was handed. The agent's run KEPT its grant to the
+    objects already named, and could act on them through the desk tools while the grant stood: no take-back in the
+    window could end it.
+  - `objects.undoAgent` had no caller in the window.
+- **The sweep, by reading ob/ui's whole diff against main.**
+  - Of every `action:` literal the stack adds, these two were the only ones outside the grammar; `objects.hand`
+    passes.
+  - The tool plane's `tools.${name}` for the desk room's `object_*` tools passes.
+
+**The rows.**
+- `fieldd/test/objects-doors.test.ts`, its fake parsing every action: 9 passed in v-obui-c10e.
+- The same change on the custody line, custody-tests-t8, GREEN (2026-11-18 00:06:09Z → 00:06:44Z):
+  `custody-boot.test.ts` 21 passed, both take-back rows among them, through the real audit writer; the custody line's
+  objects-doors.test.ts (16 tests) 16 passed.
+- biome format and lint clean on both files, their parents' blobs as the control.
+
+**The proof.**
+- The whole verify, on a Mac mini, at the piece's tip `35f292d4c815` (71 on main `8064bbdec`): v-obui-c10e, 2026-11-18
+  00:11:34Z → 00:20:52Z, `pnpm verify` exit 0 in 558 s, all stages.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- **A take-back is refused while the audit cannot write, item 526.** A take-back that the daemon refuses for any
+  other reason (the audit truly degraded, a full disk) still leaves the grant standing, and the window still says
+  nothing. The door was built against main's revocation law (daemon.ts: "Revocation is safety-preserving … may never
+  leave a bearer live") and the design's "A take-back always takes, even when the disk refuses the write". Item 526
+  fixes it after train 10:
+  - the take-back always takes, and its evidence is owed;
+  - the window says what the agent still holds, with one way to take it back.
+- Two other fake audits the stack adds or changes (`tool-plane-desk.test.ts`, `tool-plane-service.test.ts`) still
+  parse nothing. Their actions are `tools.*` names inside the grammar, so nothing is hidden today; item 526 holds them
+  to it.
+- On this piece alone no row takes back through the real audit writer: custody-boot.test.ts is the custody line's.
+- Not looked at in a window: no Live play was driven to its roll-back.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## OB custody — the daemons' secrets are handed to them, not left in files a same-user agent can read (M379)
+
+(2026-11-09 → 2026-11-17; 111 commits, 206 paths +27865 −453, of which the gen commit's 50 files are generated schema
+and Rust; on the OB foundations and ob/ui's re-cut: `3248f6a0b`…`f1ac537af`, listed at the end with each subject.)
+
+**What a person and an agent get.**
+- A person: nothing new to see or do. No sheet, act or sentence about keys, a keychain, custody, starting over or
+  VibeField's own restarts reaches a person (OB-D23 and OB-D24 withdrawn by James's rule, 2026-11-10 00:46Z). A sealed
+  start whose keystore does not answer fails with the splash's existing words and Retry.
+- **Two levels, decided by what each process is handed and never read back from a file.**
+  - `sealed`: a signed macOS release build (macOS, packaged, and trust's own code identity not null). The shell keeps
+    one root under the OS keystore and hands each daemon pair its secrets on stdin.
+    - fieldd writes no `shell.token`.
+    - The floor makes, reads and removes no `native/pairing`.
+    - The desk's grants file is signed under a key handed to fieldd and on no disk. Its count is told, at each change,
+      to two survivors outside fieldd (the floor and the shell's supervisor); one that does not answer is a log line.
+  - `files`: every dev run, smoke and unsigned or ad-hoc package. Today's secrets stay in today's files, byte for byte,
+    and no keystore is made (OB-D20 A: the land does not wait for a signed build).
+  - At both levels: the grants move to one counted file; OB-D18's settle and launch memory apply; every re-attached
+    run's root is named again; and `product.json`'s level, one boot log line and the marks door are new.
+- **An agent on the same user account,** at `sealed`:
+  - the shell token, the floor's pairing secret and the desk's grants key sit in no file it can read; other stores'
+    keys are item 276's;
+  - the shell's door is paired by MAC, not borne by a token;
+  - fieldd and the shell's supervisor ask macOS whose code a child is before they write it anything. The check stops a
+    wrong binary that stays itself, and no more (item 288);
+  - a grants file put back while the daemons run is seen to be stale.
+  - At `files` all of that is as before: the EL7 exposure stands there.
+  - At both levels, a live run that fieldd did not launch and that nothing vouches for is handed nothing ("VibeField
+    doesn't know that agent."), and `canvas_place` and a grant refuse it.
+- **What an agent holds after fieldd restarts** (OB-D18 A).
+  - A plain run's grants end at the settle, vouched or not.
+  - A spark keeps its objects, held again from its next run.
+  - At `sealed`, a run that outlived the restart is named by the floor's started-for entry, never by its record.
+
+**The seams, by slice.**
+- **K, the contracts.**
+  - `custody.ts`: `CustodyHandoff` (one line on fieldd's stdin: `{v, shell, pairing, records, expect?}`),
+    `CustodyLevel` and `CustodyMarksFrame`.
+  - `CUSTODY` in the registries: the env names, the line's bounds, the pairing contexts, the HKDF labels and the marks'
+    bound and pattern. `HANDOFF_WAIT_MS` is 10 000 by K7: a child waits two seconds longer than its spawner's whole
+    check budget, and a contracts row pins that margin.
+  - K2: the grants leave the records for one counted file, and the shell's custody key has a place.
+  - K4: the shell's two audit actions, `shell.custody.root` and `shell.custody.pair`.
+  - K5: the floor's started-for table (a verb, an entry on the hello ack, a bound).
+  - K6: two of the shell's waits.
+- **C1, the shell** (electron-shell `src/main/custody/`).
+  - One root at `LAYOUT.CUSTODY_KEY` under the OS keystore, read once per boot. A start refused while it is unavailable
+    says one constant that names nothing of it.
+  - Each pair is handed its secrets on stdin.
+  - What happened before a pair was up is audited through the first pair as deferred `shell.custody.*` records; fieldd
+    admits them.
+  - A missing or unopenable root is replaced by itself (the old one renamed aside). Main then stops the older pair it
+    can no longer reach: one SIGTERM each, only after codesign says the pid is ours, within one budget. This is OB-D21
+    A, the one exception to WP12 D10, and that pair's sessions end.
+  - Inert at `files`: no keystore is made.
+- **C2, the pairing.**
+  - A fieldd handed custody writes no shell token. The shell's client pairs by an HMAC over the boot's facts and judges
+    the listener's ack (trust's `shellPairingMac` and `shellAckMac`).
+  - The supervisor's sealed spawn.
+  - `tryAdopt` names its credential.
+  - fieldd's verifier checks the MAC with trust's recipe and keeps none of its own.
+  - At a sealed door, a shell credential of any other shape answers as a bad token (UNAUTHORIZED, 1008).
+  - At `sealed`, the supervisor reads a leftover `shell.token` once, only to find and replace a fieldd from before
+    custody. A sealed fieldd removes a stale one, and pairs on loopback only.
+- **C3, the floor's line.**
+  - Under `FIELD_NATIVE_CUSTODY=stdin` the floor reads its pairing as one line on stdin and never falls back to the
+    file.
+  - A sealed fieldd spawns it and hands it that one line.
+  - No child of the crate, and no child of fieldd, is given the floor's stdin or fd 0.
+- **C4, the grants.**
+  - One counted, signed file (`GrantsFile`, 0600, written beside and renamed; one change is one count and one write).
+  - A take-back takes whatever the disk says.
+  - Nothing in objects reads a session's record.
+  - OB-D18 is one rule at the settle.
+  - A refused write, or a lost take-back, is said by a fixed sentence and a code, never a path.
+- **C5, the marks.**
+  - A mark is a name and a number that only rises. The floor keeps the highest under each name in memory and says them
+    in every hello ack.
+  - The supervisor is a mark's second survivor and raises the next hand-off.
+  - fieldd holds a view, tells the floor each rise, and says the view whole to its shell.
+  - A mark past the safe integers reads as the top.
+  - A stopped fieldd's desk store writes nothing afterwards.
+- **C6, trust.**
+  - The custody recipes: HKDF-SHA256, the two MACs, a constant-time compare.
+  - `code-identity.ts` asks `/usr/bin/codesign` whose code a process is. A sealed fieldd asks it of its floor, always
+    with the expected identifier, before it writes it anything.
+  - The supervisor holds its spawn-to-write to one budget.
+  - A refused child "was not shown to be" ours.
+- **§8.1, started-for.**
+  - A sealed floor keeps, in memory, what each terminal was started for, read against the kernel's start.
+  - fieldd remembers what it launched and tells the floor once.
+  - Re-attach reads the floor's table once, and a run it vouches for is named by its entry. Every re-attached run's
+    root is named again (`nameAgain`), at both levels: OB-3d's gap, a helper-rooted run holding nothing at the door
+    after fieldd restarted, is closed.
+  - A spark's wake names the spark it is waking. At `sealed`, launch memory of the run being continued wins over the
+    asked spark.
+- **The joins and the carry.**
+  - The marks stream declares its item 476 admission.
+  - The test roots take item 345's alias parent.
+  - The lock records the two workspace edges to trust.
+  - biome's and rustfmt's layout.
+  - The generated schema and Rust (`pnpm gen`'s 50 files), then the reader's one import.
+  - DESIGN.md §9, one dated amendment on where the desk's grants are kept (`c0173e419`). The stack's comments name no
+    working spec, person or clock (`eb93b789e`), and the bloom opener's comment names DESIGN.md §8 (`9e5644983`).
+  - Four causes the stack's first whole test run found: the hand-off wait's row, the sealed stand-in's torn observe
+    file, the vector's four values, and the sealed door's shapeless credential.
+- **What ob/ui's commits carry, below this entry** (each told in its own entry):
+  - the spark gate back to a pane's (`3016039a3`, `f67b4dc24`);
+  - the take-back's and the undo's audit spelling (`35f292d4c`).
+
+**The rows.**
+- Each code slice (C1–C6, §8.1, K5, K7) landed red first, with the counts its commits give. The contract commits K, K2,
+  K4 and K6 carry their rows with their shapes, and the fd-0 row (`35220cebe`) holds from its first commit.
+- The join rows (`d83fa3579`: one spawn carries the person's PATH and custody, and neither leaks into the other) are
+  pins, shown red by mutation.
+- The shell-pairing vector's values come from the rows' own output, the maker's and the verifier's alike, with two
+  cross-checks from the fixture's recipe.
+
+**Proved.**
+- custody-rust, 2026-11-17, the stack's first compile: the test build exit 0 at 23:04:58Z. Then custody-rust-p1 CLEAN:
+  clippy at -D warnings, 0 errors and 0 warnings; the test build exit 0.
+- The stack's whole runs before its fixes: v-custody-t10 … t10e, each red at one stage, each named in the packet. t10e
+  was red at `test` alone: nine tests, six causes. Each cause was then proven alone on the test Mac (custody-tests t1
+  to t9).
+- **v-custody-t10f** at `aff6287b425a`: GREEN, `pnpm verify` exit 0 in 594 s, all 16 stages, test:rust and gen:check
+  among them, ended 2026-11-18 00:31:38Z.
+- **rows-joinc** at `aff6287b425a`: GREEN, ended 00:38:45Z.
+  - The eight mutations were each red by exactly the rows named, with foreign failures 0.
+  - The eight greens: fieldd-supervisor whole 143, electron-shell whole 3119 and 3 skipped.
+  - The sources went back at their sums, and no ref was written.
+- Its base, ob/ui-c `35f292d4c815`, was GREEN alone in v-obui-c10e (exit 0, 558 s).
+- The train's rehearsal, the piece joined:
+  - v-rehearsal-b at `dde7e69a5968`, 2026-11-18 03:41:21Z → 03:51:23Z, exit 0: sixteen steps run, fifteen printing a
+    header.
+  - kit-rehearsal-b, ended 03:55:08Z: 3,060 rows; Passed 3,056, Skipped 3, Failed 1, the known R4 row (item 522). The
+    kit ran with the piece joined; it did not pass.
+- The train: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not run, and owed.**
+- No build has reached `sealed`: no signed build exists. The daemons' sealed arms ran only in rows, handed their lines
+  by the tests, with the code-identity check stood in for. The shell's sealed half has no real-root row (a stated
+  limit; its proof is a release gate on a signed build).
+  - The witness OB-D20 names is owed: the first sealed Developer ID build, not promoted until the custody row is green
+    on it.
+  - So is the cold signed boot. The check's budget (8 000 ms) and the child's wait (10 000 ms) are the lead's choice,
+    not a measurement: how long the check takes, cold and warm, is owed to the signed build.
+- No real window, and no live agent, has met a sealed door.
+- Not pinned, as the commits say themselves:
+  - the stand-in's race is shown gone by five clean passes, evidence and not a proof;
+  - that nothing of a shell credential reaches a log is read, not pinned.
+- With every VibeField process stopped, an older grants file put back is served (OB-D19 A, a stated limit).
+- 94 of the 111 messages carry the UNRUN lines they were cut with. They land as written; t10f is their run.
+- Open, by item: 288, 276, 526. `sealed` closes the files and not two doors outside this track, item 275 and item 279
+  (the record's §11).
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+**The commits, `3248f6a0b`…`f1ac537af`, in order:**
+
+- `3248f6a0b` `9f52e77bf` OB (custody, K): the custody contracts — a hand-off on stdin, the floor's bootstrap line,
+  marks that only rise
+- `8eaaf9a80` `33f8ae775` OB (custody, join): the shell's marks stream declares its admission
+- `d84476f0a` `685c4db01` OB (custody, K2): the grants leave the records for one counted file, the shell's root has a
+  place, and the line's bound holds
+- `675a26c5b` `d0b23350f` OB (custody, K2, rider): agent-index.test — LAYOUT_ROOT_LEVEL is 9, the shell's custody key
+  named
+- `7f02c35f2` `f5c90c119` OB (custody, K4): the shell's two custody audit actions are named in contracts — a root, and
+  an older pair
+- `c5ca5b20c` `32a326644` OB (custody, K5, red): the floor's started-for table has its rows and its fixtures — the names
+  are not written yet
+- `16955cd71` `b6b211159` OB (custody, K5, green): the floor's started-for table is named — a verb, an entry on the
+  hello ack, and its bound
+- `8c838fa93` `60ce85a21` OB (custody, K6): two waits of the shell's are named in the custody registry — the old pair's
+  walk, and a root's re-read
+- `37ab071d7` `640a9e207` OB (custody, K6, rider): the two waits say what the lead asked of them — whose number the
+  first is, whose asks the second guards
+- `6f49b938b` `dff977de8` OB (custody, K7, red): a child waits longer for its line than its spawner may take — the row
+  that holds the two apart
+- `1857def95` `effbc136a` OB (custody, K7, green): the spawner's check has one budget, and the child waits two seconds
+  longer than all of it
+- `6bf4ec0b3` `20a41abb5` OB (custody, C6, red): trust's rows — the custody recipes and whose code a process is
+- `f30dbcc4d` `9ffad6aa6` OB (custody, C6, green): trust holds custody's recipes, and asks codesign whose code a process
+  is
+- `491e52007` `f66191f58` OB (custody, C6b, red): the child check names the identifier it expects — a sibling of our own
+  team is not the daemon
+- `29aaedc50` `04dba8ab9` OB (custody, C6b, green): the child check names the identifier it expects, and holds it to a
+  pattern before it is asked
+- `e725aac25` `f221fc8e1` OB (custody, C2, red): the shell pairs — the client's and the supervisor's rows, and a fixture
+  that speaks the sealed side
+- `5aa68e9e8` `0638bd655` OB (custody, C2, green): the shell pairs, it does not bear — the client's pairing, the
+  supervisor's sealed spawn, readiness and adoption
+- `166d18d24` `304450a54` OB (custody, C2b, red): tryAdopt names its credential — the rows, and every probe in the suite
+  says which road it takes
+- `d9b58dfab` `c86128f6d` OB (custody, C2b, green): tryAdopt has no default credential — a probe names its road, and an
+  unnamed one probes nothing
+- `b707e40ce` `eff1c824a` OB (custody, C2, red): a sealed fieldd writes no shell token and its shell pairs — the rows,
+  before the code
+- `1cf9c0dc3` `c32821e20` OB (custody, C2, green): a fieldd handed custody writes no shell token, and its shell pairs by
+  MAC
+- `527eade88` `7d2af9c5e` OB (custody, C2, red): fieldd's verifier takes trust's recipe and keeps none of its own — the
+  rows, which need C6's names
+- `f43ae6848` `f6dd116fa` OB (custody, C2, green): fieldd's verifier checks the shell's MAC with trust's recipe — THIS
+  COMMIT NEEDS C6 AND AN INSTALL TO LOAD
+- `a527b356c` `050257766` OB (custody, C2, rider): the source row names the three things fieldd takes from trust
+- `ce605c60f` `acc35af66` OB (custody, C3, red): the floor is handed its pairing on stdin — no file, that secret alone,
+  and a line it cannot read is a refusal
+- `7832f19c4` `fffc9057a` OB (custody, C3, green): the floor reads its pairing from stdin when its spawner says so, and
+  never falls back to the file
+- `3f6b928a8` `6e94ced95` OB (custody, C3, rows): the real-binary rows stop their floor by the paired verb, never by a
+  signal sent at readiness
+- `32fd08913` `3e9b115b8` OB (custody, C3, rows): the bootstrap line is the daemon's alone — the door bridge carries one
+  as its ordinary input, and no other role reads the flag
+- `91b742e8d` `cab5309b8` OB (custody, C3, green): main says at its dispatch that the bootstrap line is the bare path's
+  alone — a comment, no code
+- `eefb3164d` `28842fb2d` OB (custody, C3, red): a sealed fieldd pairs with its floor from the hand-off and hands the
+  floor its own line — the rows
+- `8677c051c` `c01da6e75` OB (custody, C3, green): a sealed fieldd pairs with its floor from the hand-off, and hands the
+  floor it spawns ONE line on a pipe
+- `300446d6f` `651f7833d` OB (custody, C5, red): a mark only rises — two names apart, said in the hello ack, outliving
+  fieldd, sixty-four names and no more
+- `b1b3b3307` `f6ad9e094` OB (custody, C5, green): the floor keeps fieldd's marks — the highest value under each name,
+  in memory, said in every hello ack
+- `c080dc242` `2d0c95d5a` OB (custody, C5, rows): the second hello of two marks rows is on a new connection — a hello
+  closes the connection that says it twice
+- `a70bf2fc2` `b738b38dc` OB (custody, C5, red): the supervisor's rows — it remembers fieldd's marks and hands the
+  highest to the next spawn
+- `9e42362d9` `7587a3d51` OB (custody, C5, green): the supervisor is a mark's second survivor — it hears fieldd's marks
+  and raises the next hand-off by them
+- `934614d38` `16a5eac01` OB (custody, C5, red): fieldd's marks — the link reads and sets them, the daemon holds a view,
+  the shell alone hears it — the rows
+- `2877cc05e` `908382cd7` OB (custody, C5, green): fieldd holds a view of every mark, tells the floor each rise, and
+  says the view whole to its shell alone
+- `bbf4ceb30` `4ae03d38f` OB (custody, C5, red): a mark past the safe integers reads as the top, never as nothing — two
+  rows
+- `c2dacb22e` `3d3f3e931` OB (custody, C5, green): a mark past the safe integers reads as the top — one rule, in the
+  holder and the link
+- `9fdb3acf6` `d1cf70207` OB (custody, C5, red): the marks' holder says an error by its code — what a note is refused
+  for, and what its two log lines print
+- `d034f0d12` `40e0b892a` OB (custody, C5, green): the marks' holder says an error by its code alone
+- `ce1e9b49d` `fc2ce880f` OB (custody, C1, red): fieldd admits what main records of its custody root — the row, which
+  needs K4's names
+- `a8cb6775c` `8597e8a42` OB (custody, C1 (audit), fieldd's half, green): fieldd admits main's two custody audit actions
+- `b26f3fe50` `5ccd70bcf` OB (custody, C1, red): the shell's rows — one root under the OS keystore, each pair handed its
+  secrets, nothing of it before a person
+- `e05b0a3c2` `775dedf70` OB (custody, C1, green): the shell keeps one root under the OS keystore, hands each pair its
+  secrets on stdin, and starts nothing without it
+- `1233a6d72` `c0173e419` OB (custody, C4, docs): DESIGN.md §9 says where the desk's grants are kept, and its one more
+  way not to be read
+- `6a6316e51` `f676312eb` OB (custody, C4, red): the grants in one counted file, a take-back that always takes, and who
+  a run is — the rows
+- `f3fddb803` `3caa825fe` OB (custody, C4, green): the grants live in one counted, signed file; a take-back takes
+  whatever the disk says; a holder is what fieldd launched
+- `80b006236` `7270a47d9` OB (custody, C4, red): a take-back that reads no record, a sealed store that never leaves its
+  path empty, and no new words — the rows
+- `077637579` `faa3882d2` OB (custody, C4, green): nothing in objects reads a session's record; a sealed store never
+  leaves its path empty; the withdrawn words are gone
+- `b49aea522` `649222fe6` OB (custody, C3, red): no child is given the floor's stdin — every command the crate makes
+  names a stdin of its child's own
+- `c5fb44b8d` `d7124665f` OB (custody, C3, green): the five commands that named no stdin name one — nothing, in each
+- `73a88c0eb` `35220cebe` OB (custody, C2, rider): no child of fieldd is given fd 0 — a row that reads the source and
+  holds today, with no green to follow
+- `27c299cad` `ae10ac9a6` OB (custody, C6, red): a fieldd handed custody asks whose code its floor is before it writes
+  it anything — the rows
+- `b679af34e` `82712ce0d` OB (custody, C6, red): the verifier's rows go through fieldd's real entry — only the tool
+  below trust is stood in for
+- `66489254c` `a5ce556b4` OB (custody, C6, green): a fieldd handed custody asks whose code its floor is before it writes
+  it anything
+- `2e9dc1d74` `95b2cd6be` OB (custody, C6c, red): the supervisor's spawn-to-write has one budget — its rows, each given
+  an injected verifier
+- `ee25f7424` `e16e43650` OB (custody, C6c, green): the supervisor holds its own spawn-to-write to one budget, and to
+  the attempt's abort
+- `4297fc702` `8cb05aa93` OB (custody, C6, budget rider, red): the hand to the floor has one budget, and fieldd asks
+  whose code it is before any spawn — the rows
+- `3e5c83cd6` `67de3823a` OB (custody, C6, budget rider, green): the hand to the floor ends at its budget, and fieldd
+  asks whose code it is when the verifier is made
+- `3b3f1dcd6` `1bf7df1ca` OB (custody, C6c, red): the refused child's sentence says what is known — "was not shown to
+  be", for both reasons
+- `05110198e` `0546543b9` OB (custody, C6c, green): a refused child "was not shown to be" ours — one phrase, in the
+  event's sentence and the error's
+- `9a12f1574` `db5f458e2` OB (custody, C6, rider): trust's comments say what the child check stops, and no more — a
+  correction at the source
+- `719c9ac17` `5324906c2` OB (custody, §8.1 floor, red): the floor says what each terminal was started for — a table
+  only a sealed floor keeps, an entry that stands on a process, handed on in every hello ack
+- `d8702b078` `5be808ab2` OB (custody, §8.1 floor, rows): the pid's bound by hand, a path among the canaries, the real
+  binary's row — and a sealed floor with nothing to hand says no key
+- `ceb35f112` `42f14b45a` OB (custody, §8.1 floor, green): a sealed floor keeps what each terminal was started for —
+  read against the kernel at the set, handed on in the hello ack while the root still has that start, and the door's
+  walk matches by it
+- `24f60fae6` `dfafc3789` OB (custody, §8.1 floor, rider): the table's two headers name the file K5 put its shapes in —
+  custody.ts, not mgmt.ts
+- `c25fdd515` `2169830ba` OB (custody, §8.1 fieldd, red): the link reads the floor's started-for table by hand and says
+  a set in one word — the rows
+- `97a33209b` `3295328d2` OB (custody, §8.1 fieldd, green): the link reads the floor's started-for table by hand, hands
+  it over once, and says a set in one word
+- `8c2921390` `3ddb49aae` OB (custody, §8.1 fieldd, red): launch memory, and the floor is told what each terminal was
+  started for — the rows
+- `4e41dc439` `cc044bc8c` OB (custody, §8.1 fieldd, green): fieldd remembers what it launched, and a fieldd handed
+  custody tells the floor the same
+- `02334a19f` `5a7a5dc3b` OB (custody, §8.1 fieldd, rider, red): the set is said ONCE, when the run's row is first seen
+  running — the rows
+- `6ac883c8a` `1a65fa5d9` OB (custody, §8.1 fieldd, rider, green): what a run was started for is said to the floor once,
+  at its row's first sighting
+- `29446b2e2` `9f161f7ce` OB (custody, §8.1 fieldd, red): a wake of S resumes its run FOR S, the wake's own argument and
+  never the record's word — the rows
+- `42180da22` `574994baa` OB (custody, §8.1 fieldd, green): a spark's wake names the spark it is waking, and at sealed
+  that names the resumed run
+- `987896075` `b186b7362` OB (custody, §8.1 fieldd, red): after a restart a run is who the floor's entry says, never who
+  its record says — the rows
+- `ccc9bbe00` `7728e59a7` OB (custody, §8.1 fieldd, green): re-attach reads the floor's table once, and a run it vouches
+  for is named by its entry
+- `e8282d8bb` `b4531b733` OB (custody, §8.1 fieldd, rider, red): on a resume at sealed, launch memory beats the asked
+  spark — the row
+- `ac006ad82` `5a91453bd` OB (custody, §8.1 fieldd, rider, green): a resumed run is what launch memory says the run it
+  continues was, before any spark a wake asked for
+- `226311a74` `dd8698142` OB (custody, C4, red): a plain run's hold at boot ends, vouched or not, and a file too large
+  to peek is left — the rows
+- `8a7a70325` `035d8c480` OB (custody, C4, green): OB-D18 is one rule at the settle, decided by an option and never by
+  who is vouched; a file too large to peek is left
+- `5c8d07fb9` `41f399d34` OB (custody, §8.1 fieldd, daemon lines, red): the desk's key, marks and `bornFor` through the
+  real daemon — the rows
+- `595ecd26e` `635163ebe` OB (custody, §8.1 fieldd, daemon lines, green): the daemon hands the desk's store its key and
+  the marks, and the desk launch memory
+- `b8f9b1fa5` `45c48c089` OB (custody, §8.1 fieldd, rider, red): the mock floor answers bad started-for params as
+  field-native does — the row
+- `04ac33094` `cd3be5645` OB (custody, §8.1 fieldd, rider, green): the mock floor refuses bad started-for params as
+  field-native does, and says `not-sealed` first
+- `3b64d6147` `57f173467` OB (custody, C4, red): a lost take-back is said by the disk's code and no path, and every
+  header says what its rows are given — the row
+- `2f48f5574` `cd2689b50` OB (custody, C4, green): a lost take-back is said by the disk's code alone; the error never
+  reaches the log
+- `f365290f5` `c50006fa7` OB (custody, C4, red): what a refused write says travels, so it is one fixed sentence and a
+  code; the mark's line prints a code too — the rows
+- `b24f86cde` `f977507fe` OB (custody, C4, green): a refused write throws one fixed sentence and a code; the mark's line
+  prints a code
+- `8b3b44fac` `f82e99a95` OB (custody, C4, red): a typed refusal is said by its kind — the mark row's fourth case
+- `89b94b8f3` `41b7540ec` OB (custody, C4, green): `codeOf` reads a code, else a kind, else `unknown`
+- `23c93c856` `fc2dd186c` OB (custody, C4, red): a code or a kind is said only when it is a plain token — the rows
+- `6b63ff061` `2c091c37b` OB (custody, C4, green): a code or a kind is said only when it is a plain token; anything else
+  is `unknown`
+- `8e69d9b61` `32ff4008a` OB (custody, C5, rider, red): a set the floor cannot read is refused in words that quote none
+  of it — the row, and the bootstrap rows' header names no number for the registry's wait
+- `85e84e2b2` `9d20db9e2` OB (custody, C5, rider, green): the marks arm refuses params it cannot read in a fixed
+  sentence, never the parser's words — and the table's header says who can speak to a sealed floor: a holder of its
+  secret
+- `1e7455e27` `ff6151733` OB (custody, C5, stop rider, red): a stopped fieldd's desk store writes nothing afterwards —
+  the row
+- `0eae6380e` `cc246c516` OB (custody, C5, stop rider, green): the daemon's stop releases the desk's store, and its one
+  timer with it
+- `d6ab81c5f` `eb93b789e` OB (custody, comments): the custody stack's comments name no working spec, person, role or
+  clock
+- `07c0c3130` `d83fa3579` OB (custody, join rows): one spawn carries the person's PATH and custody, and neither leaks
+  into the other
+- `0ad493772` `9e5644983` OB-UI (comments): the bloom's opener names its design section, not a working file
+- `a85bab261` `ee144ccdc` OB (custody, lock): the lock records the two workspace edges to trust that the custody picks
+  add
+- `172950bf2` `0941f5258` OB (custody, join): custody's test roots take item 345's alias parent
+- `5b39730fd` `8f0aca199` OB (custody, format): biome's layout for four lines the carry brought in
+- `59eac2ceb` `1893666f2` OB (custody, format): rustfmt's layout for three field-native test lines the carry brought in
+- `a633b8f7b` `8239f149c` OB (custody, gen): the generated schema and Rust carry custody's shapes
+- `180857c9b` `8a9a415f0` OB (custody, compile): the custody reader imports only the trait it uses
+- `c89ec791e` `e9b8e379b` OB (custody, join): the hand-off reader's row pins the wait the registry rules
+- `27afc1f8d` `32a0817fd` OB (custody, test): the sealed stand-in writes what it observed whole or not at all
+- `ff5546f62` `d17991e79` OB (custody, vector): the shell-pairing vector's four values, from the rows that compute them
+- `f1ac537af` `aff6287b4` OB (custody, C2): a sealed door answers a shapeless shell credential as a bad token
+
+## Item 274 — a meter a later reading did not carry says its own read's age, on the desk and the phone (M380)
+
+(2026-11-18; fifteen commits, with item 283's two:
+`9876b9726` (274's red, step 1, "a meter a later reading did not carry names its own read"),
+`3e6d90196` (274's green, step 1, "a meter carries its own read"),
+`045e2dd80` (274's step 1 fixture, "the kept meters' example"),
+`5f6a25151` (274's red, step 2, "fieldd drops a kept meter's own read"),
+`56204cc89` (274's green, step 2, "fieldd passes a kept meter's own read"),
+`becdcb499` (274's docs, "a push defers the poll only if it carries every meter"),
+`41d109a14` (283's red, "a stamped push before fieldd's first reconcile keeps its bare id"),
+`9f6bcf57e` (283's green, "a stamped push before fieldd's first reconcile kicks one"),
+`25425dbd7` (274's step 0, "DESIGN.md first"),
+`b3de10a46` (274's red, step 3, "the desk says a push's age for meters it did not carry"),
+`533593fad` (274's green, step 3, "a meter says its own read's age"),
+`7850ab9e6` (274's red, step 4, "the phone says a push's age for meters it did not carry"),
+`b82ab12bd` (274's green, step 4, "the phone says each meter's own read"),
+`a6048add6` (274's comments, "the item and the day where a person and a ruling were named"),
+`9ad27ad77` (274's kit mend, "the kept-meters twins run on the main actor").)
+
+**What a person sees.**
+- A status line's push carries only the meters it reads, so one plan can hold meters of two readings. Until now each
+  one said the push's age, so a meter kept for hours read as a minute old. Now every age said is the age of the numbers
+  beside it. A window's line says its own read, and a plan's words, its circle's words and a bud's word say its
+  tightest window's. The popover's head still says the batch's newest read.
+- The same on the phone: the Agent Profiles page's plan rows and each passed line, by the same rules.
+- The desk's catalog gains a "kept meters" state, and the phone's mock door gains `-vf-mock-usage=kept-meters`.
+
+**The seams.**
+- The contract names a meter's own `fetchedAt` (`AgentAccountUsageMetric`), with dated corrections to the three docs
+  it falsified, and the kit reads it. fieldd's projection passes it (`METRIC_KEYS`), and the usage doors' caption in
+  `docs/agent-plane/api.html` says so.
+- The rules: field-app's `meterReadAt` and `rightOf` (`usage/rules.ts`, `usage/meters.ts`), and the kit's twins in
+  `MeterModel.swift`.
+- `docs/agent-plane/usage-meters.md` corrects when a push defers the poll. DESIGN.md §8 and §9 carry the decisions
+  UM-274-D2, -D3 and -D4.
+- Item 283: a push stamped with an account before fieldd's first reconcile, while nobody watches, now kicks one
+  reconcile that reads no account, so the row is named or dropped. `9f6bcf57e` says where it still keeps its bare id: if
+  that one read fails (until a window subscribes, a forced refresh, a sign-in or a registry change), or if the push
+  comes before the service is armed (a later push kicks).
+- The usage-bands golden (and the kit's byte copy) was regenerated by its own generator at the new tree: main's 27
+  circles unchanged and in order, plus the three kept-meters cases (30).
+
+**The proof.**
+- The item was cut on main `8064bbdec`, its fifteen commits patch-equal to the ones landed; each run below names the
+  cut's own id.
+- The whole verify, at a Mac mini: run um-pur-b1, at a branch that stacks the next piece's two commits (PU-R) on
+  `5bde4e0b6` on the cut (`a6048add6`'s patch), ended 2026-11-17 22:02:32Z (552 s), `pnpm verify` exit 0, 16 stages,
+  failed
+  0. Those two change field-app's usage code (`usage/meters.ts`, one of this item's rule files, and `usage/bands.ts`)
+  and DESIGN.md, so it proved the cut under them, not alone.
+- The kit, at a Mac mini, at `5bde4e0b6` on the cut (`a6048add6`'s patch): RED by a cause in the change. The build
+  stopped at one compile error, so no test ran (2026-11-17 22:04:19Z, xcodebuild exit 65). Step 4's helper in
+  `MeterModelTests` read the `@MainActor` fixture door's `now` from a nonisolated suite, and step 4's Swift had never
+  been compiled. `9ad27ad77` marks the helper and its three rows `@MainActor`. Without it FieldHomeTests does not
+  compile from `7850ab9e6`'s patch on: built at `5bde4e0b6` on the cut; at `d4dc0415f` and `8864edea3` on the cut
+  (`7850ab9e6`'s and `b82ab12bd`'s patches) by reading, the helper that `7850ab9e6` adds unchanged after it.
+- The kit, at a Mac mini, at `d77df08e0` on the cut (`9ad27ad77`'s patch): GREEN, 2026-11-17 22:12:36Z, xcodebuild exit
+  0 in 74 s. FieldProductTests 351 rows: 350 passed, 1 skipped. FieldHomeTests 813 rows, 813 passed.
+- The golden's generator, on the development Mac, at the tree of `ceaa2d791` on the cut (`533593fad`'s patch),
+  2026-11-17 19:27:22Z → 19:27:29Z, exit 0. Beside it, a reading only: six field-app test files, the five the item
+  touches and `usage-bands.test.ts` (which reads the regenerated golden), 288 of 288; contracts' `agent-usage`, 10 of
+  10.
+- The train's second dress rehearsal passed with the piece joined, each commit a re-pick of the same patch: run
+  v-rehearsal-b at `dde7e69a5968`, 2026-11-18 03:41:21Z → 03:51:23Z, `pnpm verify` exit 0, sixteen stages; its kit run,
+  kit-rehearsal-b, ended 03:55:08Z: 3,060 rows, Passed 3,056, Skipped 3, Failed 1, the known FieldWebTests R4 row
+  (item 522).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not covered.**
+- No live push from a real agent's status line was watched on a desk or a phone; the rows are scripted.
+- The two-account row (F4) holds routing and stamp keeping only; per-session stamping is the adapter's, not run.
+- The reds of `9876b9726`, `5f6a25151`, `41d109a14`, `b3de10a46` and `7850ab9e6` were not run at their own commits on
+  the cut (`760598a60`, `9adc3be50`, `b5ed0f980`, `cd270bd86`, `d4dc0415f`).
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## PU-R, the bands — a spawn bloom bud wears its profile's Bands circle, at 48 and 42 (M381)
+
+(2026-11-18; two commits, on item 274's and under item 495's:
+`f4ae47fed` (PU-R's red, "a spawn bloom bud wears no fuel yet"),
+`c5019aa0f` (PU-R's green, "a spawn bloom bud wears its profile's Bands circle at 48 and 42").
+Its design record landed 2026-11-17, as "PU-R, the doc".)
+
+**What a person sees.**
+- In the desktop's spawn bloom, a profile's bud wears the circle the profiles column draws for it, at the
+  bud's own size, 48 and 42: the two bands, a fill per plan and its notch, orange when hot, at half when a
+  reading was kept or read before its reset.
+- A plan that needs you is the dashed thread, at 46%; at 38% for a retry, and for every plan while usage
+  cannot be read. A first read and a profile with no meters keep the plain bud.
+- The bud's line names its deciding plan, "Claude Code: 42% of 5 hours", and a kept reading's age, the age
+  of its tightest window's own read (item 274's rule). With no plan on the circle it says "usage
+  unavailable" or "No meters".
+- An open bloom keeps the drawing it opened with.
+- The catalog's spawn bloom specimen reads usage rows of its own: This Mac ahead of pace, Work reading
+  beside a sign-in, Demo with none.
+
+**The seams.**
+- `usage/spawn-fuel.ts` (new): the column's `bandsGeometry` at each size, with nothing in its middle, its
+  arcs and notches handed as `MonitorSpawnFuel.drawn`, the view SDK's type that puppeteer-views paints,
+  every number at two places. Only the ink and the orange are handed. A first read's breath, the empty
+  ring and the hot dot never are, and none of the bloom's older one-arc fields is.
+- `godview/profiles-column/useSpawnFuel.ts` (new): the column's own read (`columnCircles`) at
+  puppeteer-views' `BLOOM.bud1` and `bud2`. The stage hears of a minute only when the map moved. A read
+  that throws gives no map, so every bud is plain, never a frozen reading.
+- `spawnMenuOf` wears each profile's fuel, and a moved fuel is a new menu key. The stage reads the usage
+  rows above `useMonitorAgents`, and the column and the hook share one "cannot be read" boolean.
+- Pure exports with no output change: `round2`, `decidingPlan`, `agedWords` and `bandsReadingWords` in
+  `bands.ts`; `MeterBase` and `needsYou` in `meters.ts`. The usage bands golden is not regenerated.
+- DESIGN.md: §8's italic note "until it lands, the bud is plain" is dropped. §9's spawn bloom bullet says
+  the age is its tightest window's own read.
+- The map is keyed by profile. Keying it by desktop, for a peer's profiles in the bloom, is a later slice.
+- Item 495, after it, names a plan with a tier by its spoken title in the bud's line too (its entry).
+- No file under `apps/ios` moves.
+
+**The proof.**
+- The 24 rows, red first. `godview-spawn-menu.test.ts` F1–F10 (16): the fuel at 48 and 42, its strokes,
+  its words, its map and the menu, every stroke's number a literal worked by hand from DESIGN.md §8 "The
+  Bands circle". `godview-monitor.test.tsx` M1–M6 (6): the wiring, and an open bloom held across a change
+  of its fuel alone. `design-system.test.tsx` D1–D2 (2): the catalog specimen's fuel from its own usage
+  rows, read pure with no page rendered, a sign-in's thread beside a reading.
+- The whole verify, on the test Mac, run um-pur-b1, at the same two patches on item 274's tree before its
+  kit mend: 2026-11-17 21:53:19Z → 22:02:33Z, `pnpm verify` exit 0, 16 stages, failed 0. The three files:
+  the spawn menu 21 of 21, the monitor 135 of 135, the design system 10 of 10.
+- The whole verify, on the test Mac, run v-join-495-pur, at the join's top (item 274 with its kit mend, the
+  same two patches, and item 495's four): 2026-11-18 00:39:51Z → 00:49:06Z, exit 0, failed 0. The three
+  files as above.
+- The whole verify, on the test Mac, run v-rehearsal-a, at the train's rehearsal `270a6e8dc615`:
+  2026-11-18 03:12:53Z → 03:23:04Z, exit 0, failed 0. The three files as above.
+- The whole verify, on the test Mac, run v-rehearsal-b, at the train's second rehearsal `dde7e69a5968`:
+  2026-11-18 03:41:21Z → 03:51:23Z, exit 0, failed 0. The three files as above.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- The red count at `f4ae47fed` was not run at its own commit. Counted by hand: 23 of the 24 rows fail there, and
+  M3 (the same rows keep the same menu object) passes.
+- No row turns the minute's clock or gives the hook a port's installs: the minute's refresh and the
+  installs' read are read from the code alone.
+- No PU-R row gives a meter a read of its own: the bud's age by its tightest window's own read rests on
+  item 274's rows, through the code the bud shares (`agedWords`).
+- No row renders the catalog's specimen; D1–D2 read its fuel pure.
+- The real window at 48 and 42, light and dark, was not looked at: the thread, the reached bud's inverted
+  ink, the glyph's corner at 42, `color-mix` with a `var()` share, a minute's turn under a held bloom.
+- No still or smoke draws the bud. The rows are scripted usage rows; no live account's reading was
+  watched in the bloom.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## Item 495 — A plan's tier rides beside its plan word, and stands after its name as a badge, desktop and phone (M382)
+
+(2026-11-18; four commits, in order: `13537a01d` (contract, "UM: a plan's tier rides beside its plan word, a record of
+three cases"), `a7eaef322` (desktop, "UM: a plan's tier stands after its name, as a badge, on the desktop"), `06b7f78d4`
+(phone, "UM: the phone wears a plan's tier as a badge after its title, and says it in the arcs") and `6fcc17124` (test,
+"UM (test): the design system page counts thirteen profile plates in the dark…"). The family's name is the one
+James picked on 2026-11-17, "Claude Ultra, no badge": an agent that reads Claude's `max` at `max_20x` names the
+plan `ultra` with `planTier: {}`, and VibeField titles it as it titles every plan word.)
+
+**What a person sees.** Nothing yet. puppeteer at the pin (0.4.2) sends no `planTier` and names no `ultra`, so every
+face draws and says what it did before this item. Once a release that sends them is pinned:
+- A plan whose tier was read wears it as a badge after its title, as in "ChatGPT Pro" then "200". It appears on
+  Godview's profile popover rows, on Settings → Agent Profiles' plan card and on the phone's Plans rows. The badge is
+  the popover head's tag (10/600, tabular figures, the strong hairline, secondary ink), capped at 8 characters'
+  width with the ellipsis inside. It never gives way: in a row that names a sign-in the veiled sign-in gives way
+  first, then the title; on Settings' card the title alone gives way.
+- A plan whose tier was not read, beside a labelled plan of its own family (the same service and title), wears the
+  capsule empty: 32 × 16, twice as wide as tall, dashed 2 3. A plan with no tier (`{}`) wears nothing, and so does
+  a plan not read with no labelled plan of its family in view.
+- The spoken name joins the title and the label with a space ("Claude Max 20x"). It is said by each plan's Bands
+  words, the circle's words, the C1 lists, Settings' refresh and loading words, VoiceOver's title and Show.
+- Claude's `max` at `max_20x` reads "Claude Ultra", with no badge, on desktop and phone alike. The title comes from
+  puppeteer-views' `planTitle` on the desktop and from the kit's `PlanTitles.title` on the phone, by their spelling of
+  the token; no row here holds it (below).
+
+**The seams.**
+- `packages/contracts/src/agent-index.ts`:
+  - `AgentPlanTier` (`{ label? }`, passthrough), `PLAN_TIER_LABEL_MAX` (8) and `PLAN_TIER_LABEL` (one word of
+    letters, digits, `.`, `+`, `-`).
+  - `planTier` sits on `AgentPlan.account`, with mirrors on `AgentSignIn` and `AgentPersona.identity`. Every place
+    is `.optional().catch(undefined)`, so a tier this build cannot read reads as not read and never blanks a face.
+    That drop is silent, unlike the tolerant reader's unknown-field logging: zod's catch leaves no trace, and the kit
+    logs no key of `AgentPlan.account`.
+  - Absent means not read, `{}` means none, and `{ label }` is the badge.
+- fieldd: no code change. Its projection hands the identity through whole.
+- field-app, the model: `planTierOf` behind the title's own gate, feeding `PlanCard.tier` and `MeterBase.plan.tier`.
+- field-app, the faces: `panels/agents/plan-tier.ts` (`tierOf`, `tierMarks`, `spokenPlanName`, `spokenPlanTitle`)
+  and `PlanTierMark` (`.vf-plan-tier`). Also the popover rows and no-meter lines, Settings' plan card,
+  `bandsPlanWords`, and the catalog's Studio profile, with its "plan tiers" Settings state and "plan-tiers" column
+  plate.
+- The kit: `AgentPlanTier` and `AgentPlanAccount.planTier` (LaunchShapes.swift), `PlanMeter.Plan.tier` and
+  `spokenTitle` (MeterModel.swift), `BandsLayout.planWords`, and `PlanRow.tier` and `PlanRow.spoken`
+  (AgentProfilesPage.swift).
+- At the join with PU-R slice B, `bandsReadingWords` names the plan by its spoken title too, so the spawn bloom's
+  words name a tiered plan as its row does, in every state.
+- Fixtures: `agents-profile-sets.tier.json`, with its kit mirror and its row in `check-ios-fixtures`.
+  `check-ios-fixtures` pins the kit's `labelMax` to `PLAN_TIER_LABEL_MAX`. The bands golden is byte-same.
+- `DESIGN.md` §8: "A plan's tier — a badge after its name", new, with amendments to "Godview's profiles column" (the
+  head's tag, the body's row order) and "The phone's corner"; §9's words say the tiered name ("Show only ChatGPT Pro
+  200's sessions"). `docs/UI_SYSTEM.md` lists the plate. `docs/agent-plane/api.html` names the field on
+  `profileSets.list`.
+
+**The rows.**
+- contracts `agent-index`: the three cases, the cap and pattern, and the unreadable forms reading as not read on
+  all four places.
+- fieldd `agent-profiles`: the tier through the projection. `agent-monitor-pin`: a row that turns red at the EL8 to
+  a puppeteer that names a tier cap.
+- field-app: `plan-tier.test.ts` (new), `profiles-plan-tiers-plate.test.tsx` (new), `usage-meters`,
+  `profiles-settings`, `profiles-column`, `design-system` (the plate list; the dark count is 13),
+  `ui-system-boundaries` and `glyphs`.
+- kit: `LaunchShapeTests`, `MeterModelTests`, `AgentProfilesPageTests` and `BandsParityTests` (its meter encoder
+  writes `plan.tier`; no golden input carries one).
+
+**Proved.**
+- The cut (21:12Z, 2026-11-17) made the three originals, `5f485f859`, `c47c972a1` and `7b4a5f37e`, on a branch over
+  main's `8064bbdec`, from four diffs prepared and summed beforehand. Each was held to its parent, its paths and a
+  clean tree.
+- The first whole `pnpm verify` at the original `7b4a5f37e` on the test Mac (23:30:47Z to 23:37:50Z) was red at
+  `test`: field-app failed 1 of its 5162 tests and nothing else failed (test:rust and gen:check did not open). The
+  theme test still counted 12 profile plates where the page draws 13. The mend, `b7797d6a3` (23:41:21Z), moves that
+  one number.
+- `pnpm verify`, whole, at `b7797d6a3` on the test Mac (23:55:54Z to 00:05:06Z, 2026-11-18): exit 0 in 552 s, no
+  test failed.
+- The kit at the original `7b4a5f37e` on the test Mac (ALL targets, 23:41:12Z to 23:44:09Z): 3017 rows, 3013
+  passed and 3 skipped (FieldHome 817; FieldProduct 351 and 1 skipped). The one red row was FieldWebTests SP-4c R4,
+  item 522: the same row is red in the kit at main `8064bbdec` the same night (3007 rows), and no file of this item
+  touches FieldWeb. The spend view's two stills are byte-equal to that main run's.
+- The join with PU-R slice B and item 274 (`969a4623d`: 274's fourteen, its kit mend, PU-R B's two, then this
+  item's four), three files resolved by hand at the desktop pick (ProfilesSettingsPreview, profiles-fixtures,
+  bands.ts): `pnpm verify`, whole, on the test Mac (00:39:51Z to 00:49:06Z, 2026-11-18), exit 0 in 552 s, no test
+  failed. The train carries this item's four as re-picks with the join's patch-ids, and the three hand-resolved
+  files as the join's blobs.
+- The train's second dress rehearsal, with the join in it, at `dde7e69a5968` (2026-11-18): `pnpm verify`, whole,
+  03:41:21Z to 03:51:23Z, exit 0 in 601 s, its sixteen stages run. The kit, ALL targets, ended 03:55:08Z: 3,060
+  rows, 3,056 passed, 3 skipped and 1 failed, the known FieldWebTests R4 row (item 522).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- puppeteer's half: the adapter naming `ultra` and sending `planTier`, behind its tolerant registry read, which is
+  released first. The PR's CI is its proof, and the release and the EL8 that pins it are James's. Until then this
+  item draws nothing new.
+- No still or recording of a badge on either platform was taken.
+- No row holds the "Claude Ultra" title, on either platform, nor the spawn bloom's tiered words at the join.
+- Left as they were, and asked: an agent row's plan badges (`PlanBadge`), a harness's Sign-ins lines and the limit
+  moment's card.
+- The phone caps a badge by count, where the desktop caps it at 8 characters' width; the width cap is open.
+- `pnpm gate:landing` not run (owed).
+
+## Item 327, its second half — the selection bar's smoke says when its press took no selection, as HN-3's does (M383)
+
+(2026-11-18; three commits:
+`19165901b` (327's move, "the desk's facts and the press's judge move to a module both desk rows can import"),
+`c6716ecdb` (327's red, "the selection bar's select never asks whether its press took a selection"),
+`5710934b2` (327's green, "the selection bar's select says when its press took no selection, as HN-3's does").
+All in `packages/electron-shell`.)
+
+**What it fixes.**
+- Item 327's first half made HN-3's `select()` (`smoke-desk-copy.ts`) wait up to 5 s for the count its row's bar asks
+  next, and say the press, not the bar, when that count never comes. DK-11's own `select()` (`smoke-selection-bar.ts`)
+  pressed and went straight to the bar's 10 s wait, so a press that took nothing there was said as the bar's timeout.
+- Now both ask one guard. `waitSelectionTook` reads the anchor's count until it is the one wanted (1, or one more
+  under ⇧, from `selectionWant`) or 5 s pass, 60 ms apart, and returns the judge's words on a miss. Each `select()`
+  throws them, with where the press landed (in the desk, in the hand's cards) and the desk's facts. HN-3's own loop
+  gives way to it, with the same reads, bound and words.
+- What a person sees: nothing. This is the smokes' harness alone.
+
+**The seams.** `src/testing/smoke-desk-facts.ts` (new) holds item 327's `DeskFacts`, `DESK_FACTS`, `UNDER`,
+`deskFactsWords` and `judgeSelectionTook`, moved word for word, and the new guard. It is a module of its own because
+`smoke-desk-copy.ts` already imports `smoke-selection-bar.ts`, so a reach back would be a cycle; it imports nothing.
+`test/smoke-window.test.ts`'s ROWS names it, so it is held to the no-key-window rule.
+
+**The proof.**
+- The three were cut on main `8064bbdec`, patch-equal to the ones landed; each run below names the cut's own id.
+- The whole verify, at a Mac mini, at `6978d7bcb` on the cut (`5710934b2`'s patch): 2026-11-17 22:23:09Z → 22:32:25Z,
+  `pnpm verify` exit 0 in 554 s, all 16 stages. electron-shell's suite: 193 files, 2952 passed, 3 skipped, 0 failed.
+  `smoke-desk-facts.test.ts` 8 of 8.
+- On the development Mac, light, 2026-11-17 19:37:30Z → 19:42:24Z, in a lane at main `8064bbdec` under env -i:
+  - At the tree of `438b63d90` on the cut (`19165901b`'s patch): the three files (the two desk rows' tests and
+    `smoke-window.test.ts`), 29 of 29; electron-shell's typecheck 0 errors; biome clean.
+  - At the tree of `e120a17c8` on the cut (`c6716ecdb`'s patch): `smoke-desk-facts.test.ts` 7 failed and 1 passed (the
+    plain press's count, a guard), each failed title one the red named; the other three files 29 of 29; typecheck 0;
+    biome clean.
+  - At the tree of `6978d7bcb` on the cut (`5710934b2`'s patch): the four files 37 of 37, then
+    `smoke-desk-facts.test.ts` five times in a row, 8 of 8; typecheck 0; biome clean.
+- The train's second dress rehearsal passed with the piece joined, each commit a re-pick of the same patch: run
+  v-rehearsal-b at `dde7e69a5968`, 2026-11-18 03:41:21Z → 03:51:23Z, `pnpm verify` exit 0, sixteen stages; its kit run,
+  kit-rehearsal-b, ended 03:55:08Z: 3,060 rows, Passed 3,056, Skipped 3, Failed 1, the known FieldWebTests R4 row
+  (item 522).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- `select()` in DK-11 now FAILS a run whose press took nothing in 5 s, where it went on to the bar's 10 s wait before.
+  Only smoke:canvas drives both selects, and it was not run.
+- The ⇧ count is the count before plus one, which assumes no row shift-presses an object already selected. DK-11's
+  four calls were read: the clock (1), ⇧ and the note over the clock (2), the note (1), the missing clock (1).
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## Item 372 — a typed `hermes` runs its wrapper's Python, and an install naming none is refused in §9's words (M384)
+
+(2026-11-18; one commit, `47874c032` (372's guard pair, "a typed hermes runs its wrapper's Python"), in
+`packages/fieldd/test/agent-gateway.test.ts` alone.)
+
+**What it holds.**
+- Item 278 held two facts at the launch door (`agent.spawn`). These are the same two for a `hermes` TYPED in a pane:
+  through the gateway's `prepareInvocation`, over puppeteer's real Hermes adapter, as fieldd lends it to the
+  spawn-through kit.
+  - T1: the gateway runs the Python the `hermes` wrapper names, as `-I -B -c` with no argument naming a file, never a
+    bare `python3`, and no FIELD_/FIELDD_ name reaches its environment.
+  - T2: a wrapper that names no Python is refused, placed, in DESIGN.md §9's typed words without the kit's
+    "VibeField: " label, "hermes was not started: VibeField can't find this Mac's Hermes install. Reinstall Hermes,
+    then run hermes again.", and no interpreter starts.
+- What a person sees: nothing new. Both already held at puppeteer 0.4.2 with item 278: a guard pair, green on arrival.
+
+**The seams.** The file's `unit()` gains three options, `providers`, `catalog` and `executables`, each defaulting to
+what it built before, so no other row moves. The new describe runs the built-in Hermes provider alone, its executable
+the row's wrapper. HERMES_PYTHON and HERMES_HOME are taken out of the process for the row and put back. Each stub
+writes its runs by shape and its environment by names, never a value.
+
+**The proof.**
+- The whole verify, at a Mac mini, at its first cut, `a0658be5f` on main `8064bbdec` (`47874c032`'s patch):
+  2026-11-17 23:11:27Z → 23:20:39Z,
+  `pnpm verify` exit 0 in 550 s, all 16 stages. fieldd's suite: 298 files (293 passed, 5 skipped), 4131 passed and 15
+  skipped. `agent-gateway.test.ts` 109 of 109.
+- On the development Mac, light, 2026-11-17 19:53:45Z → 19:54:26Z, in a lane at main `8064bbdec` under env -i, with
+  the first cut's file (`a0658be5f`'s blob) and a vitest config that runs no cargo build (so field-native was not
+  rebuilt), the item's two rows alone:
+  - T1 and T2 passed, twice; fieldd's typecheck 0 errors; biome over the file clean.
+  - The bite, on the lane's tree alone and put back. With item 278's typed refusal words off, T2 failed at its
+    `toMatchObject` and T1 passed. With T1 over a wrapper that names no Python and HERMES_PYTHON at the row's stub,
+    T1 failed and T2 passed. HERMES_PYTHON alone was not tried: by a reading of puppeteer 0.4.2's Hermes adapter,
+    the wrapper's Python is tried first.
+- Cut again, on the objects-at-work stack, because both add to the same test's options (both kept, the stack's first).
+  - Its file is the stack's plus exactly the first cut's change: its added and removed lines are the first cut's, in
+    order. biome over it clean, on the development Mac, 2026-11-18 01:08:11Z. The re-cut is `c817e670e`.
+  - A reading, not a run: the stack briefs a typed launch (`briefedInvocation`), but with no briefing, which these rows
+    never pass, `withTypedBriefing` hands the options back unchanged and nothing is made again, so the rows meet main's
+    launch.
+  - The whole verify, at a Mac mini: proven in the joined tree, by run v-rehearsal-a at `270a6e8dc615` (tree
+    `77fd6ea2ff02`), where the re-cut `c817e670e` (`47874c032`'s patch) rides as `8707bf3e1`, a re-pick of the same
+    patch, 2026-11-18 03:12:53Z → 03:23:03Z,
+    `pnpm verify` exit 0, all 16 stages. Its own lane V was not run.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- A real Hermes install was not tried, typed or launched; nothing was looked at in a pane.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## Item 517 — AH-4's findings: Refresh preview is audited with the person, and captures go one at a time (M385)
+
+(2026-11-18; five commits, 5 paths +140 −14, cut on main `8064bbdec` as `c2a08670e`, `383cebe61`, `4f004f775`,
+`bbc310d49` and `657e20f8a` on branch `i517/capture-findings-on-8064bbdec`. Main moves once, on James's word and
+VF-PM's GO. On main they are `297047d85`, `42fe2bf35`, `a792082cd`, `d5815a14a` and `d6fa2a503`; every other id here is
+a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.** AH-4's review (LANDED "AH-4 — a live app's preview") named seven findings, by reading. This
+mends three of them:
+- A person's Refresh preview was not audited at its door with the person who asked, as publish, update and
+  unpublish are. The capture it caused was recorded as fieldd's own act alone.
+- A new live app's first preview could be refused while a made app was being captured, and was not asked again:
+  the app kept its placeholder until a person pressed Refresh preview. fieldd's two services that capture each
+  queue their own captures, and the desktop app holds one capture at a time.
+- A comment in ArtifactService said the desktop app's capture has always finished when the broker answers. After
+  a timeout it may not have.
+
+**What moved.**
+- The comment (`297047d85`, `artifact-service.ts`, comment only): what holds after a timeout. Removing the preview
+  folder then is still safe, because the capture writes a temporary file inside it and renames it last, and an
+  unpublished app's record is kept until its folder is gone. The one leftover is an empty folder, when the capture
+  begins only after the broker gave up on it; no sweep is built for it.
+- The audit (`42fe2bf35` red, `a792082cd` green, `daemon.ts`): `artifact.refreshPreview` goes through the required audit
+  with its caller. The action is `artifact.preview.refresh` (an audit action is lowercase dotted words); a capture
+  is `succeeded`, none is `cancelled` with reason code `PREVIEW_NOT_CAPTURED`, and a refused one is `failed` with
+  the refusal's reason code. The capture it causes stays fieldd's own act. With the audit unavailable, Refresh
+  preview is now refused, as publish already is.
+- One capture at a time (`d5815a14a` red, `d6fa2a503` green, `shell-provider.ts`): the broker's internal door holds a
+  capture behind the one in flight and sends it when that one settles, answered or refused. With none in flight a
+  capture is sent at once, as before; a held capture's deadline starts when it is sent. No other method is held.
+  What a person meets: a capture the desktop app would have refused at once now waits, for at most one other
+  capture's deadline, so a Refresh preview can take that much longer.
+
+**The rest of the review's findings.**
+- Withdrawn on a second read: that a capture moves the preview's revision even when the source changed during it.
+  The picture's bytes are already replaced by then, so the revision must move, and an update takes no new picture
+  in any case.
+- Held as item 519: each capture keeps one browser session until the app quits, and Electron has no call that
+  ends one. The only fix would reuse one session cleared between captures, trading a new session per capture for a
+  cleared one. Its cost is to be measured on a real Electron first.
+- Item 514: what a capture answers a client-certificate request, unmeasured; measuring it is James's word.
+- Two draft documents still give the Live apps panel to the browser plugin FL-2 removed: design-03 at :54 and in
+  its plugin table, the AH spec at §1.1, AH-D7, §7 and §10's AH-3 row. The spec's §1.1 and AH-D7 are already FL-2's
+  owed correction (M267). Their dated notes go through the draft queue, not these commits.
+
+**The proof.**
+- On a Mac mini kept for tests (the test Mac from here), 2026-11-17 21:28:11Z → 21:37:23Z: `pnpm verify` whole at
+  the branch's top `657e20f8a`, exit 0 in 551 s. Fifteen of its sixteen stages print a header, and each opened
+  (cargo fmt prints none); no vitest line names a failure. Read from its log: fieldd's `shell-provider.test.ts`
+  passed whole, 10 tests (9 before it, and 517c's row), and `artifact-service.test.ts` passed whole, 48 tests, none
+  skipped.
+- The red rows were read red, not run red: neither red commit was run alone. 517b's row would find no
+  `artifact.preview.refresh` record at the red commit and fail at its first `toEqual`; 517c's would see two calls
+  sent and fail at its first `toHaveLength(1)`.
+- The train's second dress rehearsal passed with this piece joined: `pnpm verify` whole on the test Mac at
+  `dde7e69a5968`, 2026-11-18 03:41:21Z → 03:51:23Z, exit 0 in 601 s, sixteen stages. fieldd's two files passed
+  there with the same counts, 10 and 48.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- No Electron ran: the queue is fieldd's alone, and the desktop app's own one-capture guard is unchanged.
+- No window was looked at. macOS only.
+
+**Not done, and not claimed:** items 514 and 519; the two draft notes; the landing-only gates (`pnpm gate:landing`)
+were not run and are owed at the landing; nothing pushed.
+
+## NR S3 — the drive's holders and lane relay hear through MeshStream, and a refused lane replay is asked again (M386)
+
+(2026-11-17; five commits, in order: `9f1849967` "NR S3 (doc): S3 lands on its own", `7d92a71f5` "NR S3 (red):
+MeshStream renews", `a5aec179d` "NR S3 (green): MeshStream renews", `c1eccba40` "NR S3 (red): the drive's holders and
+lane relay on MeshStream", `efd7d004f` "NR S3 (green): the drive's holders and lane relay hear through MeshStream". Cut
+on main `8064bbdec`: 12 files, +638 −421, the two docs and ten under `packages/fieldd`.)
+
+**Why.** NR S0–S2 (2026-11-08) made a refused native subscription tell its owner, and made MeshStream, which
+DocHoldersService took whole. The drive's two subscribers kept their own workarounds. One fault stood in them, R3,
+and moving them onto MeshStream had two hazards to keep, F1 and F2.
+- R3, item 237's uncured order, carried in the DR-3b entry: a node-up that came during the replays, before a
+  reconnect whose replay and re-subscribe were both refused, kept the stream it saw. So the lane table stayed unheard
+  until the next node-up or reconnect. The note's §5 row for it, in `drive-lane-relay.test.ts`, held that order and
+  was green by design until now. This entry is the answer to item 237's line.
+- F1: a node built anew under a live link refuses nothing, so no replay is refused and nothing tells the holders.
+  DriveHolders covered it with its own re-subscribe at every node-up, and its node-built-anew row holds that. A
+  MeshStream alone would stay on the old store, so MeshStream gains `renew()`. The S0–S2 entry names this among NR's
+  follow-ups, for `drive/holders.ts`.
+- F2: the holders hear node-up from DriveService, which renews them after the pulls. A stream whose wake heard
+  node-up as well would ask a second time at a fresh start's late node, beside DriveService's ask.
+
+**What moved.**
+- `MeshStream.renew()`, the owner's own ask: it waits out any ask in flight, then asks once. If that ask is
+  answered, the new stream replaces the standing one, and only then is the old one disposed. If it is refused, the
+  standing stream stays and still hears, and the refusal decides the next ask as any refusal does. It never rejects,
+  and before start or after stop it does nothing. A refused ask leaves a standing stream as it was; a refused replay
+  still ends it, because the link ended that entry.
+- `MeshClient.onConnected(fn)`: the link's "connected" alone, the wake of a stream whose owner hears node-up itself.
+- DriveHolders: one MeshStream over the drive's store, its wake "connected" alone (F2). Its answers and events
+  refresh what is heard; only the owner's moments publish. `start` makes the first ask, and a refusal is logged,
+  never thrown. `nodeUp` renews the stream (F1), or makes the first ask if none was made. The new `connected`
+  publishes, and makes the first ask if none was made. `#dispose`, `#subscribing`, `#subscribe` and `#doSubscribe`
+  retire, and `stop` is the stream's.
+- DriveLaneRelay: one MeshStream over `native.mesh.lane.subscribe` with the whole wake. The port's lanes map to the
+  stream's snapshot, and `#resync` is unchanged. `#release`, `#arming`, `#renewOwed`, `#subscribe`, `#arm`,
+  `#unheard`, `nodeUp` and `connected` retire. A reconnect whose replay answered makes no subscribe beside it, and a
+  refused replay is asked again by what refused it, so R3 is cured. `start` still rejects on a refused first ask and
+  stays armed.
+- DriveService: `nodeUp` runs the pulls, then the holders. `connected` runs the pulls and the holders side by side.
+  The relay hears its own moments.
+- The tests:
+  - `mesh-stream.test.ts` gains five rows for `renew()`.
+  - `drive-fakes.ts` gains a wake with both moments. Its lane control and store keep each entry's replay owner, as
+    NativeLink does, and the store refuses in the node gate's shape.
+  - `drive-lane-relay.test.ts` goes from 37 rows to 29. R3's row flips, under the title "S3 (R3, cured): a refused
+    replay after an early node-up, and a refused re-ask, are asked again on their pace…". Four more rows are
+    rewritten under new titles. Eight retire by name in the file's own comment, each with its reason. The rows
+    that drove `relay.connected()` and `relay.nodeUp()` move to the wake's moments.
+  - `drive-holders.test.ts` goes from 31 rows to 35. It keeps its node-built-anew row as it was and gains four.
+    Its reconnect row is rewritten as "S3: publishes the slice again at a reconnect whose replays answered, and
+    subscribes nothing beside them".
+  - `drive-pulls.test.ts`'s relay takes a wake.
+- The docs: DECISIONS' NR row gains S3's shape. Its status and Q5's answer are corrected and dated, and so are the
+  two ROADMAP lines: S3 lands on its own, and the daemon row stays the integration lane's. The S0–S2 entry's "Not
+  this entry" placed S3 with the integration lane after EL8-TRUFFLE, by Q5's answer. That entry stays as written,
+  and the correction stands at DECISIONS' Q5.
+- No field-native source, Cargo.toml, Cargo.lock, toolchain, lock, manifest, Swift, plugin or renderer file moved.
+
+**A named behaviour change.** `DriveService.nodeUp` and `connected` no longer wait on the lane table.
+- The composed row "holds up neither the pulls nor the slice behind the lane table's unanswered subscribe at a
+  node-up" no longer asserts that the node-up is still pending.
+- "holds up neither the slice nor the lane table behind the pulls' unanswered subscribe at a reconnect" became
+  "holds up no slice behind the pulls' unanswered subscribe at a reconnect", because a reconnect makes no lane-table
+  subscribe.
+- "arms all three parts at the next reconnect after the lane table refused start" and "arms the lane table at the
+  next node-up after it refused start, with no reconnect" now wait for the lane's claim, where they read it as the
+  call returned.
+- The rows changed at `c1eccba40`, the source at `efd7d004f`.
+
+**Proved on the development Mac, each red commit's rows red by value.** Each file ran alone, in a worktree installed
+offline at the base's lock, under `env -i` with an empty home. Vitest ran under a copy of fieldd's config whose global
+setup builds no field-native. None of these runs is of record.
+- The piece was cut on main `8064bbdec` as `c90f466af`, `f8765461f`, `1f9e0beff`, `1a3dfc66f` and `2a46654fd`, its
+  five commits patch-equal to the ones landed. Each run below names the cut's own commit: it ran on the files that
+  commit holds, made before the cut and held equal to them by sum.
+- On the tree of `f8765461f` on the cut (`7d92a71f5`'s patch): mesh-stream's file, 5 failed and 9 passed (14). Each
+  failure is its own assertion against a `renew()` stub that throws, never a missing method.
+- On the tree of `1f9e0beff` on the cut (`a5aec179d`'s patch): mesh-stream 14 of 14, three times; native-rearm-matrix 13
+  of 13; library-doc-holders 6 of 6; mesh-client 21 of 21.
+- On the tree of `1a3dfc66f` on the cut (`c1eccba40`'s patch):
+  - drive-lane-relay, 5 failed and 24 passed (29); drive-holders, 3 failed and 32 passed (35), with the
+    node-built-anew row green; drive-pulls, 82 of 82.
+  - fieldd's typecheck printed no error. Biome was clean over the nine changed files. The source's new seams are
+    types only.
+  - Two new rows are guards, green on arrival: F2's one ask, and the slice written after the pulls' roots.
+- On the tree of `2a46654fd` on the cut (`efd7d004f`'s patch):
+  - drive-lane-relay 29 of 29, three times. drive-holders 35 of 35, three times; the first of the three ran
+    before its test file was reflowed for format. An earlier draft's run read 1 failed of 35 (the roots row timed
+    out on its own wait), and the row's wait was mended.
+  - drive-pulls 82 of 82; native-link 46 of 46; mesh-client 21 of 21; mesh-stream 14 of 14.
+  - native-rearm-matrix 13 of 13; library-doc-holders 6 of 6, and its shutdown file 2 of 2; doc-holders-stop 4 of 4.
+  - fieldd's typecheck printed no error. Biome found one format error, in `drive-holders.test.ts`. The file was
+    reflowed, and it reads clean in `1a3dfc66f`'s run (its test files are `2a46654fd`'s).
+- Six mutations of `2a46654fd`'s source on the cut. Each was one edit in the worktree, put back after it ran, and
+  each turned its named row red:
+  - `renew` lets go before the answer: renew rows 1 and 2.
+  - A refused `renew` clears the standing stream: row 2.
+  - `renew` skips the flight: row 3.
+  - The holders' wake hears node-up: F2's row (3 asks), and also "keeps one entry when a start lands at any turn
+    after a node-up's refused subscribe".
+  - The relay's subscribe drops its replay owner: R3's row, and also "S3: a refused replay is asked again at its
+    next moment…" and "S3: lets the answer go when disposed during a re-ask…".
+  - The service runs the holders beside the pulls: the roots row, and also "holds up no lane table behind the
+    pulls' unanswered subscribe at a node-up".
+
+**Proved, whole, on a Mac mini kept for tests.** `pnpm verify` ran at the cut's own tip `2a46654fd73a`, five commits
+on main `8064bbdec`, from 2026-11-17 22:40:41Z to 22:49:54Z: **GREEN**.
+- The clone was at that commit, detached and clean. `pnpm install --frozen-lockfile --offline` exited 0 and left
+  the tree unmoved.
+- `pnpm verify` ran once and exited 0 in 552 s. All 16 of its stages ran. Fifteen printed their own header, and
+  `cargo fmt --check` prints none; `test:rust` and `gen:check` were among them.
+  - No vitest line names a failure and no nx task failed.
+  - cargo printed `test result: ok` ×38 and no failed result.
+  - preflight reads OK with one warning, R23's catalog candidate (`acp` could offer `spawn`), which is not this
+    entry's.
+- fieldd's suite: 293 files passed and 5 skipped (298); 4130 tests passed and 15 skipped; 342.74 s. Every file S3
+  touches or leans on passed in it:
+  - drive-lane-relay (29), drive-holders (35), drive-pulls (82), mesh-stream (14), mesh-client (21);
+  - native-link (46), native-rearm-matrix (13), library-doc-holders (6) and its shutdown file (2), doc-holders-stop
+    (4).
+- The test Mac's memory held: swap flat at 684 MiB, pressure level 1 at every sample. cargo compiled field-native
+  once and downloaded nothing. The clone was left clean at the same commit.
+
+**Joined.** The landing's second dress rehearsal passed with this piece joined: v-rehearsal-b at `dde7e69a5968`, on
+the test Mac, 2026-11-18 03:41:21Z → 03:51:23Z, `pnpm verify` exit 0 in 601 s, all sixteen stages. That commit
+carries these five with their messages, and its ten fieldd paths are byte-equal to the cut's tip.
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**Not run, and owed.**
+- `pnpm gate:landing` not run (owed).
+- The daemon row is owed to the integration lane, which wires the two classes. Nothing constructs DriveService
+  yet, so the holders and the relay on MeshStream are proven at unit level alone.
+- The note's corrections (`draft/thinking-native-replay-rearm.md`) are owed at the next draft snapshot:
+  - its §3.2 and §6 for F1 and F2;
+  - the placement this entry corrects, which the note still carries in its Status header, §3.2, §6's S3 line and
+    §7's Q5;
+  - its Status header's flip, since S3 is its last slice.
+- DECISIONS' NR status still reads "S3 OWED"; it flips at this landing's records.
+- On the development Mac: no whole suite, no `test:rust`, no field-native build and no smoke ran. The whole-tree reads
+  are the test Mac's, above.
+
+**Not done, and not claimed.**
+- DocHoldersService's own F1 gap stays a named follow-up: a node built anew under a live link refuses nothing,
+  and its stream is not renewed.
+- DrivePulls does not adopt MeshStream (the note's §6.1, row 14).
+- The S0–S2 entry's other named follow-ups stand: egress's route table, and Q2's readout of the streams waiting to
+  re-arm.
+
+## Item 435 and MK-N24 — a probe of the SEA's seam refusal; a plugin the list can't update is said once (M387)
+
+(2026-11-18; four commits, 8 paths +353 −44. Drafted on main `63c128fd7`, cut on main `8064bbdec` as `dd5fbdfca` and
+`015c95d5c` (435) and `b46329855` and `2f4f973a7` (N24) on branch `mk/fieldd-pair-on-8064bbdec`, each item red then
+green. Main moves once, on James's word and VF-PM's GO. On main they are
+`6b349d6d2`, `52ac69fdd`, `3d721fe51` and `785d2e00c`; every other id here is a side commit's,
+where it was cut or where a row ran, or main's where it says so.)
+
+**What was wrong.**
+- Item 435: MK-6 gave a packaged fieldd a boot refusal for the plugin list's development seam
+  (`FIELDD_PLUGIN_REGISTRY_URL`, `FIELDD_PLUGIN_REGISTRY_KEY`), and nothing held it on the single executable itself.
+  fieldd's rows hold the pure function, and fieldd's bundle under a plain Node that a preload makes say it is one;
+  none of `build-fieldd-sea.mjs --verify`'s probes set the seam. M315 left the item open.
+- N24: M308 named it owed, but MK-UC, inside M308's own stack (main's `20d92237f`, 2026-11-14), had built its logging
+  (`logUpdatesRead`, called by `updatesCheck` and by the popup's read). It kept no memory, so each read said every
+  standing line again. The popup reads the list at each open, so a plugin that stayed behind was said in the log at
+  every open, and again at every `updatesCheck`. M308's Owed bullet said the entries were not logged at all (a
+  correction at its source is drafted for the records).
+
+**What moved.**
+- 435, the row (`dd5fbdfca`): `registry-seam.test.ts`'s new last row takes the packaged refusal from
+  `pluginRegistryOf` and the two names from contracts, reads `build-fieldd-sea.mjs` as text (never runs it), and
+  holds the script's names and words equal to them: a reworded refusal or a renamed constant reddens `pnpm verify`.
+  By its message it is red on main at its first `toContain`. fieldd's `test` target takes the script as an input,
+  beside `Cargo.toml` and `Cargo.lock`, so a warm Nx cache does not replay a green after an edit to the script
+  alone; such an edit re-runs fieldd's suite. Kept, at the plan's lean (Q6).
+- 435, probe H (`015c95d5c`): `--verify` boots the staged executable after probe G, as a package starts the daemon
+  (no argument, cwd `/`, probe F2's environment), with both variables set: an example.com address and a word that is
+  no key. It is green only at exit 1, nothing on stdout (no readiness line), stderr exactly bin.ts's one line
+  ("fieldd failed to start: " and the refusal), neither value said, and no data directory made. The script depends
+  only on builtins and postject, so it spells the names and the words again. The row above holds the two names and
+  the words after them; bin.ts's "fieldd failed to start: " prefix and the script's own " or " only probe H holds.
+- N24, the rows (`b46329855`): three in `plugin-catalog.test.ts`, over a list the test writes and signs. Two reads
+  say one line per plugin; a line that changes (another release, other floors, another version you have) is said
+  again; one that clears says nothing, and is said again when it comes back; the popup's read and `updatesCheck`, in
+  either order, never say again what the other said. By its message all three are red on main at a `toEqual` on
+  the log: two reads make four lines.
+- N24, the memory (`2f4f973a7`): `UpdatesReadLog` (`plugin-install.ts`) takes `logUpdatesRead`'s place. A plugin's
+  line is keyed by what it says, and said when it is new or has changed; one that clears (listed again, an update
+  this VibeField takes, the plugin gone from this desktop) is forgotten. One memory serves both reads, the
+  installer's (`RegistryInstallService.updatesRead`): the catalog reads with its installer's, and daemon.ts, which
+  already hands the catalog the real installer, is unchanged. The memory is in fieldd's process alone, so a restart
+  says each standing line once more. The lines are MK-UC's: the same two events at info, the same fields, no URL.
+- DESIGN.md §8 "The updates flow" (`2f4f973a7`, +7 −0): the owed sentence and MK-UC's rider stand as main has them,
+  and one dated rider follows, "*Built 2026-11-17 (MK, N24's second half):*". It says the rule VF-PM ruled at
+  2026-11-17 17:55:44Z, "once while a line stands", and that the rule amends "each read logs them" in MK-UC's
+  rider. The rider form is VF-PM's ruling of the same time.
+
+**The proof.**
+- The lane V on a Mac mini kept for tests: `pnpm verify` whole at the cut's top `2f4f973a7`, detached and clean,
+  installed offline from the lock, under the harness and a short TMPDIR, Nx's cache skipped, 2026-11-17 19:28:09Z →
+  19:37:28Z: **GREEN**, exit 0 in 557 s. Every stage opened (cargo fmt's has no header of its own), `gen:check`
+  last; vitest and node:test failures 0; cargo's 38 results ok, none failed; fieldd 293 test files passed and 5
+  skipped (4133 tests passed, 15 skipped), `registry-seam.test.ts` 6 tests (5 on main) and `plugin-catalog.test.ts`
+  34 (31 on main) among them; field-app 358 of 358 files, 5134 of 5134 tests (verify.log `13d4447f1e51ff2f`).
+- The train's second dress rehearsal, with this piece joined: v-rehearsal-b, `pnpm verify` whole at `dde7e69a5968`
+  on the test Mac, 2026-11-18 03:41:21Z → 03:51:23Z: exit 0, sixteen stages.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- Probe H has not run. Its row (a fresh fieldd build, field-native's release set, then `build-fieldd-sea.mjs
+  --verify`, every probe ok) is drafted, not run. The script exports nothing and builds at its top, so `--verify` is
+  the probe's only proof; the V holds the names and words equal to their source, not the executable's refusal, and
+  not bin.ts's prefix or the script's " or ".
+- `--verify` runs only by hand (`package:sea` passes none; desk-gates row 34 says so), so probe H holds when someone
+  runs it. `docs/desk-gates.md` is unchanged: row 34 lists only the probes its AR-7j claims ride on.
+- No commit but the top was run: neither red alone (what each wants red is in its message), nor 435's green alone,
+  nor a commit's own typecheck. Probe H's own red is unwitnessed.
+- Two messages name rows as their tests: 435's red, "At this commit alone, vitest over registry-seam.test.ts …",
+  and 435's green, "Tests (on the test Mac: the lane V, then the SEA row) …". Neither ran at its commit; the lane
+  V ran at the top alone, and the SEA row has not run.
+- No row boots fieldd and reads its log: N24's rows build the catalog over the real installer, as daemon.ts does.
+  The catalog's own memory when its installer hands none (`updatesRead ?? new UpdatesReadLog()`) is held by no
+  row: every row hands the installer's.
+- MK-UC's rider still names Settings → Plugins' old updates row as what asks `updatesCheck`; under the rider form
+  those words stand, and what asks it now was not traced.
+- The debug swarm's packaged refusal (`FIELDD_DEBUG_SWARM_CORPUS`) has the same shape and no probe either.
+- macOS only.
+
+**Closed by it:** N24's second half (MK-UC's lines were its first). **Not closed:** item 435, until probe H has run
+on a real single executable.
+
+**Not done, and not claimed:** probe H's row (drafted, not run); a boot row for N24; the opt-in check at start (no MK
+slice builds it); the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing; nothing
+pushed.
+
+## Item 516 — History on the phone waits in the living mark: its first read, a project's list, none at rest (M388)
+
+(2026-11-18; six commits, in order: `2edce7c6d` (doc, "516 (doc): the phone's History waits in the hold…"),
+`c39e6702a` (red, "516 (red): History's waits hold nothing yet…"), `6aa7c8d6d` (green, "516 (green): History's waits
+stand in the hold…"), `fb7edc588` (generator, "516 (generator): the living mark's generator writes the phone's
+numbers…"), `030aa5532` (mend, "516 (mend): item 242's ink census reads the ledger's t3s…") and `8f91e41e7` (words,
+"516 (words): its comments say the item, the day and what was asked…"). The leans and the words are the ones
+James picked on 2026-11-17 on the page "The Mark in a Pocket", round 2.)
+
+**What a person sees.** While the phone's History waits for its desktop, it now waits in the living mark, as a
+conversation's first reading has since item 417: the mark at the centre at 99 × 44, one line 26 pt under it,
+and under the line the desktop or a count. It is late by 120 ms, stands at least 800 ms once shown and leaves
+over 280 ms; while the wait goes on in other words the mark stays and only the line changes. With a desktop
+named studio:
+- The first page, with no project yet, while studio answers: "Opening History…" until the listing is answered
+  once (a desktop still grouping its projects is still waited for); "Finding your history…" over "on studio";
+  "Updating your history…" over "on studio"; "Discovering conversations…" over "214 of 1,033 sessions on
+  studio".
+- No desktop answering and nothing kept: the mark at rest, "No desktop is answering" over "History opens when
+  one wakes." It replaces item 505's note "History comes from your desktops".
+- A project's list of sessions, while none has arrived and studio answers: a box 280 pt tall at the list's
+  top, "Reading the conversations…" over "from studio". Once its sessions are answered it holds no longer; an
+  empty list then stands empty under the project's head.
+- Earlier messages read in by the pull: the living mark, 40 wide, stands in the ring's place while the batch
+  is read. The ring keeps the pull and the release; its turning arc is gone.
+- No longer drawn as an empty page's note: "History on studio is opening", "…is updating", "studio is reading
+  its history" and, for a desktop asleep, "Your projects have not been read yet"; nor a project's "Reading
+  the sessions…". The line under a page's head keeps all six of its sentences.
+
+**The seams.**
+- `DESIGN.md` §8: a new bullet, "The phone's History waits in the hold", and dated amendments at fix7's
+  paragraph (the notes no longer drawn), "Its first reading is the hold", the pull's "Let go" and "The living
+  mark, drawn as SVG".
+- `HistoryOpening.swift`: item 417's hold widened. `historyHold(_:place:)` takes `Words` (a line, what stands
+  under it, resting) at a `Place` (`.pushed`, `.root`, `.box`); its rules are `ledger(…)` and `sessions(…)`.
+- `HistoryProjects.swift`: `answered`, set in the turn the fold carrying the first listing is drawn or by a
+  refused listing (not by a grouping not ready); `sessionsRead(_:)`, the same for each project's sessions.
+- `HistoryLedgerView.swift` and `HistoryProjectView.swift` hold, and the ledger's `noDesktop` is retired. In
+  `ProjectFold.swift`, `noDesktopRead` is retired, `emptyLedger` answers nil where the place holds, and
+  `projectSessionsNote(desktop:)` is the asleep note alone.
+- `HistoryOlderPull.swift` and its view: the reading face is the living mark at `markWidth` 40; `arc`, `turn`
+  and `angle(at:)` are retired.
+- `tooling/splash/living-mark.mjs` writes `LivingMarkData.swift` beside the SVGs, and its `--check` holds the
+  Swift file with them. The Swift file's diff is its header alone; every number is as item 417b set it.
+- `KitFaintWordsTests` (item 242's census): `HistoryLedgerView.swift` reads 8 t3 inks, not 9, as
+  `noDesktop`'s own line left with it. It was never an `inkFaint`, so the census's 42 and 19 stand.
+
+**The rows.**
+- `HistoryHoldsTests` (new, 12 rows): which places hold and what each says, its figures, and no insides
+  (door, index, ledger, phone, daemon, schema) in any of its words.
+- `HistoryOlderPullTests`: `theTurn` became `theReadingMark`.
+- `HistoryProjectsTests`: new `answeredOnce` and `sessionsAnsweredOnce`; fix7's three rows (`indexFailed`,
+  `indexComing`, `indexReadyEmpty`) follow the note that may now be nil, and `indexComing` reads the hold's
+  words where the notes stood. `FieldHistoryModelTests`: `deviceNamed`, `projectSessionsWait` and
+  `emptyLedgerWords` follow the retired words.
+- `living-mark.test.tsx`: a row that the Swift file carries the generator's header, its stamp and its box; the
+  row already there that runs `--check` now holds every byte of the Swift file too.
+
+**Proved.**
+- The piece was cut on main `8064bbdec`; its six commits are patch-equal to the ones landed, and each run
+  below names the cut's id.
+- The cut (19:29:02Z to 19:29:11Z, 2026-11-17) made `87d235ae94b7` to `5009d9bd0ee1` on main `8064bbdec`
+  from files prepared and summed beforehand, each held to its parent, its message and its blobs; the mend
+  (19:45:19Z to 19:45:20Z) made `fe40ce7acb68` on them, and the words (21:32:58Z to 21:33:00Z) made
+  `09aa9c46053b`. None ran a test.
+- `8f91e41e7` changes comment lines and DESIGN.md words alone: its cut held that every changed Swift line is a
+  comment and that DESIGN.md changes four lines for four. So the rows below, run at `fe40ce7acb68` on the
+  cut (`030aa5532`'s patch), carry to it.
+- The red at `2a0eaf82c176` on the cut (`c39e6702a`'s patch), on the test Mac's simulator (iPhone 17 Pro, iOS
+  27.2; 19:38:43Z to 19:40:04Z): FieldHistoryTests compiled, 511 rows; exactly the 11 rows meant to fail
+  did, each on its stub's value: eight of `HistoryHoldsTests`' twelve, `answeredOnce`,
+  `sessionsAnsweredOnce` and `theReadingMark`. The other 500 passed, among them the four
+  `HistoryHoldsTests` rows that say no place holds, as a stub's nil says so too.
+- The top at `5009d9bd0ee1` on the cut (`fb7edc588`'s patch; 19:41:08Z to 19:42:18Z): FieldHistoryTests 511 of
+  511; FieldDesignTests 99 of 100, the one red being `KitFaintWordsTests`' table, which `030aa5532` mends.
+- The top at `fe40ce7acb68` on the cut (`030aa5532`'s patch; 19:46:28Z to 19:47:17Z): FieldDesignTests 100 of
+  100 and FieldHistoryTests 511 of 511.
+- `pnpm verify`, whole, at `fe40ce7acb68` on the cut (`030aa5532`'s patch), on the test Mac (19:48:18Z to
+  19:57:35Z): exit 0 in 555 s, its sixteen steps run (fifteen open under their own header; `cargo fmt
+  --check`, its own step between lint and lint:rust, prints none), on an offline install from the lock.
+- The train's second dress rehearsal passed with this piece joined: v-rehearsal-b at `dde7e69a5968`
+  (2026-11-18, 03:41:21Z to 03:51:23Z), `pnpm verify` exit 0, its sixteen stages run; kit-rehearsal-b, every
+  target of the kit (03:52:58Z to 03:55:08Z), 3,060 rows: 3,056 passed, 3 skipped and 1 failed, the known
+  FieldWebTests R4 row (item 522).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- No still or recording of the holds on a phone was taken; how they look and move is for the eye on a device.
+- DESIGN.md marks two of the words as readings: "Updating your history…" (the desktop says no line of its own
+  there), and an answered empty project list that stands empty.
+- A desktop still grouping its projects is read again only by a ping, as before this item.
+- `pnpm gate:landing` not run (owed).
+
+## Item 518 — the spend chart's moment line no longer runs through its caption (M389)
+
+(2026-11-18; three commits, in order: `d13042e28` "518 (doc): the spend chart's moment lines keep off its caption, on
+both surfaces", `ed99ccac3` "518 (red): a moment held under the spend chart's caption draws its line through the words",
+`7953ff17d` "518 (green): the spend chart's moment lines begin below its caption where they would cross it".)
+
+**What a person sees.** On the phone's Godview spend chart, a moment held under the chart's caption ("LAST 10
+MINUTES") drew its vertical line through the words. Now the moment's line, the finger's ghost line and the dashed
+line down to a line's start begin 4 pt below the caption's line wherever they fall within its drawn width, 4 pt
+either side: level with the Now pill's top. Elsewhere they begin 4 pt above the plot's top, as before. The caption
+stands where it did; the line moved.
+
+**The seams and files.**
+- DESIGN.md, Godview's spend view: a dated bullet, "The moment's lines keep off the caption", the rule for both
+  surfaces. The window's half is owed by puppeteer-views, whose `paintCross` and `paintStart` draw from the plot's
+  top at 0.4.2 (a petition to it is drafted, 2026-11-17, not yet sent).
+- `SpendScene`: `Caption` (its left, the end of its drawn width, the foot of its 10 pt line) and `lineTop(_:x:)`,
+  with `captionClear` = 4.
+- `SpendModel.colcapWidth`: the caption's drawn width, measured as `colcapWords` measures; `colcapWords` calls it.
+- `SpendPaint`: the moment's, the ghost's and a start's lines begin at `lineTop`.
+
+**The row it adds.** S7 `aMomentsLineBeginsBelowTheCaption` (`SpendSceneTests.swift`, host-buildable): a moment
+held under the caption's middle begins its line 4 below the caption's line, where the Now pill stands; a line clear
+of the caption begins 4 above the plot's top. The ghost's and a start's lines begin at the same `lineTop`; no row or
+still draws them under the caption.
+
+**Proved, on a Mac mini kept for tests** (2026-11-17; an iPhone 17 Pro simulator on iOS 27.2, Xcode 27.3; the kit's
+suite "PG-7 — the spend view"):
+- At the red commit as cut (`08eedb7b2`), 21:38:28Z to 21:39:41Z: red as wanted. It builds; 49 rows passed, and S7
+  failed on its line's top: "the moment's line begins at 76.0; the caption's line ends at 98.0".
+- At the green commit as cut (`8cb2ea386`), 21:50:14Z to 21:51:10Z: 50 of 50 passed. R2 drew its two stills, light
+  and dark: "LAST 10 MINUTES" reads whole, and the 14:16 moment's line begins below it, level with the Now pill's
+  top. Nothing else in either still moved.
+- The train's second dress rehearsal, with the piece joined (`dde7e69a5968`, 2026-11-18, 03:41:21Z to 03:51:23Z):
+  `pnpm verify` exit 0, its sixteen stages. It runs no kit test.
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+- dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone
+
+**Not run, and owed.**
+- On a simulator, not a phone: nothing was installed on a device. How the chart looks on a real phone is owed to
+  an eye.
+- The window keeps the crossing until puppeteer-views carries the same rule; the petition to it is drafted, not sent.
+- `pnpm gate:landing` not run (owed).
+
+## Item 520 — History's folder-list test gets 20 s, so a loaded runner no longer fails it (M390)
+
+(2026-11-18; one commit: `f63523edb` "520: R6's folder-list walk gets 20 s, as the room's other long walks do".)
+
+**What happened.** GitHub's verify at main `8064bbdec8e3` (2026-11-17) failed once at the 5 s default: R6 in
+`room-host-inputs.test.tsx`, "lists every folder by group, …", "Test timed out in 5000ms" (field-app 357 of 358
+files and 5133 of 5134 tests, in a suite of about twelve minutes there). Two re-runs that day got no runner and
+were cancelled; a third re-run passed that evening on the same commit, with no change. It also passed in the verify
+of the landed main on a Mac mini kept for tests, 358 of 358 files. The same test at the same commit failed once and
+passed twice, as a wait too short for a loaded runner does.
+
+**Why, and the fix.**
+- R6 mounts one room over the demo ports (itself one `until`, on the ledger's rows), then makes ten more `until`
+  waits on its renders (polled every 10 ms, 5 s each) and one 50 ms pause. The demo fixtures keep no timer (they
+  answer by microtask), and R6 sets no clock of its own. Splitting it would mount the room more often.
+- Its own waits allow 5 s each, so a 5 s budget for the whole walk was no more than any one of its waits allows
+  alone.
+- R6 now has an explicit 20 s, with a three-line reason above it, as eleven tests in `history-view.test.tsx` and
+  five in `history-glass.test.tsx` have. Nothing else moves.
+- No red: a timing flake has none.
+
+**Proved.**
+- On the test Mac, the whole file, 25 tests, took 1.3 to 1.6 s in the day's ten earlier verifies.
+- biome check on the file, by stdin, gave it back byte for byte (exit 1 in stdin mode, as the file at main gives);
+  the verify's lint stage passed at the commit.
+- The test Mac's verify at the commit as cut (`cdd6e16f3`), 2026-11-17, 22:53:39Z to 23:02:49Z: `pnpm verify`
+  exit 0 in 549 s; field-app 358 of 358 files and 5134 of 5134 tests; this file's 25 tests in 1.4 s.
+- The train's second dress rehearsal, with the piece joined (`dde7e69a5968`, 2026-11-18, 03:41:21Z to 03:51:23Z):
+  `pnpm verify` exit 0, its sixteen stages.
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**Not run, and owed.**
+- GitHub's verify on the next push.
+- `pnpm gate:landing` not run (owed).
+
+## AC (erratum) — CLAUDE.md: the agent catalog has seven kit mirrors, not six (M391)
+
+(2026-11-17; one commit, 1 path +10 −3: `77b66287d` ("docs: CLAUDE.md — the agent catalog has seven kit mirrors, not six
+(IOS-12d's seventh, dated)"). Cut by ES on main `8064bbdec` as `99d7f2986` on branch
+`es/claude-md-mirrors-on-8064bbdec`, a re-cut of `54f0d6f70` (cut on main's `68f489ac2` on 2026-11-09, never carried).
+Main moves once, on James's word and VF-PM's GO. On main it is `77b66287d`. `99d7f2986` and `54f0d6f70` are side
+commits; `8064bbdec`, `68f489ac2` and `c585c2da9` are main's.
+James's word for the edit, typed in ES's session on 2026-11-09 at 07:53Z, three lines (" / " marks his line breaks):
+"1. ASAP, build in parallel if possible / 2. go bare form / 3. go ahead". Item 3 answered ES's third question of
+07:49Z, "Can I correct one line in `CLAUDE.md`?", which named this erratum and its draft.)
+
+**What was wrong.**
+- The falsified claim stood at its source: CLAUDE.md, "Laws that bind code here", the bullet "The agent catalog decides
+  support (AC, 2026-09-22)", line 318 at `8064bbdec`. It said to copy `fixtures/agent-catalog.valid.json` "to the
+  kit's six mirrors (`pnpm check:ios-fixtures` names them)", and listed six `Fixtures` folders.
+- IOS-12d (2026-11-06) added a seventh, `Sources/FieldHome/Fixtures` (its d3 red commit, `c585c2da9`, added the
+  file): the catalog `ChatFixtureDoor` answers `agent.catalog` from (the `chat` row of
+  `scripts/check-ios-fixtures.mjs`). Found by ES on 2026-11-09.
+- "names them" claimed too much. The script's `requiredMirrors` checks only that each copy it names exists, and it
+  names four of the seven: the `workspace` row's two (`Tests/FieldWorkspaceTests`, `Sources/FieldWorkspace`), `chat`'s
+  (`Sources/FieldHome`) and `usage`'s (`Tests/FieldHomeTests`). They stand at lines 418, 423, 504–508 and 528–540 at
+  `8064bbdec`, and the same four at lines 420, 425, 514–518 and 546–559 at the train's top `fa6c1ea15e8b`. The other
+  three (the tests' of FieldProduct, FieldMesh and FieldSwarm) are held by the script's walk alone. It compares each
+  JSON copy present under the kit's `Tests` and `Sources` to its origin, byte for byte; this file's origin is the
+  contracts fixture.
+
+**What moved.**
+- The bullet now says seven and lists `Sources/FieldHome` with the other six. Its parenthetical says
+  `pnpm check:ios-fixtures` holds each to it, which is true of the seven: the walk compares each to the contracts
+  fixture.
+- A dated correction at the source, "Errata (2026-11-17, ES; found 2026-11-09)", follows UM-4b's of 2026-11-06 (five
+  to six), which stands. It says what the bullet said and names the slice that added the seventh (IOS-12d, 2026-11-06;
+  it names no commit). It says the check's `requiredMirrors` names four of the seven, and that all seven were
+  byte-equal to their origin when read at `8064bbdec`.
+
+**Untouched.**
+- No fixture, check or code moved. The seven copies were already equal to their origin. `requiredMirrors` still names
+  four of the seven; whether it should name all seven is not ruled here.
+
+**The proof.**
+- Read at `8064bbdec` (2026-11-17) and at the train's top `fa6c1ea15e8b` (2026-11-18): the kit holds exactly seven
+  copies of `agent-catalog.valid.json`, and they and `packages/contracts/fixtures/agent-catalog.valid.json` are one
+  blob, `2c28a087bd12`. CLAUDE.md at `8064bbdec` is blob `6a6b3885f`, the blob that `54f0d6f70` was cut over.
+- The cut, 2026-11-17 21:16:49Z → 21:16:50Z: one commit, on VF-PM's word. It went through the repo's pre-commit hook
+  (its siblings render check passed) and was held to its parent `8064bbdec`, to the sums of its message and its file,
+  and to its one path.
+- Docs only: nothing reads the root CLAUDE.md, at runtime or in any verify stage. Read at `8064bbdec` and at
+  `fa6c1ea15e8b`: every code mention of `CLAUDE.md` is a comment, or a spark folder's own brief.
+- In the joined tree: the train's first dress rehearsal of the twenty pieces, v-rehearsal-a, ran `pnpm verify` whole
+  on the test Mac, 2026-11-18 03:12:53Z → 03:23:03Z, at `270a6e8dc615`: exit 0, sixteen stages.
+- The train's second dress rehearsal passed with the piece joined: v-rehearsal-b at `dde7e69a5968`, on the test Mac,
+  2026-11-18 03:41:21Z → 03:51:23Z, `pnpm verify` exit 0, sixteen steps run, fifteen printing a header.
+- The train's V:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Found at the fact-check (2026-11-18), not mended here.**
+- One sentence of the committed erratum overstates the check (`CLAUDE.md:327–328` at `fa6c1ea15e8b`): "The check
+  compares every JSON copy under the kit's `Tests` and `Sources` to its contracts origin". The commit message's second
+  bullet says the same. The walk skips `.xcassets` folders, and it looks a copy's origin up in `OTHER_ORIGINS` first
+  (goldens under design-kit, field-app and fieldd), and in the contracts fixtures only after. A copy with no origin is
+  skipped if it is lane-authored or vendored, and is reported otherwise. The sentence is true of the catalog's seven
+  copies. A dated correction at its source is owed: a later docs commit on CLAUDE.md, on James's word.
+- LANDED "ES-4 (role)" (2026-11-09; `docs/LANDED.md:44509` at `fa6c1ea15e8b`) says "check:ios-fixtures names
+  seven". It names four (above), and its walk compares all seven. A dated correction at that source is owed, in the
+  records.
+- Main's records name the word two ways. ES-4 (role) owes the erratum "on James's own word, never on a peer's". M270's
+  owed list says "on James's word in the fixer's session, then re-cut onto main". The edit's word is the one quoted
+  above, typed in ES's session; main moving is the land's word.
+
+**Not covered.**
+- No row ran on the lane (docs only). The landing tree's proof is the train's V (v-train10d, `pnpm verify` whole at the
+  train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt
+  --check` is its own step, between lint and lint:rust, and prints none); 27 suites
+  passed. The kit of every target at the same top, kit-train10d, ended 13:21:02Z:
+  3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed
+  on main (item 522), passes from this train on); the rehearsal trees are not the
+  landing tree.
+- No reader of CLAUDE.md was asked to follow the new list.
+
+**Not done, and not claimed:** a ruling on whether `requiredMirrors` should name all seven; the two corrections owed
+above; the landing-only gates (`pnpm gate:landing`) were not run here and are the train's at the landing; nothing
+pushed.
+
+## Item 522's guard — no app view outside FieldWeb may name the web host until its filtering front stands (M392)
+
+(2026-11-18; one commit on main:
+- `c994b233c` "522: check:web-markers holds that no view outside FieldWeb mounts the web host yet": the guard and
+  its self-test rows.)
+
+**What a person has.** Nothing on any screen changes. No view mounts SP-4's web host today, and now the gate holds
+it: `check:web-markers` fails when `FieldWebAppHost` or `FieldWebAppNavigation` is named in any app source outside
+`Sources/FieldWeb/`, gated or not, each finding naming item 522. Before this commit the check let any gated app
+source (a FieldHome view among them) name the host, and did not look for `FieldWebAppNavigation` at all; and a
+developer's phone runs Debug builds.
+- It is unconditional. As cut, its comment lifts it in the filtering front's own green commit. That commit (cut on
+  its own branch, not landed) keeps it instead: it rewrites the comment to wait on item 524's reading (whether
+  WebRTC or WebTransport leave a page around its proxy), lifting in the commit that records it, and turns the
+  finding to name item 524. Until the front lands, the comment on main states the older condition.
+- What it holds is the two type NAMES. It stops an honest mount. A mount through a new door inside FieldWeb that
+  handed the host out unnamed would pass it; the front's own type closes that, not this check.
+- The self-test, 19 rows: the old row allowing a gated FieldHome view turned round, and rows for the navigation type
+  in a FieldHome view, the host in FieldWeb's own folder and a test target naming it; the comment-outside-the-gate
+  row, now outside FieldWeb too, draws the mount finding as well (2, not 1).
+
+**What was proved.**
+- At the cut, on the development Mac, as its message says (no output of them was kept): the self-test, 19 of 19; the
+  check over main's sources, 0 findings; over the tree of an unlanded branch whose screen names the host, 3 findings in
+  its `AppsWebPage.swift`, exit 1. Native biome check on the files, exit 0: the script at `a506990d`'s tree,
+  after a control that failed (the run's folder `biome-check/`, 2026-11-18). `pnpm lint` is the train's verify's.
+- In the train's joined tree at `270a6e8dc` on the test Mac, where `check-web-markers.mjs` is this commit's byte
+  for byte: `pnpm verify`, whole, passed (v-rehearsal-a: exit 0, its sixteen stages; its log reads
+  "check-web-markers self-test: 19 of 19" and "check-web-markers: 0 findings"). Its kit run of all targets on the
+  simulator (kit-rehearsal-a) ended xcodebuild exit 65 on one row: of 3,060, 3,056 passed, 3 skipped and 1
+  failed, FieldWebTests' R4, main's own (it fails at main `8064bbdec` too, sp4-ma5-kit-1).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- `pnpm verify` not run at the cut; the train's verify above is its proof.
+- `pnpm gate:landing` not run (owed).
+- Item 522 stays open: its fix, the filtering front, is cut on its own branch and is not yet proven or landed (R4,
+  above, is among the rows it turns); the guard waits on item 524's reading besides.
+
+## DS — A desktop restarting for an update is drawn as it was while it answered, never asleep (M393)
+
+(2026-11-18; eleven commits, in order. `0ab44e737` (comment, "FS (comment): the files worker's native shim names mille
+0.3.6's export surface") stands apart: train 9's EL8 to mille 0.3.6 left `mille-native.ts`'s header naming 0.3.4's
+surface, and it now names 0.3.6's (`source`, `resolvedPath`, `packageVersion`). Then the slice, red before green
+at each seam: `8124d4447` (red, "DS (red): a desktop's restart announcement on its slice and its roster row…"),
+`591f4fd1f` (green, "DS (green): DeviceSlice.restart is fieldd's RestartScheduled…"), `2e9848660` (red, "DS (red): an
+offline desktop that announced its update reads asleep…"), `7d8b00410` (green, "DS (green): a desktop announces an
+update's restart on its slice…"), `3063cb83b` (red, "DS (red): the mesh board dials a desktop restarting with its node
+offline…"), `7f2c62eb4` (green, "DS (green): the mesh board holds a desktop restarting…"), `e22de4ec5` (red, "DS (red):
+History draws a desktop mid-update asleep…"), `f7b7fb8bd` (green, "DS (green): History draws a desktop mid-update as
+it was…"), `f80c0b317` (red, "IOS (red): the phone leaves a desktop's announced restart unread…") and `95f9ff9b8`
+(green, "IOS (green): the phone reads a desktop's announced restart…"). The pick is the one James made on 2026-11-17:
+"A: behaviour only, no new word". The old branch `hl/restart-announce` (6ed21e718)
+was reference only; none of its words are carried.)
+
+**What a person sees.** Nothing new is written for a person to read: no sentence, label, mark, DESIGN.md line or
+shown kit string is added or changed. (The new texts are fieldd's three log events and the kit's three decode
+reasons, which nothing shows.) What changes is that a desktop restarting for an update stops reading as asleep. An
+update that stops a desktop's floor takes its tailnet node down with it, and until now every other device then read
+it asleep. Now, for up to five minutes from the moment it announced the restart:
+- On another desktop, the mesh board keeps its last board, standing stale, and does not dial it while its node is
+  offline. History draws it exactly as it was while awake, and its replica does not ask it in a search or a
+  figures ask.
+- On the phone, the account corner, the sheet's line, Settings' reach, the bloom, search, the launch sheet and
+  History's roster all draw it as they did while it answered. A remembered desktop the tailnet no longer lists
+  shows no word in the corner and reads connected in Settings, not "Asleep · last heard". "Can’t reach your
+  computer." does not stand over an update's restart.
+- When the five minutes pass and it has not come back, it reads asleep, as before. A desktop on an older build
+  announces nothing and reads as it always did. A quit, a logout and an idle stop announce nothing.
+- Side effect, named in `f7b7fb8bd`: History no longer draws an incompatible desktop with its node offline as asleep,
+  because the roster and the listing both say incompatible.
+
+**The seams.**
+- `packages/contracts/src/devices.ts`: `restart` on `DeviceSlice` and `DeviceInfo` is `RestartScheduled`, the same
+  object as fieldd's local carrier, `.optional().catch(undefined)`, so an announcement a build cannot read costs
+  only itself. `restartHolds(restart, now)` holds from `at` for the reader's TTL, and never for an `at` more than
+  the skew ahead. `registries.ts`: `DEVICE_RESTART` (TS-only): `ANNOUNCE_TTL_MS` 300 s, `MAX_CLOCK_SKEW_MS` 5 s,
+  `PUBLISH_BOUND_MS` 2 s. `update-policy.ts`: `RestartScheduled`'s comment no longer says the peer half is owed.
+  Fixtures `device-slice.restarting.json` and `device-info.restarting.json`, mirrored into the kit.
+- `packages/fieldd/src/daemon.ts`: `announceRestart` hands the announcement to the roster's one writer and logs
+  `fieldd.lifecycle.restart_announced` or `_unannounced`. It writes on the consented floor stop for an update
+  (all three planes, before `stopFloor`) and on the update stop that leaves the floor (`shell` and `fieldd`,
+  before the answer). The stop goes on either way. Nothing retracts it: the next boot's slice carries none.
+- `packages/fieldd/src/device-service.ts`: `DeviceService.announceRestart` is that writer: it puts `restart` on this
+  device's own slice, bounded by `PUBLISH_BOUND_MS`. `deviceState` gains a sixth argument, `restartAnnounced`. It
+  reads `restarting` with the node offline, never outranks `incompatible` or self, and a door that answers on a
+  listed node reads `awake`. The roster carries `restart` on the row, arms one timer for the earliest lapse so
+  `restarting` becomes `asleep` on its own, and logs an unreadable announcement once per device.
+- `packages/fieldd/src/mesh-board.ts`: a `restarting` row with its node offline closes the upstream and stands
+  `stale`, its board kept. `packages/fieldd/src/index-mesh.ts`: that peer stands `stale` and is not asked
+  (`#awayRestarting`, `RESTARTING_DETAIL`, the sentence `#refusedSource` already gave). Comments in `rows.ts` and
+  `agent-index.ts` say so; no shape moved.
+- `packages/field-app/src/history/host-model.ts`: the roster's `state` decides a desktop's `asleep` when the row
+  carries one.
+- The kit: `ProductShapes.swift` reads `DeviceInfo.restart` as `DeviceRestart` (the contracts' reasons and planes,
+  `holds`, `lapsesAt`); one it cannot read is nil and named in `unknownFields`. `FieldLink.swift`: `restarting`,
+  read off the presence store and nowhere else, with one wake for the earliest lapse; `FieldDesktop.restart`,
+  carried while `restartStands` (fieldd's roster rule, mirrored); `FieldDesktop.drawnState`, which every surface
+  that draws reads, while those that ask a door keep `state`. `AccountDisplay`, `MeshDisplay`,
+  `FieldHomeModel(+Settings)`, `HomeScreen` and `PhoneSearchWorld` read `drawnState` and the restarting set.
+- `scripts/check-ios-fixtures.mjs`: the two fixtures' mirror row, and two pins holding the kit's TTL and skew to
+  `DEVICE_RESTART`, anchored to its block.
+
+**The rows.**
+- `contracts/test/devices.test.ts`: the shape carries `restart`; a malformed one drops alone; identity with
+  `RestartScheduled` on both shapes; `restartHolds`' window and skew edges; the publish bound inside the TTL.
+- fieldd: `device-service.test.ts` (an offline peer's roster state, the two stops' writes and their order, the
+  lapse on a fake clock), `peer-door.test.ts` (`deviceState`'s ten announcement cases), `mesh-board.test.ts`
+  (the offline restarting row stale, not dialled) and `index-mesh.test.ts` (stale, not asked).
+- `field-app/test/history-host.test.tsx`: the host model reads the roster's state, and a guard that a desktop
+  mid-update is drawn exactly as the same desktop awake, so any new word or mark fails it.
+- The kit: `WireShapeTests` (the announcement read, not left unknown; one this build cannot read costs only
+  itself; the value; `holds`' edges); `AccountDisplayTests` (a desktop mid-update draws the word and sentence of
+  the same desktop answering; the stand rule's table); `AccountFaceTests`, `SettingsAccountTests` and
+  `DoorPageTests` (the remembered row, the count); `FieldLinkTests` (the announcement read off the presence store,
+  a lapsed one dropped).
+
+**Proved.** Each run or read below names the commit it ran at on the cut; a mark names the landed commit, whose
+patch is the cut's.
+- The cut: the branch `hl/restart-on-8064bbdec` at `9f050356e`, eleven commits on main `8064bbdec`, made in a lane
+  clone through the repository's hook (`core.hooksPath=scripts/git-hooks` on each commit), came in by one create-only
+  fetch (21:19:46Z, 2026-11-17; one ref added, none moved). Its eleven commits are patch-equal, by
+  `git patch-id --stable`, to the eleven the train carries at `fa6c1ea15e8b` (read 2026-11-18), in order `c4d2e2bf8`,
+  `a6338fd52`, `6c8e76eb0`, `d4038b026`, `47cb6e5a6`, `588b7fefb`, `21f64af6d`, `e25085593`, `f71e060d5`,
+  `47cb6f144` and `9f050356e` (`0ab44e737` to `95f9ff9b8`).
+- The cut's last four were re-made at 21:19Z for their words. `e25085593` (`e22de4ec5`'s patch) differs from its first
+  make `ecf50630c` by one comment line in `history-host.test.tsx`, its message the same; `f71e060d5` (`f7b7fb8bd`'s) was
+  re-made only for its new parent, its patch and message those of `52bf73a2f`; `47cb6f144` and `9f050356e`
+  (`f80c0b317`'s and `95f9ff9b8`'s) carry the patches of `34f23e326` and `cdb560d13`, each message changing one line. So
+  a tree a first make's rows ran on differs from the cut's by that one comment line, and the rows carry.
+- The TypeScript rows, on the development Mac, each in the lane's clone of main with the slice's earlier commits
+  beneath, on the tree then committed, under env -i on the pinned store offline (the lane's harness, on one frozen
+  offline install); fieldd's files under its vitest config less the global cargo build (none of them spawns
+  field-native). The clocks are the ones the harness printed; the logs carry none:
+  - `a6338fd52` on the cut (`8124d4447`'s patch; 19:24:48Z to 19:25:36Z): devices and fixtures, two of the three new
+    rows failed, each at its own assertion, and 772 passed, the third new row (an older peer's slice reads as announcing
+    nothing, a guard) among them. `6c8e76eb0` (`591f4fd1f`'s; 19:26:12Z to 19:26:51Z): devices, fixtures and freeway,
+    794 passed.
+  - `d4038b026` (`2e9848660`'s; 19:31:10Z to 19:32:18Z): the three new rows failed, 37 skipped. `47cb6e5a6`
+    (`7d8b00410`'s; 19:34:17Z to 19:36:46Z): device-service and peer-door whole, 55 passed; shell-lease,
+    daemon-stop-carries-on, terminal-inventory-age and mesh-board, 89 passed.
+  - `588b7fefb` (`3063cb83b`'s; 19:37:23Z to 19:39:05Z): mesh-board, 1 failed, 45 passed. `21f64af6d` (`7f2c62eb4`'s;
+    19:39:25Z to 19:41:14Z): mesh-board and device-service whole, 87 passed.
+  - `ecf50630c`, the first make of `e22de4ec5`'s patch (19:42:44Z to 19:44:36Z): index-mesh, 1 failed and 18 passed;
+    history-host, 2 failed and 45 passed. `52bf73a2f`, the first make of `f7b7fb8bd`'s (19:45:16Z to 19:50:30Z):
+    index-mesh, mesh-board and device-service, 106 passed; history-host, 47 passed; fieldd's fourteen non-e2e
+    index-* files, 221 passed and 8 skipped; field-app's history-* and godview-monitor files, 414 passed and 3
+    skipped.
+  - biome clean on every file, and tsc clean for every package touched, on each tree committed from `a6338fd52` to
+    `21f64af6d` and on the first makes `ecf50630c` and `52bf73a2f`; biome also on the re-made comment line
+    (21:19:35Z). At `6c8e76eb0`, `d4038b026` and `47cb6e5a6` biome's first try failed and the formatter wrapped
+    lines; the rows, and at the first two tsc, ran before that and not again after it. At `47cb6e5a6` neither the
+    fault nor the fix is on file: the clean rerun overwrote its first logs.
+  - Nothing generated moved: none of the eleven touches a generated file, and the V's gen:check at `9f050356e`
+    diffed clean.
+- `pnpm check:ios-fixtures` on the tree then committed as `cdb560d13`, the first make of `95f9ff9b8`'s patch (21:09:12Z
+  to 21:09:20Z): 462 copies and 114 pins. The skew pin made to drift (the Swift side at 6_000) went red naming both
+  values, then was restored.
+- The kit's red on the test Mac at `47cb6f144` on the cut (`f80c0b317`'s patch; ended 00:59:48Z, 2026-11-18, 77 s):
+  FieldProductTests compiled, 352 rows; exactly `aDesktopsAnnouncedRestartIsReadNotLeftUnknown` failed, at its two
+  assertions (`restart` in both shapes' `unknownFields`), one skipped (an SP-7a row that needs the real worker,
+  skipped at the tip too), and the other 350 passed, its guard row among them.
+- The kit at `9f050356e` on the cut (`95f9ff9b8`'s patch) on the test Mac (ended 01:04:24Z, 158 s): it compiled; 3,016
+  rows, 3,012 passed, 3 skipped, 1 failed. Every test target holding the slice's rows is green: FieldProductTests
+  353 of its 354 passed and the same SP-7a row skipped, FieldHomeTests 811 of 811, FieldMeshTests 336 of 336. ALL
+  but R4, main's, item 522: FieldWebTests' `R4: popups and window.open make no second web view…`
+  (HostRowsTests.swift:277), red the same way on every kit run that night that ran FieldWebTests, main's own among
+  them. The slice touches no FieldWeb file.
+- `pnpm verify`, whole, at `9f050356e` on the cut (`95f9ff9b8`'s patch) on the test Mac (01:06:33Z to 01:15:48Z,
+  2026-11-18): exit 0 in 554 s, all sixteen of its steps run (fifteen open with their own header; `cargo fmt
+  --check`, its own step between lint and lint:rust, prints none when clean), on an offline install from the lock.
+  Among them were `cargo fmt --check`, check:ios-fixtures, test:rust, plugin-cli's suite and gen's check with its
+  Rust half; no row failed.
+- The train's second dress rehearsal, with this piece joined (its eleven patches the same), at `dde7e69a5968` on
+  the test Mac: v-rehearsal-b ran 03:41:21Z to 03:51:23Z, 2026-11-18, exit 0, all sixteen steps run;
+  kit-rehearsal-b ended 03:55:08Z: 3,060 rows, Passed 3,056, Skipped 3, Failed 1, the known FieldWebTests R4 row,
+  item 522 (so xcodebuild exited 65).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- No real update was run end to end: no desktop was updated while another desktop or a phone watched it. The
+  writers are proved against fieldd's mock floor, and the readers against fake meshes and fixtures.
+- That a phone still holds the slice of a desktop whose node went offline is read from the store's rules (truffle
+  keeps an offline peer's slice), not measured on a device.
+- No still or recording of the slice's surfaces was taken (the `9f050356e` kit run's two stills are of the
+  spend view). That a desktop mid-update looks as it did awake is held by the parity rows, not seen on a screen.
+- Readings: a desktop that announced and never comes back is drawn as it was for up to five minutes, then asleep.
+  A remembered desktop mid-update reads connected in Settings.
+- `pnpm gate:landing` not run (owed).
+
+## MK-5b — a plugin whose runtime failed says so and offers Try again; one that can't run says so (M394)
+
+(2026-11-18; five commits, 11 paths +1,176 −122, summed by commit. Drafted on main `63c128fd7`, cut on main `8064bbdec`
+as `49419f6ce`, `3f592e668` and `8aa357a62` (doc, red then green, the stack's first three), `a39c92220`, the
+format, the stack's eleventh, and `3f05771f5`, the test, its thirteenth, on branch `mk/fa-stack-on-8064bbdec`.
+Main moves once, on James's word and VF-PM's GO. On main they are
+`90fd69a5e`, `5b1158cd7`, `1911b07c3`, `15221c138` and `930ad265b`;
+every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- Installed read no plugin's runtime. A plugin that was on, whose runtime fieldd's Doctor said had failed (a failed
+  controller, a failed behavior generation, a suspended breaker), read as fine. "isn't working right now" stood only
+  on an invalid or incompatible plugin, and on one that cannot start in this window (item 476, M333).
+- Nothing offered Try again: not on such a row, and not where neither of the popup's doors answered. There Discover
+  and Updates said "Plugins aren't available right now." with no act, and Installed, holding none of its plugins,
+  said "Reading your plugins…" whatever the read.
+- VF-PM ruled MK-5's asks 2 and 3 at their leans on 2026-11-14 04:33Z, and DESIGN.md §9 gave both to MK-5b. M308
+  left it owed.
+
+**What moved.**
+- DESIGN.md first (`49419f6ce`, +66 −3): MK-5b's drawing in §8 Installed and "Its states, in the body"; Settings →
+  Plugins' owed "(MK-5b's)" made as-built; a dated correction at item 476's amendment in §9, whose "the same line a
+  plugin fieldd reports broken reads" no longer holds on Installed. Its one new sentence, a plugin's name, then
+  "can't run on this VibeField", is held as a draft until its words are chosen on screen (ruled at its lean,
+  2026-11-17 18:23:17Z).
+- The rows (`3f592e668`): in plugins-popup.test.tsx, over a fixture fieldd that streams each plugin's runtime
+  (`plugins.runtime.subscribe`), eleven rows for a failed runtime and its Try again, and three for Try again where
+  neither door answers; plugins-model.test.ts's invalid row takes the new line; plugins-fixtures.ts gains the
+  runtime read and a not-working snapshot. By its message fifteen rows want red on main, each naming main's API
+  alone so the commit typechecks; neither was run at this commit.
+- The read (`8aa357a62`): `runtimeFailures` (plugins-model.ts) reads fieldd's runtime snapshot by the Doctor's codes
+  (`controller-failed`, `behavior-generation-failed`, `behavior-suspended`), skipping a window that left: one the
+  Doctor marks `renderer-disconnected`, or whose renderer says `connected: false`, for fieldd can cut either. The
+  frame reads it only while the popup stands, on the feed Settings → Diagnostics' Plugins section reads, and only
+  a live read: one the client ended reads as none failed.
+- The lines (`8aa357a62`): Installed says a plugin's name, then "isn't working right now", for a failed runtime or
+  item 476's set; an invalid or incompatible plugin says its name, then "can't run on this VibeField", with no
+  switch and no Try again.
+- Try again (`8aa357a62`): on such a row of a Built in or Development plugin (where its switches stood then; N18,
+  above it on the stack, widens it with the switch) that is on, runs, and was not stopped after it kept crashing.
+  It sends the switch's two requests, `plugins.disable` then `plugins.enable`, under the switch's own key; it
+  stands, taking no press, while they run, and the keyboard goes to the field. A refusal says the switch's words
+  for the request refused, or item 440's updating line. A Built in plugin's off and on reach its other desktops,
+  as its switch's do (VF-PM's ruling, 2026-11-17 17:55:44Z). No new door: the requests are the switch's, and the
+  feed is Diagnostics'.
+- Where neither door answers (`8aa357a62`): Discover and Updates carry Try again in the foot, ↵ printed, which reads
+  the list again as an opening does, once per press, and gives the keyboard to the field; Installed says "Plugins
+  aren't available right now." with no act while it holds none of its plugins.
+- The catalog and the model's rows (`8aa357a62`): a not-working plate mounts the shipping controller over the
+  fixture runtime, and the away plate carries Try again. plugins-runtime-failures.test.ts (new, seven rows) holds
+  `runtimeFailures` by code and by window, the rows' lines and Try again.
+- The format (`a39c92220`): onRetry's `run()` call as biome draws it, one argument a line: whitespace and one
+  trailing comma; no other token moves.
+- The test (`3f05771f5`): plugins-model.test.ts's popup's-words row samples `cantRun` ("Desk clock", as `broken`
+  is sampled). The green had added the word with no sample, and the row reds on a word it cannot call; the first
+  lane V found it (the proof).
+
+**The proof.**
+- Nothing ran on these commits before they were cut. After the first nine were cut, a `biome check` ran over
+  the stack's top's 29 non-Markdown files (by the tenth's and the format commit's messages; no log is kept):
+  Plugins.tsx alone not clean, which the format commit formats.
+- The first lane V, `pnpm verify` whole at the stack's twelfth `343884ca1` on a Mac mini kept for tests, was red
+  at its test stage in two rows, this item's popup's-words row and item 433's pegboard row; the two test commits on top
+  mend them, and their first run at the stack's top is the lane V below.
+- The lane V: `pnpm verify` whole at the stack's top, on the test Mac: RUN mk-fa-stack-b at `6ba72f005688`, whose tree
+  `7507dce7d215` is the top's, 2026-11-18 02:55:40Z → 03:04:30Z: **GREEN**, exit 0 in 530 s. Every stage opened; vitest
+  and node:test failures 0; cargo's 38 results ok, none failed; fieldd 293 test files passed and 5 skipped (4129 tests
+  passed, 15 skipped); field-app 359 of 359 files, 5158 of 5158 tests; gen:check opened (verify.clean.log
+  `416ece9fc22f2e71`).
+- The train's second dress rehearsal, with this piece joined: v-rehearsal-b, `pnpm verify` whole at `dde7e69a5968`
+  on the test Mac, 2026-11-18 03:41:21Z → 03:51:23Z: exit 0, sixteen stages.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- The lane V is owed: it had not ended when this entry was drafted.
+- No red commit was run alone: the fifteen rows' red on main is their message's want, unwitnessed.
+- Biome ran at no single commit. `8aa357a62`, and each commit above it up to the format commit `a39c92220`, hands
+  onRetry's `run()` its three arguments on one line, which biome draws one a line: by that line biome would be red
+  at each of them alone.
+- From `8aa357a62` up to the twelfth the popup's-words row is red at each commit (no sample for `cantRun`): read
+  at the twelfth by the first lane V, and by the same missing row at each commit below it. This item's test
+  `3f05771f5` carries item 433's pegboard red (433's entry), which the commit above it mends.
+- No window was looked at, and no live fieldd failed a plugin's runtime under the popup: the rows read a fixture.
+- A plugin's page says nothing of a failed runtime (not drawn; item 494). Each row's Try again is named "Try again"
+  to assistive tech, not by its plugin.
+- The read stands only while the popup does: for one round trip after an opening a failed row says its registry
+  line; a read the client ended stays none failed until the next opening; after Try again a row may read as failed
+  until its window's renderer reports again; a window whose mark and renderer row fieldd both cut reads as current.
+- macOS only.
+
+**Closed by it:** MK-5b, owed since M308.
+
+**Not done, and not claimed:** the lane V (owed, above); each red commit alone; a plugin's page's line; the new
+sentence's words, held as a draft; the landing-only gates (`pnpm gate:landing`) were not run and are owed at the
+landing; nothing pushed.
+
+## Item 433 — Discover draws the pegboard's categories, the pill opens on the board's, CARRY is un-parked (M395)
+
+(2026-11-18; four commits, 18 paths +756 −81, summed by commit. Drafted on main `63c128fd7`, cut on MK-5b's
+`8aa357a62` over main `8064bbdec` as `e6acde7ea`, `c96e5adc6` and `dafedbf5b` (doc, red then green), and on the
+stack's thirteenth as `cf7d00158`, the test, its fourteenth, on branch `mk/fa-stack-on-8064bbdec`.
+Main moves once, on James's word and VF-PM's GO. On main they are
+`1454642f5`, `53bf2993d`, `7dc40851e` and `e743f6cec`;
+every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- Discover drew no categories: MK-D2's order (the featured set, then the categories, then the grid) had its middle
+  left owed by MK-4e. The pegboard's More in Plugins… handed the frame the board's category, and ChromeLayer
+  dropped it, so the pill opened Discover where the Me menu's Plugins… does.
+- smoke:market's CARRY row was parked until Discover drew its categories (M308, M315). As written it could not have
+  passed then either (read from source): it read the chosen category by `role="radio"` and `aria-checked`, which
+  the kit's segmented control never draws; it pressed the board's category before the board's slide finished, and
+  read before the read on open; and it stood before INSTALL, where the board hangs no Things, for the run hands
+  fieldd no development plugin.
+
+**What moved.**
+- DESIGN.md first (`e6acde7ea`, +52 −1: DESIGN.md +49, UI_SYSTEM.md +3 −1): §8 Discover's dated block for the
+  categories row; at MK-D2's own sentence, a dated note, ruled at its lean (2026-11-17 18:23:17Z), that Discover
+  offers only the categories the board here names, for the list says a category by its id alone; dated corrections
+  at MK-4e's "the shelf still draws no categories" and at the pegboard's "the pill opens Discover where Plugins…
+  does"; §9's doors line and the row's words: "All", the pegboard filters' own, and "Categories" to assistive tech,
+  held as a draft. UI_SYSTEM's Owed line names the row's catalog plate.
+- The rows (`c96e5adc6`): two in plugins-popup.test.tsx over a desk double whose board names four categories; the
+  one door into Plugins pinned in ui-system-boundaries.test.ts (the popup takes `openCategory`, the pill calls
+  `openPluginsFromBoard`); smoke-market.test.ts and the stager's market-smoke-fixture.test.mjs hold CARRY run after
+  RISE and before REMOVE, and PICTURES alone parked. By its message each wants red on main where it says, and
+  typechecks there; none ran at this commit.
+- The row (`dafedbf5b`): Discover draws the kit's segmented control at its small size, a row of its own across the
+  shelf's grid after the featured set: All, then each category a shown set's object hangs under that the board
+  names, by the board's name and in its order, never an id or a count. Past its width the end where more lies fades
+  over 24. A category chosen keeps the sets that hang there, with no featured row; typed words search every set,
+  and the row stands down until they are gone. One stop of Tab; a pointer's press gives the keyboard back to the
+  field.
+- The door (`dafedbf5b`): `openPlugins` takes Discover's category. More in Plugins… opens on the board's; every
+  other door, and a note's re-opening, on All; a category Discover does not offer shows All. No new desk import,
+  and no new line in the pinned "plugins" table.
+- CARRY (`dafedbf5b`): un-parked and moved after RISE, where the clock INSTALL took hangs its category on the
+  board. It waits for the board's slide to finish (smoke-more's `BOARD_SETTLED`, now exported) and 350 ms, presses
+  All and then the clock's category, waits for the read on open, reads the chosen segment by the kit's own
+  attributes, holds the clock on the shelf, no featured row and the board folded, and takes a shot. PICTURES stays
+  parked. desk-gates row 37 and the `VF_MARKET_ROWS` door say so, dated: a part that names CARRY names
+  `INSTALL,RISE,CARRY,REMOVE`, and CARRY alone is red by design.
+- plugins-shelf.test.ts gains five rows and plugins-popup.test.tsx four more, with the green.
+- The test (`cf7d00158`): ui-system-boundaries.test.ts's DK-13 pegboard row reads the board's own door,
+  `openPluginsFromBoard`. The red had moved the doors row to it and left this one, and from the green on the row
+  was red; the first lane V found it (the proof).
+
+**The proof.**
+- Nothing ran on these commits before they were cut. After the first nine were cut, a `biome check` ran over
+  the stack's top's 29 non-Markdown files (by the tenth's and the format commit's messages; no log is kept):
+  Plugins.tsx alone not clean, which MK-5b's format commit `a39c92220` formats.
+- The first lane V, `pnpm verify` whole at the stack's twelfth `343884ca1` on a Mac mini kept for tests, was red
+  at its test stage in two rows, this item's pegboard row and MK-5b's popup's-words row; the two test commits on top
+  mend them, and their first run at the stack's top is the lane V below.
+- The lane V: `pnpm verify` whole at the stack's top, on the test Mac: RUN mk-fa-stack-b at `6ba72f005688`, whose tree
+  `7507dce7d215` is the top's, 2026-11-18 02:55:40Z → 03:04:30Z: **GREEN**, exit 0 in 530 s. Every stage opened; vitest
+  and node:test failures 0; cargo's 38 results ok, none failed; fieldd 293 test files passed and 5 skipped (4129 tests
+  passed, 15 skipped); field-app 359 of 359 files, 5158 of 5158 tests; gen:check opened (verify.clean.log
+  `416ece9fc22f2e71`).
+- The train's second dress rehearsal, with this piece joined: v-rehearsal-b, `pnpm verify` whole at `dde7e69a5968`
+  on the test Mac, 2026-11-18 03:41:21Z → 03:51:23Z: exit 0, sixteen stages.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- The lane V is owed: it had not ended when this entry was drafted.
+- No red commit was run alone: what each wants red is in its message, unwitnessed.
+- Biome ran at no single commit; each of these but the test `cf7d00158` carries MK-5b's onRetry call on one line,
+  which biome draws one argument a line (MK-5b's entry).
+- From `dafedbf5b` up to the thirteenth `3f05771f5` the DK-13 pegboard row is red at each commit: read at the
+  twelfth by the first lane V, and by the same pattern at each commit beside it. This item's first three commits
+  also carry MK-5b's popup's-words red (MK-5b's entry), which `3f05771f5` mends.
+- smoke:market's window rows have not run: CARRY's listed run (`VF_MARKET_ROWS=INSTALL,RISE,CARRY,REMOVE`) and
+  `pnpm smoke:market` whole run at `pnpm gate:landing`, the fixer's, at the landing. Until then CARRY's place, its
+  waits and its read are unproven in a window: the V's smoke-market.test.ts and the stager's node test read names
+  and lines, not a window.
+- The keyboard row builds a pointer's click by hand and leans on happy-dom honouring a `MouseEvent`'s `detail`.
+- Not built: a tile's categories among its facts; a listed set's What it adds by its listing's categories; a
+  catalog plate with the row (the catalog mounts no desk, so no board names a category there).
+- A category the board here does not name is not offered until the list carries each category's name: a contract
+  change, an item of its own. The row is one more item of Discover's list to assistive tech.
+- macOS only.
+
+**Closed by it:** Discover's categories, MK-D2's part MK-4e left owed. **Not closed:** item 433, until CARRY has
+run green in smoke:market's listed run at the landing.
+
+**Not done, and not claimed:** the lane V (owed, above); each red commit alone; smoke:market's window rows;
+PICTURES (parked, MK-E9's window half); the three not built above; the landing-only gates (`pnpm gate:landing`)
+were not run and are owed at the landing; nothing pushed.
+
+## N18 — a listed or Sideloaded plugin's controls are in Plugins…; Settings → Plugins lists none (M396)
+
+(2026-11-18; five commits, 23 paths +561 −1,305, summed by commit, two paths removed. Drafted on main `63c128fd7`,
+cut on item 433's `dafedbf5b` over main `8064bbdec` as `0300bb33c`, `13a87b6fc` and `5476b9d53` (doc, red then
+green), `ca1252462`, the comments, the stack's tenth, and `343884ca1`, the doc notes, the stack's twelfth, on branch
+`mk/fa-stack-on-8064bbdec`.
+Main moves once, on James's word and VF-PM's GO. On main they are
+`6aff26dde`, `7311f54fb`, `e5d364d45`, `5d78e6866` and `a7aff76c8`;
+every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.**
+- A plugin from the plugin list, or a Sideloaded one, had no switch and no settings in Plugins…: `controlsHere`
+  gave them to a Built in or Development plugin alone, and the page said "Its switches aren't here yet.". Its
+  switch, its settings and Reset stayed in Settings → Plugins (M308).
+- Settings → Plugins drew a switch on a held community plugin's row, which fieldd keeps held whatever a switch
+  sends, so the switch moved nothing.
+- MK-5b's Try again, below on the same stack, stood on a Built in or Development plugin's row alone.
+
+**What moved.**
+- DESIGN.md first (`0300bb33c`, +105 −6), drafted on the MK inventory's A2, ruled at its lean (2026-11-17
+  18:23:17Z): N18's Built notes at §8 Installed, the page's switches and settings, and Settings → Plugins; a dated
+  note at the source of each sentence it falsifies (that block's line, its kept rows and "every build", the undo
+  affordance's "re-gets every row", "Its way back"'s Reset, item 476's "and in Settings → Plugins", C22's
+  last-error line); the two "Gone" notes say their files are deleted in the green commit. A community plugin
+  turned off while community plugins are off keeps its switch, drawn as a draft, ruled at its lean. MK-5b's
+  drawing's Try again bullet is reworded at its source, and three dated N18 notes (Settings → Plugins, §8
+  Installed, §9) say Try again follows the switch (VF-PM's ruling, 2026-11-17 19:45:16Z).
+- The rows (`13a87b6fc`): seven test files. Every source's row and page carry their switches and settings but a
+  held plugin's; a held page says its row's line alone; Settings → Plugins lists, reads and sends nothing. By
+  VF-PM's ruling of 2026-11-17 19:45:16Z, Try again follows the switch: a failed Sideloaded or listed row offers
+  it, and its press sends its switch's two requests. By its message each file typechecks on the commit below and
+  wants red there at its own expect; none ran at this commit.
+- The switch (`5476b9d53`): `controlsHere(record)` is `heldLine(record) === null`, so every source counts but a
+  plugin held while community plugins are off. The row, the page, every power's switch, `settingsOf` and MK-5b's
+  `retryable` ask it, so all widen together; the controller already sent from the same reads. The window reads no
+  source to decide: the stop is fieldd's (O3-C). The line that a page's switches reach your other desktops is said
+  for a Built in or a listed plugin, the install-set's two sources. `PluginPage.readOnly` and "Its switches aren't
+  here yet." are retired.
+- Settings → Plugins (`5476b9d53`) lists no plugin: its rows, their switch, Settings + with Reset and
+  Capabilities + left. The page stays as a pointer, its two sentences and the dialog's line held as drafts; its
+  leaving is a cut of its own (ruled at its lean). A listed or Sideloaded plugin's last error is said in
+  Diagnostics' Plugins section alone, as a Built in one's has been since MK-5 (VF-PM's ruling, 2026-11-17
+  17:55:44Z). SettingsPanel drops `settingsRevision`.
+- Removed (`5476b9d53`): `panels/PluginCapabilities.tsx` and `panels/PluginSettingsForm.tsx`, unreached once
+  Settings → Plugins lists no row, and their one other reader, plugins-settings.test.tsx's C3 block (VF-PM's
+  ruling, 2026-11-17 17:55:44Z).
+- Comments (`5476b9d53`): each "the requests Settings → Plugins sends today" says it sent them until N18; each
+  comment that put Try again on a Built in or Development row alone carries a dated N18 note.
+- The comments (`ca1252462`): 31 comment lines in twelve files change: each comment that named who asked or ruled,
+  or a ruling's stamp, says the item and the day instead, and Plugins.tsx's header is rewrapped. Comments only;
+  DESIGN.md and docs keep their dated notes. One of the twelve is item 433's smoke-market.ts.
+- The doc notes (`343884ca1`): six dated DESIGN.md notes keep a ruling's day and time and its quoted words, and no
+  longer name where it was typed. Five are N18's; one is item 433's, its note at MK-D2's own sentence on the row's
+  categories (§8 Discover). Six lines changed in place.
+
+**The proof.**
+- Nothing ran on these commits before they were cut. After the first nine were cut, a `biome check` ran over
+  the stack's top's 29 non-Markdown files (by the tenth's and the format commit's messages; no log is kept):
+  Plugins.tsx alone not clean, which the format commit formats.
+- The first lane V, `pnpm verify` whole at the stack's twelfth `343884ca1` on a Mac mini kept for tests, was red
+  at its test stage in two rows, MK-5b's and item 433's (red at this item's commits too, not this item's
+  rows); the two test commits on top
+  mend them, and their first run at the stack's top is the lane V below.
+- The lane V: `pnpm verify` whole at the stack's top, on the test Mac: RUN mk-fa-stack-b at `6ba72f005688`, whose tree
+  `7507dce7d215` is the top's, 2026-11-18 02:55:40Z → 03:04:30Z: **GREEN**, exit 0 in 530 s. Every stage opened; vitest
+  and node:test failures 0; cargo's 38 results ok, none failed; fieldd 293 test files passed and 5 skipped (4129 tests
+  passed, 15 skipped); field-app 359 of 359 files, 5158 of 5158 tests; gen:check opened (verify.clean.log
+  `416ece9fc22f2e71`).
+- The train's second dress rehearsal, with this piece joined: v-rehearsal-b, `pnpm verify` whole at `dde7e69a5968`
+  on the test Mac, 2026-11-18 03:41:21Z → 03:51:23Z: exit 0, sixteen stages.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- The lane V is owed: it had not ended when this entry was drafted.
+- No red commit was run alone: what each file wants red is in its message, unwitnessed.
+- Each of this item's five commits carries both of the first lane V's reds, MK-5b's popup's-words row and item
+  433's pegboard row (their entries); the two test commits on top mend them.
+- Biome ran at no single commit; each of these but the twelfth `343884ca1` carries MK-5b's onRetry call on one
+  line, which biome draws one argument a line (MK-5b's entry).
+- No build lists or sideloads a plugin today: a listed or Sideloaded row is reached only through the fixtures and
+  the catalog's page-listed plate, until the registry rung.
+- smoke:market opens a listed plugin's page, which now draws its switch and the line about your other desktops: it
+  runs at `pnpm gate:landing`, the fixer's, at the landing.
+- With the C3 block gone, the port's request shapes rest on whatever other test reads them; none was traced.
+- The plan's reads for another reader of the two removed files and the retired names did not run; the lane V's
+  typecheck would name one.
+- A held plugin's settings are reachable nowhere while community plugins are off. An undo of a listed plugin's
+  setting shows on an open page at its next opening.
+- macOS only.
+
+**Closed by it:** N18, the inventory's row M308 named. **Left:** Settings → Plugins leaving Settings whole.
+
+**Not done, and not claimed:** the lane V (owed, above); each red commit alone; Settings → Plugins leaving whole;
+the drafts' words; the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing; nothing
+pushed.
+
+## Item 367 (E4) — a TestFlight build stands in the Developer page's demos; the review build carries none (M397)
+
+(2026-11-18; one commit, `2b3b2a981` ("367 (E4): TestFlight builds stand in the Developer page's demos — the gates
+on its paths widen"). Item 367 asked, on 2026-11-13, that every real string give way to a made-up name before
+the demos reach TestFlight. Its E2 and E5 landed that on 2026-11-17; this is the widening that waited for them.)
+
+**What a person sees.** In a TestFlight build, Settings › This phone now draws Developer after Notifications, and
+its page stands in Demo field, the account states and the Swarm lab, as a development build's does. The build sent
+to App Review draws neither row and compiles none of it. Most paths that only a launch argument reaches stay in
+development builds alone. A few argument checks compile into TestFlight builds with the code that holds them:
+`-vf-apps-open`'s door to the shelf, `FaceHold.mockReach`, the fixture arguments and `thisLaunch`'s read.
+
+**The seams.**
+- 53 `#if DEBUG` lines on a path a page choice reaches now read `#if DEBUG || VF_TESTFLIGHT`:
+  - the made-up field (`MockField`, the scripted fleet and its doors);
+  - the account states (`AccountFixtures`);
+  - the fixture doors: Chat, Apps, Meters, History, Workspace and the store's;
+  - `FaceHold`, and `HomeScreen`'s own gates on those paths.
+- 62 stay DEBUG:
+  - most are paths only a launch argument reaches: the stills, the witnesses, the spark gallery, the field slice,
+    `-vf-demo-remote`, the input card's arguments and `-vf-web-inspect`;
+  - the rest are the web relay's own gate, the build kind's own condition, the About page's Development label, the
+    swarm's frame meter and a compile-time print, a retired comment block and the sign-in spike.
+- `SettingsModel.thisPhoneRows`: the inner DEBUG gate on `.developer` is lifted, so `drawsDeveloper` decides (every
+  build but the review build). `HomeScreen.thisLaunch` reads the demo in TestFlight builds too; its `#else` keeps
+  `LaunchFixtures.off` alone.
+- Three blocks in `HomeScreen` split, so that nothing a TestFlight build compiles names a symbol declared under
+  DEBUG alone:
+  - the scripted fleet's state: the field slice's witness stays DEBUG;
+  - the swarm lab's states: `demoRemoteActive` stays DEBUG;
+  - the way in's page (`fixtureOwnsTheField`): the field slice's door and `-vf-demo-remote` stay DEBUG.
+
+  Under DEBUG every answer is as before.
+- `apps/ios/scripts/testflight.sh`: `markers` gains `MockAccount` (a widened type's name) and the made-up user id
+  (a 26-byte literal of `AccountFixtures`' and `MockField`'s), six markers in all. A review archive must carry 0 of
+  each; a TestFlight archive must carry every one. Its usage and comment say so. In `apps/ios/TESTFLIGHT.md`'s kinds
+  table, review draws "no TestFlight-only row (Notifications, Developer)" and testflight "TestFlight's own rows and
+  the Developer page's demos".
+
+**The rows.** None new. Under DEBUG every changed condition is true as before, so no kit row's answer moves.
+
+**Proved.**
+- The cut (21:15:54Z, 2026-11-17) made `dc59da044` (`2b3b2a981`'s patch) on main `8064bbdec`, through the pre-commit
+  hook, from files prepared
+  and summed beforehand. Each path was held to the blob its apply script wrote. None ran a test.
+- Before the cut, a tool read the finished tree (the kit's 403 Sources files):
+  - every changed condition is one of the census's 139 `#if … DEBUG` lines at the base, each classed;
+  - of the 1,769 lines compiled under the widened gate alone, none names a type, or a `HomeScreen` member, declared
+    under DEBUG alone.
+- The kit, whole, on the test Mac's simulator at `1e1e9148f` on the cut (513 on top; iPhone 17 Pro, iOS 27.2; 00:50:03Z
+  to 00:52:52Z, 2026-11-18): 3,007 rows, Passed 3,003, Skipped 3, Failed 1. The one red is FieldWebTests R4
+  (`HostRowsTests.swift:277`, `undeclared == 0` read 1). It is main's own red (item 522): a kit run that night at
+  main `8064bbdec` fails it the same way. This range touches no FieldWeb path. BUILD FAILED 0. Recorded as: ALL but
+  R4, main's, item 522.
+- The Release pair at `1e1e9148f` on the cut, on the test Mac (00:54:30Z to 00:57:18Z, 2026-11-18). Two Release builds,
+  unsigned, from the same kit clone, with package resolution off. Each marker and each census literal was read from the
+  commit's own `testflight.sh` and counted by its own form over every file of the app.
+  - The review build: BUILD SUCCEEDED in 78 s, 0 errors. Markers 0 of 6 present; census literals 0; other accounts'
+    homes 0.
+  - The TestFlight build (`-DVF_TESTFLIGHT`): BUILD SUCCEEDED in 76 s, 0 errors. Every marker present (242 in all:
+    `NotificationsPage` 68, its words 1, `DeveloperPage` 74, its words 1, `MockAccount` 97, the made-up user id 1);
+    census literals 0; other accounts' homes 0.
+- The train's second dress rehearsal ran with the piece joined (kit-rehearsal-b at `dde7e69a5968`, ended 2026-11-18
+  03:55:08Z): 3,060 rows, Passed 3,056, Skipped 3, Failed 1, the known FieldWebTests R4 row (item 522);
+  v-rehearsal-b exit 0, sixteen stages.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- No archive of either kind was made. testflight.sh's own marker counts, now six, first run at the next archive from
+  main; the pair counts the same markers by the same form over unsigned Release builds.
+- The pair's builds hold the builder's home only in the executable's debug map: in the review build 928 hits, every
+  one a stab's string in LC_SYMTAB's string table (OSO 470, SO 457, AST 1) and none in a section (read on the test
+  Mac, 02:57:30Z); an archive's strip of the installed product is expected to drop that map, unproved here, so the
+  first archive's real_strings_check, which refuses any hit, is still the real test.
+- **A device look, owed to James:** the Developer page in a TestFlight build, its Demo field, the account states
+  and the Swarm lab. No still or recording was taken.
+- `pnpm gate:landing` not run (owed).
+
+## Item 513 — the kit's comments say what was asked for and the day, and name no person and no session (M398)
+
+(2026-11-18; one commit, `e3722a35b` ("513: the kit's comments say what was asked for and the day, and name no person
+and no session"), on `2b3b2a981`.)
+
+**What a person sees.** Nothing: comments, and one test fixture.
+
+**The seams.**
+- 48 comment lines in 17 of the kit's files named a person, a session or who ruled. The files are History's corpus
+  and views, the home screen and its model, the terminal surface and its look's preview, the way in, search, the
+  Apps folder, and one test (`LiveCardSeatTests`).
+- Most of those lines now say what was asked for and its day, in the form "asked for 2026-11-14"; the rest drop the
+  name alone ("owed to James:" becomes "owed:"). A quote of a person's words becomes what was asked, in plain words.
+  Item numbers, DESIGN.md's sections and the product's own words stay, and so do rulings named by their number or
+  role ("the lead's ruling 24", "Q1's ruling", "the art director ruled").
+- `LiveCardSeatTests`: the holder that keeps its capitals is "Spare iPhone", a phone that names no one, in its
+  fixture and in its expectation.
+
+**Proved.**
+- The cut (21:17:52Z, 2026-11-17) made `1e1e9148f` (`e3722a35b`'s patch) on `dc59da044` (`2b3b2a981`'s patch), through
+  the pre-commit hook. Before it a tool held that:
+  - every changed line is a comment line, but the fixture's two;
+  - no line of the 17 files names a person, a card or a session (its pattern: the names, card ids, session names and
+    lane paths). Rulings by number stay, as above.
+- The kit, whole, at `1e1e9148f` on the cut, as above: FieldHomeTests 809 of 809, `LiveCardSeatTests` among them. The
+  one red is FieldWebTests R4, main's own (item 522).
+- The train's second dress rehearsal ran with the piece joined (kit-rehearsal-b at `dde7e69a5968`, ended 2026-11-18
+  03:55:08Z): 3,060 rows, Passed 3,056, Skipped 3, Failed 1, the known FieldWebTests R4 row (item 522);
+  v-rehearsal-b exit 0, sixteen stages. The rehearsal's copy of this commit differs from the one run above by one
+  context line in `HistoryLedgerView.swift`, where item 516's change sits; its added and removed lines are the same.
+
+**Not run, and owed.**
+- `pnpm gate:landing` not run (owed).
+
+## Item 367 (E3) — the Developer page opens Input card states: the real card in each of §9's eleven states (M399)
+
+(2026-11-18; three commits, in order:
+- `d0ad8e482` (doc, "367 (E3, doc): §9 names the eleven states of the Input card states lab");
+- `caeb35eea` (red, "367 (E3, red): the Input card states lab's rows, over a state type that seeds nothing yet");
+- `d87d9654e` (green, "367 (E3, green): Input card states opens from the Developer page, the real card in each state").
+
+Item 367's last piece: the lab DESIGN.md §8's Labs row names, as amended on 2026-11-12. It is cut on 513, the top of
+E4's branch, since it needs E4's widened gates.)
+
+**What a person sees.** In a TestFlight or development build, Settings › Developer › Labs › Input card states opens
+a full-screen cover, as the Swarm lab does. It is closed by the system close button (Done before iOS 26).
+- The list is §9's eleven states, in order: A key's fan, open · Control, armed · Control, locked · Meta, armed ·
+  Listening · The keypad, Navigate · The keypad, Shortcuts · The keypad, Fn · A paste to read first · Reply chips ·
+  Typing into terminal.
+- A row puts its state in the list's place, with a back chevron. The state is the real input card and its floating
+  controls, over the terminal's default ground and a made-up session: garden-planner on studio,
+  `~/code/garden-planner`.
+- Nothing typed there is sent: the card's sink refuses every act, so a Send keeps its draft.
+- Control, armed and Meta, armed are armed again each second while they stand. Listening wears the mic's listening
+  look with no microphone, no Speech and no audio session.
+- **The lab's mic is the real card's mic:** in every state but Listening, a person's tap on it asks for Speech and
+  the microphone, as the live card does, and nothing is sent.
+- The `+` menu's doors stay shut. The card is handed no attachment, no pasteboard watcher and no clipboard history.
+- The review build compiles none of it.
+
+**The seams.**
+- `DESIGN.md` §9 "Developer": one list after Labs, naming the states. The keypad's pages take §8 "The phone's
+  terminal keypad"'s names, and the terminal's mode takes the card strip's words. A dated note at §8's Labs
+  sentence says the states are now named.
+- `FieldHome/InputCardStatesLab.swift` (new, whole under `#if DEBUG || VF_TESTFLIGHT`):
+  - `InputCardLabState` (CaseIterable, §9's names): `seed(_:)` installs the refusing sink, then makes the state's
+    own public acts on a fresh model; `keep(_:)` arms Control and Meta again; `listens` marks Listening alone.
+  - `InputCardStatesLab`, the view, and its stage.
+- `FieldInput/Dictation.swift`: `DictationSession.labListening` stands beside `demoListening`, under the wider gate,
+  and `init` and `start()` read it. The lab sets it before the card is drawn and clears it when the state or the lab
+  leaves.
+- `HomeScreen.swift`, beside the Swarm lab's and under the wider gate:
+  - `settingsActions` hands `openInputCardStates`, and `afterSettings()` opens the lab;
+  - two `@State` flags and one `fullScreenCover`.
+
+  The `-vf-demo-input-*` arguments stay DEBUG and untouched; the lab reaches none of them.
+
+**The rows.** `InputCardStatesLabTests` (new, FieldHomeTests, 11 rows):
+- One row reads §9's names from DESIGN.md and holds that the lab's are the same, in the same order.
+- Each state is held as its seeded model: the fan, the latch, the Meta burst, dictation's words, the keypad on each
+  page, a five-line paste held for review in the terminal's mode, the chips and the terminal's mode.
+- The sink refuses every act in every state.
+- Control and Meta are armed again while they stand, and let go once a key or a tap moves them.
+- A mic made while `labListening` is up listens; one made after it is down is idle. No row calls
+  `DictationSession.start()`.
+
+**Proved.**
+- The cut (21:52:49Z, 2026-11-17) made `62a5cca29`, `d14f28087` and `21bea2015` (`d0ad8e482`'s to `d87d9654e`'s patches)
+  on `1e1e9148f` (`e3722a35b`'s patch), through the pre-commit hook. They were made from
+  files prepared and summed beforehand, each commit held to its parent, its message and its blobs. None ran a test.
+- The red at `d14f28087` on the cut, FieldHomeTests on the test Mac's simulator (iPhone 17 Pro, iOS 27.2; 02:40:33Z to
+  02:42:16Z, 2026-11-18). It compiled (BUILD FAILED 0, 0 errors): 820 rows, Passed 810, Failed 10. Exactly the lab's 10
+  rows failed, each at its `#expect`s (29 issues, every one in `InputCardStatesLabTests.swift`). The 11th, the names
+  row, passed, since the doc commit wrote the list. The other 809 passed.
+- The green at `21bea2015` on the cut, the kit whole on the same simulator (02:44:27Z to 02:46:58Z, 2026-11-18): 3,018
+  rows, Passed 3,014, Skipped 3, Failed 1. FieldHomeTests passed 820 of 820, the lab's 11 rows among them. Every other
+  target's count equals E4's run (FieldInputTests 173, FieldSettingsTests 48, and the same skips). The one red is
+  FieldWebTests R4, main's own (item 522), as at E4. BUILD FAILED 0.
+- The Release pair at `21bea2015` on the cut (02:50:45Z to 02:53:31Z, 2026-11-18), in E4's form:
+  - The review build: BUILD SUCCEEDED in 76 s, 0 errors. Markers 0 of 6 present; census literals 0; other accounts'
+    homes 0.
+  - The TestFlight build: BUILD SUCCEEDED in 76 s, 0 errors, so the lab compiles under `VF_TESTFLIGHT` without
+    DEBUG. Every marker present (242, as at E4); census literals 0; other accounts' homes 0.
+- The train's second dress rehearsal ran with the piece joined (kit-rehearsal-b at `dde7e69a5968`, ended 2026-11-18
+  03:55:08Z): 3,060 rows, Passed 3,056, Skipped 3, Failed 1, the known FieldWebTests R4 row (item 522);
+  v-rehearsal-b exit 0, sixteen stages.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- The lab has not been seen on a device or a simulator. **Device looks owed to James:**
+  - the mic's permission prompts, from a tap in the lab;
+  - Ctrl's fan popover, standing from the card's first frame in A key's fan, open;
+  - the navigation bar's background over the ground, in the ground's ink.
+- `pnpm gate:landing` not run (owed).
+
+## TL-1/2 — a pane's text is held to two nets, and the deck wears neither CRT layer (M400)
+
+(2026-11-17; five commits, 5 paths +113 −3. Cut by the terminal-look lane on main `8064bbdec` as `496497dff` →
+`98b219507` on branch `tl/look-on-8064bbdec`. Main moves once, on James's word and VF-PM's GO. On main it is
+`fe5eb96cc`; every other commit id here is a side commit's, where it was cut or where a row ran (`8064bbdec` is main's
+own; `77fd6ea2ff02` is a tree).)
+
+**What was wrong.** The look check of 2026-11-17, read over the Godview captures of 2026-10-28:
+- Godview's scanlines and vignette stood at 30 over the whole root, so they crossed every row of terminal text, and
+  the vignette (75% black at the corners by night) dimmed the outer panes.
+- In a light pane a program that paints its dark design was drawn exactly as it painted: Claude Code's link ink read
+  1.5:1 on the parchment ground.
+- The cause of the second: the deck hands its surfaces a `theme` prop, and the workspace takes it in place of the
+  theme it would build from the floor's configuration. The configuration's path defaults light adaptation to auto; a
+  handed theme that leaves the field out draws with it off, and with no contrast floor (by the repo's comment). So
+  both of ghosttea's nets were off in Godview whatever the configuration said.
+
+**What moved.**
+- `DESIGN.md` first (`496497dff`, `ac67eed5e`): §1.1 names the scanlines and the vignette among the departures from the
+  reference; §8 gains "The deck wears neither the scanlines nor the vignette" and "What a pane's text is held to";
+  the phone's row on the swarm's CRT layers gains a dated pointer.
+- TL-1 (`a1c1efb41` red, `010f7aced`; `00cc0869a` green, `dbc488de3`): `PANE_TEXT_NETS` in `godview/deck-theme.ts`
+  (`lightAdaptation: "auto"`, `minimumContrast: 3`), spread into both of `godviewTerminalTheme`'s answers, a catalog
+  theme and the deck's own pair. The sign-in terminal spreads the deck's theme and gets them too.
+- TL-2 (`48383babe` red, `8e6134bbb`; `98b219507` green, `fe5eb96cc`): `godview.css` clips `.vf-godview-scanlines` and
+  `.vf-godview-vignette` at the deck's top edge with the chrome layer's own inset, so the clip follows a drag of the
+  edge live. Under a maximized deck they fade out with the stage (260 ms) and are then hidden. Their place in the root
+  and their 30 are unchanged; the curtain wears them whole; with the terminals away they cover the stage whole.
+- Rows: `godview-appearance.test.ts`, "the nets under a pane's text" (by day and by night, the deck's own pair and a
+  catalog theme); `ui-system-boundaries.test.ts`, "ends the CRT layers at the deck's top edge".
+
+**The proof.**
+- Before the cut (2026-11-17 23:15Z, on the working tree the cut then committed at 23:19Z): biome over the tree
+  (3,719 files, no fixes, after one format fix in `godview.css`) and the static walls, clean. No test was run: the
+  two reds were red by reading and by a file scan with the row's own patterns, and are said so in their commits.
+- The train's dress rehearsal on a Mac mini, twenty pieces joined with this one among them, at tree `77fd6ea2ff02`:
+  `pnpm verify` whole, exit 0, sixteen stages; the kit's run of all targets, 3,060 rows, the one known R4 row alone
+  failed (so its xcodebuild exit is 65; no kit path is this piece's). Runs v-rehearsal-a (2026-11-18 03:12:53Z →
+  03:23:03Z, exit 0 in 609 s, verify.clean.log `7c793e94e3fdc0be`) and kit-rehearsal-a (ended 2026-11-18
+  03:29:15Z; rows.tsv `5a46f9f172c2b8c1`: Passed 3,056, Skipped 3, Failed 1), both at `270a6e8dc615`. In that
+  verify the piece's two files ran green: `test/godview-appearance.test.ts` (22 tests) and
+  `test/ui-system-boundaries.test.ts` (62 tests).
+- The piece's own lane V was withdrawn as not needed once the rehearsal held it.
+- The train's verify: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18
+  13:07:49Z → 13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is
+  its own step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on
+
+**Not covered.**
+- NOT SEEN. No pane and no stage was drawn, at the cut or in the rehearsal's rows. What a 3:1 floor does to a
+  program's deliberately dim text, and how the stage reads with the two layers ended at the deck, are for a capture
+  and for the eye this was asked for. That review has not happened.
+- A program in a light pane is still told its ground is dark: the floor's configuration answers OSC 11, not the
+  deck's theme. That is TL-4a's piece (`tl/scheme-on-8064bbdec`), not this one.
+- Daylight still draws the dark sixteen colours. The contrast floor lifts text drawn in them to 3:1 against its own
+  cell's ground (box drawing, block elements and colour glyphs are exempt); the designed palettes wait for the
+  ghosttea release that can tell a session one.
+- A travel moves the sheet by `transform` while the clip follows the deck's state, which changes at once, so for
+  the length of a travel the two disagree, as the chrome layer's clip does. On a rise (480 ms) the clip already
+  stands at the edge the sheet is rising to. On a fall to away (300 ms) the clip is lifted at once, so the falling
+  sheet wears both layers. On a restore from maximized (300 ms) the layers are back at once, clipped at the edge
+  the sheet is falling to, so the part of the sheet still above that edge wears them.
+- Leaving maximized, the layers do not return with the stage's 260 ms: the scanlines are back at once, the
+  vignette in 120 ms. The row holds the way out only.
+- The vignette is still centred on the window, so it now ends at the sheet's edge at the strength it has there.
+- Settings' miniature has no edge (its sheet is in the flow), so its picture keeps both layers whole; and its text
+  is DOM text, not a terminal surface, so it shows neither net.
+- The live peek's own file is unchanged. Its worker keeps the deck's theme, so the nets may reach its picture too:
+  not checked. No row holds the sign-in terminal's nets either (its test stands in for the deck's theme). The
+  phone's swarm keeps its CRT layers.
+- macOS only.
+
+**Not done, and not claimed:** the review of the lifted layers by the person who asked for it; glass in the well;
+the capture set that would show any of this; the landing-only gates (`pnpm gate:landing`), owed at the landing;
+nothing pushed.
+
+## Item 525 — a made app's declared host is never an address in another spelling, on the desktop or the phone (M401)
+
+(2026-11-18; two commits, in order: `9fb279bbf` (red, "525 (red): a made app's declared host is never an address
+in another spelling…") and `8448dfdb4` (green, "525 (green): a last label of 0x and hex is an address, never a
+host…").)
+
+**What a person sees.** Nothing, for an app whose declared hosts are names. A declared host whose last label is
+`0x` and any hex is, like one of all digits, an IPv4 address in a spelling a resolver reads (`0x7f.0x1` is
+127.0.0.1, `0x64.0x65.0x66.0x67` an address in the tailnet's range). It is now refused on both sides, as one of
+all digits already was. It is the rule item 522's filtering front holds at the connection (cut on its own branch,
+not landed): once that lands, the contract, the phone's reader, its rule list and the front hold one rule.
+- An app that declared such a host loses that one host on the desktop: `readMadeAppEnvironment` (a captured
+  page's) and the manifest's reader (`VibefieldAppManifest`, a built app's) strip it as unreadable, so the open
+  answer's `reach` and the capture's `allowHosts` never carry it.
+- An older desktop that still sends one: the phone takes a `reach` list only whole, so that app's page gets only
+  its origin on a newer phone until its desktop updates. Fail closed, kept.
+
+**The seams.**
+- `packages/contracts/src/artifacts.ts`: `isReachHost` refuses a last label of `0x` and any hex beside one of
+  digits; `MadeAppReachHost`'s doc says so and names the vector.
+- `FieldProduct/ArtifactOpenShapes.swift`: `MadeAppReach.isHost` reads the same rule through `isAddressLabel`
+  (all digits, or `0x` and ASCII hex; a bare `0x` reads as 0); its doc says so.
+- `packages/contracts/fixtures/made-app-reach-host.vector.json` (new): five hosts to accept, eighteen spellings
+  to refuse. Its six `moved` rows are the ones this item turned from admitted to refused; its twelve others pin
+  the rule as it stood (uppercase, decimal and dotted forms, a root dot on each side, a port, brackets, a colon,
+  the tailnet's names).
+- `scripts/check-ios-fixtures.mjs`: one required-mirror row, `reach-host`, fails the check when the vector's copy
+  in `Tests/FieldProductTests/Fixtures` is missing; the script's walk over every kit JSON holds it byte-identical.
+- No Rust or JSON Schema change: a refinement emits none, and the generated schema names no reach host.
+
+**The rows.**
+- `made-app-reach-host.test.ts` (contracts, new, 3 rows) and `MadeAppReachHostTests` (FieldProductTests, new,
+  3 rows), each reading the vector: every host accepted; every row refused before still refused; the six moved
+  rows refused.
+
+**Proved.**
+- The cut (00:18:08Z to 00:18:10Z, 2026-11-18) made `bf3cd8d1` and `9aca1654` (`9fb279bbf`'s and `8448dfdb4`'s patches)
+  on main `8064bbdec` from files prepared and summed beforehand, each held to its parent, its message and its blobs.
+  It ran no test.
+- On the development Mac, as evidence and not the proof: the contracts package's tsc and the new test file in a scratch
+  tree of each commit, resolving the checkout's installed packages read-only. At `bf3cd8d1` on the cut (`9fb279bbf`'s
+  patch), tsc clean and the moved row alone red ("0x7f.0x1: 127.0.0.1 in hex: expected true to be false"); at `9aca1654`
+  on the cut (`8448dfdb4`'s patch), tsc clean and three of three.
+- In the train's joined tree at `270a6e8dc` on the test Mac, which holds this item's seven files (six byte for
+  byte; `check-ios-fixtures.mjs` with its row beside other pieces' rows): `pnpm verify`, whole, passed
+  (v-rehearsal-a: exit 0, its sixteen stages, `check:ios-fixtures` and the generated schema's freshness among
+  them). Its kit run of all targets on the simulator (kit-rehearsal-a) ended xcodebuild exit 65 on one row: of
+  3,060, 3,056 passed, 3 skipped and 1 failed, FieldWebTests' R4, main's own (it fails at main `8064bbdec` too,
+  sp4-ma5-kit-1). Green in the joined tree by kit-rehearsal-a. Its rows name this item's three in
+  FieldProductTests, each passed: "accepts every host the vector names", "refuses every row it refused before this
+  item, as it did" and "refuses a last label of 0x and hex, a bare 0x included".
+- `bf3cd8d1` on the cut (`9fb279bbf`'s patch), on the test Mac's simulator, FieldProductTests (i525-kit-red, ended
+  04:16:25Z): red as meant. It
+  compiled; of 353 rows, 351 passed, 1 skipped (SP-7a W1, skipped on that target's other runs too) and 1 failed,
+  "refuses a last label of 0x and hex, a bare 0x included", with six issues, one per moved host (0x7f.0x1,
+  0x64.0x65.0x66.0x67, a.0xbeef, a.0xff, 1.0x, a.0x). This item's other two rows passed.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- No row on a device: the phone's check is held by the kit's rows on the simulator.
+- The rule reads the last label alone: `0x7f.example.com` is a name, and a resolver answers it as one. A declared
+  name that resolves to a private or tailnet address (a wildcard DNS service, say) is a name too: the contract and
+  the front see names, never what they resolve to. Item 373's.
+- `pnpm gate:landing` not run (owed).
+
+## PS (words) — the program-status rulings are indexed, and DESIGN.md draws the split ring; nothing of it built (M402)
+
+(2026-11-18; one commit, docs only: `a0210cacc` ("PS: the program-status rulings are indexed, and DESIGN.md draws the
+split ring - nothing built"). Track PS, the second reading of a run's state: the state a program's own pane reports
+(OSC 7501), beside the monitor's native reading.)
+
+**What the words say.**
+- `DESIGN.md` §8 gains "A run whose two readings disagree" (PS-D17), after "The monitor view owns its drawing":
+  - A run's body draws the presented word, the one the two readings are reconciled into, and control keeps reading
+    the native one (PS-D12).
+  - While the two disagree past PS-D16's split delay, the run's light wears a still split ring, at the line's own
+    weight and in the native word's ink, never orange. The frame's hover names both readings, so a queue held under
+    an Idle body says why.
+  - It is marked NOT BUILT. Its words (§9) and its delay's §6 reason come with the build.
+- `docs/DECISIONS.md` gains the PS row in "Spec decision namespaces":
+  - PS-D2…D8, D10 and D12…D22 ruled (a), James: “What the Program Says all ruled with leans”, and “they should all
+    land before train 10”;
+  - PS-D1 folded into PS-D19, PS-D9 into PS-D14 and PS-D15, PS-D11 into PS-D19;
+  - the state inventory's ten fixes not ruled.
+  PS-D10's ruling at (a), nothing on VibeField main before the 0.9 cut, was then reverted on 2026-11-18, James:
+  “Revert that ruling, land before”. These words land before that cut. The row in `a0210cacc` does not say so; the
+  train's records commit adds a dated correction beside its list, which is otherwise unchanged.
+  It names its sources: `draft/thinking-program-status.md` §14–§17, and the pages *What the Program Says* and *What
+  Godview Knows*.
+
+**Nothing of it is built.** No code, no token and no test moved. The split ring is a design, not a drawing.
+
+**What waits on the two sibling releases** (PS-D21's path: a ghosttea release that keeps and carries a pane's record,
+and a puppeteer release that reconciles it, each an EL8 here):
+- Everything that reads OSC 7501 waits: what ghosttea keeps, the level rule and the wire (PS-D2, D3, D4); who turns a
+  record into a word (PS-D6); done and error, seen (PS-D7); attention (PS-D8); and PS-D12 to PS-D20, the two
+  readings, where they meet, the pane's authority, healing, timing, the split ring, control's readers, which PTYs
+  answer, and child records.
+- PS-D22, Claude's session file read as native evidence, waits on a puppeteer release alone. It needs no ghosttea
+  release.
+- One ruled piece is built, and needed no release: PS-D5's V1 (LANDED "PS-D5 (V1)"), a bare terminal's working
+  word from ghosttea's sampled activity, landed in the same train. The DECISIONS row says so in a dated correction.
+
+**Proved.**
+- The cut: this commit was first made on main's `8064bbdec8e3`, as `b5e0755e1408`. It is patch-equal
+  (`git patch-id --stable`) to its re-made copy `a0210cacc498` in train 10's assembly at `fa6c1ea15e8b`, read
+  2026-11-18. The runs below happened at the ids they name.
+- The cut (01:05:41Z, 2026-11-18): `b5e0755e1408`, made through the pre-commit hook from files prepared and summed
+  beforehand, held to its parent, its message and its blobs (+8 and +1), docs only.
+- The pre-flight at `b5e0755e1408` on the cut (`a0210cacc`'s patch), just after the cut (01:06Z, 2026-11-18):
+  `check:walls`, `check:retired`, `check:web-markers` and biome (3719 files) all exit 0.
+- The joined tree's rehearsal on a test Mac (`v-rehearsal-a`, 03:12:54Z to 03:23:03Z, 2026-11-18): `pnpm verify`
+  exit 0 in 609 s, all sixteen stages, at `270a6e8dc615`, with this commit's patch in it.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- Nothing to witness: nothing is drawn. The split ring's first look comes with its build (PS-D17, L7).
+
+## PS-D5 (V1) — a bare terminal running a job reads working on every desktop and the phone (M403)
+
+(2026-11-18; nine commits, in order, on the objects stack's last commit:
+- `2813d5c76` (red, "PS-D5 (red): a floor's terminal row cannot yet say what its pane is doing");
+- `33abdfab0` (green, "PS-D5 (green): a floor's terminal row carries its pane's activity kind");
+- `068f70746` (gen, "PS-D5 (gen): the generated schemas and the floor's contracts carry the row's activity");
+- `41f52b5ea` (red, "PS-D5 (red): the floor's row drops the pane's activity that ghosttea reports");
+- `0c26aa68c` (green, "PS-D5 (green): the floor's row carries the pane's activity kind");
+- `3897ef19d` (red, "PS-D5 (red): fieldd hands the monitor a bare terminal without its activity");
+- `eb16541b0` (green, "PS-D5 (green): a bare terminal running a job is working on every desktop and the phone");
+- `277826903` (red, "PS-D5 (red): the catalog's board reads a shell running a job as idle, as fieldd's does");
+- `751e62aef` (green, "PS-D5 (green): the catalog's copy carries a pane's activity as fieldd's does").
+
+Track PS, decision D5, ruled (a) on 2026-11-18. The pinned siblings already had the fact. ghosttea 0.15.0 samples
+each session's foreground every 200 ms, reports `SessionSummary.activity` and pushes `session-activity-changed`, and
+puppeteer-monitor 0.4.2 reads a terminal's `foreground-job` as working. Two hops in this repo dropped it: field-native's
+reader of the summary, and fieldd's `hostTerminalFrom`. No sibling release, no pin, no manifest and no lock moves.
+PS-D10's ruling at (a), nothing on VibeField main before the 0.9 cut, was reverted on 2026-11-18, James: “Revert that
+ruling, land before”.)
+
+**What a person sees.** A terminal no agent claims, a plain shell in a pane:
+- While a program runs in front of its shell (`sleep 60`, a build, a test run), its row reads working in every
+  window of this desktop, on a linked desktop and on the phone.
+- When the shell is back at its prompt, the row reads idle. **Before this, it read working only in the window that
+  held its pane** (that window's own join, M28). Every other window, a linked desktop and the phone read it idle.
+- **Working means a program holds the terminal's foreground, not that it is busy:** an editor or a pager opened from
+  the shell and left at rest reads working, as ghosttea classifies it.
+- These read idle, as before: a host that cannot sample; a terminal started directly on a program ghosttea does not
+  classify (both say `unknown`); and a floor older than this one, which sends no activity.
+- The monitor is handed no activity for an exited terminal, so a husk never reads working. The floor's own row for
+  it, on `terminal.list`, may still carry its last kind.
+- Only the terminal's own row changes. The monitor's backend skips a terminal an agent claims before it classifies
+  one (puppeteer-monitor 0.4.2's `dist/backend/backend.js`, its step 3, read at the pin; not run), and an agent's row
+  takes its status from the agent runtime. Nothing new is drawn; the row keeps its existing working and idle words.
+
+**The surface, said plainly.** Every reader of `terminal.list` sees the kind word. An inventory row gains an optional
+`activity: {kind}`, the floor's string as ghosttea sent it, an exited row's included. A reader that does not know the
+field passes it by (the tolerant reader), and one that does reads `foreground-job`, `shell-idle`, `unknown` or a
+newer host's word.
+
+**The seams.**
+- `packages/contracts/src/mgmt.ts`: `ObservedTerminalActivity` (`{kind: string}`, passthrough) and
+  `ObservedTerminal.activity`, optional. `scripts/gen-jsonschema.ts` names it in the shared definitions, so every entry
+  schema that holds the row carries it. A sixth `observed-state` fixture (the fifth floor `fixtures.test.ts` names),
+  `fixtures/observed-state.activity.json`, has three rows: a job running, a shell at its prompt, and an agent's row
+  with no activity.
+- Generated (`pnpm gen`): the 46 entry schemas that hold the row, and the bundle the floor's types are generated
+  from, gain the definition and the property, +15 each. The floor's `contracts.rs` gains the struct, the field (serde
+  default, left out when none) and its builder, +88. Nothing else generated moved.
+- `packages/field-native/src/services/terminal_client.rs`: `SessionSummary.activity_kind`, a reader that keeps the
+  kind string alone and refuses nothing. A missing, null or non-object activity, or one without a string kind, is
+  none, and the summary still parses.
+- `packages/field-native/src/services/terminal.rs`: `observed_row` copies the kind onto the row, an exited one's too.
+  The pump already reconciled on `session-activity-changed`. Since only the kind is kept, a new observation of the
+  same kind (a new process group, say) is no changed inventory, and an edge of the kind is one. The `068f70746` hand
+  line `activity: None,` (which kept the floor compiling between the generated field and `0c26aa68c`) is replaced.
+- `packages/fieldd/src/agent-monitor.ts`: `hostTerminalFrom` hands the monitor `activity: {kind}` from a live row,
+  and none for an exited one.
+- **No control minor moves.** field-native still announces 1.17. ghosttea 0.15.0 (the pin) serves 1.19, gates
+  `session-activity-changed` at 1.6, and sends `SessionSummary.activity` at every minor. Nothing in it is gated at
+  1.18. This was read at ghosttea's `v0.15.0` tag (`8f5b3d122be284c3d0292dacd5c475c2a6193769`), in
+  `native/ghosttea/src/service.rs` (:46-104, the gate at :132) and `session.rs` (:514). The design's
+  V1 sentence, "field-native moving its announced control minor from 17 to 18 deliberately", was wrong. It carries
+  a dated correction at its source (`draft/thinking-program-status.md`, beside its own line, 2026-11-18), as do
+  the two more of that file's lines that repeated it (§8's cost table, "crossing minors 18 and 19", and §11's
+  "field-native's 17 to 18"). The next draft snapshot records them.
+- `packages/field-app/src/design-system/godview-model-fixture.ts`: `hostTerminalOf` makes fieldd's copy (the kind,
+  and none for an exited terminal), so the catalog's board reads a row as fieldd's does. The test helper
+  `test/model-board-fixture.ts` (`terminalInfoOf`) hands it the kind.
+
+**The rows.**
+- contracts, `terminal-inventory.test.ts`, the describe "a pane's activity on the list — ObservedTerminal.activity
+  (PS-D5)", five rows:
+  - the field is declared, so the generated floor carries it typed;
+  - the host's kind is carried where it has one, and nothing where it cannot say;
+  - older floors' rows still parse, and their silence is never a word that a pane is idle;
+  - an unknown kind, or a field beside the kind, is read as a newer host's word;
+  - an activity that is not an object carrying a string kind is refused.
+  `fixtures.test.ts` reads the new fixture.
+- field-native, `services/terminal.rs`'s tests:
+  - `a_row_carries_its_panes_activity_kind_and_no_more_of_the_sample` (the same kind at a later stamp is no changed
+    inventory; an edge is);
+  - `a_summary_that_cannot_say_lists_its_row_with_no_activity` (four odd shapes and silence say nothing);
+  - the pump's existing `the_pump_reconciles_on_the_events_it_reads_and_counts_the_rest` now sends ghosttea's real
+    payload shape (`{"sessionId", "activity": {"kind"}}`).
+- field-native, `tests/terminal_unit.rs`: `a_panes_activity_reaches_the_inventory_on_the_activity_event` (unix). It
+  boots the floor and a real ghosttea session whose script is `set -m`, a read, a `/bin/sh -c` read and a read. The
+  test releases the first two in turn, and ends the session at the third. The inventory reads shell-idle, then
+  foreground-job, then shell-idle.
+- field-native, `tests/fixture_parity.rs`: `activity_fixture`. The new fixture round-trips through the generated types
+  strictly, its kinds read foreground-job, shell-idle and none, and three older floors' fixtures (valid, fresh,
+  exited-husk) carry none.
+- fieldd, `agent-monitor.test.ts`: "a live PTY carries its activity kind alone; a husk or a silent row none (PS-D5)",
+  and "PS-D5 — a bare terminal is working while a job runs, idle when its shell waits" (the live monitor, on the
+  floor's changes).
+- fieldd, `agent-remote-cut.test.ts`: "PS-D5 — a bare terminal running a job is working for a peer and the phone".
+- field-app, `godview-catalog-model-fixture.test.ts`: "PS-D5 — a shell running a job reads working on both boards".
+
+**Proved.**
+- The cut: these nine commits were first made on the objects stack's `aff6287b425a`, as `a1ccd67d8ab0`,
+  `339e82a8668c`, `40d7e55ed0e9`, `d3a2530185c0`, `9a7f7bf14bdd`, `dcc97bc30166`, `52ec81fedf50`, `097d9549d0cf` and
+  `edf6b773f93e`, one for each of `2813d5c76`…`751e62aef` in order. Each is patch-equal (`git patch-id --stable`) to its
+  re-made copy in train 10's assembly at `fa6c1ea15e8b`, read 2026-11-18. The runs below happened at the ids they name.
+- `2813d5c76`'s and `33abdfab0`'s patches before their cut, on the development Mac, in scratch trees made by
+  `git archive` of `aff6287b425a`, each patch's files on top (02:41Z to 02:44Z, 2026-11-18):
+  - the contracts package's tsc printed no diagnostic at either;
+  - vitest over `terminal-inventory.test.ts` and `fixtures.test.ts`: at the red, 2 of 795 failed, exactly the
+    declared-field row and the refusal row; at the green, 795 of 795 passed;
+  - biome clean on the five files.
+  The trees carried the base's generated schemas.
+- The cuts, 2026-11-18: `a1ccd67d8ab0`–`339e82a8668c` at 02:47:18Z, `40d7e55ed0e9` at 03:12:39Z,
+  `d3a2530185c0`–`9a7f7bf14bdd` at 03:27:36Z, `dcc97bc30166`–`52ec81fedf50` at 03:28:29Z, `097d9549d0cf`–`edf6b773f93e`
+  at 03:29:40Z.
+  - Each commit was made through the pre-commit hook from files prepared and summed beforehand, and held to its
+    parent, its message, its blobs and its counts.
+  - The branch was created at `339e82a8668c` on the cut (`33abdfab0`'s patch), create-only, then moved only by
+    compare-and-swap on its expected tip.
+  - None ran a test.
+- `068f70746`'s generated files: `pnpm gen` on a test Mac at `339e82a8668c` on the cut (`33abdfab0`'s patch; 03:06:53Z
+  to 03:06:55Z, the run ended 03:06:58Z, 2026-11-18): exit 0, offline. It changed
+  48 files, exactly the 46 entry schemas and the bundle that hold the row plus `contracts.rs`, +793 −0, and nothing
+  outside them. Each file was carried here held to its sum and size. The commit's one other line is the hand line
+  above.
+- `41f52b5ea`'s and `0c26aa68c`'s patches as one, on a test Mac at `40d7e55ed0e9` on the cut (`068f70746`'s patch; ended
+  03:24:45Z, 2026-11-18):
+  - `pnpm gen` changed nothing;
+  - `cargo clippy -p field-native --all-targets -- -D warnings`: exit 0, 0 errors, 0 warnings;
+  - `cargo test -p field-native --no-run`: exit 0. The tests were built, not run.
+  - `d3a2530185c0` (`41f52b5ea`'s patch) alone was not built.
+- The pre-flight at `edf6b773f93e` on the cut (`751e62aef`'s patch; 03:29Z to 03:31Z, 2026-11-18), each read-only:
+  - biome over the branch's changed files (11 checked; the generated schemas are excluded by `biome.jsonc`);
+  - the pinned rustfmt `--check` over the five `.rs` files, `contracts.rs` among them;
+  - `check:walls` (its six steps), `check:retired`, `check:ios-fixtures` (460 copies, 112 pins; the new fixture owes
+    the kit no copy) and `check:web-markers`.
+  Each exited 0, as its launching call printed (the codes are not kept in a file), and every log reads clean.
+- Proven in the joined tree by `v-rehearsal-b` on a test Mac (03:41:21Z to 03:51:23Z, 2026-11-18): `pnpm verify`
+  exit 0 in 601 s, all sixteen stages, at `dde7e69a5968` (tree `70d9f5dc7580`), train 10's twenty-two pieces joined.
+  These nine commits are re-made there, in order and with the same subjects. 62 of the 63 files they touch are
+  byte-identical to this piece's own tip; `fixtures.test.ts` also carries another piece's rows. It was the first run
+  of:
+  - field-native's four rows, each `ok` by cargo's own line:
+    `a_row_carries_its_panes_activity_kind_and_no_more_of_the_sample`,
+    `a_summary_that_cannot_say_lists_its_row_with_no_activity`,
+    `a_panes_activity_reaches_the_inventory_on_the_activity_event` (the `set -m` row) and `activity_fixture`;
+  - fieldd's `agent-monitor.test.ts` (33 of 33) and `agent-remote-cut.test.ts` (16 of 16), and field-app's
+    `godview-catalog-model-fixture.test.ts` (5 of 5). vitest names files, not rows, on a green run;
+  - the typecheck of this piece's fieldd and field-app code, and the contracts rows over the regenerated schemas;
+  - `gen:check`, clean on the joined tree.
+  Its own lane V was not run.
+- The kit, all targets, at the same tip (`kit-rehearsal-b`, ended 03:55:08Z, 2026-11-18): 3,060 rows, 3,056 passed,
+  3 skipped, 1 failed: FieldWebTests R4, main's own (item 522). This piece changes no Swift.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- **The witness on real devices is owed to James.** In a bare terminal on this desktop, `sleep 60` should read working
+  on a second desktop and on the phone, then idle at the prompt.
+- The reds `d3a2530185c0`, `dcc97bc30166` and `097d9549d0cf` on the cut (`41f52b5ea`'s, `3897ef19d`'s and `277826903`'s
+  patches) were never built or run alone. Their rows first ran in the rehearsal, beside their greens.
+- Hosts that cannot sample, and programs ghosttea does not classify, say `unknown`, and the row reads idle. This entry
+  does not measure which hosts and programs those are.
+- `pnpm gate:landing` not run (owed).
+
+**A wrong sentence, carried.** `33abdfab0`'s message and `41f52b5ea`'s test doc (`services/terminal.rs`: "The sample's
+own stamp moves at every 200 ms sample") say ghosttea's sample stamp changes at every sample. It does not. ghosttea
+0.15.0 keeps the summary's activity, its stamp included, while the observation is the same: the kind, the source, the
+confidence and both process groups (`session.rs` :1971-1990 at the tag). The reason the row keeps the kind alone
+stands, because a new observation of the same kind would otherwise republish the inventory. `mgmt.ts`'s "so the row
+does not change at every sample" is loose the same way. Item 530 carries dated corrections beside the test doc and
+`mgmt.ts`'s line (LANDED "Item 530"); `33abdfab0`'s message stands as cut, and this paragraph is its correction.
+
+## TL-4a — fieldd tells every local session the deck's terminal scheme (M404)
+
+(2026-11-18; four commits, 23 paths +2053 −7. Cut by the terminal-look lane as `918040a5e` (contract) → `13eb8fd21`
+(generated) → `c656830f3` (red) → `59639715f` (green) on branch `tl/scheme-on-8064bbdec`, stacked on TL-1/2's tip
+`98b219507`. Main moves once, on James's word and VF-PM's GO. On main it is `fa6c1ea15`; every other commit id here is a
+side commit's, where it was cut or where a row ran (`70d9f5dc7580` is a tree).)
+
+**What was wrong.** A program in a pane asks its terminal what the ground is (OSC 10 and 11, the colour-scheme
+report, `COLORFGBG`) and picks its dark or its light design from the answer. That answer was the floor's
+configuration, whatever the deck drew. So in a light Godview an agent's TUI was told the ground was dark and
+painted its dark design on a light pane: the 1.5:1 link ink of the look check. TL-1's contrast floor lifts such
+text; it does not make the program choose the right design.
+
+**What moved.**
+- The contract (`918040a5e`, `6a576ad77`): `TerminalScheme` (`foreground`, `background`, `cursor` as validated
+  `#rrggbb`, and a sparse `palette`), `terminal.scheme.set` (product surface, scope `settings.manage`, local,
+  idempotent), and LAYOUT `TERMINAL_SCHEME_FILE` = `fieldd/terminal-scheme.json`. No `mode` field: light or dark is read
+  from the ground, as ghosttea reads it. No read method: nothing would call it.
+- The generated files (`13eb8fd21`, `62e303e52`): `gen/layout.json` and field-native's `registries.rs`, as `pnpm gen`
+  wrote them on a Mac mini at the contract commit; exactly those two moved.
+- fieldd (`59639715f`, `fa6c1ea15`): `terminal-scheme.ts` keeps the scheme across restarts and builds everything a
+  session is told from the parsed scheme. `TerminalService.setScheme` keeps it, then tells every live session of every
+  cell through ghosttea's `set-colors`, pane or no pane, an agent a phone started included. An equal scheme answers
+  `changed: false` and tells nobody. A scheme that cannot be kept is UNAVAILABLE `scheme-unkept` and nobody is told
+  it. A session born after a scheme is kept is spawned with `COLORFGBG` and told right behind its create; the birth
+  never waits for that tell. The act is audited as `terminal.scheme.set`.
+- A cell that misses a change (it did not answer, or the management link was down and the floor named no cell) is
+  told when the floor next names it or a client next connects to it, once. When a cell reloads a changed
+  configuration, ghosttea 0.15 gives its sessions the configuration's colours again and announces it; fieldd says
+  the kept scheme to that cell again on the announcement.
+- The deck (`59639715f`): `godview/deck-scheme.ts` is the one caller in the renderer. It says the ground, ink and
+  cursor of the look the deck draws its panes in, once the look has stood still for 200 ms, at mount and at each
+  change. Only Godview mounts the deck, so a preview that tries a look on tells no session; a look that Studio
+  APPLIES to the product reaches the real deck through the appearance store and is said by it, which is the design
+  working (by reading; no row holds it). A say fieldd refuses is logged by its code
+  (`renderer.godview.scheme_refused`), once per code until a say succeeds, an unanswered say as `unreachable`;
+  the scheme is never logged.
+- Rows (`c656830f3`, `29b9f29e6`, with the contract's 7 in `6a576ad77`): fieldd's `terminal-scheme.test.ts` (14) and the
+  block "the terminal scheme (TL-4a)" in `terminal-service.test.ts` (18, five of them through the daemon with the real
+  audit writer), field-app's `godview-deck-scheme.test.tsx` (10, two of them boundary rows for the one caller).
+  The green commit also edits one standing test: `godview-deck.test.tsx`'s exact request list now sets the scheme
+  call aside (+6 −2).
+
+**The proof.**
+- At the cut: biome clean over the ts, tsx and json paths it reads (21 of the 22: `gen/layout.json` is outside
+  biome's includes; the cut's own run kept no log, the pre-flight's did). No type error names a touched file: the
+  lane-mapped fieldd and field-app runs carry errors in other files (348 and 459, the mapping's own), and
+  contracts' run is clean. Five contracts test files ran: 862 tests passed and 1 failed, the `gen/layout.json`
+  freshness row the generated commit turns green. fieldd's and field-app's new rows were NOT run at the cut.
+- The carry pre-flight in the lane's worktree at `59639715f` (2026-11-18 03:37Z, read-only): biome at error level
+  (21 files), rustfmt on the one generated Rust file, the walls with their self-tests, retired names, the iOS
+  fixtures and the web markers, each clean by its log (the logs keep no exit code; rustfmt's is empty).
+- Proven in the joined tree by v-rehearsal-b at `dde7e69a5968` (tree `70d9f5dc7580`: the train's twenty-two
+  pieces joined by picks, this one's four commits among them) on a Mac mini, 2026-11-18 03:41:21Z → 03:51:23Z:
+  `pnpm verify` whole, exit 0 in 601 s, all sixteen stages (verify.clean.log `d4963c4a2743a668`).
+  - `gen:check` on the joined tree: gen wrote contracts' `gen/layout.json` and field-native's `registries.rs`, and
+    the diff against the committed files was empty.
+  - It was the FIRST run of fieldd's and field-app's new rows (contracts' 7 had run at the cut), and all passed:
+    contracts' `test/terminal-scheme.test.ts` (7 tests); fieldd's `test/terminal-scheme.test.ts` (14 tests) and
+    `test/terminal-service.test.ts` (136 tests, the block's 18 among them); field-app's
+    `test/godview-deck-scheme.test.tsx` (10 tests).
+  - The suites whole: contracts 75 files of 75 (2,192 tests); fieldd 317 files passed and 5 skipped of 322 (4,601
+    tests passed, 15 skipped); field-app 370 files of 370 (5,394 tests).
+- The kit's run of all targets, kit-rehearsal-b, at the same forty, ended 03:55:08Z: 3,060 rows, Passed 3,056,
+  Skipped 3, Failed 1, the known FieldWebTests R4 row (item 522), so its xcodebuild exit is 65; no kit path is this
+  piece's (rows.tsv `70f585fe55a878d1`).
+- Its own lane V not run.
+- The train's verify: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18
+  13:07:49Z → 13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is
+  its own step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on
+
+**Not covered.**
+- The sixteen palette colours: ghosttea 0.15 has no door for them, and the deck sends an empty palette.
+- The instant of spawn: a program whose first act is to ask its terminal can be answered from the floor's
+  configuration one step before it is told.
+- The moment after a reload: between a cell's reload and fieldd's re-say, a session holds the configuration's
+  colours.
+- A cell still behind when fieldd itself restarts is told at the next change (what each cell was told is counted in
+  memory).
+- A cell that lists its sessions and never answers a tell holds `terminal.scheme.set`'s answer for at least the
+  ghosttea client's request bound (its 10 s default; fieldd passes none) before it says `unavailable`, and longer
+  behind another tell or change on the same chain.
+- A cell said `unavailable` is not retried on a timer. It catches up when the floor next names it, a client next
+  connects to it or it announces a reload; a silent cell whose row never moves waits for the next change.
+- A live session whose tell the floor itself refuses is logged at debug (`fieldd.terminal.scheme_session_untold`)
+  and its cell still counts as told: that session is told again only at the next change or reload (item 529).
+- Before any deck has said a scheme, fieldd keeps none and tells nothing. With the app closed, the kept scheme is
+  the last one said.
+- NO REAL FLOOR: every fieldd row runs against a fake floor or the mock. No row and no run sent `set-colors` to a
+  real ghosttea floor or read a session's OSC 10 or 11 answer back.
+- The deck says its scheme at mount and at a change. A look changed while fieldd is unreachable is said again only
+  at the next change or mount, not when the connection returns.
+- Sessions on another device: the method is local.
+- NOT SEEN: no pane was drawn. Whether a given agent's TUI then picks its light design is that program's own
+  reading of its terminal; it was read in the public sources of four of them and not watched.
+- macOS only.
+The first three close with the ghosttea release that takes a session's colours at create and keeps them across a
+reload (vibecook-dev/ghosttea#106, control protocol 1.20) and its EL8: TL-4b.
+
+**Not done, and not claimed:** TL-4b; the two palettes; the phone; the landing-only gates (`pnpm gate:landing`),
+owed at the landing; nothing pushed.
+
+## Item 532 — no launch argument reaches a TestFlight build or the review build; six comments say the item and the day (M405)
+
+(2026-11-18; four commits, in order:
+- `bc5815048` (red, "532 (red): rows that hold launch arguments to development builds, over a seam that passes all");
+- `0d5e73893` (green, "532 (green): every demo and fixture read takes its arguments from one seam, none outside DEBUG");
+- `6bbe1ffc9` (words, "532 (words): six kit comments that named a ruling say the item and the day");
+- `874094887` (note, "532 (note): the launch-argument rows' note says what the runs showed, and what they did not").
+
+Item 532 was asked for on 2026-11-18, after item 367's widening. That widening compiled the Developer page's demos
+into TestFlight builds, and with them their launch-argument reads. No TestFlight build was to be cut from main until
+this lands.)
+
+**What a person sees.** Nothing, in any build a person holds. A launch argument is set by a developer's tooling, not
+by a tap. Before this, a scripted `-vf-mock` given to a TestFlight build stood the made-up field with no Demo tag,
+and other arguments staged states no control reaches: the way in's page left undrawn, an empty chat, no agent
+installed, a home that goes to sleep. Now a TestFlight build and the review build read no launch argument.
+- A demo stands in a TestFlight build only as the Developer page's own choice, wearing its Demo tag.
+- The page's Demo field and account states work as before.
+- Development builds read every argument as before.
+
+**The seams.**
+- `FieldProduct/LaunchArguments.swift` (new):
+  - `current` is the process's arguments under DEBUG and `[]` otherwise, read from nowhere;
+  - `development` says which;
+  - `of(_:development:)` is the same rule as a value, for the rows.
+
+  It lives in FieldProduct, the module both FieldHome and FieldWorkspace see.
+- All 80 reads of `ProcessInfo.processInfo.arguments` in FieldHome and FieldWorkspace read `LaunchArguments.current`,
+  the DEBUG ones too, so a gate widened later reads none either. They are:
+  - `HomeScreen` 57, `ChatFixtureDoor` 15 and `HomeRoot` 2 (which now imports FieldProduct);
+  - the apps', meters' and workspace's fixture doors, the workspace sheets, the rain and the spark gallery.
+- Consequences in a TestFlight build:
+  - `HomeScreen.thisLaunch` reads the Developer page's choices alone, and `thisLaunchScripted` is false.
+  - `fixtureArguments` is the page's choice alone, so the way in's page is drawn unless a demo stands.
+  - The shelf's stills door (`-vf-apps-open`), the chat door's sleep (`-vf-mock-chat-away`) and the fixture
+    variants read nothing. The variants are `-vf-chat-*`, `-vf-needs-*`, `-vf-hatch-answer=`, `-vf-open-new-spark`,
+    `-vf-new-spark-job`, `-vf-new-spark-create`, `-vf-new-spark-hold`, `-vf-new-spark-seed=`,
+    `-vf-open-chat-thread=`, `-vf-mock-apps=`, `-vf-mock-usage=` and `-vf-demo-workspace=spawning`. The green's
+    message names fewer.
+- Five reads besides the seam's own stay direct, each on a DEBUG-only line, and the wall below holds them so:
+  - FieldDesign's three (the spark's held time and flat stage) and FieldSplash's one, in modules that cannot see
+    FieldProduct;
+  - FieldWeb's web inspector flag.
+- The review build compiled no read of the arguments before this either. Its Godview, phone search and spark parsers
+  are fed only from DEBUG lines.
+- `apps/ios/TESTFLIGHT.md`: one paragraph after the archive kinds says so, and names the residual below.
+- `6bbe1ffc9`: six comment lines named a ruling by its number or by who made it. Each now says the day, beside the item
+  it or its comment names:
+  - History's corpus (SE-2o, 2026-11-06) and History's pictures (item 362g, 2026-11-13);
+  - phone search's glyph table and the home's lens list (UM-4, 2026-11-06);
+  - the live card's seat and the home model's seat rule (item 42, 2026-10-19).
+- `874094887`: the rows' suite note says only what the runs showed (below).
+
+**The rows.** `LaunchArgumentsTests` (new, FieldHomeTests, 4 rows):
+- A wall. It reads every line of the kit's Sources and the app's that a review build or a TestFlight build compiles.
+  An `#if` evaluator refuses any condition that is not a `||` of known flags. No such line may read the process's
+  arguments (`ProcessInfo.processInfo.arguments`, `CommandLine.arguments`, `CommandLine.unsafeArgv`), with no
+  exception. Its scan runs in a detached task and walks line by line only the files that hold an `#if` or spell a
+  read.
+- A TestFlight-shaped read of `-vf-mock` or `-vf-demo-account=approval` stands no demo and is no scripted run.
+- The Developer page's own Demo field still stands in a TestFlight build, as the page's choice.
+- In a development build the arguments pass as they are.
+
+**Proved.**
+- The cut (05:28:58Z, 2026-11-18) made the red, the green and the words on the train's top `fa6c1ea15`, and the note
+  cut (05:35:21Z) made the fourth commit on them. Both went through the pre-commit hook, from files prepared and
+  summed beforehand. Each commit was held to its parent, its message and its blobs. None ran a test.
+- Before the cut, the wall's evaluator was ported line for line to a read-only script and run over the base and the
+  trees (kept beside the cut: `wall-port.py`, and `wall-port-gated.py` for the gated form): 405 files at the base,
+  406 with the seam, every condition evaluable. It named 23 lines at the red and 0 at the green. Of the 23, 22 are in
+  code item 367's widening compiles into a TestFlight build; the 23rd, `thisLaunchScripted`, has been compiled into
+  TestFlight builds since RB-2c (2026-11-12). The red's message says all 23 came with the widening.
+- The red at `2037d4909` on the cut, FieldHomeTests on the test Mac's simulator (05:29:31Z to 05:30:32Z): it compiled
+  (BUILD FAILED 0, 0 errors), 839 rows, Passed 837, Failed 2. The 2 are the wall (naming the 23 lines) and the
+  TestFlight-shaped read, each at its `#expect`s. The page's row and the development row passed, and so did the
+  rest. The wall row ended after 7.328 s.
+- The kit, whole, at `f4858d18e` on the cut (the words, before the note; a record), 05:31:20Z to 05:33:53Z: 3,064
+  rows, Passed 3,060, Skipped 3, Failed 1, FieldWebTests R4, main's own (item 522). LaunchArgumentsTests 4 of 4, the
+  face suite (`NewSparkCreateTests`) 8 of 8. The wall row ended after 4.689 s, its suite's three other rows after
+  4.658–4.659 s.
+- The kit, whole, at `06595573c` on the cut (the piece's tip), 05:39:40Z to 05:41:50Z: 3,064 rows, Passed 3,060,
+  Skipped 3, Failed 1, FieldWebTests R4, main's own (item 522). LaunchArgumentsTests 4 of 4, the face suite 8 of 8.
+  The wall row ended after 4.599 s, its suite's three other rows after 4.137–4.141 s; its own cost is not shown.
+- The Release pair at `f4858d18e` on the cut, review and TestFlight. It stands for `06595573c` too: the note commit
+  changes a test file alone, and a Release build compiles no test target. 05:35:30Z to 05:38:16Z, unsigned, from
+  the kit clone, with package resolution off.
+  - The review build: BUILD SUCCEEDED in 76 s, 0 errors. Markers 0 of 6 present; census literals 0; other
+    machines' homes 0. So `LaunchArguments` and the 80 reads compile with neither flag.
+  - The TestFlight build (`-DVF_TESTFLIGHT`): BUILD SUCCEEDED in 77 s, 0 errors. Every marker present (242, as at
+    E4); census literals 0; other machines' homes 0. So they compile with VF_TESTFLIGHT and no DEBUG.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id
+  --stable`: `2037d4909`→`e554caff9`, `7a00f80ce`→`541bc018a`, `f4858d18e`→`996220a31`, `06595573c`→`5ea7fa03f`) read
+  `pnpm verify` exit 0 in 597 s (END 2026-11-18 08:11:50Z), every stage through test:rust and gen:check.
+- The joined kit: kit-join-g7 at the trial top `cfc33ff317d3` (seventeen pieces): 3,075 rows, R4 alone failed. It
+  holds this piece's commits by `git patch-id --stable`: `2037d4909`→`c32575912`, `7a00f80ce`→`7ead84791`,
+  `f4858d18e`→`24eddaaec`, `06595573c`→`4eb049685`.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**What went wrong on the way, said plainly.** This is the fourth form of the piece; the first three cuts are kept as
+records (their tips `98aa27f4b`, `aa02d23dc` and `f4858d18e`, the last being this piece's third commit).
+- The first two cuts' red runs each failed one more row than wanted: `NewSparkCreateTests`' "the face flies only once
+  the new spark's row says where its face is…", whose landing waits two seconds for its row.
+- I read the cause as the wall row holding the main actor, and re-cut twice: first off the suite's `@MainActor`,
+  then `async` in a detached task, with the scan gated to the files that matter.
+- **That reading was wrong.** A FieldHomeTests-only run with no wall at all (item 367's E3 red, `d14f28087`) also
+  ends hundreds of rows together, in second 7. The face row passed there after 9.157 s, and in the third cut's red
+  after 4.410 s. The gate cut the lines the wall walks six times, and its time did not move (7.44 s, then 7.33 s).
+- Rows ending together are seen in every kit run tonight, with or without the wall: in the ALL runs at the tip about
+  200 end at once near 4–6 s. They do not single out the wall, and what they mean is not shown. The face row's
+  two-second wait failing under a FieldHomeTests-only run's load is item 538. Until it is mended, a red at that row
+  in such a run is named item 538 and the run repeated once.
+- `874094887` corrects the suite note that the third cut wrote on the wrong reading.
+
+**Not run, and owed.**
+- **Not covered:** the wall finds a read by its spelling, so a read through an alias (a stored `ProcessInfo` and its
+  `.arguments`) would pass it. None exists at `06595573c`: in the kit's Sources and the app's, the only other use of
+  the process info is `isLowPowerModeEnabled`, and nothing reads its environment (the kit's tests do).
+- **Not covered:** the wall reads the kit's Sources and the app's alone. The packages built into the app (truffle,
+  ghosttea, rosetta's client) are not read, so "a TestFlight build reads no launch argument" holds for the kit's own
+  code.
+- **The residual, said, not closed:** a `-key value` launch argument still sets UserDefaults' argument domain, so a
+  developer's tooling can set the Developer page's own choices. They stand only what the page offers, with the Demo
+  tag.
+- Item 538, the face row's wait under a cold FieldHomeTests-only run, is open.
+- The wall row's own cost is not shown: it ends after 4.6–4.7 s in an ALL run, as its suite's trivial rows end at
+  nearly the same moment, though it walks 53 of the 406 files line by line. Its phases are to be timed under item 538.
+- No TestFlight archive was made; the first one from main is owed after this lands.
+- No device look is owed: nothing a person sees changes.
+- `pnpm gate:landing` not run (owed).
+
+## Item 530 — three comments say what ghosttea 0.15.0 does: the activity's stamp, and the minor it serves (M406)
+
+(2026-11-18; one commit, comments only: `4c1479fcd` ("530: three comments say what ghosttea 0.15.0 does — the activity's
+stamp, and the minor it serves"). It corrects two sentences that PS-D5 (V1) carried in this train, and the older
+control-protocol note: its first line and two of its service.rs citations.)
+
+**What it changes.** `4c1479fcd` adds three dated corrections, each beside the old text, which stays:
+- `packages/field-native/src/services/terminal.rs`, the doc of
+  `a_row_carries_its_panes_activity_kind_and_no_more_of_the_sample` (+6). It said the sample's own stamp moves at
+  every 200 ms sample. ghosttea 0.15.0 keeps the summary's activity, its stamp included, while the observation is the
+  same: the kind, the source, the confidence and both process groups. What keeping the kind alone buys is narrower: a
+  new observation of the same kind, a new foreground process group, is no changed inventory.
+- `packages/contracts/src/mgmt.ts`, `ObservedTerminalActivity`'s doc (+5 −1; the −1 is the line whose closing `*/`
+  moved down): the same, for its loose "so the row does not change at every sample".
+- `packages/field-native/src/services/terminal_client.rs`, the control-protocol note (+12):
+  - Its first line named ghosttea 0.13.4. The pin is 0.15.0, which serves 1.19.
+  - This client still announces 1.17, and every pushed-event gate in 0.15.0 sits at or below 1.17: the broadcast
+    gates (service.rs :130-141), the 1.12 snapshot after `hello` (:2003-2005) and `events-lost` (:2030).
+  - That list in the comment is one short. `event_for_client` (:165-166) holds a fourth gate, at 1.12: below it,
+    `control-state` is rewritten as `control-changed`, or dropped when the controller is cleared. It sits below 1.17
+    too, so the comment's claim holds; only its list is incomplete.
+  - The gate is on pushed events alone: 1.18's summary fields (`creationId`, `inputUsed`, `programKind`) ride
+    `list-sessions` at any minor, and this reader takes the first two.
+  - The note's :49 and :88, and :34 in `MAX_CONTROL_BYTES`'s doc below it, read as cited at 0.15.0. The two it cited
+    for the recorded minor and the hello response's ceiling moved: to :1968 (broadcast events gated on it at :2020)
+    and :2522-2524.
+
+The facts were read at ghosttea's `v0.15.0` tag (`8f5b3d122be284c3d0292dacd5c475c2a6193769`), in
+`native/ghosttea/src/service.rs`, `session.rs` and `CHANGELOG.md`. No code, test, generated file or manifest moves.
+PS-D5 (V1)'s entry, under "A wrong sentence, carried", names the first as wrong and the second as loose the same way.
+The message of that piece's second commit ("PS-D5 (green): a floor's terminal row carries its pane's activity
+kind"), which repeats the first, stands as cut; that paragraph is its correction.
+
+**Proved.**
+- The cut: this commit was made on train 10's assembly at `fa6c1ea15e8b`, as `0480d85911d5`, on the branch
+  `ps/530c-on-train10b`. The runs below happened at the ids they name.
+- Two earlier cuts of this item, on the same parent, are kept as records; the item's own fact-checks found each before
+  any train took it:
+  - `711ba6048487` (`ps/530-on-train10b`) said in the third correction that what 1.18 and 1.19 add stays off this
+    connection. That was wrong: 1.18's summary fields reach it through `list-sessions`.
+  - `454af779479d` (`ps/530b-on-train10b`) cited the broadcast gates alone for "every pushed-event gate", and its
+    message said biome was clean where it ran at error level.
+  All three cuts carry the same two other files, blob for blob.
+- Before the cut, on the development Mac (06:08:43Z to 06:08:45Z, 2026-11-18), on the three files as `0480d85911d5`
+  carries them (blob-equal), each writing only its logs (biome also its cache, in a scratch home):
+  - the pinned rustfmt (1.99.1) `--check` exit 0 on both `.rs` files;
+  - biome exit 0 on `mgmt.ts` (`--diagnostic-level=error`), with `fa6c1ea15e8b`'s `biome.jsonc`.
+- The cut (dated 06:10:23Z; run 06:10:23Z to 06:10:25Z, 2026-11-18): `0480d85911d5`, in the lane's standing worktree.
+  - That worktree was first moved, detached, from `454af779479d` to `fa6c1ea15e8b`, and no ref was written by that
+    step.
+  - The commit was made through the pre-commit hook, from files prepared and summed beforehand, and held to its
+    parent, its message, its blobs and its counts.
+  - Its branch was created, create-only.
+  - None ran a test.
+- `v-ps530` on a test Mac at `711ba6048487` (05:42:38Z to 05:52:37Z, 2026-11-18): `pnpm verify` exit 0 in 599 s, all
+  sixteen stages, with `gen:check` clean (`pnpm gen`, then `git diff --exit-code` over the generated paths).
+  - It stands for `0480d85911d5` by their delta. The two trees differ in `terminal_client.rs` alone (+9 −3), and there
+    in `///` lines alone. rustfmt `--check` passed on that text here.
+  - Clippy's doc lints and rustdoc read the changed text, and first run on it in the train's verify.
+  - No second lane verify was run.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- `0480d85911d5`'s own tree has not been verified; the train's verify is its first whole run.
+- Nothing to witness: nothing a person sees moves. None of the changed text reaches a generated schema, `contracts.rs`
+  or `docs/`.
+- `pnpm gate:landing` not run (owed).
+
+## Item 536 — The pages, the README and three comments stop naming mille's sibling checkout as required (M407)
+
+(2026-11-18; one commit, `6f7045dbf` ("536 (docs): the pages, the README and two comments stop naming mille's sibling
+checkout as required"; three comments change in fact: two in scripts and one in a test). Item 536 came out of the
+fact-check of the EL8 to mille 0.3.6's own entry: since that EL8 (2026-11-17, `0d1e63b07`), mille and mille-ui are
+exact registry pins and `../mille-pin` is a checkout only while the overlay links mille, but seven statements still
+said otherwise. Docs and comments only: no code moves.)
+
+**What a person sees.** Nothing in the app. A reader of the agent-plane pages, the README or the desk gates' page now
+reads mille as released, with each old statement kept in a dated correction beside the new words.
+
+**What changed.**
+- `docs/agent-plane/api.html`, the page that owns the files seam, first: "The unreleased mille channel is pinned at
+  `c8160d5` in a dedicated sibling checkout…" now says mille and mille-ui are exact registry pins at 0.3.6 since the
+  EL8 (`0d1e63b07`), that fieldd, field-app and the room resolve them from npm, that the sibling window (FS-1b) is
+  closed, and that `siblings.lock.json` keeps mille's entry only as the dev overlay's coordinate. A dated correction
+  (2026-11-18, item 536) quotes the old words. R24's sentence, the 2026-10-07 erratum and the git port's line stand.
+- `docs/agent-plane/architecture.html`, the umbrella's files-service section, after the owner: "release publication
+  closes the window" now says it closed at 0.3.6 and that "no mille checkout is read unless the overlay links
+  mille", with a dated correction quoting the old sentence and naming the API page as the channel's owner.
+- `README.md`: the watcher's list of the checkouts it does not watch drops `../mille-pin` (an overlay-linked mille is
+  still covered by "any overlay-linked sibling"), with a dated correction.
+- `docs/desk-gates.md`: preflight reads `../mille-pin` only while the overlay links mille, with a dated correction
+  beside the 2026-10-28 one.
+- `scripts/build-paths.mjs`: the pinned checkouts are `../rosetta-pin`, and `../mille-pin` while the overlay links
+  mille. Comment only.
+- `scripts/host-links.mjs`: after the 2026-11-05 correction (its words left as written), one sentence: mille's `.node`
+  comes from npm, built by mille's own release, and is built here only while the overlay links mille; "a hit in it
+  still FAILS." (No row of `BUILDER_PATH_EXCEPTIONS` names it.) Comment only.
+- `tooling/dev-runner/test/host-links.test.mjs`: one comment line names the fixture's mille install name as the
+  2026-11-04 nightly's; the fixture's mille, field-native, terminal-host, freeway-host, rosettad and sidecar registry
+  counts are that nightly's (its loro and fieldd rows are the 2026-11-03 local package's). The string stays as that
+  nightly carried it.
+
+**Proved.**
+- The cut: `hl/536b-on-train10b` at `0fed57c3d516`, one commit on the train's top `fa6c1ea15e8b`, made by
+  `cut-536b.sh` (sum `e8bb6530…`) in a lane clone: biome on the seven paths, then the commit through the
+  repository's hook (the hook's line is in `cut-536b/commit.log`), then one create-only fetch into the repository
+  (one ref added, none moved). The cut ran 08:55:39Z to 08:55:41Z, 2026-11-18. Its diff against `fa6c1ea15e8b` is
+  the prepared `536b.diff` by sum. The first cut, `hl/536-on-train10b` at `72f1f8483a63` (05:41Z), stays a record
+  and rides nothing.
+- This cut differs from the first in one sentence and in its message, read at their sources:
+  `git diff 72f1f8483a63 0fed57c3d516` changes one line alone, `docs/agent-plane/architecture.html:2009`, where "and
+  no mille checkout is read." gains "unless the overlay links mille"; the messages differ in two places, "on the
+  train's top" → "on its base" with the install's words corrected, and "the train's" → "the joined run's".
+- On the development Mac, in that lane clone under env -i on one frozen offline install (the lane's harness; no
+  package was downloaded; the supply-chain check fetched registry metadata into the install's own HOME, its log
+  reading "668 entries in 2.5s"):
+  - biome on the tree the cut committed as `0fed57c3d` (`6f7045dbf`'s patch), inside the cut (08:55:40Z), and again at
+    `0fed57c3d` on the cut (08:55:51Z): exit 0 on the five files it reads; its four warnings are CSS rules in the two
+    pages' styles (`api.html` 701 and 890, `architecture.html` 663 and 915), none on a changed line;
+  - `host-links.test.mjs` under `node --test` at `0fed57c3d` on the cut (`6f7045dbf`'s patch), 2026-11-18 08:55:51Z: 12
+    of 12 passed.
+- The test's new comment says npm's 0.3.6 addon names `@rpath/…` itself. `otool -D` read
+  `@rpath/libmille_binding.dylib` from `mille-darwin-arm64`'s `mille.darwin-arm64.node` in a vibe-field install, in
+  the GREEN row of the EL8's cut `04235e309` (landed as `ccfab02a0`), 2026-11-17 08:31:38Z. That file and the same
+  file in this piece's lane install at `fa6c1ea15e8b` share one sha256, `ad99ec43…` (read 2026-11-18 08:47:47Z, the
+  lane's `logs/addon-sum.log`).
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed) held the FIRST cut `72f1f8483a63` by
+  `git patch-id --stable` (→`4dda29bb4dec`) and read `pnpm verify` exit 0 in 597 s (END 2026-11-18 08:11:50Z),
+  every stage through test:rust and gen:check. This cut differs from it in one sentence of
+  `docs/agent-plane/architecture.html` and in its message.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- `docs/ROADMAP.md`'s mille row still reads `link:../mille-pin` at `c8160d5`: it is the roadmap's rewrite's, not this
+  piece's.
+- `docs/DECISIONS.md`'s RT row still names `.github/actions/prepare-mille` at `fa6c1ea15e8b`: its dated correction
+  (2026-11-17) rides the same records commit in the EL8 to mille 0.3.6's own entry; this piece adds none.
+- `CLAUDE.md`'s Machine setup still describes mille as a `link:` sibling checkout: its correction is James's word.
+- No page or comment was read in a browser or an editor beyond the diff; biome does not read the two Markdown files.
+
+## Item 528 — the door's docs and comments say what puppeteer 0.4.2 declares (M408)
+
+(2026-11-18; two commits, 6 paths, comments and docs, and one test constant's type: `f6273d47b`, `0d0fb7031`.)
+
+**What was wrong.**
+- At the pin, puppeteer 0.4.2 (read in the installed packages, 2026-11-18):
+  - Claude declares `mcpServerProcess: "terminal"`.
+  - Codex declares `run-helper`.
+  - Grok's built-in provider (`puppeteer-builtin-providers`' `grok` row) carries `GROK_BRIEFING_CAPABILITIES`: ACP's
+    capabilities with `mcpServerProcess: 'run-helper'` over ACP's own `external`. fieldd reads that value (`daemon.ts`,
+    `capabilities` from `runtime.providers()`' `briefing`).
+  - `HostIngress.onHelperProcess` is declared.
+  - `prepareInvocation` forwards a typed launch's briefing and `briefingRefusal` to the session it prepares, and the
+    receipt `briefing: {applied, withheld}` comes back, with the adapter's `briefingWithheld` folded into its
+    `withheld`.
+  - puppeteer-core's `AgentBriefingCapabilitiesSchema` lists `"run-helper"`.
+- Seven texts still described the 0.3.3 pin, or said Grok's servers run `external`; an eighth was found after the cut,
+  below.
+
+**What moved** (each dated at its source; what it said, below). In `f6273d47b`:
+- `docs/agent-plane/architecture.html`, the door row: "need puppeteer's `run-helper` declaration, not yet pinned" now
+  reads that Codex and Grok declare `run-helper` at the pin and hold the door as plain runs only, never as sparks; and
+  "Claude Code holds the door by its pane on the pin" drops "on the pin".
+- `docs/agent-plane/spark-briefings.md`: a dated correction after the 2026-11-09 note, saying the pin and what it
+  declares and forwards.
+- `packages/fieldd/src/agent-door-launch.ts`: the ingress hook's comment (the pin "does not declare it yet") and PU-J's
+  (the pin "forwards only the fields it names, so on it the briefing goes nowhere").
+- `packages/fieldd/test/agent-runtime.test.ts`: the spark row's comment, which said Grok's adapter's servers run
+  `external`.
+- `packages/fieldd/test/agent-session.test.ts`: the scripted adapter's comment, "the installed pin's HostIngress
+  predates the hook".
+In `0d0fb7031`:
+- `packages/fieldd/test/agent-briefing.test.ts`: `RUN_HELPER`'s comment said "The installed puppeteer-core's enum
+  predates it, so the test casts"; it now says the enum has it since 0.4.2, and the constant is the typed value with no
+  cast through `unknown`. Its declared type is the field's own, as the cast's was.
+
+**Untouched.**
+- No behaviour, and no row's assertion. `0d0fb7031`'s constant is the one change a compiler reads.
+- `docs/agent-plane/api.html`'s door passage and `packages/contracts/src/agent-catalog.ts`'s spark comment already said
+  what holds.
+- `docs/ROADMAP.md`'s CP-5c line names 0.3.3, and is left for the roadmap's rewrite at a milestone; its substance holds
+  at 0.4.2.
+- A carried commit's message (`1afacbeb5`, the spark gate's row, the re-pick of `c5abfe184`) says Grok's servers run
+  `external`. A commit message cannot move; its dated correction rides in OB-3d's entry.
+
+**What holds the path.** A Grok plain run holds the door through its helper root by the same code as Codex's.
+- By the capability's value: contracts' `doorCanName("run-helper")` row; agent-runtime.test.ts's "agent.providers does
+  not say spark for a claim whose pin runs its MCP servers in a run helper (OB-3d)"; and agent-briefing.test.ts's rows:
+  - "names a run's helper process as it names a pane's (OB-3d)";
+  - "gives a harness with no allowance field the door and no allowance, so it asks before each tool (OB-3d, Grok)",
+    which is Grok's own shape;
+  - the spark refusal of `run-helper` (the CP-1d `it.each`, and `sparkFactsRefusal` in the CP-5a row "exports the one
+    predicate").
+- Never by the agent's id: the helper hook rides every birth's ingress, whatever the agent declares. The door's launch
+  rows test it with no provider; the real-floor row runs it on `scripted`, which declares no briefing. Neither reads
+  the capability's value.
+
+**The proof.**
+- On the tree of `b572d03a8` on the cut (`f6273d47b`'s patch), in a scratch clone of the top with its five files placed:
+  - the walls chain and check-retired-names each printed its clean line, check-ios-fixtures "identical" and
+    check:web-markers
+  "0 findings"; - `biome check .` at error level printed no diagnostic; - nor did the three TS files at warn level.
+- On the tree of `86e5e435e` on the cut (`0d0fb7031`'s patch), in a scratch clone of `b572d03a8` with its file placed:
+  biome printed no diagnostic on the file at warn level, nor on `.` at error level; check-retired-names printed clean.
+  Its type-check is the whole verify's, below.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656` (sixteen
+  pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id --stable`:
+  `b572d03a8`→`34c2c5414`, `86e5e435e`→`52ab41093`) read `pnpm verify` exit 0 in 597 s (END 2026-11-18 08:11:50Z),
+  every stage through test:rust and gen:check.
+- The train: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- No live Codex or Grok helper has met the door. Grok's adapter says its leader's spawning of MCP children "has NOT
+  been observed against a live Grok".
+- macOS only.
+- An eighth stale text was found after the cut: `doorCanName`'s comment in `packages/contracts/src/objects.ts` says of
+  puppeteer-core's enum that "the installed one does not have `run-helper` yet". This piece's sweep did not cover
+  `packages/contracts`. A `run-helper` grep over packages, docs, apps and scripts at the train's top finds no other. It
+  is corrected in item 550a.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## Item 531 — two notes corrected at their sources: truffle 0.7.28's LP-5 note and mille 0.3.6's window (M409)
+
+(2026-11-18; one commit, 2 paths +10 −4. Cut on train 10's top `fa6c1ea15e8b` as `610e5c966` on branch
+`focus/i531-on-train10b`. On main it is `40a4e1fb4` "531: dated corrections at their sources — truffle 0.7.28's LP-5
+note, mille 0.3.6's window". Every other id here is a side commit's.)
+
+**What landed.**
+- `40a4e1fb4` corrects Cargo.toml's 0.7.27 → 0.7.28 note at its source. It said TB's LP-5 rider was not run in that
+  event, and that the Go licence record would name sidecar 0.7.27 until the 0.9 tag. The rider rode the same event as
+  its own commit. The note now says so, under an ERRATUM dated 2026-11-18 that says what it said.
+- `40a4e1fb4` corrects the mille 0.3.6 note in pnpm-workspace.yaml's minimumReleaseAgeExclude. It said 0.3.6 was inside
+  the release-age window at its EL8 of 2026-11-17. The registry dates 0.3.6 at 2026-11-12T06:40:04Z (read on
+  2026-11-18), and the file sets no minimumReleaseAge, so pnpm 11.13.1's default of 1440 minutes held: 0.3.6 was
+  outside the window. By that reading the ten mille rows were not needed; they stand.
+- Comments only: no row, pin, lock or code line moves.
+
+**What was proved.**
+- The commit's own check, its pre-commit hook's render check, passed at the cut (2026-11-18 05:42:58Z): "the
+  committed rows (staged) are the lock's".
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commit by
+  `git patch-id --stable`: 610e5c966ab6→f68af0677e78) read `pnpm verify` exit 0 in 597 s (END 2026-11-18
+  08:11:50Z), every stage through test:rust and gen:check.
+
+**Not run, owed.**
+- Dropping the ten mille rows: not done. It changes pnpm's settings, so it is its own decision.
+- `pnpm gate:landing` not run (owed).
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+## EY-0 — the pages room's record: 29 planned rows, the control verb, the hold, the engine's script set (M410)
+
+(2026-11-18; five commits, in order:
+- `95f39fc84` (doc, "EY-0 (doc): an agent on a page — DESIGN.md's words first");
+- `72e86d82d` ("EY-0: the pages room's record — 29 planned rows, the control verb, the hold, the pin");
+- `6623729a1` (docs, "EY-0 (docs): the pages family on the agent-plane pages");
+- `7c5ece0c9` (test, "EY-0 (test): the desk room's own facts reach the model through the plane, beside the pages
+  room's");
+- `40a9571d5` (docs, "EY-0 (docs): the plane reads the pages room's facts beside the desk room's own").
+
+Track EY's first slice, by `draft/tool-plane/EY-0-PLAN.md`. It is contracts first: EY-1, main's broker and bridge,
+and EY-2, fieldd's pages room, build on these shapes in two lanes. Nothing in it runs an agent on a page yet.)
+
+**What a person sees.** Nothing yet. DESIGN.md §8 gains the words an agent on a page will wear, "A page an agent is
+using", right after item 42's "A session another device is driving":
+- while an agent uses a page in the browser pane, the pane's head wears the agent's face and says the agent "is
+  using this page", by the name the run wears on its own pane, for any agent;
+- during an act it says the agent "is driving", and a small mark shows where the act lands;
+- the caption is "pick it up to take it back", and there is no veil.
+
+Words only: no colour, size, motion or token, so tokens.css and the catalog do not move. The browser pane has
+shipped in no packaged app since 2026-11-09, and the bullet says so. James ruled the words as written on 2026-11-17.
+
+**The seams.**
+- `contracts/tools.ts`:
+  - the `pages` family and its slice, EY-2;
+  - `TOOL_FACTS`: fieldd's eight facts and the pages room's eight (not-handed, held, off-site, stale-ref,
+    loading, parked, gone, needs-you). Four of the pages room's are the desk room's words too, in its own
+    `OBJECT_FACTS` (OB-3b), and `TOOL_FACTS`'s comment says so (`40a9571d5`);
+  - the 29 `browser_*` rows, the pinned engine's core profile in its own order, each on the browser pane
+    (`vibefield.browser-pane`) for every agent: 25 at object scope, `browser_tab_new` at device scope, and
+    `browser_tools_profiles`, `browser_tab_list` and `browser_close` at self scope. They are planned rows with
+    no schema, so nothing is served and `gen/tools.ts` stays byte-same.
+- `contracts/pages.ts` (new): the room's words (its service, its unavailable states, its needs) and the schemas
+  of the script set and the engine record. Of the engine's text they hold only hashes and lengths, and the set's
+  objects are strict, so a `body` or `text` key fails the parse. `index.ts` exports it.
+- `contracts/pages-record.ts` (new), written by the lab's `convert-record.mjs`, never by hand. It is not exported
+  from `index.ts`; EY-1, its first reader, adds the subpath.
+  - `PAGES_SCRIPT_SET`: 35 exact bodies and 16 templates, from 345 agent calls in two merged record passes, 164
+    and 181.
+  - `PAGES_ENGINE_RECORD`: agent-browser 0.41.0 at tag commit `1453dd37`, confirmed against the tag ref; the
+    darwin-arm64 binary's sha256; the npm integrity; the 29 core tools with their readOnlyHint.
+  - No engine text: the tag is Apache-2.0, so each body and each fixed part of a template is its SHA-256 and
+    the length of its UTF-8 bytes. The header names each of the six inputs by SHA-256.
+- `contracts/shell.ts`: the internal `shell.surfaces.control`, with run required, surfaceId optional, a read or
+  act window and a bounded command object. Its result is done, refused with a fact, or refused needs-you. Three
+  limits for EY-1 to measure: `CONTROL_DEADLINE_MS` 30 s and `CONTROL_OUTPUT_MAX_BYTES` 1 MiB, each marked
+  provisional in the code, and `CONTROL_COMMAND_MAX_BYTES` 64 KiB, whose comment leaves the shim's own bound to
+  EY-2. The plan named two; the third bounds `done`'s output, and carried twice it stays under the native door's
+  8 MiB line.
+- `contracts/live-surfaces.ts`: the `hold` message. `registries.ts` and `plugins.ts`: dated notes retiring the
+  `surface.control` reservation (EY-D8 A), comments only, so `registries.rs` stays byte-same.
+- fieldd: `ROOM_WORDS` gains the pages line; the room facts set reads `TOOL_FACTS` and the desk room's
+  `OBJECT_FACTS` (OB-3b) in place of its own list of eight; `METHOD_CONTRACTS` gains the control row, its deadline
+  `CONTROL_DEADLINE_MS`.
+- electron-shell main: the one refusal EY-0 adds. `shell.surfaces.control` answers UNAVAILABLE until EY-1, before
+  any parse and before the folder dialog is reached.
+- The agent-plane pages: `api.html` gains a dated EY-0 note on the compose door's facts (in `40a9571d5`, the plane reads
+  them beside the desk room's own), a section note and the 29 catalog rows, each Designed, family pages, audience
+  agent, slice EY-2. `architecture.html`'s seams table gains "the pages engine (EY)", status Designed.
+  `AGENT_PLANE.md` says EY-0 adds the 29 planned rows.
+
+**The rows.** Nine new, all in contracts but the last two:
+- `tools.test.ts`, five:
+  - the facts: fieldd's eight, then the pages room's eight, each once;
+  - the pin's core profile in its own order, 29 rows, with no `get_cdp_url`;
+  - readOnly taken from the engine's readOnlyHint, but for the map's two stated departures;
+  - every row on the browser pane, for every agent, in slice EY-2, and none served before EY-2;
+  - the record and the script set parsed by their schemas, both recorded from one release.
+
+  The name cap's row moves from 24 to 32, since `browser_wait_for_selector` is 25.
+- `shell.test.ts`, one: the control is an internal provider verb, in a page form and a run-level form, and main's
+  refusals are facts.
+- `live-surfaces.test.ts`, one: the person's hold is its own control message, and `held` says which edge.
+- `fixtures.test.ts` parses the six new control fixtures, in its existing row.
+- electron-shell's `shell-provider.test.ts`, one: the control is refused as the live-surface authority unavailable,
+  and never reaches the folder dialog.
+- fieldd's `tool-plane-desk.test.ts`, one, in `7c5ece0c9`: a handed note asked through the real plane for a tool it
+  does not declare answers the model `no-tool:` with the note's own tools. `no-tool` is the desk room's alone, so
+  the row reddens if the plane's facts set drops `OBJECT_FACTS`.
+
+**How the record was made.** The lab, `draft/browser-spike/ey`, drives the pinned engine against the lab's own
+Electron. The script set merges two of its record passes: sitting 2's Path 2 pass on the development Mac (164
+agent calls; 2026-10-31 local time, its report stamped 2026-11-01T02:04Z) and a supplementary pass on the second
+test Mac on 2026-11-18 (181). The binary's sum is read from that report of sitting 2. The lab's files as run ride
+the next `commit-draft` snapshot; dev-local's last holds the 2026-10-31 lab. No repo row runs the engine binary.
+
+The lab's runs of 2026-11-18 were on the second test Mac. In order: the install (03:07Z), the probe (03:10Z),
+sitting 1's first full run (03:31Z to 03:39Z) and the record pass (03:55Z). Then, on the development Mac, the lab
+fixes, the convert in the lane and the first cut; then v-ey0 on the test Mac (below, under Proved). Then two install
+attempts (05:07Z and 05:11Z) and sitting 1's first re-run (05:12Z to 05:20Z). The trap and the joined verify, later
+that day, are under Proved. Last, on James's word, sitting 1's second re-run (11:39Z to 11:47Z). The harness's own
+EXIT lines judge by exit code, so they say RED wherever the runner exits 1; the verdicts here are the runner's.
+- The window-server probe: sitting 1's cpu phase alone. Its one run case, AB-16c, painted frames and passed; the
+  runner's line read yellow, 1 passed and the eight sign-in rows owed. A run of some of sitting 1's phases that is
+  not a segment is judged against the sitting's whole 70-row table, so it reads neither green nor declared-yellow
+  and exits 1. A segment, such as sitting 2's record phase alone below, is judged on its own phases.
+- **Sitting 1's first full run there (Path 1, 70 rows) ended red, on two faults in the lab's own code.** Its run 8
+  on the development Mac, 2026-10-31, had read yellow, before the cases these faults sat in were changed. Neither
+  fault was the host, and neither was a finding about the engine or Electron:
+  - EY-S1-16 normalized its plant spec twice, and the second pass refused the first pass's output, so the case
+    threw on its first control;
+  - AB-23's no-grants check failed because EY-S1-05 opened a second signed-in page, cached its grant and
+    destroyed the page without forgetting the grant.
+
+  Before the first re-run, two readers and two checkers read the lab's untested paths. They found five more that
+  held: two controls that could never show an effect (the planted socket folder was read only after the daemons
+  stopped, and argv's `--session` always beats the planted variable), two ways a guarded run could read a false red,
+  and a yellow that carried no evidence. A stdout race they also named was not upheld by its checker. A latent gap
+  in EY-S1-20, a grant left dead if DevTools takes the page's owner, is left open: the owner survived on both Macs.
+  All seven were fixed in the lab, each covered by one of six new tests, each test seen red on the old code; the
+  lab's 399 tests pass.
+- Sitting 2's record phase alone, with the supplementary pass, ended green, 2 of 2. Every required call site
+  matched over the merged set, and only the two the pin cannot reach stayed unmatched (`interaction.rs:781` and
+  `:901`). The merged set admits all 11 supplementary fixed bodies. Its set and calls file are the converter's
+  inputs.
+- The converter ran in the lane on the development Mac. Before the write, it re-matched each of the 313 script
+  calls the last pass kept (67 distinct) and the set's 62 form probes against the hashed form and the lab's own
+  matcher, with no miss.
+- The first re-run of sitting 1 on the fixed lab ended yellow, as SITTINGS §0's note of 2026-11-18 had said R2 would
+  leave it: the runner's exit at 05:20:09Z, 475 s, exit 1, which the runner gives every status but green and
+  declared-yellow. Of its 70 rows: 39 pass, 11 findings, 6 known gaps, 12 owed (exactly the declared twelve), 2
+  yellow and 0 fail. No daemon survived any phase.
+  - EY-S1-05, AB-23 and EY-S1-16 pass.
+  - EY-S1-16's 24 plants: every guarded run reached the app's provider in time and loaded nothing. Every control
+    showed its effect, the two the readers found among them: the planted socket folder read `planted-folder-used`,
+    and the session variable `token-reached-daemon` and `token-named-file`.
+  - The two yellows: EY-S1-R2, with the same 14 cells and causes as the first run, and EY-S1-03c, whose raced read
+    queued behind the agent's call and lost the race to the window's close, as the same case read on Path 2 in
+    sitting 2's final run (stamped 2026-11-01T02:04Z).
+  - Against sitting 1's run 8 of 2026-10-31, six cases differ:
+    - AB-3 and EY-S1-19, yellow there, are owed by the amendment;
+    - EY-S1-15b and EY-S1-17 passed there on the development Mac's source build, and are owed on a source build,
+      as declared;
+    - EY-S1-16, yellow there because it did not run, passes;
+    - EY-S1-03c, a known gap there, is yellow.
+
+    Every other case has the same disposition, AB-23's pass among them. EY-S1-20 is a finding in both, but its
+    evidence differs: the first re-run reads `autoAttachIframeOnly` true where run 8 read it false.
+- The second re-run, on James's word "rerun" (typed in the EY lead's session by 11:32:16Z, answering the first
+  re-run's yellow as it was put to him), ran sitting 1 in full once more on the same lab, unchanged: 11:39:55Z to
+  11:47:50Z, 475 s, exit 1, yellow, its verdict line the first re-run's byte for byte. All 70 cases read as the
+  first re-run's, each with the same disposition, the same reason and the same pass or fail, EY-S1-R2's 14 cells and
+  EY-S1-03c's lost race among them. Their evidence differs only in what varies run to run: timings; per-run ids
+  (AB-1's target hashes, AB-3's and AB-17's daemon hashes, EY-S1-18's process-chain hashes); and five counts, AB-9's
+  frames on its two surfaces (20 to 19 and 9 to 10, with their paint events), AB-16's shared paints (15 to 14),
+  EY-S1-12's keys typed before the hold (54 to 55) and the trace events of R2's own-class `profiler stop` cell (15
+  to 16). No daemon survived any phase.
+- The lab ran from a packed copy, and two of the converter's inputs came back after the pack: the record pass's
+  set, `ey/script-set-0.41.0-p2.json` (the packed copy holds the 2026-10-31 set), and its calls file, which the pack
+  lacks. Sitting 1 never reads either: its set is `script-set-0.41.0.json`.
+- The first re-run's first install attempt ended exit 1, with no word, after the Electron download. The swap that
+  set the first run's lab aside kept that install's copy of the host's guard file. The install's `cp -n` onto a
+  standing file exits 1 on macOS, and `set -e` ended the script there. Both were at fault: the swap's keep list,
+  which no one had tried against the install's writes, and the install's silent step. Its mend, the next attempt:
+  the partial lab and that copy were set aside, every other write of the install was walked against what stood, and
+  the same install ran green, each sum held.
+- The macOS Keychains folder on the test Mac was unmoved by each of the eight runs: three install attempts, the
+  probe, sitting 1, the record pass and sitting 1's two re-runs.
+
+**Proved.**
+- EY-0's witness: sitting 1's first re-run read yellow, outside the declared set on EY-S1-R2 and EY-S1-03c. By
+  SITTINGS §0 a yellow outside the declared set is not a witness, and by its amendment the verdict goes to James as
+  it stands. It went to him so, each cell with its cause, and he answered "rerun". The second re-run read the same,
+  and its result went to him: he answered "Take it as it stands (Recommended)" (in VF-PM's session, 2026-11-18, by
+  17:31:50Z).
+- Contracts in the lane: tsc clean, and vitest 70 files and 2,088 tests, both before the convert and again on the
+  converted record. biome was clean over all 22 changed code files before the convert, and over the 18 changed
+  contracts files on the converted record.
+- biome over the four files outside contracts, on the converted record: clean. Over the two agent-plane pages: no
+  error, and four warnings, each in CSS already on main.
+- The first cut (04:48:28Z to 04:48:29Z, 2026-11-18) made EY-0's three commits on main's `8064bbdec`, the
+  pre-commit hook's sibling render passing at each. Their script's gates held the record to the converter's sum, and
+  would refuse a record converted from the 2026-10-31 set. They were re-cut for their messages alone at 05:18Z, each
+  through the hook onto the first cut's own tree.
+- v-ey0, the lane's verify on the test Mac, proved the first cut on main. It ended 05:06:17Z; its COMMIT names
+  `430cda2fc`, and the re-cut holds by tree (`33db814b`). It read: `pnpm verify` exit 0 in 554 s, every stage.
+  Every suite passed by its own count: contracts 70 files, fieldd-client 10, fieldd-supervisor 14, electron-shell
+  192, field-app 358, and fieldd 293 with 5 skipped; cargo's 38 results ok. Its frozen `--offline` install's log
+  reads "Already up to date" and "Done in 148ms", with no registry line, and the tree's porcelain stayed 0. It was
+  this slice's first whole typecheck, and the first run of its fieldd, electron-shell and fieldd-client tests.
+- The carry onto train 10's top (`fa6c1ea15e8b`). Two trials by cherry-pick came first, each in its own scratch
+  clone. The first stopped at commit 2 on two paths where the OB track (OB-0, OB-3b and its review) had moved,
+  `contracts/src/tools.ts` and fieldd's `tool-plane/index.ts`. Laid in as it was, EY-0's facts set would have
+  dropped the three desk facts the pages room does not also say: busy, no-tool and conflict. Each path took a
+  prepared file: the train's side kept and EY-0's change laid in. The second trial met the same two conflicts, took
+  the prepared files, and ran to its end with no other conflict.
+- So the carried `72e86d82d`'s patch differs from the first cut's only where it keeps the OB track's lines:
+  `TOOL_SLICES` keeps "OB-3" beside "EY-2", and the facts set keeps `...OBJECT_FACTS`, its comment naming the desk
+  room's list. `95f39fc84` and `6623729a1` change the same lines as the first cut. `72e86d82d` and `6623729a1` keep the
+  message re-cut's messages (`6623729a1`'s is the first cut's word for word): `72e86d82d`'s says "the facts set reads
+  TOOL_FACTS" and names no desk list, and `6623729a1`'s describes the `api.html` note as the first cut wrote it.
+- No row would have caught the dropped facts, so `7c5ece0c9` adds one. The texts that still read as the first cut,
+  `api.html`'s EY-0 note on the facts ("No room names them before EY-2 serves the pages rows.") and `TOOL_FACTS`'s
+  comment, are mended in `40a9571d5`, the two texts alone.
+- The lane branches were cut through the hook. The first four were committed 05:45:03Z to 05:45:04Z (the three
+  picks keep the message re-cut's author dates, 05:18:08Z to 05:18:09Z); the three picks' trees were each held to
+  the second trial's, and the fourth to its prepared test file over the train's own. `40a9571d5` was committed at
+  06:11:33Z, after the ledger's second check, on a new branch.
+- The new row's red, at the carried tip with the facts set laid back to EY-0's first-cut line:
+  ey0c-trap on the test Mac, 08:17:27Z to 08:17:32Z, on the tree of `96c0bbe42` on the cut (`40a9571d5`'s patch), with
+  `index.ts`'s facts set laid back to `new Set<string>(TOOL_FACTS)` and nothing else moved. fieldd's
+  `tool-plane-desk.test.ts` read 1 failed and 7 passed of 8, and the one red was the new row: the model read
+  "bad-input: desk.note has no tool named nope. It has: read_text, write_text.", its error kind's fact, where the
+  row wants `no-tool:`. The file was then put back and held by its blob, `c3eac8a1`; the Keychains were unmoved.
+- The carried five's verify. No lane verify ran at this piece's own tip. The whole verify on the test Mac at the
+  trial top `a61bdf174656` (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's
+  commits by `git patch-id --stable`: `f8f5ca9ac`→`4ed4cd895`, `f4c61d9d4`→`6c2b5e585`, `a1492501c`→`9c1d7bbd7`,
+  `b417701ac`→`ac51cffeb`, `96c0bbe42`→`53a40d0c2`) read `pnpm verify` exit 0 in 597 s (END 2026-11-18
+  08:11:50Z), every stage through test:rust and gen:check. Read in that run's log by name: fieldd 318 files passed
+  with 5 skipped; contracts 75 files; `tool-plane-desk.test.ts` whole, 9 of 9 (this piece's 8 and item 526's one).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- Nothing serves the 29 rows, and nothing installs the engine: the pages room is EY-2's, and main's broker, the
+  bridge and the install are EY-1's. Until then `shell.surfaces.control` answers UNAVAILABLE.
+- Sitting 1's declared owed rows (SITTINGS §0, as amended 2026-11-17):
+  - the sign-in phase, K1 to K8, on its own segment. K1's witness moves to EY-8, on Path 2, where the sign-in fill
+    is built; its last measurement, on 2026-11-01, read red;
+  - AB-3 and EY-S1-19, which the lab's offscreen pages cannot read, on EY-1's desk smoke;
+  - EY-S1-15b and EY-S1-17, on a source build.
+- A second reader's read of the MT lead's row map, which the plan put before the cut; the MT lead signed it in the
+  session that drew it.
+- The record is darwin-arm64 only.
+- `pnpm gate:landing` not run (owed).
+
+## Item 468 — a restored agent takes its old session's place on other screens, as a hand-off does (M411)
+
+(2026-11-18; two commits, in order: `d82ba8ed3` "468 (red): a restored agent's resume names no session, though its pane
+showed one", `e07567901` "468 (green): a restored agent's resume names the session its pane showed".)
+
+**What a person sees.** Not seen; read in the code. When Godview's last-run question is answered Restore, each agent
+the last run left is resumed by its record, and the deck hands its new terminal to the pane that showed the old
+session. That birth named no predecessor, so where the old session was still listed (an ended agent's, after a
+relaunch the floor outlived), other screens drew the resumed agent as a new body beside the old row, which fieldd
+drops as the resume answers. The birth now names it, and a screen that reads the claim (the phone's Swarm; a peer
+desktop's window with item 465) gives the resumed agent the body the old row wore, as for item 464's hand-offs.
+
+**The fix.**
+- `e07567901` `last-run.ts`, `restoreLastRun`: each `agent.resume {runtimeRunId}` names the floor session its pane
+  showed (`succeeds`), when the last run joined one. The field has been on the wire since item 464.
+- fieldd keeps the claim only when the caller's grant holds `terminal.attach`, its floor still lists that session
+  (an ended agent's among them) and no other live session already succeeds it (`admitSuccession`). Where the floor
+  restarted too, the claim is dropped with one log line and the resume goes on as before.
+- Nothing this window draws moves: the pane's hand-over was already the rehydration's.
+
+**The rows.** `d82ba8ed3` `godview-last-run.test.tsx`: the restore row now expects `succeeds: "pty-s9"` beside the
+record's id. A new row resumes an agent the last run left without a session by its id alone, with no other key.
+
+**Proved.**
+- The cut (2026-11-18, 05:47:37Z to 05:47:40Z) made the two commits on `fa6c1ea15e8b` and proved each message and
+  each patch-id equal to its draft, each commit's one path, and the tip's tree equal to its base plus the two
+  diffs. It ran no test or build.
+- In a lane tree with an install of the top's lock (frozen and `--offline`: no package downloaded, but each install's
+  supply-chain check read the registry's metadata for its 668 entries), field-app's `tsc --noEmit` at the red commit
+  as cut (`9d337b55a`), 06:22:59Z to 06:23:22Z, and at the green (`a51cb6447`), 06:23:23Z to 06:23:44Z (2026-11-18):
+  exit 0 at each, no error. A first try at 06:22:16Z stopped before any tsc ran: it looked for tsc at the tree's root.
+- On a Mac mini kept for tests, the file alone at the red commit as cut (`9d337b55a`), 2026-11-18, 06:10:03Z to
+  06:10:05Z: red as wanted, "Tests 1 failed | 20 passed (21)". The one failure is the restore row, which wanted
+  `succeeds: "pty-s9"` and got the record's id alone. The new row passed.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by
+  `git patch-id --stable`: `9d337b55a`→`00343d9c0`, `a51cb6447`→`326c511cb`) read `pnpm verify` exit 0 in 597 s
+  (END 2026-11-18 08:11:50Z), every stage through test:rust and gen:check. In it, `godview-last-run.test.tsx`
+  passed, 21 tests (its own line in the verify's log).
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**Not covered.**
+- History's Resume is left as it is. It resumes first and places after, in the focused pane, whose session runs on,
+  and by item 464's rule a birth there succeeds nothing. One residual stays: when that pane shows the deck's own
+  never-used shell, which is then released as unused, other screens can draw the shell and the resumed agent as two
+  bodies for a moment. It cannot be named at birth: History asks for the resume before it asks the deck to place
+  it, so no pane, and no shell, is chosen yet; before Godview's first open, neither the deck nor that shell exists.
+- Nobody watched it on a second screen.
+
+**Not run, and owed.**
+- `pnpm gate:landing` not run (owed).
+- GitHub's verify on the next push.
+
+## Item 397 — under `pnpm dev`, Godview's swarm physics stay in their worker again (M412)
+
+(2026-11-18; two commits: `b895d1ae0`, the red row, whose subject begins "397 (red): under `pnpm dev`, the swarm's
+physics worker gets matter-js raw"; `d9973795b`, the green, whose subject begins "397 (green): under `pnpm dev`, the
+swarm's physics stay in their worker". One config entry and one row; no product code moves.)
+
+**What a person had.** Under `pnpm dev` the dev console said "[swarm] the physics run in this thread: unknown
+worker error" at Godview's first open (the QA stage's dev logs, 2026-11-13 and 2026-11-17), and the swarm's
+simulation ran on the renderer's main thread. The packaged app and the smokes build the worker with matter
+inside; they are not touched.
+
+**Why.** Vite's dev server serves the physics worker's module graph raw from the views' dist, and it never
+discovers a bare import whose importer is inside node_modules: it answers with the raw file plus `?v=`, so only
+an `optimizeDeps.include` entry pre-bundles such an import. The graph's `world.js` imports matter-js, whose 0.19.0
+package names a UMD build as `main` (`build/matter.js`; no `module`, no `exports`), so it has no ES form and the
+worker could not link.
+
+**What landed.**
+- `d9973795b`: `packages/electron-shell/vite.config.ts`'s `optimizeDeps.include` becomes a list. ICE's four desk entries
+  keep their linked-ICE condition. One entry is added under a dated comment:
+  `"@vibefield/field-app > @vibefield/puppeteer-views > matter-js"`. Vite's nested-dependency lookup answers the
+  worker's `matter-js` import with matter's optimized ES module.
+- `b895d1ae0`: `tooling/dev-runner/test/swarm-physics-worker.test.mjs`, the row. It holds that `world.js` still imports
+  matter, then starts Vite from the real renderer config in dev mode with its own optimizer cache in a temp dir,
+  and no listener, socket or watcher. It waits for the optimizer's first run to be written, resolves `matter-js`
+  from `world.js`, and holds that the answer is the optimizer's `matter-js.js` and on disk. Then it closes and
+  removes its temp dir. It is skipped while the views are linked.
+
+**Proved** (the rows and the verify on the test Mac, a Mac mini; the piece was cut as `a9a402e25` and `79da661b5`
+on `fa6c1ea15`, 2026-11-18 08:55:40Z to 08:55:42Z, through the repo's pre-commit hook, whose siblings render check
+said the staged rows are the lock's; biome 2.5.4 over the two files at `79da661b5`: exit 0, no fixes).
+- The green, at `79da661b5` on the cut (`d9973795b`'s patch), 09:00:11Z to 09:00:12Z: exit 0, `ok 1`; the test took
+  382 ms (the `node --test` run 709 ms). The run log names its temp dir's one entry `node-compile-cache`, node's
+  own compile cache, with no `vf-vite-397-*` dir there or under `/private/tmp`.
+- The red, at `991d94b13` on the third cut, whose row differs from `b895d1ae0`'s patch in comment lines alone, 07:17:41Z
+  to 07:17:42Z: exit 1, `not ok 1`, the failure naming matter's raw `matter-js/build/matter.js?v=…`; the test took
+  431 ms (the run 785 ms). It was not run again at this cut.
+- The green at `631561d1a` on the third cut, 07:18:32Z: exit 0, `ok 1`; the test took 321 ms (the run 628 ms).
+  After each of the third cut's rows, the run log counts one entry and 90 files in the run's temp dir. The
+  tester's listing, not kept in a run file, named it `node-compile-cache/` (another lane's vitest run there left
+  one too) and found no `vf-vite-397-*` dir there or under `/private/tmp`.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds the third cut's commits by
+  `git patch-id --stable`: `991d94b13`→`fbf554689`, `631561d1a`→`c6b3013e4`) read `pnpm verify` exit 0 in 597 s
+  (END 2026-11-18 08:11:50Z), every stage through test:rust and gen:check. This piece differs from the third cut
+  in comment lines alone. In that verify the row passed in 798 ms, within dev-runner's `node --test` run of 502
+  tests (7.0 s); that is one verify's reading, not wall time added.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**The four cuts**, all on `fa6c1ea15` on 2026-11-18; the first three stay as records.
+- The first (`d34a4fbcb`, `97575b618`) named the item without the day in its two comments, and was cut again
+  before any row ran.
+- The second (`605c95184`, `18016b2e6`) gave the same red and green on the test Mac, which proved the spelling.
+  But its row closed while the optimizer was still bundling: the run logs count 174 and 176 files in two entries,
+  and by the tester's listing 84 and 86 of them were in the row's own `vf-vite-397-*` dir, under a `deps_temp_*`
+  folder. That the bundle wrote them after the row's remove is read from Vite's close path, not measured.
+- The third (`991d94b13`, `631561d1a`) waits for the optimizer's first run before it closes.
+- The fourth (`a9a402e25`, `79da661b5`) changes comment lines alone: the two comments and the red's message now say
+  what this entry says of Vite and of matter's package. It is this piece.
+
+**Not covered, and owed.**
+- A desktop dev run whose monitor marker reads `physics: worker`: not run.
+- The entry with the views linked (`pnpm siblings use puppeteer`): not measured; the row skips there.
+- `pnpm gate:landing` not run (owed).
+
+## Item 494 — a plugin that isn't working says its row's line on its own page too (M413)
+
+(2026-11-18; three commits, in order: `85fea92f2` "494 (doc): a plugin's page says its row's line while it isn't
+working — DESIGN.md first", `5e888bbce` "494 (red): a plugin that isn't working says nothing of it on its own page —
+the rows", `f3fa9a1ee` "494 (green): a plugin that isn't working says its row's line on its own page too". Nine paths,
+143 lines added and 5 removed.)
+
+**What a person sees.** In the Plugins popup, a plugin's row already said when it wasn't working: one that cannot
+start in this window, or whose runtime fieldd says failed, says its name, then "isn't working right now" (item 476,
+M333; MK-5b), and one this VibeField can't run says its name, then "can't run on this VibeField" (MK-5b). Its own
+page said none of it: M333 left it parked ("A plugin's own page in the Plugins popup does not say the line yet
+(item 494, parked behind this)."). Now the page says its row's line too, under its act: the same words on one more
+view, and no new one. A plugin that works, or whose row says it is off, held or stopped after it kept crashing, says
+no such line on its page.
+
+**The seams and files.**
+- DESIGN.md §8 Installed, after MK-5b's drawing of an invalid or incompatible plugin: a dated bullet, "Its page"
+  (built 2026-11-18, item 494): the row's line 12 under where the page's act stands, at 12/400 in tertiary ink, as a
+  held plugin's page says its own. No token: the page's note is the class the held line already uses.
+- `plugins-model.ts`: `pluginPage` takes the window's own set of plugins that cannot start here and the plugins
+  whose runtime failed, as `installedRows` does, each empty unless given. It reads the row's own line the same way
+  (`honestLine`, then `rowLine`) and keeps it as the page's `notWorking` only while it is the not-working or the
+  can't-run line, so the page never says other words than its row.
+- `Plugins.tsx` hands the page the two sets it hands the rows. `PluginsView.tsx` draws `notWorking` under the act,
+  before a held page's line. `listedPage` (`plugins-shelf.ts`), the page of a set this desktop doesn't have, says
+  none.
+
+**The rows it adds.**
+- Four in `plugins-popup.test.tsx` (`5e888bbce`), in MK-5b's block over its fixture fieldd that streams each plugin's
+  runtime. Key-value store's page (its service failed), Comment pad's (in this window's own set of plugins that
+  cannot start) and Gauge's (incompatible) each say their row's line. A guard holds that Comment pad's page while it
+  works, and Desk clock's while it is off, say neither line.
+- Two in `plugins-runtime-failures.test.ts` (`f3fa9a1ee`). The first reads the page's line in seven states: a failed
+  runtime, one that cannot start here and one that can't run each say their row's line; one that works, one that is
+  off, one held while community plugins are off (and named in the window's set besides) and one stopped after it kept
+  crashing say none. The second holds that the page never says other words than its row.
+- The two whole-page literals among the tests gain `notWorking: null` (`f3fa9a1ee`): the Built in page in
+  `plugins-model.test.ts` and the listed page in `plugins-shelf.test.ts`.
+
+**Proved** (2026-11-18; on the development Mac under the light lock, unless a line names the test Mac, a Mac mini kept
+for tests. The typechecks and tests ran in the lane's worktree after one frozen `--offline` install: no package was
+downloaded, but its supply-chain check, verified then (668 entries in 2.4 s), fetched 581 registry metadata documents
+into the install's own new HOME):
+- At `2a1125c60f2a` on the cut (`f3fa9a1ee`'s patch), 08:47:52Z to 08:47:55Z: biome 2.5.4, the root's pin, `biome check`
+  without `--write` over the eight committed TypeScript files, exit 0 ("Checked 8 files in 77ms. No fixes applied.").
+- At `dda4474e51ab` on the cut (`5e888bbce`'s patch), 05:53:10Z to 05:53:44Z: field-app's typecheck exit 0, and
+  `plugins-popup.test.tsx` red as wanted, 3 failed and 110 passed of 113. The three are the three rows, each at its
+  page's `toContain` (vitest's lines, its backslash escapes left out: "expected [] to include 'Key-value store isn't
+  working right …'", "expected [ Array(1) ] to include 'Comment pad isn't working right now'", "expected [] to
+  include 'Gauge can't run on this VibeField'"). The guard passed.
+- At `2a1125c60f2a` on the cut (`f3fa9a1ee`'s patch), 06:11:32Z to 06:12:08Z: the typecheck exit 0, and the fourteen
+  field-app test files that import the plugins frame or name a page, 432 of 432 passed. The fourteen are what
+  `git grep -lE "src/frame/plugins/|pluginPage|listedPage|PluginPage"` names under `packages/field-app/test`; two
+  of them (`extensions-settings`, `browse-settings`) match by Agents' own extension pages.
+  `ui-system-boundaries.test.ts`, which reads the frame's sources by paths the grep does not name, ran in the
+  whole verify below and not here.
+- A first green, cut at `982b1aa5da7a`, ran the three touched test files alone and missed the listed page's literal
+  in `plugins-shelf.test.ts`. A read of this entry found it before any lane verify ran at it, and the green was cut
+  again on the same red with that literal and the held and stopped states; the first cut lands nowhere.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by
+  `git patch-id --stable`: `bd2f6cb886d1`→`0c4fc38eb0b4`, `dda4474e51ab`→`225b1157a864`,
+  `2a1125c60f2a`→`7937f73c54a0`) read `pnpm verify` exit 0 in 597 s (END 2026-11-18 08:11:50Z), every stage
+  through test:rust and gen:check.
+- The piece was cut on train 10's top `fa6c1ea15e8b` (on main `8064bbdec`) as `bd2f6cb88`, `dda4474e5` and
+  `2a1125c60`; its commits are patch-equal to the ones landed.
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**Not run, and owed.**
+- No window was looked at: the rows read a fixture fieldd and the window's own set.
+- The green's two model rows were not seen red: at the red they do not typecheck (`pluginPage` takes five arguments
+  there). Its two literals, added with the green, were not seen red either.
+- No catalog plate draws a not-working page: the not-working plate stands on Installed.
+- The can't-run line's words are MK-5b's, still marked a draft in DESIGN.md; the page says the row's words, so it
+  moves with them.
+- The page offers no Try again; the row's does (MK-5b). The page says the line alone.
+- `pnpm gate:landing` not run (owed).
+- macOS only.
+
+**Closed by it:** item 494, which M333 left parked and MK-5b's entry names under Not covered.
+
+## Item 477 — the phone no longer re-dials its desktop twice a second when one feed is refused on a reconnect (M414)
+
+(2026-11-18; four commits, in order: `3e7587bf5` (red, "477 (red): one refused replay takes the phone's connection
+down…"), `537520aa1` (green, "477 (green): a refused replay is its subscription's alone…"), `30885403e` (red, timeout,
+"477 (red, timeout): a replay the deadline ends is re-asked on the same socket…") and `962587e2d` (mend, "477 (mend):
+a replay the deadline ends takes the socket down again…").)
+
+**What a person sees.** Nothing new on any screen. When the phone's socket to its desktop drops and comes back,
+the phone asks again for every feed it held (its replay). Before, ONE feed the desktop refused there took the
+whole connection down. The phone dialed again 500 ms later, was refused again, and went round until the person
+left that view, and every feed after the refused one was never asked for again. Now:
+- a refusal the desktop marks as one that may pass is asked again for that feed alone, on the re-dial's own
+  ladder: after asks at 0.5, 1, 2, 4 and 8 s it settles at one ask per 10 s (the default ceiling) for that one
+  feed while the connection stands, never a re-dial;
+- any other refusal (a session that is gone, an older desktop that refuses the ask) ends that feed on the phone,
+  with one line in the phone's log;
+- in both refusal cases, the connection, its ready state and every other feed stand;
+- a feed whose replay gets no answer within the call deadline (20 s by default) takes the connection down, as
+  before this item: at worst one re-dial per deadline and 500 ms, never the twice-a-second loop.
+An earlier reading of the code (2026-11-16, not traced again here) found it could fire before this item: a
+History conversation open while its desktop restarts, or Chat with another desktop asleep when the phone
+reconnects. It was not seen on a phone.
+
+**The seams.**
+- `FieldProductClient.swift`: `replaySubscriptions` hands each standing feed to `replayOne`, the TypeScript
+  client's shape since S3 (2026-10-01).
+  - A socket lost under a replay, or an owner gone, is judged as nothing; the next hello replays what stands.
+  - A retryable refusal goes to `retryReplay`: a rung per feed (`replayRetries`), reset by an answer. Every
+    re-ask is cancelled at a drop, at `close()`, at `fail()` and at that feed's unsubscribe.
+  - Any other refusal takes the feed out of the table and calls `Options.endedLog`.
+  - A refused replay no longer writes `lastError`: the connection did not fail.
+- `ReplayEnded.swift` (new): the line, "<method> ended: its replay was refused <kind>", and its default sink,
+  the unified log at NOTICE on the kit's door logger (and the `[door]` console line in a DEBUG build). It names
+  no params, payload, path or label.
+- `962587e2d` makes a replay ended by the client's own deadline keep the old rule. The deadline is one value,
+  `deadline(_:)`, which `timeOut` gives. The replay is recorded (`lastError`), its socket retired and
+  re-dialed, which releases whatever the door stood up for an answer it gives too late. It is known by its
+  whole value, so a TIMEOUT the door sends, which carries its JSON-RPC code, stays a refusal judged per feed.
+- The gap repair (`resnapshot`) keeps its rule: a refused re-subscribe still drops the socket once. Its comment
+  says the replay then judges that feed alone.
+
+**The rows** (`ReplayLifetimeTests`, in `ClientLifetimeTests.swift`).
+- `aRefusedReplayReDialsInsteadOfFreezingTheRest`, which pinned the old rule, became
+  `aRefusedReplayEndsItselfAndTheRestStand`: one re-dial and no more, `.ready`, the next feed replayed, the ended
+  line exact and without the subscribe's own params; a second drop does not ask for the ended feed again.
+- New: `aRetryableRefusedReplayIsAskedAgainAloneOnTheSameSocket`, `aRefusedReSubscribeAfterAGapReDialsOnceAndNoMore`
+  and the guard `aSocketLostUnderAReplayLeavesItStanding`.
+- New in `30885403e`: `aReplayThatTimesOutTakesTheSocketDown`, a door that leaves the first replay unanswered, at a
+  100 ms deadline: exactly one more dial, the feed asked once on the socket that timed out and that socket
+  closed, the feed back on the next socket, and no ended line.
+
+**Proved.**
+- The piece was cut on `fa6c1ea15e8b` (train 10's top), and each run below names the cut's id.
+- The cut (05:55:31Z to 05:55:35Z, 2026-11-18) made `027208ddca6f` and `a66a4e68ab4f` on it from files prepared
+  and summed beforehand, each held to its parent, its message and its blobs. It ran no test.
+- The second cut (06:20:25Z to 06:20:27Z) made `35b181dbc573` and `abbce75ebdc5` on `a66a4e68ab4f`, held the
+  same way, under a new branch; the first cut's branch did not move. It ran no test.
+- The third cut (08:59:49Z to 08:59:50Z) changed one line of the tip's message alone: it made `10c260ac5a3f` on
+  `35b181dbc573`, under a new branch, with `abbce75ebdc5`'s tree and patch-id, held to both, and the first three
+  commits kept their ids. No earlier branch moved. It ran no test; the rows below ran at `abbce75ebdc5`, whose
+  patch this cut's tip carries, so they stand.
+- The red at `027208ddca6f` on the cut (`3e7587bf5`'s patch), on the test Mac's simulator (iPhone 17 Pro, iOS 27.2;
+  06:04:06Z to 06:05:44Z): FieldProductTests compiled, 363 rows. Exactly the three rows meant to fail did, each
+  on the old rule: all three re-dialed (`door.dials == 2` failed in each); in the moved row the next feed was
+  never replayed; in the moved and gap rows no ended line was written, as the seam was stored and not yet
+  called; in the retryable row the feed was not asked three times on one socket. The guard passed
+  with 358 other rows. One row was skipped, SP-7a W1 (the reader against fieldd's real transcript worker),
+  skipped in the train's second dress rehearsal too.
+- The top at `a66a4e68ab4f` on the cut (`537520aa1`'s patch; 06:06:59Z to 06:09:28Z): every target of the kit,
+  3,063 rows (the second dress rehearsal's 3,060 and this item's three more): 3,059 passed, 3 skipped and 1
+  failed, the known FieldWebTests R4 row (item 522). `ReplayLifetimeTests` passed 5 of 5, this item's four among
+  them.
+- The timeout's red at `35b181dbc573` on the cut (`30885403e`'s patch; 06:43:25Z to 06:44:55Z): FieldProductTests
+  compiled, 364 rows. Exactly `aReplayThatTimesOutTakesTheSocketDown` failed, by four expectations: the dials
+  were not 3, the feed was not asked once on the socket that timed out, that socket was not closed, and no third
+  socket asked for the feed. The other five `ReplayLifetimeTests` rows passed, with 362 passed in all and
+  SP-7a W1 skipped.
+- The tip at `abbce75ebdc5` on the cut, whose patch this cut's tip `10c260ac5a3f` carries (`962587e2d`'s patch;
+  06:51:30Z to 06:54:27Z): every target of the kit, 3,064 rows (the first top's 3,063 and the timeout's row):
+  3,060 passed, 3 skipped and 1 failed, the known FieldWebTests R4 row (item 522). `ReplayLifetimeTests` passed
+  6 of 6.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and not covered.**
+- Item 540: the five owners (History's document tail, the Swarm, Chat, Apps and Meters) are not told that their
+  feed ended, so a person sees a view that stopped moving with nothing to say why. It waits James's words, beside
+  items 478 and 501. It is still strictly less than before, when every feed after the refused one stopped too and
+  the phone dialed twice a second.
+- Which refusals fieldd marks retryable was not read per trigger: the client follows the door's own word, as the
+  TypeScript client does.
+- A replay's deadline takes the socket down (`962587e2d`), as before this item. Keeping the socket and unsubscribing a
+  late answer by its request id is item 544, after the train; it would also close the same hole an INITIAL
+  subscribe's timeout has today, where the door's late answer stands unrouted until the socket closes. The
+  TypeScript client sets no deadline on a replay.
+- No row cancels a waiting re-ask (by a drop, `close()`, `fail()` or an unsubscribe), observes a feed's rung or
+  its reset (every row runs at a 5 ms ceiling; only `backoff` itself is pinned), checks that a refused replay
+  leaves `lastError` unwritten, uses the ended line's default sink, or sends the door's own TIMEOUT on a replay
+  (the whole-value comparison is not pinned by a row).
+- Item 469's double send in Swift, and the 64-device cap on resume cursors, stay as read on 2026-11-16 (inferred,
+  not verified).
+- No phone was looked at, and nothing was measured on a device.
+- `pnpm gate:landing` not run (owed).
+
+## Item 502 — a run's start line names its profile set and the door it came through, by ids and kinds alone (M415)
+
+(2026-11-18; two commits, in order: `9f1a8b5d8` "502 (red): a run's start line names neither", `1fb6bb3ae` "502 (green):
+a run's start line names its profile set". Cut on `fa6c1ea15e8b` (fixer/train10b-on-8064bbdec) as `55fa45bbd` and
+`58674eb3e`, branch `dr/i502-on-train10b`, with `dr/i502-red-on-train10b` at the red: 4 files, +203 −5, all under
+`packages/fieldd`. `9f1a8b5d8` and `1fb6bb3ae` carry the cut patch-equal. Every other commit id here is the cut's, where
+its rows ran, except the joined verify's trial top and its picks.)
+
+**What a person sees.** Nothing. The line is a witness for the next investigation: fieldd's system log now says, for
+each run it starts, which profile set puppeteer bound it to (when it bound one) and which door it came through. The
+audit already recorded the door and its whole actor, and the run's record the set it was bound to; the audit keeps a
+set only when the caller named one. The log, which an investigation reads first, said neither.
+
+**What landed.**
+- `9f1a8b5d8` adds the rows and `src/agent-started-through.ts` in its first shape: the facts as they arrive, unmapped,
+  and used by nothing.
+  - The real-floor row is in `test/agent-session.test.ts`.
+  - The two unit rows are in `test/agent-started-through.test.ts`, which is new.
+- `1fb6bb3ae` maps the facts to kinds, and threads them through `agent-runtime.ts` onto the line.
+- `fieldd.agents.session_started` gains `profileSet`, the set puppeteer bound the run to (`info.profileSetId`, when
+  it is set), and three door facts:
+  - `door`: `spawn`, `resume`, or fieldd's own `resume-when-idle`;
+  - `caller`: the caller's principal kind;
+  - `onBehalfOf`: the forwarded client's kind, only on a call a peer forwarded.
+- `src/agent-started-through.ts` (new) makes the door facts. `startedThrough` is called at each door with the
+  launch call's own principal: the spawn, the native resume, a record's resume, and a pending run's manual resume.
+  Its result is threaded into `enter` and onto the line alone, never onto the run's record. The idle resume passes
+  `RESUMED_WHEN_IDLE` (`resume-when-idle`, `system`), as the audit's system actor names fieldd's own act.
+- The re-attached and adopted lines gain `profileSet` too, from the same `info`. They name no door: no caller
+  asked for them.
+- `fieldd.agents.terminal_spawned` (`agent-host.ts`) is unchanged. In fieldd's code it is keyed by the same
+  terminal session id as the start line's `sessionId`.
+
+**What the line can carry, and what it cannot (EL7).**
+- Its new fields carry ids and kinds alone: the set's id; the door's name; a principal kind the contracts name, or
+  `system`, or `unknown`; a client kind the contracts name, or `unknown`. Its other fields (the run's ids, its
+  epoch, the provider, the session and profile ids) are ids and kinds too.
+- It never carries a token or a token id, a login, the caller's device, window or session id, an environment value
+  or a path. The audit keeps the whole actor.
+- `caller` is typed as the contracts' principal kinds plus `system` and `unknown`. A Record over the contracts'
+  principal kinds (`Principal["kind"]`) lists them, so a kind added in the contracts and missing here, or one here
+  not there, fails the typecheck. Any other string becomes `unknown`.
+- `onBehalfOf` is written only when the contracts' `ClientKind` parses it, and otherwise as the fixed word
+  `unknown`. No peer writes text of its own choosing into this machine's system log.
+
+**A finding of the piece.** Neither value was held to kinds where the runtime reads it.
+- `GrantPrincipal`'s `kind` (`terminal-grants.ts`), the runtime doors' parameter type, is a plain `string`, so a
+  type over it alone holds nothing. The product door's own `Principal` is the closed union.
+- `ForwardedFor`'s `clientKind` is a free bounded string. `readOnBehalfOf` keeps a client kind this build does not
+  know "as the string it is", although `ClientKind` is a closed enum on the hello.
+- So the line maps both by value as well as by type, as above.
+
+**Proved on this Mac, nothing of record.** The worktree was installed with `pnpm install --frozen-lockfile
+--offline` at the top's lock (`fa6c1ea15e8b`'s, `b9369edb`), under `env -i` with an empty home. Its log reads
+"Packages: +1 -1", "downloaded 0", and "✓ Lockfile passes supply-chain policies (668 entries in 2.2s)": that check
+fetched registry metadata, and no package was downloaded. For each tree, its files were copied in and read; then
+the two changed files were put back from the top's and the two new ones moved aside.
+- On the trees of `55fa45bbd` and `58674eb3e` on the cut (`9f1a8b5d8`'s and `1fb6bb3ae`'s patches), whose files the cut
+  held equal by sum:
+  - fieldd's `tsc --noEmit` printed nothing (its log is empty; its tsconfig includes `test/`);
+  - biome checked the four paths, "No fixes applied", with no error.
+- The first biome pass over the final green tree's four paths found two format-only errors, one in each new file.
+  They were reflowed by hand before the clean pass.
+- No test file ran here.
+
+**Proved red, on the test Mac.** Each row ran alone at `55fa45bbd` on the cut (`9f1a8b5d8`'s patch), the branch
+`dr/i502-red-on-train10b`, in a tree found detached and clean and returned as found, with no ref written.
+- `i502-red-unit` (2026-11-18 08:18:18Z to 08:18:24Z): `test/agent-started-through.test.ts` whole, 2 failed (2).
+  Each is an `AssertionError` at its own `toEqual`, by value: the raw peer's text where `unknown` is wanted (`:17`),
+  and the raw `someone@example.com` caller where `unknown` is wanted (`:28`). No other error kind, missing module or
+  timeout.
+- `i502-red-floor` (2026-11-18 08:18:44Z to 08:20:51Z): `test/agent-session.test.ts` whole (its new row over the
+  real floor), 122 s: 1 failed | 106 passed | 2 skipped (109).
+  - The one failure is the new row, by value at its first `toMatchObject` (`:3466`): the spawn's line held
+    `sessionId` and none of `profileSet`, `door` and `caller`. No other error kind, missing module or timeout.
+  - The two skipped are the real-agent rows, which run only when `FIELDD_TEST_REAL_AGENT=1`.
+
+**The joined verify.** No lane verify ran at this piece's own tip.
+- The whole verify on the test Mac at the trial top `a61bdf174656` read `pnpm verify` exit 0 in 597 s (END
+  2026-11-18 08:11:50Z), every stage through test:rust and gen:check. All sixteen of the chain's stages ran: fifteen
+  print a header of their own, and `cargo fmt --check` prints none.
+- That top is sixteen pieces (fifty-two commits) on the train's top `fa6c1ea15e8b`, never landed. It holds this
+  piece's commits by `git patch-id --stable`: `55fa45bbd`→`7b4f798bd`, `58674eb3e`→`707757967`, their messages
+  byte-equal.
+- In it, fieldd's `agent-session.test.ts` read "109 tests | 2 skipped" and `agent-started-through.test.ts` "2 tests",
+  none failed. fieldd's own run line read "Tests 4612 passed | 15 skipped (4627)".
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**Not covered, and owed.**
+- No row reads the door on the line of a native resume, a pending run's manual resume or the idle resume. The
+  real-floor row reads a spawn and a record's resume alone.
+- No row reads the re-attached or adopted lines, so their `profileSet` is read by no row.
+- The forwarded `onBehalfOf` is held by the unit rows, which read the facts the line is made of. No row reads a line
+  forwarded between two daemons.
+- No row reads `terminal_spawned` and the start line together; their shared session id is read in fieldd's code
+  alone.
+- `pnpm gate:landing` not run (owed).
+
+## Item 473 — Godview's three doors and Live apps' catalog ask again by themselves after a refusal for room (M416)
+
+(2026-11-18; three commits:
+`319000d0a` (473's seam, "a shared feed holds on any client that subscribes, and the client's root exports it"),
+`d97f1d22c` (473's red, "Godview's three doors and Live apps' catalog never ask again after a refusal for room"),
+`58ad52edf` (473's green, "Godview's three doors and Live apps' catalog hold the shared feed, which asks again").
+In `packages/fieldd-client` and `packages/field-app`.)
+
+**What it fixes.**
+- Since item 476, a shared feed (`holdFeed`) that fieldd refused for room asks again by itself: 1 s after, then 2, 4, 8
+  and 16 s, then every 30 s. Four callers subscribed on their own, outside it, so a refusal for room stood until the
+  view was opened again (or, for Live apps, its Try again was pressed): Godview's usage door (`agents.usage.subscribe`,
+  its line stayed), its roster (`device.subscribe`) and its profile sets (`agents.profileSets.subscribe`, the names and
+  the tabs never came), and Live apps' catalog (`artifact.subscribe`, "Could not load live apps. Try again." stayed).
+- Now each is held through `holdFeed`. A refusal for room is held and asks again by itself. Any other refusal of the
+  usage feed is let go first, as before, so the next reader asks again (the strip's Retry). Live apps' Try again lets
+  the feed go and holds it anew.
+- A finding of the piece: a feed is keyed by its method and params, and `{}` is a different key from none. Godview's
+  roster asked with `{}` while every other roster holder in the window (Devices, Mesh, Updates, the onboarding's
+  Connect pane) asks with none. The roster is now asked with none, so it is one feed for all of them. The usage and
+  profile-set feeds already share `{}` with Settings' and the setup pane's hooks, and the catalog with the head's.
+- What a person sees: those four, refused for room, come by themselves within the backoff. No new words.
+
+**The seams.** `fieldd-client`'s `holdFeed` takes a `FeedClient` (its `subscribe` alone) where it took a
+`FielddClient`, and the package's root exports both. A feed is keyed by the client it is held on, so holders share one
+only on the same client, and only the window's own client lends the release seam. In `58ad52edf`, `GodviewDeck.tsx`
+hands the three ports the window's own client for that reason. No rule of the feed moves. The export is at the root
+because five deck tests mock `@vibefield/fieldd-client/react` whole.
+
+**The proof.**
+- The three were cut on the train's top `fa6c1ea15e8b`, patch-equal to the ones landed; each counted run below names
+  the cut's own id. The three set-aside runs ran on earlier trial commits, superseded.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656` (sixteen
+  pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id --stable`:
+  `fcf1bcf3c`→`c317a8705`, `9c815a440`→`d7fd36c4a`, `df93d96d7`→`5d2443109`) read `pnpm verify` exit 0 in 597 s (END
+  2026-11-18 08:11:50Z), every stage through test:rust and gen:check.
+- On the development Mac, light, 2026-11-18 06:01:09Z → 06:05:04Z, in a lane at the top `fa6c1ea15e8b` with the top's
+  own frozen install (`--offline`: no package was downloaded, but its supply-chain check, "668 entries in 1.4s", read
+  the registry's metadata), under env -i and a shared lock, two vitest workers. The rows ran on the scratch trial's
+  commits; each has the tree of the cut's commit named (the cut's holds, 06:06:23Z) and its patch-id (read at 06:06:35Z
+  and again by this entry's check), not assumed.
+  - At `fcf1bcf3c` on the cut (`319000d0a`'s patch; the trial's `240a4f3cc`): the two row files, 56 of 56;
+    fieldd-client's suite, 11 files, 84 of 84; its typecheck 0 errors.
+  - At `9c815a440` on the cut (`d97f1d22c`'s patch; the trial's `d3b0b7922`): the two row files, 56 passed and 5 failed
+    of 61. Each of the five failed at its own `expect`: four "expected 1 to be 2" on the count of asks, and the roster's
+    shared key, "expected "subscribe" to be called once, but got 2 times". field-app's typecheck 0 errors.
+  - At `df93d96d7` on the cut (`58ad52edf`'s patch; the trial's `396d825aa`): the two row files, 61 of 61; the five new
+    rows twice more, 5 of 5; 15 field-app files that read the touched code, chosen by name, 651 of 651; fieldd-client's
+    suite, 84 of 84; field-app's and fieldd-client's typechecks 0 errors; biome over the 7 files clean.
+  - Three earlier runs, set aside. The first, on main's install, read field-app's typecheck red on a missing
+    `@vibefield/trust` link (the install's difference) and stopped, and the lane then took the top's own install. The
+    second, with `holdFeed` exported from `@vibefield/fieldd-client/react`, read six rows red in two deck files, five
+    of them on their mocks of that entry, which lacked it; the export moved to the root. The third read biome's two
+    findings, mended before the cut.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not covered.**
+- No refusal for room was made against a real fieldd: the rows' doors refuse by hand, on vitest's fake clock.
+- Nothing was looked at in a window. The deck's handing of the window's own client to the three ports is held by its
+  typecheck and the 15 reader files, not by a row of its own; two more readers (`frame-owner.test.tsx`,
+  `godview-model-replay.test.ts`) ran in the joined verify alone.
+- Live apps' Try again (it lets the feed go and holds it anew) is read in the code; no row presses it.
+- `pnpm gate:landing` not run (owed).
+
+**Not done, and not claimed:** nothing pushed.
+
+## Item 526 — a take-back always takes, and the window says what a take-back that did not take left behind (M417)
+
+(2026-11-18; ten commits on the train's top `fa6c1ea15e8b`, cut by ow-design as `cs/i526b-on-train10b`
+(`60bf0e5f59c0` on the cut): `612e8f65b` the fakes and a real trail, `28662c397` A's seam, `bf2d53814` A's red,
+`2873fbad1` A's green, `4b8e25bcd` B's words, `39b215d25` B, `c8d7dc2e4` the "one face" corrections,
+`e3468effb`–`b9a9c74c9` item 293's rider. The first cut `cs/i526-on-train10b` (`9485c4889822`) is a record and rides
+nothing: two of its red commits named what only their green defined (A's red a method; B's red two words, a type and a
+third argument), so those trees did not typecheck, and its rider quoted a test's fixture as fieldd's words.)
+
+**What it holds.**
+- **D, the fakes `612e8f65b`.** The fake audits in tool-plane-desk, tool-plane-service and agent-gateway's tests parse
+  `AuditActionV1` before the effect, as the real writer does. Before, an action outside the grammar passed every row
+  of those three files and only the real writer refused it, as it refused `objects.takeBack` at OB-3a (objects-doors'
+  fake has parsed the grammar since). One row runs `object_act` through a real AuditService and reads the trail back:
+  `tools.object_act`, attempt then outcome, with no written words in it.
+- **A, fieldd.**
+  - `28662c397` gives the audit `revoke`, written exactly as `required`, and sends `objects.takeBack` through it.
+  - `2873fbad1` makes `revoke` run the act when its attempt record cannot be written (AUDIT_UNAVAILABLE before the act),
+    as the token revocations do. It queues a recovery marker (`applied`, or `effect-threw`), written as
+    `audit.outcome.recovery` once the writer takes a line again. When the act ran, it answers AUDIT_UNAVAILABLE with
+    `actionApplied: true`; when the act throws, it throws the act's own error.
+  - A hand and the agent's undo stay `required`: refusing them leaves nothing open.
+  - Before: a take-back whose attempt record failed was refused whole, and the grant stood.
+- **B, the window `39b215d25`.** DESIGN.md §8 first `4b8e25bcd`.
+  - The take-back door answers `taken | stands | unknown`, and never swallows a refusal. It asks twice;
+    AUDIT_UNAVAILABLE with the act applied counts as taken. Refused twice, it reads `objects.grants {ref}`: `stands`
+    only if a row names the run or the pane's name, `unknown` if it cannot read.
+  - When a play cannot finish and a take-back did not take, its note adds after its own words, at the read stand:
+    "‹pane› still has “‹title›”." or "Couldn't take “‹title›” back from ‹pane›.". The note keeps its passive voice: no
+    action rides on it. A play that granted nothing, or whose take-backs took, says what it said before.
+  - Before: every refused take-back was swallowed, and two comments promised a hand the window does not have.
+- **The corrections `c8d7dc2e4`.** DESIGN.md §8's and §13's 2026-11-14 notes ("until then each card has one face") and
+  CardFace.tsx's comment are corrected in place: since OB-1b and the bloom, a card shows each of its faces.
+- **Item 293's rider.** DESIGN.md §8 "Chat's composer" and §9 first `e3468effb`. A send that fails says "Couldn't send
+  to ‹name›. Try again." `b9a9c74c9`, and the log keeps the refusal's kind, never fieldd's words. A refused wake keeps
+  fieldd's words: a few of them are the person's next step. Its own sentence waits for 282-1a, and the log now keeps its
+  kind too.
+
+**The wake's reasons, read from the code at `fa6c1ea15e8b` (for 282-1a).** A read-only reader listed 40 rows of reasons
+that reach a refused wake (a row may stand for several sentences of one family; 6 rows more reach it unsure):
+- 3 are a person's next step: "…missing the file it observes agents with. Reinstall VibeField." (roles.ts),
+  "VibeField can't find this Mac's ‹agent› install. Reinstall ‹agent›, then try again." (roles.ts), and the session
+  cap's "terminate sessions before spawning more" (terminal-service.ts), in jargon.
+- 4 are mixed: a model's words with puppeteer's, and the terminal floor's inventory and its file descriptors.
+- 28 are insides: the connection, the audit, the agent service and its catalog, the spark's record, its briefing, a
+  store's raw error, the native floor and the terminal floor.
+- 5 are puppeteer's own words, not read here.
+- Some say "Couldn't wake" over a spark that DID wake: an audit outcome that could not be confirmed after the wake, a
+  run born without its terminal ticket, and the spark's record failing to be read or written after its run started.
+- "the spark's agent has no sign-in" is no wake reason: it is a test fixture's sentence (chat-view.test.tsx). fieldd's
+  "has no sign-in for that agent" is the hatch's alone.
+
+**The rows.**
+- `fieldd/test/audit-service.test.ts` `bf2d53814`: a revocation whose attempt cannot be made durable takes, owes its
+  evidence, and the marker is written once the writer recovers; a durable one writes attempt, act, outcome.
+- `fieldd/test/objects-doors.test.ts` `bf2d53814`: through a real AuditService, a take-back whose attempt is refused
+  ends the grant and answers AUDIT_UNAVAILABLE with the act applied; healthy, it answers as it always did.
+- `field-app/test/objects-door.test.ts` and `card-drag.test.tsx` `39b215d25`: the door's eight rows and the play's two
+  notes.
+- `field-app/test/thread-send.test.ts`, `chat-thread-items.test.tsx`, `chat-composer.test.tsx` `c2306ea82`: four rows
+  move to "Couldn't send to Vela. Try again."; two rows hold the log's kinds, the wake's row over roles.ts's real
+  sentence.
+
+**The proof.**
+- Every commit typechecks: one frozen `--offline` install at the top (no package downloaded, 32 reused; its
+  supply-chain check read the registry's metadata, "668 entries in 2.3s"), then a dry pass laid each step's files
+  (byte for byte the blobs the cut then committed, which the cut script held) and ran `tsc --noEmit` for fieldd and
+  field-app at each of the ten states, under the light lock on the development Mac: exit 0, no error, at the top and at
+  all ten.
+- A's red at `1288463d1443` on the cut (`bf2d53814`'s patch), on a Mac mini, red by an assertion each (an
+  AssertionError, no other kind): i526b-red-audit, 2026-11-18 06:55:45Z → 06:55:51Z, audit-service.test.ts 1 failed of
+  12, the durable row green by design; i526b-red-doors, 06:56:33Z → 06:56:39Z, objects-doors.test.ts 1 failed of 18, its
+  healthy twin green.
+- B's red, in the working tree, not a commit: the two test files laid in on the state of `63f7586a3856` on the cut with
+  B's sources out, vitest alone: 10 of 80 failed. B at `bdcb6f501821` on the cut's state: 80 of 80.
+- The rider: red at `c28079913ac8`'s state, 6 of 115 failed; green at `60bf0e5f59c0`'s, 165 of 165; DESIGN.md's readers
+  with card-face, objects-door and card-drag, 774 of 774 in 31 files.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656` (sixteen
+  pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id --stable`:
+  `92a08931a133`→`cea810f28908`, `b3eb50201d42`→`ee642cd55470`, `1288463d1443`→`0bd1926a2d43`,
+  `5fdf9349f22c`→`df85c3a6fa4d`, `63f7586a3856`→`8a9dd53b8a8b`, `bdcb6f501821`→`72b07cd82bfb`,
+  `db04e6d86c91`→`21e0c8fdd1f5`, `0e1d890a4df0`→`2e3dc52c8880`, `c28079913ac8`→`23b50bde06c1`,
+  `60bf0e5f59c0`→`5cb1f4ad37cd`) read `pnpm verify` exit 0 in 597 s (END 2026-11-18 08:11:50Z), every stage through
+  test:rust and gen:check.
+- Biome: the repo's native binary 2.5.4 checks the 22 code paths of the 23 the sixteen commits touch (all but
+  DESIGN.md) clean, exit 0, at `1665de78a2c7` (item 521's cut, which carries these ten), 2026-11-18 08:51:55Z. The
+  first joined verify that held these ten (v-join-g6, at the trial top `3e4c2ae0de3f`, with item 521's first cut)
+  stopped at lint on one unformatted line of item 521's (objects-doors.test.ts:487).
+  The check made through biome's stdin before the cut could not have caught it: without `--write` that form prints
+  its input back unchanged, so comparing its output with the file can never differ, and its error on stderr was read as
+  noise (that check's output was not kept).
+
+**Not covered.**
+- A take-back refused while fieldd cannot be reached is never asked again once it is reachable (item 539).
+- The phone's Chat still says "Couldn't send to ‹name›: ‹reason›" (ChatThread.swift); its words are owed.
+- The wake's own sentence, and the "Couldn't wake" over an awake spark, wait for 282-1a.
+- One hold of the cut script did not hold: its message-sum check read the first cut's folder. Read after the fact,
+  each of the ten landed messages equals the message file the script was read with.
+- Not looked at in a window. `pnpm gate:landing` not run (owed).
+
+## Item 521 — an open desk is never "not open" to an agent for want of one more ask; a board's intents keyed by it (M418)
+
+(2026-11-18; six commits on item 526's `cs/i526b-on-train10b` (`60bf0e5f59c0`), cut by ow-design as `cs/i521b-on-i526`
+(`1665de78a2c7` on the cut): `18c1aee41` the window's seam, `7f4443440` its red, `fede6b652` its green, `6344a9e9d`
+fieldd's seam, `394df91eb` the red, `699b2ae3e` the root. The first cut `cs/i521-on-i526` (`b16933fb7283`) is a record
+and rides nothing: its fifth carried a line biome wraps, and the joined verify stopped at lint. The re-cut keeps the
+first four commits and re-makes the fifth with that line formatted and the sixth on it.)
+
+**What it holds.**
+- **Before.** A window's desk door asked fieldd for a board's intents once, at the desk's mount. If that first ask was
+  refused (the socket closed under it, or a refusal for room at the method's bound of 4), the window logged it and
+  never asked again. An agent's desk tools on that board then heard "That desk is not open in a VibeField window" while
+  it was open, until the desk was mounted again. A replay the client ended for good ended with no line. The
+  presence feed, which reports the person's hand onto objects agents have open, had the same two holes.
+- **The window.**
+  - `18c1aee41` lets the door carry the client's `onEnded`.
+  - `fede6b652` asks both feeds through one `feed` while the desk stays mounted. A refusal as the socket closed under
+    the ask (`askAgain`), or for room (`refusedForRoom`), is asked again on the client's own re-ask steps (1, 2, 4, 8,
+    16, then 30 s); the ask waits for the client to be ready. A refusal for good stands. The log says each refusal by
+    its kind and whether it is asked again, and each end by its kind, never in fieldd's words. The desk going clears
+    every wait.
+- **fieldd, the root by item 476's rule.**
+  - `6344a9e9d` adds `boardKnownIn(docs)` (a board fieldd's document service lists) and an optional `boardKnown`
+    dependency of the doors. Neither is called there.
+  - `699b2ae3e` makes `boardKnown` required and `objects.intents.subscribe` answer NOT_FOUND for a board fieldd does not
+    hold, before anything is installed, wired as `boardKnownIn(docs)` in daemon.ts.
+  - `699b2ae3e` moves the row in subscription-admission.ts from `bounded` (4 live per connection, one key for every
+    board) to `things` keyed by `docId`, at the default holders.
+- **Its cost.** `list()` is read once per subscribe (a desk's mount, the client's replay after a reconnect, or the
+  window's own re-ask of a refused feed), never per intent. It walks the registry, with one cheap read for a `local`
+  board. A deleted board (a tombstone) and a `local` board living on another desktop are left out, and are refused
+  NOT_FOUND. System documents live in their own map, so `list()` leaves them out too; none is a desk.
+- **Generated.** Nothing generated reads the admission table (fieldd's door reads it at every subscribe, which is why
+  the row's move matters). gen:schema's three scripts and gen-registries-rs exit 0 at `b16933fb7283`'s state (the dry
+  pass before the first cut; this cut's root is that state with one test file formatted) and move no file.
+
+**The rows.**
+- `field-app/test/desk-agent-applier.test.ts` `7f4443440`, six rows over scripted refusals and fake timers: asked again
+  after a socket closed under the ask, on the re-ask steps for room, never for good (logged by kind), nothing once the
+  desk has gone, presence the same, an end logged by kind.
+- `fieldd/test/objects-doors.test.ts` `394df91eb`: a board fieldd does not hold is refused NOT_FOUND with nothing
+  installed; through a real DocumentService and `boardKnownIn`, a made board is held, a deleted one is not, and its
+  subscribe is refused.
+- `contracts/test/subscription-admission.test.ts` `394df91eb`: 6 things and 2 bounded; a board's key is its own, at the
+  default holders.
+
+**The proof.**
+- Every commit typechecks: a dry pass laid each step's files (byte for byte the blobs the cut committed, which the cut
+  script held) on 526b's tip and ran `tsc --noEmit` for fieldd, field-app and contracts at each of the six states, on
+  item 526's frozen `--offline` install (no package downloaded; its supply-chain check read the registry's metadata,
+  "668 entries in 2.3s") under the light lock: exit 0, no error, at the tip and at all six; and again at the re-made
+  fifth's and sixth's states.
+- Biome: the repo's native binary 2.5.4 checks the 22 code paths of the 23 the sixteen commits touch (all but
+  DESIGN.md) clean, exit 0, at `1665de78a2c7` on the cut, 2026-11-18 08:51:55Z. The first joined verify that held item
+  521 (v-join-g6, at the trial top `3e4c2ae0de3f`, with the first cut's six) stopped at lint on that cut's one
+  unformatted line (objects-doors.test.ts:487).
+  The check made through biome's stdin before the cut could not have caught it: without `--write` that form prints
+  its input back unchanged, so comparing its output with the file can never differ, and its error on stderr was read as
+  noise (that check's output was not kept).
+- The window's red, at `ba455fa9acf9` on the cut (`7f4443440`'s patch): 5 of 42 failed on the development Mac in the dry
+  pass's state; on a Mac mini at `cs/i521-red-w-on-i526`, i521-red-app, 2026-11-18 07:03:07Z → 07:03:13Z, 5 failed of
+  42, each by an assertion, "asks nothing once its desk has gone" green by design. Its green at `e7b5dbed1de1`'s state:
+  42 of 42.
+- The red at `4aafd0e266cc` on the cut (`394df91eb`'s patch): contracts 2 of 20 failed on the development Mac in the dry
+  pass's state; on a Mac mini at `cs/i521b-red-f-on-i526`, each by an assertion: i521b-red-doors, 2026-11-18
+  07:36:50Z → 07:37:06Z, objects-doors 2 failed of 20; i521b-red-contracts, 07:38:15Z → 07:38:20Z,
+  subscription-admission 2 failed of 20. (The same rows were red the same way at the first cut's fifth
+  `fda6a64d0640`, 07:04:44Z and 07:05:37Z.) The root at `1665de78a2c7`'s state: contracts 20 of 20.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656` (sixteen
+  pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id --stable`:
+  `f48df82eab99`→`49da23a705c3`, `ba455fa9acf9`→`1f5d1e3b0ba0`, `e7b5dbed1de1`→`f71566549ba0`,
+  `fde806c2b13f`→`ad1f1d938326`, `4aafd0e266cc`→`d39dfb6421c2`, `1665de78a2c7`→`9d76156002d1`) read `pnpm verify` exit 0
+  in 597 s (END 2026-11-18 08:11:50Z), every stage through test:rust and gen:check.
+
+**Not covered.**
+- No path mounts a desk before fieldd lists its board: the window's one lane-backed mount opens through `doc.open`,
+  which refuses a board the registry does not list, a deleted one and one living on another desktop; its remount keeps
+  the same board.
+- NOT_FOUND is for good to the window. A feed REPLAYED (the window's socket to the same fieldd dropped and came back)
+  while its board is not listed (deleted, or a `local` board another desktop holds at that moment) ends. If that same
+  mount outlives the board's return, its agents hear "not open" until the next mount.
+- The two in-memory boards (a degraded launch, and a board another window holds) mount with an empty board id. Their
+  door is refused PRECONDITION_FAILED by the params, for good, as before this item; now the log says so by kind.
+- Not looked at in a window. `pnpm gate:landing` not run (owed).
+
+## Item 465 — A peer desktop's hand-off draws one body, on the phone and in its home's window (M419)
+
+(2026-11-18; two commits, in order: `45f796f9a` (red, "465 (red): a peer desktop's hand-off draws two bodies…") and
+`e63552503` (green, "465 (green): a peer desktop's hand-off draws one body…").)
+
+**What a person sees.** When a terminal on ANOTHER desktop launches an agent (or an agent there ends back into a
+shell), the phone's Swarm and this desktop's Godview now draw one bubble that goes on, as both already did for this
+desktop's own hand-offs (the phone since item 464). Before, both drew the shell's bubble and the agent's side by
+side until the shell's row left. The phone draws its home's window body for body (Q-J1 (a)), so both screens
+changed together.
+- A shell on the other desktop that was typed into stays on a bubble of its own beside the agent.
+- A peer row that names no session (its desktop's terminal doors are down, or its run has no terminal of its own on
+  that desktop) claims nothing and is drawn on its own body, as before. A peer whose fieldd predates item 464 says no
+  claim, and its hand-offs still draw two bodies, as before.
+- No id is drawn as text on either screen: a row's body key (`visualId`) and the peers' session keys only decide
+  which bubble a row is drawn on and which bubble its card follows.
+
+**The seams.**
+- The peer says `terminal.succeeds` on its own remote cut (item 464), and the home's mesh board relays it whole.
+- field-app: `peerJoins` (`window-local.ts`) joins every peer's rows by this desktop's two rules, each session keyed
+  by its desktop (`peerKey`). `peer-lineage.ts` is new: the phone's lineage rule transcribed for peer rows, read by
+  `window-rows.ts`. `useMonitorAgents.ts` hands the peers' joins where it builds the window's facts (both places),
+  and so does the golden harness (`perf/lib/phone-goldens.ts`).
+- The kit (FieldProduct): `RemoteVisibility` carries the peers' two maps and `peerKey`, and `joins` fills them.
+  `Heirs` reads one part of the rows (the home's or the peers') with that part's own body: a home row's session (its
+  id when it has none), a peer row's id. `RemoteWindowRows.rows` reads both, and `RemoteMeshCopy` carries the peers'
+  lineage.
+
+**The rows.** The same six cases on both screens, named alike: P1 a peer's claims are joined beside its sessions,
+keyed by its desktop; P2 a peer's launch takes its shell's body; P3 a claim of another desktop's session changes
+nothing; P4 a typed shell is retained on a body of its own; P5 a lapsed claim gives the shell its body back; P6 a
+successor a frame late still takes the body. field-app: `test/godview-peer-handoff.test.ts`; the kit:
+`PeerLineageTests`. The kit's L9 (`aPeersClaimChangesNothing`) had pinned the old behaviour, that a peer's claim
+changed nothing; it became `aPeersClaimIsReadByItsDesktop` and asks for one body.
+
+**Proved.**
+- The cut (06:11:31Z to 06:11:36Z) made `9156e643d` (red) and `0ec8716f1` (green) on train 10's top `fa6c1ea15`
+  from files prepared and summed beforehand, each held to its parent, its message and its blobs. Its refs hold
+  stopped it (exit 3) after its ref was written and the lane was on it: the hold compared every ref, and two other
+  branches were created in those five seconds. No ref that stood moved, and main did not move (held at each step);
+  the main hold after it and its END line did not run. It ran no test; at each commit the repo's hook found the
+  sibling rows the lock's.
+- field-app on the development Mac at the red set's field-app files (each at `9156e643d`'s sum), each alone: the new
+  file red as meant (06:01:25Z to 06:01:53Z; 5 failed, P3 passed, as a stub that reads nothing says); tsc 0 errors;
+  biome clean.
+- field-app on the development Mac at `0ec8716f1`'s files, each file alone (06:07:46Z to 06:09:08Z): the new file 6 of
+  6; `phone-parity.test.ts` 26 of 26 (the goldens unchanged: no witness row claims); twelve other files chosen as
+  near what moved, 326 rows (the rest of field-app's suite ran only in the joined verify); tsc 0 errors; biome clean.
+- The kit's FieldProductTests at `9156e643d` on the test Mac's simulator (06:37:20Z to 06:39:00Z): it compiled;
+  366 rows, 359 passed, 1 skipped (SP-7a W1) and exactly the six meant to fail failed: L9 as renamed and P1, P2,
+  P4, P5, P6. P3 passed, as a stub that reads nothing says.
+- Every target of the kit at `0ec8716f1` on the test Mac's simulator (06:40:23Z to 06:42:47Z): 3,066 rows, 3,062
+  passed, 3 skipped and 1 failed, FieldWebTests' R4 row (item 522), not this item's. FieldProductTests 365 passed
+  and 1 skipped; the six rows above passed.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by
+  `git patch-id --stable`: `9156e643d`→`317cab5df`, `0ec8716f1`→`05e62c66f`) read `pnpm verify` exit 0 in 597 s
+  (END 2026-11-18 08:11:50Z), every stage through test:rust and gen:check.
+- The joined kit beside it: kit-join-g7 at the trial top `cfc33ff317d3` (seventeen pieces; this piece's commits by
+  patch-id `9156e643d`→`37ca7e5b4`, `0ec8716f1`→`fa4930686`): 3,075 rows, R4 alone failed. The whole verify at that
+  top read exit 1 at fieldd's child-process census row (`test/child-stdin.test.ts`); this piece changes no fieldd
+  file.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- No shared fixture holds the TypeScript and Swift rules equal: the same six cases, named alike, hold each. A
+  wire-level witness of a peer's hand-off, read by both screens, is a follow-up.
+- No row holds a peer's agent ending back into a shell: the six cases are a launch's, and L9 a terminal born in a
+  terminal's place.
+- No row passes a peer's claim through the window's hook (`useMonitorAgents`) or the phone's `RemoteMeshCopy`: the
+  six cases call the window's rows directly.
+- No still or recording of a peer's hand-off on a phone or a desktop was taken: two real desktops were not used.
+- `pnpm gate:landing` not run (owed).
+
+## Item 537 (a) — the git observers and fieldd's `ps` reads run under the agents' allow-list, never fieldd's own (M420)
+
+(2026-11-18; four commits, 6 paths +257 −10. Cut on train 10's top `fa6c1ea15e8b` as `1ea2da483` (red), `a2765a96e`
+(green), `9e4003835` (red, ps) and `162f44f46` (green, ps) on branch `focus/i537-r4-on-train10b`, the reds also on
+`focus/i537-r3-red-on-train10b` and `focus/i537-r3-ps-red-on-train10b`. On main they are `9484e16f7` "537 (red): a run's
+git observer runs git under the daemon's own environment", `027341710` "537 (green): the runtime's git observers run
+under the services' environment", `e48689480` "537 (red, ps): fieldd's process-table reads start `ps` under the daemon's
+own environment" and `20af539f4` "537 (green, ps): fieldd's process-table reads start `ps` under the agents'
+allow-list". Every other id here, but the train's top, is a side commit's.)
+
+**What landed.**
+- `9484e16f7` adds agent-session.test.ts's row "a run's git observer runs git under the PTY path's law, never the
+  daemon's environment (item 537, EL7)".
+  - A stub `git` records each call's arguments and the names it is started with, never a value. Each record is
+    written whole under a hidden name and then renamed, and the row skips hidden names, so it never reads a call
+    half-written.
+  - The row plants a FIELDD_* name and a name no list grants in the daemon's environment, and spawns the scripted run
+    on the real floor. It keeps the observer's own calls by their argument prefix and the run's tree, which the
+    runtime names by its real path.
+  - It first asks that at least one such call was seen; its failure lists every call recorded, each by its first nine
+    arguments. Then, for each call, it asks that the call carries PATH and HOME, naming the call if not, so an empty
+    record fails by name. Only then does it ask that none carries a FIELD_*/FIELDD_* name or the planted unlisted
+    name.
+- `027341710`: fieldd's runtime options now name `serviceEnvironment`, the same `agentEnvironment` snapshot the built-in
+  services have been handed since item 50. It is taken once at composition and kept on the service.
+  - puppeteer 0.4.2's runtime hands it to the git its observers run: one observer per working directory, reading the
+    run's branch, its head and the paths it watches.
+  - git adds only GIT_OPTIONAL_LOCKS=0 and GIT_TERMINAL_PROMPT=0. Before this, that git ran with fieldd's own
+    environment.
+- `e48689480` adds agent-process-table.test.ts's two rows, and the seam: `readProcesses` takes the environment and does
+  not use it yet; its two callers in the runtime pass the service's snapshot.
+  - "fieldd's process-table read starts `ps` under the agents' allow-list, never the daemon's environment (item 537,
+    EL7)". A stub `ps` records the names it is started with, never a value, and answers both shapes the kit asks with
+    the same start time. The row asks for no FIELD_*/FIELDD_* name and no planted unlisted name, and for PATH and
+    HOME.
+  - The parity row: a pid's start read from the table is, as a string, what the kit's `processStartedAt` reads from
+    the same `ps`. A pid the table does not hold reads undefined, as the kit reads a pid `ps` says nothing of.
+- `20af539f4`:
+  - `readProcesses(environment)` hands the kit's exported table reader a runner that starts `ps` under that
+    environment, in the C locale; the kit parses.
+  - `processStartedAtUnder(environment, pid)` reads a pid's start from that table.
+  - AgentRuntimeService keeps both on its one snapshot. Its typed-run proofs read the table; the daemon hands both to
+    the gateway, whose adoption reads the start. The parity row also holds `processStartedAtUnder` to the kit's
+    reading.
+  - child-stdin.test.ts's census lists agent-typed-run.ts as a process maker: `execFile` with Node's default, three
+    pipes of the child's own (`execFile` takes no `stdio`, and `ps` reads none).
+- What a daemon reads. Given a table (one config field), the runtime and the gateway read that one table, as before;
+  the daemon-composed tests that give one today run with the gateway off. Given none, both read the real `ps`, now
+  under the snapshot. The gateway's adoption start reads the real `ps` under the snapshot either way; before, it read
+  the kit's `processStartedAt` under fieldd's own environment.
+- The cost. The gateway's adoption reads the whole table where it asked one pid. It asks only for a launch whose
+  placement did not carry the start.
+- The rest of item 537 is not in it.
+
+**The observer row's three tries.** The row was cut three times; the first two proved nothing of the environment.
+- First, at `a2f4cdecd` (2026-11-18, the test Mac's run started 06:25:39Z): the row failed by its 15 s wait, not by
+  an expectation. It kept only calls whose `-C` named the run's tree under `/tmp`, and the runtime names that tree by
+  its real path, under `/private/tmp`, so it matched none. It did not prove the observer's environment at the red,
+  and its green `fcbd7f8f2` was never run (its verify was dropped); it would have failed the same way.
+- Second, at `5d03fc0ac` (the run started 06:57:37Z): an observer call was seen, but its recorded names were empty.
+  The stub wrote the call's line at once and its names only when `awk` exited, and the row read between, so the
+  FIELD_*/FIELDD_* ask passed on an empty list and the PATH/HOME ask failed. It proved the observer runs and is seen,
+  and nothing of its environment. Its `ps` red `56f1cf822` read as wanted; the third cut's `9e4003835` carries the
+  same patch, and was run again (below).
+- Third, the third cut. On the tree of `1ea2da483` on the cut (`9484e16f7`'s patch), the test Mac ran
+  agent-session.test.ts whole (vitest's start 07:09:58Z): 1 failed, 106 passed, 2 skipped of 109. The one failure is the
+  observer row, at its FIELD_*/FIELDD_* expectation (:2423): "expected [ 'FIELDD_537_SENTINEL', …(2) ] to deeply equal
+  []". The "no observer call seen" and PATH/HOME expectations before it passed.
+
+**The fourth cut.** The joined verify that held the third cut's tip `348d6b468` (at the joined top `cfc33ff31`, from
+07:43:58Z) stopped at fieldd's child-stdin census: the new `execFile` was not listed there. The fourth cut re-made
+the last commit alone, as `162f44f46`, with that census row; the first three commits are the third cut's own. In that
+joined run fieldd's suite read 1 failed, 4614 passed and 15 skipped of 4630, 537's two test files passing: a reading
+here, since the run was at the joined top and not at this tip.
+
+**Read, not run.** The other fieldd tests that read fieldd's own source were read for what 537 adds; none counts it.
+settings-doc counts where the refusals' section is opened and the writer's callers, and 537 adds no refusal;
+native-bootstrap reads bin.ts and native-bootstrap.ts; record-stores walks every source file for a `readFile:` pass,
+and 537 adds none. Seven more (app-preferences, daemon-stop-carries-on, plugin-catalog, setup-ledger, shell-lease,
+subscribe-listener-leak, sync-question) read no source: they boot the daemon from `../src`, 537's files included, and
+they passed in the third cut's joined run above and in this cut's joined run (below). Of the repository's walls,
+check-test-temp-roots read clean in the third cut's joined run ("301 of 1291 test files make a temp root; all
+remove"), and the new test removes the root it makes; check-import-boundaries read clean there, and 537 compares no
+agent id for check-agent-catalog to count.
+
+**What was proved.**
+- fieldd's `tsc --noEmit` exit 0, with 0 errors, on the trees of `1ea2da483` and `9e4003835` (2026-11-18 07:03:40Z
+  and 07:03:58Z) and of the tip `162f44f46` (07:55:27Z), laid on `fa6c1ea15e8b` from the staged files before each
+  cut; each cut then held every commit's blobs to those files before it said the commit. The 07:03Z run's first line
+  labels its file "A1 r2", a label carried from the script it was copied from; the file it laid was the third cut's.
+  All three read the draft's one frozen `--offline` install of the lock these commits carry, made at 06:24:05Z: no
+  package was downloaded ("downloaded 0"); the supply-chain check fetched registry metadata into the install's own
+  HOME ("668 entries in 1.9s"). The tree of `a2765a96e` alone was not typechecked.
+- Each commit's pre-commit hook's render check passed at its cut (07:06:18Z and 07:06:19Z for the first three,
+  07:57:34Z for the last).
+- On the tree of `9e4003835` on the cut (`e48689480`'s patch), the test Mac ran agent-process-table.test.ts whole
+  (vitest's start 07:12:56Z): 1 failed, 1 passed of 2. The failure is the environment row, at its FIELD_*/FIELDD_*
+  expectation (:76): "expected [ 'FIELDD_537_SENTINEL', …(2) ] to deeply equal []"; the parity row passed.
+- On the tree of `162f44f46` on the cut (`20af539f4`'s patch), the test Mac ran child-stdin.test.ts whole (vitest's
+  start 07:59:23Z): 5 passed of 5.
+- On the same tree, the test Mac ran agent-process-table.test.ts whole (vitest's start 08:00:51Z): 2 passed of 2.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `7d5e94e641bb`
+  (eighteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by
+  `git patch-id --stable`: 1ea2da4833b7→2b6bf3de8260, a2765a96eb86→74c5ce693b47, 9e4003835e7a→42df7ebc0e52,
+  162f44f46a59→6b30b550e0ab) read `pnpm verify` exit 0 in 598 s (END 2026-11-18 08:54:36Z), every stage through
+  test:rust and gen:check.
+- In that run's fieldd suite (4615 passed, 15 skipped of 4630): child-stdin.test.ts 5 of 5, the census row among them
+  (vitest names a passing file, not its rows); the seven files that boot the daemon over 537's files, all passed:
+  app-preferences.integration 6, daemon-stop-carries-on 4, plugin-catalog 34, setup-ledger.integration 2, shell-lease
+  21, subscribe-listener-leak 2 and sync-question.integration 5; agent-session.test.ts 110 (2 skipped) and
+  agent-process-table.test.ts 2, passed.
+
+**Not run, owed.**
+- The rest of item 537.
+- `pnpm gate:landing` not run (owed).
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+## Item 533 — the kit's Swift and its iOS shell scripts name no person, no session and no one who ruled (M421)
+
+(2026-11-18; two commits, in order:
+- `847fcbccc` (red, "533 (red): a row that holds the kit's own words to name no person, no session and no one who
+  ruled");
+- `43970dfe4` (green, "533 (green): the kit's comments and row names say the item and the day, never who asked or
+  ruled").
+
+It is cut on 532's tip, since the two share files. It touches 251 files (+746 −624), so it is the last piece in the
+table.)
+
+**What a person sees.** Nothing in the app. A reader of the kit's Swift and its iOS shell scripts, or of a run's row
+names, sees the item and the day where a person, a session or who ruled stood. Other files of the kit still do (below,
+item 546).
+
+**The seams.**
+- `43970dfe4` changes 250 files: 139 in the kit's Sources, 110 in its Tests, and `apps/ios/scripts/testflight.sh`.
+  624 lines become 632; eight files gain one comment line each, where a reworded comment was reflowed.
+  - Every changed line is a comment, an `@Test` display name, or testflight.sh's usage text.
+  - No code line changes: their bytes and order are held. In the eight files the code below the added line moves down
+    one line.
+  - Seven `@Test` names change (below); no `@Suite` name does.
+- The forms:
+  - a person's ask says "asked for <day>", a decision "decided <day>", a pick "picked <day>";
+  - a quoted ask is said in short plain words, never quoted;
+  - the day is the one the line gave. Otherwise it is the UTC day of the commit that wrote the line, and then no "asked
+    for" is claimed;
+  - a ruling named by its number, or by who made it, keeps the item the line or its commit names (UM-4, SE-2n, Q1 …)
+    and takes its day.
+- The Godview port's lane name gives way to its track on 63 lines ("PG's Q1", "PG's words rule"). On 6 more, where
+  the line said the lane ruled, the day or "decided" stands instead.
+- "the History lead's D6" becomes "History's D6", on 4 lines.
+- The user face's doc example takes DESIGN.md's made-up name, Robin.
+- testflight.sh: two usage lines (:19, :69) and two comments (:333, :457), wording alone. Its marker and census lists
+  are untouched.
+- The seven `@Test` renames, old → new:
+  - HistoryFoldTests: "James's pill: …" → "Item 395's pill: …";
+  - PhoneSearchTests: "… its words are James's, so none is said" → "… its words are yet to be picked, so none is
+    said";
+  - MetersFeedTests, twice: "(ruling 10)" → "(UM-4c, 2026-11-06)";
+  - ProfileLensTests: "kept to one, and cleared … (ruling 21)" → "kept to one, cleared … (UM-4, 2026-11-06)";
+  - MeterModelTests: "(ruling 7)" → "(UM-4b, 2026-11-06)";
+  - AppsNightDragTests: "… the finger is James's" → "… the finger needs a device".
+
+**The rows.** `KitWordsNameNoOneTests` (new, FieldDesignTests, 1 row, not on the main actor), added by `847fcbccc`:
+- It reads every Swift file of the kit's Sources and Tests and of the app, and the iOS scripts' `.sh` files, each once
+  as bytes, in a detached task. A file whose bytes hold none of its gate words (the refused words, and the bare word
+  for a ruling) is not walked line by line.
+- On a Swift line it reads the comment and an `@Test` or `@Suite` display name; a script's every line is words. A
+  string literal of code is data and is never read: test data keeps its older names until it next moves (DESIGN.md
+  "The made-up names").
+- The refused words are exact, listed in the row and printed by it, each built from pieces so the file passes itself:
+  a first name, a planning session's name, a QA session's name, a possessive before the word for a ruling, and that
+  word before a number.
+- It prints its own scan time, measured around the scan alone, the files it read and walked, and its words.
+- It fails when a line names someone, and also when it reads 700 files or fewer.
+
+**Proved.**
+- Before the cut. The cut itself held the sums of its messages, its paths lists, check-533.py and wall533.py.
+  - **Every changed line was read by hand**, in a word diff of each hunk (wdiff.py; no output kept).
+  - **check-533.py** (138ee2f7e074b1f0) found 0 breaches. Every changed Swift line is a comment or a row's name;
+    no code line changes; no added Swift line passes 120 characters; and no added line holds a refused word. It
+    passes a script's lines whole, so testflight.sh's four lines were held by reading: two usage lines in its
+    heredoc, two comments.
+  - **a read-only port of the row** (wall533.py, a936b54ddfffc38d), run over the trees: 396 lines named at the red,
+    0 at the green;
+  - **verify-533.py** (ec6db534ec0fb6b5, its sum as read now) holds each of the 189 days and ids the sweep adds to
+    git blame of the lines it replaces, or to the file's own text. It prints one flag: "item 359" at
+    FieldSwarmTests:172, which the file names as "Item 359" at :122 and :169 (the script's match is case-sensitive).
+    One day was wrong before the cut (MetersFeedTests:7 gave the blame's local day 2026-11-05, where its UTC day is
+    2026-11-06) and was mended.
+- The re-cut (2026-11-18; its commits stamped 07:13:33Z and 07:13:42Z) made `6f54b8345` and `05b2351be` (`847fcbccc`'s
+  and `43970dfe4`'s patches) on `06595573c`, through
+  the pre-commit hook.
+  Each commit was held to its parent, its message and its blobs, and each to its first-cut twin: the two trees differ
+  in the row's file alone. None ran a test.
+- The red at `6f54b8345` on the cut, FieldDesignTests on the test Mac's simulator (07:14:42Z to 07:16:12Z): it
+  compiled (BUILD FAILED 0, 0 errors), 101 rows, Passed 100, Failed 1, the new row alone: "396 lines name someone".
+  It printed "719 files read, 255 walked, in 1.695641542 seconds" and ended after 1.737 s.
+- The kit, whole, at `05b2351be` on the cut (the piece's tip), 07:19:22Z to 07:22:02Z: 3,065 rows, Passed 3,061,
+  Skipped 3, Failed 1, FieldWebTests R4, main's own (item 522). The new row passed after 0.289 s, printing "719 files
+  read, 39 walked, in 0.284373875 seconds".
+- The scan's own time: 1.70 s at the red and 0.28 s at the tip.
+  - The red walked 255 files, of which 230 hold a refused word. The tip walked 39, of which 14 do; these are test
+    data, and the rest hold only the bare word for a ruling.
+  - The two runs are not alike. The red ran FieldDesignTests alone, from a load of { 1.66 5.63 16.20 }; the tip ran
+    the whole kit, from { 5.21 22.31 23.52 }. The red's longest other row took 9.2 s against 3.9 s at the tip.
+  - The row walks only the files that hold a gate word, so a later sweep that adds such words adds walking, which
+    shows as time in this row's own print.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id
+  --stable`: `6f54b8345`→`bbf5f09cc`, `05b2351be`→`1bad400d6`) read `pnpm verify` exit 0 in 597 s (END 2026-11-18
+  08:11:50Z), every stage through test:rust and gen:check.
+- The joined kit: kit-join-g7 at the trial top `cfc33ff317d3` (seventeen pieces): 3,075 rows, R4 alone failed. It
+  holds this piece's commits by `git patch-id --stable`: `6f54b8345`→`0b73feaf4`, `05b2351be`→`fa0c231f2`.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**What went wrong on the way, said plainly.** The first cut's red (`9c05b9327`; its tip `bfd911619`, kept as a record)
+did not compile. In the row's one instance method, line 107 used the two static word lists without `Self.`.
+FieldDesignTests failed to build on the test Mac (2026-11-18, ended 07:07:37Z: 2 distinct errors, 0 rows run), so the
+whole kit at its tip was not run. The re-cut mends that line alone: `Self.refused` and `Self.numbered`.
+
+**Not run, and owed.**
+- **Left, by DESIGN.md's rule:** test data that names a person, 37 lines in code (fixture names such as a desktop's
+  or a phone's). It takes the made-up names when it next moves.
+- **Left as words that name no one:**
+  - 11 code lines whose "ruled" is the product's word (a local `ruled`, and row names such as "the ruled ones");
+  - 1 row name whose "lead" is the product's word ("… by share, the lead first …");
+  - 56 comment lines: 14 where "lead" is the product's word (a day pill's lead words, the agent leading by share, a
+    text's lead mark), and 42 where a bare "ruled" names no one.
+- **Not covered, item 546's.** The row reads the kit's Swift under Sources, Tests and the App, and the iOS scripts'
+  `.sh` files, and no other file. At the tip these still name someone:
+  - `apps/ios/VibeFieldKit/Package.swift`: 2 lines (:15, :338);
+  - the shaders, 8 lines: `HatchSky.metal` 5, `SparkStar.metal` 2, `glow.metal` 1;
+  - `apps/ios/scripts/blank-unkept-marks.mjs`: 1 line (:5);
+  - the Godview lane's bare name, 4 Swift comments: `RainAtlas.swift`:14, `RainSurface.swift`:210,
+    `SwarmLabFixtures.swift`:92, and `TimelineLayout.swift`:75–76, which says who ruled;
+  - lane paths, 3 test comments: `RainFrameTests.swift`:11, `RainHandTests.swift`:9, `RainWordsTests.swift`:9.
+- Also not read: a JSON fixture's "//" key (`Tests/FieldHomeTests/Fixtures/phone-spend.golden.json`:2, which names
+  the lane and who ruled), DESIGN.md, the docs and the commit history. `apps/ios/scripts/splash-stills.swift` and a
+  Tests `.sh` are outside the row's file kinds, and neither holds a refused word.
+- Lane and session names other than the refused ones are not held. The Godview lane's name collides with code
+  (`pollfd(fd:`, a shader's `float fd`).
+- No device look is owed: nothing a person sees changes.
+- `pnpm gate:landing` not run (owed).
+
+## Item 546 — the kit's shaders, its JavaScript and its manifest name no one either, and no comment a lane's folder (M422)
+
+(2026-11-18; two commits, in order:
+- `c677ae787` (red, "546 (red): the kit's words row also reads its shaders, its JavaScript, its manifest and lane
+  paths");
+- `2d5e99045` (green, "546 (green): the shaders, the manifest, a script and four Godview comments say the item and the
+  day").
+
+Item 546 (2026-11-18) takes the lines 533's row left: the manifest, the shaders and a script it did not read, and
+Swift comments it read but did not refuse (a lane folder's path, the name the Godview port's commits cite for their
+rulings). It is cut on 533's tip and rides after it.)
+
+**What a person sees.** Nothing in the app. A reader of the kit's shaders, its manifest, its scripts and the Godview
+port's comments no longer finds a person, who ruled, a lane's name or a lane's folder there. Most of those lines now
+say the item and the day; four say neither (the two shaders' engine names and their two bounds "ruled" on the first
+report), and two say the item alone ("PG-8").
+
+**The seams.**
+- `c677ae787`, `KitWordsNameNoOneTests` (533's row), widened:
+  - every root (the kit's Sources and Tests, the app, the iOS scripts) reads `.swift`, `.metal`, `.mjs` and `.sh`
+    files, and the kit's own `Package.swift` beside them;
+  - a shell script's lines are words whole. The other files' are read as Swift's: a line beginning `//`, `*` or `/*`
+    whole, an `@Test(` or `@Suite(` line whole, and otherwise what follows a `//` outside a double-quoted string on
+    the line; nothing inside a multi-line `"""` literal, nor the lines that open and close one;
+  - a fifth refused word: a lane folder's path, built from pieces like the other four.
+- `2d5e99045`: 18 changed places (13 comment blocks) in 12 files, 20 lines becoming 23; three comments gain a line and
+  one is rewrapped. Where a day stands, in 533's forms (a person's word "asked for <day>", a decision "decided
+  <day>"):
+  - `Package.swift`: 2 lines (:15 "decided (a)", :338 "Item 362 (R2, decided 2026-11-12)"). Its release lines stand
+    as they were, and the commit hook's render check passed;
+  - the shaders, 8 lines: `HatchSky.metal` 5, `SparkStar.metal` 2, `glow.metal` 1;
+  - `apps/ios/scripts/blank-unkept-marks.mjs`: 1 line (item 359, asked for 2026-11-12);
+  - the name the Godview port's commits cite for their rulings, 4 comments: `RainAtlas.swift` and `RainSurface.swift`
+    take "PG-8",
+    `SwarmLabFixtures.swift` "(PG-3e, 2026-11-02)", and `TimelineLayout.swift`'s deviation is "kept (decided
+    2026-11-04)". The row does not refuse that name, so these four are swept, not held;
+  - three Rain test comments that named a lane folder's probe (`RainFrameTests.swift`, `RainHandTests.swift`,
+    `RainWordsTests.swift`): each now says what was computed, by which shipping code (`createMotionLoop`,
+    `rain-streams.js`, the toolkit the rain imports), on which day (PG-8, 2026-11-04, the lines' UTC commit day), and
+    that the probe is not in the repository.
+
+**Proved.**
+- Before the cut. The cut held the sums of its messages, its paths lists, check-546.py and wall546.py, and ran both
+  checks:
+  - **check-546.py** (514b2e305373d967) found 0 breaches over the 12 files. Every changed line is a comment; no code
+    line changes; no added line holds a refused word.
+  - **wall546.py** (c488ce17b8179167), a read-only port of the widened row, read 735 files (720 Swift, 9 Metal, 4
+    JavaScript modules, 2 shell scripts, the manifest among the Swift). It names 14 lines at the red and 0 at the
+    green.
+  - **verify-546.py** (22d744bf056bf41e, its sum as read now) was run by hand before the cut, outside the cut's
+    holds, and its output was not kept. A run of it since prints "checked 10 added days and ids; 0 not shown by blame
+    or the file": the 10 days and ids the green adds stand in git blame of the lines it replaces, or in the file's
+    own text.
+- The cut (2026-11-18; its output written at 07:44:49Z) made `861d9f87e` and `76956ce7e` (`c677ae787`'s and
+  `2d5e99045`'s patches) on `05b2351be`, through the pre-commit
+  hook. Each commit was held to its parent, its message and its blobs. None ran a test.
+- The red at `861d9f87e` on the cut, FieldDesignTests on the test Mac's simulator
+  (07:53:04Z to 07:54:32Z): it compiled (BUILD FAILED 0, 0 errors), 101 rows, Passed 100, Failed 1, the widened row
+  alone: "14 lines name someone": Package.swift :15 and :338, HatchSky.metal ×5, SparkStar.metal ×2, glow.metal :33,
+  blank-unkept-marks.mjs :5, and the three Rain test comments (RainHandTests at :9 before its reflow). It printed "735
+  files read, 47 walked, in 1.687971083 seconds" and ended after 1.744 s.
+- The kit, whole, at `76956ce7e` on the cut (the piece's tip), 07:55:59Z to 07:58:19Z: 3,065 rows, Passed 3,061,
+  Skipped 3, Failed 1, FieldWebTests R4, not this piece's: it fails at its base (i533b-top) and at main 8064bbdec
+  (sp4-ma5-kit-1) too (item 522). The widened row passed after 0.328 s, printing "735 files read, 40 walked, in
+  0.287700834 seconds". BUILD FAILED 0: HatchSky.metal and SparkStar.metal compiled with the kit (their
+  CompileMetalFile lines). glow.metal is not compiled at build: the swarm's shaders ride as resources and compile at
+  first use (D-i14, Package.swift:311–312), so this run does not show it compiled; its change is one comment line. The
+  run log counts 0 'Fetching'/'Resolving' lines, with package resolution off in that run, so the count shows no
+  fetch, not whether the changed manifest was read again.
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `7d5e94e641bb`
+  (eighteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id
+  --stable`: `861d9f87e`→`80178abe8`, `76956ce7e`→`927c888da`) read `pnpm verify` exit 0 in 598 s (END 2026-11-18
+  08:54:36Z), every stage through test:rust and gen:check.
+- The joined kit: kit-join-g9 at the same trial top `7d5e94e641bb` (08:56:05Z to 08:59:02Z): 3,075 rows, Passed 3,071,
+  Skipped 3, Failed 1, FieldWebTests R4, main's own (it fails at main 8064bbdec in sp4-ma5-kit-1; item 522). The
+  widened row passed after 0.290 s, printing "736 files read, 40 walked, in 0.28326 seconds" (one more file than at
+  the piece's tip: `FieldProduct/ReplayEnded.swift`, which another piece on the trial adds). FieldHomeTests' face
+  suite (`NewSparkCreateTests`, which another piece on the trial changes) passed 8 of 8, and FieldDesignTests'
+  hatch-flight suite 4 of 4.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- **A cost, said:** `Package.swift` changes. SwiftPM keys its manifest cache on the file's contents, so the first
+  resolve after this lands re-reads the manifest.
+- **Not covered:**
+  - three sets of expected values in the Rain rows that nobody can derive again from the repository: H16's ticks,
+    the hand rows' stream values, and the lines of H6, H9 and H10, computed by probes that were run outside it (their
+    comments: `RainFrameTests.swift`:11, `RainHandTests.swift`:8, `RainWordsTests.swift`:9);
+  - a block comment's line that begins with neither `*` nor `/*` is not read, in a shader, a module or Swift alike,
+    except from a `//` on it outside a double-quoted string; nor a JavaScript module's single-quoted or template
+    strings, which the reader does not track;
+  - lane and session names other than the refused ones are not held: the name the Godview port's commits cite
+    collides with code (a file descriptor's);
+  - a comment line holding an odd number of `"""` is not read, and it turns the reader's literal state for the
+    lines after it. No such line stands in the roots at the tip;
+  - not read at all: the roots' other files (394 `.json`, 85 `.png`, 45 `.svg`, a `.plist`, a `.xcprivacy`), the
+    Xcode project, DESIGN.md, the commit history, and the iOS docs. Of these, at the tip, six JSON fixtures' "//"
+    lines still name someone (`spark-flat-star.golden.json`, `phone-rain.golden.json`, `phone-spend.golden.json`,
+    the two `phone-fold.golden.json` copies and `project-summary.home.json`, each at :2), and so do
+    `apps/ios/README.md` (2 lines) and `apps/ios/TESTFLIGHT.md` (15 lines).
+  - glow.metal:33 says "asked for 2026-10-18", 533's form for a person's word; its commit records the day as that
+    person's ruling (D-i12), which reads the same under that form.
+- No device look is owed: nothing a person sees changes.
+- `pnpm gate:landing` not run (owed).
+
+## Item 538 — the new spark's face rows wait on a bound no load reaches, and read the fade at the fold (M423)
+
+(2026-11-18; two commits, in order:
+- `458de60ba` ("538: the new spark's face rows wait on a bound no load reaches, and read the fade at the fold");
+- `413d03913` ("538 (wall's time): the launch-argument wall prints its time and the files it walked").
+
+Cut on 532's tip; it does not need 533. Test files alone. This is the re-cut, `b2b7acc12` (538b); the first cut,
+`1638cd1c1`, is kept as a record, and its code is byte for byte this one's.)
+
+**What a person sees.** Nothing: no product line moves.
+
+**What was wrong.** `NewSparkCreateTests`' row "the face flies only once the new spark's row says where its face
+is…" failed in four of six cold FieldHomeTests-only runs before 538. All six ran the suite and the landing as they stand
+at 532's tip, `06595573c` (the same blobs), though none ran at that commit:
+- failed, each "with 4 issues", its four checks on the flight: i532-kit-red (at `b769d33eb`, after 8.003 s),
+  i532b-kit-red (at `19997c85d`, after 9.710 s), ma5b1r-kit-red (at `8b033acad`, after 8.685 s) and i523r-kit-red (at
+  `069f4d2ee`, after 9.445 s);
+- passed: i532c-kit-red (at `2037d4909`, after 4.410 s) and ios-e3-red (at `d14f28087`, after 9.157 s).
+
+The row passed in every whole-kit run in the run folder and in every run of its suite alone (i523r-kit-538,
+ma5b1r-kit-538, i541-place), as listed at about 07:45Z.
+
+532's own suite note says "two of four"; it was true when written, before the two later runs, and is superseded here.
+The first cut of 538 wrote the same stale count into its messages and notes, which is why it was re-cut: the notes
+now carry no count of runs, and this entry carries it.
+
+The rows gave the landing two seconds (`rowWait: .seconds(2)`) to hear the new row's box. The landing's wait starts
+when it begins (`NewSparkLanding.box(of:)`, NewSparkSheetView.swift:276–291 at `06595573c`, its timer :285–288), and the
+row slept 50 ms and 20 ms on the suite's main actor before saying the box. Read as: in those runs the main actor was
+starved, the sleeps outlasted the two seconds, the wait ran out, and nothing flew. That is a reading of the runs, not
+a proof.
+
+**The seams.**
+- `458de60ba`, `NewSparkCreateTests`:
+  - `held`, 30 s: seven rows take it, the seven that waited two seconds. Six of them SAY where the face is; the
+    seventh, the refusal, never waits. It costs nothing when the row comes, since the landing resolves at once.
+  - `settles(_:since:)`, called by the six: it counts from before the landing began and fails with "the landing waited
+    out its held bound (\(Self.held)): it never heard its row". That reads "(30.0 seconds)" as `Duration` prints it;
+    no run has shown it, since no landing waited it out. So a landing that never hears its row costs 30 s, once,
+    and the failure names the wait.
+  - `noRow` keeps its own 30 ms bound: the wait's end is still held by its row.
+  - `fades` keeps its 200 ms fade and no longer polls for the fold. A hook in the fold queues a main-actor job that
+    records the face and the threads opened; the row reads that record once the landing ends.
+    - It rests on the landing doing nothing, after `steps.fold()` and before its sleep, that opens a thread or
+      changes the face other than to `.fades`. At `06595573c` that span is NewSparkSheetView.swift:262–264:
+      the fold, the face set to `.fades`, and the sleep.
+    - The fade's end is queued on the main actor only when its sleep ends, so the job queued at the fold runs first.
+    - If the landing ever does more there, the row reads the state at the landing's first suspension after the
+      fold, not at the fold.
+  - The suite note says the above (with no count of runs).
+  - Left as they were: the 400 × 5 ms polls `until` (about two seconds at rest) for the feed and for the landing to
+    begin. They wait for a state, and no row times out on them.
+- `413d03913`, `LaunchArgumentsTests`: the wall row prints the files it read, the files it walked, and the time from
+  before its detached scan to the scan's value, so the print holds the scan's wait for a thread as well as its work.
+  Nothing is asserted on the time or on the files walked; the files read stay held over 400
+  (`#expect(scan.files > 400)`). Its note says the face row's failures were read as that row's own bound, starved.
+
+**Proved.**
+- The first cut (its commits stamped 07:21:31Z and 07:21:32Z, 2026-11-18) made `1a3877bea` and `1638cd1c1` on
+  `06595573c`. The re-cut (its commits stamped 07:48:21Z) made `2256d5a28` and `b2b7acc12` (`458de60ba`'s and
+  `413d03913`'s patches) on `06595573c`. Both went through the
+  pre-commit hook, from files prepared and summed beforehand. Each commit was held to its parent, its message and its
+  blob. The re-cut held each of its commits to its twin: they differ in `//` comment lines alone. None ran a test.
+- A load flake has no deterministic red. Three passes lower the odds; they do not prove absence. Before 538 the row
+  failed four of six in that shape (above).
+- **The home runs at `1638cd1c1` stand for the code at `b2b7acc12`** by the comment-only diff between the two tips.
+  FieldHomeTests alone at `1638cd1c1` on the first cut, three fresh runs on the test Mac's simulator, each starting
+  under a load read in its run log:
+  - i538-home-1 (07:26:30Z to 07:27:54Z, load { 2.05 15.26 21.85 }): it compiled (BUILD FAILED 0, 0 errors); 839
+    rows, all passed. The face suite passed 8 of 8, its rows ending after 8.0 to 8.2 s; the run passed after 8.262 s.
+    The 532 wall printed "406 files read, 53 walked, in 5.275333084 seconds".
+  - i538-home-2 (07:30:01Z to 07:30:43Z, load { 15.59 36.70 31.98 }): 839 rows, all passed. The face suite passed 8
+    of 8, its rows ending after 14.2 to 14.4 s; the run passed after 14.382 s. The 532 wall printed "406 files read,
+    53 walked, in 10.000911833 seconds".
+  - i538-home-3 (07:31:44Z to 07:32:26Z, load { 24.56 38.81 33.69 }): 839 rows, all passed. The face suite passed 8
+    of 8, its rows ending after 14.6 to 14.8 s; the run passed after 14.833 s. The 532 wall printed "406 files read,
+    53 walked, in 1.077713375 seconds".
+- The kit, whole, at `1638cd1c1` on the first cut (07:33:37Z to 07:35:39Z): 3,064 rows, Passed 3,060, Skipped 3,
+  Failed 1, FieldWebTests R4, main's own (item 522). The face suite passed 8 of 8. The 532 wall printed "406 files
+  read, 53 walked, in 2.898645875 seconds".
+- The 532 wall's printed time runs from before its detached scan, at utility priority, to the scan's value, so it holds
+  the scan's work and its wait for a thread while the suite runs. Over the same 406 files and 53 walked it read 5.28 s,
+  10.00 s and 1.08 s in the three home runs, and 2.90 s in the whole kit. So the work fit in 1.08 s in one run; the
+  print does not say how the rest of the spread splits between waiting and slower work under load.
+- The kit, whole, at `b2b7acc12` on the cut (the piece's tip), 08:39:41Z to 08:42:24Z: 3,064 rows, Passed 3,060,
+  Skipped 3, Failed 1, FieldWebTests R4, main's own (item 522). The face suite passed 8 of 8, and FieldDesignTests'
+  hatch-flight suite 4 of 4. The 532 wall printed "406 files read, 53 walked, in 0.690748708 seconds".
+- No lane verify ran at this piece's own tip. The whole verify on the test Mac at the trial top `a61bdf174656`
+  (sixteen pieces on the train's top `fa6c1ea15e8b`, never landed; it holds this piece's commits by `git patch-id
+  --stable`: `2256d5a28`→`a94b4c850`, `b2b7acc12`→`a61bdf174`) read `pnpm verify` exit 0 in 597 s (END 2026-11-18
+  08:11:50Z), every stage through test:rust and gen:check.
+- The joined kit: kit-join-g7 at the trial top `cfc33ff317d3` (seventeen pieces): 3,075 rows, R4 alone failed. It
+  holds this piece's commits by `git patch-id --stable`: `1a3877bea`→`f500627ca`, `1638cd1c1`→`cfc33ff31`. Those are
+  the first cut's: it holds 538, not 538b, whose own whole-kit run is the line above.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- Nothing ran `458de60ba`'s tree alone; the runs are at the tips.
+- No device look is owed: nothing a person sees changes.
+- `pnpm gate:landing` not run (owed).
+
+## Item 519 — an app's preview capture reuses its own browser session, once that session is cleared (M424)
+
+(2026-11-18; three commits, 3 paths +439 −27, cut on the train's top `fa6c1ea15` as `b038c1d32`, `315341c14` and
+`e7e853bbd` on branch `8d/i519-on-train10b`. Main moves once, on James's word and VF-PM's GO. On main they are
+`9090c068c`, `3676606ec` and `584f53afa`; every other id here is a side commit's, where it was cut or where a row ran.)
+
+**What was wrong.** AH-4's review named it, and item 517 held it here, to be measured first. Each preview capture
+opened an in-memory browser session of its own, and Electron 43 has no call that ends a session, so every one stayed
+until the app quit. Measured on a Mac mini kept for tests (the test Mac from here), 2026-11-18 09:36:23Z →
+09:38:47Z, one Electron process per leg:
+- 200 captures with a session each grew the app's working set by 89.5 MiB per 100 captures (capture 25 → 200:
+  349.7 → 506.3 MiB);
+- the same 200 captures through one session moved it −4.3 MiB per 100 (335.6 → 328.0 MiB);
+- both began at 238 MiB before their first capture;
+- Δ 93.9 MiB per 100 captures, at 113 and 114 ms per capture.
+By the rule set before the run (Δ ≥ 50 MiB per 100: a fix is worth it), it is a fix.
+
+**What moved.**
+- The capture class (`3676606ec`, `artifact-preview-capture.ts`).
+  - Each artifact keeps one in-memory session. Its next capture reuses it only after every clear of the last capture
+    has settled, within 2 s. Two artifacts never share a session.
+  - The session is retired for good, and the next capture takes a fresh one, when a clear fails or overruns, when a
+    worker of the session still runs, or when a gate would not come off.
+  - A capture that finds its artifact's session in use takes one of its own, which nobody keeps.
+  - The clears start as each capture ends, and the next capture awaits them: `clearData()`, `clearStorageData()`,
+    `clearCache()`, `clearAuthCache()`, `clearHostResolverCache()`, `clearCodeCaches({})`,
+    `clearSharedDictionaryCache()` and `closeAllConnections()`. Three were made before; five are new.
+  - The gates, the proxy and the permission handlers are still set per capture.
+- The log (`3676606ec`, `index.ts`): a session that will not be reused is a warning,
+  `desktop.artifact_preview.session_retired`, with its reason and the number of captures it served, and nothing of
+  the page.
+  - The reasons are `clear-rejected` (a gate that would not come off is logged so too), `clear-overran` and
+    `worker-running`.
+  - `in-use`, with 0 captures, is logged when an overlapping capture takes a session of its own; the kept session
+    stays.
+- The rows (`artifact-preview-capture.test.ts`).
+  - `9090c068c`: two reds. A second capture of the same artifact reuses the first's session only after its clears
+    settle, and every clear runs after a capture. Every fake session in the file now answers the clear calls.
+  - `584f53afa`: six pins. A rejected clear retires the session; so do an overrun clear, a running worker and a gate
+    that would not come off. Two artifacts never share a session. An overlapping capture takes a session of its own.
+- The class's comments said a capture owns a session of its own; corrected (`3676606ec`), dated.
+
+**What a page can leave that no clear is documented to reach, said plainly.** The TLS session-resumption cache for
+the hosts it reached, HSTS state, Reporting API and Network Error Logging policies, and the HTTP server properties
+(Alt-Svc and QUIC hints). Electron 43's own docs name none of them among what its clear calls reach, and none was
+measured. They can reach only the same app's later captures: two apps never share a session.
+
+**Deltas to fold.**
+- The AH spec's §8 (`draft/specs/artifact-hub.md:781`) says the capture "uses an ephemeral partition". That holds
+  (an in-memory partition, Electron's own term), now one per artifact, reused once cleared. It owes a dated note,
+  through the draft queue.
+- AH-4's entry ("one capture is one in-memory session") stays true of what landed on 2026-08-03 and is not edited.
+
+**The proof.**
+- At the cut, on each tree before its commit (the cut's own log), the package's typecheck (both configs) passed,
+  biome was clean over its paths, and the file's vitest ran:
+  - the base: 26 rows pass;
+  - `b038c1d32`: 28 rows, exactly the two reds failing, each by an assertion;
+  - `315341c14`: 28 pass;
+  - `e7e853bbd`: 34 pass.
+- On the test Mac, the file alone:
+  - at `b038c1d32` (2026-11-18 10:19:54Z): "Tests 2 failed | 26 passed (28)", the two reds, each by an
+    `AssertionError` and no other error kind;
+  - at `e7e853bbd` (10:20:58Z): "Tests 34 passed (34)".
+- On the test Mac, `pnpm verify` whole at `e7e853bbd`, 2026-11-18 10:21:51Z → 10:31:46Z: exit 0 in 595 s. Read
+  from its log, under electron-shell's own RUN block: `test/artifact-preview-capture.test.ts (34 tests)`.
+- On the test Mac, the fix on a real Electron at `e7e853bbd`, 2026-11-18 10:32:59Z → 10:39:24Z, one Electron
+  process per leg. The capture session has the HTTP cache off, so the cached mark is Cache Storage; the listener
+  saw the cached script fetched by both captures.
+  - **Isolation, the control** (its clears made no-ops), two captures of one app in ONE session. Capture 2 found
+    capture 1's cookie (by script and in the request's `Cookie` header), its localStorage value and its Cache Storage
+    entry. So the row can see a leak.
+  - **Isolation, the fix as it ships**, the same two captures in ONE reused session. Capture 2 found none of the
+    three. The slowest clear took 11 ms.
+  - **Memory**, 200 captures of one app: +3.2 MiB per 100 captures (capture 25 → 200; 311.5 → 317.0 MiB), against
+    +89.5 before. One session made, no retirement. Every capture's clears were timed: the slowest 10 ms, against the
+    2 s bound. The rule was set before the run: growth ≤ 10 MiB per 100, one session, no retirement.
+  - The mean time per capture there, 1615 ms, includes the test page's own image held for 1.5 s. It is not the
+    capture's own cost.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- A capture that is cancelled while it waits for its artifact's last clearing is seen only when the wait ends, up to
+  2 s late: the wait does not watch the capture's signal. That is a later item.
+- What a page can leave that no clear is documented to reach (above), unmeasured.
+- A retired session stays held until the app quits, as every session did before.
+- Memory still grows by one session per distinct app captured since the app started. That is about 0.9 MiB each by
+  the measure before the fix, and was not measured at the fix.
+- `security.ts`'s backstop comment still says a capture's WebContents has its "unique Session". It is now its app's
+  one session, marked before each window as before. A dated correction at its source is owed, as a later item.
+- No fieldd, broker or tailnet in the rows on a real Electron; one page shape. Item 514 is not touched.
+- No window was looked at. macOS only.
+
+**Not done, and not claimed:** the spec's dated note (the draft queue); the landing-only gates (`pnpm gate:landing`),
+owed at the landing; nothing pushed.
+
+## Item 542 — A secret store's child process (M425)
+
+(2026-11-18; five commits, in order:
+- `b1a9aeda5` (seam, "542 (seam): a secret store's keychain tool, its runner and its platform are the caller's to
+  name");
+- `f8a7ffc5d` (red, "542 (red): four rows on what a secret store's child process is handed, each against a stub");
+- `23daa753f` (red, "542 (red, 2): four rows on what a secret store says when the keychain does not answer, each
+  against a stub");
+- `b139ec48e` (red, "542 (red, 3): four rows on what a secret store hands its tool, and what it refuses before any
+  call");
+- `ce17ad55a` (green, "542 (green): a secret store's child process is handed its value on stdin, under HOME and a fixed
+  PATH").
+The form of the green was chosen by two probes James ran by his own hand on his Mac.)
+
+**What a person sees.**
+- While a secret's names are printable ASCII without a double quote or a backslash, and its values fit, nothing
+  changes: a plugin's secret setting and a profile's server values are kept and read as before. A profile's names
+  always pass (its id is `[a-z0-9-]`).
+- A profile's server values that together would pass the limit below are refused, and the keychain is left as it
+  was. The refusal reads "Couldn't save to your keychain: these values are too long to keep together (about 1,900
+  characters at most). Nothing was changed." (`ce17ad55a`). A window shows it after its own head: a profile's server
+  add, for one, shows "That server wasn’t added — …" (`panels/agents/ExtensionsSection.tsx`:609, through
+  `refusalSentence` in `account/use-account.ts`:79–83). A plugin secret
+  whose names leave less than 1,900 bytes gets the same sentence with no number.
+- A plugin secret set to an empty value is refused ("an empty secret is not kept"). Settings never sends one: a
+  kept secret is removed by Forget, `storage.settings.reset`, as before.
+- A plugin secret whose key holds a double quote, a backslash or a character outside printable ASCII is refused.
+- A keychain that does not answer within 10 s, or refuses, is said so: UNAVAILABLE {service: "keychain", state:
+  "no-answer" | "refused"} (`ce17ad55a`). Before, a read answered either as "no secret".
+- At the launch of an agent the profile gave server values to, a keychain that does not answer or refuses makes
+  `launchValues` reject. The launch does not fail: the run starts without the values, and the person is told
+  nothing. A line is logged.
+  - fieldd's `launchEnvironment` hook hands the call straight to `launchValues` (`agent-runtime.ts`:987–988), with
+    no catch.
+  - The pinned runtime (puppeteer-runtime 0.4.2, `dist/runtime.js`:713–726) catches the rejection in
+    `launchEnvironmentFor` and hands it to `report`, which calls the host's `onError` (:433). Then it returns no
+    values, and the spawn goes on (:2805). Its type's own words (`dist/types.d.ts`:433–443): "A host that cannot
+    answer lets the run start without them."
+  - fieldd's `onError` logs a warning, `fieldd.agents.runtime_error` "Agent runtime reported an error", with
+    `error` set to the refusal's message: "the keychain did not answer in time" or "the keychain refused"
+    (`agent-runtime.ts`:1014–1017, `plugin-settings.ts`'s `keychainUnavailable`). The message holds no value and
+    no name.
+  - Before this change the failed read answered "no secret", so the run also started without the values, with
+    nothing logged.
+  - What changes: a log line, and a bound. A keychain that does not answer now holds the launch for at most 10 s.
+    Before, the read had no limit.
+  - An agent given no values never opens the keychain (`agent-extension-store.ts`:179–189).
+
+**The seams.**
+- `packages/fieldd/src/plugin-settings.ts`:
+  - `createDarwinSecretStore({ executable, run, platform, timeoutMs })` (`b1a9aeda5`; `timeoutMs` `ce17ad55a`), with
+    `SecretToolCall`, `SecretToolRunner` and `runSecretTool` (`b1a9aeda5`).
+  - The runner spawns the tool with its three pipes written at the call. It closes stdin once the call's input is
+    written, caps the answer at 1,048,576 characters (`SECRET_TOOL_ANSWER_MAX`), and drops stderr (`b1a9aeda5`).
+  - From `ce17ad55a` the runner spawns `detached` (setsid), with no terminal to ask on, and stops the call past
+    `SECRET_TOOL_TIMEOUT_MS` (10 s) with one SIGTERM.
+  - `SecretToolError` (`ce17ad55a`) holds only the exit code and whether the time limit stopped the call.
+  - The tool is `SECURITY_TOOL`, `/usr/bin/security`, by its absolute path (`ce17ad55a`).
+  - Every call runs under `secretToolEnv()`: HOME and PATH=/usr/bin:/bin, and nothing else (`ce17ad55a`).
+  - set hands the value on stdin as one line, `add-generic-password -U -s "<service>" -a "<account>" -X <hex>`,
+    read by the tool's interactive mode (`-i`) (`ce17ad55a`). It refuses before any call, PRECONDITION_FAILED:
+    - a name `SECRET_NAME` does not admit (printable ASCII, without a double quote or a backslash);
+    - an empty value;
+    - a line longer than `SECRET_TOOL_LINE_MAX`, 4,096 bytes with its line break, counted in the bytes fieldd
+      writes.
+  - A read the tool answers with its exit 44 is no secret, and a delete of such an item is a no-op. Every other
+    failure is UNAVAILABLE as above, saying nothing of the call (`ce17ad55a`).
+- `packages/fieldd/test/child-stdin.test.ts`: plugin-settings.ts's census row is `spawn` and one `spawn pipe`
+  (`b1a9aeda5`). The census reads the same at `d7b7bbe6e` on the cut (`ce17ad55a`'s patch): `cut-542d.log`'s census
+  line, and `i542d-green-stdin` below.
+- Why the first drafts of the green could not have worked: they ran the tool through execFile with
+  `detached: true`, and execFile hands spawn only cwd, env, gid, shell, signal, uid and the two Windows flags (Node
+  v26.5.0's own execFile source, printed to the lane's `notes-execfile-source.txt` 822f0c26). `b1a9aeda5` moved the
+  runner to spawn, and `ce17ad55a` sets `detached` there.
+
+**How the form and the limit were chosen.**
+- Probe 1 (`probe-542.sh` 43c5ac24; results `probe-542.results.20261118T103518Z.tsv`, sha256 c9704a34…, 24 rows,
+  James's own run at 10:35Z): it tried two stdin forms.
+  - The prompt form (`-w` last, the value fed twice) came back equal to 128 bytes. From 129 bytes it kept 128 and
+    still ended 0.
+  - The interactive form came back equal to 1,024 bytes. At 4,096 and 8,192 bytes it ended 1 and still left an
+    item of 4,018 bytes that was not the value.
+  - A value outside printable ASCII read back as its hex in both forms.
+- Probe 2 (`probe-542b.sh` c08c06fd; results `probe-542b.results.20261118T111253Z.tsv`, sha256 c4f507ae…, 10 rows,
+  James's own run at 11:13Z), the interactive form alone, with each line's length checked before the tool saw it:
+  - equal at every line of 2,127, 3,151, 4,079, 4,094, 4,095 and 4,096 bytes;
+  - at 4,097 the tool ended 0, wrote nothing to its error stream, and kept 4,018 hex digits for 2,009 bytes;
+  - at 4,175, 6,079 and 8,079 it ended 1 and still kept 4,018 bytes.
+- Each probe deleted its item after every case and checked it gone. Every results row of both runs reads
+  absent_after yes (24 of 24, 10 of 10).
+- So the limit is 4,096 bytes of line, and the refusal comes before any call: one byte past it, the tool's exit
+  proves nothing.
+- The sentence's number: the longest line fieldd writes for a profile has the service "VibeField agent server
+  values" (29 bytes) and a profile id of 48 bytes (AgentProfileSetId's longest, `agent-index.ts`:87).
+  - Its fixed part, with the line break, measures 117 bytes. (4,096 − 117) / 2, rounded down, is 1,989 bytes of
+    the profile's JSON. The shortest id, one character, allows 2,013.
+  - The JSON counts names, quotes and commas, so the sentence says "about 1,900".
+
+**The rows.** `packages/fieldd/test/secret-store-child.test.ts`, new. No row runs the real tool. Each hands the store
+a stub in its own folder, named by absolute path, or a recording runner that spawns nothing.
+- `f8a7ffc5d`:
+  - a value is handed on stdin, and no argument holds it;
+  - the environment holds the value in no entry on set, and no FIELD_ or FIELDD_ name on set, get and delete;
+  - the default tool is /usr/bin/security;
+  - a profile's server values stay out of the arguments.
+- `23daa753f`:
+  - a read not finished in time is refused, "no-answer";
+  - "not found" is no secret, and any other failure is "refused", naming nothing of the call;
+  - keepValues over a read that does not answer writes nothing;
+  - a failed set says nothing of its value or its call.
+- `b139ec48e`:
+  - a line of exactly 4,096 bytes is handed, and one of 4,097 is refused with no call;
+  - the refusal's words are held both with the number and without it (a 300-byte name leaves 1,867 bytes);
+  - a profile's server values past the limit are refused, and only the read ran;
+  - an empty value and five disallowed names (a double quote, a backslash, a line break, a tab, é) are refused
+    before any call;
+  - every call's environment is exactly HOME and PATH.
+
+**Proved.**
+- The cut of the seam and the first two reds (08:05Z, `cut-542c.sh` 5e26ad59, console `cut-542c.run.log`) made
+  `6b9329993`, `9f31740ea` and `78ac8d2e1` on fa6c1ea15e8b, in a lane worktree.
+  - Its one install (`--frozen-lockfile --offline --ignore-scripts`, the lane's own HOME) logged "✓ Lockfile
+    passes supply-chain policies (verified 1h ago)", and "downloaded 0" on every progress line
+    (`tsc/logs/install-wt3.log`).
+  - fieldd's `tsc --noEmit` exited 0 after each commit (`tsc/logs/tsc-c1…c3.log`).
+- The cut of the third red and the green (11:25Z, `cut-542d.sh` b21fab58, console `cut-542d.log` 33c586d0) made
+  `4ecb8930c` and `d7b7bbe6e` on `78ac8d2e1`.
+  - After each commit: tsc exit 0 (`tsc/logs/tsc-d1.log`, `-d2.log`), and the tree's native biome exit 0 on the
+    commit's files (`biome/cut-d1.out`, `-d2.out`).
+  - A copy of the census's reader (`census-read/read-census.mjs`) on `d7b7bbe6e`'s plugin-settings.ts read
+    imports ["spawn"] and calls ["spawn pipe"] (`cut-542d.log`).
+- On the test Mac, each arm one file at its own commit's tree. The secret-store arms ran with the stub or the
+  recording runner alone; the -stdin arms read fieldd's source. The Keychains folder was the same before and after
+  every arm (its keychains.before and .after). The run folders are the lane's clean-run records, by the names below.
+  - `9f31740ea` on the cut (`f8a7ffc5d`'s patch):
+    - `i542c-red` (08:13:40Z): "Tests 4 failed (4)", each by AssertionError, as wanted.
+    - `i542c-red-stdin` (08:15:03Z): child-stdin "Tests 5 passed (5)".
+  - `78ac8d2e1` on the cut (`23daa753f`'s patch):
+    - `i542c-red2` (08:15:55Z): "Tests 8 failed (8)", each by AssertionError, as wanted.
+    - `i542c-red2-stdin` (08:16:46Z): child-stdin 5 of 5.
+  - `4ecb8930c` on the cut (`b139ec48e`'s patch):
+    - `i542d-red3` (11:34:43Z): "Tests 12 failed (12)", each by AssertionError. Its stage reads NOT AS WANTED, as
+      recorded, with eleven of the twelve named expectations held.
+      - R9's block reads "AssertionError: expected +0 to be 4096 // Object.is equality" (Received 0, at :220, the
+        row's `toBe(LINE_MAX)`), and the arm's held text was "expected 0 to be 4096".
+      - The arm's wording missed; the row failed where it was written to.
+    - `i542d-red3b` (12:00:16Z), the same file with R9's text as vitest prints it: "Tests 12 failed (12)", "PAIRS 12
+      of 12 HELD", AS WANTED.
+    - `i542d-red3-stdin` (11:37:16Z): child-stdin 5 of 5.
+  - `d7b7bbe6e` on the cut (`ce17ad55a`'s patch):
+    - `i542d-green` (11:38:09Z): "Tests 12 passed (12)".
+    - `i542d-green-stdin` (11:39:08Z): child-stdin 5 of 5.
+- `pnpm verify`, whole, at `d7b7bbe6e` on the cut (`ce17ad55a`'s patch), on the test Mac:
+  - `v-i542d` (verify 11:50:36Z to 11:57:54Z, 438 s): exit 1 at fieldd's test stage; `test:rust` and `gen:check`
+    were not reached.
+    - One test failed, in a file this change does not touch: fieldd's `test/drive-pulls.test.ts` > "DR-3b — the
+      drive's pulls over the floor's file transfer > ends every held pull FAILED_TIMEOUT at its bound when each
+      retry is refused, asks only while one is held, and a pull a bound's row refuses asks for the stream".
+    - Its line was "AssertionError: expected 65 to be 64 // Object.is equality", at :901,
+      `expect(asked(mock, SUBSCRIBE)).toBe(subscribes)` after `await sleep(quiet)`.
+    - fieldd: 1 failed, 4612 passed, 15 skipped (4628).
+    - The facts:
+      - this change touches three files (plugin-settings.ts, child-stdin.test.ts, secret-store-child.test.ts),
+        and none is among that test's imports;
+      - the same file (blob 110bbd236cc9 at all three trees) passed whole, 82 tests, in two earlier whole verifies
+        on trees over fa6c1ea15e8b: `v-train10c` at 413d0391390e and `v-i519` at e7e853bbda7e;
+      - the row is item 552, the Drive lane's.
+  - Four plain runs of that one file at `d7b7bbe6e`, each "Tests 82 passed (82)":
+    - `dr3b-542-1` (12:04:47Z, 30 s);
+    - `dr3b-542-2` (12:06:20Z, 31 s);
+    - `dr3b-542-3` (12:07:52Z, 31 s);
+    - `dr3b-542-4` (12:09:22Z, 31 s).
+    They were stopped at four on the Drive lane's reading of item 552: the count is read before the mock has read
+    an ask already written, so a plain run of the file is expected to pass and decides nothing.
+  - `v-i542d-2`, a second whole verify at `d7b7bbe6e` (verify 12:42:08Z to 12:52:07Z, 598 s): exit 0, every stage
+    opened. fieldd "Tests 4613 passed | 15 skipped (4628)", with `test/drive-pulls.test.ts` "✓ (82 tests)"; cargo
+    694 passed, 0 failed.
+- No fieldd test reaches the real store on a path it exercises.
+  - By `git grep -a` at `d7b7bbe6e`, 90 fieldd test files call `bootstrap(`. 85 of them never name `secretStore`
+    (the lane's `sweep-542.txt` a9eadb12).
+  - A read-only reading of those boots, and of the other boot helpers, found none on a path into the store:
+    - no profile delete with a draft;
+    - no extensions add or act;
+    - no launch with given values;
+    - no plugin with a secret-scope setting.
+  - None of the repo's plugins declares a secret-scope setting.
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own
+  step, between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top,
+  kit-train10d, ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on
+  main (item 522), passes from this train on.
+
+**Not covered.**
+- The limit is proven on one macOS and its tool alone, with ASCII names of two lengths and one service length.
+  Other macOS versions are unproven.
+- Printable ASCII in a name other than letters, digits, spaces and hyphens is admitted and unprobed. Every plugin
+  secret's service name, `vibefield.plugin.<id>`, holds dots, so every plugin secret is in that class. No shipped
+  plugin declares a secret setting.
+- Nothing reads a value back after a write.
+- What a read answers for a value outside printable ASCII is item 548's.
+- The runner sends one stop at its time limit and nothing stronger, so a tool that ignores it leaves that call
+  waiting.
+- Before this change the store refused none of these, and now it refuses each before any call:
+  - a value whose line passes the limit;
+  - an empty value (a plugin's own code, or a door caller, sending "" under a schema admitting it);
+  - a plugin secret's key holding a double quote, a backslash or a character outside printable ASCII.
+- Whether the person is told at a launch whose values could not be read: today they are not (above). That is a
+  question for James's words.
+- The green's message, the comment on `SECRET_NAME` (`plugin-settings.ts`:89) and the refusal string (:213) say
+  "a quote" where the code refuses the double quote alone. Item 548 mends those words.
+- A test that builds the default store without a stub is not yet refused: item 551.
+
+## Item 522 — an app page's only way out is its own filtering front, which holds the page's rule at every connection (M426)
+
+(Cut 2026-11-17, and again 2026-11-18 at the head of one chain; two commits, in order: `187d6e2f6` (red, "522 (red):
+an app page's only way out becomes its own filtering front…") and `04593d16b` (green, "522 (green): the front holds the
+page's rule at every connection, before any dial").)
+
+**What a person sees.** Nothing on any screen changes yet: no view mounts SP-4's web host on main, and item 522's
+guard in `check:web-markers` keeps it so until item 524's reading (whether WebRTC or WebTransport leave a page
+around its proxy) is ruled on (it was, 2026-11-18: item 524's entry). What changes is the host: it opens a page
+only through its own filtering front, so the view that mounts it (MA-5b-1, after this) holds the page's rule at
+every connection WebKit sends through its proxy, the connect-ahead of a navigation the rule cancels among them
+(item 522's finding).
+- The front: a SOCKS5 listener bound to loopback alone, one per page, the page's only proxy, with a credential made
+  for it alone (compared as bytes, the secret in constant time). The origin at its port is carried over the mesh
+  node's own dial, to the ONE peer whose own DNS name the origin is (never a name built from a hostname; a peer
+  with no DNS name is nobody's origin); a declared host, at any port, by the system's own connection, never to the
+  phone's own loopback. Every other CONNECT is refused (0x02) with nothing dialled, and counted by class: a tailnet
+  name off the origin, an address asked as one or written as a name (a last label of digits, or of 0x and hex),
+  the origin at another port, any name the page did not declare. Other commands (0x07), an unknown address type
+  (0x08) and a missing or wrong credential are answered and counted as handshake classes, undialled. A dial is
+  handed the policy's own spelling of the name, never the page's.
+- Every dial is owned to its end: a failed system dial is cancelled; one that comes back after its client or the
+  front has gone is closed, never tunnelled; each tunnel closes its stream once. A client is held only on its way
+  to a tunnel or in one: ten seconds to bring its CONNECT, thirty for its dial, 128 at once; when full, the oldest
+  client without the credential is let go first.
+- A listener lost after it started reaches the host as a failed load (`.failed`), even one lost before the host
+  listened. The open screen that mounts the host (MA-5b-1) is to make one fresh page and front, then show "Can't
+  reach ‹desktop›" / "It isn't answering.", today's words; no code here does that yet.
+- The plan said a declared host "at 443"; the front follows the page's own rule list instead, which admits a
+  declared host at any port over TLS. Narrowing both is its own item, if it is wanted.
+- A behaviour change: a declared host behind a tailnet subnet route, or a name only the tailnet's DNS answers,
+  reached the page through tsnet's proxy; through the front it is dialled on the phone's own network, which, with
+  the system's own VPN off, reaches neither.
+- Unchanged: a public site sees the phone's own address, as through tsnet's proxy (truffle sets no exit node on the
+  app's node, read at its pinned release). If the node ever gets one, the front must follow it (owed).
+
+**The seams.**
+- `FieldWeb/Host/WebFront.swift` (new): the front, SOCKS5 (RFC 1928) with RFC 1929's user and password; its counts
+  (`WebFrontCounts`: refused and handshake by class, origin, declared, unreached, abandoned); its loss, heard once.
+  Beside it, `WebFrontSystemStream`, the system dial: plain TCP, never over loopback, with a ten-second connect
+  timeout of its own.
+- `FieldWeb/WebFrontRule.swift` (new; `04593d16b` gives `admit` its rule): the origin, a declared name in the policy's
+  own spelling, or a refusal by class.
+- `FieldWeb/Host/FieldWebAppHost.swift`: `open(url:policy:dials:appId:…)` takes the page's dials (`WebFrontDials`)
+  and opens the page only through its front; with no dials, or no front, no web view is made. The host keeps the
+  front's counts (`front`), hears its loss (`FieldWebAppNavigation.frontLost()`) and stops it at `release()` and
+  `deinit`.
+- `FieldMesh/MeshModel.swift`: `peerStream(host:port:)`, the origin's dial over the mesh node, its one peer looked
+  up again at every dial by `originPeer(_:among:)`.
+- `FieldHome/Apps/AppsFrontDials.swift` (new): the app's dials from the mesh (`AppsFrontDials.from(_:)`, none while
+  the mesh has no runtime, so no page is made), and `AppsMeshStream`, the mesh's stream as the front's, closed once.
+- `FieldWeb/WebShipGate.swift`: three targets now hold code under `DEBUG || VF_WEB_RELAY` (FieldWeb, FieldMesh,
+  FieldHome), so SP-4d's land gives the define to all three together.
+- `scripts/check-web-markers.mjs` (`04593d16b`): the guard keeps its rule, and its comment no longer lifts it in this
+  commit. It waits on item 524's reading and lifts in the commit that records that reading and its ruling; its
+  finding reads "(item 524: not yet measured)". This is the correction the guard's own entry promised: its comment
+  at the guard's cut `a506990d` (its landed id is the guard entry's mark), which says it lifts in this piece's
+  green, is put right here.
+
+**The rows.**
+- `WebFrontTests` (new, 19 rows): the socket: each dial's choice and the policy's spelling, odd names and
+  addresses, the methods and commands it refuses, bytes sent ahead, loopback alone, the deadlines, the cap, a stop
+  or a gone client with a dial in flight, each stream closed once, a loss heard once, the system dial and loopback.
+- `WebFrontRuleTests` (new, 7 rows): the rule at one CONNECT, class by class.
+- `HostRowsTests`: every host row that opens a page now opens it through the front (`open` takes dials; R4 among
+  them), and W2, W4 and R2c open none; the new 522-0 and 522-a to 522-e; W1 + W3 and R8 gain the front's
+  expectations.
+- `OriginPeerTests` (FieldMeshTests, new, 5 rows) and `AppsMeshStreamTests` (FieldHomeTests, new, 1 row).
+- The rig: `RigDial` (new) carries the host rows' admitted CONNECTs on to the stand-in; `RigSocksClient` asks its
+  CONNECT at a chosen port (`at:`) and gains `raw`, for bytes the front must refuse. WebFrontTests hands its own
+  dials (fakes).
+
+**Proved.**
+- The cut (11:49:54Z to 11:50:11Z, 2026-11-18) was one chain of eleven commits on train 10's add-on top
+  `413d0391390e`, where the guard's commit stands (picked there by the train): ten picked from their pieces'
+  earlier cuts and item 524's one made from files prepared beforehand, each through the repository's pre-commit
+  hook, each commit's tree held equal to a tree staged beforehand, a pick's message and author its earlier cut's.
+  This item's two are its first and second, `1c017fe8` and `1fc2c1de` (`187d6e2f6`'s and `04593d16b`'s patches), picked
+  clean from `e6f1705a` and `7859af4d` (cut 23:58:43Z to 23:58:45Z, 2026-11-17, on the guard's cut `a506990d`; those
+  two stay a record). It ran no test.
+- On the development Mac, on the cut (the run's folder `chain/rows-pc/`): `check:web-markers`' self-test, 19 of 19, and
+  the check, 0 findings, exit 0, at `1c017fe8` and `1fc2c1de` (`187d6e2f6`'s and `04593d16b`'s patches). Native biome
+  check, `biome check --diagnostic-level=error`, on the script in `1fc2c1de`'s tree (`04593d16b`'s patch, the only one
+  that changes it), exit 0, after a control that failed.
+- `1c017fe8` on the cut (`187d6e2f6`'s patch), on the test Mac's simulator, FieldWebTests and the two 522 suites of
+  FieldMeshTests and FieldHomeTests (web-front-red, ended 12:12:24Z): it compiled, xcodebuild exit 65; of 66 rows,
+  53 passed and 13 failed, i522f-red-1's thirteen by name: 6 of the rule's 7 rows, 3 of the socket's 19, R4,
+  522-a, 522-c and 522-d. Each failed on an expectation (48 issues recorded, each "Expectation failed"). The
+  origin's five peer rows and the mesh stream's passed. The rig's listen guard read 61 listen lines on loopback,
+  0 off.
+- `42a22a77`, the chain's tip, on the test Mac's simulator, every test target, the rig's per-run test identity given
+  (web-kit-top, ended 12:21:08Z): xcodebuild exit 0; of 3,134 rows, 3,131 passed, 3 skipped (the two Workspace loopback
+  rows and SP-7a W1, skipped at the earlier cuts' top runs too) and none failed. Every 522 row passed (38), and R4 with
+  them. The rig's listen guard read 61 listen lines on loopback, 0 off. `1fc2c1de` (`04593d16b`'s patch) is not run at
+  its own id; the tip's run holds its rows.
+- `e6f1705a` (`187d6e2f6`'s earlier cut), on the test Mac's simulator (i522f-red-1, ended 04:43:36Z, 2026-11-18;
+  FieldWebTests and the two 522 suites of FieldMeshTests and FieldHomeTests): it compiled and xcodebuild exited 65,
+  as wanted; of 66 rows, 53 passed and 13 failed, each on a refusal or a spelling the rule's stub does not make: 6
+  of the rule's 7 rows, 3 of the socket's 19 (the dial's choice, odd names, bytes sent ahead of a refused CONNECT),
+  R4, 522-a, 522-c and 522-d. The origin's five peer rows and the mesh stream's passed.
+- `7859af4d` (`04593d16b`'s earlier cut), on the test Mac's simulator (i522f-green-1, ended 04:46:56Z; every
+  target): xcodebuild exit 0; of 3,045 rows, 3,042 passed, 3 skipped (the two Workspace loopback rows and SP-7a W1,
+  skipped on every such run) and none failed. Every 522 row passed (38), and R4 with them.
+- What the kit's exit means from this piece on: 0, with no known failing row left. R4, which fails on main
+  (sp4-ma5-kit-1 at `8064bbdec`), passes here, so a push record's hold "exactly the R4 row failed" becomes
+  "0 failed" at the train that carries this piece.
+- From the kit's move to the second Mac until its runner's loopback listen guard stood (2026-11-18), no runner held
+  the rig's listeners to loopback: the rig's own code bound loopback, and the runner did not check it. In 14 kit
+  runs read on the second Mac, every listen line's host was exactly 127.0.0.1 or ::1 (five runs printed them,
+  nine none), and no other host appeared in any: no bind left loopback. That count was reported from the second
+  Mac (just after 00:12:11Z, 2026-11-18) and no file of it was kept: a report, not a record. In both of this
+  piece's runs the guard stood and read 61 listen lines, all on loopback; the front's own listener prints none,
+  and its row holds it to loopback ("I522-BIND exercised at a non-loopback address: reached=false").
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+
+**Not run, and owed.**
+- `pnpm verify` not run at the cut; the train's verify above is its proof.
+- `pnpm gate:landing` not run (owed).
+- No exit node: truffle sets none on the app's node, read at its pinned release. If the node ever gets one, the
+  front must follow it (owed).
+- At this item's commits the app's own dials (`AppsFrontDials.from`, with `MeshModel.peerStream`) have no caller
+  and no row; MA-5b-1's, after them, call them (`AppsWebPage.swift`) and hold a mesh with no runtime giving none
+  (`AppsOpenScreenTests`). Their device rows on the developer's phone (L3, L3x, L8) are owed. The mesh stream's
+  close-once and the system dial's refusal of loopback have rows, but no row carries a page through either: every
+  host row hands its own dials. A listener cannot be made to fail on loopback, so the front's row drives its loss
+  by hand (`loseForRows`); no row drives the host's half.
+- 522-e passes with the front's count at 0 at both earlier-cut commits (i522f-red-1, i522f-green-1): the rule list
+  stops the page's socket before it asks, so no row shows the front refusing a socket.
+- Item 524: whether WebRTC or WebTransport leave the page around a proxy, measured on the rig; until its reading is
+  ruled on (it was, 2026-11-18), no view mounts the host. Item 525 holds the same address forms in the reach
+  contract's host check (its own entry).
+- Known, and left:
+  - The cap: when full, the oldest client without the credential is let go for a newcomer, and only a front full of
+    clients past the credential turns one away. A process on the phone that opens connections as fast as they are
+    let go can still race the page's own (nothing on loopback says who calls): availability only. Item 373's.
+  - A dial that never returns is owned, but lives as long as its own bound. The system dial gives up a SYN with no
+    answer at ten seconds (`WebFrontSystemStream.connect` sets `connectionTimeout = 10`, not the system's default;
+    no row stands for it on loopback). The mesh dial is truffle's: a blocking `tailscale_dial` on a global queue,
+    one thread held until it returns, the Swift task's cancel not reaching it, and nothing read on its path bounds
+    it (truffle, libtailscale and tsnet, read at their pins; netstack's own SYN give-up was not read).
+    A dial to a node that is not yet running waits as long as the node stays so; the front lets its client go at
+    thirty seconds and closes the dial if it ever returns; the thread is truffle's to free. Its bound is asked of
+    truffle with the device rows.
+  - With the system's own VPN up, a declared name that resolves into the tailnet's range goes in, as any app's
+    connection does; the front sees names, never what they resolve to. Item 373's.
+  - A half-close from the page's side ends both ways of a tunnel, so a response still in flight then is cut.
+  - A phone with a system proxy on its own loopback (some filtering and debugging apps set one) would lose declared
+    hosts, which the system dial never sends to loopback. Not verified.
+  - Any `.waiting` the listener reports after it started ends it, as a loss. Whether iOS reports a passing one for
+    a loopback listener is not verified on a device.
+
+## Item 541 — no archive carrying the phone's web host leaves while a ship gate stands OPEN (M427)
+
+(2026-11-18; two commits, in order: `4fed0ff4f` (red, "541 (red): an archive carrying the phone's web host leaves while
+a gate stands OPEN — rows first") and `ee92c098d` (green, "541 (green): no archive carrying the phone's web host leaves
+while a ship gate stands OPEN"). They land on item 522's front, before item 524's commit. The first cut
+(`0054a81e`, `b3dae71a`), which marked the host by its type name, stays a record.)
+
+**What a person sees.** Nothing in the app. A developer making or uploading an archive with
+`apps/ios/scripts/testflight.sh` sees one more line before the real-strings read, "The web host's markers
+in the archive's app: 0 (vibefield.web-front 0; vibefield.web-host.docum 0); ship gates: 1, 1 OPEN." ("2, 2
+OPEN." with item 524's gate, which lands with it), and the script now refuses an archive whose app carries the
+web host while a gate stands OPEN. A Release archive carries no web marker (the host compiles only under `#if
+DEBUG || VF_WEB_RELAY`, and no target defines the relay), so no archive made today changes: a real one at
+MA-5b-1's re-cut read 0 and passed (below).
+
+**The seams.**
+- `apps/ios/scripts/testflight.sh` (`ee92c098d`): `web_markers`, `ship_gates` and `web_gate ARCHIVE`, and a
+  `check-web ARCHIVE` action that runs it alone. The archive and the upload both run it, before the real-strings
+  read: the archive after the pages' count, the upload after it on a store export (an internal one counts no
+  pages). `markers=(…)`, `count_markers`, their counts and the usage text are untouched.
+- The markers (`ee92c098d`), in both readers (testflight.sh's `web_markers`, check-web-markers' `MARKERS`): literals
+  only the host's code carries, the front's queue label `vibefield.web-front` (`WebFront.swift`) and the
+  document-start script's tag `vibefield.web-host.document-start.v1`, each standing only inside the gate in
+  FieldWeb's Host folder. Never the host's type or file name: a plain Release build keeps the gated host file's
+  source and object paths (an archive drops them), which the name `FieldWebAppHost` matched in an app with none of
+  the host (row b's C3, below). The label is also the prefix of the system dial's label in the same file and gate,
+  so an app with the host reads it more than once; the fence asks only for one or more. check-web-markers still
+  refuses a marker that stands nowhere, so a renamed label cannot leave the fence blind without a finding. The
+  mount rule on the type name (item 522's guard) is untouched.
+- What `web_gate` reads: each marker's count off the app's bytes, every file, as `count_markers` reads its own
+  (`LC_ALL=C grep -raoF`); then `ship-gates.txt` line by line in check-web-markers' four forms (blank, `#…`,
+  `SHIP-GATE <item> <name> OPEN`, `SHIP-GATE <item> <name> CLOSED <7 to 40 hex>`).
+- What it refuses, failing closed: no app in the archive; a gates file it cannot read; any line of another form,
+  naming the line's number and never its text, whatever the app holds; an app carrying a marker while the file
+  records no gate at all ("no gate is recorded for it": the host ships only past a gate that reads CLOSED); and an
+  app carrying a marker while a gate stands OPEN. A file with no gate line and an app with no marker passes.
+- One divergence from the JavaScript reader: a line ending in CRLF keeps its carriage return in bash, which
+  JavaScript's `trim()` drops, so bash refuses a gate line or a blank line ending so (a `#` line is still skipped).
+  It fails closed, never open.
+- The two comments that said the archive check already held this, `scripts/check-web-markers.mjs`'s header and
+  `FieldWeb/WebShipGate.swift`'s (`ee92c098d`), now hold, each with a dated correction at its source: from SP-4c's
+  first commit (`0bc52c15e`, "SP-4 (red): the phone opens its apps…") until 2026-11-18 they said it while
+  `testflight.sh` read neither the markers nor the gates.
+
+**The rows.**
+- `tooling/dev-runner/test/testflight-web-gate.test.mjs` (new, `4fed0ff4f`), nine. The script is copied into a staged
+  tree with its own `ship-gates.txt`, and `check-web` runs on fixture archives (an `.xcarchive` folder whose app
+  holds bytes written by the row); nothing builds an app. The front's label with a gate OPEN, refused and saying
+  why; the tag alone, refused; every gate CLOSED, passes; no marker with a gate OPEN, passes; an app carrying only
+  the host file's source and object paths, passes; each of three malformed lines (`… open`, a line with no name,
+  `CLOSED` with no hash), refused at its line number without its text; a file recording no gate, refused with a
+  marker and passing without; no app, or no gates file, refused; and the script calls the fence twice (that one
+  call stands in each branch is a read of the code), on the names check-web-markers' MARKERS holds.
+- check-web-markers' self-test, 21: two new rows (the host's type name alone, in its own folder outside the gate,
+  is no marker; the front's label outside Host, gated, is a finding), and its marker rows mark by the label.
+
+**Proved.**
+- The cut (11:49:54Z to 11:50:11Z, 2026-11-18) was one chain of eleven commits on train 10's add-on top
+  `413d0391390e`: ten picked from their pieces' earlier cuts and item 524's one made from files prepared
+  beforehand, each through the repository's pre-commit hook, each commit's tree held equal to a tree staged
+  beforehand, a pick's message and author its earlier cut's. This item's two are the chain's third and fourth,
+  `27bcf67b` and `3f2f06ff` (`4fed0ff4f`'s and `ee92c098d`'s patches), on item 522's front `1fc2c1de`, picked from
+  `3dc7de2d` and `e4214e72` (cut 06:55:39Z to 06:55:40Z on the front's earlier cut `7859af4d`; those two stay a record).
+  It ran no test.
+- On the development Mac, on the cut, each run under `env -i` with a HOME made for it (the run's folders
+  `chain/rows-541red/` and `chain/rows-pc/`; the one-line commands of `rows-541red/` and of `4-541-green/rows.*` are not
+  kept as scripts, and no run file records the environment):
+  - `27bcf67b` (`4fed0ff4f`'s patch) in its own tree (the front's script and guard, with the rows): `node --check` on
+    the rows' file and the guard and `bash -n` on the script, clean (the output's one line names no file); the rows,
+    nine of nine failed, each on an assertion; the front's guard, 0 findings, its self-test 19 of 19;
+  - `3f2f06ff` (`ee92c098d`'s patch) in its own tree: `node --check` and `bash -n`, clean; the rows, nine of nine
+    passed; the guard, 0 findings ("gated: vibefield.web-front 2, vibefield.web-host.document-start.v1 1"), its
+    self-test 21 of 21;
+  - native biome check, `biome check --diagnostic-level=error`, exit 0: on the rows in `27bcf67b`'s tree and on
+    the guard in `3f2f06ff`'s, after a control that failed.
+- On real apps, on the test Mac, built at MA-5b-1's earlier cut `52bd5a54` (where the app's own page names the
+  host), read with this item's earlier cuts' scripts (the first cut's `b3dae71a` differs from `e4214e72`'s only
+  in the first marker and the comments):
+  - i541-real-bytes-b (ended 06:32:26Z): a Debug simulator build and a Release device build, unsigned, BUILD
+    SUCCEEDED each. The Debug app read `FieldWebAppHost` 8 and the tag 1: refused under the OPEN gate (C1), and
+    passed with the same counts under a CLOSED one (C2). The Release BUILD's app read `FieldWebAppHost` 2 and was
+    refused (C3, not as wanted). Where the two hits stand, and the pages' counts, come from a read-only listing on
+    the test Mac after the run, reported and not kept as a run file: both are paths in the app's main binary, the
+    gated file's source (`…/FieldWeb/Host/FieldWebAppHost.swift`) and object (`…/FieldWebAppHost.o`), not host
+    code; and in the same build the two TestFlight-only pages' gated files left no path.
+  - i541-real-bytes-c (ended 06:50:17Z): the Release app made by testflight.sh's form, `xcodebuild …
+    -configuration Release -destination 'generic/platform=iOS' … archive`, but unsigned, with no account and no
+    build number, and with the row's own derived-data and package folders; ARCHIVE SUCCEEDED. Its app read 0 for
+    `FieldWebAppHost`, its `.swift` and `.o` paths, the tag, `vibefield.web-front` and both pages' names;
+    `check-web` under the OPEN gate, exit 0, "0 (FieldWebAppHost 0; vibefield.web-host.docum 0); ship gates: 1, 1
+    OPEN."
+  - `e4214e72` (`ee92c098d`'s earlier cut), its script on the same two apps, read only, no build (i541v3-read, ended
+    07:04:01Z): b's Debug app read the front's label 2 and the tag 1, refused under the OPEN gate and passed under
+    a CLOSED one ("3 (vibefield.web-front 2; vibefield.web-host.docum 1)"); c's archive read 0 and 0 and passed
+    under the OPEN gate, exit 0.
+- `42a22a77`, the chain's tip, its script (`55a9022e`, with the train's own changes to it, items 533's and 367's)
+  and its gates file (`2e6a828f`, items 373's and 524's lines, both OPEN) on the same two apps, built at
+  `52bd5a54`, read only, no build (web-541-read, ended 12:34:11Z): b's Debug app read the front's label 2 and the
+  tag 1, refused under the gates file ("… while 2 ship gate(s) in ship-gates.txt stand OPEN.", exit 1) and passed
+  with both lines CLOSED ("3 (vibefield.web-front 2; vibefield.web-host.docum 1); ship gates: 2, 0 OPEN.", exit
+  0); c's archive read 0 and 0 and passed under the gates file ("…: 0 (…); ship gates: 2, 2 OPEN.", exit 0). It
+  proves the tip's script and gates over those apps, not an app built at the tip.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- No archive was made or uploaded with this script: its `archive` and `upload` branches ran in no row, only
+  `check-web`, which runs the same function. Row c's archive was made by the same `xcodebuild … archive` form,
+  from the row's own script.
+- The first marker as it now stands was not read on row b's plain Release build, the app the type name misfired
+  on: only b's Debug app and c's archive were read, with `ee92c098d`'s earlier cut's script (the chain's own script's
+  read is web-541-read, above; `web_gate` is byte-identical in the two).
+- The Release pair at the stack's tip (the TestFlight-only pages' counts, which this item leaves as they were) is
+  owed.
+- The pages' own markers are type names too ("NotificationsPage", "DeveloperPage"): row c's archive read them 0,
+  and the listing above found no path of theirs in the plain build, so no live flaw is measured, but they have the
+  same weakness. Item 545's. On the chain a third stands, "MockAccount" (item 367's, on the train), which no row
+  of this item read.
+- No row exercises a gate line ending in CRLF: that divergence rests on a read of the code.
+- `pnpm gate:landing` not run (owed).
+
+## Item 524 — the open app's page may mount the web host; WebRTC waits on its own ship gate (M428)
+
+(2026-11-18; one commit: `e9bc797e6` ("524: the open app's page may mount the web host; WebRTC waits on its own ship
+gate"). It lands on item 541's commits, before MA-5b-1's, on item 524's ruling (James, a board click at
+11:30:20Z: "Keep MA-D14: allow it, Debug-only, with a ship gate").)
+
+**What a person sees.** Nothing by itself: it lets the next piece, MA-5b-1, mount the web host in the open app's
+page, in Debug builds. What it records: an app's page reaches addresses through WebRTC around its filtering front
+(measured on the simulator; the phone's row is owed), and no build that carries the web host leaves the developer
+until that is ruled again.
+
+**The seams.**
+- `scripts/check-web-markers.mjs` (`e9bc797e6`): item 522's mount rule becomes an allow-list with an exact count, in
+  R23b's form. Outside FieldWeb, `FieldWebAppHost` and `FieldWebAppNavigation` are named only by
+  `FieldHome/Apps/Open/AppsWebPage.swift`, on exactly three lines (`MOUNT_ALLOWED`). Any other file naming them,
+  gated or not, is a finding at each line; another count there is one finding; none there is none, so the rule
+  stands before the page lands. Its header records the reading, the new gate and the ruling's day.
+- `apps/ios/ship-gates.txt` (`e9bc797e6`): `SHIP-GATE item-524 webrtc-ice OPEN` beside item 373's line, with its reason
+  in a comment. Item 541's fence in `testflight.sh` refuses an archive carrying the host while either stands OPEN.
+- MA-D14's amendment in `docs/DECISIONS.md` rides the records commit, as MA-D15's does (each an exact OLD and NEW
+  beside its entry; neither is on main yet).
+
+**The reading** (i524m-1, on the test Mac's simulator, at `cb45dd685b33` on item 522's front, a measuring branch
+that never lands; ended 04:53:10Z, 2026-11-18; xcodebuild exit 0, its seven rows passed, each asserting only that
+the page ran; the application firewall off, six wide listeners on en0, one row at a time, none left after):
+- AROUND the front, on en0, from one of the Mac's own addresses, nothing from any other machine: STUN over UDP (4
+  datagrams), TURN over UDP (8), TURN over TCP (1 connection), TURNS (1 connection). The front carried nothing for
+  any of them.
+- NOTHING: WebTransport (the API exists; its connection failed before any packet) and a preconnect to an
+  undeclared name (no undeclared CONNECT). NOT EXERCISED: dns-prefetch (a lookup opens nothing either could see).
+- What it cannot say: the simulator's WebKit runs on the Mac's network stack, not the phone's, and no tailnet was
+  stood. By reasoning, not measured: with the phone's Tailscale VPN up, the same road would reach any address the
+  VPN routes, the person's own tailnet devices among them (item 373's class), and any website in Safari would have
+  the same road.
+
+**The rows.**
+- check-web-markers' self-test, 24 of 24: three new rows (the page on its three lines, no finding; on two, one; on
+  four, one), and the gated FieldHome view that may not mount the host stays a finding.
+
+**Proved.**
+- The cut (11:49:54Z to 11:50:11Z, 2026-11-18) was one chain of eleven commits on train 10's add-on top
+  `413d0391390e`, each through the repository's pre-commit hook, each commit's tree held equal to a tree staged
+  beforehand. This one is its fifth, `c20e382c` (`e9bc797e6`'s patch), on item 541's green `3f2f06ff`: its two files
+  laid over item 541's own (held), from files prepared and summed beforehand (the script `087e6701`, the gates
+  `2e6a828f`), with its message from its file. It ran no test.
+- On the development Mac, on the cut, under an empty HOME (the run's folder `chain/rows-pc/`): the check, 0 findings and
+  exit 0, and the self-test, 24 of 24, at `c20e382c` (`e9bc797e6`'s patch) and at each of the six commits after it, to
+  the chain's tip `42a22a77`; native biome check on the script in `c20e382c`'s tree, exit 0, after a control that
+  failed.
+- On the development Mac, before the cut, on the staged tree equal to the tip's (`chain/rows-chain.out`): the rule
+  before this commit, item 541's `404c3ab0`, finds 3 there (`AppsWebPage.swift` lines 27, 69, 75), exit 1.
+  `testflight.sh`'s `check-web` with the tip's script and gates file: a fixture app carrying the front's label refused
+  while 2 gates stand OPEN, exit 1; one carrying only the host file's paths passed, exit 0.
+- On the test Mac, at the chain's tip `42a22a77`: `pnpm verify` whole (web-verify, ended 12:32:44Z), exit 0 in
+  598 s. Its check:web-markers printed "check-web-markers self-test: 24 of 24" and "check-web-markers: 0
+  findings; gated: vibefield.web-front 2, vibefield.web-host.document-start.v1 1; open 2"; typecheck and test ran
+  for 28 projects each, and item 541's nine web-gate rows passed in it.
+- On the test Mac, the tip's script and this commit's gates file on i541v3-read's two real apps, built at
+  `52bd5a54` (web-541-read, ended 12:34:11Z): the Debug app refused while the 2 gates stand OPEN, and passed with
+  both CLOSED; the Release archive passed under them, "ship gates: 2, 2 OPEN." (item 541's entry has the lines).
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- The reading's device row (the VPN up, an ICE server at a tailnet address the person owns) is owed.
+- Whether a real TURN server would relay: the credential was made up. The packets left; that is the finding.
+- `pnpm gate:landing` not run (owed).
+
+## MA-5b-1 — an app you made opens on the phone as its own page, behind its own filtering front, in Debug (M429)
+
+(2026-11-18; two commits, in order: `87739f0c6` (red, "MA-5b (red): an app opens on the phone — the open screen's
+faces, a page's fall, its way out") and `eebf9c0f1` (green, "MA-5b (green): an app opens on the phone — its own page in
+the fence, above the glass row"). In the stack they follow item 524's commit, which lets this page name the web
+host; without it, check:web-markers finds the host named here. The first cut (`f26acb53` and `9e694af15cb1`, on
+main's tip `8064bbdec`, its way out a proxy read back from the mesh node) and the re-cut on item 522's front
+(`8b033aca`, `52bd5a54`) stay a record.)
+
+**What a person sees.** In a Debug build, a tap on an app (Recent, the shelf, a folder, search, the drop) still
+zooms out of its icon, and now asks its desktop to open it. The screen shows the icon alone, then "Opening on
+‹desktop›…" once the answer is late, then the app's own page over the phone's tailnet, inside SP-4's web view,
+its layout ending above the glass row (DESIGN.md §8, P3). Every refusal keeps the honest screen in its words. ✕
+and the edge swipe zoom it back. A Release build without SP-4d's relay, and the field under `-vf-mock`, show the
+honest screen exactly as before: item 373's gate stands OPEN.
+- When the page cannot be made because the mesh has no runtime: "Can't reach ‹desktop›" with "It isn't
+  answering.", and the honest screen's own act (for a page hosted on claude.ai, "Open in claude.ai"). The next
+  open asks the desktop again.
+
+**The seams.**
+- `AppsOpenFace` is the face each phase of the open model gives, pure; a phase of another app gives the icon.
+  `AppsOpenScreen` draws it through `AppsAppScreen`, which takes an optional face, page and Reload, and with none
+  draws as before; ··· gains Reload while a page stands.
+- `AppsWebPage`, wholly inside `#if DEBUG || VF_WEB_RELAY`, makes SP-4's host when the page stands and lets it go
+  when it leaves. Its only way out is its own filtering front (item 522): at each load it makes the front's dials
+  from the mesh (`AppsFrontDials.from`, item 522's), the app's origin over the mesh node's own dial and a declared
+  host by the system's own connection. A failed load, or a front that stops listening, makes the page and its
+  front once more (`AppsPageRetry`); a second failure, or a content process that ends twice, falls to the honest
+  screen (`AppsPageFall`, `AppOpenModel.pageFell`). A link the page may not keep opens in Safari.
+- No dials, by which path: `AppsFrontDials.from` gives nil while `mesh.urlSessionProvider` is nil (no runtime);
+  `FieldWebAppHost.open` then throws `Failure.noProxy` before any web view is made; `AppsWebPage.load()` catches it
+  as `onFall(.noProxy)`; the home passes the fall to `AppOpenModel.pageFell`, whose refused phase draws
+  `.noProxy`'s words ("Can't reach ‹desktop›", "It isn't answering.") on the honest screen.
+- Why the screen holds the mesh and not the dials: the dials' types (`WebFrontDials`, FieldWeb's front) compile
+  only under the web host's gate, while `AppsOpenScreen` and the home compile in every build. So the screen holds
+  the `MeshModel`, and the gated page makes the dials from it, again at each load.
+
+**The rows.**
+- FieldHomeTests' `AppsOpenScreenTests` ("MA-5b-1 — the open app"), eight. Five are written red against the
+  stubs `87739f0c6` adds and green against `eebf9c0f1`'s code (the runs below say how they ran): the icon, the late
+  words, the page and a refusal; another app's phase never drawn; one more page and front, then the fall; each fall's
+  words; a fall that lets the kept answer go.
+- The no-dials path, row by row: "the way out is the front's dials over the mesh node; a mesh with no runtime
+  gives none, so no page" (FieldHomeTests, gated, written green from `87739f0c6`) holds `from` giving nil;
+  FieldWebTests' "R8: a dead dial fails the load; no dials, no web view; …" (item 522's) holds `open(dials: nil)`
+  throwing `noProxy`;
+  "each fall in its words…" holds `.noProxy`'s words; "a serving page that falls says why, and the next open asks
+  the desktop again" holds the refused phase and the next open, for an `.unreachable` fall (`pageFell` reads the
+  fall only for its words). No row holds the joins between them: the catch in `AppsWebPage.load()`, the page's
+  `onFall` through `AppsOpenScreen`, and the home's `onFall` into `pageFell`. They are views' code, and no row
+  mounts a view.
+
+**Proved.**
+- The cut (11:49:54Z to 11:50:11Z, 2026-11-18) was one chain of eleven commits on train 10's add-on top
+  `413d0391390e`: ten picked from their pieces' earlier cuts and item 524's one made from files prepared
+  beforehand, each through the repository's pre-commit hook, each commit's tree held equal to a tree staged
+  beforehand, a pick's message and author its earlier cut's. This slice's two are the chain's sixth and seventh,
+  `c05b2d04` and `01d565ed` (`87739f0c6`'s and `eebf9c0f1`'s patches), on item 524's commit `c20e382c`, picked from
+  `8b033aca` and `52bd5a54` (cut 05:45:43Z to 05:45:44Z on item 522's front's earlier cut `7859af4d`; those two stay a
+  record). The green's pick met the train's rewording of two comment lines beside its own: item 533's in
+  `AppsOpen.swift`'s head, item 513's in `HomeScreen.swift`'s comment over the app's screen. There, files prepared
+  beforehand kept the train's lines and laid this commit's change in, so its added lines are its earlier cut's.
+  It ran no test.
+- `c05b2d04` on the cut (`87739f0c6`'s patch), on the test Mac's simulator, FieldHomeTests (web-ma5b1-red, ended
+  12:14:31Z): it compiled, xcodebuild exit 65; of 848 rows, 843 passed and 5 failed, ma5b1r-kit-red's five stub
+  reds by name; the gated no-dials row passed. Of its 16 recorded issues, 15 are "Expectation failed" and one is
+  the row's own `Issue.record` at `AppsOpenScreenTests.swift:113` (the serving page's fall), as at the earlier
+  cut. Item 538's row did not fail.
+- `42a22a77`, the chain's tip, on the test Mac's simulator, every test target, the rig's per-run test identity given
+  (web-kit-top, ended 12:21:08Z): xcodebuild exit 0; of 3,134 rows, 3,131 passed, 3 skipped (the two Workspace loopback
+  rows and SP-7a W1, skipped at the earlier cuts' top runs too) and none failed. The eight MA-5b-1 rows passed, and R4
+  and R8 with them. The train's words row passed ("KitWordsNameNoOneTests: 752 files read, 40 walked"), with this
+  slice's comment lines in it. The rig's listen guard read 61 listen lines on loopback, 0 off. `01d565ed` (`eebf9c0f1`'s
+  patch) is not run at its own id; the tip's run holds its rows.
+- On the development Mac, on the cut (the run's folder `chain/rows-pc/`): `check:web-markers` at `c05b2d04` and
+  `01d565ed` (`87739f0c6`'s and `eebf9c0f1`'s patches), 0 findings, its self-test 24 of 24, item 524's commit under
+  them. Before the cut, on the staged tree equal to the tip's, the guard as it stood before item 524's commit finds the
+  host named on three lines of `AppsWebPage.swift` (27, 69, 75), exit 1.
+- `8b033aca` (`87739f0c6`'s earlier cut), on the test Mac's simulator, FieldHomeTests (ma5b1r-kit-red, ended
+  05:55:55Z): it compiled, xcodebuild exit 65; of 818 rows, 812 passed and 6 failed. Five were this slice's stub
+  reds, as meant ("asked: the icon alone…", "another app's phase is never drawn…", "a failed load makes the page
+  and its front once more; the second falls", "each fall in its words…", "a serving page that falls says
+  why…"); the gated no-dials row passed. The sixth, "the face flies only once the new spark's row says where its
+  face is…", is item 538's: its suite repeated once alone at the same commit (NewSparkCreateTests,
+  ma5b1r-kit-538, ended 05:58:25Z), 8 of 8 passed, that row among them.
+- `52bd5a54` (`eebf9c0f1`'s earlier cut), on the test Mac's simulator, every test target, the rig's per-run test
+  identity given (ma5b1r-kit-top, ended 06:02:42Z): xcodebuild exit 0; of 3,053 rows, 3,050 passed, 3 skipped
+  (the two Workspace loopback rows and SP-7a W1, none of this slice's) and none failed. The eight MA-5b-1 rows
+  passed, and R4 and R8 with them. The rig's listen guard read 61 listen lines, all on loopback.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- Nothing was installed on a phone, and no page was looked at on a screen. The device rows are owed: an app opened
+  from the strip and from the shelf; ✕ and the edge swipe; a trip to the background and back (the dials made
+  again); an app on a sleeping desktop; a mesh with no runtime.
+- `pnpm gate:landing` not run (owed).
+- No still of a served page: it needs a fixture page and a stand-in for the dials.
+- Not built: the row's fold on scroll, the warm page kept for ten minutes, the opening words held over the page
+  until its first paint, and ···'s Keep, Versions, Open on ‹desktop› and Copy link.
+- The store stays ephemeral (`WebAppStore.chosen`). The markers of words still owed stand as SP-4 and MA-5 left
+  them; none was added.
+
+## Item 523 — a made app's link out asks first, and only after your touch, on the phone in a Debug build (M430)
+
+(2026-11-18; four commits, in order: `f6ab2ef7b` (doc, "523 (doc): an app's link out asks first, and only after your
+touch — DESIGN.md §8 and §9"), `99882d2ea` (red, "523 (red): an app's link out asks first, after your touch — the rules
+and ‹site›, rows first"), `b7a0780b3` (green, "523 (green): an app's link out asks first, after your touch — one ask per
+touch, its site named") and `37d574ec5` (notice, "523 (notice): the phone's acknowledgements list the Public Suffix List
+it now carries"). They land on MA-5b-1's commits. The first cut (`9f20c0467aff`, on MA-5b-1's first cut) and the
+re-cut on MA-5b-1's re-cut (below) stay a record; the first cut's green met MA-5b-1's re-cut in two files, joined
+by hand.)
+
+**What a person sees.** In a Debug build, on an app's page that MA-5b-1 opens: a link to a site outside the app no
+longer goes to Safari at once. It asks first, with the system's confirmation, "Open ‹site› in Safari?" over "‹app›
+is opening a page outside VibeField.", with Open in Safari and Cancel (DESIGN.md §8 "The open app", §9 "Apps").
+Cancel leaves the page as it was.
+- It asks only on an unspent touch of the person's: a finger down, or lifted under a second ago. A page's own link
+  with no touch does nothing; one touch brings at most one ask, whatever its answer; while one ask stands, the page
+  raises no other.
+- ‹site› is the link's registrable domain by the Public Suffix List, a name not plain ASCII in its xn-- form, an
+  address as written. A name the encoder cannot write is no site, and that link out is dropped.
+- A Release build without SP-4d's relay behaves as before: the page and the touch watcher stand inside the web
+  host's gate. It does carry more: `AppsLinkOut` and `AppsSite` compile in every build (nothing outside the gated
+  page calls them), and the suffix list (341,839 bytes, a FieldHome resource) and its acknowledgement ship in it.
+- The phone's acknowledgements list the Public Suffix List (MPL-2.0), which the app now carries.
+
+**The seams.**
+- `FieldHome/Apps/Open/AppsLinkOut.swift` (new): one ask per touch, its window (`touchWindow`, 1 s: the code's
+  own reading of how long WebKit carries a tap's gesture forward, not measured) and the ask's words.
+- `AppsSite.swift` (new): ‹site› from the list, carried unchanged in FieldHome's Resources
+  (`public_suffix_list.dat`, its VERSION 2026-11-16_22-30-55_UTC), with its own RFC 3492 encoder. The list's
+  refresh is owed.
+- `AppsTouchWatcher.swift` (new, inside the gate): notes when a touch began and the last finger lifted, keeps no
+  point, view or target, never takes a touch, and fails after the lift.
+- `AppsWebPage.swift` (`b7a0780b3`): the watcher on the host's web view, the ask as a confirmation dialog, and the
+  `.outside` event guarded by `AppsSite.of` and the unspent touch. Its load is MA-5b-1's, unchanged: the front's
+  dials from the mesh. `AppsOpenScreen.swift` (`b7a0780b3`) hands the page the app's title for the ask's line.
+- `scripts/third-party-notices.mjs` (`37d574ec5`): `IOS_VENDORED` gains the list as an asset under MPL-2.0;
+  `apps/ios/App/Resources/acknowledgements.json` is regenerated, one new part and one new text.
+
+**The rows.**
+- FieldHomeTests' `AppsLinkOutTests` ("523 — an app's link out asks first, after your touch"), thirteen, in
+  `99882d2ea`, with its stubs; the run at the red, below, says which were red.
+
+**Proved.**
+- The cut (11:49:54Z to 11:50:11Z, 2026-11-18) was one chain of eleven commits on train 10's add-on top
+  `413d0391390e`: ten picked from their pieces' earlier cuts and item 524's one made from files prepared
+  beforehand, each through the repository's pre-commit hook, each commit's tree held equal to a tree staged
+  beforehand, a pick's message and author its earlier cut's. This item's four are the chain's eighth to eleventh,
+  `d4cfa2d9`, `839c756c`, `75e5fb3f` and `42a22a77` (`f6ab2ef7b`'s to `37d574ec5`'s patches), on MA-5b-1's green
+  `01d565ed`, picked clean from the re-cut's `d7cb08e8`, `069f4d2e`, `132cb9e6` and `625e54ac` (below). It ran
+  no test.
+- `839c756c` on the cut (`99882d2ea`'s patch), on the test Mac's simulator, FieldHomeTests (web-523-red, ended
+  12:17:16Z): it compiled, xcodebuild exit 65; of 861 rows, 850 passed and 11 failed, all eleven among this
+  item's thirteen and by name i523r-kit-red's eleven; its two that want no ask passed, and MA-5b-1's eight. Each
+  failed on an expectation (30 issues recorded, each "Expectation failed"). Item 538's row did not fail.
+- `42a22a77` on the cut (`37d574ec5`'s patch), the chain's tip, on the test Mac's simulator, every test target, the
+  rig's per-run test identity given (web-kit-top, ended 12:21:08Z): xcodebuild exit 0; of 3,134 rows, 3,131 passed, 3
+  skipped (the two Workspace loopback rows and SP-7a W1, skipped at the earlier cuts' top runs too) and none failed.
+  This item's thirteen passed, MA-5b-1's eight, and R4. The train's words row passed ("KitWordsNameNoOneTests: 752 files
+  read, 40 walked"). The rig's listen guard read 61 listen lines on loopback, 0 off. `d4cfa2d9` and `75e5fb3f` are not
+  run at their own ids; the tip's run holds the green's rows. On this Mac, native biome check on the notice's script and
+  file in `42a22a77`'s tree, exit 0, "Checked 1 file" (the acknowledgements file stands under `apps/ios/biome.jsonc`,
+  which turns biome off there), after a control that failed (the run's folder `chain/rows-pc/`).
+- The re-cut (06:11:33Z to 06:11:36Z, 2026-11-18) made `d7cb08e8`, `069f4d2e`, `5305bde1` and `fce01c76` (`f6ab2ef7b`'s
+  to `37d574ec5`'s patches) on MA-5b-1's re-cut `52bd5a54`, from files prepared and summed beforehand, each held to its
+  parent, its message and its blobs. The doc, red and notice commits carry the first cut's own blobs, their
+  parents' files byte-equal at both bases; the green carries the first green's but `AppsWebPage.swift` and
+  `AppsOpenScreen.swift`, joined by hand and read against both parents' versions. Each commit went through the
+  repository's pre-commit hook (the committed rows' check, passed four times) and the cut's own sweep of its
+  message and added lines (0 each). It ran no test.
+- The green's message was then re-made (06:31:53Z to 06:31:54Z): its one sentence saying a Release build was
+  unchanged now says what ships in every build. The green and the notice were made again on `069f4d2e` from their
+  own paths, through the hook, as `132cb9e6` and `625e54ac` (`b7a0780b3`'s and `37d574ec5`'s patches), each held to its
+  parent, its message and its tree: `132cb9e6`'s tree is `5305bde1`'s (`b105e9c6`), `625e54ac`'s is
+  `fce01c76`'s (`ea991314`). The doc `d7cb08e8` and the red `069f4d2e` stand as cut. The four picked into the
+  chain are `d7cb08e8`, `069f4d2e`, `132cb9e6` and `625e54ac`; `5305bde1` and `fce01c76` stay a record.
+- `069f4d2e` (`99882d2ea`'s re-cut), on the test Mac's simulator, FieldHomeTests (i523r-kit-red, ended
+  06:14:36Z): it compiled, xcodebuild exit 65; of 831 rows, 819 passed and 12 failed. Eleven were this item's
+  stub reds, as meant; its two that want no ask passed ("no touch since the page opened…", "a link out past the
+  second after the lift…"), and MA-5b-1's eight passed. The twelfth, "the face flies only once the new spark's row
+  says where its face is…", is item 538's: its suite repeated once alone at the same commit (NewSparkCreateTests,
+  i523r-kit-538, ended 06:16:27Z), 8 of 8 passed, that row among them.
+- `fce01c76` (`37d574ec5`'s re-cut, tree `ea991314`, `625e54ac`'s, so the run stands for `625e54ac` by tree equality),
+  on the test Mac's simulator, every test target, the rig's per-run test identity given (i523r-kit-top, ended
+  06:20:15Z): xcodebuild exit 0; of 3,066 rows, 3,063 passed, 3 skipped (the two Workspace loopback rows and SP-7a
+  W1, none of this item's) and none failed. This item's thirteen passed, MA-5b-1's eight, and R4. The rig's
+  listen guard read 61 listen lines, all on loopback.
+- On the first cut, as evidence for what the re-cut keeps byte for byte, on the test Mac:
+  - `0f193dd7` (the first red; i523-red-1, ended 23:08:41Z on 2026-11-17): its thirteen rows, eleven failed and
+    two passed, as meant.
+  - `3890785e` (the first green; i523-green-1, ended 04:40:07Z on 2026-11-18): of 3,028 rows, 3,024 passed, 3
+    skipped and 1 failed, FieldWebTests' R4, main's own before item 522's front (sp4-ma5-kit-1 at `8064bbdec`);
+    the thirteen passed.
+  - The notice's generator run on the first cut, whose notice files, kit pins (both `Package.resolved` files),
+    script and notices' tests are byte-equal to the chain tip's; the kit's `Package.swift`, which the generator
+    also reads, differs at the tip only in two comment lines the train rewrote (i523-notice-1, at `3890785e` with
+    the notice's script, blob `13013c19`, laid on, ended 04:54:24Z): `node scripts/third-party-notices.mjs --ios
+    --checkouts <the kit's checkouts> --artifacts <its artifacts>`, exit 0, "145 components, 117 distinct licence
+    texts, 2 skipped, 0 errors, 0 gaps"; against the committed file, components 144 to 145 and texts 116 to 117,
+    every old one byte-equal; biome on the script, no fixes; `check:ios-fixtures`, 460 copies identical; the
+    notices' tests, 28 of 28.
+- The phone build on the train's top:
+  dev-train10d, the Debug device build at the train's top `054fa4efb` (its `apps/ios` tree `a612bfe39aad`) on the test
+  Mac, under Xcode 27.3, 2026-11-18 17:42:42Z → 17:46:22Z: **GREEN**; the build for a generic iOS device, unsigned,
+  exited 0 in 39 s with no error line, and the kit's seventeen test targets type-checked for the device (each swiftc
+  exit 0, after a control the compiler refused; not run). Nothing was installed on a phone.
+- The train's verify:
+  v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z → 13:17:48Z:
+  **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step, between
+  lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d, ended
+  13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item 522),
+  passes from this train on.
+
+**Not run, and owed.**
+- Nothing was installed on a phone. The ask has not been seen on a screen, nor a real tap's gesture carried to a
+  link out: the device rows are owed (a tapped link out, a page's own link with no touch, Cancel, Open).
+- `pnpm gate:landing` not run (owed).
+- The Public Suffix List's refresh is owed: it ships as the 2026-11-16 list until refreshed by hand.
+- WebKit's display rule for international names is not restated: ‹site› is the xn-- form.
+- What every build now carries, measured on the files and not on a built app: the suffix list, 341,839 bytes;
+  `acknowledgements.json`, 391,265 to 391,960 bytes (+695); and `AppsLinkOut` and `AppsSite` compiled (2,459 and
+  7,597 bytes of source). Item 541's fence does not look for the list: it is no marker.
+
+## Item 552 — a drive pulls row counts the subscribes fieldd made, not the ones the floor has read (M431)
+
+(2026-11-18; two commits, in order: `88a954cf6` "552 (red): a wait on the floor's count passes", `054fa4efb` "552
+(green): the drive pulls' waits count". Cut on `413d0391390e` (fixer/train10c-on-8064bbdec) as `9100c2ade` and
+`3aa548453`, branch `dr/i552b-on-train10c`: one file, `packages/fieldd/test/drive-pulls.test.ts`, +72 −4. `88a954cf6`
+and `054fa4efb` carry the cut patch-equal. `054fa4efb`'s earlier cut, `2c0dd29eb`, has the same tree (`9d0748c4`) and
+parent; it was re-made only to make one bullet of its message exact. It and the red stand as records for their runs,
+`dr/i552-on-train10c` and `dr/i552-red-on-train10c`. Every other commit id here is the cut's, a run's own, or a commit
+read for the history: `fa6c1ea15e8b` (the base of item 542's tip) and `77ebc145d` (on main, where the wait came in).)
+
+**What a person sees.** Nothing; no product file changes. A test row of the drive's pulls read one ask more than it
+had counted, once, in a whole verify. By the reading below, the product had asked only while a pull was held. The
+row's wait read a count that can lag the product's by one socket read.
+
+**The red that opened it.** `v-i542d`: `pnpm verify` whole on the test Mac at `d7b7bbe6e702`, exit 1, from 11:50:36Z
+to 11:57:54Z. That tip is item 542's, on `fa6c1ea15e8b`, and changes only `plugin-settings.ts`, `child-stdin.test.ts`
+and `secret-store-child.test.ts`.
+- fieldd's vitest read "Tests 1 failed | 4612 passed | 15 skipped (4628)". The one failure is the DR-3b row "ends
+  every held pull FAILED_TIMEOUT at its bound when each retry is refused, asks only while one is held, and a pull a
+  bound's row refuses asks for the stream" (3350 ms): `AssertionError: expected 65 to be 64 // Object.is equality` at
+  `test/drive-pulls.test.ts:901:36`, the count read after the row's quiet.
+- The run's minute samples of the 1-minute load read 1.93 to 6.57 (`mem.log`).
+- The same row passed in three other whole verifies on the test Mac, whose trees hold the same blobs of the five
+  files read below: `v-train10c` at `413d0391390e` (3417 ms), `v-i519` at `e7e853bbda7e` (3427 ms) and `v-join-g8`
+  at `a61bdf174656` (3420 ms).
+
+**What the row read, and why.** This is a reading of the code (lines at `413d0391390e`, where the five files are the
+same blobs as at `fa6c1ea15e8b`); no run reproduced the order.
+- The 65th subscribe was the series' last attempt, made while the last held pull was still held (`#holding()`,
+  `src/drive/pulls.ts:807`). NativeLink writes the request in that same run (`src/native-link.ts:1495`).
+- The mock floor (`MockMgmtServer`) counts an ask only as it reads the line (`src/testing/mock-mgmt.ts:933`), a
+  later I/O turn.
+- On a stalled loop, the series' timer, the last pull's bound and the row's 10 ms poll can fire in one wake, with no
+  I/O turn between them. The row then runs on in microtasks to its wait (`:892` to `:895`), and `until` reads its
+  predicate before it first sleeps (`test/drive-fakes.ts:480`). It read 63 refusals against the floor's count of 64,
+  one less than fieldd had made, so it passed. The count read 64, and the floor then read the 65th: 65 at `:901`.
+- Once no pull is held, no timer asks until a pull that a bound's row refuses asks for the stream (`#askForForeign`,
+  `pulls.ts:831` to `:834`), which the row makes only after its count at `:901`. The last bound clears the series'
+  timer (`pulls.ts:1195`), and `#follow` clears it at each subscribe's end with none held (`:788` to `:790`). The row
+  "clears the series' timer at the last bound and not before, so no ask is left behind" holds that clear with no
+  socket, and it passed in `v-i542d`.
+- So the row's title held, and its wait did not. The wait came in with DR-3b fold 4 (`77ebc145d`, 2026-11-07). At
+  `413d0391390e` it was the file's one wait of that form (a sweep for `subscribeRefused).length`); `88a954cf6` adds a
+  second, in its new row, and `054fa4efb` changes both.
+
+**What landed.**
+- `88a954cf6` gives the rows' wrapper over the link (`countedFloor`, the floor fieldd is handed) `holdNext()`, `held()`
+  and `release()`. After `holdNext()`, the next subscribe is counted in `made` and held before it is written, until the
+  row releases it.
+- `88a954cf6` adds a row beside DR-3b's, "ends the last held pull at its bound with an attempt still in flight, and once
+  that attempt is refused asks nothing more":
+  - every subscribe is refused, so no stream stands. A pull accepted then is held, and makes its own ask in that same
+    run (`#accept`, `pulls.ts:1014` to `:1015`, the same blob at the top and the cut). That ask is the one held,
+    unwritten;
+  - one subscribe is in flight at most, so the pull ends FAILED_TIMEOUT at its bound with that one still held, and no
+    other made;
+  - the row releases it and waits as the DR-3b row did, refusals against the floor's count. It reads the floor's
+    count, and after a ping and the series' delay many times over holds it unchanged, at the two asks made (the
+    start's and the pull's).
+- `054fa4efb` has both rows wait until every subscribe fieldd made (`counted.made()`) is refused, the DR-3b row's
+  answered start aside, and then hold that the floor's count equals fieldd's.
+- `054fa4efb`'s change to the DR-3b row's comment is the dated correction at its source. The comment said every refusal
+  is waited for before the count is read; it now says what the wait counts and why (item 552, 2026-11-18). `054fa4efb`
+  rewrites the new row's comment at its release the same way.
+- Nothing under `packages/fieldd/src` changes.
+
+**Why the red is certain, not likely.** In the tree of `9100c2ade` on the cut (`88a954cf6`'s patch), the new row runs
+only synchronous code and microtasks between the release and its read of the count. The release queues the write;
+`until` reads its predicate at its call (1 refusal against 1 ask read); and the floor can read the write only in an I/O
+turn. So the wait passes with the count at 1. The ping's answer comes only after the floor has read every line written
+before it, so the count after the ping is 2. No timer and no load decides that order. In the tree `9d0748c4`
+(`3aa548453` on the cut, `054fa4efb`'s patch, and `2c0dd29eb`), the wait holds until the held ask is refused, one round
+trip.
+
+**Proved on the development Mac, nothing of record.**
+- fieldd's typecheck ran at each commit's own tree, in the lane, under the light lock (`tc-552`, 12:42:13Z to
+  12:42:53Z). `tsc --noEmit` read exit 0 at `2c0dd29eb` (the tree `9d0748c4`, `054fa4efb`'s patch) in 20 s, and at
+  `9100c2ade` on the cut (`88a954cf6`'s patch) in 19 s, each log empty. The 1-minute load read 8.83 to 9.47.
+  - fieldd's tsc reads each workspace package by its sources in the checked-out tree: each exports `./src/*.ts`, and
+    contracts' `./tools` is `gen/tools.ts`, tracked.
+  - It reads the registry and sibling packages from the lane's install, made at `fa6c1ea15e8b`. `pnpm-lock.yaml` and
+    `siblings.lock.json` are the same blobs there as at the cut.
+- Before the cut, the file was laid into the lane's tree at `58674eb3e` (`dr/i502-on-train10b`), its sum equal to the
+  blob the cut then committed at `9100c2ade` and in the tree `9d0748c4`. It was then put back, porcelain 0.
+  - The repo's native biome over the path read "Checked 1 file … No fixes applied", exit 0, at each state. biome
+    reads the file and `biome.jsonc`, the same blob there as at the cut. The 1-minute load read 8.06 to 8.77, then
+    8.42 to 13.31.
+  - A typecheck there read exit 0 too. That tree differs from the cut's in 371 files, so it is not the commits' own;
+    the two above are.
+- No test file ran here: fieldd's vitest runs `cargo build -p field-native` in its global setup.
+
+**Proved red, on the test Mac.** `i552-red` (2026-11-18 12:35:29Z to 12:36:12Z): the file alone at `9100c2ade` on
+the cut (`88a954cf6`'s patch), the branch `dr/i552-red-on-train10c`, in a tree found detached and clean and returned as
+found, with no ref written. It read "Tests 1 failed | 82 passed (83)" in 43 s.
+- The one failure is the new row's (540 ms), by `AssertionError: expected 2 to be 1 // Object.is equality` at
+  `test/drive-pulls.test.ts:976:36`, the count after the ping. No other error kind, missing module or timeout.
+- In the same run, the DR-3b row passed at its old wait (3424 ms).
+
+**Proved green, on the test Mac.** `i552-green-1`, `-2` and `-3`, three separate runs of the file alone at
+`2c0dd29eb` (`054fa4efb`'s earlier cut, the same tree `9d0748c4` as `3aa548453` on the cut), the branch
+`dr/i552-on-train10c`. Each ran in a tree found detached and clean and returned as found, with no ref written.
+- The runs: 2026-11-18 12:37:23Z to 12:38:00Z, 12:38:54Z to 12:39:30Z, and 12:40:26Z to 12:41:02Z.
+- Each read "Tests 83 passed (83)", in 31, 32 and 31 s.
+- The new row took 538, 537 and 535 ms; the DR-3b row 3426, 3423 and 3421 ms.
+
+**The train's verify.** This piece has no verify of its own; the train's is its whole proof:
+
+- The train's V: v-train10d, `pnpm verify` whole at the train's top `054fa4efb` on the test Mac, 2026-11-18 13:07:49Z →
+  13:17:48Z: **GREEN**, exit 0 in 598 s; sixteen steps run (fifteen print a header; `cargo fmt --check` is its own step,
+  between lint and lint:rust, and prints none); 27 suites passed. The kit of every target at the same top, kit-train10d,
+  ended 13:21:02Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0; FieldWebTests' R4 row, which failed on main (item
+  522), passes from this train on.
+
+**Not covered, and owed.**
+- The new row holds a pull's own first ask, not a series' retry. The state at the count is the same: an ask made and
+  unread.
+- That the race is gone is shown by the new row, red at `9100c2ade` and green in the tree `9d0748c4` (above), by the
+  order of its own code. It is not shown by a count of whole verifies, and no such count is claimed.
+- Which ask was the 65th is a reading of the code; no run reproduced the stalled wake.
+- The DR-3b row's series still runs the whole bound and reads its upper count. The new row reads no series.
+- `pnpm gate:landing` not run (owed).
