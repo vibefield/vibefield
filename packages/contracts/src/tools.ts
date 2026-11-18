@@ -88,7 +88,9 @@ export const TOOL_SLICES = ["CP-1", "CP-2", "CP-3", "CP-4", "OB-3", "EY-2"] as c
 export type ToolSlice = (typeof TOOL_SLICES)[number];
 
 /** The facts a refusal names in its `fact`, so the model can act on it (the study's §8). The first eight are the
- * ones fieldd answers today. The pages room's eight follow (EY; `draft/thinking-agents-eyes.md`, its facts table):
+ * ones fieldd answers today. fieldd's plane reads this list beside the desk room's own, OBJECT_FACTS (`objects.ts`,
+ * OB-3b), which already says four of the pages room's words: not-handed, held, gone and needs-you. The pages room's
+ * eight follow (EY; `draft/thinking-agents-eyes.md`, its facts table):
  * - `gone` is a pane that closed or a page that was replaced. It is not the app quitting: a grant is kept across a
  *   quit (EY-D9 B). While the app's window is down, a page answers `unavailable`.
  * - `held` answers reads and stills as well as acts (BU-9 A). */
