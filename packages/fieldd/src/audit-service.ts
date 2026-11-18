@@ -298,6 +298,19 @@ export class AuditService extends EventEmitter {
     });
   }
 
+  /**
+   * A revocation (item 526, 2026-11-18): an act that ends what someone was given, never one that gives. For now it is
+   * written as `required` is.
+   */
+  async revoke<T>(
+    ctx: CallerContext,
+    mutation: AuditMutation,
+    effect: () => Promise<T> | T,
+    describeOutcome?: (value: T) => AuditMutationOutcome,
+  ): Promise<T> {
+    return await this.requiredAs(ctx, mutation, effect, describeOutcome);
+  }
+
   close(): Promise<void> {
     return this.serial(async () => {
       if (this.closed) return;

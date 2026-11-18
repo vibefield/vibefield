@@ -4,7 +4,11 @@ import { METHODS, ObjectsTakeBackResult, TAILNET_SCOPES } from "@vibefield/contr
 import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DeskObjects } from "../src/objects/desk-objects";
-import { type ObjectDoorsApi, registerObjectDoors } from "../src/objects/doors";
+import {
+  type ObjectDoorsApi,
+  type ObjectDoorsAudit,
+  registerObjectDoors,
+} from "../src/objects/doors";
 import type { ToolPlaneAudit } from "../src/tool-plane";
 import { cleanupWorlds, DOC, type Survivor, world } from "./desk-fixtures";
 
@@ -44,24 +48,24 @@ function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk) {
   const rows = new Map<string, Handler>();
   const subs = new Map<string, SubHandler>();
   const audited: unknown[] = [];
-  const audit: ToolPlaneAudit = {
-    required: async (ctx, mutation, effect, describe) => {
-      // the real writer refuses an action outside the audit's own grammar: the fake holds the door to it as well
-      AuditActionV1.parse(mutation.action);
-      const value = await effect();
-      const described = describe?.(value);
-      audited.push({
-        action: mutation.action,
-        target: mutation.target,
-        attrs: mutation.attrs,
-        principal: ctx.principal,
-        outcome: described?.outcome,
-        // what the act added to its line once it was done
-        after: described?.attrs,
-      });
-      return value;
-    },
+  const record: ToolPlaneAudit["required"] = async (ctx, mutation, effect, describe) => {
+    // the real writer refuses an action outside the audit's own grammar: the fake holds the door to it as well
+    AuditActionV1.parse(mutation.action);
+    const value = await effect();
+    const described = describe?.(value);
+    audited.push({
+      action: mutation.action,
+      target: mutation.target,
+      attrs: mutation.attrs,
+      principal: ctx.principal,
+      outcome: described?.outcome,
+      // what the act added to its line once it was done
+      after: described?.attrs,
+    });
+    return value;
   };
+  // the fake's revoke records as its required does (item 526)
+  const audit: ObjectDoorsAudit = { required: record, revoke: record };
   const api: ObjectDoorsApi = {
     register: (method, handler) => rows.set(method, handler as Handler),
     registerSubscription: (method, handler) => subs.set(method, handler as SubHandler),

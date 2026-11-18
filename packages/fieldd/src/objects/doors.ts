@@ -23,10 +23,30 @@ import type { DeskObjects } from "./desk-objects";
 // already stale. A take-back answers `taken: true` whatever the disk said, with `kept: false` beside it when the
 // grants file does not hold it yet. Its audit line names the holders it took the object from (holders are no
 // secret), so that whoever reads the line can see when fieldd took it back from more than the one named.
+// Item 526 (2026-11-18): a take-back goes through the audit's `revoke`, the act that ends a grant, never one that gives;
+// a hand and an undo stay `required`.
+
+/** The audit the doors call (audit-service.ts): `required` for an act that gives or changes, `revoke` for one that
+ * ends a grant. */
+export interface ObjectDoorsAudit extends ToolPlaneAudit {
+  revoke<T>(
+    ctx: CallerContext,
+    mutation: {
+      action: string;
+      target: { kind: string; id: string };
+      attrs?: Record<string, string | number | boolean>;
+    },
+    effect: () => Promise<T> | T,
+    describeOutcome?: (value: T) => {
+      outcome?: "succeeded" | "failed" | "denied";
+      attrs?: Record<string, string | number | boolean>;
+    },
+  ): Promise<T>;
+}
 
 export interface ObjectDoorsDeps {
   readonly objects: DeskObjects;
-  readonly audit: ToolPlaneAudit;
+  readonly audit: ObjectDoorsAudit;
   /** a window's own token, by its id */
   isWindowToken(tokenId: string): boolean;
   /** the product API's stream floor on `objects.presence.subscribe` (tests) */
@@ -128,7 +148,7 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     const { ref, run } = parsed.data;
     objects.registry.readable();
     let holders: string[] = [];
-    return audit.required(
+    return audit.revoke(
       ctx,
       { action: "objects.take_back", target: target(ref), attrs: { run } },
       async (): Promise<{ taken: true; kept?: false }> => {
