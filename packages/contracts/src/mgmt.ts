@@ -101,6 +101,14 @@ export const ObservedTerminalCell = z
   .passthrough();
 export type ObservedTerminalCell = z.infer<typeof ObservedTerminalCell>;
 
+/** PS-D5 (2026-11-18) — what a pane's foreground is doing, as its terminal host samples it:
+ * ghosttea's `SessionActivity`, carried as its `kind` alone (`foreground-job`, `shell-idle`,
+ * `unknown`), so the row does not change at every sample. The kind is an open word: one this
+ * reader does not know still parses, and the monitor's one classifier reads every kind but
+ * `foreground-job` as idle. Named for the generator, as the cell tag is. */
+export const ObservedTerminalActivity = z.object({ kind: z.string() }).passthrough();
+export type ObservedTerminalActivity = z.infer<typeof ObservedTerminalActivity>;
+
 export const ObservedTerminal = z
   .object({
     creationId: z.string().optional(),
@@ -120,6 +128,11 @@ export const ObservedTerminal = z
      * husk's `true` as an exit, after the grace that lets the floor's own `session-exited`
      * carry the outcome first (AgentRuntime.handleInventory). */
     exited: z.boolean().optional(),
+    /** PS-D5 (2026-11-18) — the pane's activity, as the host last sampled it. ABSENT from a
+     * floor older than PS-D5 and wherever the host cannot say, so absence is silence, never a
+     * statement that the pane is idle. fieldd hands it to the monitor's host terminal, whose
+     * classifier draws `foreground-job` as working. */
+    activity: ObservedTerminalActivity.optional(),
     /** TC-S3 — the hosting cell. ABSENT on a pre-TC-S3 floor and in the
      * mesh-flagged in-process serve (there is no cell; tolerant readers fall
      * back to the legacy single-cell reading). */

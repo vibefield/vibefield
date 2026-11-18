@@ -203,6 +203,7 @@ import {
   ObservedStaleCell,
   ObservedState,
   ObservedTerminal,
+  ObservedTerminalActivity,
   ObservedTerminalCell,
   ObservedWorker,
   PeerInfo,
@@ -240,6 +241,9 @@ const BASE_SHARED = {
   TerminalRouteCell,
   TerminalRouteSnapshot,
   ObservedTerminalCell,
+  // PS-D5 (2026-11-18) — the row's activity, embedded by ObservedTerminal: named for the same
+  // typify reason as the cell tag beside it.
+  ObservedTerminalActivity,
   ErrorKind,
   UnavailableDetails,
   ErrorData,
