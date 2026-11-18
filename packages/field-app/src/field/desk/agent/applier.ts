@@ -30,7 +30,7 @@ import {
   type ObjectIntentAnswer,
   ObjectsPresenceSnapshot,
 } from "@vibefield/contracts";
-import type { FielddClient } from "@vibefield/fieldd-client";
+import { type FielddClient, reaskDelayMs, refusedForRoom } from "@vibefield/fieldd-client";
 import {
   type AgentHalf,
   agentActStillHolds,
@@ -39,6 +39,7 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { getActiveView } from "../../../frame/view-state";
 import { getRendererLogger } from "../../../logging";
+import { askAgain } from "../../../reconnect";
 import { agentHalfOf } from "../agent-kinds";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
 
@@ -556,6 +557,25 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
   };
 }
 
+const FEED_REFUSED = {
+  door: "The desk's agent door did not open",
+  presence: "The desk's presence feed did not open",
+} as const;
+const FEED_ENDED = {
+  door: "The desk's agent door was ended for good",
+  presence: "The desk's presence feed was ended for good",
+} as const;
+
+/** A refusal as the log keeps it: its kind, never its words. */
+const kindOf = (error: unknown): string =>
+  typeof error === "object" &&
+  error !== null &&
+  typeof (error as { kind?: unknown }).kind === "string"
+    ? (error as { kind: string }).kind
+    : error instanceof Error
+      ? error.name
+      : typeof error;
+
 /** One mounted desk's door: its intents carried out and answered, and the hand reported onto objects agents have open. */
 function startApplier(
   desk: MountedDesk,
@@ -571,25 +591,62 @@ function startApplier(
     if (disposed) off();
     else offs.push(off);
   };
+  // Item 521 (2026-11-18): a feed refused on its way is asked again while its desk stays mounted, so an open desk is
+  // never "not open" to an agent for want of one more ask. A refusal as the socket closed under the ask (`askAgain`) or
+  // for room (item 476) is asked again on the client's re-ask steps, and the ask waits for the client to be ready. One
+  // refused for good, or ended by the client, stands, and the log says it by its kind, never in fieldd's words.
+  const waits = new Set<ReturnType<typeof setTimeout>>();
+  const feed = (
+    name: "door" | "presence",
+    open: (onEnded: (error: unknown) => void) => Promise<() => void>,
+  ): void => {
+    let step = 0;
+    const ask = (): void => {
+      if (disposed) return;
+      void open((error) => {
+        log().warn(`renderer.desk.agent_${name}_ended`, FEED_ENDED[name], { kind: kindOf(error) });
+      }).then(
+        (off) => {
+          step = 0;
+          keep(off);
+        },
+        (cause: unknown) => {
+          const again = askAgain(cause) || refusedForRoom(cause);
+          log().warn(`renderer.desk.agent_${name}_refused`, FEED_REFUSED[name], {
+            kind: kindOf(cause),
+            again,
+          });
+          if (!again || disposed) return;
+          const wait = setTimeout(() => {
+            waits.delete(wait);
+            ask();
+          }, reaskDelayMs(step));
+          waits.add(wait);
+          step += 1;
+        },
+      );
+    };
+    ask();
+  };
 
-  void door
-    .intents(docId, (payload) => {
-      const intent = ObjectIntent.safeParse(payload);
-      if (!intent.success) {
-        log().warn("renderer.desk.agent_intent_unread", "A desk intent could not be read");
-        return;
-      }
-      void door.answer(applier.apply(intent.data)).catch((cause: unknown) => {
-        log().warn("renderer.desk.agent_answer_failed", "A desk intent's answer was not taken", {
-          cause: String(cause),
+  feed("door", (onEnded) =>
+    door.intents(
+      docId,
+      (payload) => {
+        const intent = ObjectIntent.safeParse(payload);
+        if (!intent.success) {
+          log().warn("renderer.desk.agent_intent_unread", "A desk intent could not be read");
+          return;
+        }
+        void door.answer(applier.apply(intent.data)).catch((cause: unknown) => {
+          log().warn("renderer.desk.agent_answer_failed", "A desk intent's answer was not taken", {
+            cause: String(cause),
+          });
         });
-      });
-    })
-    .then(keep, (cause: unknown) => {
-      log().warn("renderer.desk.agent_door_refused", "The desk's agent door did not open", {
-        cause: String(cause),
-      });
-    });
+      },
+      onEnded,
+    ),
+  );
 
   // the objects a run has open on this board, and which of those the person's hand is on
   let open: readonly string[] = [];
@@ -616,8 +673,8 @@ function startApplier(
     }
   };
   let guest: (() => void) | null = null;
-  void door
-    .presence((payload) => {
+  feed("presence", (onEnded) =>
+    door.presence((payload) => {
       const snapshot = ObjectsPresenceSnapshot.safeParse(payload);
       if (!snapshot.success) return;
       open = snapshot.data.objects
@@ -635,15 +692,13 @@ function startApplier(
         guest();
         guest = null;
       }
-    })
-    .then(keep, (cause: unknown) => {
-      log().warn("renderer.desk.agent_presence_refused", "The desk's presence feed did not open", {
-        cause: String(cause),
-      });
-    });
+    }, onEnded),
+  );
 
   return () => {
     disposed = true;
+    for (const wait of waits) clearTimeout(wait);
+    waits.clear();
     guest?.();
     guest = null;
     for (const off of offs) off();
