@@ -36,7 +36,12 @@ struct AppsLinkOut: Equatable {
 
   /// A link out: true to ask now, which spends the touch; false to drop it.
   mutating func asks(at now: ContinuousClock.Instant) -> Bool {
-    false  // RED: a stub, never an ask; the green asks on an unspent touch.
+    guard !asking, unspent else { return false }
+    let fresh = down || liftedAt.map { now - $0 < Self.touchWindow } ?? false
+    guard fresh else { return false }
+    unspent = false
+    asking = true
+    return true
   }
 
   /// The ask was answered, by either choice or by the sheet going away.
@@ -45,11 +50,10 @@ struct AppsLinkOut: Equatable {
   }
 
   /// The ask's words (DESIGN.md §9 "Apps", item 523).
-  // RED: stubs, no words; the green says DESIGN.md's.
-  static func title(site: String) -> String { "" }
-  static func line(app: String) -> String { "" }
-  static let open = ""
-  static let cancel = ""
+  static func title(site: String) -> String { "Open \(site) in Safari?" }
+  static func line(app: String) -> String { "\(app) is opening a page outside VibeField." }
+  static let open = "Open in Safari"
+  static let cancel = "Cancel"
 }
 
 /// A link out that asks: where it goes, and its ‹site›.

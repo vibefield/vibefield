@@ -38,8 +38,10 @@ struct AppsOpenScreen: View {
     #if DEBUG || VF_WEB_RELAY
       guard case .page(let url, let policy) = face else { return nil }
       return AnyView(
-        AppsWebPage(url: url, policy: policy, appId: app.appId, mesh: mesh, reloads: reloads, onFall: onFall)
-          .id(url))
+        AppsWebPage(
+          url: url, policy: policy, appId: app.appId, title: app.title, mesh: mesh, reloads: reloads, onFall: onFall
+        )
+        .id(url))
     #else
       return nil
     #endif

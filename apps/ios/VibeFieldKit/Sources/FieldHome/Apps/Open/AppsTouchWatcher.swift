@@ -15,7 +15,11 @@
       let watcher = AppsTouchWatcher(target: nil, action: nil)
       watcher.began = began
       watcher.lifted = lifted
-      return watcher  // RED: a stub with UIKit's defaults; the green takes no touch and delays none.
+      watcher.cancelsTouchesInView = false
+      watcher.delaysTouchesBegan = false
+      watcher.delaysTouchesEnded = false
+      watcher.delegate = watcher
+      return watcher
     }
 
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
