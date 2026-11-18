@@ -1048,7 +1048,8 @@ public final class FieldProductClient {
   /// One replay, and what its answer means for that subscription alone: an
   /// answer stands it up again; a refusal that may pass is asked again for it
   /// alone (`retryReplay`); any other refusal ends it on this client, in one
-  /// line of the log (`ReplayEnded`). Its owner is not told (item 540).
+  /// line of the log (`ReplayEnded`). Its owner is not told (item 540). A replay
+  /// the deadline ended is no refusal: it takes the socket down, as before.
   private func replayOne(key: Int, token: Int) async {
     guard let entry = subs[key] else { return }
     do {
@@ -1068,6 +1069,18 @@ public final class FieldProductClient {
         return
       }
       let refusal = Self.refusal(from: error)
+      // A replay the DEADLINE ended says the socket is suspect, not the board:
+      // it keeps the old rule and takes the socket down, which also releases
+      // whatever the door stood up for an answer it gives too late. Asked again
+      // on this socket instead, each late answer would stand on the door,
+      // unrouted, until the socket closed.
+      if refusal == Self.deadline(entry.method) {
+        record(refusal, for: token)
+        note("replaying \(entry.method) did not answer — re-dialing")
+        retireConnection()
+        socketDown(token: token, error: refusal)
+        return
+      }
       if refusal.retryable {
         note("replaying \(entry.method) was refused — asking again for it alone: \(refusal.message)")
         retryReplay(key: key, token: token)
@@ -1190,10 +1203,15 @@ public final class FieldProductClient {
   }
 
   private func timeOut(id: Int64, method: String) {
-    failOne(
-      id: id,
-      with: FieldProductError(
-        kind: "TIMEOUT", message: "\(method) did not answer", retryable: true))
+    failOne(id: id, with: Self.deadline(method))
+  }
+
+  /// What a call the door never answered is told: the client's own deadline
+  /// (`timeOut`). Item 477 (2026-11-18) — a replay knows it by this whole value,
+  /// never by its kind alone: a door may say TIMEOUT too, and that is a refusal
+  /// like any.
+  static func deadline(_ method: String) -> FieldProductError {
+    FieldProductError(kind: "TIMEOUT", message: "\(method) did not answer", retryable: true)
   }
 
   private func failOne(id: Int64, with error: FieldProductError) {
