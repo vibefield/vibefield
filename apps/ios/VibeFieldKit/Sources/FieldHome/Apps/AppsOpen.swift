@@ -3,7 +3,9 @@ import FieldProduct
 import Foundation
 
 // MA-6e — what opening an app lands on before MA-5 (Q1, decided 2026-11-09): the honest screen from the row's facts,
-// with Open in ‹host› when it has a hosted link, and About. The phone asks `artifact.open` nothing.
+// with Open in ‹host› when it has a hosted link, and About. Since MA-5b-1 the phone asks `artifact.open` in a build
+// that compiles the web host (`AppsOpenScreen`); this screen stands for every app that does not open there, and for
+// every build that does not.
 
 /// The screen an app zooms to while the phone cannot run it: its state's words and its one act (MA-L10).
 struct AppsHonest: Equatable {

@@ -143,6 +143,8 @@ public struct HomeScreen: View {
   private static let appsHere = "Your desktop"
   /// MA-6d — the door to the apps: the account's ledger, the drop, the pull and the first peek.
   @State private var appsDoor = AppsDoorModel(store: HomeScreen.appsCuesStore)
+  /// MA-5b-1 — the app opening on the phone: asked at the tap, drawn by the zoom, left at ✕ or the edge.
+  @State private var appOpen = AppOpenModel()
   /// A drag on Field: undecided (nil), the door's (true) or the swarm's (false), said once.
   /// The drag that is down on a tab: undecided (nil), the door's (true) or the page's own (false), said once.
   @State private var appsPulling: Bool?
@@ -1471,7 +1473,12 @@ public struct HomeScreen: View {
           zoom: appsZoom,
           // One app zooms open; a burst has no one app, so it opens the shelf.
           onOpen: {
-            if let key = drop.foldKey { appsDoor.zoom(key) } else { openAppsShelf() }
+            if let key = drop.foldKey {
+              appsDoor.zoom(key)
+              if let app = apps.reading.apps.first(where: { $0.foldKey == key }) { startOpen(app) }
+            } else {
+              openAppsShelf()
+            }
             appsDoor.dismissDrop()
           },
           onAway: { appsDoor.dismissDrop() }
@@ -1531,6 +1538,38 @@ public struct HomeScreen: View {
 
   private func openApp(_ app: IndexAppRow) {
     appsDoor.zoom(app.foldKey)
+    startOpen(app)
+  }
+
+  /// MA-5b-1 — the app's desktop is asked as its screen zooms open; where no app opens, nothing is asked.
+  private func startOpen(_ app: IndexAppRow) {
+    guard appsOpensHere else { return }
+    let sources = apps.reading.sources
+    let door = appsOpenDoor
+    Task { @MainActor in await appOpen.open(app, sources: sources, here: Self.appsHere, door: door) }
+  }
+
+  /// The person left the open app (✕, the edge): it zooms back into its icon.
+  private func leaveApp() {
+    appOpen.left()
+    appsDoor.unzoom()
+  }
+
+  /// MA-5b-1 — whether a tap opens the app itself: a build that compiles the web host (`AppOpenModel.opensApps`).
+  /// Under `-vf-mock` the honest screen stands as before 5b: the fixture door answers no `artifact.open`, and the
+  /// stills of an open app need a fixture page and a proxy stand-in (owed).
+  private var appsOpensHere: Bool {
+    #if DEBUG
+      if mock != nil { return false }
+    #endif
+    return appOpen.opensApps
+  }
+
+  /// MA-5b-1 — the door `artifact.open` is asked through, as the meters' is chosen: the home's own client while the
+  /// field is live; none otherwise, and the model says the desktop is out of reach.
+  private var appsOpenDoor: (any ChatDoor)? {
+    guard let link, let home = link.home, link.fieldIsLive, let client = link.client(for: home) else { return nil }
+    return client
   }
 
   /// §8: open, the bar steps aside.
@@ -1558,7 +1597,7 @@ public struct HomeScreen: View {
   }
 
   private var appsZoomShows: Binding<Bool> {
-    Binding(get: { appsDoor.zoomKey != nil }, set: { if !$0 { appsDoor.unzoom() } })
+    Binding(get: { appsDoor.zoomKey != nil }, set: { if !$0 { leaveApp() } })
   }
 
   private func appsAbout(_ app: IndexAppRow) -> AppsAbout {
@@ -1568,14 +1607,17 @@ public struct HomeScreen: View {
       projects: apps.reading.projects, here: Self.appsHere)
   }
 
-  /// The app's honest screen, before MA-5: it zooms out of the icon it was opened from.
+  /// The app's screen: it zooms out of the icon it was opened from, and draws the app opening (MA-5b-1) over its
+  /// honest screen.
   @ViewBuilder private var appsZoomScreen: some View {
     if let app = appsZoomApp {
       let sources = apps.reading.sources
-      AppsAppScreen(
-        app: app, honest: AppsHonest.of(app, sources: sources, here: Self.appsHere), about: appsAbout(app),
-        desktop: MadeAppFacts.desktop(MadeAppFacts.source(of: app, in: sources), here: Self.appsHere),
-        onClose: { appsDoor.unzoom() }
+      let desktop = MadeAppFacts.desktop(MadeAppFacts.source(of: app, in: sources), here: Self.appsHere)
+      AppsOpenScreen(
+        app: app, phase: appOpen.phase, honest: AppsHonest.of(app, sources: sources, here: Self.appsHere),
+        about: appsAbout(app), desktop: desktop, opens: appsOpensHere, mesh: mesh,
+        onFall: { appOpen.pageFell(app, $0, desktop: desktop) },
+        onClose: { leaveApp() }
       )
       .environment(\.appsIconSource, appsIconSource)
       .appsZoomDestination(sourceID: app.appKey, in: appsZoom, reduced: reduceMotion)

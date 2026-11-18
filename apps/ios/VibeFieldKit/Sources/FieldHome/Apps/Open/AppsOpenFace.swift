@@ -20,7 +20,18 @@ enum AppsOpenFace: Equatable {
   /// build without SP-4d's relay, or a field under `-vf-mock`) keeps `row`, the honest screen as it stood before 5b. A
   /// phase that belongs to another app is not drawn: the icon stands until this app's own answer.
   static func of(_ phase: AppOpenModel.Phase, appKey: String, row: AppsHonest, opens: Bool) -> AppsOpenFace {
-    .honest(row)  // RED: a stub, every face the row's own; the green draws the phase.
+    guard opens else { return .honest(row) }
+    switch phase {
+    case .idle:
+      return .icon
+    case .opening(let key, let desktop, let late):
+      guard key == appKey, late else { return .icon }
+      return .opening(AppOpen.openingWords(desktop: desktop))
+    case .serving(let key, let url, let policy):
+      return key == appKey ? .page(url: url, policy: policy) : .icon
+    case .refused(let key, let honest):
+      return key == appKey ? .honest(honest) : .icon
+    }
   }
 
   /// The honest screen this face shows, if it is one.
@@ -49,7 +60,10 @@ enum AppsPageFall: Equatable {
 
   /// Its words: the desktop out of reach, or, for a rule list the phone could not make, the app that cannot run here.
   func why(desktop: String) -> MadeAppFacts.Why {
-    AppOpen.cannotRun  // RED: a stub; the green says the desktop is out of reach.
+    switch self {
+    case .ruleList: AppOpen.cannotRun
+    case .noProxy, .unreachable, .ended: AppOpen.cantReach(desktop)
+    }
   }
 }
 
@@ -60,6 +74,8 @@ struct AppsPageRetry: Equatable {
 
   /// A load failed: true to read the proxy again and load once more, false to fall.
   mutating func failed() -> Bool {
-    false  // RED: a stub, never a re-read; the green re-reads once.
+    guard !reread else { return false }
+    reread = true
+    return true
   }
 }

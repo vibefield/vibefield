@@ -660,13 +660,20 @@ struct AppsCard: ViewModifier {
   }
 }
 
-/// What an app zooms to before MA-5: its icon at 92 over its state's words, its one act, and the glass row at rest.
+/// What an app zooms to: its icon at 92 over its state's words, its one act, and the glass row at rest. Since MA-5b-1
+/// the open app stands on it too (`AppsOpenScreen`): its face above the row, and the page itself while it serves.
 struct AppsAppScreen: View {
   let app: IndexAppRow
   let honest: AppsHonest
   let about: AppsAbout
   let desktop: String
   let onClose: () -> Void
+  /// MA-5b-1 — what stands above the row while the app opens; nil: the honest screen, as before 5b.
+  var face: AppsOpenFace?
+  /// MA-5b-1 — the open app's page, while `face` is `.page` (made only in a build that compiles the web host).
+  var page: AnyView?
+  /// MA-5b-1 — ···'s Reload, while a page stands.
+  var onReload: (() -> Void)?
 
   @Environment(\.openURL) private var openURL
   @State private var showsAbout = false
@@ -679,9 +686,15 @@ struct AppsAppScreen: View {
   var body: some View {
     ZStack(alignment: .bottom) {
       ChromePalette.paper.ignoresSafeArea()
-      state
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .padding(.horizontal, AppsGlassRow.side)
+      if face?.isPage == true, let page {
+        // P3: the page's layout ends above the row, so the row never covers the page's own controls.
+        page
+          .padding(.bottom, AppsGlassRow.height + AppsGlassRow.side)
+      } else {
+        state
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .padding(.horizontal, AppsGlassRow.side)
+      }
       row
         .padding(.horizontal, AppsGlassRow.side)
         .padding(.bottom, AppsGlassRow.side)
@@ -693,7 +706,26 @@ struct AppsAppScreen: View {
     }
   }
 
-  private var state: some View {
+  /// The face above the row: the honest screen unless the open app says otherwise.
+  @ViewBuilder private var state: some View {
+    switch face ?? .honest(honest) {
+    case .icon, .page:
+      // `.page` with no page: a build without the web host, which never serves.
+      AppIconView(app: app, side: AppIcon.honestSide)
+    case .opening(let words):
+      VStack(spacing: Self.gap) {
+        AppIconView(app: app, side: AppIcon.honestSide)
+        Text(words)
+          .font(ChromeType.sans(Self.detailSize))
+          .foregroundStyle(ChromePalette.inkSecondary)
+          .multilineTextAlignment(.center)
+      }
+    case .honest(let honest):
+      honestState(honest)
+    }
+  }
+
+  private func honestState(_ honest: AppsHonest) -> some View {
     VStack(spacing: Self.gap) {
       AppIconView(app: app, side: AppIcon.honestSide)
       Text(honest.title)
@@ -729,6 +761,7 @@ struct AppsAppScreen: View {
       capsule
 
       Menu {
+        if let onReload { Button("Reload", action: onReload) }
         Button("About this app") { showsAbout = true }
         if let act = honest.act {
           Button(act.word) { open(act) }

@@ -101,7 +101,10 @@ final class AppOpenModel {
   /// MA-5b-1 — the serving page fell (`AppsPageFall`): the honest screen says why, and the app's next open asks its
   /// desktop again instead of reopening the answer it kept. Nothing, unless `app`'s page is the one serving.
   func pageFell(_ app: IndexAppRow, _ fall: AppsPageFall, desktop: String) {
-    // RED: a stub; the green refuses in the fall's words and lets the kept answer go.
+    guard case .serving(let key, _, _) = phase, key == app.appKey else { return }
+    generation += 1
+    kept = nil
+    refuse(app, fall.why(desktop: desktop))
   }
 
   private func refuse(_ app: IndexAppRow, _ why: MadeAppFacts.Why) {
