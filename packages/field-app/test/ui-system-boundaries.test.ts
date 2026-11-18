@@ -1945,8 +1945,9 @@ describe("UI system ownership boundaries", () => {
     const css = source("field/desk/pegboard/pegboard.css");
     // the pegboard's chrome over the desk, after the bar in the document (Tab: the filters, the board, then More in
     // Plugins…); since MK-4d it is told whether a view covers the desk (MK-E14) and handed the popup's door
+    // (since item 433 the board's own door, which opens Discover on the board's category)
     expect(chrome).toMatch(
-      /<Pegboard\s+surface=\{surface\}\s+onSurfaceChange=\{onSurfaceChange\}\s+covered=\{covered\}\s+onMorePlugins=\{openPluginsOnDiscover\}\s*\/>/u,
+      /<Pegboard\s+surface=\{surface\}\s+onSurfaceChange=\{onSurfaceChange\}\s+covered=\{covered\}\s+onMorePlugins=\{openPluginsFromBoard\}\s*\/>/u,
     );
     expect(chrome.indexOf("<Pegboard")).toBeGreaterThan(chrome.indexOf("<SelectionBar"));
     // the selection bar hides while the board is out; the selection persists under it
