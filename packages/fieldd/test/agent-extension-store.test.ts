@@ -383,6 +383,8 @@ describe("AgentExtensionStore", () => {
 describe("item 548: a profile's values the keychain hands back in another form", () => {
   // a value outside printable ASCII: an accent, a check mark and a key (one character in two UTF-16 halves)
   const WIDE = "cl\u00e9-\u2713-\u{1f511}";
+  // a kept entry that is neither JSON nor the keychain's hex of it: one cut off
+  const CUT = '{"CONTEXT7_API_KEY":"ctx7_secret_val';
 
   it("keeps the values as printable ASCII, so one outside it reads back whole and the next add keeps it", async () => {
     const { store, keychain } = await toolFormSetup();
@@ -397,18 +399,16 @@ describe("item 548: a profile's values the keychain hands back in another form",
     await expect(store.launchValues("work", "codex")).resolves.toEqual({ CONTEXT7_API_KEY: WIDE });
   });
 
-  it("refuses an add over a kept entry it cannot read, and changes nothing", async () => {
+  it("refuses an add over a kept entry that is neither JSON nor the keychain's hex of it, and changes nothing", async () => {
     const { store, keychain } = await toolFormSetup();
-    // as an earlier build wrote it: the keychain hands it back as hex, which is no JSON
-    const earlier = JSON.stringify({ CONTEXT7_API_KEY: WIDE });
-    keychain.plant("work", earlier);
+    keychain.plant("work", CUT);
     await expect(
       store.keepValues("work", { LINEAR_API_KEY: "lin_api_value" }),
     ).rejects.toMatchObject({
       kind: "PRECONDITION_FAILED",
       details: { reason: "kept-values-unreadable" },
     });
-    expect(keychain.entry("work")).toBe(earlier);
+    expect(keychain.entry("work")).toBe(CUT);
     await expect(store.read("work")).resolves.toMatchObject({ values: [] });
     // the person is told why, in the words kept in one place
     const said: unknown = Reflect.get(
@@ -419,6 +419,22 @@ describe("item 548: a profile's values the keychain hands back in another form",
     await expect(store.keepValues("work", { LINEAR_API_KEY: "lin_api_value" })).rejects.toThrow(
       said as string,
     );
+  });
+
+  it("reads a kept entry the keychain hands back as hex, and the next add keeps every value as printable ASCII", async () => {
+    const { store, keychain } = await toolFormSetup();
+    await store.keepValues("work", { CONTEXT7_API_KEY: "ctx7_secret_value" });
+    // then the entry is one an earlier build wrote, outside printable ASCII: the keychain hands it back as hex
+    const earlier = JSON.stringify({ CONTEXT7_API_KEY: WIDE });
+    keychain.plant("work", earlier);
+    expect(keychain.entry("work")).toBe(earlier);
+    await store.keepValues("work", { LINEAR_API_KEY: "lin_api_value" });
+    expect(keychain.entry("work")).toBe(
+      '{"CONTEXT7_API_KEY":"cl\\u00e9-\\u2713-\\ud83d\\udd11","LINEAR_API_KEY":"lin_api_value"}',
+    );
+    await expect(store.read("work")).resolves.toMatchObject({
+      values: ["CONTEXT7_API_KEY", "LINEAR_API_KEY"],
+    });
   });
 
   it("refuses an add over a kept entry holding a member that is not text, and changes nothing", async () => {
@@ -434,12 +450,37 @@ describe("item 548: a profile's values the keychain hands back in another form",
     expect(keychain.entry("work")).toBe(earlier);
   });
 
-  it("starts an agent over a kept entry it cannot read with no values, as before", async () => {
+  it("refuses an add over hex that is not a JSON map of text, or not UTF-8, and writes nothing", async () => {
+    const { store, keychain } = await toolFormSetup();
+    // each is handed back as hex digits: the first two as the hex of their bytes, the third as itself, whose bytes
+    // (c3 28) are no UTF-8
+    for (const earlier of [JSON.stringify(["cl\u00e9"]), "cl\u00e9", "c328"]) {
+      keychain.plant("work", earlier);
+      await expect(
+        store.keepValues("work", { LINEAR_API_KEY: "lin_api_value" }),
+      ).rejects.toMatchObject({
+        kind: "PRECONDITION_FAILED",
+        details: { reason: "kept-values-unreadable" },
+      });
+      expect(keychain.entry("work")).toBe(earlier);
+    }
+    await expect(store.read("work")).resolves.toMatchObject({ values: [] });
+  });
+
+  it("gives an agent the values of a kept entry the keychain hands back as hex", async () => {
     const { store, keychain } = await toolFormSetup();
     await store.keepValues("work", { CONTEXT7_API_KEY: "ctx7_secret_value" });
     await store.give("work", "codex", "context7", ["CONTEXT7_API_KEY"]);
     // then the entry is one an earlier build wrote, which the keychain hands back as hex
     keychain.plant("work", JSON.stringify({ CONTEXT7_API_KEY: WIDE }));
+    await expect(store.launchValues("work", "codex")).resolves.toEqual({ CONTEXT7_API_KEY: WIDE });
+  });
+
+  it("starts an agent over a kept entry that is neither JSON nor its hex with no values, as before", async () => {
+    const { store, keychain } = await toolFormSetup();
+    await store.keepValues("work", { CONTEXT7_API_KEY: "ctx7_secret_value" });
+    await store.give("work", "codex", "context7", ["CONTEXT7_API_KEY"]);
+    keychain.plant("work", CUT);
     await expect(store.launchValues("work", "codex")).resolves.toBeUndefined();
     expect(keychain.secrets.get).toHaveBeenCalled();
   });

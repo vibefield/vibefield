@@ -266,13 +266,10 @@ describe("a secret store's child process (item 542)", () => {
   });
 
   it("refuses a profile's server values over a kept entry it cannot read before their length, and writes nothing", async () => {
-    // item 548, 2026-11-18: the kept entry as the tool hands back a value outside printable ASCII, the hex of its
-    // bytes (item 542's probes). An entry not read whole is refused before any write, and at any length, so that
-    // refusal is the one a person reads, and the length's words are not said.
-    const kept = Buffer.from(JSON.stringify({ A_TOKEN: "a-548-t\u00f6k\u00e9n" }), "utf8").toString(
-      "hex",
-    );
-    const { store: secrets, calls } = recorded(`${kept}\n`);
+    // item 548, 2026-11-18: a kept entry that is neither JSON nor the tool's hex of it (one cut off). An entry not
+    // read whole is refused before any write, and at any length, so that refusal is the one a person reads, and the
+    // length's words are not said.
+    const { store: secrets, calls } = recorded('{"A_TOKEN":"a-548\n');
     const root = await mkdtemp(join(tmpdir(), "fieldd-secret-child-"));
     dir = root;
     const extensions = join(root, "extensions");
