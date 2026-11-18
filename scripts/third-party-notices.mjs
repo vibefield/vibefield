@@ -2513,10 +2513,32 @@ export function ghostteaEcosystem(c) {
   return semver && /^[a-z0-9_-]+$/.test(c.name) ? "crate" : "other";
 }
 
+// Item 523 (2026-11-17): the phone carries the Public Suffix List, its bytes unchanged and its notice whole, to name
+// the site an app's link out goes to (FieldHome's Resources/public_suffix_list.dat). MPL-2.0 asks that the notice
+// travel with it and that a reader can find the list: the row says both.
+const PUBLIC_SUFFIX_LIST = {
+  ecosystem: "asset",
+  name: "Public Suffix List",
+  version: "2026-11-16_22-30-55_UTC",
+  licence: "MPL-2.0",
+  role: "the site an app's link out names",
+  texts: [
+    {
+      file: "public_suffix_list.dat",
+      body:
+        "This Source Code Form is subject to the terms of the Mozilla Public\n" +
+        "License, v. 2.0. If a copy of the MPL was not distributed with this\n" +
+        "file, You can obtain one at https://mozilla.org/MPL/2.0/.\n\n" +
+        "The list is carried unchanged, from https://publicsuffix.org/list/public_suffix_list.dat",
+    },
+  ],
+};
+
 export const IOS_VENDORED = [
   { ...LOBE_ICONS, role: "the agents' marks" },
   { ...SIMPLE_ICONS, role: "the desktops' OS marks" },
   SPARKS_FROM_FIRE,
+  PUBLIC_SUFFIX_LIST,
 ];
 
 function gitHead(dir) {

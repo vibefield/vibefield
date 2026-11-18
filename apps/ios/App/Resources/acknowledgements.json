@@ -1699,6 +1699,18 @@
     },
     {
       "ecosystem": "asset",
+      "name": "Public Suffix List",
+      "version": "2026-11-16_22-30-55_UTC",
+      "licence": "MPL-2.0",
+      "roles": [
+        "the site an app's link out names"
+      ],
+      "texts": [
+        "c957c29cdd86"
+      ]
+    },
+    {
+      "ecosystem": "asset",
       "name": "Simple Icons",
       "version": "16.13.0",
       "licence": "CC0-1.0",
@@ -2611,6 +2623,14 @@
         "LICENSE-MIT"
       ],
       "body": "Copyright (c) 2017 Artyom Pavlov\n\nPermission is hereby granted, free of charge, to any\nperson obtaining a copy of this software and associated\ndocumentation files (the \"Software\"), to deal in the\nSoftware without restriction, including without\nlimitation the rights to use, copy, modify, merge,\npublish, distribute, sublicense, and/or sell copies of\nthe Software, and to permit persons to whom the Software\nis furnished to do so, subject to the following\nconditions:\n\nThe above copyright notice and this permission notice\nshall be included in all copies or substantial portions\nof the Software.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\", WITHOUT WARRANTY OF\nANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED\nTO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A\nPARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT\nSHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY\nCLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION\nOF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR\nIN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER\nDEALINGS IN THE SOFTWARE."
+    },
+    {
+      "id": "c957c29cdd86",
+      "kind": "MPL-2.0",
+      "files": [
+        "public_suffix_list.dat"
+      ],
+      "body": "This Source Code Form is subject to the terms of the Mozilla Public\nLicense, v. 2.0. If a copy of the MPL was not distributed with this\nfile, You can obtain one at https://mozilla.org/MPL/2.0/.\n\nThe list is carried unchanged, from https://publicsuffix.org/list/public_suffix_list.dat"
     },
     {
       "id": "cb140e49d1fa",
