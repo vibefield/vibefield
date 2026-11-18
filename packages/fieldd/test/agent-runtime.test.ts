@@ -2072,7 +2072,7 @@ describe("the catalog (AC-3) — the doors answer from the table, the roll call 
   // declarations: the table's claim, and the composed provider's facts through the gate's one predicate.
   it("agent.providers says spark as the hatch would: claimed and passing, claimed on a pin that lacks the facts, unclaimed", async () => {
     const { daemon } = await setup({
-      // a claim the pin cannot honour (its adapter's MCP servers run `external`, in no process the door can name):
+      // a claim the pin cannot honour (item 528, 2026-11-18: its adapter runs its MCP servers in a run helper, which holds a plain run's door and no spark's):
       // R23 fails it at preflight, and the device answers false rather than the table's word
       catalog: catalogWith("grok", {
         offers: { ...(catalogEntry("grok")?.offers ?? NONE), spark: true },

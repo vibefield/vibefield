@@ -540,7 +540,7 @@ function scriptedProvider(
       const ingress: BoundIngress = { port: 40_000 + n, token: `bearer-${n}` };
       options.ingress?.onBound?.(ingress);
       if (extra.helperProcess === true) {
-        // the installed pin's HostIngress predates the hook (agent-door-launch.ts `withHelperProcess`)
+        // puppeteer-core's HostIngress declares the hook since 0.4.2 (item 528, 2026-11-18); the row types it locally
         const named = options.ingress as
           | { onHelperProcess?: (h: { pid: number; startedAtMs: number }) => Promise<void> }
           | undefined;

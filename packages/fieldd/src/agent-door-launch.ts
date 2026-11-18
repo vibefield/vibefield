@@ -84,9 +84,9 @@ export interface RunHelperProcess {
   readonly startedAtMs: number;
 }
 
-/** The ingress with puppeteer's hook. The installed puppeteer-core's `HostIngress` does not declare it yet, so it is
- * typed here and nowhere else; a pin that declares it needs this adapter no longer. An adapter from a pin without the
- * hook never reads the field, and its run simply has no root. */
+/** The ingress with puppeteer's hook. puppeteer-core's `HostIngress` declares `onHelperProcess` since 0.4.2 (item 528,
+ * 2026-11-18: this said the installed pin did not declare it); the field is still typed here, and nowhere else. An
+ * adapter that never calls the hook leaves its run with no root. */
 type IngressWithHelper = HostIngress & {
   onHelperProcess?: (helper: RunHelperProcess) => void | Promise<void>;
 };
@@ -177,8 +177,9 @@ function failureCode(error: unknown): string {
 
 // PU-J — A TYPED LAUNCH GETS THE DOOR A SPAWNED ONE GETS. puppeteer's `prepareInvocation` takes a briefing and
 // `briefingRefusal: "withhold"`, and answers a receipt `briefing: {applied, withheld}`. A person's own command must never
-// fail for a host's addition, so a typed launch always withholds. The installed pin does not declare these and forwards
-// only the fields it names, so on it the briefing goes nowhere: harmless, and typed here and nowhere else.
+// fail for a host's addition, so a typed launch always withholds. Since puppeteer 0.4.2, `prepareInvocation` forwards
+// both to the session it prepares and the receipt comes back (item 528, 2026-11-18: this said the installed pin
+// forwarded neither, so the briefing went nowhere).
 
 /** A typed launch's options with the briefing under `withhold`, or as they were when there is nothing to carry. */
 export function withTypedBriefing<T extends object>(options: T, briefing: AgentRunBriefing): T {
