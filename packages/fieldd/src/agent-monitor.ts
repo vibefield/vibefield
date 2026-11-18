@@ -302,6 +302,11 @@ export function hostTerminalFrom(
     ...(profileSet !== undefined ? { profileSet } : {}),
     ...(workloadClass !== undefined ? { workloadClass } : {}),
     ...(info.exited === true ? { exited: true } : {}),
+    // PS-D5 (2026-11-18): the floor's word for what the pane is doing, its kind alone; the
+    // backend's one classifier reads `foreground-job` as working. A husk is doing nothing.
+    ...(info.activity !== undefined && info.exited !== true
+      ? { activity: { kind: info.activity.kind } }
+      : {}),
   };
 }
 
