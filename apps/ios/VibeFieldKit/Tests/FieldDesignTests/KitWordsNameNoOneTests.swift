@@ -5,15 +5,17 @@ import Testing
 /// and its rows' display names say the item and the day instead. Test data is not words: a fixture keeps an older name
 /// until it next moves (DESIGN.md "The made-up names"), so a string literal of code is never read here.
 ///
-/// The row reads every Swift file of the kit's Sources and Tests and of the app, and the iOS scripts, each once as
-/// bytes, in a detached task. It walks line by line only the files that hold a refused word. On a Swift line it reads
-/// the comment and an `@Test` or `@Suite` display name; a script's every line is words. It prints its own time.
+/// The row reads every Swift, Metal, JavaScript module and shell file of the kit's Sources and Tests, of the app and of
+/// the iOS scripts, and the kit's own Package.swift, each once as bytes, in a detached task (widened by item 546,
+/// 2026-11-18). It walks line by line only the files that hold a gate word. On a Swift, Metal or JavaScript line it
+/// reads the comment and an `@Test` or `@Suite` display name; a shell script's every line is words. It prints its time.
 @Suite("the kit's words name no person, no session and no one who ruled")
 struct KitWordsNameNoOneTests {
   /// The words refused, exactly. Each is built from pieces, so this file passes itself. The word for a ruling is
   /// refused after a possessive (one named as having made it) and before a number (`… 7`, `…s 17 and 18`), never
-  /// alone. A lane's or a session's name other than these is not held: no such name is one exact word.
-  static let refused: [String] = ["Ja" + "mes", "VF" + "-PM", "'s rul" + "ing", "session q" + "a-0"]
+  /// alone. A lane's folder is refused by its path. A lane's or a session's name other than these is not held: one
+  /// collides with code (a file descriptor's name).
+  static let refused: [String] = ["Ja" + "mes", "VF" + "-PM", "'s rul" + "ing", "session q" + "a-0", "lan" + "es/"]
   static let numbered = "rul" + "ing"
 
   /// The kit's folder, the one that holds this file's `Tests/FieldDesignTests/`, and the iOS folder above it, which
@@ -21,10 +23,14 @@ struct KitWordsNameNoOneTests {
   static let kit = URL(fileURLWithPath: #filePath)
     .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
   static let ios = kit.deletingLastPathComponent()
-  static let roots: [(url: URL, ext: String)] = [
-    (kit.appendingPathComponent("Sources"), "swift"), (kit.appendingPathComponent("Tests"), "swift"),
-    (ios.appendingPathComponent("App"), "swift"), (ios.appendingPathComponent("scripts"), "sh"),
+  static let roots: [URL] = [
+    kit.appendingPathComponent("Sources"), kit.appendingPathComponent("Tests"), ios.appendingPathComponent("App"),
+    ios.appendingPathComponent("scripts"),
   ]
+  /// The kinds of file read in every root: a shell script's lines are words whole, the others' comments are.
+  static let kinds: Set<String> = ["swift", "metal", "mjs", "sh"]
+  /// The kit's manifest, read as Swift beside the roots.
+  static let manifest = kit.appendingPathComponent("Package.swift")
 
   /// What the row finds: the files it read, the files it walked, and each line whose words name someone.
   struct Scan: Sendable {
@@ -74,25 +80,29 @@ struct KitWordsNameNoOneTests {
     return nil
   }
 
-  /// Every file of the roots, read once. A file whose bytes hold no refused word is not walked.
+  /// The manifest and every file of the roots, read once. A file whose bytes hold no gate word is not walked.
   static func scan() throws -> Scan {
     var scan = Scan()
     let needles = (refused + [numbered]).map { Data($0.utf8) }
+    var urls = [manifest]
     for root in roots {
-      let walker = FileManager.default.enumerator(at: root.url, includingPropertiesForKeys: nil)
+      let walker = FileManager.default.enumerator(at: root, includingPropertiesForKeys: nil)
       while let url = walker?.nextObject() as? URL {
-        guard url.pathExtension == root.ext else { continue }
-        scan.files += 1
-        let data = try Data(contentsOf: url)
-        guard needles.contains(where: { data.range(of: $0) != nil }) else { continue }
-        scan.walked += 1
-        let text = String(decoding: data, as: UTF8.self)
-        var inLiteral = false
-        for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
-          let said = root.ext == "sh" ? line : words(of: line, inLiteral: &inLiteral)
-          guard let said, let word = refusedWord(in: said) else { continue }
-          scan.named.append("\(url.lastPathComponent):\(index + 1) (\(word))")
-        }
+        if kinds.contains(url.pathExtension) { urls.append(url) }
+      }
+    }
+    for url in urls {
+      scan.files += 1
+      let data = try Data(contentsOf: url)
+      guard needles.contains(where: { data.range(of: $0) != nil }) else { continue }
+      scan.walked += 1
+      let text = String(decoding: data, as: UTF8.self)
+      let whole = url.pathExtension == "sh"
+      var inLiteral = false
+      for (index, line) in text.split(separator: "\n", omittingEmptySubsequences: false).enumerated() {
+        let said = whole ? line : words(of: line, inLiteral: &inLiteral)
+        guard let said, let word = refusedWord(in: said) else { continue }
+        scan.named.append("\(url.lastPathComponent):\(index + 1) (\(word))")
       }
     }
     return scan
