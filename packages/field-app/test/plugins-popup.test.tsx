@@ -23,6 +23,7 @@ import {
   PLUGINS_FIXTURE_DOWNLOADS,
   PLUGINS_FIXTURE_HELD_SNAPSHOT,
   PLUGINS_FIXTURE_LISTED_SNAPSHOT,
+  PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT,
   PLUGINS_FIXTURE_NOW,
   PLUGINS_FIXTURE_OUTDATED_SNAPSHOT,
   PLUGINS_FIXTURE_READ_AT,
@@ -3104,6 +3105,60 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
     } finally {
       resetUnstartedPlugins();
     }
+  });
+
+  // item 494 (2026-11-18): a plugin that isn't working, or can't run here, says its row's line on its own page
+  // too, under its act, in the row's words
+  /** The open page's notes under its act, each one's words. */
+  const pageNotes = (): string[] =>
+    [...document.body.querySelectorAll(".vf-plugins-page-note")].map(
+      (note) => note.textContent ?? "",
+    );
+  /** The page of the row titled `title`, opened as a press on its row opens it. */
+  const openPageOf = (title: string): void =>
+    act(() => rowOf(title)?.querySelector<HTMLButtonElement>(".vf-plugins-row")?.click());
+  const NOT_WORKING = /isn't working right now|can't run on this VibeField/u;
+
+  it("says a plugin's not-working line on its own page too, under its act (item 494)", async () => {
+    await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    expect(lineSaid("Key-value store")).toBe("Key-value store isn't working right now");
+    openPageOf("Key-value store");
+    expect(pageTitle()).toBe("Key-value store");
+    expect(pageNotes()).toContain("Key-value store isn't working right now");
+  });
+
+  it("says it on the page of a plugin that cannot start in this window too (item 476's line; item 494)", async () => {
+    nameUnstartedPlugin("vibefield.comment-pad", { reason: "activation" });
+    try {
+      await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+      openPageOf("Comment pad");
+      expect(pageTitle()).toBe("Comment pad");
+      expect(pageNotes()).toContain("Comment pad isn't working right now");
+    } finally {
+      resetUnstartedPlugins();
+    }
+  });
+
+  it("says a plugin this VibeField can't run on its page too, in its row's words (item 494)", async () => {
+    setPluginRegistrySnapshot(PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT);
+    await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    expect(lineSaid("Gauge")).toBe("Gauge can't run on this VibeField");
+    openPageOf("Gauge");
+    expect(pageTitle()).toBe("Gauge");
+    expect(pageNotes()).toContain("Gauge can't run on this VibeField");
+  });
+
+  it("says no such line on the page of a plugin that works, or one that is off (item 494)", async () => {
+    await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
+    // Comment pad's failure is the last report of a window that left: not read, so it works
+    openPageOf("Comment pad");
+    expect(pageTitle()).toBe("Comment pad");
+    expect(pageNotes().filter((note) => NOT_WORKING.test(note))).toEqual([]);
+    toInstalled();
+    // Desk clock is off, whatever its last report says
+    openPageOf("Desk clock");
+    expect(pageTitle()).toBe("Desk clock");
+    expect(pageNotes().filter((note) => NOT_WORKING.test(note))).toEqual([]);
   });
 });
 
