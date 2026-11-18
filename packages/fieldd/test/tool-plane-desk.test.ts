@@ -1,7 +1,7 @@
 import { mkdtempSync, readdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { NativeDoorOpen } from "@vibefield/contracts";
+import type { NativeDoorOpen, ObjectIntentAnswer } from "@vibefield/contracts";
 import { AuditActionV1, type AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuditService, verifyAuditSegment } from "../src/audit-service";
@@ -50,10 +50,23 @@ const DOOR: NativeDoorOpen = {
   pane: { terminalSessionId: "sess-plain", depth: 1 },
 };
 
-/** `real`: the audit the plane is given in place of the recording fake (item 526's real-trail row). */
-function harness(real?: ToolPlaneAudit) {
+/** `real`: the audit the plane is given in place of the recording fake (item 526's real-trail row). `actTurns` (item
+ * 557, 2026-11-18): the window answers an act only this many turns after it arrives, as a window slower than a
+ * reader's count. */
+function harness(real?: ToolPlaneAudit, actTurns = 0) {
   const h = world();
-  h.window(ordinaryWindow);
+  h.window((intent) => {
+    const answer = ordinaryWindow(intent);
+    if (actTurns === 0 || intent.op !== "act" || answer === undefined) return answer;
+    void (async () => {
+      for (let i = 0; i < actTurns; i += 1) await new Promise((r) => setTimeout(r, 0));
+      h.desk.intents.answer(
+        { ...answer, intent: intent.intent } as ObjectIntentAnswer,
+        "tok-window",
+      );
+    })().catch(() => undefined);
+    return undefined;
+  });
   const handlers = new Map<number, (p: Uint8Array) => void>();
   const sent = new Map<number, string>();
   const order: string[] = [];
@@ -173,6 +186,29 @@ describe("the desk room through the plane (OB-3b)", () => {
     expect(lines.map((r) => r.phase)).toEqual(["attempt", "outcome"]);
     expect(lines[0]?.attrs).toMatchObject({ verb: "object_act", ref, tool: "write_text" });
     expect(JSON.stringify(lines)).not.toContain("milk");
+  });
+
+  it("keeps the act's outcome in the trail when the window answers after a reader's count of turns (item 557)", async () => {
+    // the act's answer comes 40 turns after the act reaches the window: a reader that counts turns rather than waiting
+    // for its answer closes the trail before the outcome is asked for, and the outcome is refused
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-desk-trail-"));
+    trails.push(dataDir);
+    const service = new AuditService({ dataDir, bootId: "fieldd-desk-trail-late" });
+    await service.start();
+    const { h, plane, call } = harness(service, 40);
+    await plane.ensureStarted();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    const result = await call(1, "object_act", {
+      doing: "Replace the shopping list",
+      ref,
+      tool: "write_text",
+      input: { text: "milk" },
+    });
+    expect(result?.isError).toBeUndefined();
+    await service.close();
+    const lines = (await trailOf(service.root)).filter((r) => r.action === "tools.object_act");
+    expect(lines.map((r) => r.phase)).toEqual(["attempt", "outcome"]);
   });
 
   it("answers not-handed as the words of the model's own tool result, with the instruction", async () => {
