@@ -229,9 +229,12 @@ opt-level = 3
 # returns its error). truffle-core's own dependencies did not move (its Cargo.toml changed only its version),
 # so Cargo.lock moves by truffle-core alone. The kit's Swift plane STAYS 0.7.26, which ghosttea 0.15.0 declares
 # exact; 0.7.28 changes nothing under apple/, so the phone's TailscaleKit keeps go1.27.3 until truffle rebuilds
-# it. TB's LP-5 rider (the Go licence record, apps/desktop/packaging/notices/go-modules.json) is NOT run in this
-# event: since item 379 it reads both Go binaries, and this host holds no truffle checkout at Package.resolved's
-# revision nor TailscaleKit's artifact. The record is owed before the 0.9 tag; until then it names sidecar 0.7.27.
+# it. TB's LP-5 rider (the Go licence record, apps/desktop/packaging/notices/go-modules.json) rode this event as
+# its own commit: the record names sidecar 0.7.28, and Go go1.27.4 beside go1.27.3.
+# **ERRATUM (2026-11-18, item 531).** The sentences that stood here said the rider "is NOT run in this event"
+# and that the record is owed before the 0.9 tag, naming sidecar 0.7.27 until then. They were false from the
+# event's second commit on: the rider ran with it, and the repo's own test holds the record to the sidecar pin,
+# so the event could not land without it.
 truffle-core = "=0.7.28"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped

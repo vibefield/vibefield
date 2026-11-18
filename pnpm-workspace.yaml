@@ -453,7 +453,10 @@ catalog:
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
   - '@vibecook/ice@0.17.0'
-  # EL8 2026-11-17: reviewed mille 0.3.6 (tag v0.3.6 = 85c35e7d, published 2026-11-12), inside the window.
+  # EL8 2026-11-17: reviewed mille 0.3.6 (tag v0.3.6 = 85c35e7d, published 2026-11-12). (Corrected 2026-11-18,
+  # item 531: this said "inside the window". The registry dates 0.3.6 at 2026-11-12T06:40:04Z, read 2026-11-18:
+  # five days before the EL8, and this file sets no minimumReleaseAge, so pnpm 11.13.1's default of 1440 minutes
+  # held and 0.3.6 was OUTSIDE the window. The ten rows below were not needed by that reading; they stand.)
   # RD-5's exit for its npm plane, so there is no older row to drop (the rows were link:). The eight platform
   # packages are mille's optionalDependencies, each in the lock whatever this host installs.
   - '@vibecook/mille@0.3.6'
