@@ -15,14 +15,17 @@ import {
 } from "@vibecook/ice";
 import { NOTE_TYPE, PHOTO_TYPE } from "@vibecook/ice/desk/objects";
 import type { ObjectIntent, ObjectIntentAnswer } from "@vibefield/contracts";
+import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  type ApplierDeps,
   createDeskApplier,
   type DeskAgentDoor,
   followDeskAgent,
 } from "../src/field/desk/agent/applier";
 import { type MountedDesk, publishDesk } from "../src/field/desk/desk-door";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
+import { type RendererLogger, setRendererLogger } from "../src/logging";
 
 type Ok = Extract<ObjectIntentAnswer, { ok: true }>;
 
@@ -640,5 +643,162 @@ describe("following the desk: the door", () => {
     expect(hands.calls).toBe(0);
     stop();
     unpublish();
+  });
+});
+
+describe("the door asks again while its desk is mounted (item 521)", () => {
+  const QUIET: RendererLogger = {
+    child: () => QUIET,
+    trace() {},
+    debug() {},
+    info() {},
+    warn() {},
+    error() {},
+    fatal() {},
+    isLevelEnabled: () => false,
+  };
+  // each row's follower and desk end here, so a row that fails cannot leave one following the next row's desk
+  const ends: (() => void)[] = [];
+  afterEach(() => {
+    for (const end of ends.splice(0)) end();
+    vi.useRealTimers();
+    setRendererLogger(QUIET);
+  });
+  /** The board mounted and followed through `wire`, both ended after the row. */
+  function follow(wire: { readonly value: DeskAgentDoor }, deps: ApplierDeps = {}) {
+    const { desk } = mount();
+    const unpublish = publishDesk(desk);
+    const stop = followDeskAgent(wire.value, deps);
+    ends.push(stop, unpublish);
+    return stop;
+  }
+  /** What the desk's agent door warns, by event and attrs. */
+  function capture() {
+    const warned: Array<{ event: string; attrs: unknown }> = [];
+    const logger: RendererLogger = {
+      ...QUIET,
+      child: () => logger,
+      warn: (event, _message, attrs) => {
+        warned.push({ event, attrs });
+      },
+    };
+    setRendererLogger(logger);
+    return warned;
+  }
+  /** A door whose feeds refuse their first asks with `refusals`, in order, and then open. */
+  function refusing(refusals: { intents?: unknown[]; presence?: unknown[] }) {
+    const asked = { intents: 0, presence: 0 };
+    const intents: ((payload: unknown) => void)[] = [];
+    const ended: {
+      intents?: ((error: unknown) => void) | undefined;
+      presence?: ((error: unknown) => void) | undefined;
+    } = {};
+    const answers: ObjectIntentAnswer[] = [];
+    const value: DeskAgentDoor = {
+      intents: async (docId, onIntent, onEnded) => {
+        expect(docId).toBe("doc-1");
+        asked.intents += 1;
+        const refusal = refusals.intents?.shift();
+        if (refusal !== undefined) throw refusal;
+        intents.push(onIntent);
+        ended.intents = onEnded;
+        return () => undefined;
+      },
+      answer: async (answer) => {
+        answers.push(answer);
+        return { taken: true };
+      },
+      presence: async (_onSnapshot, onEnded) => {
+        asked.presence += 1;
+        const refusal = refusals.presence?.shift();
+        if (refusal !== undefined) throw refusal;
+        ended.presence = onEnded;
+        return () => undefined;
+      },
+      held: async () => ({}),
+    };
+    return { value, asked, answers, ended, send: (payload: unknown) => intents.at(-1)?.(payload) };
+  }
+  const closedUnder = () => new FielddRpcError("UNAVAILABLE", "connection closed", true);
+  const forRoom = () =>
+    new FielddRpcError("RESOURCE_EXHAUSTED", "too many subscriptions", false, {
+      resource: "subscriptions",
+      limit: 4,
+    });
+  const forGood = () => new FielddRpcError("NOT_FOUND", "no such board: doc-1", false);
+  const tick = (ms: number) => vi.advanceTimersByTimeAsync(ms);
+
+  it("asks the intents feed again when the socket closed under its first ask, and intents then flow", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const wire = refusing({ intents: [closedUnder()] });
+    follow(wire, { onCanvas: () => true });
+    await tick(0);
+    expect(wire.asked.intents).toBe(1);
+    await tick(999);
+    expect(wire.asked.intents).toBe(1);
+    await tick(1);
+    expect(wire.asked.intents).toBe(2);
+    wire.send(intent({ op: "place", kind: NOTE_TYPE, props: {} }));
+    await tick(0);
+    expect(wire.answers[0]).toMatchObject({ ok: true });
+  });
+
+  it("asks again on the re-ask steps when refused for room: after 1 s, then 2 s", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const wire = refusing({ intents: [forRoom(), forRoom()] });
+    follow(wire, {});
+    await tick(1_000);
+    expect(wire.asked.intents).toBe(2);
+    await tick(1_999);
+    expect(wire.asked.intents).toBe(2);
+    await tick(1);
+    expect(wire.asked.intents).toBe(3);
+  });
+
+  it("never asks again a refusal for good, and says its kind in the log, not fieldd's words", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const warned = capture();
+    const wire = refusing({ intents: [forGood()] });
+    follow(wire, {});
+    await tick(60_000);
+    expect(wire.asked.intents).toBe(1);
+    expect(warned).toEqual([
+      { event: "renderer.desk.agent_door_refused", attrs: { kind: "NOT_FOUND", again: false } },
+    ]);
+    expect(JSON.stringify(warned)).not.toContain("no such board");
+  });
+
+  it("asks nothing once its desk has gone", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const wire = refusing({ intents: [closedUnder()], presence: [closedUnder()] });
+    const stop = follow(wire, {});
+    await tick(0);
+    stop();
+    await tick(60_000);
+    expect(wire.asked).toEqual({ intents: 1, presence: 1 });
+  });
+
+  it("asks the presence feed again the same way, so the hand is reported again", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const wire = refusing({ presence: [closedUnder()] });
+    follow(wire, {});
+    await tick(1_000);
+    expect(wire.asked.presence).toBe(2);
+  });
+
+  it("says in the log, by its kind, a feed the client ended for good, and asks it nothing more", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const warned = capture();
+    const wire = refusing({});
+    follow(wire, {});
+    await tick(0);
+    wire.ended.intents?.(forGood());
+    wire.ended.presence?.(forGood());
+    await tick(60_000);
+    expect(warned).toEqual([
+      { event: "renderer.desk.agent_door_ended", attrs: { kind: "NOT_FOUND" } },
+      { event: "renderer.desk.agent_presence_ended", attrs: { kind: "NOT_FOUND" } },
+    ]);
+    expect(wire.asked).toEqual({ intents: 1, presence: 1 });
   });
 });
