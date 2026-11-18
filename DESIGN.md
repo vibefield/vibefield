@@ -7654,6 +7654,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       run — says a line of its own, "‹plugin› can't run on this VibeField" ‹draft› (MK's, for James's eye),
       with no Try again and no switch, for turning it off and on fails the same way until it or VibeField
       changes; its details are in Diagnostics.
+    - **Its page** *(built 2026-11-18, item 494)*: a plugin that isn't working, or that this VibeField can't run,
+      says its row's line on its own page too, 12 under where its act stands, at 12/400 in tertiary ink, as a held
+      plugin's page says its own ("Its switches", below): the same words on one more view, and no new one. A
+      plugin that works, or one its row says is off, held or stopped, says no such line there.
   - **Updates** is what the last read found, its time at its head. Each update says how it changes the set before
     you take it — the objects it adds or removes (MK-D4) — over its notes, with **Update**; one that removes an
     object asks first, because the objects of that kind on your desks would wear the missing face. Nothing installs
