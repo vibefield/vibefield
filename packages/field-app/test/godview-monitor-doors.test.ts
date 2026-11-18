@@ -31,8 +31,9 @@ import {
   type AgentProfileSet,
   type DeviceInfo,
 } from "@vibefield/contracts";
+import { holdFeed } from "@vibefield/fieldd-client";
 import type { AccountUsageBatch } from "@vibefield/puppeteer-core";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type DoorClient,
   devicesPortOver,
@@ -932,5 +933,100 @@ describe("DS-3 — the roster port over device.subscribe", () => {
     expect(seen).toHaveLength(1);
     dispose();
     expect(door.unsubscribes).toBe(1);
+  });
+});
+
+/** A door whose FIRST subscribe is refused for room, as fieldd refuses a feed it has no room for
+ * (item 476: `RESOURCE_EXHAUSTED`, its details naming subscriptions), and whose next ask is
+ * answered with `snapshot`. */
+function roomOnceClient(snapshot: unknown): { client: DoorClient; asks(): number } {
+  let asks = 0;
+  return {
+    asks: () => asks,
+    client: {
+      request: async () => undefined,
+      subscribe: async () => {
+        asks += 1;
+        if (asks === 1) {
+          throw Object.assign(new Error("no room for another subscription"), {
+            kind: "RESOURCE_EXHAUSTED",
+            retryable: true,
+            details: { resource: "subscriptions", limit: 8 },
+          });
+        }
+        return { snapshot, unsubscribe: () => undefined };
+      },
+    },
+  };
+}
+
+describe("item 473 — Godview's usage, roster and profile-set doors ask again by themselves after a refusal for room", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("usage: refused for room once, it asks again by itself, and its line goes when the batch comes", async () => {
+    vi.useFakeTimers();
+    const door = roomOnceClient(fixture("agent-usage.valid.json"));
+    const port = usagePortOver(door.client);
+    const states: string[] = [];
+    port.subscribeState?.((state) => states.push(state.state));
+    const seen: (readonly AgentAccountUsageEntry[])[] = [];
+    const dispose = port.subscribeRows?.((rows) => seen.push(rows));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(states.at(-1)).toBe("unavailable");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(door.asks(), "the usage door asked again").toBe(2);
+    expect(states.at(-1)).toBe("ready");
+    expect(seen.at(-1)).toHaveLength(3);
+    dispose?.();
+  });
+
+  it("roster: refused for room once, it asks again by itself, and the list comes", async () => {
+    vi.useFakeTimers();
+    const door = roomOnceClient([
+      {
+        deviceId: "dev-a",
+        name: "pro",
+        platform: "darwin",
+        self: true,
+        online: true,
+        lastSeenAt: 1,
+      },
+    ]);
+    const seen: (readonly DeviceInfo[])[] = [];
+    const dispose = devicesPortOver(door.client).subscribe((devices) => seen.push(devices));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(seen).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(door.asks(), "the roster door asked again").toBe(2);
+    expect(seen.at(-1)?.map((device) => device.name)).toEqual(["pro"]);
+    dispose();
+  });
+
+  it("roster: held with no params, it is ONE wire subscription with the window's other roster holders", () => {
+    // every other roster holder in the window (Devices, Mesh, Updates, the onboarding's Connect
+    // pane) holds `device.subscribe` with no params; a feed is keyed by its method and params, and
+    // `{}` is a different key from none, so the port asks it as they do
+    const door = subscribingClient();
+    const subscribe = vi.spyOn(door.client, "subscribe");
+    const other = holdFeed(door.client, "device.subscribe", undefined, () => undefined);
+    const dispose = devicesPortOver(door.client).subscribe(() => undefined);
+    expect(subscribe, "wire subscriptions of the roster").toHaveBeenCalledOnce();
+    dispose();
+    other();
+  });
+
+  it("profile sets: refused for room once, it asks again by itself, and the sets come", async () => {
+    vi.useFakeTimers();
+    const door = roomOnceClient(fixture("agents-profile-sets.valid.json"));
+    const seen: (readonly AgentProfileSet[])[] = [];
+    const dispose = profileSetsPortOver(door.client).subscribe((sets) => seen.push(sets));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(seen).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(door.asks(), "the profile-sets door asked again").toBe(2);
+    expect(seen.at(-1)?.map((set) => set.id)).toEqual(["native", "work"]);
+    dispose();
   });
 });

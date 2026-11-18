@@ -473,6 +473,35 @@ describe('LiveApps says Live, in Apps\' words (MA-4c; MA-D13 (a); DESIGN.md §8 
     expect(quietWords().detail).toBe("The app limit has been reached.");
   });
 
+  it("asks again by itself for a catalog fieldd refused for room, and its line goes when the catalog comes (item 473)", async () => {
+    vi.useFakeTimers();
+    let asks = 0;
+    await mount({
+      request: vi.fn(async () => ({})),
+      subscribe: vi.fn(async () => {
+        asks += 1;
+        if (asks === 1) {
+          throw {
+            kind: "RESOURCE_EXHAUSTED",
+            message: "this connection holds too many live subscriptions",
+            details: { resource: "subscriptions", limit: 8 },
+          };
+        }
+        return { snapshot: [ARTIFACT], unsubscribe: () => undefined };
+      }),
+    });
+    expect(quietWords()).toEqual({
+      title: "Live apps unavailable",
+      detail: "Could not load live apps. Try again.",
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    expect(asks, "the catalog was asked again").toBe(2);
+    expect(container?.textContent).not.toContain("Live apps unavailable");
+    expect(button("Open Vite prototype")).toBeDefined();
+  });
+
   it('never says "artifact" — the code\'s word — in anything it draws or names, in any state (MA-D13 (a); L17)', async () => {
     const said: string[] = [];
     const away: ArtifactView = {
