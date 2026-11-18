@@ -185,6 +185,18 @@
       ],
       "additionalProperties": true
     },
+    "ObservedTerminalActivity": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind"
+      ],
+      "additionalProperties": true
+    },
     "ErrorKind": {
       "type": "string",
       "enum": [
@@ -454,6 +466,9 @@
         },
         "exited": {
           "type": "boolean"
+        },
+        "activity": {
+          "$ref": "#/definitions/ObservedTerminalActivity"
         },
         "cell": {
           "$ref": "#/definitions/ObservedTerminalCell"

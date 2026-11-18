@@ -10650,6 +10650,9 @@ impl ObservedState {
 #[doc = "    \"sessionId\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"activity\": {"]
+#[doc = "      \"$ref\": \"#/definitions/ObservedTerminalActivity\""]
+#[doc = "    },"]
 #[doc = "    \"cell\": {"]
 #[doc = "      \"$ref\": \"#/definitions/ObservedTerminalCell\""]
 #[doc = "    },"]
@@ -10688,6 +10691,8 @@ impl ObservedState {
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct ObservedTerminal {
     #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub activity: ::std::option::Option<ObservedTerminalActivity>,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
     pub cell: ::std::option::Option<ObservedTerminalCell>,
     #[serde(
         rename = "createdAt",
@@ -10722,6 +10727,34 @@ pub struct ObservedTerminal {
 }
 impl ObservedTerminal {
     pub fn builder() -> builder::ObservedTerminal {
+        Default::default()
+    }
+}
+#[doc = "`ObservedTerminalActivity`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"kind\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"kind\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct ObservedTerminalActivity {
+    pub kind: ::std::string::String,
+}
+impl ObservedTerminalActivity {
+    pub fn builder() -> builder::ObservedTerminalActivity {
         Default::default()
     }
 }
@@ -20544,6 +20577,10 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct ObservedTerminal {
+        activity: ::std::result::Result<
+            ::std::option::Option<super::ObservedTerminalActivity>,
+            ::std::string::String,
+        >,
         cell: ::std::result::Result<
             ::std::option::Option<super::ObservedTerminalCell>,
             ::std::string::String,
@@ -20573,6 +20610,7 @@ pub mod builder {
     impl ::std::default::Default for ObservedTerminal {
         fn default() -> Self {
             Self {
+                activity: Ok(Default::default()),
                 cell: Ok(Default::default()),
                 created_at: Ok(Default::default()),
                 creation_id: Ok(Default::default()),
@@ -20587,6 +20625,16 @@ pub mod builder {
         }
     }
     impl ObservedTerminal {
+        pub fn activity<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::ObservedTerminalActivity>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.activity = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for activity: {e}"));
+            self
+        }
         pub fn cell<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::option::Option<super::ObservedTerminalCell>>,
@@ -20694,6 +20742,7 @@ pub mod builder {
             value: ObservedTerminal,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                activity: value.activity?,
                 cell: value.cell?,
                 created_at: value.created_at?,
                 creation_id: value.creation_id?,
@@ -20710,6 +20759,7 @@ pub mod builder {
     impl ::std::convert::From<super::ObservedTerminal> for ObservedTerminal {
         fn from(value: super::ObservedTerminal) -> Self {
             Self {
+                activity: Ok(value.activity),
                 cell: Ok(value.cell),
                 created_at: Ok(value.created_at),
                 creation_id: Ok(value.creation_id),
@@ -20720,6 +20770,44 @@ pub mod builder {
                 pid: Ok(value.pid),
                 session_id: Ok(value.session_id),
                 title: Ok(value.title),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct ObservedTerminalActivity {
+        kind: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for ObservedTerminalActivity {
+        fn default() -> Self {
+            Self {
+                kind: Err("no value supplied for kind".to_string()),
+            }
+        }
+    }
+    impl ObservedTerminalActivity {
+        pub fn kind<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.kind = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for kind: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<ObservedTerminalActivity> for super::ObservedTerminalActivity {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: ObservedTerminalActivity,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self { kind: value.kind? })
+        }
+    }
+    impl ::std::convert::From<super::ObservedTerminalActivity> for ObservedTerminalActivity {
+        fn from(value: super::ObservedTerminalActivity) -> Self {
+            Self {
+                kind: Ok(value.kind),
             }
         }
     }

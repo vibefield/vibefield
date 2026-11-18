@@ -3912,6 +3912,7 @@ fn observed_row(session: &SessionSummary) -> ObservedTerminal {
         title: session.title.clone(),
         cwd: session.cwd.clone(),
         exited: session.exited.then_some(true),
+        activity: None,
         // CORRECTED 2026-09-14 (N-L7). This used to read "the legacy in-process
         // serve has no cell", which named a caller TM-1 deleted — there is no
         // cell-less shape on this floor any more. What is true is narrower and
