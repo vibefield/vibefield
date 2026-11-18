@@ -48,6 +48,8 @@ export interface ObjectDoorsAudit extends ToolPlaneAudit {
 export interface ObjectDoorsDeps {
   readonly objects: DeskObjects;
   readonly audit: ObjectDoorsAudit;
+  /** whether fieldd holds a board (item 521; `boardKnownIn`) */
+  readonly boardKnown?: (docId: string) => boolean;
   /** a window's own token, by its id */
   isWindowToken(tokenId: string): boolean;
   /** the product API's stream floor on `objects.presence.subscribe` (tests) */
@@ -65,6 +67,14 @@ export interface ObjectDoorsApi {
   register(method: string, handler: Handler): void;
   registerSubscription(method: string, handler: SubscriptionHandler): void;
 }
+
+/** A board fieldd holds (item 521, 2026-11-18): one its document service lists, so a deleted board, or one living on
+ * another desktop, is not one. Read once per `objects.intents.subscribe` (a desk's mount, or the client's replay after a
+ * reconnect), never per intent: `list()` walks the registry, with one cheap read for a `local` board. */
+export const boardKnownIn =
+  (docs: { list(): readonly { readonly docId: string }[] }) =>
+  (docId: string): boolean =>
+    docs.list().some((entry) => entry.docId === docId);
 
 const bad = (shape: string): RpcCallError =>
   new RpcCallError("PRECONDITION_FAILED", `expected ${shape}`, false);
