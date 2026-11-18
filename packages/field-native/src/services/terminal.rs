@@ -4087,6 +4087,61 @@ mod tests {
         );
     }
 
+    /// PS-D5 (2026-11-18): a row says what its pane is doing, as ghosttea's summary says it, and
+    /// says the kind alone. The sample's own stamp moves at every 200 ms sample, so a row that
+    /// carried it would be a changed inventory, published again, at every sample; the kind moves
+    /// only on an edge.
+    #[test]
+    fn a_row_carries_its_panes_activity_kind_and_no_more_of_the_sample() {
+        let sampled = |kind: &str, observed_at_ms: u64| {
+            observed_row(&summary(json!({
+                "persistence": FLOOR_LIFETIME,
+                "activity": {
+                    "kind": kind,
+                    "source": "process-group",
+                    "confidence": "heuristic",
+                    "rootProcessGroupId": 4242,
+                    "foregroundProcessGroupId": 4300,
+                    "observedAtMs": observed_at_ms,
+                },
+            })))
+        };
+        let busy = sampled("foreground-job", 1);
+        assert_eq!(
+            serde_json::to_value(&busy).expect("a row")["activity"],
+            json!({"kind": "foreground-job"}),
+            "the kind alone rides the row"
+        );
+        assert_eq!(
+            inventory_value(&[sampled("foreground-job", 1)]),
+            inventory_value(&[sampled("foreground-job", 2)]),
+            "a later sample of the same kind is no change to the inventory"
+        );
+        assert_ne!(
+            inventory_value(&[busy]),
+            inventory_value(&[sampled("shell-idle", 2)]),
+            "an edge is a changed inventory, so it reaches fieldd by itself"
+        );
+    }
+
+    /// PS-D5: a summary that says no activity, or one this reader cannot read, still lists its
+    /// row, with nothing said: silence, never a word that the pane is idle.
+    #[test]
+    fn a_summary_that_cannot_say_lists_its_row_with_no_activity() {
+        for odd in [json!(null), json!("busy"), json!({}), json!({"kind": 7})] {
+            let wire = json!({"persistence": FLOOR_LIFETIME, "activity": odd});
+            assert!(observed_row(&summary(wire)).activity.is_none(), "{odd}");
+        }
+        let silent = observed_row(&summary(json!({"persistence": FLOOR_LIFETIME})));
+        assert!(
+            serde_json::to_value(&silent)
+                .expect("a row")
+                .get("activity")
+                .is_none(),
+            "a row with nothing to say carries no activity at all"
+        );
+    }
+
     /// The birth classifier, on the wire shapes it actually meets.
     #[test]
     fn only_a_session_created_event_carrying_an_ownerless_birth_is_queued() {
@@ -4145,7 +4200,7 @@ mod tests {
             pushed("session-exited", json!({"sessionId": "s1", "exitCode": 0})),
             pushed(
                 "session-activity-changed",
-                json!({"sessionId": "s1", "active": true}),
+                json!({"sessionId": "s1", "activity": {"kind": "foreground-job"}}),
             ),
             pushed(
                 "control-changed",

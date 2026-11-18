@@ -258,6 +258,33 @@ fn exited_husk_fixture() {
     }
 }
 
+/// PS-D5 (2026-11-18) — the pane's activity on the inventory. field-native EMITS the row, so the
+/// fixture is strict: two rows say their kind and the third says nothing; older floors' rows carry
+/// none, so their bytes are as they were.
+#[test]
+fn activity_fixture() {
+    roundtrip::<ObservedState>("observed-state.activity.json", true);
+    let floor: ObservedState =
+        serde_json::from_value(load("observed-state.activity.json")).expect("activity");
+    let kinds: Vec<Option<&str>> = floor
+        .terminals
+        .iter()
+        .map(|row| row.activity.as_ref().map(|activity| activity.kind.as_str()))
+        .collect();
+    assert_eq!(kinds, [Some("foreground-job"), Some("shell-idle"), None]);
+    for name in [
+        "observed-state.valid.json",
+        "observed-state.fresh.json",
+        "observed-state.exited-husk.json",
+    ] {
+        let older: ObservedState = serde_json::from_value(load(name)).expect(name);
+        assert!(
+            older.terminals.iter().all(|row| row.activity.is_none()),
+            "{name}"
+        );
+    }
+}
+
 #[test]
 fn mgmt_freeway_fixtures() {
     // FW-D4 (thinking-freeway.md v0.3 §4.3, §5.2) — the freeway's floor seam. The floor EMITS the

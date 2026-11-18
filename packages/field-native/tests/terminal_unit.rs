@@ -649,6 +649,82 @@ async fn a_shells_cwd_and_title_reach_the_inventory_on_the_metadata_event() {
     daemon.shutdown().await;
 }
 
+/// PS-D5 (2026-11-18): a pane's activity reaches the published inventory on ghosttea's
+/// `session-activity-changed`, within one reconcile tick, both ways: a foreground job reads
+/// `foreground-job`, and the shell back in its own wait reads `shell-idle`.
+///
+/// The tenant is a shell with job control on (`set -m`), so the job it runs is its own process
+/// group and holds the terminal while it runs; the shell itself waits in its own `read` before
+/// and after, as a shell waits at its prompt. The test releases each step, so the backstop
+/// (`TERMINAL_INVENTORY.BACKSTOP_MS`, 5 s) cannot stand in for the event.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_panes_activity_reaches_the_inventory_on_the_activity_event() {
+    const WITHIN: Duration = Duration::from_secs(1);
+    let dir = short_tempdir();
+    let go = dir.path().join("go");
+    let fifo = std::ffi::CString::new(go.to_str().unwrap()).unwrap();
+    assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0, "mkfifo");
+    let script = concat!(
+        r#"set -m; read -r _ < "$1"; "#,
+        r#"/bin/sh -c 'read -r _ < "$1"' sh "$1"; "#,
+        r#"read -r _ < "$1""#,
+    );
+    let kind = |payload: &Value, session_id: &str| {
+        row_of(payload, session_id).map(|row| row["activity"]["kind"].clone())
+    };
+
+    let daemon = boot(dir.path()).await;
+    let mut mgmt = MgmtClient::connect(&daemon).await;
+    let ack = mgmt.hello(&daemon).await;
+    mgmt.subscribe_observed().await;
+    let (client, _events) = control(&ack).await;
+    let session = client
+        .create_session(json!({
+            "executable": "/bin/sh",
+            "args": ["-c", script, "sh", go.to_str().unwrap()],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "programKind": "interactive-shell",
+            "environment": {"mode": "clean", "variables": {}},
+        }))
+        .await
+        .expect("create session");
+    mgmt.await_observed(Duration::from_secs(5), |p| {
+        kind(p, &session.id) == Some(json!("shell-idle"))
+    })
+    .await;
+
+    release(&go).await;
+    let released = Instant::now();
+    mgmt.await_observed(WITHIN, |p| {
+        kind(p, &session.id) == Some(json!("foreground-job"))
+    })
+    .await;
+    eprintln!(
+        "the job published {:?} after its release",
+        released.elapsed()
+    );
+
+    release(&go).await;
+    let released = Instant::now();
+    mgmt.await_observed(WITHIN, |p| {
+        kind(p, &session.id) == Some(json!("shell-idle"))
+    })
+    .await;
+    eprintln!(
+        "the shell's wait published {:?} after the job ended",
+        released.elapsed()
+    );
+
+    client
+        .terminate(&session.id, "user")
+        .await
+        .expect("terminate");
+    daemon.shutdown().await;
+}
+
 /// The persistence of one session, as the observed inventory reports it.
 fn persistence_of<'a>(payload: &'a Value, session_id: &str) -> Option<&'a str> {
     terminals(payload)
