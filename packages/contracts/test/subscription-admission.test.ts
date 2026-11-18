@@ -9,6 +9,7 @@ import {
 } from "../src/agent-index";
 import { ComposeSparksCrewsSubscribeParams } from "../src/compose";
 import { METHODS, type SubscriptionFrames } from "../src/methods";
+import { ObjectsIntentsSubscribeParams } from "../src/objects";
 import { PluginRuntimeDiagnosticsSubscribeParams } from "../src/plugin-diagnostics";
 import { SettingsSubscribeParams } from "../src/plugin-registry";
 import { PluginUpdateSubscribeParams } from "../src/plugin-update";
@@ -51,6 +52,7 @@ const PARAMS: Readonly<Record<string, z.AnyZodObject>> = {
   "storage.settings.subscribe": SettingsSubscribeParams,
   "agents.extensions.subscribe": AgentsExtensionsSubscribeParams,
   "compose.sparks.crews.subscribe": ComposeSparksCrewsSubscribeParams,
+  "objects.intents.subscribe": ObjectsIntentsSubscribeParams,
 };
 
 interface RefusedAsk {
@@ -198,12 +200,11 @@ describe("item 476 — every product subscription row declares its admission (th
     expect(Object.keys(SUBSCRIPTION_ADMISSION).sort()).toEqual([...PRODUCT_SUBSCRIPTIONS].sort());
   });
 
-  it("classes the 34 rows: 21 one, 5 variants, 5 things, 3 bounded", () => {
+  it("classes the 34 rows: 21 one, 5 variants, 6 things, 2 bounded", () => {
     const byClass = (cls: SubscriptionAdmission["class"]): string[] =>
       PRODUCT_SUBSCRIPTIONS.filter((method) => rowOf(method).class === cls).sort();
-    expect(byClass("bounded")).toEqual(
-      ["diagnostics.subscribe", "index.session.subscribe", "objects.intents.subscribe"].sort(),
-    );
+    // item 521 (2026-11-18): a board's intents are keyed by the board, which fieldd's handler must hold
+    expect(byClass("bounded")).toEqual(["diagnostics.subscribe", "index.session.subscribe"].sort());
     expect(byClass("things")).toEqual(
       [
         "plugins.update.subscribe",
@@ -211,6 +212,7 @@ describe("item 476 — every product subscription row declares its admission (th
         "storage.settings.subscribe",
         "agents.extensions.subscribe",
         "compose.sparks.crews.subscribe",
+        "objects.intents.subscribe",
       ].sort(),
     );
     expect(byClass("variants")).toEqual(
@@ -438,6 +440,14 @@ describe("item 476 — what each ask is counted against", () => {
     expect(resolve("storage.settings.subscribe", {}, { pluginId: "clock" }).limit).toBe(32);
   });
 
+  it("resolves a board's intents by the board, each at the default holders (item 521)", () => {
+    // fieldd's handler refuses a board its documents do not list, so a key names a board that exists
+    const board = resolve("objects.intents.subscribe", { docId: "a" }, {});
+    expect(board).toMatchObject({ class: "things", limit: defaultHolders(), declared: true });
+    expect(resolve("objects.intents.subscribe", { docId: "b" }, {}).key).not.toBe(board.key);
+    expect(resolve("objects.intents.subscribe", { docId: "a" }, {}).key).toBe(board.key);
+  });
+
   it("resolves the bounded methods and a plugin-provided `x.` method by their bounds", () => {
     expect(resolve("diagnostics.subscribe", {}, {})).toMatchObject({
       class: "bounded",
@@ -449,10 +459,6 @@ describe("item 476 — what each ask is counted against", () => {
       limit: 8,
       declared: true,
     });
-    // a board's id is open: every board's feed is counted against the method's one bound
-    const board = resolve("objects.intents.subscribe", { docId: "a" }, {});
-    expect(board).toMatchObject({ class: "bounded", limit: 4, declared: true });
-    expect(resolve("objects.intents.subscribe", { docId: "b" }, {}).key).toBe(board.key);
     expect(PLUGIN_PROVIDED_SUBSCRIPTION.identity).toEqual({});
     const provided = resolve("x.clock.ticks.subscribe", { a: 1 }, {});
     expect(provided).toMatchObject({ class: "bounded", limit: 32, declared: true });

@@ -6,8 +6,10 @@ import { METHODS, ObjectsTakeBackResult, TAILNET_SCOPES } from "@vibefield/contr
 import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuditService } from "../src/audit-service";
+import { DocumentService } from "../src/doc-service";
 import type { DeskObjects } from "../src/objects/desk-objects";
 import {
+  boardKnownIn,
   type ObjectDoorsApi,
   type ObjectDoorsAudit,
   registerObjectDoors,
@@ -52,8 +54,14 @@ type SubHandler = (
   emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
 ) => { snapshot: unknown; start?: () => void; dispose(): void };
 
-/** `real`: the audit the door is given in place of the recording fake (item 526's rows through the real writer). */
-function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk, real?: ObjectDoorsAudit) {
+/** `real`: the audit the door is given in place of the recording fake (item 526's rows through the real writer).
+ * `known`: the boards fieldd holds (item 521), the fixtures' one board unless a row gives its own. */
+function doors(
+  h: ReturnType<typeof world>,
+  desk: DeskObjects = h.desk,
+  real?: ObjectDoorsAudit,
+  known: (docId: string) => boolean = (docId) => docId === DOC,
+) {
   const rows = new Map<string, Handler>();
   const subs = new Map<string, SubHandler>();
   const audited: unknown[] = [];
@@ -90,6 +98,7 @@ function doors(h: ReturnType<typeof world>, desk: DeskObjects = h.desk, real?: O
     objects: desk,
     audit: real ?? fake,
     isWindowToken: (id) => windows.has(id),
+    boardKnown: known,
     presenceIntervalMs: 1,
   });
   return { rows, subs, audited, windows, ask };
@@ -468,5 +477,49 @@ describe("a take-back always takes (item 526)", () => {
     expect(h.desk.grantOf(ref, "run-a")).toBeUndefined();
     expect(service.health()).toMatchObject({ state: "healthy", pendingRecoveryMarkers: 0 });
     await service.close();
+  });
+});
+
+describe("a board fieldd does not hold has no intents feed (item 521)", () => {
+  /** What subscribing for `docId` throws, its feed started if it opens; undefined when nothing is refused. */
+  const refusalOf = (subs: ReturnType<typeof doors>["subs"], docId: string): unknown => {
+    try {
+      subs
+        .get("objects.intents.subscribe")?.(WINDOW, { docId }, () => undefined)
+        .start?.();
+      return undefined;
+    } catch (refused) {
+      return refused;
+    }
+  };
+
+  it("refuses a board fieldd does not hold NOT_FOUND, before anything is installed", () => {
+    const h = world();
+    const { subs } = doors(h);
+    expect(refusalOf(subs, "doc-nobody")).toMatchObject({ kind: "NOT_FOUND" });
+    expect(h.desk.intents.holds("doc-nobody")).toBe(false);
+    // the board it holds opens as it always did
+    expect(refusalOf(subs, DOC)).toBeUndefined();
+    expect(h.desk.intents.holds(DOC)).toBe(true);
+  });
+
+  it("reads a board deleted from fieldd's documents as one it does not hold, through the daemon's own wiring", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doors-boards-"));
+    trails.push(dataDir);
+    const docs = new DocumentService({ dataDir });
+    try {
+      const known = boardKnownIn(docs);
+      const made = await docs.create("Q3 plan");
+      expect(known(made.docId)).toBe(true);
+      await docs.delete(made.docId);
+      expect(known(made.docId)).toBe(false);
+      expect(known("doc-nobody")).toBe(false);
+      const h = world();
+      const { subs } = doors(h, h.desk, undefined, known);
+      expect(refusalOf(subs, made.docId)).toMatchObject({ kind: "NOT_FOUND" });
+      expect(h.desk.intents.holds(made.docId)).toBe(false);
+    } finally {
+      docs.dispose();
+    }
   });
 });
