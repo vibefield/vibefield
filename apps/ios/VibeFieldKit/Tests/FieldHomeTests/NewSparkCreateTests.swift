@@ -15,6 +15,15 @@ import Testing
 /// With no row, nothing flies. Under reduced motion, or where nothing can fly, the row's face fades in, then the thread
 /// opens. A refusal flies nothing.
 ///
+/// Item 538 (2026-11-18): the face row failed in cold FieldHomeTests-only runs on 2026-11-18, read as this suite's
+/// own sleeps starved past the two seconds a row once waited. The six rows that SAY where the face is now wait on
+/// `held` (30 s), a bound no load reaches; the refusal, which never waits, takes it too. A landing that never hears
+/// its row costs that bound once, and `settles`, counting from before the landing began, fails naming it. The wait's
+/// own end keeps its row (`noRow`, 30 ms). `fades` keeps its 200 ms fade and polls for nothing: a main-actor job queued
+/// at the fold records the face and the threads opened. The fade's end is queued only when its sleep ends, so the job
+/// runs first, at any load, while the landing does nothing between the fold and that sleep but set the face to
+/// `.fades`; should it do more there, the job reads the state at its first suspension.
+///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("Created, the face flies to its row as the sheet folds, then Chat opens its thread")
 @MainActor
@@ -42,6 +51,9 @@ struct NewSparkCreateTests {
     var events: [String] = []
     var opened: [String] = []
     var hero: SparkFlight.Start? = SparkFlight.Start(x: 201, y: 214, R: 47.6)
+    /// Called at the fold, after its event; and what a job it queued saw.
+    var atFold: (@MainActor () -> Void)?
+    var seenAtFold: (face: NewSparkLanding.Face?, opened: [String])?
 
     var steps: NewSparkLanding.Steps {
       NewSparkLanding.Steps(
@@ -49,7 +61,10 @@ struct NewSparkCreateTests {
           self.events.append("hero")
           return self.hero
         },
-        fold: { self.events.append("fold") },
+        fold: {
+          self.events.append("fold")
+          self.atFold?()
+        },
         open: { spark in
           self.events.append("open")
           self.opened.append(spark)
@@ -83,6 +98,8 @@ struct NewSparkCreateTests {
 
   static let box = CGRect(x: 16, y: 180, width: 48, height: 48)
   static let cut = SIMD3<Double>(1, 1, 1)
+  /// The bound a row that says where its face is waits on: no load reaches it (item 538). The refusal takes it too.
+  static let held = Duration.seconds(30)
 
   static func made() throws -> SparkSummary {
     let spark = ChatFixtureDoor.fixture("compose-sparks-list.merged")?["sparks"]?.arrayValue?.first
@@ -99,6 +116,13 @@ struct NewSparkCreateTests {
     await until { landing.face(of: made.id) == .waits }
   }
 
+  /// The landing ends before its held bound, counted from before it began: it heard its row, and did not wait it out.
+  func settles(_ landing: Task<Void, Never>, since start: ContinuousClock.Instant) async {
+    await landing.value
+    let took = ContinuousClock.now - start
+    #expect(took < Self.held, "the landing waited out its held bound (\(Self.held)): it never heard its row")
+  }
+
   @Test("made, Chat's list reads again and holds the new spark, and the face flies once its row says where it is")
   func readsAgain() async throws {
     let feed = ChatFeed()
@@ -110,7 +134,8 @@ struct NewSparkCreateTests {
     await sheet.open(on: feed)
     let flight = Flight()
     let steps = Steps()
-    let landing = NewSparkLanding(flying: flight, rowWait: .seconds(2))
+    let landing = NewSparkLanding(flying: flight, rowWait: Self.held)
+    let start = ContinuousClock.now
     let created = Task {
       await landing.create(sheet, on: feed, reducedMotion: false, cut: Self.cut, steps: steps.steps)
     }
@@ -123,7 +148,7 @@ struct NewSparkCreateTests {
     #expect(waits == .waits)
     #expect(flight.flights.isEmpty)
     landing.row(id, box: Self.box)
-    await created.value
+    await settles(created, since: start)
     let seeds = flight.flights.map(\.seed)
     #expect(seeds == [sheet.seed])
     #expect(steps.events == ["hero", "fold"])
@@ -134,7 +159,8 @@ struct NewSparkCreateTests {
     let made = try Self.made()
     let flight = Flight()
     let steps = Steps()
-    let landing = NewSparkLanding(flying: flight, rowWait: .seconds(2))
+    let landing = NewSparkLanding(flying: flight, rowWait: Self.held)
+    let start = ContinuousClock.now
     let landed = Task { await landing.land(made, reducedMotion: false, cut: Self.cut, steps: steps.steps) }
     await begun(landing, made)
     try? await Task.sleep(for: .milliseconds(50))
@@ -144,7 +170,7 @@ struct NewSparkCreateTests {
     try? await Task.sleep(for: .milliseconds(20))
     #expect(flight.flights.isEmpty)
     landing.row(made.id, box: Self.box)
-    await landed.value
+    await settles(landed, since: start)
     let flights = flight.flights
     #expect(flights.count == 1)
     #expect(flights.first?.seed == made.seed)
@@ -157,11 +183,12 @@ struct NewSparkCreateTests {
     let made = try Self.made()
     let flight = Flight()
     let steps = Steps()
-    let landing = NewSparkLanding(flying: flight, rowWait: .seconds(2))
+    let landing = NewSparkLanding(flying: flight, rowWait: Self.held)
+    let start = ContinuousClock.now
     let landed = Task { await landing.land(made, reducedMotion: false, cut: Self.cut, steps: steps.steps) }
     await begun(landing, made)
     landing.row(made.id, box: Self.box)
-    await landed.value
+    await settles(landed, since: start)
     #expect(steps.events == ["hero", "fold"])
     #expect(flight.flights.count == 1)
   }
@@ -171,11 +198,12 @@ struct NewSparkCreateTests {
     let made = try Self.made()
     let flight = Flight()
     let steps = Steps()
-    let landing = NewSparkLanding(flying: flight, rowWait: .seconds(2))
+    let landing = NewSparkLanding(flying: flight, rowWait: Self.held)
+    let start = ContinuousClock.now
     let landed = Task { await landing.land(made, reducedMotion: false, cut: Self.cut, steps: steps.steps) }
     await begun(landing, made)
     landing.row(made.id, box: Self.box)
-    await landed.value
+    await settles(landed, since: start)
     #expect(steps.opened.isEmpty)
     flight.landed?()
     #expect(steps.opened == [made.id])
@@ -187,13 +215,14 @@ struct NewSparkCreateTests {
     let made = try Self.made()
     let flight = Flight()
     let steps = Steps()
-    let landing = NewSparkLanding(flying: flight, rowWait: .seconds(2))
+    let landing = NewSparkLanding(flying: flight, rowWait: Self.held)
+    let start = ContinuousClock.now
     let landed = Task { await landing.land(made, reducedMotion: false, cut: Self.cut, steps: steps.steps) }
     await begun(landing, made)
     let before = landing.face(of: made.id)
     #expect(before == .waits)
     landing.row(made.id, box: Self.box)
-    await landed.value
+    await settles(landed, since: start)
     let flying = landing.face(of: made.id)
     #expect(flying == .waits)
     let other = landing.face(of: "sp-other")
@@ -231,17 +260,23 @@ struct NewSparkCreateTests {
     flight.flies = still != .noWindow
     let steps = Steps()
     if still == .noHero { steps.hero = nil }
-    let landing = NewSparkLanding(flying: flight, rowWait: .seconds(2), fadeWait: .milliseconds(200))
+    let landing = NewSparkLanding(flying: flight, rowWait: Self.held, fadeWait: .milliseconds(200))
+    let id = made.id
+    // the look mid-fade: a job queued at the fold runs before the fade's sleep can end (item 538)
+    steps.atFold = { [steps] in
+      Task { @MainActor in steps.seenAtFold = (landing.face(of: id), steps.opened) }
+    }
+    let start = ContinuousClock.now
     let landed = Task {
       await landing.land(made, reducedMotion: still == .reducedMotion, cut: Self.cut, steps: steps.steps)
     }
     await begun(landing, made)
     landing.row(made.id, box: Self.box)
-    await until { steps.events.contains("fold") }
-    let fading = landing.face(of: made.id)
+    await settles(landed, since: start)
+    let fading = steps.seenAtFold?.face
     #expect(fading == .fades)
-    #expect(steps.opened.isEmpty)
-    await landed.value
+    let openedAtFold = steps.seenAtFold?.opened
+    #expect(openedAtFold?.isEmpty == true)
     #expect(flight.flights.isEmpty)
     #expect(steps.opened == [made.id])
     #expect(steps.events.last == "open")
@@ -259,7 +294,7 @@ struct NewSparkCreateTests {
     await sheet.open(on: feed)
     let flight = Flight()
     let steps = Steps()
-    let landing = NewSparkLanding(flying: flight, rowWait: .seconds(2))
+    let landing = NewSparkLanding(flying: flight, rowWait: Self.held)
     await landing.create(sheet, on: feed, reducedMotion: false, cut: Self.cut, steps: steps.steps)
     #expect(door.hatches == 1)
     #expect(steps.events.isEmpty)
