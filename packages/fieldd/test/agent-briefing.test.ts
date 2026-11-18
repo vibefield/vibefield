@@ -30,8 +30,8 @@ const ALLOWANCE = SERVED_TOOLS.filter(
   (t) => t.audience === "agent" && t.annotations.readOnlyHint,
 ).map((t) => `vibefield/${t.name}`);
 
-/** OB-3d — a helper puppeteer names to the host. The installed puppeteer-core's enum predates it, so the test casts. */
-const RUN_HELPER = "run-helper" as unknown as AgentBriefingCapabilities["mcpServerProcess"];
+/** OB-3d — a helper puppeteer names to the host; puppeteer-core's enum has it since 0.4.2 (item 528, 2026-11-18). */
+const RUN_HELPER: AgentBriefingCapabilities["mcpServerProcess"] = "run-helper";
 
 // `null` is an agent that declares no briefing at all (a default parameter would read `undefined` as `supported`).
 // The catalog is the test seam's table, whose scripted row claims `spark` (CP-5a), unless a test composes another.
