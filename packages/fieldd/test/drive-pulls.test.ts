@@ -912,11 +912,14 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect((await ended) - emptied).toBeGreaterThanOrEqual(bound - 50);
     // asked: at the start, the re-subscribe, then the plain subscribe and its series, the list and its last delay
     // again while a pull is held (once at least, here), and nothing once none is. An attempt in flight as the last
-    // bound fired is refused after it, so every refusal is waited for before the count is read.
+    // bound fired is refused after it, so the count is read once every subscribe fieldd made but the start's is
+    // refused. The floor counts one only as it reads it, so a wait on the floor's count (item 552, 2026-11-18) passed
+    // with one written and unread, and the quiet then read one more.
     await until(
-      () => events.filter(subscribeRefused).length === asked(mock, SUBSCRIBE) - 1,
+      () => events.filter(subscribeRefused).length === counted.made() - 1,
       "every attempt after the start's, refused",
     );
+    expect(asked(mock, SUBSCRIBE)).toBe(counted.made());
     const subscribes = asked(mock, SUBSCRIBE);
     const series = subscribes - 2;
     expect(series).toBeGreaterThan(1 + delays.length);
@@ -961,13 +964,14 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     expect(failure).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_TIMEOUT });
     expect(counted.held()).toBe(true);
     expect(counted.made()).toBe(2);
-    // the attempt is written now, and the wait reads its count first in this same run, before any I/O turn can let
-    // the floor read it
+    // the attempt is written now, and the floor reads it only in a later I/O turn: the wait counts the subscribes
+    // fieldd made, so it holds until this one is refused too
     counted.release();
     await until(
-      () => events.filter(subscribeRefused).length === asked(mock, SUBSCRIBE),
+      () => events.filter(subscribeRefused).length === counted.made(),
       "every attempt, refused",
     );
+    expect(asked(mock, SUBSCRIBE)).toBe(counted.made());
     const subscribes = asked(mock, SUBSCRIBE);
     // the ping's answer comes once the floor has read every line written before it; then the series' delay passes
     // many times over
