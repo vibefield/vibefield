@@ -16,8 +16,9 @@
 //
 // What these rows cannot see: a process made inside another package that runs in fieldd's process (the agent
 // runtime's adapters, the files engine, trust's `codesign`), and a seam whose default a caller replaces (the
-// supervisors' `spawnProcess` option, `McpService`'s `spawn`, the flow host's `spawn`: tests' seams, whose
-// production value is the module's own function here). The floor's own children are field-native's row.
+// supervisors' `spawnProcess` option, `McpService`'s `spawn`, the flow host's `spawn`, the secret store's `run`:
+// tests' seams, whose production value is the module's own function here, or `runSecretTool`, whose one `spawn` is
+// counted). The floor's own children are field-native's row.
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -62,10 +63,8 @@ const SITES: Record<string, Census> = {
   "agent-typed-run.ts": { imports: ["execFile"], calls: ["execFile default"] },
   "bin.ts": { imports: ["spawn"], calls: ["spawn passed", "spawn ignore"] },
   "flows/supervisor.ts": { imports: ["spawn"], calls: ["nodeSpawn ignore"] },
-  "plugin-settings.ts": {
-    imports: ["execFile"],
-    calls: ["execFileAsync default", "execFileAsync default", "execFileAsync default"],
-  },
+  // item 542 (2026-11-18): the secret store's three calls go through its one runner, `runSecretTool`
+  "plugin-settings.ts": { imports: ["spawn"], calls: ["spawn pipe"] },
   "process-service.ts": {
     imports: ["spawn"],
     calls: ["spawn pipe", "spawn ignore", "spawn ignore"],

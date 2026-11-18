@@ -1,8 +1,7 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import type { SettingsSnapshot } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { Ajv, type ValidateFunction } from "ajv";
@@ -21,17 +20,77 @@ import { SettingsDocService } from "./settings-doc";
 //            log line; the wire returns them ONLY to the owning plugin.
 // Defaults come from the schema and are never eagerly persisted (§16.2).
 
-const execFileAsync = promisify(execFile);
-
 export interface SecretStore {
   get(service: string, account: string): Promise<string | null>;
   set(service: string, account: string, value: string): Promise<void>;
   delete(service: string, account: string): Promise<void>;
 }
 
+/** One call of the keychain tool: the program, its arguments, what it is handed on its stdin, and the environment it
+ * runs under (fieldd's own when absent). */
+export interface SecretToolCall {
+  executable: string;
+  args: readonly string[];
+  input?: string;
+  env?: NodeJS.ProcessEnv;
+}
+
+/** Runs one call of the keychain tool and answers its stdout; a call that fails rejects. */
+export type SecretToolRunner = (call: SecretToolCall) => Promise<{ stdout: string }>;
+
+/** The most a call's answer may be: past it the call is stopped and refused. */
+const SECRET_TOOL_ANSWER_MAX = 1024 * 1024;
+
+/** The runner fieldd uses: the tool as a child process with three pipes of its own. Its stdin is closed once what the
+ * call hands it is written, or at once when it hands nothing, so no call can wait on it. Its stdout is the answer; its
+ * stderr is read and dropped. A call that fails rejects with an error that says how it ended and nothing of the call. */
+export const runSecretTool: SecretToolRunner = (call) =>
+  new Promise((resolve, reject) => {
+    const child = spawn(call.executable, [...call.args], {
+      stdio: ["pipe", "pipe", "pipe"],
+      ...(call.env !== undefined ? { env: call.env } : {}),
+    });
+    let answer = "";
+    let over = false;
+    child.stdout?.setEncoding("utf8");
+    child.stdout?.on("data", (chunk: string) => {
+      answer += chunk;
+      if (answer.length > SECRET_TOOL_ANSWER_MAX && !over) {
+        over = true;
+        child.kill("SIGTERM");
+      }
+    });
+    child.stderr?.resume();
+    // a tool that ends before it reads its stdin must not end fieldd: the write's error is the close's to say
+    child.stdin?.on("error", () => undefined);
+    child.on("error", () => reject(new Error("the keychain tool could not be started")));
+    child.on("close", (code, signal) => {
+      if (code === 0 && !over) {
+        resolve({ stdout: answer });
+        return;
+      }
+      const ended = over ? "past its answer's limit" : (code ?? signal);
+      reject(new Error(`the keychain tool ended ${ended}`));
+    });
+    child.stdin?.end(call.input ?? "");
+  });
+
+/** Test seam (item 542, 2026-11-18): the tool, how a call runs and the platform, so a row points the store at a stub
+ * of its own and never at the real tool. */
+export interface DarwinSecretStoreOptions {
+  /** the keychain tool (default `security`) */
+  executable?: string;
+  /** how one call runs (default `runSecretTool`) */
+  run?: SecretToolRunner;
+  /** the platform the store is on (default `process.platform`) */
+  platform?: NodeJS.Platform;
+}
+
 /** macOS keychain via the security(1) CLI — no native deps, headless-safe.
  * Non-darwin platforms refuse honestly until a portable backend lands. */
-export function createDarwinSecretStore(): SecretStore {
+export function createDarwinSecretStore(options: DarwinSecretStoreOptions = {}): SecretStore {
+  const executable = options.executable ?? "security";
+  const run = options.run ?? runSecretTool;
   const refuse = (): never => {
     throw new RpcCallError(
       "UNAVAILABLE",
@@ -40,19 +99,15 @@ export function createDarwinSecretStore(): SecretStore {
       { service: "plugin-settings", state: "no-keychain" },
     );
   };
-  const darwin = process.platform === "darwin";
+  const darwin = (options.platform ?? process.platform) === "darwin";
   return {
     async get(service, account) {
       if (!darwin) refuse();
       try {
-        const { stdout } = await execFileAsync("security", [
-          "find-generic-password",
-          "-s",
-          service,
-          "-a",
-          account,
-          "-w",
-        ]);
+        const { stdout } = await run({
+          executable,
+          args: ["find-generic-password", "-s", service, "-a", account, "-w"],
+        });
         return stdout.replace(/\n$/, "");
       } catch {
         return null; // absent (or locked) — absent-shaped, never a throw on read
@@ -60,26 +115,17 @@ export function createDarwinSecretStore(): SecretStore {
     },
     async set(service, account, value) {
       if (!darwin) refuse();
-      await execFileAsync("security", [
-        "add-generic-password",
-        "-U",
-        "-s",
-        service,
-        "-a",
-        account,
-        "-w",
-        value,
-      ]);
+      await run({
+        executable,
+        args: ["add-generic-password", "-U", "-s", service, "-a", account, "-w", value],
+      });
     },
     async delete(service, account) {
       if (!darwin) refuse();
-      await execFileAsync("security", [
-        "delete-generic-password",
-        "-s",
-        service,
-        "-a",
-        account,
-      ]).catch(() => undefined); // deleting an absent secret is a no-op
+      await run({
+        executable,
+        args: ["delete-generic-password", "-s", service, "-a", account],
+      }).catch(() => undefined); // deleting an absent secret is a no-op
     },
   };
 }
