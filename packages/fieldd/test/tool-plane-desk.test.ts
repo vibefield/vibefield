@@ -137,6 +137,20 @@ describe("the desk room through the plane (OB-3b)", () => {
     expect(refused?.content?.[0]?.text).toContain("Ask the user to hand it to you");
   });
 
+  // EY-0 (2026-11-18): the plane's facts are contracts' TOOL_FACTS and the desk room's OBJECT_FACTS together.
+  // `no-tool` is said by the desk room alone, so it reaches the model as itself only while the desk's list is in the
+  // plane's; without it, the refusal would read as its error kind's fact.
+  it("answers no-tool, a fact only the desk room says, as itself in the model's tool result", async () => {
+    const { h, plane, call } = harness();
+    await plane.ensureStarted();
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    const refused = await call(3, "object_read", { ref, tool: "nope" });
+    expect(refused?.isError).toBe(true);
+    expect(refused?.content?.[0]?.text).toMatch(/^no-tool: /);
+    expect(refused?.content?.[0]?.text).toContain("read_text, write_text");
+  });
+
   it("says a bad input's path and expected shape to the model in the words it reads", async () => {
     const { h, plane, call } = harness();
     await plane.ensureStarted();
