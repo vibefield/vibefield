@@ -8,7 +8,8 @@ import { createDarwinSecretStore, type SecretToolCall } from "../src/plugin-sett
 
 // Item 542 (2026-11-18): a secret store's child process. No row here runs the real keychain tool: each hands the
 // store a stub of its own, written into the row's own folder and named by its absolute path, which the row checks
-// before the store is made; the store's default tool is read from a recording runner and never run.
+// before the store is made. The rows that read the calls themselves hand the store a recording runner, which runs
+// nothing: the store's default tool is read from it and never run.
 
 const VALUE = 'a 542 value with spaces, "quotes" and ünïcode';
 const SERVICE = "vibefield.plugin.probe";
@@ -81,6 +82,29 @@ async function refusal(
 }
 
 const names = (env: string): string[] => env.split("\n").map((line) => line.split("=")[0] ?? "");
+
+// The longest stdin line the keychain tool was seen to keep whole, its line break included (item 542's probes,
+// 2026-11-18): the store hands it no longer one.
+const LINE_MAX = 4096;
+
+// What a person reads when a value is refused for its length: with the limit it names when the call's own limit
+// reaches it, and without a number when long names leave less.
+const TOO_LONG = "Couldn't save to your keychain: these values are too long to keep together";
+const TOO_LONG_NAMED = `${TOO_LONG} (about 1,900 characters at most). Nothing was changed.`;
+const TOO_LONG_UNNAMED = `${TOO_LONG}. Nothing was changed.`;
+
+/** A store whose calls are recorded and never run: a read answers nothing, every other call succeeds. */
+function recorded() {
+  const calls: SecretToolCall[] = [];
+  const store = createDarwinSecretStore({
+    platform: "darwin",
+    run: async (call) => {
+      calls.push(call);
+      return { stdout: "" };
+    },
+  });
+  return { store, calls };
+}
 
 describe("a secret store's child process (item 542)", () => {
   it("is handed a value on its stdin, and none of its arguments holds it", async () => {
@@ -185,5 +209,75 @@ describe("a secret store's child process (item 542)", () => {
     expect(said.text).not.toContain(VALUE);
     expect(said.text).not.toContain(SERVICE);
     expect(said.text).not.toContain("add-generic-password");
+  });
+
+  it("hands its tool a stdin line of at most 4,096 bytes, and refuses a longer one before any call", async () => {
+    // a line is 67 bytes under SERVICE and "token" (68 under "tokens") and twice the value's bytes, its line break
+    // included: so one line lands on the limit, and the other one byte past it
+    const at = recorded();
+    await at.store.set(SERVICE, "tokens", "v".repeat((LINE_MAX - 68) / 2));
+    expect(at.calls).toHaveLength(1);
+    expect(Buffer.byteLength(at.calls[0]?.input ?? "")).toBe(LINE_MAX);
+    const past = recorded();
+    const said = await refusal(
+      past.store.set(SERVICE, "token", "v".repeat((LINE_MAX + 1 - 67) / 2)),
+    );
+    expect(said.kind).toBe("PRECONDITION_FAILED");
+    expect(past.calls).toEqual([]);
+    expect(said.text).toContain(TOO_LONG_NAMED);
+    // a 300-byte name leaves 1,867 bytes of value: the refusal names no limit
+    const long = recorded();
+    const unnamed = await refusal(long.store.set(SERVICE, "k".repeat(300), "v".repeat(1900)));
+    expect(unnamed.kind).toBe("PRECONDITION_FAILED");
+    expect(long.calls).toEqual([]);
+    expect(unnamed.text).toContain(TOO_LONG_UNNAMED);
+    expect(unnamed.text).not.toContain("1,900");
+  });
+
+  it("refuses a profile's server values whose line would pass that length, and writes nothing", async () => {
+    const { store: secrets, calls } = recorded();
+    const root = await mkdtemp(join(tmpdir(), "fieldd-secret-child-"));
+    dir = root;
+    const extensions = join(root, "extensions");
+    await mkdir(extensions);
+    const store = new AgentExtensionStore({
+      dir: extensions,
+      skillsDir: join(root, "skills"),
+      home: join(root, "home"),
+      secrets,
+    });
+    const said = await refusal(store.keepValues("work", { D_TOKEN: "d".repeat(LINE_MAX) }));
+    expect(said.kind).toBe("PRECONDITION_FAILED");
+    expect(said.text).toContain(TOO_LONG_NAMED);
+    expect(calls.map((call) => call.args[0])).toEqual(["find-generic-password"]);
+  });
+
+  it("refuses before any call an empty value, or a name outside printable ASCII or holding a quote or a backslash", async () => {
+    const cases: ReadonlyArray<readonly [string, string, string]> = [
+      [SERVICE, "token", ""],
+      [`${SERVICE}"`, "token", "a-542-value"],
+      [SERVICE, "to\\ken", "a-542-value"],
+      [SERVICE, "to\nken", "a-542-value"],
+      [SERVICE, "to\tken", "a-542-value"],
+      [`${SERVICE}é`, "token", "a-542-value"],
+    ];
+    for (const [service, account, value] of cases) {
+      const { store, calls } = recorded();
+      const said = await refusal(store.set(service, account, value));
+      expect(said.kind).toBe("PRECONDITION_FAILED");
+      expect(calls).toEqual([]);
+    }
+  });
+
+  it("runs its tool with HOME and a fixed PATH in its environment, and nothing else", async () => {
+    process.env.FIELDD_ITEM542_PROBE = "fieldd's own";
+    const { store, calls } = recorded();
+    await store.set(SERVICE, "token", "a-542-value");
+    await store.get(SERVICE, "token");
+    await store.delete(SERVICE, "token");
+    expect(calls).toHaveLength(3);
+    for (const call of calls) {
+      expect(call.env).toEqual({ HOME: process.env.HOME, PATH: "/usr/bin:/bin" });
+    }
   });
 });
