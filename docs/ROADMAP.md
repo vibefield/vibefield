@@ -5,10 +5,12 @@
 > append-only ledger, one entry per landed slice · `docs/DECISIONS.md` is the decision index (status flips there;
 > definitions stay in their owning docs) · `draft/petitions/README.md` holds petition status. Law stays in the design
 > docs, the specs and `DESIGN.md`. A falsified claim gets a dated correction at its source, never only here.
-> Last rewritten: 2026-11-17, at main `63c128fd7`, after M340: the heads, each track's Next and Owed cells that M309
-> to M340 made stale, §3's item 5, §8's rows and five dated corrections. It was made from the ledger's entries and a
-> search by milestone and item number; the lines no entry touches were not read again, so a stale line that names no
-> item may stand. The whole rewrite before it: 2026-10-28, the housekeeping rewrite (James adopted it: James,
+> Last rewritten: 2026-11-18, at main `bf205b7c7`, after M431: the heads, each track's Next and Owed cells that M341
+> to M431 made stale, EY's block (EY-0's own lines), §7's truffle, puppeteer and mille rows, upstream's state, and
+> the dated corrections they owed. It was made from the ledger's entries and a search by milestone, item number and
+> track code; the lines no entry touches were not read again, so a stale line that names no item may stand. The
+> rewrite before it: 2026-11-17, at main `63c128fd7`, after M340. The whole rewrite before that: 2026-10-28, the
+> housekeeping rewrite (James adopted it: James,
 > 2026-10-28, the housekeeping page (R1)), at main `a7498883f`. It replaced 2,074 lines of recaps, landed narratives
 > and stale Next cells with the live
 > queue: what landed went to LANDED, dead directions to the retired table, every owed item kept once, every stale fact
@@ -34,23 +36,25 @@
   `draft/docket/release-docket.html`; *corrected 2026-11-09: RL6 named a fourth, the browser pane in a packaged build,
   which fell with the pane at James's first launch's lineup, DECISIONS "FL"*), as betas `v0.9.0-beta.N`, then stable
   after a soak; 1.0.0 at P0's exits (AR-6, the signed beta, the two-account witness).
-- **Heads** (read 2026-11-17). main = origin/main `63c128fd7`, pushed 2026-11-17. The ledger runs to M340: the last
-  land was eight entries in one move, M333 to M340 (items 476's stage 2 and 490, 489, 486, 291's slice A, UM's
-  meters as chrome, 499, 504 and 230). CI's verify on `63c128fd7` is GREEN (run 44032952093, completed 2026-11-17
-  07:17:20Z), the first green since `8fffb13c7`'s; a nightly dispatches only from a green head
-  (`scripts/release-plan.mjs:62`: never from a red trunk). Every entry from M309 to M340 is named in
-  its track's block in §2, and those with no track are in the Fixer's block. Next: the following train of landings
-  on that head, led by the EL8 to puppeteer 0.4.2 (0.4.0 is pinned; §7).
-  *Corrected 2026-11-17: this line still read the heads of 2026-10-28 (main = origin/main `a7498883f`, its verify
-  run 40638591985 green).*
+- **Heads** (read 2026-11-18). main = origin/main `bf205b7c7`, pushed 2026-11-18. The ledger runs to M431. The land
+  of 2026-11-17 (pushed that day, main `8064bbdec`) reached main without its entries; the land of 2026-11-18 carried
+  366 commits to `054fa4efb`, and its records commit `bf205b7c7` wrote both lands' entries: M341 to M362 (the
+  11-17 land) and M363 to M431. On the test Mac at `bf205b7c7`, `pnpm verify` exited 0 in 601 s (run
+  v-train10-rec) and the kit of every target read 3,131 passed, 3 skipped and 0 failed (run kit-train10-rec).
+  CI's verify on `bf205b7c7` is not read here; a nightly dispatches only from a green head
+  (`scripts/release-plan.mjs:62`: never from a red trunk). Every entry from M341 to M431 is named in its track's
+  block in §2, and those with no track are in the Fixer's block. Next: the following landings on that head (§3).
+  *Corrected 2026-11-18: this line still read the heads of the morning of 2026-11-17 (main = origin/main
+  `63c128fd7`, M340) after main moved to `8064bbdec` that day; it was not rewritten at that push.*
 - **The live program.** §2: TS, AO, FG, AL, **AU (updates that wait)**, **PG (the phone's Godview)**, **WI (the
   phone's way in)**, **IOS-12 (the phone's Chat, since 11-04)**, **SD (the sound identity, since 11-05)**, **UM + SE
   (the profile meters and one search, since 11-06)**, **HN (Cards in Hand: the line, the hand, Artifacts in the head)**,
   **CS (Card Stock and the Card Button, since 11-14)**,
   QW1 (the Godview swarm's fix wave 1), PT-S (PORTALS' phone, resumed 10-29), **CO (the compose plane: sparks and the
-  tool plane, re-entered 10-28)**, **MK (the plugin market, ruled 11-11 and 11-12; landed on James's word but for
-  MK-7: MK-1 in M303 on 11-14, the rest in M308 on 11-15, and its follow-ups in M309, M314, M315, M317, M323, M324
-  and M326)**, the release rails, the EL8 watch, the fixer, upstream.
+  tool plane, re-entered 10-28)**, **EY (the pages room: AGENT'S EYES' browser half, the tool plane's MT-3; EY-0
+  landed 2026-11-18)**, **MK (the plugin market, ruled 11-11 and 11-12; landed on James's word but for MK-7: MK-1 in
+  M303 on 11-14, the rest in M308 on 11-15, and its follow-ups in M309, M314, M315, M317, M323, M324 and M326)**,
+  the release rails, the EL8 watch, the fixer, upstream.
   The first-beta blockers are §3 item 7. Everything valid but unscheduled is §4.
 
 ## 2 Now — the active tracks
@@ -364,6 +368,13 @@
 - Landed 11-17: **item 291's slice A** (M336; LANDED "Item 291 (slice A)"): the phone's Now pill prints no `↘`, a
   named deviation; the window keeps its legend. Owed: the kit's rows H10 and P7, declared and not run; slice B (the
   item's other four marks) at the EL8 to the first puppeteer release that carries puppeteer #81.
+- Landed 11-17: **item 291's kit port** (M360; LANDED "Item 291's kit port"): the phone's spend view says #81's
+  words at a set moment and on a narrow plot, above the EL8 to puppeteer 0.4.2 (M356), which re-blessed
+  `phone-spend.golden.json` in #81's forms.
+- Landed 11-18: **item 518** (M389): the spend chart's moment lines begin below its caption where they would cross
+  it; the window keeps the crossing until puppeteer-views carries the same rule (its petition drafted, not sent).
+  **Item 465** (M419): a peer desktop's hand-off draws one body, on the phone and in its home's window.
+  **Item 468** (M411): a restored agent takes its old session's place on other screens, as a hand-off does.
 
 **WI — the phone's way in** · the IOS session, and the gate's own session · law: the page *The Way In*
 (https://claude.ai/artifact/VZPzwk7VZZ3iYwbB5bmDQd since 11-13; it was 5cvau5EQ, not found under this account;
@@ -407,12 +418,20 @@ sources `draft/ios-pocket/way-in/`), DESIGN.md §8 "The phone's way in" and §9 
   with no desktop answering, or no network, the splash stands: **Looking for your computer…**, then **Can’t reach
   your computer.** with Try again and Use another account, or **You’re offline.**; "Couldn’t connect." carries Try
   again (W2e). Its Swift build is the train's device build; the kit's rows are owed.
+- Landed 11-17: **item 367's C and E5** (M342): the kit's mock paths are nobody's, and testflight.sh refuses an
+  archive of either kind, review or TestFlight, that carries one of the item's real strings. **Item 508** (M345):
+  the Developer page's comments and its own design words name no board card and no person.
+- Landed 11-18: **item 367's E4** (M397): a TestFlight build stands in the Developer page's demos, and the review
+  build carries none; **its E3** (M399): Developer › Labs › Input card states, the real card in each of §9's eleven
+  states. **Item 532** (M405): no launch argument reaches a TestFlight build or the review build.
 - Next: the kit's rows for item 504; the phone's own "This phone was removed." screen (item 406's words
-  in §9) with the kit's reader of device-removed and device-unidentified; item 367's E2…E5, their own slice; a
-  booted witness of the boot read's place before the listen (LANDED "Items 423, 429 and 430", Not done).
+  in §9) with the kit's reader of device-removed and device-unidentified; the first archive from main, the first
+  run of item 367's two checks (its E2 and E5 landed 11-17, E4 and E3 11-18); a booted witness of the boot read's
+  place before the listen (LANDED "Items 423, 429 and 430", Not done).
 - Owed: the mark's fade (WI-W3 A: James pushes vibefield-splash `9219e97`, then `markFades` opens); the lock's four
   hand rows (James; LANDED "WI-3 — the lock", Owed); the way in's and the curtain's stills on the iPhone and the
-  13-inch iPad, in light and dark (message 3 of M285).
+  13-inch iPad, in light and dark (message 3 of M285); James's device looks at the Developer page in a TestFlight
+  build and at Input card states (M397, M399).
 
 **IOS-12 — the phone's Chat** · the IOS session (lanes `lanes/ios12`, `lanes/ios12b`) · law: the page *Chat in a
 Pocket* (M6kri6s5; sources `draft/ios-pocket/chat/`), DESIGN.md §8 "The phone's Chat", §2.10 and §9 "Chat on the
@@ -487,8 +506,8 @@ phone"; DECISIONS PC
   - M-f2's unstilled: Effort's row (until a model-chosen fixture exists) and a chip wider than the field;
   - 241b's row 32 on the old mini (the ts6 form, with rosettad), the witness of record: owed on the console
     unlock, a9's row placed 11:21Z;
-  - item 242 (the phone kit's `inkFaint` retires, its 40 uses sorted by §2.4's test: 29 words to t3, 10
-    marks and an off control's words to t4; VF-PM 11-08 06:10Z), cut on 241b's tip, its kit row R owed;
+  - item 242 LANDED 11-17 (M344; LANDED "Item 242"): the kit's `inkFaint` retires and its 61 uses take their tier,
+    42 words to t3 and 19 marks to t4; the first cut, of 11-08 (40 uses), never landed; its red has not run;
   - item 248 (the phone's t3, black at 50% by day, reads 3.98:1, under §2.4's floor): a kit-wide ink
     slice with its own stills, James's eye on the number;
   - item 251 (the mock fleet's seed door for the stills, so the Field badge is judged at max 0 like
@@ -574,17 +593,34 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
   the shelf's open is mended (item 419), in the build James tested on his iPhone.
 - Landed 11-16: **the phone's Keep words** (M321; LANDED "MA — the phone's Keep words are James's"): §9 and K4's
   comments lose ‹draft›.
-- Next: what is left of MA-3h, Versions on the phone ·
-  **MA-5, the phone's host** after SP-4 and its probes P1/P2 (cp-landing's queue).
+- Landed 11-17: **SP-4** (M350): a made app's page has a fenced web view on the phone, in the kit, mounted by no
+  screen until MA-5b-1; **MA-5's kit half** (M351): the phone's open model for a made app, and iOS's own ask for
+  its camera and mic; MA-6e's two test rows named for what they prove (M348). **AH-4** (M362, records only),
+  written 11-17 and on main with the records of 11-18: its LANDED entry and its review, for `cce684ce3`, on main
+  since 08-03.
+- Landed 11-18, the made app's page on the phone and its guards: **item 522's guard** (M392), **item 525** (M401: a
+  declared host is never an address in another spelling, on the desktop or the phone), **item 522** (M426: the
+  page's only way out is its own filtering front), **item 541** (M427: no archive carrying the web host leaves
+  while a ship gate stands OPEN), **item 524** (M428: the page may mount the web host; WebRTC waits on its own ship
+  gate), **MA-5b-1** (M429: an app you made opens on the phone as its own page, in Debug) and **item 523** (M430: a
+  link out asks first, and only after your touch, in a Debug build). A Release build without SP-4d's relay shows
+  the honest screen as before:
+  item 373's gate stands OPEN.
+- Landed 11-18, AH-4's findings: **item 517** (M385: Refresh preview is audited with the person, and captures go
+  one at a time) and **item 519** (M424: a preview capture reuses its own browser session, once it is cleared).
+- Next: what is left of MA-3h, Versions on the phone · MA-5b's later slices, not built: the row's fold on scroll,
+  the warm page kept for ten minutes, the opening words held until the first paint, and ···'s acts (M429) ·
+  SP-4d, the relay item 373 waits on (M350).
 - Owed: the words still marked ‹for James› in DESIGN.md §8 and §9, and §9's interim words for Live (MA-4);
   James's device rows for MA-6, to be named again against M316's pull: LANDED "MA-6e"'s Owed lists a real pull, a
   real preview fetch, the zoom, the night that does not follow the finger and the unshot dot on it, and its pull
   is M272's, which M316 replaced; which of the five his QA of 11-12 to 11-15 paid is his to say;
   smoke-first-run at item 273's land; its still witness (item 343);
   MA-4's witness by eye; smoke:godview on vf-m1 (items 185, 186); carried from AH: AH-4's physical witnesses
-  (`cce684ce3`, on main since 08-03; its review and its LANDED entry were written on 2026-11-17 and land with the
-  next train's records), AH-1's two-client
-  witness, AH-3's physical closeout, and device-retirement GC with TS's "forget a device".
+  (`cce684ce3`, on main since 08-03; its review and its LANDED entry, M362, written 11-17, on main 11-18), AH-1's
+  two-client
+  witness, AH-3's physical closeout, and device-retirement GC with TS's "forget a device"; the device rows of
+  MA-5b-1 and items 522, 523 and 524 on the developer's phone (their entries' Owed).
 
 **DR — the Drive (your apps and pages, held by every desktop, served by any)** · vibe-field-19 (lanes `lanes/ma-4`,
 `lanes/ma/1`, `lanes/ma/rosetta`, `lanes/dr/{truffle,truffle-t3,mille}`) · law: `draft/thinking-drive.md` v0.3 (the
@@ -629,9 +665,11 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
   0.7.27"), before the v0.9.0 tag on James's word: cargo and the five sidecars move together, and the Swift plane
   stays 0.7.26. The new sidecar has run on no automated row: its live witness (R1's or row 28's) is owed, and is the
   precondition of the v0.9.0 tag and beta.1.
+- Landed 11-18: **item 552** (M431, test-only): a drive pulls row counts the subscribes fieldd made, not the ones
+  the floor has read.
 - Next:
-  - The EL8 to mille 0.3.5 in its dev shape, one commit with its own filler (`siblings:pin` to the
-    tag; VF-PM's M1: the npm exit waits on a mille 0.3.6 that remaps its release builds and ships its notices).
+  - The EL8 to mille LANDED 11-17 at 0.3.6 (M359; §2's EL8 block): mille and mille-ui come from npm, exact. Owed
+    from it: the git port's move to `GitService`, "at mille's release, with the pin's exit" (the Files docket's R2).
   - The substrate slice after EL8-TRUFFLE: `impl PullSubstrate for MeshNode`, the install hook in bring-up, the
     `truffle-named-pull` default feature and the `#[ignore]` probe, the first live named pull.
   - The integration lane after EL8-TRUFFLE: the daemon constructs `DriveService` and wires NativeLink's
@@ -648,13 +686,14 @@ page *The Drive*, KB33dCAP, where it moved 11-06 05:45Z from LB8rzJYV; sources `
     witness paid GREEN-BUT-263/264 at main `351bea4ce` (recorded `4db42a816`), the BUT settled by items 263 + 264, M239
     `9d2b8d03d`); row 13's is item 255, host state, so `smoke:studio` is owed again, alone, on an awake display.
   - From DR-3b: items 237 and 238, their root landed by NR S0–S2 (M240 `33162a078`, LANDED "NR S0 + S1 + S2"): a
-    refused native subscription tells its owner, and the five gated consumers ask again. NR's S3 brings
-    DriveHolders and DriveLaneRelay onto MeshStream. It lands on its own; the daemon row stays the integration
-    lane's.
+    refused native subscription tells its owner, and the five gated consumers ask again. NR's S3 LANDED 11-18
+    (M386): DriveHolders and DriveLaneRelay hear through MeshStream, and a refused lane replay is asked again,
+    proven at unit level; the daemon row stays the integration lane's.
     *Corrected 2026-11-17: this said S3 came "with the integration lane after EL8-TRUFFLE". Both classes are still
     unwired, so S3 is proven at unit level and lands alone.*
   - The two-device witness of MA-3f, R1's class (LANDED "MA-3f", Owed).
-  - Item 268's removal of the four orphan `lane-*.json` schema files, after MA-3f (LANDED "MA-3f", Found).
+  - Item 268's removal of the four orphan `lane-*.json` schema files, after MA-3f (LANDED "MA-3f", Found): LANDED
+    11-17 (M349).
   - The drive's disk budget (the record's §10, risk 5).
   - Findings for James: rosetta-main's seven stripped ts-rs outputs, and the heatmap's daylight saving (a protocol
     change).
@@ -705,10 +744,16 @@ profiles column", "Search — the Peek", the phone's corner, search sheet and to
   its cards stand over Godview's CRT layers; a card takes a new circle at once unless the pointer is on its way
   into the shown card; the popover's and the phone's circles name the deciding window in the middle; a plan's row
   says its sign-in, veiled; the phone's bud labels keep clear of the buds. Left: item 495 (the tier badge, and the
-  key by the bands drawn). Owed: the kit's Swift rows and an Electron witness.
-- Next: the EL8 to puppeteer 0.4.2 (it leads the next train), then **PU-R's consumer**, the bloom's buds wear
-  their fuel, its DESIGN.md text first. **PU-R's bands** are in puppeteer: James pushed `pu/bloom-bands` himself as
-  puppeteer #82 (opened 2026-11-12 01:37:55Z), it merged, and it shipped in 0.4.1. VibeField pins 0.4.0 (§7).
+  key by the bands drawn); its VibeField half landed 11-18 (M382) and draws nothing new until a puppeteer release
+  that sends `planTier` is pinned. Owed: the kit's Swift rows and an Electron witness.
+- Landed 11-17: the EL8 to puppeteer 0.4.2 (M356; §2's EL8 block), which carries #82, and **PU-R, the doc** (M346):
+  DESIGN.md says a spawn bloom bud wears its profile's Bands circle.
+- Landed 11-18: **PU-R, the bands** (M381): the bud wears the circle the profiles column draws, at 48 and 42, and
+  its line names its deciding plan; **item 274** (M380, with item 283): a meter a later reading did not carry says
+  its own read's age, on the desk and the phone; **item 495** (M382), above.
+- Next: puppeteer's half of item 495 (the adapter naming `ultra` and sending `planTier`), its release and EL8
+  James's; the real window at 48 and 42, light and dark, for the eye. **PU-R's bands** are in puppeteer: James
+  pushed `pu/bloom-bands` himself as puppeteer #82 (opened 2026-11-12 01:37:55Z), it merged, and it shipped in 0.4.1.
   *Corrected 2026-11-17: this said the bands were "built on `pu/bloom-bands`, unrun, his to push", with the
   release and the EL8 to follow. They ran, were pushed, merged and released; only the EL8 is left.*
 - Owed:
@@ -800,18 +845,27 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   own try, a failed step is logged by its name and the next one runs, and the process exits 1 after a stop that
   failed. Parked beside it: item 487 (the quit reads the door's early answer as complete; the shell's) and item
   492 (the words a person reads for the mark; James's to see first).
+- Landed 11-17, with the EL8 to puppeteer 0.4.2 (M356): **item 278** (M357): an agent whose own install can't be
+  found is refused in VibeField's words; **item 354**, fieldd's half (M358): a harness's Homebrew prefixes reach
+  puppeteer's inventory, and a packaged fieldd ignores them; **item 50** (M361): what puppeteer starts on its own
+  inside fieldd runs with an agent terminal's environment.
+- Landed 11-18: **item 372** (M384): a typed `hermes` runs its wrapper's Python, and an install naming none is
+  refused in §9's words; **item 537 (a)** (M420): the git observers and fieldd's `ps` reads run under the agents'
+  allow-list, never fieldd's own. The rest of item 537 is owed.
 - In flight:
-  - item 341's slice 4, `smoke:agent-path`: its red `9466221a8` stays on `rv/341`. Its green and its first run wait
-    for item 354.
+  - item 341's slice 4, `smoke:agent-path`: its red `9466221a8` stays on `rv/341`. Its green and its first run
+    waited for item 354, which landed 11-17 (M358); neither is in the ledger yet.
   - item 354, the Homebrew probe (note `lanes/rv/nightly-agents/item-354-note.md`, James's card j-354-homebrew-probe):
     puppeteer's inventory reads `/opt/homebrew` and `/usr/local` whatever a harness isolates, so a test or smoke
     fieldd runs a Homebrew-installed agent's version command. puppeteer's half (forward `brewPrefixes`) merged as
     puppeteer #85 and shipped in 0.4.2 (*corrected 2026-11-17: this said it was James's hand*); fieldd's half (pass
-    none in every harness, its seam beside `FIELDD_AGENT_SEARCH_PATH`) follows its EL8.
+    none in every harness, its seam beside `FIELDD_AGENT_SEARCH_PATH`) LANDED 11-17 with its EL8 (M358, M356).
   - item 357 (note `lanes/rv/nightly-agents/item-357-note.md`, with 354's card): the adapters' service runs (version,
     sign-in status, usage, models, extensions) start the vendor's executable with the daemon's whole environment,
     `FIELDD_*` included, because the built-in providers take no `env`. The agent's PTY and helpers stay clean.
-    Its puppeteer half shipped in 0.4.2 with 354's (#85); fieldd's half follows the EL8.
+    Its puppeteer half shipped in 0.4.2 with 354's (#85), as `serviceEnvironment` (M356). Item 50 (M361) runs
+    puppeteer's service runs inside fieldd under an agent terminal's law through it; other runs inside fieldd are
+    item 537's: its (a), M420, the git observers and fieldd's `ps` reads, and the rest owed.
   - the sibling lanes, filed by James on 11-06: puppeteer #64 rv/pup-monitor (#84, #81, #9), #65
     rv/pup-claude-a (#1, #61, #4, #3, #5a, #64, #62, #63) and #66 rv/pup-views-a (#38, #39, #106, #107, #40,
     #105) MERGED; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. After them, MERGED too:
@@ -927,7 +981,10 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   PT-S3's P14 left it and the dev bundled set (`field-engine.ts`) untouched).
   Owed: PT-S1's host-bound files and its two ICE candidates (§6 PORTALS).
 
-**CO — the compose plane (sparks and their doors)** · cp-landing (lanes `co` and `mt/mt0`; the tool plane's build too, since the MT lead's session, vibe-field-dc, ended 10-31) · law `draft/compose-plane/thinking-roled-agents.md` §15–§17 and `draft/compose-plane/v2/` (version 2, ruled 2026-10-29), `draft/thinking-tool-plane.md` (MT, ruled 2026-10-30), DESIGN.md §2.10
+**CO — the compose plane (sparks and their doors)** · cp-landing (lanes `co` and `mt/mt0`; the tool plane's build too; the MT lead's session did not end on 10-31: vibe-field-dc is the same session, known as vibe-field-db on 11-17, and also leads EY, below) · law `draft/compose-plane/thinking-roled-agents.md` §15–§17 and `draft/compose-plane/v2/` (version 2, ruled 2026-10-29), `draft/thinking-tool-plane.md` (MT, ruled 2026-10-30), DESIGN.md §2.10
+  *Corrected 2026-11-18: this line said the MT lead's session, vibe-field-dc, ended 10-31. It did not: vibe-field-db,
+  its name on 11-17, is the same session, the MT lead and the EY lead (`EY-0-PLAN.md` §7's correction of 2026-11-17
+  ~18:10Z). `draft/thinking-tool-plane.md`:6 carries the same error at its source.*
 - Re-entered 10-28 on James's word, with its rulings since:
   - the plane, ruled 10-29: fifteen CP marks, each on its lean, on the v2 page;
   - Sparks round 2, ruled 10-30: 22 of 22 on its page;
@@ -947,8 +1004,10 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   02:11:50Z), LANDED 10-31 (`ef5fb6161`, the mini's run 25; LANDED "CP-1d").
   - puppeteer 0.3.2's per-run `mcpServers`, `allowTools` and `instructions` carry the `vibefield` server and the
     spark's brief at hatch, at both resumes and at a pending run's replacement, so a spark's own session holds the door.
-  - Claude only, until CP-5c: at puppeteer 0.3.3, as at 0.3.2, only the Claude adapter declares a terminal MCP
-    process. Since CP-5a the catalog's `spark` claim is read first, and Claude Code's row alone makes it.
+  - Claude only, until CP-5c: at puppeteer 0.4.2, as at 0.3.2 and 0.3.3, only the Claude adapter declares a
+    terminal MCP process; Codex and Grok declare `run-helper` at the pin and hold the door as plain runs only,
+    never as sparks (item 528, M408). Since CP-5a the catalog's `spark` claim is read first, and Claude Code's row
+    alone makes it.
 - **MT-0, the tool plane's first slice**: LANDED 10-31 (`b3a0cc95a`, the mini's run 29; LANDED "MT-0").
   - `contracts/src/tools.ts` is the one catalog, with audience and scope columns, and `fieldd/src/tool-plane/` serves
     each caller its rows: a spark every served row, a plain run History and the projects list, by its own briefing.
@@ -1106,6 +1165,44 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
     spark's brief and allowance (PU-O). Only CP-5c's Codex claim commit waits for step 7's profile card (CP5-Q2 (d),
     §12 Q11).
 
+**EY — the pages room (AGENT'S EYES' browser half; the tool plane's MT-3)** · vibe-field-db (lane `lanes/ey/ey0`,
+branch `ey/0-record-d-on-train10b`) · law `draft/tool-plane/browser-use.md` (BU), `draft/thinking-agents-eyes.md`
+§10 and §11, `draft/tool-plane/browser/SITTINGS.md` §0, `draft/tool-plane/EY-0-PLAN.md`; DESIGN.md §8 "A page an
+agent is using"
+- Ruled (DECISIONS, the EY row): EY-D1 and EY-D7, answered 10-30 by MT-D2 and MT-D10; BU-1…BU-18 and EY-D2…D6, D8 and
+  D9, 10-31; BU-19…BU-23, 11-01; EY-0's asks 1, 2 and 4, 11-17, and ask 5, the lab's window, 11-18 (James); the MT
+  lead's row map (its second read owed) and the name cap raised to 32, 11-17. EY-0's witness, sitting 1's first re-run
+  of 11-18, read yellow outside the declared set and went to James as it stands; on his "rerun" it ran once more that
+  day and read the same: he answered "Take it as it stands (Recommended)" (in VF-PM's session, 2026-11-18, by
+  17:31:50Z).
+- **EY-0, the record**: LANDED 2026-11-18 (`95f39fc84` → `40a9571d5`, 5 commits, M410, run v-train10d; LANDED "EY-0").
+  - DESIGN.md §8's words for an agent on a page; contracts: the `pages` family's 29 planned `browser_*` rows from
+    the pin's core profile, the pages room's eight facts, the internal `shell.surfaces.control`, the `hold`
+    message, and the record of agent-browser 0.41.0 with its script set; fieldd's room words, facts and method row;
+    main's UNAVAILABLE for the control until EY-1; the agent-plane pages; and a row holding the desk room's own
+    facts through the plane beside the pages room's. Nothing is served and nothing is installed.
+  - The script set merges the lab's 10-31 Path 2 record pass on the development Mac with a supplementary pass on the
+    second test Mac on 11-18: 345 agent calls, 35 exact bodies, 16 templates.
+- Next, by `browser-use.md` §10 and `EY-0-PLAN.md` §5: EY-1 ∥ EY-2. `browser-use.md` §10 re-cuts the slices the
+  tool plane's MT-3 row cites (`draft/tool-plane/IMPLEMENTATION.md`:76).
+  - EY-1, main: the broker and the bridge on Path 2 (BU §10), the install and its EL8 (ask 2 A), and wall R33, the
+    engine spawned only by main's broker (plan §5). Sitting 2 gates it beside sitting 1; its last full run, 11-01,
+    read yellow, so EY-1 lands on its green or a declared yellow. EY-1's desk smoke row measures AB-3 and EY-S1-19
+    onscreen. The browser pane ships in no packaged app since 11-09 (`apps/desktop/packaging/bundled-list.mjs`);
+    whether it returns is James's to decide, at EY-1's plan.
+  - EY-2, fieldd: the pages room, the shim with the pin's grammar, and the signed store that keeps grants (EY-D9 B).
+    Owed before it: James's ask 3 (the reading of MT-L1 for way (b)) and the MT lead's rulings on openWorldHint and
+    on where the `object`-scope hold lives (plan §6.2, §6.13).
+  - Then EY-3 (the dev loop, on EY-1 and EY-2), EY-4, EY-5, EY-7 and EY-8; EY-6 is folded into EY-1 (BU §10). K1 is
+    EY-8's witness, on Path 2; its last reading on Path 1 was red.
+- Owed in sitting 1's table, each measured before (10-31 or 11-01): K1…K8 on their sign-in segment (K1's witness
+  EY-8's, above), and EY-S1-15b and EY-S1-17 on a source build. Owed besides: `pnpm gate:landing`; the lab's draft
+  snapshot, in the next `commit-draft` (LANDED "EY-0"); a second reader's read of the MT lead's row map, which the
+  plan put before the cut (the MT lead signed it in the session that drew it); the at-source draft corrections in
+  `EY-0-PLAN.md` §4, with `draft/thinking-tool-plane.md`:6 (above), `browser-use.md`:1148-1149 (BU-19…BU-23 are on
+  the page since v5) and a dated note on EY-D4 A at `thinking-agents-eyes.md` §11 (OB-D1). The record is
+  darwin-arm64 only.
+
 **ES — Chat's empty state, "The night that becomes the window"** · vibe-field-b4 (lane `lanes/es`, branch
 `es/catalog-role`) · law DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`, *Your First Spark*)
 - Ruled 11-08 (James, on the page): ES-D1…D7, all seven at their leans, then "All ruled with leans, now please start
@@ -1131,7 +1228,8 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
 - Next: 5e, the portal on the phone, a spike that needs a device and James.
 - Owed: James's eye on the phone's night, its motion and its interim Off sentence, on a device (LANDED "ES-Q1 + ES-5a to
   5d"); James's eye on the built night, its lean and its portal on a real GPU, and the starters on his own board;
-  CLAUDE.md's "six mirrors" erratum, on James's word (LANDED "ES-4 (role)"); gate:landing, landing-only;
+  CLAUDE.md's "six mirrors" erratum, on James's word (LANDED "ES-4 (role)"), LANDED 11-18 (M391: seven kit
+  mirrors, not six); gate:landing, landing-only;
   `smoke:chat-night`'s first real window (row 36, a Mac landing row, on James's word).
 
 **HG — History's first view and its waits, "The Room Behind Glass" and "The Mark Holds"** · vibe-field-12 (lane
@@ -1172,6 +1270,9 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   `project.figures` takes a listed page's `{device, sessionId}` pairs and answers exactly their rows before any cut,
   and every other answer carries `totals` over all it gathered; `index.project` takes `sessionIds`, the same ask
   handed down to a peer. Contracts and fieldd only; the phone does not read them yet.
+- Landed 11-17: **item 394** (M355): History's top fade on glass is the glass's own colour, at most 64%, eased over
+  96px, DESIGN.md first. Landed 11-18: **item 516** (M388): History on the phone waits in the living mark, its first
+  read and a project's list, none at rest; **item 520** (M390, test-only): History's folder-list test gets 20 s.
 - Next: the phone's `AppReviewTests.swift` comment-only follow-up (LANDED "EL8 — Rosetta 0.1.6", Owed), item 398
   slice 2 (the kit: the phone reads `totals` and asks by id, which ends the messages stat's undercount past 100
   conversations; the row's figures wait for DESIGN.md), and item 411's plan (a Swift-plane change for a 0.1.8, which
@@ -1201,6 +1302,9 @@ law DESIGN.md §9 "VibeField's insides are never a person's to read" (item 280),
   `874e3cd42` from `1f3b8f83a`; LANDED "Item 282, the rule and 282-7"): §9 says every room keeps VibeField's insides
   inside, the same way; History says it is reading, a new terminal that terminals aren't ready yet, the desk's bar
   "can't draw here", Search that it is getting ready, and the sync dot names no peer.
+- Landed 11-17: **item 505** (M341): History on the phone speaks as History, what arrives and from where, never a
+  door, an index or fieldd's detail and reason (DESIGN.md §9: item 280, IS-282-3, IS-282-7); a log line for the
+  dropped detail is item 512.
 - Next: 282's groups in the build order's sequence: 282-4's desktop half; 282-2, with the tile captions, Settings'
   Mesh rows and fieldd's doc-sync.ts comment, and 282-6, whose plugin half is MK-5's; 282-1a, the log seam, settled
   with RV first; then 282-1b, 282-3 and the phone's. The notify teller's fallback to a run's id is its own slice.
@@ -1229,6 +1333,17 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
   whole V on the old mini. *Ran 2026-11-12 (M294's records): run345v3 at `df3677c46`, fieldd's suite whole,
   `271 passed | 5 skipped` files and `3843 passed | 15 skipped` tests, the four plugin files at 13, 3, 7 and 15
   (LANDED "Item 345").*
+- Landed 11-18, held since 11-11 for its custody fix (`obui-tag`): **OB-0** (M365: the desk room's wire truth),
+  **OB-1b** (M366: a card lands by the face you choose), **OB-2** (M367: a kind's agent half), **OB-3a** (M368: a
+  signed registry of refs and grants), **OB-3b** (M369: the desk room's eight tools), **OB-3c** (M370: the window
+  carries out what fieldd asks of its desk), **OB-3d with PU-J** (M371: the door names a run's helper by a root on
+  the floor) and **OB-4** (M372: who is at work on what, and OB-3/OB-4's twelve review findings), each cut 11-09;
+  **OB custody** (M379): at `sealed`, a signed macOS release build, the daemons' secrets are handed to them and sit
+  in no file a same-user agent can read, and at `files`, every other build, today's secrets stay in today's files.
+  With them: OB-UI, the card's bloom (M373), item 293 (M374), the riders of items 303, 308 and 316 (M375), items
+  443 and 476 on the stack (M376), OB-3d's correction (M377), the take-back and the agent's undo in the audit's own
+  grammar (M378), item 526 (M417: a take-back always takes) and item 521 (M418: an open desk is never "not open"
+  to an agent for want of one more ask).
 - In flight: the desk tools for Codex and Grok, upstream in puppeteer (seven commits in OB's clone
   `lanes/ob-build/puppeteer`). James on the PM board: `j-ob-desk-tools-puppeteer` "A. Release puppeteer first (push,
   PR and tag on my word), then a pin bump, so all three have desk tools at 0.9" (03:30:27.940Z) and `j-pup-041` "A.
@@ -1243,7 +1358,8 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
   bridge).
 - Owed: the whole V named above (*closed 2026-11-12 by run345v3, M294's records*); the landing table over main,
   before any push, on James's word by name; item 322's two items for James's eye (LANDED "Item 322") and S2's one
-  (LANDED "Item 279, S2"); item 330, on MK's side.
+  (LANDED "Item 279, S2"); item 330, on MK's side; custody's witness, the first sealed Developer ID build
+  (OB-D20), and the cold signed boot's measure (M379); items 288 and 276 (M379).
 
 **MK — the plugin market, "A Place for Plugins"** · vibe-field-b0 (lane `lanes/mk`, `mk/stack-on-8af9b6c85`) · law
 DESIGN.md §8 "Plugins — the frame's second popup" and §9 "The plugins' words", the page *A Place for Plugins*
@@ -1355,9 +1471,9 @@ Browse), the plan `lanes/mk/PLAN.md`, and MK-2's custody note with its addenda (
 - Today, with all of MK but MK-7: no packaged build configures a plugin list (nothing sets fieldd's `registryUrl`,
   `daemon.ts:716`; MK-6's development seam, `FIELDD_PLUGIN_REGISTRY_URL` and `_KEY`, is refused by a packaged fieldd at
   boot), so Discover says "Nothing to discover yet" in every packaged build until the registry rung (TD §9 TD-4); item
-  279's S2 keeps fieldd's installed-plugins folder unread; Settings → Plugins keeps the rows of plugins from the plugin
-  list and of sideloaded ones, with their switches, settings and Reset, until the popup can hold them (MK-5; VF-PM
-  2026-11-14 04:33Z); the packaged app bundles the comment pad alone (FL-2, M267).
+  279's S2 keeps fieldd's installed-plugins folder unread; since N18 (M396), a listed or Sideloaded plugin's switch
+  and settings are in Plugins…, and Settings → Plugins lists, reads and sends nothing; the packaged app bundles the
+  comment pad alone (FL-2, M267).
 - The slices, in order:
   - **MK-0** the docs: DESIGN.md first, then DECISIONS' MK row, this block and UI_SYSTEM's catalog line.
   - **MK-0b** the later rulings' fold (J1 and calls 2–7): DESIGN.md §8 and §9; DECISIONS' PA, TD, insides and MK
@@ -1396,8 +1512,15 @@ Browse), the plan `lanes/mk/PLAN.md`, and MK-2's custody note with its addenda (
   - **Items 449, 457, 442 and 452** (M324; LANDED "Items 449, 457, 442 and 452"): the records file has one writer,
     and keeps a person's unpublished act.
   - **Item 451** (M326, test-only; LANDED "Item 451"): the lane's booted witness, the rest of row B.
+- Landed 11-18: **item 435 and MK-N24** (M387): probe H in `build-fieldd-sea --verify`, not run, and a plugin the
+  list can't update said once; **MK-5b** (M394): a plugin whose runtime failed says so and offers Try again, and one
+  that can't run says so; **item 433** (M395): Discover draws the pegboard's categories, the pill opens on the
+  board's, and smoke:market's CARRY is un-parked; **N18** (M396): a listed or Sideloaded plugin's controls are in
+  Plugins…, and Settings → Plugins lists none; **item 494** (M413): a plugin that isn't working says its row's line
+  on its own page too.
 - Next: `pnpm gate:landing` at James's unlock, both desktops down: rows 20–22 and 29 of `docs/desk-gates.md` read MK's
-  change, and row 37, smoke:market, is MK-6's own (its CARRY and PICTURES rows parked, said on its run's line).
+  change, and row 37, smoke:market, is MK-6's own (its PICTURES row parked, said on its run's line; CARRY un-parked
+  by item 433, M395).
 - Owed after the land: James's eye on the popup in both themes, with one page listing every word that lands as a
   draft (VF-PM 2026-11-14 04:33Z: the land carries those marks honestly, and no picks round comes first), the call
   still his and the two leans held until he says (§5, MK's entry), and VF-PM's plain line for C40 and C41
@@ -1405,22 +1528,25 @@ Browse), the plan `lanes/mk/PLAN.md`, and MK-2's custody note with its addenda (
   plugins are on there, without the statement on each"; MK-7 after ICE's door (petition I54,
   drafted, which James files after the v0.9.0 tag by his own hand, on VF-PM's draft-queue word; his ruling of
   06:48:31Z stands), then its EL8; James's commit-draft of MK-0d (`lanes/mk/draft-0d/`, with additions for O2–O6
-  and O21–O36 still to write); MK-5b, Try again for a plugin whose runtime failed (VF-PM 04:33Z, at mk5's lean);
-  three rows of the inventory (`lanes/mk/mk-inventory/INVENTORY.md`, read against the stack on 2026-11-14) that no slice
-  built: a plugin from the plugin list or a Sideloaded one keeps its switches, settings and Reset in Settings → Plugins
-  until the popup can hold them (N18; MK); a read's incompatible and vanished entries reach `updatesCheck`'s caller
-  alone and are not logged (N24, DESIGN.md's *owed (MK)*; MK); pictures in the window, MK-E9's window half, behind
+  and O21–O36 still to write); MK-5b, Try again for a plugin whose runtime failed (VF-PM 04:33Z, at mk5's lean),
+  landed 11-18 (M394); three rows of the inventory (`lanes/mk/mk-inventory/INVENTORY.md`, read against the stack on
+  2026-11-14) that no slice built: N18, landed 11-18 (M396: a listed or Sideloaded plugin's controls are in
+  Plugins…, and Settings → Plugins lists none); N24, landed 11-18 (M387: a plugin the list can't update is said
+  once; *corrected 2026-11-18: this said a read's incompatible and vanished entries were not logged, where MK-UC's
+  `logUpdatesRead`, in M308's own stack, said every standing line again at each read*); pictures in the window,
+  MK-E9's window half, behind
   ob/ui's token side (N30; ob/ui, then MK); the registry rung before
   Discover shows a listing. Item 437 (a grant turned off then on, replayed by the install reconciler from this
   desktop's own earlier "off") landed in M314. Item 333 and S3 stay
   OB's (its block, above). And the items VF-PM numbered at the packet (2026-11-14
   06:56Z; each C-number is an ask of `lanes/mk/ASKS-CARRIED-2026-11-14.md`). Items 431 (C18), 432 (C35) and 436
   (C21) landed as MK-H1 in M315. Still open:
-  - items 433 and 434: smoke:market's two parked rows, CARRY (433) until Discover draws
-    the pegboard's categories, and PICTURES (434) until MK-E9's window half (behind ob/ui's custody fix); each
-    still runs by name and is said on the run's `SMOKE_MARKET_ROWS` line and in `docs/desk-gates.md` row 37 (C36);
-  - item 435: the single executable's `build-fieldd-sea --verify` carries the plugin-list seam's
-    boot refusal.
+  - items 433 and 434: CARRY (433) un-parked 11-18 (M395), open until it runs green in smoke:market's listed run at
+    the landing; PICTURES (434) parked until MK-E9's window half (ob/ui's custody fix landed 11-18, M379); the
+    parked row still runs by name and is said on the run's `SMOKE_MARKET_ROWS` line and in `docs/desk-gates.md`
+    row 37 (C36);
+  - item 435: probe H, in `build-fieldd-sea --verify` since 11-18 (M387), boots the single executable with the
+    plugin-list seam set; it has not run, and the item stays open until it runs on a real single executable.
 
 **CS — Card Stock and the Card Button (items 400–405, and 304)** · ow-design (lane `lanes/cs`, branch `cs/land-m303`;
 plan `lanes/cs-plan/PLAN.md`) · law DESIGN.md §5/§8/§13 (the pages *Card Stock* `Bw5JvitHdKzUmN528AkWzh` (2026-11-14
@@ -1450,9 +1576,11 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
     and its faces as their types' glyphs.
 - Next: James's eye on the cards in a window (owed; both desktops are down, and nothing is shown before his word) and
   ONE list of the new words (`lanes/cs-plan/records/r2/WORDS-FOR-JAMES.md`).
-- Waits for OB's custody fix (named to James at 11-14 06:48:57Z): the card's bloom (OB-D12; five commits on `ob/ui`,
-  and item 309), Live ref cards and FACE-b (the link, session and ref windows), and ENDED_AGENT's words with item 293.
-  Until then a card let go flies home or plays directly, as before, and a card's foot shows one glyph.
+- OB's custody fix (named to James at 11-14 06:48:57Z) landed 11-18 (M379), and with it the card's bloom (OB-D12
+  and item 309, M373): a card let go on a pane opens the bloom and lands the face chosen; and item 293 (M374): a
+  Live card sent to a sleeping spark is handed to the run its wake started. Still waiting, named by no entry since:
+  Live ref cards and FACE-b (the link, session and ref windows), and ENDED_AGENT's words; a card's foot shows one
+  glyph, as before.
 - Owed: James's answers on ow-design's six readings (Flip it in, "No card made — …", the paper card's ◇, round 5's face,
   the mark's three tokens, the press's light as numbers; DECISIONS "CS-D1…CS-D12"); his word on the press's catalog
   caption, held; `pnpm still` byte-equal and the landing table (owed at James's unlock: LANDED Item 400's
@@ -1483,17 +1611,24 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
   on the old mini, carried onto M289 by exact-text edits; LANDED "EL8 — libghostty-vt 1.0"): the six crates, the five
   npm rows and the kit's Swift package move together, with no product source line changed; truffle's Swift plane
   stays 0.7.26, which 0.15.0 declares. Owed: the landing gates at this land; item 331 (rustix 1.1.4 → 1.1.6 in
-  `Cargo.lock`); ack-fonts; item 355 (a `GHOSTTEA_` build variable reached a pane on a test host); James's cards
+  `Cargo.lock`, landed 11-18, M364); ack-fonts; item 355 (a `GHOSTTEA_` build variable reached a pane on a test
+  host); James's cards
   (the old mini's keychain file, j-mini-keychain-el8; two root links at 0.14.0 in his checkout).
 - Landed 11-13: **rosetta 0.1.6** (`31abf8792` → `ea26b0464`, M296; generated by run el8r016b on the old mini;
   LANDED "EL8 — Rosetta 0.1.6"): the two npm rows, the lock, the pin and the kit's Swift row; rosetta is MIT in the
   notices. The Mac's rows after the land are that entry's addendum, landed with HG-4's records.
 - Landed 11-14: **item 414** (M302; LANDED "Item 414"): quinn-udp 0.5.15 → 0.5.16 under truffle-core's quinn
   (RUSTSEC-2026-0538), `Cargo.lock` alone.
-- Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle 0.7.27 at the first ghosttea that declares it.
+- Landed 11-17: **puppeteer 0.4.2** (`787552155`, M356): 0.4.1 and 0.4.2 ride one pin, and the eight phone goldens
+  re-bless; **mille 0.3.6** (M359): mille and mille-ui come from npm, exact, and the files service's sibling window
+  (FS-1b) closes, RD-5's exit for mille's npm plane.
+- Landed 11-18: **truffle 0.7.28** (`628233925`, `fc4434113`, M363): the crate and the five sidecars move together,
+  every sidecar built with Go 1.27.4; **item 331** (M364): `Cargo.lock`'s rustix is 1.1.6.
+- Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle (0.7.28 since M363) at the first ghosttea
+  that declares it.
   Since item 379 (M298), the iOS record regenerates with no Go module cache.
-  Next events: puppeteer 0.4.2, published 2026-11-13 (0.4.0 is pinned, M274; its EL8 leads the next train), and
-  mille's first release.
+  Next events: the two this line named, puppeteer 0.4.2 and mille's npm release (0.3.6), both landed 11-17 (M356,
+  M359; above).
   *Corrected 2026-11-17: this named "a later puppeteer release (§3 item 3; 0.3.0 pinned 10-28, `1469639a6`)";
   0.4.0 has been the pin since 11-10.* The next event's kit pre-boots the
   simulator (`/Volumes/SamsungRed/lanes/hl-k1/kit-template.sh`, item 77's k1). CLAUDE.md names no pin since its dated pass (2026-10-28), so an EL8 event leaves it alone.
@@ -1521,13 +1656,38 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
     budget holds), item 475 (M328: a hidden window mints no ticket; the ask waits for the show), items 476's
     stage 1 and 482 (M330: the door admits a subscription by what it asks for; DECISIONS "item 476 · stage 1")
     and items 476's stage 2 and 490 (M333: a refused feed asks again by itself, and a plugin that cannot start
-    says so). Left: items 473, 480 (stage 3, the bound per caller) and 494 (a plugin's own page says the line);
+    says so). Left: item 480 (stage 3, the bound per caller); item 473 landed 11-18 (M416: Godview's three doors
+    and Live apps' catalog ask again by themselves after a refusal for room), and item 494 (M413, §2's MK block);
   - the agent's words: item 488 (M331: the refresh notice says VibeField's sentence) and item 489 (M334: four
     more places say VibeField's sentence alone); the adapter's words go to the log. Left: the two sites that
     print the agent's words alone, whose new sentences are James's to choose, and item 493's sweep;
   - item 499 (M338): the design catalog's theme row is split from its component-state checks, after GitHub's
-    verify timed out on that row in three of eight runs. Left: the root, and the settling measurement, ruled and
-    not run.
+    verify timed out on that row in three of eight runs. Left: the root. The settling measurement RAN 11-18: at the
+    test Mac's scale the spend tick is NOT the root (item 499's own entry, M338, its dated addendum).
+- Landed 11-17 and 11-18, the items no track's block holds (each LANDED under its own heading):
+  - the smokes' and the tests' own ground: item 327's two halves (M353, M383: a smoke's timed-out wait says the
+    desk's state, and each `select()` says when its press took no selection) and item 538 (M423: the new spark's
+    face rows wait on a bound no load reaches);
+  - the dev runner: TP-S3d (M352: a SIGTERM to `pnpm dev`'s runner stops Electron and the daemon pair before it
+    exits; §6's debt);
+  - Godview: item 382 (M354: a hold's terminal carries its release point the first time a view is handed its
+    row), item 397 (M412: under `pnpm dev`, the swarm's physics stay in their worker again) and PS-D5 (V1) (M403:
+    a bare terminal running a job reads working on every desktop and the phone), with PS's words (M402: the
+    program-status rulings indexed and DESIGN.md's split ring drawn, nothing of it built);
+  - the terminal's look: TL-1/2 (M400: a pane's text is held to two nets, and the deck wears neither CRT layer)
+    and TL-4a (M404: fieldd tells every local session the deck's terminal scheme);
+  - the phone: item 41 (M343: another device's held screen anchors at the grid's foot, its empty rows on top) and
+    item 477 (M414: the phone no longer re-dials its desktop twice a second when one feed is refused on a
+    reconnect);
+  - DS (M393): a desktop restarting for an update is drawn as it was while it answered, never asleep, for up to
+    five minutes (§6's Mesh and DS);
+  - fieldd: item 502 (M415: a run's start line names its profile set and its door, by ids and kinds alone) and
+    item 542 (M425: a secret store's child process);
+  - words at their sources: items 513 (M398), 533 (M421) and 546 (M422): the kit's comments, Swift, shell scripts,
+    shaders, JavaScript and manifest name no person and no session; item 530 (M406: three comments say what
+    ghosttea 0.15.0 does), item 536 (M407: the pages, the README and three comments stop naming mille's sibling
+    checkout as required) and item 531 (M409: truffle 0.7.28's LP-5 note and mille 0.3.6's window, corrected at
+    their sources); Q4's errata (M347: the wind's comment gives the whole logged range, 22,026–22,116 ms).
 - Queue: item 80 (DS-5c's wall-clock gap margin, `doc-sync-service.test.ts`, shaped with the DS owner; its sibling
   TC-S3, item 120, landed in run 34) · item 71 (persona refresh window) · item
   73 (`unregistered_webcontents` false positive on every factory window) · item 74 (the generation-1 port forward before
@@ -1630,7 +1790,8 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
    at 07:34Z, `e79fc53d`) → its EL8 pin → QW1 stack B (both LANDED 10-28) → QA wave 1 (vibe-field-d4), next. 0.3.0 carries none of the
    following (read at its tag), so they wait on a later puppeteer release (0.3.x or 0.4.0): AO-7 (Get)'s
    `installRecipe`; item 50's env seam (puppeteer `9ffe59d1` + fieldd
-   `c0581e952`, branch `focus/agent-probe-env`); item 39 (the swarm's physics at the display's rate, ruled (i) 10-19);
+   `c0581e952`, branch `focus/agent-probe-env`; LANDED 11-17 through 0.4.2's
+   `serviceEnvironment`, M361); item 39 (the swarm's physics at the display's rate, ruled (i) 10-19);
    the tuck row (`384e933f`). The puppeteer halves of the last three sit on `vf/item-39` / `vf/after-a` in James's local
    `../puppeteer` only (not on GitHub, not on puppeteer main, not in a release): push them first, then merge.
 4. TS-8c → TS-9.
@@ -1689,7 +1850,8 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
        (LP-D16): LANDED 2026-11-05 (M139 `bb49a3eab`, LANDED "TD-4"); owed: two signed nightlies with an unchanged
        field-native, `touched` naming none, a live terminal surviving the apply. W11's PTY clause rides it.
      - **D** RD-6, CI in prod shape: rosetta's published `rosettad` archive pinned by checksum (RD-D7), then mille's
-       release (PR #44) and an exact pin.
+       release (PR #44) and an exact pin. Mille's half LANDED 2026-11-17: 0.3.6, exact, and CI's `prepare-mille`
+       retires (M359).
      - **E** the scope freeze (VF-PM, James; `draft/launch/scope-freeze-proposal.md`): what 0.9 holds, and item 152
        and 169 (a say forgotten across a fieldd restart, 152's class) fixed, or the feature they touch kept out.
      - **F** testers report a problem in one place (LP-D18): LANDED 2026-11-05 (M142 `d48b6fe6d`, LANDED "LP-7"). Owed:
@@ -1768,17 +1930,17 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 
 | Track / item | Parked state | Re-entry | Doc |
 |---|---|---|---|
-| DS / SP — sync planes | DS-7 LANDED (M66 `c0d68b94d`, 2026-10-31): another desktop's transcript by ticket — the owner mints for the window's daemon, which re-homes the index serve's set onto its own egress route (9424 now routable); History hands the room another desktop's sessions of a project here; **owed: the two-desktop run (James, steps in LANDED "DS-7")** · DS-9 (E3 and artifacts in the app, files) · SP-4 probe → SP-4 → SP-7 (OPENED 2026-11-06 on James's word; road 7a, a spark's transcript for Chat's thread: M-b, the kit's reader, LANDED 2026-11-06 (`432784612`, LANDED "SP-7a's M-b"), M-a, the home's carry and the owner's routed serve (9426), LANDED 2026-11-06 (`d6fe77980`, LANDED "SP-7a's M-a"), M-b2, the phone's routed serve and its `device`, LANDED 2026-11-06 (`3b8611ec4`, LANDED "SP-7a's M-b2"); road 7b, the phone's History from rosettad by grant through rosetta's Swift client (James 22:56Z, `sp7b-swift-rosetta-reader` (b); DECISIONS "SP-7b"): 7b-1, the phone's ticket by both roads, LANDED 2026-11-07 (`41331646e`, LANDED "SP-7b's 7b-1"); 7c, its terminal asks through its home, LANDED 2026-11-07 (`c8c580fcb`, LANDED "SP-7b's 7c"); 7b-2a, the ticket's `rest` leg (the index serve's http(s) origin) and the projection's golden pairs, LANDED 2026-11-08 (`c435f1e6e`, M223, LANDED "SP-7b's 7b-2a"); rosetta's `clients/swift` (RO-39) released in rosetta 0.1.5 (2026-11-08); the EL8 to 0.1.5 LANDED 2026-11-08 (`68b80fb95`, M230, LANDED "EL8 — Rosetta 0.1.5"; its Swift row PAID on vf-m2 by item 257's mint, M233 `b3a5930b2`, at main `f1670584e` + 257's three test files; the exact-tree witness stays the old mini's); item 259, the iOS record's own rosetta row and About's filter, LANDED 2026-11-08 (M236 `83cf67316`, LANDED "Item 259"); 7b-2b, the kit's reader and the projection in Swift, LANDED 2026-11-09 (`870edfa9e`, M253, LANDED "SP-7b's 7b-2b"); its injection LANDED 2026-11-15 in the phone's QA batch (M316, LANDED "The phone's QA batch": History reads a desktop's sessions directly), so 7b-2b is no longer dark; then W1 on the old mini (James's disk); owed: item 247, a tool's strict `attachments`) → SP-5 → SP-8 (after AR-6) → SP-D4's view state, Follow off, LAST (ruled (a) at the lean, VF-PM 2026-10-31) · PeerLink and the asleep roster (a forward dials a desktop the roster calls asleep, ~15 s to `unreachable`; LANDED "DS-7", Found) · wave 2's residue (§6) · the two built trades ACCEPTED (Q29: whole-value streams lose the 250 ms leading edge; self-served keyed calls are not journaled), reopened only if a witness shows a lost update | an owner + the two-desktop run (Tailscale app QUIT) | `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `design-06-sync-planes.md` |
+| DS / SP — sync planes | DS-7 LANDED (M66 `c0d68b94d`, 2026-10-31): another desktop's transcript by ticket — the owner mints for the window's daemon, which re-homes the index serve's set onto its own egress route (9424 now routable); History hands the room another desktop's sessions of a project here; **owed: the two-desktop run (James, steps in LANDED "DS-7")** · DS-9 (E3 and artifacts in the app, files) · SP-4 probe → SP-4 (in the kit 2026-11-17, M350; mounted by MA-5b-1 in Debug 2026-11-18, M429; §2's MA block) → SP-7 (OPENED 2026-11-06 on James's word; road 7a, a spark's transcript for Chat's thread: M-b, the kit's reader, LANDED 2026-11-06 (`432784612`, LANDED "SP-7a's M-b"), M-a, the home's carry and the owner's routed serve (9426), LANDED 2026-11-06 (`d6fe77980`, LANDED "SP-7a's M-a"), M-b2, the phone's routed serve and its `device`, LANDED 2026-11-06 (`3b8611ec4`, LANDED "SP-7a's M-b2"); road 7b, the phone's History from rosettad by grant through rosetta's Swift client (James 22:56Z, `sp7b-swift-rosetta-reader` (b); DECISIONS "SP-7b"): 7b-1, the phone's ticket by both roads, LANDED 2026-11-07 (`41331646e`, LANDED "SP-7b's 7b-1"); 7c, its terminal asks through its home, LANDED 2026-11-07 (`c8c580fcb`, LANDED "SP-7b's 7c"); 7b-2a, the ticket's `rest` leg (the index serve's http(s) origin) and the projection's golden pairs, LANDED 2026-11-08 (`c435f1e6e`, M223, LANDED "SP-7b's 7b-2a"); rosetta's `clients/swift` (RO-39) released in rosetta 0.1.5 (2026-11-08); the EL8 to 0.1.5 LANDED 2026-11-08 (`68b80fb95`, M230, LANDED "EL8 — Rosetta 0.1.5"; its Swift row PAID on vf-m2 by item 257's mint, M233 `b3a5930b2`, at main `f1670584e` + 257's three test files; the exact-tree witness stays the old mini's); item 259, the iOS record's own rosetta row and About's filter, LANDED 2026-11-08 (M236 `83cf67316`, LANDED "Item 259"); 7b-2b, the kit's reader and the projection in Swift, LANDED 2026-11-09 (`870edfa9e`, M253, LANDED "SP-7b's 7b-2b"); its injection LANDED 2026-11-15 in the phone's QA batch (M316, LANDED "The phone's QA batch": History reads a desktop's sessions directly), so 7b-2b is no longer dark; then W1 on the old mini (James's disk); owed: item 247, a tool's strict `attachments`) → SP-5 → SP-8 (after AR-6) → SP-D4's view state, Follow off, LAST (ruled (a) at the lean, VF-PM 2026-10-31) · PeerLink and the asleep roster (a forward dials a desktop the roster calls asleep, ~15 s to `unreachable`; LANDED "DS-7", Found) · wave 2's residue (§6) · the two built trades ACCEPTED (Q29: whole-value streams lose the 250 ms leading edge; self-served keyed calls are not journaled), reopened only if a witness shows a lost update | an owner + the two-desktop run (Tailscale app QUIT) | `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `design-06-sync-planes.md` |
 | TD-4…TD-7 | the registry's listing gates, attestation/rebuild, the R2 posture (TD ladder §9) · *Note 2026-11-11 (MK):* TD §9 TD-6's Browse, switch and row labels are MK's popup, its design round ruled 11-11 (§2's MK block); MK builds the popup first, saying "No plugin registry yet" until the registry rung (TD §9 TD-4: the registry repository and the index v2 reader) lands. That rung is not LANDED's "TD-4" (2026-11-05, M139), LP-D16's code-hash slice (§3 item 7, phase 2's C; DECISIONS' collision warnings). *Corrected 2026-11-15 (MK's records): since MK-O5 (James's pick "Rewrite without 'registry'", his Rulings Docket, 2026-11-11 22:34:14Z; `43ea4ff5f`, `1fbd92318`), Discover says "Nothing to discover yet" until that rung lands, and no word in the popup says "registry".* | third-party plugins; the first listing Discover shows | `specs/trust-and-distribution.md` |
 | History finish (AR-8) | B-D4/B-D5 (the doors federate; no window asks for another desktop's past; the phone reads none) · PJ-8 acts across desktops (PlaceRef + the params idempotency key), unblocked by DS-7 (another desktop's sessions are in the room, their acts said "ran on ‹desktop›") · projects only another desktop holds, and its Home and Temporary, in the list (PJ's design; DESIGN.md §8's DS-7 amendment) · the Peek's "Everything" across desktops (K5) · R8/R9 and P2's runs (§6) | the History lead's slot | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` |
 | PJ-5 · PJ L5 | Godview's project chip, "Open in History", synced ink, where line: unbuilt; re-judged against One Frame and MV before any build (Q16) · the project key unkeyed (`normalize.ts:172`, version 1) | the re-judgement · a mesh-shared secret | `thinking-project-places.md` |
-| FS | FS-3 the files consumer on the desk (a kind or panel; `pickFolder()` → `attach(root)` is built) · FS-4 over DS-7's road (one route per owner desktop, `OwnerRoutes`; the workspace serve needs its DS-L6 claim) · FS-5 the phone viewer · GitService replaces the interim git port (R2; M5) | a desk lane · mille's release | `thinking-files-service.md`, `draft/files-service/build-fs.md` |
+| FS | FS-3 the files consumer on the desk (a kind or panel; `pickFolder()` → `attach(root)` is built) · FS-4 over DS-7's road (one route per owner desktop, `OwnerRoutes`; the workspace serve needs its DS-L6 claim) · FS-5 the phone viewer · GitService replaces the interim git port (R2; M5) | a desk lane · mille's release (0.3.6, exact since 2026-11-17, M359) | `thinking-files-service.md`, `draft/files-service/build-fs.md` |
 | FW — the freeway | F1's device round before leaving `-vf-freeway`, which witnesses F1b's exit (the kit asks through its home since 11-01, `284e4af9d`; LANDED "F1b's kit half") · FD1/FD2 (truffle precondition met; need an owner), FD3/FD4, F4, FW-D10's slice, FW-R1…R10 · FW-DF-1/DF-2 (§6) | James's device round; an owner for FD1/FD2 (History lead) | `draft/thinking-freeway.md` v0.3 §13/§14/§16; LANDED "F1b — the forwarded phone approval", "F1b's kit half" |
 | AR-6 — approvals + prompts | Phase 0 paid (P0-H, 09-25); AG-1 shipped as AR-S1/AR-S2. Waits on AR6-D1…D9 (unindexed; re-verify §0's anchors at the pinned puppeteer). PU-15 rides it. A 1.0 exit | James rules AR6-D1…D9 | `thinking-ar-approvals-prompts.md` |
 | AR-7 later slices · AR-S4e3 | AR-7f leak detector, AR-7h bash/fish, AR-7i prewarm (AR-7j LANDED 2026-11-05, M128 `45c3680a3`) · S4e3 options, Needs/Needed by, EX6/EX7, other profiles | an AR lane | `thinking-ar7-typed-agents.md` §5.6, `thinking-ar-agents-settings.md` |
 | MV-8b ruling 8 | the transcript-provider migration: puppeteer 0.2.3 still ships adapter-claude's `observation/transcript/provider.ts` | its own track after MV | DECISIONS MV-8b, `docs/agent-plane/architecture.html` |
 | MV · SB | third-party views (MV-D14) · SB-4, SB-6 (after DS); SB's M4/L7/M5/L8 RULED at the built leans (Q14); SB-5 was delivered by PJ-7 (PJ-7's own Q4) | the next MV slot | `design-mv.md`, `thinking-spawn-bloom.md` |
-| Desk Phase 6 | STRING (ports on objects, ICE's wires, the Wire tool DK-D29) · OBJECT KIT (panel, controls, screens, cables, `process`) · AGENT'S EYES, now the tool plane's rooms (`thinking-tool-plane.md` §13; the `canvas_*` rows for DK-D26's MCP canvas tools; DT-5's control lane, the reserved `surface.control` scope) · UPLOAD PLANE + the mini-app bridge (SP-D9/SP-D7; UP v0.1 and MB v0.1 drafted 10-01; UP-D1…D8, MB-D1…D9 unruled; AH-D10's cross-device CAS rides it). It replaces the four dogfood packs (Q9); the microservice pack retires or becomes an OBJECT KIT `process` candidate | a thinking doc each; STRING first | `thinking-desk-migration.md`, `thinking-upload-plane.md`, `thinking-mini-app-bridge.md` |
+| Desk Phase 6 | STRING (ports on objects, ICE's wires, the Wire tool DK-D29) · OBJECT KIT (panel, controls, screens, cables, `process`) · AGENT'S EYES, now the tool plane's rooms (`thinking-tool-plane.md` §13; the `canvas_*` rows for DK-D26's MCP canvas tools); its browser half is the pages room, track EY (§2 above; `thinking-agents-eyes.md`), and EY-D8 A retired the reserved `surface.control` scope · UPLOAD PLANE + the mini-app bridge (SP-D9/SP-D7; UP v0.1 and MB v0.1 drafted 10-01; UP-D1…D8, MB-D1…D9 unruled; AH-D10's cross-device CAS rides it). It replaces the four dogfood packs (Q9); the microservice pack retires or becomes an OBJECT KIT `process` candidate | a thinking doc each; STRING first | `thinking-desk-migration.md`, `thinking-upload-plane.md`, `thinking-mini-app-bridge.md` |
 | Mind map pack | the next release's headline, not 0.9 (James, 2026-11-09, DECISIONS "FL"); waits for STRING; redesign from Paper & String (MD-1…MD-15); v3's MM-D1…D14 were cut for the pre-desk canvas, MM-D14 moot (DK-D30) | STRING's thinking doc | `draft/mindmap/`, `thinking-mindmap-pack.md`, `predesign-mindmap-evidence.md` |
 | The bare mat's menu | "Paste here", "New note here": unbuilt | a desk lane | DESIGN.md §8, ICE design-015 §7 |
 | PT — PORTALS | PT-S is §2's (resumed 10-29; PT-S1 built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 `1de84540b`; item 119's fix LANDED 10-31 `265325d09`; PT-S2 built code-only and light-green 10-30, LANDED 10-31 `e4aa3d367`; PT-S3 built code-only and light-green 10-31, LANDED 10-31 `c564de0e4`, its live run owed to James's unlock) · then PT-C, PT-T (form ruled last, PT-D10) · James's 10-14 A2, B4, the 5 s wind tail, unbuilt | PT-C, PT-T: after PT-S (PT-D11's order: the simulator, window capture, the terminal) · A2, B4, the tail: a PT lane | `thinking-portals.md`, `draft/portals-maps/`, ICE design-019 |
@@ -1866,7 +2028,8 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
   question (AU-2), since B3 the status item's update image and the app menu's update item (AU-4), and since B4 the
   notes card, the build's day and What's new (AU-6); ⌘, through the app menu has no smoke (LC-28).
 - History by project (PJ-4 phase B): the list's order and folds, a row's marks, "n live".
-- Settings → Plugins (object rows since DK-8 `244263f8c`): enable, disable, update, a faulted plugin's state.
+- Plugins…, where a plugin's switch and settings stand since N18 (M396; Settings → Plugins lists none): enable,
+  disable, update, a faulted plugin's state.
 - Settings → Devices → Network details' sync rows and the head's name-pill sync dot (C6-4); could join TS's photographs.
 - Artifacts: the list and the Proxy/Folder picker, add and open flows (AH-3), reduced motion included.
 - The UI catalog (`pnpm dev:design`): light/dark, keyboard focus, reduced motion, narrow.
@@ -1895,9 +2058,9 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 
 **Releases, edits and chores**
 - Releases: puppeteer 0.3.0 PUBLISHED 10-28 08:19Z and pinned (`1469639a6`, with QW1 stack B) · a later puppeteer
-  release (0.3.x or 0.4.0) for AO-7's `installRecipe`, item 50's env seam, item 39 and the tuck (push and merge
-  `vf/item-39`, `vf/after-a` first) · mille's first
-  npm release · adopt rosettad's published archives (RD-D7) · RD-4's pipelines (who runs them is open, §9).
+  release (0.3.x or 0.4.0) for AO-7's `installRecipe`, item 50's env seam (shipped in 0.4.2 and taken 11-17, M361),
+  item 39 and the tuck (push and merge `vf/item-39`, `vf/after-a` first) · mille's npm release (0.3.6, pinned exact
+  2026-11-17, M359) · adopt rosettad's published archives (RD-D7) · RD-4's pipelines (who runs them is open, §9).
 - The Mac mini (Q24): full Xcode was INSTALLED there (James, 2026-10-28 ~20:54Z: Xcode 27.1, 27A9275; read 20:57Z:
   `actool` and Icon Composer's `ictool` executable, the two files `run-electron-builder.mjs` requires), and row 30
   (`smoke:update`), the one gate row that needs it, ran there 5/5 that evening (§6). The mini is OFFLINE from
@@ -1950,6 +2113,9 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 
 **AL and the dev runner**
 - The dev runner's SIGTERM teardown dies before `stopDaemons` under `pnpm dev` (three times 10-17); read why, fix at the cause — `draft/handover/2026-10-17-focus-audit.md`.
+  *Closed 2026-11-17 (M352, TP-S3d): Vite's dev server, hosted in the runner, added SIGTERM and stdin-end
+  listeners that called `process.exit()`; the runner removes them, and its teardown stops Electron and the pair
+  before it exits. The run on a fresh dev root is owed.*
 - After an unclean exit, a pair adopted across a shell-only change keeps its floor, loses its cells to the start-up reaper, and the floor starts its host again — LANDED "TC-S2 + GT-2d".
 
 **Agent plane (AR · AO · MV · Godview)**
@@ -1957,6 +2123,9 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
   with no pane state, and ask 4 the unverified coalescing residual) · drawing the Stop on the phone, a later iOS
   slice (fd's; the PG/IOS track) — LANDED "ST", "ST's rename and the kit half".
 - Item 50: agent probes inherit fieldd's env (EL7); one puppeteer seam (`BuiltinProviderOptions.env`, abort on stop) also ends fieldd's agent-inventory probes outliving its stop (QW1 stack A's `4c54f20c7` covers an adapter's helper once the pinned puppeteer asks) — DK-18 follow-up (a).
+  *Closed in part 2026-11-17 (M361): the catalog's probes and puppeteer's other service runs inside fieldd run
+  under an agent terminal's allow-list, through 0.4.2's `BuiltinProviderOptions.serviceEnvironment`; other runs
+  inside fieldd are item 537's (its (a), M420: the git observers and `ps` reads). No entry names the abort on stop.*
 - COLORFGBG: ghosttea writes it into every session, an agent's included; EL7 accepted ghosttea's value 10-23 — decide whether an agent's value is VibeField's own.
 - Item 60's doors: James's veto on the phone's bounded reply; whether `project.figures` says a count beside `clipped`; the phone's "N more" for `omitted`; a revisioned delta past a page (measure first) — LANDED "AR/SP — item 60's three doors".
 - AR-S4e2's probes: each install form's first real run on a throwaway profile; a >512-char Claude inventory id — LANDED "AR-S4e2".
@@ -1991,6 +2160,9 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 
 **Mesh and DS**
 - `DeviceSlice.restart` and `doorWords`' restarting arm — the C row's owed.
+  *Closed in part 2026-11-18 (M393): `restart` on `DeviceSlice` and `DeviceInfo` is fieldd's `RestartScheduled`,
+  and a desktop restarting for an update reads as it was for up to five minutes; the entry names no `doorWords`
+  arm.*
 - C3's in-boot half: a placed serve's changed spec is adopted while the old gate runs (`mesh-client.ts` reconcile); live since UA-P-0; callers remove-then-add; the restart half fixed at P0-S `1a44b141`.
 - Which tailnet grants a serve should accept — the mesh owner's question (or TS-6/TS-9's, if TS owns grants).
 - DS wave 2's residue: the egress-route sweep after a superseded daemon; `FORWARDED_MINTS` vs the keyed-forward set; DS-6b's `page`/`pages` not in `rows.ts`, design-06 §5's `catalog.db` vs per-table JSON, project-family's case and port, a consumer throw inside live frame routing (the unjournaled self-served keyed call is accepted, Q29) — `draft/work/ds-wave2-2026-10-01.md`.
@@ -2047,12 +2219,13 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 
 | Plane | Pin (the manifests) | Note |
 |---|---|---|
-| truffle | `truffle-core = "=0.7.27"` (Cargo.toml) + the five npm sidecars 0.7.27 (protocol 13) · Swift exact 0.7.26 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.15.0 declares, as 0.14.0 did | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27; Swift rejoins at the first ghosttea declaring 0.7.27 |
+| truffle | `truffle-core = "=0.7.28"` (Cargo.toml) + the five npm sidecars 0.7.28 (protocol 13) · Swift exact 0.7.26 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.15.0 declares, as 0.14.0 did | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27, and the EL8 of 2026-11-18 (M363, `628233925`, `fc4434113`; DECISIONS TB) moved them to 0.7.28, protocol 13 standing; Swift rejoins at the first ghosttea declaring 0.7.27 · *Corrected 2026-11-18: this row still said `=0.7.27` and the sidecars 0.7.27 after M363 moved both to 0.7.28 (Cargo.toml:238; `apps/desktop/package.json`).* |
 | ghosttea | 0.15.0 on cargo (`=0.15.0`), npm and Swift: libghostty-vt 1.0 (Ghostty `0fa3d577`) | the EL8 of 11-12 (0.14.0's: 11-02, LANDED "EL8 — Ghostty 1.4"); no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
 | ICE | `@vibecook/ice` 0.17.0 exact (overrides row) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | EL8 |
-| puppeteer | `@vibefield/puppeteer-*` 0.4.0 exact (the lock's `e6e4753de`) | the EL8 of 11-10 (LANDED "EL8 — puppeteer 0.4.0"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate |
+| puppeteer | `@vibefield/puppeteer-*` 0.4.2 exact (the lock's `325b6770`, v0.4.2, the release #86) | the EL8 of 2026-11-17 (M356, `787552155`; LANDED "EL8: puppeteer 0.4.2": 0.4.1, never pinned here, rides with it), after the EL8 of 11-10 (LANDED "EL8 — puppeteer 0.4.0"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate · *Corrected 2026-11-18: this row still said 0.4.0 after M356 moved the pin to 0.4.2 on 2026-11-17.* |
 | rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.7 exact · the kit's `RosettaClient` 0.1.6 exact (`let rosettaRelease`; the dated split, DECISIONS RD: 0.1.7 changes no Swift path) · rosettad built from `../rosetta-pin` at `1bc7f45ef` (protocol and store schema 30) · MIT | EL8 11-14 (`ed67b0c5b`, M301; 0.1.6 at `31abf8792` → `ea26b0464`, M296, 11-13; 0.1.5 at `68b80fb95`, M230, 11-08); npm and the daemon archives released (v0.1.7), Swift at v0.1.6; adopting the archives remains RD-D7; the Swift row is PAID on vf-m2 by item 257 (M233 `b3a5930b2`); its exact-tree witness stays the old mini's |
-| mille | `link:../mille-pin` at `c8160d5` (`@vibecook/mille`, `mille-ui`) | FS-1b; no release past v0.3.4; exit RD-6 |
+| mille | `@vibecook/mille` and `mille-ui` 0.3.6 exact (the overrides rows; the lock's `85c35e7d`, tag v0.3.6) | the EL8 of 2026-11-17 (M359, `0d1e63b07`; LANDED "EL8 — mille 0.3.6"): RD-5's exit for mille's npm plane, and FS-1b's sibling window closed; `../mille-pin` is the overlay's coordinate · *Corrected 2026-11-18: this row still said `link:../mille-pin` at `c8160d5` and no release past v0.3.4 after M359 moved mille to npm 0.3.6 on 2026-11-17.* |
+| agent-browser | 0.41.0, tag `1453dd37` — RECORDED, not installed (contracts' `pages-record.ts`, EY-0); the install is EY-1's (ask 2 A) | upstream #2445 (`53384771`, merged 2026-11-15), the fix for the event gate behind K1's Path 1 red, was in no release at the 2026-11-17 read (latest 0.43.0); the move off 0.41.0 is a later EL8, to the first release that carries it |
 | rustc | 1.99.1 (`rust-toolchain.toml`) | EL8 |
 
 Petition status lives in `draft/petitions/README.md`. Still open or owed there:
@@ -2061,9 +2234,19 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   D6's `encodeInput` seam, D5's renewal, browse-handler injection (absent at 0.13.7), a real `prepare()` (the
   first-frame half MET by `session-drawn`, 09-29), whether `paste()`/`sendKey()`/`sendText()` say they sent, the "last
   pane closed" hook (AL), K-D5's `customInputView` · G27 parked (a second Swift consumer).
+- Upstream, read 2026-11-18 20:18Z: v0.16.0 is tagged on #108's merge `3e71939735f6` and PUBLISHED 2026-11-18 (the
+  publish run green; npm's six `@vibecook/ghosttea*` packages and the `ghosttea` crate read back at 0.16.0).
+  Protocol minor 19 to 20 (a host tells a terminal its colours). Its Swift manifest declares truffle 0.7.26 exact,
+  as 0.15.0's did. The EL8 (item 529) is the next train's.
 - **truffle:** T8 (the app-chosen hostname prefix; taken at 0.7.27; TS-8c) · T12 (a typed start refusal; held; a PR when
   James says) · T13, the one T row for T7's route-name pinning (Q22; owed, not drafted); T7's other follow-ups (the per-direction idle reap, a held
   route id's refusal, loopback pages) are recorded as accepted.
+- Upstream, read on GitHub 2026-11-18 20:18Z: main is `9fdff8692099`, #264's squash, merged 2026-11-18 (the embedded
+  node's client-log upload can be turned off, `MeshConfiguration.clientLogUpload`; quinn-udp 0.5.16; TailscaleKit
+  rebuilt with Go 1.27.4, its artifact release `tailscalekit-d1dc45d0-ts1.104.1-go1.27.4`). Main's advisory checks
+  have been red since 2026-11-16 (zip, RUSTSEC-2026-0548; chrono, RUSTSEC-2026-0543); #268 mends them and is open,
+  its advisory checks green. NOT released: the latest is truffle-v0.7.28; 0.7.29 follows #268. The EL8 is a later
+  train's, and the Swift plane moves only with a ghosttea that declares the new truffle.
 - **rosetta:** RO-24…RO-27 (#23–#26) shipped in 0.1.2; VibeField RPC/UI adoption remains follow-on work. RO-28 (#27,
   AO-8) shipped in 0.1.3 and is adopted (the face's titles). RO-32 (by digest), RO-33, RO-34a and RO-35 shipped in
   0.1.4: RO-33 and RO-34a are adopted at the History door, and the export and RO-35's signal have no caller yet. Still
@@ -2071,16 +2254,33 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
   DS-6's follower's ask; DS-7 landed without it, the follower still diffs snapshots), RO-17…RO-23, and RO-10's
   follow-ups. RO-4's remainder is adopting the released daemon archives (RD-D7). RO-31 (a copy port in rosetta's room;
   History's Copy waits on it, HN-5).
+- Upstream, read on GitHub 2026-11-18 20:18Z: main is `306ec5b992c9`. Merged 2026-11-18: #58 (`e6ec951bff4f`, the
+  temp-directory paths left in the Antigravity 1.1.20 and Codex 0.149.1 stores redacted) and #42 (`306ec5b992c9`,
+  Antigravity 1.4.12 ground truth and replay; its normalizer version moves 8 to 10). No release holds them: the
+  latest is v0.1.7. The EL8 is the next train's, and its smoke watches rosettad's first start on a root with
+  Antigravity history.
 - **puppeteer:** 0.4.0 PUBLISHED 11-09 (`v0.4.0` = `e6e4753d`) and pinned at M274 · 0.4.1 (PU-R's bands, #82) and
-  0.4.2 (2026-11-13; puppeteer's halves of items 354 and 357, #85) are published and not pinned yet · a later
-  release for
-  AO-7's `installRecipe`,
-  item 50's env seam, item 39 and the tuck · PU-12 (verify first) · PU-19 filed as #47 (AO-8) · PU-15
+  0.4.2 (2026-11-13; puppeteer's halves of items 354 and 357, #85) pinned at M356 (2026-11-17) · a later release
+  for AO-7's `installRecipe`, item 39 and the tuck (item 50's env seam LANDED 11-17 through 0.4.2, M361) · PU-12
+  (verify first) · PU-19 filed as #47 (AO-8) · PU-15
   (with AR-6). PU-R (UM-D7, the bloom's buds wear their fuel, #76) and PU-S (UM-D6, an agent's body wears its profile,
   #77) shipped in 0.4.0; PU-R's consumer is VibeField's.
+- Upstream, read on GitHub 2026-11-18 20:18Z: main is `16121dbb7463`. Merged 2026-11-18: #87 (`529fc40176fc`, an
+  aged access token is a reading that failed, never a sign-out), #88 (`f468defa3ca2`, three fixtures' per-user temp
+  root made synthetic), #89 (`7c8a08c579b8`, a new managed root does not open Claude Code's first run), #90
+  (`77790c2d6a1e`, a profile registry a newer build wrote is read, the fields it does not know dropped), #91
+  (`87f3ed8bbf5d`, a forced usage refresh reads past a failure that names no server refusal) and #93
+  (`16121dbb7463`, an aged access token is renewed through Claude Code before a usage read, managed roots only). NOT
+  released: the release pull request #92 (0.4.3) is open and npm's `latest` is 0.4.2. Open, each a draft: #94 (a
+  plan's tier beside its name; it needs #90 released first, so it rides the release after 0.4.3), #60 (Antigravity
+  1.4.12 journals read beside 1.1.20) and #61 (an OpenCode 2.x binary refused on the 1.x line). The EL8 to each
+  release is the next train's.
 - **mille:** M11 (with WIN). **ICE:** I47, I48 (named, parked) · the remount edge (a pointer `leave` with no point; a
   candidate if presence UX needs it) · NodeNext portability. **strata:** S3/S4's residue (parked: a measured join or
   reload wall on a real desk document).
+- **ICE, upstream**, read 2026-11-18 20:18Z: 0.18.0 (petition I54, the board's set and its hidden types) is on main,
+  #2's merge `14124028da5d`, and tagged v0.18.0, both 2026-11-18. NOT on npm yet: `latest` is 0.17.0. The EL8 is a
+  later train's.
 
 ## 8 Tracks
 
@@ -2091,32 +2291,32 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | FG — the first run on the field | ACTIVE; FG-0…3a landed 10-30, FG-3b, FG-4a, FG-4b, FG-6, FG-5, FG-6c, FG-O2, FG-O2's judge and its fix, FG-6's catalog, FG-6's frozen frame 10-31, FG-6's follow-up 3, the catalog judged and its follow-up 1 11-01 | `thinking-first-run-glass.md`; DESIGN.md §2.1/§5/§6/§8/§13; desk-gates row 32 | James's product question and his eye list (item 136, the glass's literals, landed 11-04, M117) |
 | AL — app lifecycle | ACTIVE; AL-1…3, 5, 7, 8a, 9 and 9b landed; AL-10 (the Behavior words), AL-11 (the relaunch cap), AL-12 (Last exit) and AL-6 landed 11-01 | `thinking-app-lifecycle.md`; ESR §7.3 | nothing queued; the AL-9c candidates wait on James's word |
 | AU — Updates That Wait | ACTIVE; B1–B4 (AU-0…AU-7) landed 10-30/31 | `thinking-update-ux.md` §7 (page sources `draft/update-ux/`); DESIGN.md §2.5/§2.8/§6/§8/§9/§13; EDP §5.2/§6.4/§11; ESR §7.3 | the owed eyeballs, the first signed nightly with notes, the physical rows |
-| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02; PG-4t, then PG-7, PG-5 and PG-8 as one stacked mint, then PG-6, 11-04; PG-9 (S1–S4b, then S4a, S4c and S5a), 11-05; items 464 (M329) and 291's slice A (M336), 11-17 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | S5, James's device run, by his recipe page (published 11-05) |
+| PG — the phone's Godview | ACTIVE; PG-0, PG-1a…1d, PG-1e0 (measured: neither), PG-1f's pin test and PG-2 (the remote cut) landed 10-31; PG-3 (3a…3f), PG-9a and PG-4s 11-01…11-02; PG-4t, then PG-7, PG-5 and PG-8 as one stacked mint, then PG-6, 11-04; PG-9 (S1–S4b, then S4a, S4c and S5a), 11-05; items 464 (M329), 291's slice A (M336) and its kit port (M360), 11-17; items 518 (M389), 465 (M419) and 468 (M411), 11-18 | `thinking-phone-godview.md` §7/§8; `design-mv.md`; `design-06-sync-planes.md` | S5, James's device run, by his recipe page (published 11-05) |
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
-| EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | puppeteer 0.4.2 (0.4.0 pinned 11-10, M274), leading the next train; Swift rejoin; mille's release |
+| EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | ghosttea 0.16.0 (published 2026-11-18; item 529) first; then puppeteer 0.4.3 and the release after it (the plan's tier), rosetta's next release (#42, #58), truffle 0.7.29 and ICE 0.18.0, each when it is published; none is published at this read but ghosttea's. · Swift rejoin |
 | AR — agent runtime | PARKED; AR-3…AR-5b, AR-7, AR-7j, AR-S1…S4e2, AR-S5 landed | `thinking-ar-agent-plane.md`, `thinking-ar-data-topology.md`, `thinking-ar7-typed-agents.md`, `thinking-ar-agents-settings.md` | AR-6 on AR6-D; AR-7j LANDED (M128 `45c3680a3`) |
 | MV — monitor views | PARKED; landed 10-08 | `draft/monitor-view-sdk/design-mv.md`; DESIGN.md §8 | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); item 39 and the tuck wait on a later release; QL ratifications |
 | History (AR-8) / PJ | PARKED; PJ-1…4, 6, 7 landed; DS-7 hands the room another desktop's sessions | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` | R8/R9; B-D4/B-D5; PJ-5 re-judged; PJ-8 (unblocked) |
 | DS / SP — sync planes (was C — mesh) | PARKED; waves 1–3 and DS-7 landed | design-04, `design-06-sync-planes.md`, `thinking-desktop-sync-plane.md`, `thinking-sync-planes.md`, `thinking-c6-meshdata.md` | the two-desktop run (James); DS-9; SP-7 (opened 11-06; 7a's M-b, M-a and M-b2 LANDED; the device run next) |
 | FW — the freeway | PARKED; F1 landed 10-20, packaging 10-27, F1b's desktop half 10-31 (M63 `599998fdd`), its kit half 11-01 (M93 `284e4af9d`) | `thinking-freeway.md` | James's device round (the flag-off); FD1/FD2's owner |
-| FS — files service | PARKED; FS-1a/1b/2 landed | `thinking-files-service.md`, `build-fs.md` | FS-3 on the desk; mille's release |
+| FS — files service | PARKED; FS-1a/1b/2 landed | `thinking-files-service.md`, `build-fs.md` | FS-3 on the desk (mille released: 0.3.6, exact, M359; FS-1b's window closed) |
 | PT — PORTALS | ACTIVE (PT-S, resumed 10-29); browser landed 10-14; PT-S1 (the phone as a kind) built 10-18 and 10-29, gated and looked at 10-29, LANDED 10-30 (`1de84540b`); PT-S2 (the phone's producer) built code-only and light-green 10-30, LANDED 10-31 (`e4aa3d367`); PT-S3 (the gates) built code-only and light-green 10-31, LANDED 10-31 (`c564de0e4`) | `thinking-portals.md`, `draft/portals-maps/` (PT-S: `PT-S-the-simulator.md`), `draft/ground/PHONE.md`, ICE design-019, LSF spec | PT-S3's live run (on James's unlock) → PT-S4 (touch); then PT-C, PT-T |
 | Desk Phase 6 | PARKED; replaces the four dogfood packs (Q9) | `thinking-desk-migration.md` | STRING's thinking doc |
 | DK — the desk migration | COMPLETE; landed 10-09 | `thinking-desk-migration.md`, `thinking-the-desk.md`, ICE design-015…018, `docs/desk-gates.md` | James's parked build rulings |
 | GT — Godview terminal | PARKED; the deck's ladder done (GT-0…GT-8) | `specs/godview-terminal.md` | G29; GT-D22; row 13b |
 | TP / TC — terminal pipeline and custody | PARKED; TC RATIFIED 10-28 (Q6) | `specs/terminal-pipeline-v3*.md`, `specs/terminal-custody.md`, `thinking-terminal-mesh-cells.md`, `thinking-floor-wedge.md`, `thinking-inventory-latency.md` | D6's cell half |
-| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162), MA-4 (M166), MA-3f (M268) and MA-6 (M269, M272; its bands M285; item 273 M287) and items 378 (M299) and 415 (M304) landed; the userinfo pins (M300); MA-3h's Hide dropped and Keep on the short path (M312), the phone's Keep (M319) and its words (M321); the pull and the shelf's open in the phone's QA batch (M316); AH-1…3 landed; AH-4 on main since 08-03, its ledger entry and review written 11-17 and landing with the next train's records; Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | row 38 at James's unlock (its four legs); Versions on the phone (the rest of MA-3h); MA-5 after SP-4; James's device rows for MA-6, named again against M316's pull; item 273's still witness (item 343); AH-4's physical witnesses |
-| DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle, DR-3b (W3's VF-RELAY) and DR-1 (B) as MA-3f landed (M183, M188, M190, M203, M205, M217, M249, M268); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14 and D15 (James); the EL8 to mille and the substrate slice; DR-2…DR-5 |
-| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196) and VF-W3a (M274, with #73), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; the sibling lanes merged, puppeteer's six shipped in 0.4.0 (M274); item 341 (M292), items 485 (M332) and 486 (M335) landed | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | the EL8 to puppeteer 0.4.2 (fieldd's halves of items 354 and 357 follow it); rv/vf-ghosttea-tail on ghosttea 0.15.0; waves 3–8 |
-| UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198); UM-R (M271), UM-5, the plan filter (M273), the EL8 to puppeteer 0.4.0 (M274) and UM-R-F (M276) landed 11-09 and 11-10; the meters are chrome landed 11-17 (M337) | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | the EL8 to puppeteer 0.4.2, then PU-R's consumer (the bloom's buds wear their fuel), its DESIGN.md text first; item 495 |
+| MA — Apps (was AH — Artifact Hub) | ACTIVE since 11-05 (MA-D1…D13 ruled; MA-4 in 0.9, James 11-06); MA-0a + MA-1a (M152), MA-3 (M157, M162), MA-4 (M166), MA-3f (M268) and MA-6 (M269, M272; its bands M285; item 273 M287) and items 378 (M299) and 415 (M304) landed; the userinfo pins (M300); MA-3h's Hide dropped and Keep on the short path (M312), the phone's Keep (M319) and its words (M321); the pull and the shelf's open in the phone's QA batch (M316); AH-1…3 landed; AH-4 on main since 08-03, its ledger entry and review written 11-17 and on main 11-18 (M362), its findings items 517 (M385) and 519 (M424) 11-18; SP-4 (M350) and MA-5's kit half (M351) 11-17; MA-5b-1 (M429), with items 522 (M392, M426), 524 (M428), 541 (M427), 523 (M430) and 525 (M401), 11-18 (the page in Debug); Live apps are field-app's since FL-2 (M267), `plugins/browser` gone | `thinking-mini-apps.md`, `specs/artifact-hub.md`, design-06 §5; DESIGN.md §2.9/§8/§9/§13 | row 38 at James's unlock (its four legs); Versions on the phone (the rest of MA-3h); MA-5b's later slices and SP-4d's relay (item 373's gate); James's device rows for MA-6, named again against M316's pull; item 273's still witness (item 343); AH-4's physical witnesses |
+| DR — the Drive | ACTIVE since 11-06 (DR-D1…D13 ruled; D14, D15 open); DR-1a, DR-2a, DR-1b, DR-3a (W3's VF-FLOOR), the EL8s to rosetta and truffle, DR-3b (W3's VF-RELAY) and DR-1 (B) as MA-3f landed (M183, M188, M190, M203, M205, M217, M249, M268); wave 1's sibling PRs merged and released 11-06 | `thinking-drive.md` v0.3 (page sources `draft/drive/page/`); `thinking-mini-apps.md` | D14 and D15 (James); the substrate slice (the EL8 to mille landed 11-17 at 0.3.6, M359); DR-2…DR-5 |
+| RV — the review fixes (Godview, terminal, puppeteer) | ACTIVE since 11-06; items 191 (RV #2 half A, M192), 192 (RV #6, M193), 201 (RV #17, #43, #49, #48, #50, M194), 203's VF-W1 (RV #1's pin-free half, M196) and VF-W3a (M274, with #73), 211 (RV #97, #96, #93, #116, #95, #47, M199), 212 (RV #30, #29, #67, M201) and 216 (item 192's census row, M204) landed; the sibling lanes merged, puppeteer's six shipped in 0.4.0 (M274); item 341 (M292), items 485 (M332) and 486 (M335) landed; items 278 (M357), 354 (M358) and 50 (M361) 11-17, with the EL8 to puppeteer 0.4.2 (M356); items 372 (M384) and 537 (a) (M420) 11-18 | `draft/rv/` (plan.md, james-asks.md, lead-rulings.md); `lanes/rv/review/` | rv/vf-ghosttea-tail on ghosttea 0.15.0; waves 3–8; the rest of item 537 |
+| UM + SE — profile meters and one search | ACTIVE since 11-06 (UM-D21…D28 and SE-D1…D5 ruled on the page; UM-D16 E, D19 A; D3, D4, D8, D12…D15 at the leans); UM-0…UM-2 landed 11-06 (M-U1 `c9493b957`, run180, M180); UM-3 and SE-1 landed 11-06 (M-desk `ed8099c1e`, run187, M187); UM-4 and SE-2 landed 11-06 (M-phone `d6d76d079`, run198, M198); UM-R (M271), UM-5, the plan filter (M273), the EL8 to puppeteer 0.4.0 (M274) and UM-R-F (M276) landed 11-09 and 11-10; the meters are chrome landed 11-17 (M337); PU-R's doc 11-17 (M346); item 274 (M380), PU-R's bands (M381) and item 495's VibeField half (M382) 11-18 | `thinking-profile-meters.md`; `lanes/um/PLAN.md` §4; DESIGN.md §2.7/§5/§8/§9/§13; `docs/agent-plane/usage-meters.md` | puppeteer's half of item 495 (`planTier`), its release and EL8 James's; item 495's other half, the key by the bands drawn; the bloom's buds at 48 and 42 for the eye |
 | PLUG — shipped core | COMPLETE: P0–P7, P8b–d (P8c via WP8), PRC-4/5; later publishing/validation work is separate | `specs/plugin-architecture.md`, `thinking-p8-loadable-artifact.md` | existing product gates; no blanket 24-hour prerequisite |
 | PRC-6 — plugin runtime validation | OPEN; diagnostics in draft [PR #7](https://github.com/vibefield/vibefield/pull/7); Linux CI passed, full verification and calibration pending | `thinking-prc6c2-physical-soak.md` §9–10 | full verify → guarded 32-cycle current-desk calibration + listener control; historical failures stay open; literal 24h only for that claim |
 | PLUG — publishing | PARKED: KIT/P8e | `thinking-p8-loadable-artifact.md`, `specs/trust-and-distribution.md` | publishing scope; TD registry + R2 process host |
-| MK — the plugin market | LANDED but for MK-7, on James's word (11-14 03:06:11Z, 19:42:10Z): ruled 11-11 and 11-12 (MK-D1…MK-D13 A, the leans; VF-PM's E1–E9 and E11–E14; James's J1 06:43:00Z, calls 2–7 at MK's leans 06:48:31Z, MK-O1…MK-O36, four PM-board picks and his click of 11-14 08:19:36Z); MK-1 in M303 on 11-14 (37 commits and the E10 fix), the rest in M308 on 11-15 (44 commits, `a9d339bb9`…`8df41b5b7`); its follow-ups in M309, M314 (items 437, 439), M315 (MK-H1: items 431, 432, 436), M317 (items 440, 441), M323 (item 466), M324 (items 449, 457, 442, 452) and M326 (item 451), 11-15 and 11-16 | DESIGN.md §8 "Plugins — the frame's second popup" and §9 "The plugins' words"; the page *A Place for Plugins* (`Xy5CTh2MMuxNsb7icwjiQk`; sources `draft/plugin-market/round1/`); `specs/trust-and-distribution.md`; `lanes/mk/PLAN.md`; `lanes/mk/mk2/` (custody) | `gate:landing` at James's unlock; James's eye with the drafts' page, the call still his and the two leans held until he says (§5); the items VF-PM numbers at the packet (§2's MK block); MK-7 after ICE's door (I54) |
-| IOS — companion | ACTIVE; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4); IOS-10a landed 11-01 (the phone's Settings, `a9a62c20a`); IOS-11 landed 11-02 (the phone's splash, James's PR #10, M104 `f2854bf2f`); WI-1 landed 11-02 (the way in, M108 `8cfe4a59d`; the WI row); item 161 landed 11-02 (a set that never comes up backs off and stops waiting at the dial); WI-3 landed 11-04 (the lock, M116 `ae2d44c00`; the WI row); IOS-12a landed 11-05 (the phone's Chat, its cross-plane changes: `sparks.use`, the spark and needs-you doors through the home, `compose.sparks.say`, the remote row's `spark`; M125 `4fcb471af`; §2's IOS-12 block); IOS-12b landed 11-05 (the phone's Chat, the tab and the list: the bar's third tab, each spark as the Mac reads it, its face, each desktop's last word or never heard; M127 `8255a10b3`); IOS-13a landed 11-06 (Settings for App Review: Privacy Policy and Support on About and the welcome, the bundled acknowledgements read with their texts, the non-affiliation line, the device named as its platform names it; M165 `7a7f22623`); IOS-12e landed 11-06 (the phone's Chat, the star in Metal: the engine's own live face, held to its rows and stills; Chat's list draws it; M186 `09378c9ec`); IOS-12c's M-c2 landed 11-06 (the phone's Chat, the thread: a spark's conversation drawn as the Mac's at touch pitch, read through the home and answered by your words, its draft held while its desktop is away; M191 `eda440d58`); IOS-12d's M-d landed 11-07 (the phone's Chat, what waits on you: Needs you heading Chat, the Mac's card at a thread's foot, an answer through the home; M209 `ef9457363`); IOS-12f's M-f1 landed 11-07 (the phone's Chat, New spark: the Mac's sheet at touch pitch, its sky the engine's hatch in Metal, the face flown to its row; M218 `27c75681f`); IOS-12f's M-f2 landed 11-09 (the phone's Chat, @ at touch pitch, a chip in the sentence, the handle in the card; M266 `d9fe8e6c2`); item 241's 241a landed 11-07 (a pill that is off draws §7's Off, the quiet look with its words in t4; M219 `fba72f50d`), and its 241b 11-08 (the Mac's kit pill draws §7's Off; M225 `493ad96b0`); item 257 landed 11-08 (the kit's tests build on vf-m2's Xcode 26.3 and pass under Xcode 27.3's test runner, all but item 167's; the EL8's row 6 paid there; M233 `b3a5930b2`); item 259 landed 11-08 (About lists the parts others made, and VibeField's own rosetta row rides the iOS record undrawn; M236 `83cf67316`); RB-1 landed 11-12 (the build for App Review without TestFlight's own rows: Notifications, dotted Not yet, in TestFlight and development builds only; two archives per release, the store taking the clean one; M288 `05bfd0944`); item 167 landed 11-14 (the terminal's keyboard row stands its window up without a scene, so FieldTerminalTests is whole in a package run: the red since 11-04 was the test's own; M299 `df6fc8ad7`) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md`; the page *Chat in a Pocket* (M6kri6s5; sources `draft/ios-pocket/chat/`), DECISIONS PC | 12f is whole (M-f2 landed 11-09, M-f1 and 12d's M-d 11-07, and 12c's M-c1 and M-c2 and 12e 11-06); item 242 (the phone's faint words, sorted), items 248 and 251; the rebuild; TestFlight build 4 |
-| WI — the way in | ACTIVE; WI-4 and WI-1 (with WI-2) landed 11-02 (M108 `8cfe4a59d`, run 108): the two states, the way in on the splash's field; item 163 landed 11-02 (Settings' unreachable signed-out head and empty list retired); WI-3 landed 11-04 (the lock: Face ID over a curtain above everything, the way in's last step, Settings › Lock; M116 `ae2d44c00`, run 116); WI-1's owed witness landed 11-04 (M120 `576172d99`, run 120); the mark keeps its place (`WayInView.markFades` shut) until James's word on its fade; P1 and P1b landed 11-12 (M285 `a71a52777`, run 313: "Couldn’t connect.", the notes' ink, the fitted glass); the Desktop slice, item 406, landed 11-14 (M305); items 423, 429 and 430 landed 11-15 (M313); the gate (WI-L2 as amended, WI-G1…G10) and W2e landed 11-17 with ios/rb2 (item 504, M339) | the page *The Way In* (VZPzwk7VZZ3iYwbB5bmDQd since 11-13; sources `draft/ios-pocket/way-in/`); DESIGN.md §8 "The phone's way in", §9 "The way in" and "The lock"; DECISIONS WI | the lock's four hand rows (James; LANDED "WI-3 — the lock"); the kit's rows for item 504; the phone's "This phone was removed." screen; item 367's E2…E5 |
+| MK — the plugin market | LANDED but for MK-7, on James's word (11-14 03:06:11Z, 19:42:10Z): ruled 11-11 and 11-12 (MK-D1…MK-D13 A, the leans; VF-PM's E1–E9 and E11–E14; James's J1 06:43:00Z, calls 2–7 at MK's leans 06:48:31Z, MK-O1…MK-O36, four PM-board picks and his click of 11-14 08:19:36Z); MK-1 in M303 on 11-14 (37 commits and the E10 fix), the rest in M308 on 11-15 (44 commits, `a9d339bb9`…`8df41b5b7`); its follow-ups in M309, M314 (items 437, 439), M315 (MK-H1: items 431, 432, 436), M317 (items 440, 441), M323 (item 466), M324 (items 449, 457, 442, 452) and M326 (item 451), 11-15 and 11-16; M387 (item 435's probe H, N24), M394 (MK-5b), M395 (item 433), M396 (N18) and M413 (item 494), 11-18 | DESIGN.md §8 "Plugins — the frame's second popup" and §9 "The plugins' words"; the page *A Place for Plugins* (`Xy5CTh2MMuxNsb7icwjiQk`; sources `draft/plugin-market/round1/`); `specs/trust-and-distribution.md`; `lanes/mk/PLAN.md`; `lanes/mk/mk2/` (custody) | `gate:landing` at James's unlock; James's eye with the drafts' page, the call still his and the two leans held until he says (§5); the items VF-PM numbers at the packet (§2's MK block); MK-7 after ICE's door (I54) |
+| IOS — companion | ACTIVE; IOS-8f landed 10-30 (`user.me`: the corner wears its home desktop's face and name); item 130 landed 10-31 (a sign-out clears History's cache, AP-D4); IOS-10a landed 11-01 (the phone's Settings, `a9a62c20a`); IOS-11 landed 11-02 (the phone's splash, James's PR #10, M104 `f2854bf2f`); WI-1 landed 11-02 (the way in, M108 `8cfe4a59d`; the WI row); item 161 landed 11-02 (a set that never comes up backs off and stops waiting at the dial); WI-3 landed 11-04 (the lock, M116 `ae2d44c00`; the WI row); IOS-12a landed 11-05 (the phone's Chat, its cross-plane changes: `sparks.use`, the spark and needs-you doors through the home, `compose.sparks.say`, the remote row's `spark`; M125 `4fcb471af`; §2's IOS-12 block); IOS-12b landed 11-05 (the phone's Chat, the tab and the list: the bar's third tab, each spark as the Mac reads it, its face, each desktop's last word or never heard; M127 `8255a10b3`); IOS-13a landed 11-06 (Settings for App Review: Privacy Policy and Support on About and the welcome, the bundled acknowledgements read with their texts, the non-affiliation line, the device named as its platform names it; M165 `7a7f22623`); IOS-12e landed 11-06 (the phone's Chat, the star in Metal: the engine's own live face, held to its rows and stills; Chat's list draws it; M186 `09378c9ec`); IOS-12c's M-c2 landed 11-06 (the phone's Chat, the thread: a spark's conversation drawn as the Mac's at touch pitch, read through the home and answered by your words, its draft held while its desktop is away; M191 `eda440d58`); IOS-12d's M-d landed 11-07 (the phone's Chat, what waits on you: Needs you heading Chat, the Mac's card at a thread's foot, an answer through the home; M209 `ef9457363`); IOS-12f's M-f1 landed 11-07 (the phone's Chat, New spark: the Mac's sheet at touch pitch, its sky the engine's hatch in Metal, the face flown to its row; M218 `27c75681f`); IOS-12f's M-f2 landed 11-09 (the phone's Chat, @ at touch pitch, a chip in the sentence, the handle in the card; M266 `d9fe8e6c2`); item 241's 241a landed 11-07 (a pill that is off draws §7's Off, the quiet look with its words in t4; M219 `fba72f50d`), and its 241b 11-08 (the Mac's kit pill draws §7's Off; M225 `493ad96b0`); item 257 landed 11-08 (the kit's tests build on vf-m2's Xcode 26.3 and pass under Xcode 27.3's test runner, all but item 167's; the EL8's row 6 paid there; M233 `b3a5930b2`); item 259 landed 11-08 (About lists the parts others made, and VibeField's own rosetta row rides the iOS record undrawn; M236 `83cf67316`); RB-1 landed 11-12 (the build for App Review without TestFlight's own rows: Notifications, dotted Not yet, in TestFlight and development builds only; two archives per release, the store taking the clean one; M288 `05bfd0944`); item 167 landed 11-14 (the terminal's keyboard row stands its window up without a scene, so FieldTerminalTests is whole in a package run: the red since 11-04 was the test's own; M299 `df6fc8ad7`) | `thinking-ios-app.md`, `thinking-ios-swarm.md`, `thinking-ios-account.md`, `thinking-ios-history.md`, `apps/ios/TESTFLIGHT.md`; the page *Chat in a Pocket* (M6kri6s5; sources `draft/ios-pocket/chat/`), DECISIONS PC | 12f is whole (M-f2 landed 11-09, M-f1 and 12d's M-d 11-07, and 12c's M-c1 and M-c2 and 12e 11-06); items 248 and 251 (item 242, the phone's faint words, sorted, landed 11-17, M344); the rebuild; TestFlight build 4 |
+| WI — the way in | ACTIVE; WI-4 and WI-1 (with WI-2) landed 11-02 (M108 `8cfe4a59d`, run 108): the two states, the way in on the splash's field; item 163 landed 11-02 (Settings' unreachable signed-out head and empty list retired); WI-3 landed 11-04 (the lock: Face ID over a curtain above everything, the way in's last step, Settings › Lock; M116 `ae2d44c00`, run 116); WI-1's owed witness landed 11-04 (M120 `576172d99`, run 120); the mark keeps its place (`WayInView.markFades` shut) until James's word on its fade; P1 and P1b landed 11-12 (M285 `a71a52777`, run 313: "Couldn’t connect.", the notes' ink, the fitted glass); the Desktop slice, item 406, landed 11-14 (M305); items 423, 429 and 430 landed 11-15 (M313); the gate (WI-L2 as amended, WI-G1…G10) and W2e landed 11-17 with ios/rb2 (item 504, M339) | the page *The Way In* (VZPzwk7VZZ3iYwbB5bmDQd since 11-13; sources `draft/ios-pocket/way-in/`); DESIGN.md §8 "The phone's way in", §9 "The way in" and "The lock"; DECISIONS WI | the lock's four hand rows (James; LANDED "WI-3 — the lock"); the kit's rows for item 504; the phone's "This phone was removed." screen; the first archive from main, the first run of item 367's two checks (its E2…E5 landed 11-17 and 11-18: M342, M397, M399) |
 | UA — users and accounts | COMPLETE except witnesses | `specs/users-and-accounts.md`, `thinking-ua-phone-account.md` | the phone's second-account witness |
 | NF — native floor | COMPLETE; one owed line | `specs/native-floor.md` | item 52 (b)'s phone half |
 | LOG — logging and audit | PARKED; item 78 landed | `specs/logging-and-diagnostics.md` | LOG-39 for the beta |
@@ -2126,11 +2326,12 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | WIN — Windows port | PARKED since 08-24 (`c16e618f4`) | `thinking-windows-port.md`, `docs/WINDOWS_PORT_STATUS.md` | a Windows leg on the rails |
 | LSF — live surfaces foundation | COMPLETE; LSF-4 landed 10-26 | `specs/live-surfaces-foundation.md` | consumed by PT; §18 Windows rows with WIN |
 | CO — the compose plane | ACTIVE; CP-0, SP-1a, CP-1a…1c, CP-1d, MT-0, CP-2, SP-1b, SP-1c, SP-1d, CP-3 (`ce6577783`, run 88), TU-1 (`57569bca3`, mint M96), the handle (`045f10ec7`, mint M100), items 158 and 159 with CO-1b (`9b3164ccf`, mint M129), CP-5a (`fc70097e3`, mint M140), CP-4a1 (`1a3ca5f24`, mint M143), SP-1e2's fieldd half (`068cab410`, mint M146), TH-1/TH-2 (`d5c6995fb`, mint M147), SP-1e2's card (`320d4b882`, mint M156), CP-4a2a (`c07039551`, mint M159), CP-4a2b's M-h (`aebd6a80b`, mint M163) and M-r1 (`c92b33692`, mint M168) landed | `compose-plane/thinking-roled-agents.md` §15–§17, `compose-plane/v2/`, `thinking-tool-plane.md`; the CO round (Druyc3Ua); DESIGN.md §2.10 | SP-1e4 · CP-4a2b…4f · CP-5b…d |
+| EY — the pages room (AGENT'S EYES' browser half; the tool plane's MT-3) | ACTIVE; EY-0 landed 2026-11-18 (`95f39fc84` → `40a9571d5`, M410) | `tool-plane/browser-use.md`, `thinking-agents-eyes.md` §10–§11, `tool-plane/browser/SITTINGS.md` §0, `tool-plane/EY-0-PLAN.md`; DESIGN.md §8; DECISIONS EY | EY-1 ∥ EY-2 (`browser-use.md` §10); before EY-2, James's ask 3 and the MT lead's two rulings |
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`), ES-4 (role) landed 11-09 (M241 `7d7019a23`), ES-6 landed 11-09 (M260 `f3cbbc469`), ES-Q1 + ES-5a to 5d landed 11-09 (M270 `e6de35f09`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | 5e (a device and James); ES-6's first real window (row 36) |
-| HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`); the EL8 to rosetta 0.1.6 landed 11-13 (M296 `31abf8792` → `ea26b0464`); HG-4 landed 11-13 (M297 `b399703d0` → `5749798c2`); items 379 + 385 landed 11-14 (M298 `3c4c32d3a` → `6e56276d6`); the EL8 to rosetta 0.1.7 landed 11-14 (M301 `ed67b0c5b`); item 398 slice 1 landed 11-14 (M307 `f020ad8f2`) | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | the `AppReviewTests.swift` comment follow-up → item 398 slice 2 (the kit) → item 411's plan |
-| NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 lands on its own, the daemon row the integration lane's (*corrected 2026-11-17: it said "S3 with the integration lane after EL8-TRUFFLE"*); the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
-| OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314); item 279's S2 landed 11-12 (M293 `82e166608`, run279) | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; DECISIONS "items 279 · 321 · 322" | S3 with item 333, after the 0.9 tag; item 321; the desk tools in puppeteer 0.4.2 |
-| CS — Card Stock and the Card Button | ACTIVE since 11-14 (CS-D5…D8 and CS-D10…D12 ruled 11-06 and 11-09; CS-D9 withdrawn); items 400–405 and 304 landed 2026-11-14 21:58:27Z as one M (M306 `54ed3d58c`) | `draft/card-stock/v5/RECORD.md`, `draft/card-stock/button/RECORD.md`; DESIGN.md §5/§8/§13; DECISIONS CS | James's eye on the cards in a window and his answers; the bloom, Live ref cards and FACE-b after OB's custody fix |
+| HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`); the EL8 to rosetta 0.1.6 landed 11-13 (M296 `31abf8792` → `ea26b0464`); HG-4 landed 11-13 (M297 `b399703d0` → `5749798c2`); items 379 + 385 landed 11-14 (M298 `3c4c32d3a` → `6e56276d6`); the EL8 to rosetta 0.1.7 landed 11-14 (M301 `ed67b0c5b`); item 398 slice 1 landed 11-14 (M307 `f020ad8f2`); item 394 landed 11-17 (M355); items 516 (M388) and 520 (M390) landed 11-18 | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | the `AppReviewTests.swift` comment follow-up → item 398 slice 2 (the kit) → item 411's plan |
+| NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`); S3, its last slice, landed 11-18 (M386) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 landed on its own (M386); the daemon row stays the integration lane's (*corrected 2026-11-17: it said "S3 with the integration lane after EL8-TRUFFLE"*); the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
+| OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314); item 279's S2 landed 11-12 (M293 `82e166608`, run279); OB-0…OB-4 (M365–M372), OB-UI (M373), item 293 and the stack's riders (M374–M378), OB custody (M379) and items 526 (M417) and 521 (M418) landed 11-18 | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; DECISIONS "items 279 · 321 · 322" | S3 with item 333, after the 0.9 tag; item 321; the desk tools in puppeteer 0.4.2; custody's sealed witness on the first signed build (OB-D20) |
+| CS — Card Stock and the Card Button | ACTIVE since 11-14 (CS-D5…D8 and CS-D10…D12 ruled 11-06 and 11-09; CS-D9 withdrawn); items 400–405 and 304 landed 2026-11-14 21:58:27Z as one M (M306 `54ed3d58c`) | `draft/card-stock/v5/RECORD.md`, `draft/card-stock/button/RECORD.md`; DESIGN.md §5/§8/§13; DECISIONS CS | James's eye on the cards in a window and his answers; Live ref cards and FACE-b (the bloom landed 11-18 with OB's custody fix, M373, M379) |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | — |
 
 **Retired and superseded tracks**
@@ -2139,7 +2340,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 |---|---|---|---|
 | B — canvas and docs | DK-D11 (2026-10-02/03) | the desk; LANDED §B1–B4 | design-03 / 03·A carry the desk's Status amendment (2026-10-28); their body folds are §6 Records' |
 | D — widgetlab port | DK-8 `91bda4f6`, DK-17 | desk object kinds | `draft/archive/retired/thinking-widgetlab-port.md`; board `rm-d` |
-| DT — dev tool pack | DK-D19/D20 | PORTALS (PT-D1), PT-S/PT-C, AGENT'S EYES | `thinking-devtools-pack.md` stays law for DT-D2/D3/D4/D6/D7 |
+| DT — dev tool pack | DK-D19/D20 | PORTALS (PT-D1), PT-S/PT-C, AGENT'S EYES | `thinking-devtools-pack.md` stays law for DT-D2/D3/D4/D6/D7; DT-D3's reserved control scope is retired by EY-D8 A, and DT-D9 is superseded by EY (M410; DECISIONS DT) |
 | The terminal mirror widget (TP-S2b) | DK-D19 (DK-5/DK-17) | PT-T | LANDED §TP-S2b-widget |
 | The browser page widget (BW) | DK-D20 | `vibefield.browser-pane` (PT-D1) | `draft/archive/superseded/thinking-browser-widget.md` |
 | chopsticks / spaghetti | the 09-04 pivot (D1–D4) | puppeteer / rosetta | `draft/archive/superseded/predesign-04-agent-data-runtime.md`; petitions C1/C5/C7 in `draft/archive/retired/petitions/` |
