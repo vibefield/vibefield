@@ -12,13 +12,15 @@
 //
 // Every refusal row begins with a CONTROL: the honest hello pairs on that very daemon. A refusal alone proves
 // nothing, because a daemon that pairs nobody refuses everything.
-import { CUSTODY, SCOPES } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, CUSTODY, SCOPES } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import WebSocket from "ws";
 import { TokenService } from "../src/token-service";
 import {
   bootFiles,
   bootSealed,
   type Cleanup,
+  type FilesWorld,
   HANDED,
   hello,
   helloErr,
@@ -51,6 +53,38 @@ async function pairs(
   const credential = pairingCredential({ port, bootId, userId });
   const ack = await hello(rpc, credential);
   return { rpc, ack, credential };
+}
+
+/** `system.hello`'s params with this credential, of this kind, at this contracts version. */
+function helloWith(
+  credential: unknown,
+  clientKind = "shell-main",
+  version = CONTRACTS_VERSION,
+): Record<string, unknown> {
+  return { contractsVersion: version, minCompatible: version, clientKind, credential };
+}
+
+/** A hello on a socket of the row's own: the door's refusal, and the code it closed with. */
+async function refusalAndClose(
+  world: SealedWorld | FilesWorld,
+  params: Record<string, unknown>,
+): Promise<{ error: RpcErrorShape; code: number }> {
+  const ws = new WebSocket(`ws://127.0.0.1:${world.daemon.controlPort}`);
+  cleanup.push(() => ws.close());
+  const closed = new Promise<number>((resolve) =>
+    ws.once("close", (code: number) => resolve(code)),
+  );
+  await new Promise<void>((resolve, reject) => {
+    ws.once("open", () => resolve());
+    ws.once("error", reject);
+  });
+  const answered = new Promise<RpcErrorShape>((resolve) =>
+    ws.once("message", (raw) =>
+      resolve((JSON.parse(String(raw)) as { error: RpcErrorShape }).error),
+    ),
+  );
+  ws.send(JSON.stringify({ jsonrpc: "2.0", id: 1, method: "system.hello", params }));
+  return { error: await answered, code: await closed };
 }
 
 /** A hello the door refuses as it refuses a bad token: UNAUTHORIZED, and the socket closed. */
@@ -193,6 +227,48 @@ describe("the shell's pairing at a sealed fieldd (C2)", () => {
     expect(first?.message).toBe("invalid token");
     expect(first?.data?.details).toBeUndefined();
     for (const refusal of rest) expect(refusal).toEqual(first);
+  });
+
+  it("a shell-main credential of any other shape is refused in a bad token's words, and the door closes 1008", async () => {
+    const world = await bootSealed(cleanup);
+    await pairs(world);
+    const sentinel = "sentinel-of-an-unshaped-credential";
+    const shapes: unknown[] = [
+      {},
+      [],
+      [sentinel],
+      7,
+      null,
+      { nested: { mac: sentinel, deeper: { deepest: [sentinel] } } },
+      // far past any pairing's size, and well under the door's frame
+      { mac: sentinel, filler: "f".repeat(64 * 1024) },
+    ];
+    for (const credential of shapes) {
+      const { error, code } = await refusalAndClose(world, helloWith(credential));
+      expect(error.data?.kind).toBe("UNAUTHORIZED");
+      expect(error.message).toBe("invalid token");
+      expect(error.data?.details).toBeUndefined();
+      expect(code).toBe(1008);
+      expect(JSON.stringify(error).includes(sentinel)).toBe(false);
+    }
+  });
+
+  it("only a sealed door's shell-main hello takes that road: another kind, and a files door, still hear a malformed hello", async () => {
+    const sealed = await bootSealed(cleanup);
+    await pairs(sealed);
+    const otherKind = await refusalAndClose(sealed, helloWith({}, "renderer"));
+    expect(otherKind.error.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(otherKind.error.message).toBe("malformed hello");
+    const files = await bootFiles(cleanup);
+    const unsealed = await refusalAndClose(files, helloWith({}));
+    expect(unsealed.error.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(unsealed.error.message).toBe("malformed hello");
+  });
+
+  it("a contracts major the door does not speak is answered first, whatever the credential", async () => {
+    const world = await bootSealed(cleanup);
+    const { error } = await refusalAndClose(world, helloWith({}, "shell-main", "999.0.0"));
+    expect(error.data?.kind).toBe("INCOMPATIBLE");
   });
 
   it("a window token minted over the paired connection still works, and objects.* still demand a window token", async () => {

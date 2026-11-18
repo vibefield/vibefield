@@ -414,6 +414,15 @@ function installSub(state: ConnState, subId: string, key: string, dispose: () =>
   state.heldByKey.set(key, (state.heldByKey.get(key) ?? 0) + 1);
 }
 
+/** OB custody (C2) — a hello's params that say `clientKind: "shell-main"`, read before their shape is known. */
+function isShellMainHello(params: unknown): params is Record<string, unknown> {
+  return (
+    typeof params === "object" &&
+    params !== null &&
+    (params as Record<string, unknown>)["clientKind"] === "shell-main"
+  );
+}
+
 /** Item 476 (2026-11-16) — a live subscription removed whole: out of `subs` and
  * `subKeys`, its key's count given back, then disposed. The ledger moves before
  * the dispose runs, so a dispose that throws cannot leave a count behind. Every
@@ -1024,7 +1033,18 @@ export class ProductApi extends EventEmitter {
 
     if (method === "system.hello") {
       // full contract hello: shape-validated, version-gated (mirrors field-native)
-      const parsed = Hello.safeParse(params);
+      const asked = Hello.safeParse(params);
+      // OB custody (C2) — at a `sealed` door, a `shell-main` hello whose credential alone has no shape is the pairing's
+      // own "shape" failure, not a malformed hello: it parses without the credential, and the sealed arm below hands
+      // the credential as it came to the verifier, which refuses it in a bad token's words. Every other malformed
+      // hello, and every hello at a `files` door, is answered as before.
+      const bare =
+        !asked.success && this.sealed !== null && isShellMainHello(params)
+          ? Hello.safeParse({ ...params, credential: undefined })
+          : null;
+      const parsed = bare?.success ? bare : asked;
+      const unshaped =
+        bare?.success && isShellMainHello(params) ? { credential: params["credential"] } : null;
       if (!parsed.success) {
         reply(this.err(id, "PRECONDITION_FAILED", "malformed hello", false));
         ws.close(1008, "bad hello");
@@ -1102,7 +1122,10 @@ export class ProductApi extends EventEmitter {
         // credential and a missing one among them, is answered as a bad token is: the same words, no detail, 1008.
         let verdict: ShellPairingVerdict | null = null;
         if (state.tailnetLogin === null && this.boundPort !== null)
-          verdict = sealed.verifier.verify(token, this.boundPort);
+          verdict = sealed.verifier.verify(
+            unshaped === null ? token : unshaped.credential,
+            this.boundPort,
+          );
         if (verdict === null || !verdict.ok) {
           this.logger.debug(
             "fieldd.product_api.shell_pairing_refused",
