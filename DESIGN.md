@@ -6503,6 +6503,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   monitor on no door (GT-D17). *(Made true 2026-10-07, MV-8b: the deck, System control and the
   claims stood outside any boundary until then. The window since 2026-10-08, MV-8b phase 2: the
   package's boundary, M179.)*
+- **A run whose two readings disagree** (track PS; PS-D17, ruled 2026-11-18 on the page *What the Program Says*;
+  NOT BUILT: `draft/thinking-program-status.md` §14). A run can carry two readings of its state: the one its own
+  pane reports (OSC 7501) and the monitor's native one. Its body draws the presented word, the one both are
+  reconciled into, and control keeps reading the native one (PS-D12). While the two disagree past PS-D16's split
+  delay, the run's light wears a **split ring**: a second ring at the line's own weight (§2.3; 1.5px is
+  selection's), in the native word's ink, never orange, and still (a state, not a wait: §6's loops are for waits).
+  The frame's hover names both readings, so a queue held under an Idle body says why. Its words follow §9, and its
+  delay gets its §6 reason, when it is built.
 - **Godview's timeline is the swarm through time** (TL, 2026-10-02 — James ruled design F,
   Wakes, with its map of the day; `draft/godview-timeline/`). A fourth monitor view (`TIMELINE`,
   after swarm, list and rain). It is painted into a canvas, like the swarm and the rain. Lanes run
