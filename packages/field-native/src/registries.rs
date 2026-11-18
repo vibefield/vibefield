@@ -339,6 +339,7 @@ pub mod layout {
     pub const SHELL_RELAUNCHES: &[&str] = &["fieldd", "shell-relaunches.json"];
     pub const TERMINAL_RELEASES_FILE: &[&str] = &["fieldd", "terminal-releases.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
+    pub const TERMINAL_SCHEME_FILE: &[&str] = &["fieldd", "terminal-scheme.json"];
     pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const SETUP_LEDGER_FILE: &[&str] = &["fieldd", "setup.json"];
     pub const DEVICE_NAME_FILE: &[&str] = &["fieldd", "device-name.json"];
@@ -438,6 +439,7 @@ pub mod layout {
         ("SHELL_RELAUNCHES", SHELL_RELAUNCHES),
         ("TERMINAL_RELEASES_FILE", TERMINAL_RELEASES_FILE),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
+        ("TERMINAL_SCHEME_FILE", TERMINAL_SCHEME_FILE),
         ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("SETUP_LEDGER_FILE", SETUP_LEDGER_FILE),
         ("DEVICE_NAME_FILE", DEVICE_NAME_FILE),

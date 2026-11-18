@@ -109,6 +109,10 @@
     "fieldd",
     "terminal-bindings.json"
   ],
+  "TERMINAL_SCHEME_FILE": [
+    "fieldd",
+    "terminal-scheme.json"
+  ],
   "PROJECT_IDENTITY_FILE": [
     "fieldd",
     "project-identity.json"
