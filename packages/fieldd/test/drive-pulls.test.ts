@@ -203,16 +203,26 @@ class MemoryFloor implements DrivePullsFloor {
  * the floor nothing). A subscribe made while `transfer.subscribeUnanswered` is set is written and left unanswered, and
  * reads fieldd's own TIMEOUT when the row calls `pass()`, once the row has seen the floor run it and set what comes
  * next. So no request here has a short deadline, and a stalled host cannot read TIMEOUT for an answer already in the
- * socket, or show the floor two subscribes in one read. */
+ * socket, or show the floor two subscribes in one read. Item 552 (2026-11-18): after `holdNext()`, the next subscribe
+ * is counted in `made` and held before it is written, until `release()`: one fieldd made that the floor has not read,
+ * for as long as the row keeps it. */
 function countedFloor(link: NativeLink, transfer: MockFileTransfer) {
   const disposed: number[] = [];
   let made = 0;
   let pass: () => void = () => undefined;
+  let holdOne = false;
+  let open: (() => void) | null = null;
   const over: DrivePullsFloor = {
     request: (method, params) => link.request(method, params),
     subscribe: async (method, params, onEvent) => {
       made += 1;
       const n = made;
+      if (holdOne) {
+        holdOne = false;
+        await new Promise<void>((resolve) => {
+          open = resolve;
+        });
+      }
       if (transfer.subscribeUnanswered) {
         void link.request(method, params).catch(() => undefined);
         await new Promise<void>((resolve) => {
@@ -230,7 +240,21 @@ function countedFloor(link: NativeLink, transfer: MockFileTransfer) {
       };
     },
   };
-  return { floor: over, disposed, made: () => made, pass: () => pass() };
+  return {
+    floor: over,
+    disposed,
+    made: () => made,
+    pass: () => pass(),
+    holdNext: () => {
+      holdOne = true;
+    },
+    held: () => open !== null,
+    release: () => {
+      const opened = open;
+      open = null;
+      opened?.();
+    },
+  };
 }
 
 /** `link` as the floor, whose next pull reads fieldd's own TIMEOUT: `ran` once the floor has answered it, as a loop
@@ -912,6 +936,46 @@ describe("DR-3b — the drive's pulls over the floor's file transfer", () => {
     void drive.pull(ask(digestOf(1))).catch(() => undefined);
     await until(() => transfer.pulls.length === 3, "the same digest, accepted");
     expect(asked(mock, SUBSCRIBE)).toBe(subscribes + 1);
+  });
+
+  it("ends the last held pull at its bound with an attempt still in flight, and once that attempt is refused asks nothing more", async () => {
+    const transfer = mockFileTransfer();
+    // every subscribe is refused, its mesh queue full (RESOURCE_EXHAUSTED, never run): no stream stands from the start
+    transfer.refuseSubscribes = Number.POSITIVE_INFINITY;
+    const { mock, link, root } = await floor(transfer);
+    const events: CapturedLog[] = [];
+    const counted = countedFloor(link, transfer);
+    const drive = pulls(link, root, {
+      floor: counted.floor,
+      heldBoundMs: 300,
+      retryDelaysMs: [10],
+      logger: captureLogger(events),
+    });
+    await drive.start();
+    expect(events.filter(subscribeRefused)).toHaveLength(1);
+    // item 552 (2026-11-18): the next subscribe is held unwritten. A pull accepted with no stream is held at once and
+    // makes its own ask in that same run (`#accept`), so the one held is made while the pull is held
+    counted.holdNext();
+    const failure = await drive.pull(ask(digestOf(1))).catch((error: unknown) => error);
+    // one attempt is in flight at most: the bound ended the pull with that one still held, and no other was made
+    expect(failure).toMatchObject({ reason: MESH_FILE_TRANSFER.FAILED_TIMEOUT });
+    expect(counted.held()).toBe(true);
+    expect(counted.made()).toBe(2);
+    // the attempt is written now, and the wait reads its count first in this same run, before any I/O turn can let
+    // the floor read it
+    counted.release();
+    await until(
+      () => events.filter(subscribeRefused).length === asked(mock, SUBSCRIBE),
+      "every attempt, refused",
+    );
+    const subscribes = asked(mock, SUBSCRIBE);
+    // the ping's answer comes once the floor has read every line written before it; then the series' delay passes
+    // many times over
+    await roundTrip(link);
+    await sleep(200);
+    expect(asked(mock, SUBSCRIBE)).toBe(subscribes);
+    // the start's and the held pull's own: refused after the bound, the attempt leaves nothing to ask (`#follow`)
+    expect(subscribes).toBe(2);
   });
 
   it("holds a pull accepted while no stream stands at once, asks for the stream, and the first fresh snapshot settles it", async () => {
