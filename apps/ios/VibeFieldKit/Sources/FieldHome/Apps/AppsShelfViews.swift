@@ -232,7 +232,7 @@ struct AppsShelfView: View {
   }
 
   private var tileColumns: [GridItem] {
-    Array(repeating: GridItem(.flexible(), spacing: 0), count: AppsShelfChrome.across)
+    Array(repeating: GridItem(.flexible(), spacing: 0, alignment: .top), count: AppsShelfChrome.across)
   }
 
   private var folderColumns: [GridItem] {
@@ -246,7 +246,7 @@ struct AppsShelfView: View {
     let folder = shelf.folders.first { $0.key == stand.drawn }
     // a folder heading open has the screen: the shelf under it takes no touch until the folder is let go
     let held = folder != nil && stand.takesClose
-    behind(list(shelf), held: held, drawn: folder != nil)
+    behind(shelf, held: held, drawn: folder != nil)
       .overlay { folderLayer(folder, shelf: shelf) }
       .onChange(of: door.folder, initial: true) { _, key in
         if let key {
@@ -266,7 +266,7 @@ struct AppsShelfView: View {
   }
 
   /// The shelf's own list.
-  private func list(_ shelf: AppsShelf) -> some View {
+  private func list(_ shelf: AppsShelf, blur: CGFloat) -> some View {
     ScrollView {
       VStack(alignment: .leading, spacing: Self.groupGap) {
         field
@@ -288,6 +288,8 @@ struct AppsShelfView: View {
       .padding(.horizontal, AppsShelfChrome.side)
       .padding(.top, AppsShelfChrome.topInset)
       .padding(.bottom, AppsShelfChrome.cardShowing + Self.groupGap)
+      // Blurring the ScrollView itself makes its top safe-area inset accumulate across folder transitions.
+      .blur(radius: blur)
     }
     .scrollIndicators(.hidden)
   }
@@ -295,13 +297,12 @@ struct AppsShelfView: View {
   /// The list as it stands behind a folder (item 419): blurred, and drawn a little toward you about the folder's tile,
   /// on the folder's own spring. While a folder is drawn it does not scroll, so the tile keeps the place it gave. The
   /// paper is under it and does not move. The shelf's space and its size are named here, for the tiles and the panel.
-  private func behind(_ list: some View, held: Bool, drawn: Bool) -> some View {
+  private func behind(_ shelf: AppsShelf, held: Bool, drawn: Bool) -> some View {
     let back = AppsFolderMotion.behind(progress: drawn ? stand.progress : 0)
-    return list
+    return list(shelf, blur: back.blur)
       .scrollDisabled(drawn)
       .allowsHitTesting(!held)
       .accessibilityHidden(held)
-      .blur(radius: back.blur)
       .modifier(
         AppsShelfBehind(
           scale: reduceMotion ? 1 : back.scale, about: CGPoint(x: stand.tile.midX, y: stand.tile.midY)
