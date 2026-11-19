@@ -873,11 +873,12 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
     #105) MERGED; ghosttea #102 rv/ghosttea (#115, #37 G-A, #92, #113, #94) MERGED. After them, MERGED too:
     puppeteer #68 rv/pup-claude-b (#14, #111, #66, #110, #13), #69 rv/pup-views-b (#103, #104, #41, #101, #108) and
     #74 rv/pup-claude-usage (#70, #32, #34, #102, #109, #35, #33). All six puppeteer lanes shipped in 0.4.0, pinned
-    at M274; ghosttea is pinned at 0.15.0 since M290. Parked: rv/pup-codex (on rv-pr58-codex-observer).
+    at M274; ghosttea is pinned at 0.16.0 since M434 (0.15.0 since M290 until then). Parked: rv/pup-codex (on
+    rv-pr58-codex-observer).
     *Corrected 2026-11-17: this said #66 was open, claude-b's and views-b's PR scripts waited at James's hand,
     claude-usage was building, and the releases and pins were to follow.*
-- Next: rv/vf-ghosttea-tail, on ghosttea 0.15.0 (its EL8 landed 11-12 as M290, by the gvt lane; §2 "EL8 — the
-  pins"); waves 3–8 by the plan.
+- Next: rv/vf-ghosttea-tail, on ghosttea 0.16.0 (its EL8 landed 11-19 as M434; 0.15.0's landed 11-12 as M290, by
+  the gvt lane; §2 "EL8 — the pins"); waves 3–8 by the plan.
 - Owed: James's hand on every sibling PR and release; the landing table at M283 before its push; item 320 (a
   red over a whole environment prints it), no owner (three electron-shell sites on the shell's spawn environment
   became booleans with item 365, M295, LANDED "Items 363 and 365"; the class beyond them stands);
@@ -1318,8 +1319,8 @@ law DESIGN.md §9 "VibeField's insides are never a person's to read" (item 280),
   code, not watched), four of them for James's eye (LANDED "Item 282, the rule and 282-7").
 
 **OB — Objects at Work (the plugin folders first: items 279, 321, 322)** · ob-foundation (lanes `lanes/ob-plug`,
-`lanes/ob-build`) · law `draft/thinking-objects-at-work.md`, `lanes/ob-build/ITEMS-279-321-322-PLAN.md` with its three
-addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
+`lanes/ob-build`, `lanes/ob-join`) · law `draft/thinking-objects-at-work.md`, `lanes/ob-build/ITEMS-279-321-322-PLAN.md`
+with its three addenda, `lanes/ob-build/ITEM-279-S2-PLAN.md` and `lanes/ob-build/s3/S3-333-READING.md`
 - Ruled 11-11 and 11-12 (James): on the page *James's Rulings Docket* (`6xovbEgmuvMnzKPuWZcFz6`, db `decisions`),
   `cu-owners` "OB's session takes 279, 321, 322" (11-11 22:47:10.131Z) and `obui-tag` "Before the tag" (11-11
   22:33:08.463Z: Objects at Work, held for its custody fix, lands before the 0.9 beta tag once the fix is green); on
@@ -1332,10 +1333,6 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
 - Landed 11-12: **item 279's S2** (`c8d84f53f` → `82e166608`, 4 commits, M293, run279, an ff of `47f8d4732` with
   fa's two commits under it; LANDED "Item 279, S2"): with no list key configured, which is every build today, fieldd
   reads nothing under the installed-plugins folder; a folder with no pointer is not a plugin, and adoption is gone.
-  Not re-run at the landed tip: fieldd's suite with 279 on ghosttea 0.15.0 and beside item 341 is owed at the next
-  whole V on the old mini. *Ran 2026-11-12 (M294's records): run345v3 at `df3677c46`, fieldd's suite whole,
-  `271 passed | 5 skipped` files and `3843 passed | 15 skipped` tests, the four plugin files at 13, 3, 7 and 15
-  (LANDED "Item 345").*
 - Landed 11-18, held since 11-11 for its custody fix (`obui-tag`): **OB-0** (M365: the desk room's wire truth),
   **OB-1b** (M366: a card lands by the face you choose), **OB-2** (M367: a kind's agent half), **OB-3a** (M368: a
   signed registry of refs and grants), **OB-3b** (M369: the desk room's eight tools), **OB-3c** (M370: the window
@@ -1347,22 +1344,45 @@ addenda, and `lanes/ob-build/ITEM-279-S2-PLAN.md`
   443 and 476 on the stack (M376), OB-3d's correction (M377), the take-back and the agent's undo in the audit's own
   grammar (M378), item 526 (M417: a take-back always takes) and item 521 (M418: an open desk is never "not open"
   to an agent for want of one more ask).
-- In flight: the desk tools for Codex and Grok, upstream in puppeteer (seven commits in OB's clone
-  `lanes/ob-build/puppeteer`). James on the PM board: `j-ob-desk-tools-puppeteer` "A. Release puppeteer first (push,
-  PR and tag on my word), then a pin bump, so all three have desk tools at 0.9" (03:30:27.940Z) and `j-pup-041` "A.
-  Release 0.4.1 now; the desk tools come in 0.4.2 (Recommended: the bands and spend words reach the app sooner)"
-  (05:12:14.356Z). The seven are re-cut onto v0.4.1 (`e940419d`) as `ob/foundations` `dd0257747b12`; typecheck (24
-  of 25 projects), prettier, four repository checks and five test files ran green on the Mac, and six changed test
-  files have the PR's CI as their first run (`lanes/ob-build/pup-ready/READY.md`). The push waits on James's card
-  `j-pup-desk-tools-push` (open, per VF-PM, 16:53Z); the push, PR and tag are his hand; then an EL8.
-- Next: S3 (a verified load, once a list is configured), with item 333's fix (a parked install-set entry is never
-  removed), on VF-PM's order, after the 0.9 tag; item 321 on James's card `j-321-design` (open, per VF-PM; its note,
-  `lanes/ob-build/ITEM-321-DESIGN-NOTE.v0.2.md`: the connection handed once per page, then one claim for the whole
-  bridge).
-- Owed: the whole V named above (*closed 2026-11-12 by run345v3, M294's records*); the landing table over main,
-  before any push, on James's word by name; item 322's two items for James's eye (LANDED "Item 322") and S2's one
-  (LANDED "Item 279, S2"); item 330, on MK's side; custody's witness, the first sealed Developer ID build
-  (OB-D20), and the cold signed boot's measure (M379); items 288 and 276 (M379).
+- Landed 11-19: **item 557** (M435: the desk room's rows wait for each call's own answer) and **item 581** (M444,
+  85defb042 2eb87202d: an agent never places a kind whose plugin requests a live page's, device's or app window's
+  powers, and is
+  told to ask the user; the window's live gate reads the same list of pairs).
+- Landed upstream: the desk tools for Codex and Grok, in puppeteer 0.4.2 (#85, squash `b8838194`, released as
+  `325b6770`, #86); main pins 0.4.4, which carries them. Its first seven commits are OB's `ob/foundations`
+  (`dd025774`). What VibeField does with them is CP-5b…5d (MT-7), CO's.
+- Cut, each waiting its assembly:
+  - **item 550a** (the desk's at-work feed carries each run's agent, project, spark and starter as ids, for the
+    at-work mark), **item 559** (an act asked of a window that never answered is "cannot tell", never "nothing was
+    done", and its trail closes it `EFFECT_UNKNOWN`) and **item 558** (before the audit writer closes, every attempt
+    still open is closed `INTERRUPTED_BY_STOP`);
+  - **S3** (a verified load, once a list is configured: each installed revision is checked at every load against the
+    signed list and the artifact kept at its install, and a revision that fails is refused as a bundled plugin is)
+    with **item 333** (the uninstall door unpublishes a parked entry, and the walk says one once per list), cut
+    11-19, its rows waiting on the test Mac;
+  - **R-2's room field** on S3 (a kind whose agent tools are a room's rows answers the desk's place, read and act with
+    that room's rows; the pages room's browser pane names it) with its follow-up **R-2b** (such a kind binds no agent,
+    and only the kind a room's own rows name may declare that room), cut 11-19, its rows waiting on the test Mac. Its
+    meeting with 581 in one line is prepared (`lanes/ob-build/join-r2-581/JOIN.md`);
+  - **the row that holds the browser pane's real manifest** the pages room's to place, on EY-2's 2g, cut 11-19 to
+    land with 2g after R-2.
+- After S3: **S3b** (serving by hash, so a file changed after the check is refused).
+- Planned: **item 276** (the six other stores' keys at `sealed`, derived from the handed record key;
+  `lanes/ob-build/i276/ITEM-276-PLAN.md`), its plan before VF-PM, with one question for James: what a person's
+  sparks and sessions do at the first sealed launch.
+- Owed to EY-1, each after its prerequisite: **item 580** (559's no-answer matcher reads one list of rooms, the
+  pages room's among them; after 559 and the pages room's `no-answer`); 1f's applier row with the three `agentRun`
+  locks (after the prop is in contracts).
+- Parked: **item 559b** (a second click on an agent's undo whose effect is unknown; latent until a window draws the
+  offer; `lanes/ob-build/i559b/ITEM-559b-READING.md`) and **item 585** (an object an agent placed opens live, signed
+  in, once its plugin gains a live pair by an update; `lanes/ob-build/i585/READING-585.md`). 585 closes before a
+  third-party plugin with a live-page power ships, after launch's two official plugins.
+- Next: item 321 on James's card `j-321-design` (open; its note, `lanes/ob-build/ITEM-321-DESIGN-NOTE.v0.2.md`: the
+  connection handed once per page, then one claim for the whole bridge).
+- Owed, and none buildable now:
+  - item 322's two items for James's eye (LANDED "Item 322") and S2's one (LANDED "Item 279, S2");
+  - custody's witness, the first sealed Developer ID build (OB-D20), and the cold signed boot's measure (M379);
+  - item 288's second half, which waits on item 275 (held for James's typed word) and a signed build.
 
 **MK — the plugin market, "A Place for Plugins"** · vibe-field-b0 (lane `lanes/mk`, `mk/stack-on-8af9b6c85`) · law
 DESIGN.md §8 "Plugins — the frame's second popup" and §9 "The plugins' words", the page *A Place for Plugins*
@@ -1627,6 +1647,10 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
   (FS-1b) closes, RD-5's exit for mille's npm plane.
 - Landed 11-18: **truffle 0.7.28** (`628233925`, `fc4434113`, M363): the crate and the five sidecars move together,
   every sidecar built with Go 1.27.4; **item 331** (M364): `Cargo.lock`'s rustix is 1.1.6.
+- Landed 11-19: **ghosttea 0.16.0** (`87a60957c`, M434; cut as `302bf55e3`; LANDED "EL8 — Ghosttea 0.16.0 on every
+  plane"): the six crates, the six npm packages and the kit's Swift package move together; a host can tell a
+  session its colours (control protocol 1.20). truffle's Swift plane stays 0.7.26, which 0.16.0 declares. TL-4b
+  (item 529) tells a session its sixteen colours, and its colours at birth, through it.
 - Watch: the kit's Swift plane (0.7.26) rejoins the desktop's truffle (0.7.28 since M363) at the first ghosttea
   that declares it.
   Since item 379 (M298), the iOS record regenerates with no Go module cache.
@@ -1903,7 +1927,10 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
      Simulator ship Built in (*amended 2026-11-19; until then both were out, DECISIONS "FL"*). Owed through the
      betas: a desk picture card reaching an agent (`copy-to-hand.ts` sets `paste: ""`), several images dropped landing
      as several prints (`cards-outside.ts`), the note's typing and cut-off text (an ICE release), and the first board
-     as a small moodboard (a design round, with images we own).
+     as a small moodboard (a design round, with images we own). Owed with the iOS Simulator (item 567's other half,
+     waiting James's choice of the launch picture path): a person who launches with `VF_SIMULATOR_FRAMEBUFFER=0`
+     gets the window path, so Screen Recording is asked under the `surface.simulator` power, whose words carry no
+     Screen Recording note; the default framebuffer path asks for none (said in the bundling commit too).
    - **Phase 4, the gate and the cut** (target 7 Nov, was 19 Nov):
      - The gate: phase 1 done; B and D done (A struck 2026-11-09); C measured, and fixed or said in the notes; the
        scope frozen; James on a signed nightly with its checks green (James shortened RL6's five days, 2026-11-07
@@ -2242,7 +2269,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 - Upstream, read 2026-11-18 20:18Z: v0.16.0 is tagged on #108's merge `3e71939735f6` and PUBLISHED 2026-11-18 (the
   publish run green; npm's six `@vibecook/ghosttea*` packages and the `ghosttea` crate read back at 0.16.0).
   Protocol minor 19 to 20 (a host tells a terminal its colours). Its Swift manifest declares truffle 0.7.26 exact,
-  as 0.15.0's did. The EL8 (item 529) is the next train's.
+  as 0.15.0's did. Its EL8 landed 11-19 as M434 (§2 "EL8 — the pins"); TL-4b (item 529) follows on it.
 - **truffle:** T8 (the app-chosen hostname prefix; taken at 0.7.27; TS-8c) · T12 (a typed start refusal; held; a PR when
   James says) · T13, the one T row for T7's route-name pinning (Q22; owed, not drafted); T7's other follow-ups (the per-direction idle reap, a held
   route id's refusal, loopback pages) are recorded as accepted.
@@ -2300,7 +2327,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | HN — Cards in Hand | BUILT; B1–B3 (HN-0…HN-8) landed 10-31 | `thinking-cards-in-hand.md` §6 (page sources `draft/cards-in-hand/`); DESIGN.md §1/§5/§6/§8/§9/§10/§13 | the console-window smoke rows; D10 (James) |
 | QW1 — Godview swarm QA, fix wave 1 | ACTIVE; stacks A and B landed 10-28, B on puppeteer 0.3.0's EL8 pin | `godview-swarm-qa-plan.md`; `thinking-ar-reattach.md` | QA wave 1 |
 | Release rails (EDP/ESP, WP12, TD, BP, RD, RM) | ACTIVE; nightlies live, W10/W11 passed | the release specs; `thinking-browser-profile.md`, `thinking-release-deps.md`, `thinking-release-management.md` | round 3; the first-beta list |
-| EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | ghosttea 0.16.0 (published 2026-11-18; item 529) first; then puppeteer 0.4.3 and the release after it (the plan's tier), rosetta's next release (#42, #58), truffle 0.7.29 and ICE 0.18.0, each when it is published; none is published at this read but ghosttea's. · Swift rejoin |
+| EL8 — pins | ACTIVE (watch) | DECISIONS TB; the manifests | ghosttea 0.16.0 (published 2026-11-18) LANDED 11-19 as M434, TL-4b (item 529) next on it; then puppeteer 0.4.3 and the release after it (the plan's tier), rosetta's next release (#42, #58), truffle 0.7.29 and ICE 0.18.0, each when it is published; none is published at this read but ghosttea's. · Swift rejoin |
 | AR — agent runtime | PARKED; AR-3…AR-5b, AR-7, AR-7j, AR-S1…S4e2, AR-S5 landed | `thinking-ar-agent-plane.md`, `thinking-ar-data-topology.md`, `thinking-ar7-typed-agents.md`, `thinking-ar-agents-settings.md` | AR-6 on AR6-D; AR-7j LANDED (M128 `45c3680a3`) |
 | MV — monitor views | PARKED; landed 10-08 | `draft/monitor-view-sdk/design-mv.md`; DESIGN.md §8 | puppeteer 0.3.0 pinned 10-28 (`1469639a6`); item 39 and the tuck wait on a later release; QL ratifications |
 | History (AR-8) / PJ | PARKED; PJ-1…4, 6, 7 landed; DS-7 hands the room another desktop's sessions | `build-hf.md`, `thinking-ar-history-room.md`, `thinking-project-places.md` | R8/R9; B-D4/B-D5; PJ-5 re-judged; PJ-8 (unblocked) |
@@ -2335,7 +2362,7 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 | ES — Chat's empty state | ACTIVE since 11-08 (ES-D1…D7 ruled at the leans); ES-1 + ES-2 landed 11-08 (M226 `6b8a4b09f`), ES-3 + ES-4 landed 11-08 (M238 `2c34727a3`), ES-4 (role) landed 11-09 (M241 `7d7019a23`), ES-6 landed 11-09 (M260 `f3cbbc469`), ES-Q1 + ES-5a to 5d landed 11-09 (M270 `e6de35f09`) | DESIGN.md §2.4/§2.10/§3/§5/§6/§8/§9 (the ES page `1GdkfmnTxynAp6wHTbAa3a`) | 5e (a device and James); ES-6's first real window (row 36) |
 | HG — History's first view and its waits | ACTIVE since 11-08 (HG-D1…D6, HG-W1…W5 and HG-L1 ruled at the leans); HG-1 + HG-2 landed 11-08 (M235 `3264c54f1`); items 263 + 264 landed 11-08 (M239 `9d2b8d03d`); item 267 landed 11-09 (M242 `519132f1a`); the EL8 to rosetta 0.1.6 landed 11-13 (M296 `31abf8792` → `ea26b0464`); HG-4 landed 11-13 (M297 `b399703d0` → `5749798c2`); items 379 + 385 landed 11-14 (M298 `3c4c32d3a` → `6e56276d6`); the EL8 to rosetta 0.1.7 landed 11-14 (M301 `ed67b0c5b`); item 398 slice 1 landed 11-14 (M307 `f020ad8f2`); item 394 landed 11-17 (M355); items 516 (M388) and 520 (M390) landed 11-18 | DESIGN.md §5/§6/§8/§9 (the HG pages `U12DeYQrZB4YRjycrR4wuR` and `9ByDzaNGQaijgSHW6GrZUb`) | the `AppReviewTests.swift` comment follow-up → item 398 slice 2 (the kit) → item 411's plan |
 | NR — native re-arm | ACTIVE since 11-08 (opened by VF-PM 19:53Z, Q1–Q5 answered); S0–S2 landed 11-08 (M240 `33162a078`); S3, its last slice, landed 11-18 (M386) | `draft/thinking-native-replay-rearm.md`; DECISIONS NR | S3 landed on its own (M386); the daemon row stays the integration lane's (*corrected 2026-11-17: it said "S3 with the integration lane after EL8-TRUFFLE"*); the named follow-ups (LANDED "NR S0 + S1 + S2", Not this entry) |
-| OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314); item 279's S2 landed 11-12 (M293 `82e166608`, run279); OB-0…OB-4 (M365–M372), OB-UI (M373), item 293 and the stack's riders (M374–M378), OB custody (M379) and items 526 (M417) and 521 (M418) landed 11-18 | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; DECISIONS "items 279 · 321 · 322" | S3 with item 333, after the 0.9 tag; item 321; the desk tools in puppeteer 0.4.2; custody's sealed witness on the first signed build (OB-D20) |
+| OB — Objects at Work | ACTIVE since 11-09, the plugin folders first since 11-11; item 322 landed 11-12 (M286 `864d7aca3`, run 314); item 279's S2 landed 11-12 (M293 `82e166608`, run279); OB-0…OB-4 (M365–M372), OB-UI (M373), item 293 and the stack's riders (M374–M378), OB custody (M379) and items 526 (M417) and 521 (M418) landed 11-18 | `draft/thinking-objects-at-work.md`; `lanes/ob-build/ITEMS-279-321-322-PLAN.md`; `lanes/ob-build/s3/S3-333-READING.md`; DECISIONS "items 279 · 321 · 322" | 550a, 559, 558, S3 with item 333, R-2's room field with R-2b, and 2g's row to their assemblies; then S3b; EY-1's rows (580, 1f's applier); item 276's plan; item 321 on James's card; custody's sealed witness on the first signed build (OB-D20) |
 | CS — Card Stock and the Card Button | ACTIVE since 11-14 (CS-D5…D8 and CS-D10…D12 ruled 11-06 and 11-09; CS-D9 withdrawn); items 400–405 and 304 landed 2026-11-14 21:58:27Z as one M (M306 `54ed3d58c`) | `draft/card-stock/v5/RECORD.md`, `draft/card-stock/button/RECORD.md`; DESIGN.md §5/§8/§13; DECISIONS CS | James's eye on the cards in a window and his answers; Live ref cards and FACE-b (the bloom landed 11-18 with OB's custody fix, M373, M379) |
 | A — shell and spine | COMPLETE | design-03, `specs/electron-shell-refactor.md` | — |
 
