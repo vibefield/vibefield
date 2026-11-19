@@ -27,6 +27,10 @@ import type { WindowRegistry } from "./window-policy";
 // re-issued `app.quit()` runs from a macrotask: a quit re-issued inside a promise
 // continuation can leave the process alive on macOS (electron #55208).
 //
+// Item 601 (2026-11-19) — and a signal's quit holds every pair the moment it
+// begins (`holdPairs`, the gate's own hold): a fieldd lost before the teardown is
+// not started again, so a quit that leaves the pairs never starts one in their place.
+//
 // AU-7 (AU-G8; LC-25, LC-37; main-process.md §8.4) — Move to Applications is a
 // person's quit through the same gate (`quitThen`), with the move in place of the
 // plain native quit: Electron's mover copies the bundle, trashes this one and
@@ -268,6 +272,8 @@ export function installLifecycle(opts: {
   const quitForSignal = (): boolean => {
     if (!restarting) return false;
     gate = "open";
+    // item 601 (2026-11-19) — an aborted stop released every hold (the gate's re-ask Cancel): hold them again
+    opts.holdPairs?.();
     answerMove("proceed");
     // the signal's own quit again, as it would have run: past the gate, through the durable close if a window is open
     setImmediate(() => app.quit());
@@ -468,6 +474,9 @@ export function installLifecycle(opts: {
     },
     leavePairsOnQuit(cause) {
       restarting = true;
+      // item 601 (2026-11-19) — a signal's quit leaves the pairs and never starts one: from here every pair is held,
+      // so a fieldd lost before will-quit's teardown is not recovered with a spawn
+      opts.holdPairs?.();
       logger.info(
         "desktop.lifecycle.quit_leaves_pairs",
         "The next quit is not a person's: the daemon pairs are left running",

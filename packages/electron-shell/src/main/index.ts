@@ -294,6 +294,9 @@ let lifecycleFlow: LifecycleFlow | null = null;
 /** AL-3 — the quit gate (built with the pairs in a gated mode) and the restore an aborted quit runs; null before the
  * pairs exist and after teardown, when a person's quit leaves the pairs as before. */
 let quitGate: QuitGate | null = null;
+/** Item 601 (2026-11-19) — holds every pair as the quit gate's hold does; set once main has its pairs, null before (a
+ * signal then has nothing to hold). A signal's quit calls it through the lifecycle's `holdPairs`. */
+let holdEveryPair: (() => void) | null = null;
 let restoreAfterAbortedQuit: (() => void) | null = null;
 /** AU-5 — install on quit, the updater's (assigned once it exists); null in a build with no updater and after teardown,
  * when a person's quit installs nothing. */
@@ -1239,6 +1242,13 @@ async function main(
       ),
     onHeld: () => republishDesktopState?.(),
   });
+  // Item 601 (2026-11-19) — every pair held, the one way: the quit gate's port and a signal's quit (the lifecycle's
+  // `holdPairs`) share it, so a quit that leaves the pairs never starts one in their place
+  const holdAllPairs = (): void => {
+    quitLatch.hold();
+    for (const bundle of pairBundles.values()) bundle.handles.holdForStop();
+  };
+  holdEveryPair = holdAllPairs;
   let windowRendererBoundary: ReturnType<typeof registerWindowBootstrap> | null = null;
   const ensurePairBundle = (
     userId: string,
@@ -2885,10 +2895,7 @@ async function main(
         });
       },
       // Item 290 — the hold sets the quit's latch too, so a bundle born from now on starts held and a switch is refused
-      hold: () => {
-        quitLatch.hold();
-        for (const bundle of pairBundles.values()) bundle.handles.holdForStop();
-      },
+      hold: holdAllPairs,
       release: () => {
         quitLatch.release();
         for (const bundle of pairBundles.values()) bundle.handles.releaseHold();
@@ -3474,6 +3481,8 @@ if (!hasInstanceLock) {
       logger,
       closeLogging: closeEvidence,
       getQuitGate: () => quitGate,
+      // Item 601 (2026-11-19) — a signal's quit holds every pair, as the gate's hold does
+      holdPairs: () => holdEveryPair?.(),
       keepRunningOnQuit: () => quitKeepsRunning?.() ?? false,
       onQuitAborted: () => restoreAfterAbortedQuit?.(),
       installOnQuit: async (context) => {
