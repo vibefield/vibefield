@@ -46,7 +46,8 @@ export const simulatorManifest: PluginManifestV1 = {
   title: "iOS Simulator",
   description:
     "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
-  engines: { app: ">=0.0.0", contracts: "^0.1.0" },
+  // item 565 (2026-11-19): CoreSimulator is macOS's alone, so fieldd refuses this plugin elsewhere
+  engines: { app: ">=0.0.0", contracts: "^0.1.0", platforms: ["darwin"] },
   entries: { renderer: "./dist/renderer.js" },
   activation: [`onObject:${SIMULATOR_TYPE}`],
   capabilities: ["surface.attach", "surface.simulator"],

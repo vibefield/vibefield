@@ -87,7 +87,10 @@
   "description": "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
   "engines": {
     "app": ">=0.0.0",
-    "contracts": "^0.1.0"
+    "contracts": "^0.1.0",
+    "platforms": [
+      "darwin"
+    ]
   },
   "entries": {
     "renderer": "./dist/renderer.js"
