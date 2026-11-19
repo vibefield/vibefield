@@ -12,7 +12,7 @@
         "binding": {
           "kind": "simulator"
         },
-        "description": "Double-click to choose an iPhone model and iOS version, then use the simulator on the canvas.",
+        "description": "Double-click to choose an iPhone and an iOS version, then use it on your desk.",
         "groups": {},
         "interaction": {
           "movable": true,
@@ -59,7 +59,7 @@
           "h": 393.7,
           "w": 188.71
         },
-        "title": "Phone",
+        "title": "iOS Simulator",
         "tray": {
           "category": "devices",
           "hang": {
@@ -77,14 +77,14 @@
             ],
             "w": 75.48
           },
-          "label": "Phone",
+          "label": "iOS Simulator",
           "order": 0
         },
         "type": "vibefield.simulator"
       }
     ]
   },
-  "description": "Create interactive iPhones on the canvas using the iOS simulator runtimes installed in Xcode.",
+  "description": "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
   "engines": {
     "app": ">=0.0.0",
     "contracts": "^0.1.0"

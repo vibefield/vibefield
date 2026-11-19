@@ -45,7 +45,7 @@ export const simulatorManifest: PluginManifestV1 = {
   version: "0.1.0",
   title: "iOS Simulator",
   description:
-    "Create interactive iPhones on the canvas using the iOS simulator runtimes installed in Xcode.",
+    "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
   activation: [`onObject:${SIMULATOR_TYPE}`],
@@ -54,9 +54,10 @@ export const simulatorManifest: PluginManifestV1 = {
     objects: [
       {
         type: SIMULATOR_TYPE,
-        title: "Phone",
+        // item 572 (2026-11-19): the object is named as the plugin is
+        title: "iOS Simulator",
         description:
-          "Double-click to choose an iPhone model and iOS version, then use the simulator on the canvas.",
+          "Double-click to choose an iPhone and an iOS version, then use it on your desk.",
         schemaVersion: 1,
         size: { w: PHONE_SIZE.w, h: PHONE_SIZE.h },
         interaction: { selectable: true, movable: true, resizable: false, snap: "both" },
@@ -84,7 +85,7 @@ export const simulatorManifest: PluginManifestV1 = {
         // on the pegboard (ICE design-017 §8): a phone on a shelf under the devices' own category, hung at its own aspect
         tray: {
           category: SIMULATOR_CATEGORY,
-          label: "Phone",
+          label: "iOS Simulator",
           order: 0,
           hang: {
             w: hundredth(PHONE_SIZE.w * HANG),
