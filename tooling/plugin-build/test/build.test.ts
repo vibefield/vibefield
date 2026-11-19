@@ -94,6 +94,7 @@ describe("findUnmappableSpecifiers (the §11.6 artifact check)", () => {
         "react/jsx-runtime",
         "@vibefield/plugin-sdk",
         "@vibefield/plugin-sdk/ui",
+        "@vibefield/plugin-sdk/ui-dom",
         "@vibefield/plugin-sdk/canvas",
         "@vibefield/plugin-sdk/behavior",
       ]),

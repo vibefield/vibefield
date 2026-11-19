@@ -1,12 +1,13 @@
 // The same drawing as a standalone SVG string — what an export, a test and the
 // phone's template assets read, so every plane draws one geometry. It is also the
-// glyphs' DOM leaf (the kit's `./glyphs/svg` entry, item 570): it reaches no .tsx,
-// so a plugin with no `jsx` draws §13 through `@vibefield/plugin-sdk/ui-dom`.
+// glyphs' DOM leaf (the kit's `./glyphs/svg` entry, item 570, 2026-11-19): it
+// reaches no .tsx, so a plugin with no `jsx` draws §13 through
+// `@vibefield/plugin-sdk/ui-dom`.
 import { GLYPHS, type GlyphName, type GlyphShape } from "./data";
 
 export { GLYPH_NAMES, type GlyphName } from "./data";
 
-/** Quarter turns clockwise. Defined here, the DOM leaf, and re-exported by FieldGlyph.tsx (item 570). */
+/** Quarter turns clockwise. Defined here, the DOM leaf, and re-exported by FieldGlyph.tsx (item 570, 2026-11-19). */
 export type GlyphTurn = 0 | 90 | 180 | 270;
 
 export interface GlyphSvgOptions {

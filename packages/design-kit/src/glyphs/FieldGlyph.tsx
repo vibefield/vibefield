@@ -6,8 +6,8 @@ import { type CSSProperties, createElement, type ReactElement } from "react";
 import { GLYPHS, type GlyphName, type GlyphShape } from "./data";
 import type { GlyphTurn } from "./svg";
 
-// A quarter turn's type is defined in svg.ts, the glyphs' DOM leaf, which reaches no .tsx (item 570); it is
-// re-exported here, where it stood until then.
+// A quarter turn's type is defined in svg.ts, the glyphs' DOM leaf, which reaches no .tsx (item 570,
+// 2026-11-19); it is re-exported here, where it stood until then.
 export type { GlyphTurn };
 
 export interface FieldGlyphProps {

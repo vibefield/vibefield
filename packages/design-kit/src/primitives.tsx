@@ -12,7 +12,8 @@ import {
 import "./primitives.css";
 import { uiButtonClass, uiFieldClass, uiIconButtonClass, uiLabelClass } from "./primitive-classes";
 
-// The four class names are defined in primitive-classes.ts, which reaches no .tsx (item 570); re-exported here.
+// The four class names are defined in primitive-classes.ts, which reaches no .tsx (item 570, 2026-11-19);
+// re-exported here.
 export { uiButtonClass, uiFieldClass, uiIconButtonClass, uiLabelClass };
 
 export type UiButtonVariant = "quiet" | "primary" | "danger";

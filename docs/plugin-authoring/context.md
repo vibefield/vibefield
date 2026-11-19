@@ -162,6 +162,13 @@ workspace-internal `@ice/*` names ICE's own packages build with; a kind reaches
 ICE through `@vibefield/plugin-sdk/desk` alone. `scripts/` and `test/` are
 authoring-time subtrees and are exempt.
 
+`@vibefield/plugin-sdk/ui-dom` is the door for a plugin that draws its own DOM
+without React: DESIGN.md §13's glyphs (`glyphSvg`, `GLYPH_NAMES`) and the kit's
+four control class names. It carries the NAMES only: their rules are the kit's
+`primitives.css`, which the app loads, never the door, so in a harness of your
+own outside the app the names carry no style. `/ui` is the kit's React
+primitives, and a plugin needs `jsx` in its tsconfig to import it.
+
 Separately, these are the specifiers the host's import map RESOLVES at load
 time, so a bundle may leave them as bare imports instead of bundling a second
 copy:
