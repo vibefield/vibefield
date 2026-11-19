@@ -50927,6 +50927,12 @@ red before green wherever a value could hold the decision):
   catalog and on the swarm's atlas. **358**: Settings › Terminal opens on a preview.
 - **410** (found by the mini's tests, not by James): a direct read's session ends when its last call is back,
   never under one that is out; leaving a session while its older pages were read could end the app.
+  - *Added 2026-11-19 (item 411, a reading; nothing was built or run for it):* rosetta's own reads were read at
+    its pin `1bc7f45ef8ce`, whose Swift client is byte for byte the kit's 0.1.6. The client makes no request its
+    owner did not start, except a socket open, which the subscription's `closed` flag guards on the main actor;
+    the kit closes the subscription before it ends the session, and 410's count holds the session for every read
+    the kit makes. Whether the mesh's own node ends the sessions it handed out, when it stops or restarts, was
+    not read.
 - **SP-7b** (the injection): History reads a desktop's sessions directly.
 - **427** (the last commit): `BandsLayout.centre` is left unoptimized, because Swift 6.3.3's CopyPropagation pass
   crashes on it in a Release build and stops every archive; the comment says when to drop the attribute.
@@ -60497,3 +60503,454 @@ found, with no ref written. It read "Tests 1 failed | 82 passed (83)" in 43 s.
 - Which ask was the 65th is a reading of the code; no run reproduced the stalled wake.
 - The DR-3b row's series still runs the whole bound and reads its upper count. The new row reads no series.
 - `pnpm gate:landing` not run (owed).
+
+## Item 551 — a fieldd test that would run the keychain tool fails by name instead (M432)
+
+(2026-11-19; two commits, in order:
+- `f25102257` (red, "551 (red): a fieldd row that reaches for the keychain tool is refused before it starts, and
+  named");
+- `73fa59f5a` (green, "551 (green): fieldd's tests refuse the keychain tool, and fail the row that reached for it by
+  name").)
+
+**What a person sees.** Nothing: the change is in fieldd's tests alone. What a developer sees: a fieldd row that
+calls the keychain tool, `/usr/bin/security` or the bare name `security`, fails by its name, and the tool never
+starts.
+
+**The seams.**
+- `packages/fieldd/test/keychain-guard.ts`, new (`73fa59f5a`), a setup file beside `alias-parent-env.ts` and
+  `fake-ssh-env.ts` in `vitest.config.ts`'s `setupFiles` (`73fa59f5a`, its line commented by item):
+  - `vi.mock` of `node:child_process` (and of `child_process`, which vitest 3.2.7 names as the same module) hands
+    every file the real module, except `spawn`, `spawnSync`, `execFile`, `execFileSync`, `exec` and `execSync`.
+    Each throws at once, before any program starts, when its program is one of the two spellings, or when a
+    command string's first word is one. Every other program runs as before, and a promisified `execFile` or `exec`
+    keeps its own form.
+  - A refused call is kept with the row that made it. An `afterEach` fails that row, naming it and each call's
+    function, program and first argument. An `afterAll` fails the file for a call made outside any row.
+  - The module carries `keychainGuard`, so a row can see the guard is in place before it calls anything.
+- Not covered, and said in the file: a program that starts the tool itself (`sh -c`, `env security`, a script), a
+  daemon's child process or worker thread, code vitest does not transform (node_modules, puppeteer's own
+  included), and a file that mocks `node:child_process` itself. Two fieldd test files do (`agent-brew-prefixes`,
+  `agent-runtime-brew-prefixes`). Their mock replaces the guard's for their file, and both already throw on every
+  member.
+- `test/child-stdin.test.ts`'s census reads `src/` alone, so its SITES are unchanged.
+
+**The rows.** `packages/fieldd/test/keychain-guard.test.ts`, new (`f25102257`), seven rows. Each row's first expectation
+reads the guard's marker on the module it calls through. A row that then calls first holds that the guard refuses
+that very call (`reaches`) and that the function is the guard's own (`wraps`). The rows that call by the bare name
+hand the call a PATH that holds no program.
+- the tool's two spellings, and a command string's first word, are what the guard refuses (a pure read);
+- `spawn` of the tool by its path is refused and kept with its row;
+- the default store's read (`createDarwinSecretStore({ platform: "darwin" })`: its own tool and runner) is refused
+  and answers UNAVAILABLE {service: "keychain", state: "refused"}, and the spawn is kept;
+- the bare name is refused in each of the six calls, as an argument and as a command string;
+- every other program runs, and a promisified `execFile` still answers stdout and stderr;
+- the module's bare spelling carries the same guard;
+- the words a row fails with name the row and each call.
+
+**Proved.**
+- The cut (`cut-551.sh` 8e9678d0, console `cut-551.console` aac437a3) made `7f3a16cf2` and `febecef73` on main
+  `bf205b7c7`, in a lane worktree. After each commit fieldd's `tsc --noEmit` exited 0 with no "error TS" line, and
+  the tree's native biome exited 0 on the commit's files.
+- On the test Mac, through its QA lane (stage rows-one v19 76fde157; the verify by the test Mac's verify script
+  49e710bf), each row once, the Keychains folder unmoved before and after every row. Each clock is the END line of
+  the run's own run.log; the run folders are the lane's clean-run records, by the names below:
+  - `7f3a16cf2` on the cut (`f25102257`'s patch): `i551-red` (END 20:13:54Z): "Tests 7 failed (7)". Every failure is one
+    AssertionError line, "the keychain guard is on the module: expected undefined to be defined", at
+    `guardOn` (test/keychain-guard.test.ts:35:57). No other kind of error. Nothing was called.
+  - `febecef73` on the cut (`73fa59f5a`'s patch):
+    - `i551-green` (END 20:16:30Z): "Tests 7 passed (7)".
+    - `i551-green-stdin` (END 20:19:44Z): child-stdin "Tests 5 passed (5)".
+    - `v-i551`, `pnpm verify` whole (END 20:30:35Z, 584 s): exit 0, every failure count 0, as train 10's
+      record verify. The one suite that grows has one more file and seven more tests, these rows. No line of the
+      run names "item 551": no fieldd test reaches the keychain tool today.
+- The train's V: v-t11a, `pnpm verify` whole at the first assembly's top `68b0bcb8d` on the test Mac, 2026-11-19
+  08:02:14Z → 08:12:27Z: **GREEN**, exit 0 in 612 s; 27 vitest suites passed, none failed. The kit of every target at
+  the same top, kit-t11a-2 (kit-run3b.sh; its first try, kit-t11a with kit-run3.sh, stopped at 08:13:43Z at its own
+  package resolve, exit 74, before any test ran), ended 08:22:11Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not covered.**
+- The six calls of `node:child_process` in code vitest transforms. A program that starts the tool itself, a
+  daemon's child process or worker thread, and node_modules are outside the guard (above).
+- `fork`, and any other way to start a program, are not wrapped.
+- Rows run one at a time per file. A file's concurrent rows would be named by whichever row was running when a call
+  was made.
+
+## Item 548, part one — a profile's kept values read back as written, and are never written over unread (M433)
+
+(2026-11-19; six commits, in order:
+- `e309b5aef` ("548: the keychain's name rule says a double quote, as its pattern does");
+- `0bb88279c` (red, "548 (red): a profile's values read back whole after any add, or the add is refused");
+- `de0791142` (green, "548 (green): a profile's kept values are written as printable ASCII, and never written over
+  unread");
+- `d5b9968e6` (mend, "548 (mend): 542's keychain stand-ins answer as the tool does; a row pins the refusal read first");
+- `5d8aed5d4` (red, "548 (red, 2): a profile's kept entry the keychain hands back as hex is read, and saved over
+  whole");
+- `014fefe62` (green, "548 (green, 2): a profile's kept entry is read in the keychain tool's hex form too").
+
+`de0791142` was RED on the test Mac in `test/secret-store-child.test.ts` (2 of 12, run `i548a-green-child`) until
+`d5b9968e6`. Two of item 542's rows handed the store a kept entry in a form the keychain tool never hands back for an
+entry fieldd wrote, and `de0791142` refuses a save over such an entry. `de0791142` is green only with `d5b9968e6`.
+
+`5d8aed5d4` and `014fefe62` are the way out. At `d5b9968e6`, an entry kept outside printable ASCII before this item came
+back from the tool as hex. It was not whole, so it could never be saved over, and an agent started in that profile got
+no values. `014fefe62` reads that form for the profile's entry alone.
+
+Part two waits for a probe James runs by his own hand. It covers a plugin's secret setting and a read back after a
+write.)
+
+**What a person sees.**
+- A profile's server values holding characters outside printable ASCII (an accent, a symbol) are kept, read back
+  whole, kept by the next add, and handed to the agent at its start.
+- Some profiles kept such values before this item. The keychain hands those entries back in its hex form, and they
+  now read whole (`014fefe62`). The next save keeps every value and rewrites the entry as printable ASCII, and an agent
+  started in that profile is given its values.
+- A save of server values over a kept entry that is not read whole is refused, and nothing changes: neither the keychain
+  entry nor the names the profile lists. An entry is not read whole when it is neither JSON text nor the tool's hex of
+  it. The person reads "Couldn't save these values: the values this profile already keeps in your keychain can't be
+  read, and saving would replace them. Nothing was changed. Deleting this profile removes them."
+  (`KEPT_VALUES_UNREADABLE`, `de0791142`, and the last sentence `014fefe62`'s). The sentence is a draft for James's
+  words, kept in that one constant.
+- When that refusal and the too-long refusal (item 542) both hold, the person reads this one. It is checked before
+  any write and holds at any length (`d5b9968e6`'s row).
+- Values outside printable ASCII are kept escaped (`\uXXXX`), which is longer, so they meet item 542's line limit
+  sooner.
+- At an agent's start over a kept entry that is not read whole, the agent is given that entry's text values, or
+  none, as before.
+- The refusal for a secret's name says "a double quote" where it said "a quote" (`e309b5aef`).
+
+**The seams.** `packages/fieldd/src/agent-extension-store.ts`:
+- `entry()` answers `{ values, whole }` (`de0791142`). An absent entry is whole and empty. An entry that is not a JSON
+  map of text is not whole.
+- `entry()` reads the tool's hex form (`014fefe62`). An answer that is an even count of hex digits and nothing else is
+  the tool's form for a value outside printable ASCII. A profile's entry is a JSON object, whose text opens with
+  "{", so its text is never that. The bytes are decoded as strict UTF-8, and a bad sequence makes the entry not
+  whole, never replaced. The decoded text is then read as above. The store's read of every other secret is
+  unchanged.
+- `keepValues` refuses before any write when the kept entry is not whole: PRECONDITION_FAILED
+  {reason: "kept-values-unreadable"} (`de0791142`).
+- `keepValues` writes the entry with every character from U+007F up escaped as `\uXXXX` (`asciiJson`, `de0791142`). A
+  character past U+FFFF is written as its two halves. That is the same JSON, all printable ASCII, which the tool
+  hands back as its text. Item 542's probe records it equal for printable JSON written by fieldd's own line
+  (`probe-542.results.20261118T103518Z.tsv` rows 17–23, `probe-542b.results.20261118T111253Z.tsv` rows 2–7). The
+  tool hands a value outside printable ASCII back as lowercase hex (`probe-542.results.20261118T103518Z.tsv` row 16,
+  `probe-542b.results.20261118T111253Z.tsv` rows 8–11).
+- `launchValues` reads the entry's text values as before.
+- `packages/fieldd/src/plugin-settings.ts` (`e309b5aef`): `SECRET_NAME`'s comment says a double quote, with a dated
+  correction at it, and so does the set's refusal. `test/secret-store-child.test.ts`'s row name says the same.
+
+**The rows.**
+- `test/agent-extension-store.test.ts`, the describe "item 548: a profile's values the keychain hands back in
+  another form", seven rows. Its stand-in keychain answers a read as the tool's `-w` read does: printable ASCII as
+  its text, any other value as the hex of its UTF-8 bytes.
+  - `0bb88279c`: values outside printable ASCII are kept as printable ASCII, read back whole, kept by the next add, and
+    given at launch.
+  - `0bb88279c`: an add over a kept entry holding a member that is not text is refused, and the entry and the keep are
+    unchanged.
+  - `0bb88279c`, renamed at `5d8aed5d4`: an add over a kept entry that is neither JSON nor the keychain's hex of it (one
+    cut off) is refused, and nothing changes.
+  - `0bb88279c`, renamed at `5d8aed5d4`: an agent started over such an entry is given no values, as before.
+  - `5d8aed5d4`: an entry an earlier build wrote outside printable ASCII, handed back as hex, is read. The next add
+    keeps every value, and the entry's bytes after are exactly the printable ASCII JSON of both.
+  - `5d8aed5d4`: an agent started over such an entry is given its values.
+  - `5d8aed5d4`: the worst answers are each refused, with nothing written. These are hex whose bytes are UTF-8 but not
+    a JSON map of text, and hex whose bytes are not UTF-8 (`c3 28`).
+- `test/secret-store-child.test.ts`:
+  - "holds a profile's server values out of its arguments too" runs on the stub's "absent" mode, a profile that
+    keeps no values yet (`d5b9968e6`).
+  - `recorded()` answers a read with the tool's not-found exit (44), or with the text a row hands it (`d5b9968e6`).
+  - A new row: values too long to keep, over an unreadable kept entry, are refused with the unreadable words and not the
+    length's, and nothing is written (`d5b9968e6`). At `5d8aed5d4` its entry is one that is neither form, so it stays
+    unreadable once the hex form is read.
+  - No existing expectation changed.
+
+**Proved.**
+- The cut (`cut-548a.sh` 9b22e7b1, console `cut-548a.console` b2d83a21) made `75443fab6`, `5dd14a7cc` and
+  `f5ec2373d` on main `bf205b7c7`, in a lane worktree. The mend's cut (`cut-548a-mend.sh` 57210348, console
+  `cut-548a-mend.console` 08d14ff6) made `77e8e6a32` on `f5ec2373d`. The hex cut (`cut-548a-hex.sh` dc5e7df8,
+  console `cut-548a-hex.console` e932e5de) made `77d770b4e` and `ef64fc796` on `77e8e6a32`. After each commit,
+  fieldd's `tsc --noEmit` exited 0 with no "error TS" line, and the tree's native biome exited 0 on the commit's
+  files.
+- `77d770b4e`'s message said both its rows "fail by assertion", but its first row fails by the store's refusal. The
+  message was re-worded the same evening by `cut-548a-rw.sh` (8d308fbb, console `cut-548a-rw.console` 87c87533). That
+  script wrote `5d8aed5d4` = `94d9e87df` and `014fefe62` = `6e5cda7ac` with `git commit-tree`, from the old commits' own
+  trees: `77d770b4e`'s tree f1c6577dfbbf4208b073768d13d06381af5929d6 and `ef64fc796`'s tree
+  3833b30b87dff3d76457b2f5ea0a03a40e76f8ae, on `77e8e6a32`. Only the red's one message line differs. The trees are
+  identical by id, so the runs below at `77d770b4e` and `ef64fc796` are runs of `5d8aed5d4`'s and `014fefe62`'s trees.
+- The rows ran on the test Mac, through its QA lane. The stages were rows-one v20 40375b18 for `i548a-*`, v21
+  351af6bd for `i548m-*` and fea7748e for `i548h-*`, and the verify ran by the test Mac's verify script 49e710bf.
+  Each row ran once, with the Keychains folder unmoved before and after every row. Every row hands the store a
+  stand-in, and none reaches the tool. Each clock is the END line of the run's own run.log. The run folders are the
+  lane's clean-run records, by the names below.
+  - `5dd14a7cc` on the cut (`0bb88279c`'s patch): `i548a-red` (END 20:36:05Z) read "Tests 3 failed | 9 passed (12)". The
+    three rows failed by AssertionError, at the kinds the stage named:
+    - "keeps the values as printable ASCII…": `toMatch(/^[\x20-\x7e]*$/u)` on the kept entry (:390:36);
+    - "refuses an add over a kept entry it cannot read…": "promise resolved "undefined" instead of rejecting"
+      (:407:5);
+    - "refuses an add over a kept entry holding a member that is not text…": the same (:430:5).
+  - `f5ec2373d` on the cut (`de0791142`'s patch):
+    - `i548a-green-store` (END 20:39:02Z): the store's file "Tests 12 passed (12)".
+    - `i548a-green-child` (END 20:40:06Z): RED, "Tests 2 failed | 10 passed (12)". "holds a profile's server values
+      out of its arguments too" was refused as unreadable. "refuses a profile's server values whose line would pass
+      that length" read the unreadable refusal where it wanted the too-long one. Their stand-ins answered a read
+      with "stub-answer" and "". fieldd's kept entry is only ever a JSON object with a text value, which the tool
+      hands back as written, or no item (exit 44, both probes' first look). So the stand-ins were mended, not the
+      rule.
+    - `i548a-green-ext` (END 20:41:12Z): agent-extensions "Tests 36 passed (36)".
+  - `77e8e6a32` on the cut (`d5b9968e6`'s patch):
+    - `i548m-green-store` (END 20:51:01Z): the store's file "Tests 12 passed (12)".
+    - `i548m-green-child` (END 20:51:29Z): secret-store-child "Tests 13 passed (13)", including the two rows red at
+      `de0791142` and the new row.
+    - `i548m-green-ext` (END 20:52:59Z): agent-extensions "Tests 36 passed (36)".
+    - `v-i548a`, `pnpm verify` whole (END 21:04:12Z, 587 s): exit 0, every failure count 0. fieldd's suite read "4633 +
+      15" tests against the train 10 record's "4628 + 15". The five more are `0bb88279c`'s four rows and `d5b9968e6`'s
+      new row.
+  - `77d770b4e` on the cut (`5d8aed5d4`'s patch): `i548h-red` (END 21:32:03Z) read "Tests 2 failed | 13 passed (15)",
+    exactly the two rows the stage named, with no foreign failure. The two rows failed by two kinds:
+    - "reads a kept entry the keychain hands back as hex, and the next add keeps every value as printable ASCII":
+      `RpcCallError`, the refusal's own words, thrown by `keepValues` (the store's :165). The add is refused
+      because the hex entry is not yet read whole.
+    - "gives an agent the values of a kept entry the keychain hands back as hex": AssertionError, "expected
+      undefined to deeply equal { CONTEXT7_API_KEY: 'clé-✓-🔑' }" (:476:5).
+  - `ef64fc796` on the cut (`014fefe62`'s patch):
+    - `i548h-green-store` (END 21:33:58Z): the store's file "Tests 15 passed (15)".
+    - `i548h-green-child` (END 21:34:38Z): secret-store-child "Tests 13 passed (13)".
+    - `i548h-green-ext` (END 21:36:23Z): agent-extensions "Tests 36 passed (36)".
+    - `v-i548h`, `pnpm verify` whole (END 21:47:25Z, 441 s): EXIT 1, with ONE red in fieldd's suite: "Tests 1
+      failed | 4635 passed | 15 skipped (4651)". The three more over `v-i548a` are `5d8aed5d4`'s three new rows. The red
+      is `test/tool-plane-desk.test.ts`, item 526's row "writes the act's `tools.object_act` lines through the real
+      audit writer, attempt then outcome". It read `["attempt"]` where `["attempt", "outcome"]` was wanted, after
+      `service.close()` (:173:39; the clean log's lines 20244–20501). Item 548 does not reach that row. The six
+      commits change agent-extension-store.ts, plugin-settings.ts and two test files. The desk test's
+      relative-import closure at `ef64fc796` is 30 files, with audit-service and the tool plane in it and none of
+      those four files or their importers (agent-runtime, agent-extensions, daemon) in it. The same file was 9 of 9
+      in `v-i551` and `v-i548a` that day. The cause is item 557's.
+  - `6e5cda7ac` (`014fefe62`), `v-i548h-2`, `pnpm verify` whole (END 22:29:26Z, 578 s): exit 0, with no failed line.
+    fieldd's suite read "Tests 4636 passed | 15 skipped (4651)". tool-plane-desk.test.ts was 9 of 9, item 526's
+    row among them. The V lane's clone read HEAD `6e5cda7ac` with tree 3833b30b87dff3d76457b2f5ea0a03a40e76f8ae
+    before the run (22:19:40Z) and after it (22:30:16Z), which is `ef64fc796`'s tree.
+- The train's V: v-t11a, `pnpm verify` whole at the first assembly's top `68b0bcb8d` on the test Mac, 2026-11-19
+  08:02:14Z → 08:12:27Z: **GREEN**, exit 0 in 612 s; 27 vitest suites passed, none failed. The kit of every target at
+  the same top, kit-t11a-2 (kit-run3b.sh; its first try, kit-t11a with kit-run3.sh, stopped at 08:13:43Z at its own
+  package resolve, exit 74, before any test ran), ended 08:22:11Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not covered.**
+- A plugin's secret setting (`PluginSettings.get`) still answers the hex text for a value outside printable ASCII:
+  `014fefe62` reads the form for a profile's entry alone. Part two mends it, after James's probe.
+- Nothing reads an entry back after a write (part two).
+- The person's sentence is a draft, for James's words.
+
+## EL8 — Ghosttea 0.16.0 on every plane: a host can tell a session its colors; truffle's Swift plane stays 0.7.26 (M434)
+
+(2026-11-19; one commit, 22 paths +138 −114. Cut by the terminal-look lane on main `a8be46dd2` as `302bf55e3`
+(tree `0c5c2b45f809`) on branch `tl/el8-gt016-on-a8be46dd208c`. On main it is `87a60957c` "EL8 (ghosttea 0.16.0): a host
+can tell a session its colors, on every plane; truffle's Swift plane stays 0.7.26". Every other id here is a
+run's or a sibling's. The day in the commit's notes, 2026-11-18, is the day the pins moved and were measured.)
+
+**What landed.**
+- ghosttea `v0.16.0` = `3e719397` (a signed tag, published 2026-11-18) on cargo, npm and Swift, one event:
+  - siblings.lock.json: ghosttea's `sha` and its three `release` keys, and four places in its prose;
+  - by `node scripts/siblings.mjs render --prod`: Cargo.toml's `ghosttea = "=0.16.0"`, the three rendered npm
+    rows (client, react, protocol) and the kit's `ghostteaRelease`;
+  - typed: the two npm rows the lock does not render (electron, frame), the six `minimumReleaseAgeExclude` rows
+    (0.16.0 was published inside the window), and preflight's six ghosttea PIN_EXPECTATIONS rows.
+- What 0.16.0 carries (vibecook-dev/ghosttea#106): control protocol 1.20. `create-session` takes a session's
+  `colors`, `set-colors` takes a sparse `palette`, a host's colors are kept across a configuration reload, and
+  the node client has `setColors`. The engine does not move: the VT library is the one 0.15.0 took
+  (`ghostty-vt-18e09ae6cb6a`, Ghostty `0fa3d577`, libghostty-vt 1.0).
+- NOT adopted here: nothing in the product calls 1.20 yet. That is TL-4b (item 529).
+- Four test lines, and no line outside tests. `SpawnOptions` gained the public field `colors`, and
+  field-native builds that struct by a literal in four test sessions (`mod tests` in src/tp/door.rs and
+  src/tp/presentation.rs; tests/terminal_paste_termination.rs; tests/tp_activation.rs). Each gains
+  `colors: None`: the session follows the configuration, as every session did at 0.15.0.
+- Written by the tools, on the test Mac, never by hand:
+  - Cargo.lock: the six ghosttea blocks, 12 lines out and 12 in;
+  - pnpm-lock.yaml: the six `@vibecook/ghosttea*` packages, no other package key;
+  - the kit's Package.resolved, by `swift package resolve`: ghosttea's revision and version, and the originHash;
+  - `ghostty-keys.generated.ts`, by `pnpm gen`: the crate's version, twice; the key table does not move;
+  - the phone's acknowledgements.json, by `node scripts/third-party-notices.mjs --ios`: the pin's version and
+    revision, the eight ghosttea crates and the Swift ghosttea part (145 components, 117 texts, 0 gaps).
+- The App's Package.resolved: ghosttea's two pin lines, typed; its originHash as committed.
+- Dated notes at their sources (Cargo.toml, pnpm-workspace.yaml, the kit's Package.swift, preflight.mjs); a
+  dated line in each of two field-native comments (terminal_client.rs: 0.16.0 serves 1.20 and no pushed-event
+  gate moved; terminal.rs); TESTFLIGHT.md's Swift row with a dated correction (it also said the desktop's truffle
+  is 0.7.27; it is 0.7.28 since the EL8 of 2026-11-17); ROADMAP's pins table (the ghosttea row and one clause of
+  the truffle row); DECISIONS' TB row.
+- Unmoved: truffle on every plane. The kit's Swift plane stays 0.7.26, which ghosttea 0.16.0 declares exact, as
+  0.15.0 and 0.14.0 did. `GHOSTTY_VT_BUNDLED` needs no new row: it is keyed by the Ghostty commit, and it holds
+  `0fa3d577`.
+
+**What was proved.** Every row ran on the test Mac (a Mac mini) on 2026-11-18, in a clean clone holding the cut's
+base tree (detached at `bf205b7c7` with `a8be46dd2`'s docs/ROADMAP.md placed and held by sum: the one file the
+two commits differ in), the edits made by the cut's own tool (`el8-edits-2.py`, `b25a77f0e7e3fe6f`) with
+`--day 2026-11-18`.
+- A, the pin's own row (el8a-4, 21:51:05Z → 21:51:48Z; run.log `9c81350ab1e05504`): GREEN.
+  - the read-backs before anything moved: the six crates and the six npm packages at 0.16.0 on their registries,
+    the tag at `3e719397`, the Apple asset;
+  - the red arm: `node scripts/preflight.mjs` after the lock and the render alone, exit 1, four lines naming a
+    ghosttea row still at 0.15.0;
+  - the one online `pnpm install` moved pnpm-lock.yaml by exactly the six packages and left pnpm-workspace.yaml
+    as typed; both files were read around every pnpm command, and no other command moved either;
+  - `cargo update -p ghosttea --precise 0.16.0`: one call, exactly the six crates; `cargo metadata --locked`
+    exit 0;
+  - `swift package resolve`: ghosttea at `3e719397`, 0.16.0; rosetta's and truffle's pins unmoved;
+  - the Apple artifact `ghosttea-apple-native-fdf3c96b8e39` against 0.15.0's `6a3c4add4331`: three slices, 4898
+    members on each side (1617, 1640, 1641). 58 members a slice differ by name, every one an object of
+    ghosttea's own eight crates, whose names carry build hashes; with those hashes blanked the lists are equal,
+    and every other member is equal as named ("SLICES EQUAL (hashes blanked)");
+  - preflight, check:deps, `siblings render --prod --check` and check:ios-fixtures: 0 each;
+  - its 22 files are the cut's by sha256 (files.sums `fdaa4f27ce86da26`; its patch `da50c4803e236b47`).
+- V (el8v-2, 21:56:36Z → 22:07:40Z; run.log `862f18117a73e766`), on A's tree held to that patch: `pnpm verify`
+  whole, exit 0 in 662 s, sixteen stages (the log's sha16 `730557eb4b4ebbd0`). fieldd 320 files passed and 5
+  skipped of 325 (4628 tests passed, 15 skipped); field-app 371 files of 371 (5430 tests); cargo's
+  `test result: ok` 43 times and no FAILED; nothing downloaded.
+- K (el8k-1, 22:10:48Z → 22:14:12Z; run.log `c320f48781439fbd`, rows.tsv `c329249d71966a03`), on the same tree:
+  the whole kit by `xcodebuild test` on the test Mac's simulator, exit 0 in 189 s, 17 targets, 3134 rows: 3131
+  Passed, 3 Skipped, none other. The row that reads ghosttea's version in the acknowledgements Passed, exactly
+  one. Xcode's resolve from the tree's own Package.resolved held ghosttea's checkout at `3e719397` and left the
+  tree as it was.
+- The cut, on the development Mac, 22:25:06Z → 22:25:30Z: the tool's three phases around the real render, the
+  five run-written files placed from the row's copies, each of the 22 files held to A's sum before staging and
+  again as committed; through the pre-commit hook ("siblings:render: the committed rows (staged) are the lock's
+  (15 npm, 0 cargo + 6 released on the registry, 3 swift)"). Its script had one dry try in a scratch repository
+  first: a good world to its END, and eleven planted faults, each stopping at its own line.
+- The reds on the way, each as it happened:
+  - A's first run (el8a-1, 20:46:17Z → 20:46:49Z) stopped at the typed phase with nothing written. Before
+    `pnpm siblings render --prod --check`, pnpm 11.13.1 had installed by itself, online: it rewrote
+    pnpm-lock.yaml, wrote 0.16.0 into four rows of `minimumReleaseAgeExclude` and dropped that list's two notes.
+    The row was re-ordered: the node scripts are called directly until the one install.
+  - A's second run (el8a-2, 21:06:17Z → 21:06:59Z) held every step but the artifact compare, which then asked
+    for equal member names; no version bump could pass that. The compare was re-formed as above, for the eight
+    named crates only, and el8a-3 (21:21:17Z → 21:22:02Z) was GREEN in that form, on 18 paths.
+  - The first verify (el8v-1, 21:26:55Z → 21:28:40Z, on el8a-3's tree) ended 101 after 104 s at
+    `cargo clippy --workspace --all-targets`: E0063, a missing field `colors`, in three test literals. A search
+    of every `.rs` found a fourth, which clippy had not reached. The tool gained the four lines, and A, V and K
+    ran again on 22 paths.
+- The train's verify: v-t11a, `pnpm verify` whole at the first assembly's top `68b0bcb8d` on the test Mac, 2026-11-19
+  08:02:14Z → 08:12:27Z: **GREEN**, exit 0 in 612 s; 27 vitest suites passed, none failed. The kit of every target at
+  the same top, kit-t11a-2 (kit-run3b.sh; its first try, kit-t11a with kit-run3.sh, stopped at 08:13:43Z at its own
+  package resolve, exit 74, before any test ran), ended 08:22:11Z: 3,134 rows, Passed 3,131, Skipped 3, Failed 0
+
+**Found.**
+- pnpm 11.13.1 installs by itself, online, before any `pnpm <script>` on a tree whose override rows moved, and
+  writes tracked files nobody asked it to (item 554 holds the setting's question). An EL8's row calls the node
+  scripts directly until its one install, types the release-age rows first, and reads pnpm-workspace.yaml's and
+  pnpm-lock.yaml's sums around every pnpm command.
+- ghosttea 0.16.0 breaks the source of anything that builds `SpawnOptions` by a literal: the struct has no
+  `Default` and no constructor. A petition candidate.
+- The kit's Package.resolved did not agree with its Package.swift on main before this: its `originHash` is the
+  sha256 of the manifest, and the manifest had been edited since the last resolve (`08fc960f` against
+  `5231fe91`). This commit carries a resolved pair. A dated note in that manifest therefore fixes the resolved
+  file's bytes, which is why the commit's notes keep the day the row ran.
+- The old version in tracked test files: four lines, all ICE's own 0.15.0; none is ghosttea's.
+
+**Not run, owed.**
+- `pnpm gate:landing`: not run (owed at the landing). No pane was drawn and no desk smoke ran in this row.
+- No floor was asked anything at 1.20: no session was created with colors and no palette was sent. TL-4b's.
+- No run opened the App's workspace. What Xcode computes the App's Package.resolved `originHash` from is still
+  not found.
+- No object of the Apple artifact was opened (no `nm`): what the engine's objects carry rests on the engine's
+  archive manifest being one blob at both tags (`artifacts.json` `2455dac9f74c`, `ghostty.lock.json`
+  `4afb26775435`).
+- The desktop's notices were not regenerated.
+- macOS only; the kit ran on one simulator (iOS 27.2, Xcode 27.3).
+
+**For the records' ROADMAP rewrite** (line numbers at `a8be46dd2`; this commit moves the pins table's two rows
+alone, as the last ghosttea EL8 did):
+- :874 "ghosttea is pinned at 0.15.0 since M290": it is 0.16.0 since M434.
+- :877 "Next: rv/vf-ghosttea-tail, on ghosttea 0.15.0": the pin under it is now 0.16.0.
+- :2237–2240 "The EL8 (item 529) is the next train's": landed as M434; what is left of item 529 is TL-4b.
+- :2298, the "EL8 — pins" row: "ghosttea 0.16.0 (published 2026-11-18; item 529) first" is done.
+
+## Item 557 — the desk room's rows wait for each call's own answer, and hold that it came (M435)
+
+(2026-11-19; two commits, in order: `a556d3110` "557 (red): a row reading a desk act's audit trail closes it before a
+slow answer's outcome is written", `68b0bcb8d` "557: the desk room's rows wait for each call's own answer, and hold that
+it came". Cut on main `a8be46dd208c` as `2a6c4292b699` (the red) and `e11f0aa287de` (the green, branch
+`ob/item557-on-a8be46dd2`), 22:02:25Z; the red's branch `ob/item557-red-on-a8be46dd2` was made after the cut,
+create-only, for the test Mac's red rows. Two files, both tests: `packages/fieldd/test/tool-plane-desk.test.ts` +67 −14
+and `packages/fieldd/test/agent-gateway.test.ts` +3 −0. `a556d3110` and `68b0bcb8d` carry the cut patch-equal
+(`git patch-id --stable`, the first assembly's carries 10 and 11, each held equal to the cut's,
+train11a-assemble-run-0752.out).)
+
+**What a person sees.** Nothing; no product file changes. A test row read an act's audit trail as `["attempt"]` once,
+in a whole verify, where it wanted `["attempt", "outcome"]`. The audit trail did what a close does; the row closed it
+too early.
+
+**The red that opened it.** `v-i548h`: `pnpm verify` whole on the test Mac at `ef64fc796b5f` (item 548a's tip),
+2026-11-18 21:40:02Z to 21:47:25Z, exit 1.
+- fieldd's vitest read "Tests 1 failed | 4635 passed | 15 skipped (4651)". The one failure is item 526's row
+  "writes the act's `tools.object_act` lines through the real audit writer, attempt then outcome (item 526)" (65 ms):
+  `AssertionError: expected [ 'attempt' ] to deeply equal [ 'attempt', 'outcome' ]` at
+  `test/tool-plane-desk.test.ts:173:39`.
+
+**What the row read, and why.** A reading of the code at `a8be46dd208c`; no run reproduced the order under load.
+- The plane awaits `audit.required` before it answers (`tool-plane/index.ts:455`, answer at `:477`). `requiredAs`
+  awaits the attempt (`audit-service.ts:402`), the effect (`:421`) and the outcome (`:456`) before it returns
+  (`:509`).
+- The rows' harness `call()` returned after a count of 20 `setTimeout(0)` turns (`tool-plane-desk.test.ts:121`), not
+  when the answer came. On a slower machine the answer was not in by then.
+- The row's `result?.isError` check passes on an undefined result. Its close (`:171`) then ran ahead of the outcome.
+- `close()` is serial and drains the appends already asked for; an append asked for after it begins is refused
+  CLOSED (`audit-service.ts:517`). So the trail held the attempt alone.
+
+**What landed.**
+- `a556d3110` lets the harness's window answer an act a set number of turns after the act reaches it, and adds the row
+  "keeps the act's outcome in the trail when the window answers after a reader's count of turns (item 557)". Its window
+  answers 40 turns late, so the counted reader returns first every time: red by order, not by timing.
+- `68b0bcb8d`:
+  - `call()` waits for the line with its own id, turn by turn, under a 10 s deadline (`CALL_ANSWER_MS`) that fails by
+    the call's id and name ("had no answer within");
+  - the three rows that read an act's answer hold `expect(result).toBeDefined()` first: "records ref and tool, and no
+    contents, before the act", item 526's row and the new row;
+  - agent-gateway's row "retries once only: a second failure is the launch's own, and both attempts are given up" now
+    holds that the answer came. It checked only that `answer?.action` is not "exec"; a launch is always answered.
+- The sweep, a reading at `a8be46dd208c`: no other fieldd row passes when a call's answer never came.
+  - The desk file's other rows already fail on no answer (a `toBe(true)`, `toMatch` or `toContain` on it).
+  - tool-plane-service.test.ts waits one turn (`settle`, `:241`) and then reads `answer.result` with no `?.`, so a
+    missing answer fails its rows. doc-compaction.test.ts's rows fail on the board they build from the answer.
+  - Four other counted loops let side effects settle and read no call's answer: agent-screens.test.ts `:131`,
+    mesh-board.test.ts `:142`, shell-provider.test.ts `:139` and freeway.test.ts `:296`.
+  - `68b0bcb8d`'s message says it more broadly: "no other fieldd test that counts turns for an answer". The line above
+    is the true one.
+- Nothing under `packages/fieldd/src` changes.
+
+**Proved before the cut, on the development Mac, nothing of record.** In a scratch clone of main with the files
+placed, at each tree (red `1b292978`, green `93c7c316`): the pinned biome over the changed files ("No fixes
+applied"), `biome check .` over the green at error level (3882 files, "No fixes applied"), check-retired-names and
+check-test-temp-roots clean. No typecheck ran for this piece; its first is the joined V's.
+
+**Proved red, on the test Mac.** `i557-red-desk-1` to `-10`, ten runs of `tool-plane-desk.test.ts` alone at
+`2a6c4292b699` on the cut (`a556d3110`'s patch), 2026-11-18 22:33:08Z to 22:44:14Z, each in a tree found detached and
+clean and returned as found, with no ref written.
+- Each read "Tests 1 failed | 9 passed (10)", the one failure the new row's, by `expected [ 'attempt' ] to deeply
+  equal [ 'attempt', 'outcome' ]`. Each run's stage read AS WANTED. No other error kind, missing module or timeout.
+- vitest's duration: 12.84 s for the first, 1.04 to 1.07 s for the other nine.
+- The runs went as three series (`i557-red-desk-1` alone; the series `i557-red` ran `-2` and `-3` and then stopped at
+  its stop file, `-3` running on to its end and fetched by hand; the series `i557-red-b` ran `-4` to `-10`).
+- agent-gateway.test.ts had no red run: `a556d3110` does not change it (`git diff --quiet a8be46dd208c 2a6c4292b699 --`
+  the file: exit 0).
+
+**Proved green, on the test Mac.** At `e11f0aa287de` on the cut (`68b0bcb8d`'s patch), each run in a tree found detached
+and clean and returned as found, with no ref written; the series `i557-green` ended 23:14:16Z, 20 of 20 AS WANTED.
+- `i557-green-desk-1` to `-10` (22:47:44Z to 22:55:20Z): `tool-plane-desk.test.ts` alone, each "Tests 10 passed
+  (10)", vitest's duration 873 to 901 ms.
+- `i557-green-gw-1` to `-10` (22:56:00Z to 23:13:42Z): `agent-gateway.test.ts` alone, each "Tests 118 passed (118)",
+  vitest's duration 67.74 to 68.67 s.
+- No `R1.clean.log` of the thirty holds the deadline's words "had no answer within", and each green run's own check
+  in its `run.log` reads 0 lines holding them.
+
+**The joined verify.** This piece has no verify of its own: v-t11a, `pnpm verify` whole at the first assembly's top
+`68b0bcb8d` on the test Mac, 2026-11-19 08:02:14Z → 08:12:27Z: **GREEN**, exit 0 in 612 s; 27 vitest suites passed, none
+failed. The kit of every target at the same top, kit-t11a-2 (kit-run3b.sh; its first try, kit-t11a with kit-run3.sh,
+stopped at 08:13:43Z at its own package resolve, exit 74, before any test ran), ended 08:22:11Z: 3,134 rows, Passed
+3,131, Skipped 3, Failed 0.
+
+**Not covered.**
+- The opening red's own order (a counted reader outrun by a slow outcome on a loaded machine) was not reproduced; the
+  red holds the answer back by a count of turns instead.
+- The gateway row's new hold was never seen red.
+- What a stop does to a call still in flight is item 558's, not this.
+- macOS only.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
