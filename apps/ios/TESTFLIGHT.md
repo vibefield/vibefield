@@ -232,6 +232,10 @@ as archives 1–5 did, and gets the key only when `ASC_ARCHIVE_KEY=1` asks:
 | `ASC_ARCHIVE_KEY` | *optional:* `1` makes `archive` use the key too, for an archive Xcode's account cannot sign; the key is then decoded for the whole Release build |
 | `VIBEFIELD_ASC_AGENTS_RUNNING` | *optional:* `revoke-the-key-afterwards` reads the key although agents run as you (the guard below); then revoke the key (step 4) |
 
+A `VIBEFIELD_` variable here is set on the command line or in the shell's own
+profile, never inherited from the shell that started VibeField: a terminal
+VibeField starts is born without one (item 576, 2026-11-19).
+
 **The route: James's own account.** James ruled on 2026-11-05: "just use my
 current account, I'm an individual developer". The key lives in his login keychain
 (steps 2 and 3), Xcode is signed in to the team there, and the archive and the

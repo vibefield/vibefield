@@ -287,6 +287,10 @@ Smoke-only doors. The product never loads these queries, never reads these varia
 | `VF_MARKET_ROWS` | a part of the market runs' rows, by name (`READ,DOOR`), one list for every run: each run runs those of its own it names, a parked row among them; unset, every row but the parked (PICTURES, row 37); a name no run has is red. A list that names CARRY names `INSTALL,RISE,CARRY,REMOVE` too, for CARRY reads the clock INSTALL took and REMOVE takes it away: CARRY alone is red by design. *(Changed 2026-11-17, item 433: CARRY was parked too, until Discover drew its categories.)* |
 | `FIELDD_PLUGIN_REGISTRY_URL` / `FIELDD_PLUGIN_REGISTRY_KEY` | *(MK-6, 2026-11-14)* the plugin list a DEVELOPMENT fieldd reads (file:// or http(s)://) and the PUBLIC key that verifies it, both or neither (`packages/fieldd/src/registry-seam.ts`): smoke:market's stager hands its own. Unlike the rows above, the product reads these, in development alone: the shell blanks both for a packaged fieldd (`main/fieldd.ts`, as it blanks the debug swarm's), and a packaged fieldd handed either refuses to boot, by name (fieldd's `registry-seam-packaged.test.ts`, on its own bundle as PG-9 S4c's `swarm-replay-packaged.test.ts` is). No build sets them; a build's list is the registry rung's (TD §9 TD-4). `.env.example` names them beside the debug swarm's. No agent or pane is handed them: the `FIELDD_` class is stripped from both (`ENV_PREFIXES`, EL7), and a plugin's service worker starts with an empty environment. |
 
+*(item 576, 2026-11-19)* A `VIBEFIELD_` variable above is set on the command line or in the shell's own profile,
+never inherited from the shell that started VibeField: a terminal VibeField starts is born without one. A launcher that
+sets one for its own child (run-studio-smoke.mjs's `VIBEFIELD_DEV_ROOT`) is unchanged.
+
 ## The product desk rig — the census
 
 §5 Phase 5 named the rig: "an Electron harness that opens a fixture board, places each kind, drags one off the pegboard, holds
