@@ -136,9 +136,9 @@ describe("the page's honest life — its rows", () => {
   it("BAR: ‹ disabled on a fresh page and its press and chord nothing; live after a click; ↻ Stop while a page loads, and its press stops the load", () => {
     expect(judgeBar(BAR)).toEqual([]);
     expect(judgeBar({ ...BAR, fresh: { disabled: false, label: "Back" } })).toEqual([
-      "BAR: ‹ is not aria-disabled on a fresh page — the bar says there is somewhere to go",
+      "BAR: the held pane enables Back on a fresh page",
     ]);
-    expect(judgeBar({ ...BAR, fresh: null })).toEqual(["BAR: the held bar has no ‹"]);
+    expect(judgeBar({ ...BAR, fresh: null })).toEqual(["BAR: the held pane has no Back control"]);
     // the disabled tool DID something: the page went, a navigation was sent, the pane was put down
     expect(
       judgeBar({ ...BAR, pressed: { path: "about:blank", navigations: 2, held: false } }),
@@ -615,7 +615,7 @@ describe("the page's honest life — its rows", () => {
       'FAIL: in hand the cursor over the film beside the capsule is "pointer" — the film is not the pane\'s own glass',
     ]);
     expect(judgeFail({ ...FAIL, reload: { disabled: true, label: "Reload" } })).toEqual([
-      "FAIL: the bar's ↻ is disabled on a page that can be tried again",
+      "FAIL: the pane disables Reload on a page that can be tried again",
     ]);
     // Try again did nothing
     expect(judgeFail({ ...FAIL, retried: { state: "failed", veiled: true, path: null } })).toEqual([

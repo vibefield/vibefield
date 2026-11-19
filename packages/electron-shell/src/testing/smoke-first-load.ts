@@ -44,7 +44,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { choosePaneDevice } from "./browser-pane-chrome";
+import { choosePaneDevice, paneHeadControl, pressPaneHead } from "./browser-pane-chrome";
 import { FIXTURE_HOLD_MS, type FixtureReport, ZOOM_SCALE } from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
 import {
@@ -943,12 +943,10 @@ export async function firstLoadRows(d: FirstLoadDriver): Promise<string[]> {
   };
   const heldFrame = (): Promise<HeldFrameSeen | null> =>
     js<HeldFrameSeen | null>("globalThis.__vfDesk.held()?.frame ?? null");
-  /** ↻ on the held bar: its label, and a press on it. */
-  const TOOL = `[...(document.querySelector('[data-selection-bar] [data-face-row="hand"]')?.querySelectorAll("[data-tool]") ?? [])].find((t) => t.getAttribute("data-tool") === "reload")`;
-  const reloadLabel = (): Promise<string | null> =>
-    js<string | null>(`(${TOOL})?.getAttribute("aria-label") ?? null`);
-  const pressReload = (): Promise<void> =>
-    h.pressSelector('[data-selection-bar] [data-face-row="hand"] [data-tool="reload"]');
+  /** The action drawn on the held pane, and a press on its glyph. */
+  const reloadLabel = async (): Promise<string | null> =>
+    (await paneHeadControl(h, "reload"))?.label ?? null;
+  const pressReload = (): Promise<void> => pressPaneHead(h, "reload");
   /** PT-6a (M7 A6): whether the cap counts `p`'s face alive (null: no face), read until it says not, bounded. */
   const outOf = async (p: Pane): Promise<{ alive: boolean | null; ms: number }> => {
     const t0 = Date.now();

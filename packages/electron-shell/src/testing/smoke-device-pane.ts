@@ -34,7 +34,7 @@
 import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { choosePaneDevice } from "./browser-pane-chrome";
+import { choosePaneDevice, pressPaneHead } from "./browser-pane-chrome";
 import {
   FIXTURE_COOKIE,
   FIXTURE_EDGE,
@@ -741,18 +741,6 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     mkdirSync(d.shotDir, { recursive: true });
     writeFileSync(join(d.shotDir, name), (await win.capturePage()).toPNG());
   };
-  /** A press on the held bar's tool. */
-  const pressTool = async (id: string): Promise<void> => {
-    const p = await js<{ x: number; y: number } | null>(`(() => {
-      const row = document.querySelector('[data-selection-bar] [data-face-row="hand"]');
-      const el = [...(row?.querySelectorAll("[data-tool]") ?? [])].find((t) => t.getAttribute("data-tool") === ${JSON.stringify(id)});
-      if (el === undefined) return null;
-      const r = el.getBoundingClientRect();
-      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
-    })()`);
-    if (p === null) throw new Error(`the held bar has no ${id}`);
-    await press(p);
-  };
   /** The view panned by Space-drags on the bare mat until the pane's middle stands in the window (its delete's press needs it). */
   const bringBack = async (e: number): Promise<void> => {
     const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
@@ -865,7 +853,7 @@ export async function devicePaneRows(d: DeviceRowsDriver): Promise<string[]> {
     const favicon: DeviceSeen["favicon"] = { ...own, served: d.fixture.icons(), none };
     said.favicon = favicon;
     problems.push(...judgeFavicon(favicon));
-    await pressTool("back");
+    await pressPaneHead(h, "back");
     await hear("the page back at /page", (r) => r.path === "/page");
     await done();
 

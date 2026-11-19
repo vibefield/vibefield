@@ -76,6 +76,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pressPaneHead } from "./browser-pane-chrome";
 import {
   type FixtureBusy,
   type FixtureRect,
@@ -1360,8 +1361,6 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       const G = l.G;
       return { ...h.frame, eye: { ex: G.eye.ex, ey: G.eye.ey, h: G.eye.h }, centre: G.centre, axes: [G.ex, G.ey, G.n], page: G.shape.page, ext: [l.ext.cx, l.ext.cy] };
     })()`);
-  const pressTool = (tool: string): Promise<void> =>
-    h.pressSelector(`[data-selection-bar] [data-face-row="hand"] [data-tool="${tool}"]`);
   const shoot = async (name: string): Promise<void> => {
     if (d.shotDir === undefined) return;
     mkdirSync(d.shotDir, { recursive: true });
@@ -2789,7 +2788,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         )
       )?.address === bAddress;
     await pickUp(backPane);
-    await pressTool("back");
+    await pressPaneHead(h, "back");
     await waitFor(
       "the page back at A",
       FRAMES_ROWS.withinMs,
@@ -3225,7 +3224,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       );
       if (stopped?.state === "failed") saidMs = Date.now() - sent;
       reason = stopped?.reason ?? null;
-      await pressTool("reload");
+      await pressPaneHead(h, "reload");
       reloaded =
         (
           await waitFor(
@@ -3283,7 +3282,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
       // ↻ at once, the chain stalled: the page's address asked again within three seconds (served once more)
       const served0 = d.fixture.framesServed(LOOP);
       const asked0 = d.fixture.reports(LOOP);
-      await pressTool("reload");
+      await pressPaneHead(h, "reload");
       reloadActed =
         (await waitFor(
           "the loop page asked again by ↻",
@@ -3298,7 +3297,7 @@ export async function framesRows(d: FramesDriver): Promise<string[]> {
         () => face(loop),
         (f) => f?.state === "failed" || (f?.state === "live" && d.fixture.reports(LOOP) > asked0),
       );
-      if (after?.state === "failed") await pressTool("reload");
+      if (after?.state === "failed") await pressPaneHead(h, "reload");
     }
     if (reloaded && (await hangAgain())) {
       // an address of ANOTHER site typed (⌘L, the address, ⏎), the chain stalled: the page goes there, and stays live

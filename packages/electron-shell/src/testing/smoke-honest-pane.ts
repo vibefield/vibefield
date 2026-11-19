@@ -35,6 +35,7 @@
 
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { paneHeadControl, pressPaneHead } from "./browser-pane-chrome";
 import {
   FIXTURE_HUE,
   type FixtureActId,
@@ -86,7 +87,7 @@ export const HONEST_ROWS = {
   saidWithinMs: 6_000,
 } as const;
 
-/** A held tool as the bar shows it. */
+/** A control on the held pane's header. */
 export interface ToolSeen {
   readonly disabled: boolean;
   readonly label: string | null;
@@ -279,9 +280,8 @@ export interface HonestSeen {
 /** BAR: ‹ disabled on a fresh page and its press and chord nothing; live after a click; ↻ Stop while loading, and it stops. */
 export function judgeBar(seen: HonestSeen["bar"]): string[] {
   const out: string[] = [];
-  if (seen.fresh === null) out.push("BAR: the held bar has no ‹");
-  else if (!seen.fresh.disabled)
-    out.push("BAR: ‹ is not aria-disabled on a fresh page — the bar says there is somewhere to go");
+  if (seen.fresh === null) out.push("BAR: the held pane has no Back control");
+  else if (!seen.fresh.disabled) out.push("BAR: the held pane enables Back on a fresh page");
   if (seen.pressed.path !== "/page")
     out.push(
       `BAR: after a press on the disabled ‹ and ⌘[ the page is at ${seen.pressed.path}, not where it was`,
@@ -599,7 +599,7 @@ export function judgeFail(seen: HonestSeen["fail"]): string[] {
       `FAIL: in hand the cursor over the film beside the capsule is ${JSON.stringify(seen.film)} — the film is not the pane's own glass`,
     );
   if (seen.reload === null || seen.reload.disabled)
-    out.push("FAIL: the bar's ↻ is disabled on a page that can be tried again");
+    out.push("FAIL: the pane disables Reload on a page that can be tried again");
   if (seen.retried.state !== "live")
     out.push(`FAIL: after Try again the face is ${seen.retried.state}, not live`);
   if (seen.retried.veiled !== false)
@@ -862,39 +862,20 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     await until("the pane put down by Done", 5_000, "globalThis.__vfDesk.held() === null");
     await settledCamera();
   };
-  /** A held tool as the bar shows it. */
-  const tool = (id: string): Promise<ToolSeen | null> =>
-    js<ToolSeen | null>(`(() => {
-      const row = document.querySelector('[data-selection-bar] [data-face-row="hand"]');
-      const el = [...(row?.querySelectorAll("[data-tool]") ?? [])].find((t) => t.getAttribute("data-tool") === ${JSON.stringify(id)});
-      return el === undefined ? null : { disabled: el.getAttribute("aria-disabled") === "true", label: el.getAttribute("aria-label") };
-    })()`);
-  /** A held tool's state waited for (the bar repaints with the anchor). */
+  /** Wait for the navigation state drawn on the held pane. */
   const toolIs = async (
-    id: string,
+    id: "back" | "reload",
     ok: (t: ToolSeen) => boolean,
     ms = 5_000,
   ): Promise<ToolSeen | null> => {
     const deadline = Date.now() + ms;
     let last: ToolSeen | null = null;
     while (Date.now() < deadline) {
-      last = await tool(id);
+      last = await paneHeadControl(h, id);
       if (last !== null && ok(last)) return last;
       await sleep(80);
     }
     return last;
-  };
-  /** A press on the held bar's tool. */
-  const pressTool = async (id: string): Promise<void> => {
-    const p = await js<{ x: number; y: number } | null>(`(() => {
-      const row = document.querySelector('[data-selection-bar] [data-face-row="hand"]');
-      const el = [...(row?.querySelectorAll("[data-tool]") ?? [])].find((t) => t.getAttribute("data-tool") === ${JSON.stringify(id)});
-      if (el === undefined) return null;
-      const r = el.getBoundingClientRect();
-      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
-    })()`);
-    if (p === null) throw new Error(`the held bar has no ${id}`);
-    await press(p);
   };
   /** What a window point picks on the desk (its part). */
   const partAt = async (at: { x: number; y: number }): Promise<string | null> => {
@@ -1037,7 +1018,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     await pickUp(e);
     const fresh = await toolIs("back", (t) => t.disabled, 3_000);
     const sent0 = (await liveStats())?.navigations ?? 0;
-    await pressTool("back");
+    await pressPaneHead(h, "back");
     await key("[", [process.platform === "darwin" ? "meta" : "control"]);
     await sleep(HONEST_ROWS.quietMs);
     const pressed: HonestSeen["bar"]["pressed"] = {
@@ -1060,7 +1041,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     await press(await onAct("slow"));
     const loading = await toolIs("reload", (t) => t.label === "Stop");
     await shoot("pt-5a-bar-stop.png");
-    await pressTool("reload");
+    await pressPaneHead(h, "reload");
     const stopped = await toolIs("reload", (t) => t.label === "Reload");
     await sleep(HONEST_ROWS.quietMs);
     const bar: HonestSeen["bar"] = {
@@ -1081,7 +1062,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
      * a page the document had sent to the acts page that went to `/next` by its own link was never written there, and
      * the document kept the acts page — PT-5a's finding 6.) */
     const toActs = async (): Promise<void> => {
-      await pressTool("back");
+      await pressPaneHead(h, "back");
       // (PT-5d, M7 H12: ‹ lands at the acts page only where the row before left the page at an address after it — one that
       // left it at the acts page itself, or nowhere, goes elsewhere: then the acts page by an address of its own, the
       // visit's query, so that a row gone wrong strands none after it)
@@ -1487,7 +1468,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     const capsuleAt = f === null ? null : pageOnWindow(f, viewF, off, cap.cx, cap.cy);
     const filmAt =
       f === null ? null : pageOnWindow(f, viewF, off, cap.cx - cap.hx * 2.2, cap.cy + cap.hy * 4);
-    const failTool = await tool("reload");
+    const failTool = await paneHeadControl(h, "reload");
     const film = filmAt === null ? null : await cursorAt(filmAt, (c) => c !== "pointer", 1_200);
     const capsule =
       capsuleAt === null ? null : await cursorAt(capsuleAt, (c) => c === "pointer", 4_000);
@@ -1528,7 +1509,7 @@ export async function honestPaneRows(d: HonestRowsDriver): Promise<string[]> {
     const f2 = await heldFrame();
     const stoppedFace = await failedFace(e, f2 === null ? undefined : heldPageArea(f2, viewF));
     await shoot("pt-5a-stopped-in-hand.png");
-    await pressTool("reload");
+    await pressPaneHead(h, "reload");
     const again = await hear(
       "a new page at the address",
       (r) => r.path === "/revived" && r.token !== tokenBefore,

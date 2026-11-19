@@ -40,8 +40,8 @@
 //                 of its light), each channel within a tolerance: a still through the wrong transfer curve does not pass
 //                 (REST's too: the page as it was put to rest);
 //   EVICTED     — a pane on a quiet page, seen, then out of view while LARGE panes are laid and seen one at a time, each
-//                 drawn at its page's top rung on whatever display this is (PT-5b3: framed alone, then zoomed until its
-//                 page is drawn at more than half its native width), until their textures' own bytes take the desk's
+//                 drawn at its page's native raster on this display (framed alone, then zoomed until its
+//                 page is drawn at its native width), until their textures' own bytes take the desk's
 //                 budget past its room: the budget's eviction takes the unseen pane's texture (the least recently used)
 //                 and its page stays alive, paused; seen again, the pane shows its page's own frame again within a bound
 //                 — said with what it wore meanwhile, each frame — and no rest mark.
@@ -51,6 +51,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { BrowserWindow } from "electron";
+import { pressPaneHead } from "./browser-pane-chrome";
 import { FIXTURE_HUE, type FixtureReport } from "./live-fixture";
 import { PANE, type PaneHands, paneHands } from "./smoke-browser-pane";
 import type { LiveRowsDriver } from "./smoke-live-pane";
@@ -1759,7 +1760,7 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       const wordsMark = await markOf(third);
       // ↻ in hand: the face's own retry
       await pickUp(third);
-      await h.pressSelector('[data-selection-bar] [data-face-row="hand"] [data-tool="reload"]');
+      await pressPaneHead(h, "reload");
       const recovered = await waitFor(
         "the page loaded again",
         STILL_ROWS.withinMs,
@@ -2113,9 +2114,11 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
     await cap(most + 2);
     const pane = await lay("e", x, y - away, "/page?ev=");
     const fill: Pane[] = [];
-    /** A large pane's page, world units wide; its native width (device px) — the stream's top rung is above its half. */
+    /** The native raster is the logical viewport at the emulated device pixel ratio. */
     const pageW = big.w - 2 * PANE.border * PANE.mm;
-    const nativeW = (pageW / (PANE.laptop * PANE.mm)) * deviceDpr;
+    const pageH = big.h - (PANE.border + PANE.head) * PANE.mm;
+    const nativeW = Math.round(pageW / (PANE.laptop * PANE.mm)) * deviceDpr;
+    const nativeH = Math.round(pageH / (PANE.laptop * PANE.mm)) * deviceDpr;
     const dpr = await js<number>("window.devicePixelRatio");
     try {
       await frame([pane]);
@@ -2140,9 +2143,7 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
       await settled();
       const evictionsWas = (await stats()).evictions ?? 0;
       const presentedWas = (await face(pane))?.presented ?? 0;
-      // large panes, each seen alone and drawn at its top rung on THIS display (framed, then zoomed until its page is
-      // drawn at more than half its native width), until their textures' own bytes take the budget past its room — the
-      // pane, out of view and the least recently used, is what the budget lets go
+      // Keep zoom fixed while moving between panes so previous textures retain their native size.
       while (fill.length < most && ((await face(pane))?.bytes ?? 0) > 0) {
         const large = await lay(
           `f${fill.length}`,
@@ -2152,17 +2153,19 @@ export async function lastStillRows(d: LastStillDriver): Promise<string[]> {
           big,
         );
         fill.push(large);
-        await frame([large]);
-        const want = (1.15 * (nativeW / 2)) / (pageW * dpr);
-        if ((await camera()).zoom < want) {
-          await js(`globalThis.__vfFieldSmoke.zoomTo(${want})`);
-          await settledCamera();
+        if (fill.length === 1) {
+          await frame([large]);
+          await js(`globalThis.__vfFieldSmoke.zoomTo(${(1.08 * nativeW) / (pageW * dpr)})`);
+        } else {
+          const c = await camera();
+          await js(`globalThis.__vfFieldSmoke.panTo(${c.x + big.w + STILL_ROWS.gap}, ${c.y})`);
         }
+        await settledCamera();
         await waitFor(
           `large pane ${large.q} live at its top rung`,
           STILL_ROWS.withinMs,
           () => face(large),
-          (f) => f !== null && f.state === "live" && f.bytes > 0,
+          (f) => f !== null && f.state === "live" && f.bytes >= nativeW * nativeH * 4,
         );
         await sleep(400);
       }

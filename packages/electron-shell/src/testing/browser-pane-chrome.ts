@@ -34,6 +34,28 @@ export async function paneHeadPoint(
   return { x: off.left + at.f.cx + x * at.f.s, y: off.top + at.f.cy + (y - at.extentV) * at.f.s };
 }
 
+export async function pressPaneHead(
+  h: Pick<PaneHands, "js" | "deskAt" | "press">,
+  part: "back" | "reload",
+): Promise<void> {
+  await h.press(await paneHeadPoint(h, part));
+}
+
+/** Read the state used to draw the held pane's navigation glyphs. */
+export function paneHeadControl(h: Pick<PaneHands, "js">, part: "back" | "reload") {
+  return h.js<{ disabled: boolean; label: string } | null>(`(() => {
+    const desk = globalThis.__vfDesk;
+    const held = desk.held();
+    if (!held) return null;
+    const local = desk.local("vibefield.browser-pane");
+    const head = local?.said(held.entity);
+    if (!head?.interactive) return null;
+    if (${JSON.stringify(part)} === "back") return { disabled: !head.canBack, label: "Back" };
+    const state = local.page(held.entity)?.state;
+    return { disabled: state?.is === "failed" && !state.retry, label: head.loading ? "Stop" : "Reload" };
+  })()`);
+}
+
 /** Select a device using the same configuration UI a person opens from the object menu. */
 export async function choosePaneDevice(
   h: Pick<PaneHands, "js" | "until" | "pressSelector">,
