@@ -78,7 +78,8 @@
     "gate:landing": "node scripts/gate-landing.mjs",
     "bundle:assert": "pnpm --filter @vibefield/electron-shell run build && pnpm --filter @vibefield/electron-shell run build:renderer && node scripts/bundle-report.mjs --dist packages/electron-shell/dist --assert",
     "census:assert": "pnpm --filter @vibefield/fieldd --filter \"./plugins/*\" --filter \"./examples/plugins/*\" run --if-present build && node scripts/package-census.mjs --assert --strict",
-    "verify": "pnpm preflight && pnpm check:walls && pnpm check:deps && pnpm check:retired && pnpm check:ios-fixtures && pnpm check:web-markers && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm census:assert && pnpm test && pnpm test:rust && pnpm gen:check",
+    "check:bundled-plugins": "node scripts/check-bundled-plugins.mjs --self-test && node scripts/check-bundled-plugins.mjs",
+    "verify": "pnpm preflight && pnpm check:walls && pnpm check:deps && pnpm check:retired && pnpm check:ios-fixtures && pnpm check:web-markers && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm census:assert && pnpm check:bundled-plugins && pnpm test && pnpm test:rust && pnpm gen:check",
     "hooks:install": "git config core.hooksPath scripts/git-hooks",
     "commit-draft": "sh scripts/commit-draft.sh"
   },
