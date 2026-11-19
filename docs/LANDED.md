@@ -62293,3 +62293,163 @@ The fact-check read the same four values in the code.
 - 590-D1 with 590-A1 (tl) is re-made on SH-0's landed DESIGN.md. It carries SH-0's two Godview lines by content: the
   keyline "4.3:1 on Godview's paper" and the dim's "3.7:1 on Godview by day" (`godview-paper-lines.diff`, `1ee14465`).
 - Next for the track: SH-1, the ledger (`tutorial:<id>` in `setup.moment`).
+
+## Item 599 — field-app's typecheck names its heap, so every host checks it at the size CI does (M454)
+
+(2026-11-19; one commit, `80355e1ca` "599: field-app's typecheck names its heap, so every host checks it at the size CI
+does", one file, `packages/field-app/package.json` +2 −1. The fixer made it inside its assembly from prod-builder's
+diff and message: `item-599.diff` on main `45edd5fb4309`, carried by its tool's one anchor, the old `typecheck` line.)
+
+**What a person sees.** GitHub's `verify` on main goes green again, at the first push that carries this. A developer
+whose machine gives node a small default heap can typecheck field-app again. The typecheck itself is unchanged.
+
+**The red that opened it.** GitHub's `verify` was red on main for four pushes: `bf205b7c739d` (2026-11-18),
+`a22f710b9a76`, `599f4edadcca` and `45edd5fb4309`. The last green was `8064bbdec8e3`, on 2026-11-17.
+- Each run died the same way. `nx run @vibefield/field-app:typecheck` (`tsc --noEmit`) aborted with "Ineffective
+  mark-compacts near heap limit … JavaScript heap out of memory", its last GC lines between 2031.9 and 2038.3 MB, on
+  the hosted runner (macos-26-arm64, node 26.13.1).
+- Every other project's typecheck was green.
+- The four logs, fetched by the PM, are in the PM's ci-599 folder.
+- The test Mac has 16 GiB, and node's default heap there is 4192 MiB, so our own verify passed at every one of those
+  commits.
+
+**The measure, on the test Mac** (ROW-599: qa-01's runs i599-base, i599-top and i599-l4-4096; 2026-11-19 14:34:41Z
+to 14:41:50Z; node v26.5.0 and typescript 5.9.3; each commit's own offline install; no NODE_OPTIONS):
+- **At a 2048 MiB limit,** CI's replayed: `8064bbdec8e3` passed (exit 0, Memory used 2117431K), and `45edd5fb4309`
+  aborted (exit 134, V8's "FATAL ERROR: … JavaScript heap out of memory"). That is the cause, on our own host.
+- **With room (8192):**
+  - Memory used went 2579536K → 2633093K;
+  - Types went 818715 → 857647, Instantiations 2505831 → 2628690, and files 3509 → 3572;
+  - peak RSS went 2.82 → 2.91 GB.
+
+  The file counts by package rose a little in every class, with no new package and no `dist/` in the program. It is
+  ordinary growth that carried a program already at CI's limit over it.
+- **At the new 4096,** `45edd5fb4309` passed in 11.63 s real with peak RSS 2.91 GB, against 11.83 s at 8192.
+
+**The seam.** field-app's `typecheck` script is now
+`node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit`. A `"//typecheck"` key right before it (the
+form apps/desktop's scripts use) says three things: why the limit is explicit, the figures it was set from, and how
+to re-measure it.
+- **The rule:** the next whole GiB above 1.5 × the Memory used that `--extendedDiagnostics` reports at 8192. 4096 is
+  just under the test Mac's own default, so every host checks this program at one size, and our verify reds where CI
+  would.
+- **Every caller of field-app's typecheck goes through the script:**
+  - `pnpm typecheck` and `pnpm verify`;
+  - `pnpm dev`'s background and affected typechecks;
+  - the affected workflow;
+  - siblings:pin's consumer check;
+  - gate:landing's typecheck.
+- **Not covered:** electron-shell's renderer typecheck. It is a separate program that reaches field-app's src through
+  `src/renderer-host`, keeps node's default heap, and has an unmeasured Memory used. It is green on the runner.
+- **Not chosen:** `NODE_OPTIONS` in verify.yml. It would reach every node process of the job, vitest's workers
+  included, and this repo treats that variable as hostile.
+
+**Proved before the commit, on the development Mac** (check-599-1.out, 2026-11-19 14:41:54Z to 14:41:56Z, under the
+light lock). The check ran in a private copy of main `45edd5fb4309` (git archive, its own git init, nothing added):
+- the control, the copy's `package.json` with its `typecheck` line mis-indented: biome exited 1, naming the file and
+  its format;
+- the made file: `biome check --error-on-warnings` exited 0, and node's parse held `"//typecheck"` right before
+  `"typecheck"`, with the script's exact text.
+
+**Not covered.**
+- Why the program is this size. field-app's src imports a type from `@vibefield/fieldd` (MeshSection.tsx and
+  SystemSection.tsx, `FielddHealth`), and its tests import fieldd itself. fieldd's `exports` are its source, so
+  fieldd's whole source rides in this program, as it already did at the last green. Cutting that is item 600.
+- The CI read at push time is the push script's own change, not this commit.
+
+CI's verify at the pushed head: read after the push and said then as a dated line; this records commit lands before it.
+The first whole verify with field-app's typecheck at the 4096 heap passed on the test Mac: cand2-v, `pnpm verify` exit 0
+in 646 s, 2026-11-19 17:30:37Z → 17:41:24Z
+
+## Item 576 — VibeField's own variables no longer reach a terminal or any child of fieldd (M455)
+
+(2026-11-19; three commits of its own in the fixer's assembly, nothing folded into them and nothing stacked on them:
+4ce5c9911 "576 (red): a VIBEFIELD_ name reaches a plain terminal and every child of fieldd", d060d61cd "576 (green):
+VibeField's own variables no longer reach a terminal or any child of fieldd", 1af1a94f4 "576: the variable tables say
+where a VIBEFIELD_ variable is set". Cut on main `a22f710b9a76`; replayed by patch onto main `45edd5fb4309`, the
+patch-ids held: `ccecf212…`, `67fff22e…`, `9ee0bd46…`.)
+
+**What a person sees.** A terminal VibeField starts is born without the `VIBEFIELD_` variables of the shell that
+started VibeField. So is every other child of fieldd and of the floor: a plugin's child, the files worker, an
+adapter's own variables. A release or packaging variable is set on the command line or in the shell's own profile,
+never inherited; a value given on the command line inside a terminal still reaches its command. The variable tables
+of `apps/ios/TESTFLIGHT.md` and `docs/desk-gates.md` say so under the table. The two tool messages that tell a person
+to export or set one (`run-macos-release.mjs`, `bundled-plugins.mjs`) stand as written: an export inside the shell
+still holds.
+
+**Why.** A dev run hands Electron main the runner's own `VIBEFIELD_` names (its state root, the checkout, the build
+id) and any a person exported in the launching shell. Main's environment reaches fieldd, fieldd's reaches the floor,
+and `ENV_PREFIXES` (`FIELD_`, `FIELDD_`) was all a child was born without. A `pnpm dev` run inside such a terminal, in
+another checkout, would take the outer runner's state root as its own (read from `tooling/dev-runner/src/paths.mjs`,
+not observed). An agent's own terminal was already born clean (`terminal-service.ts:1823`, `mode: "clean"` from
+agentEnvironment's composition); a plain shell inherits (`:1644`, `mode: "inherit"`). Both lines stand at the landed
+tree: the file is unchanged since the cut's base.
+
+**What changed.**
+- `ENV_PREFIXES` gains `VIBEFIELD_` (contracts `registries.ts`), so the whole prefix is held at every site that reads
+  it: fieldd's five (agent-host, process-service, terminal-service, the workspace supervisor, agent-extensions) and
+  the floor's cell, through the generated `packages/field-native/src/registries.rs` (its one line). A name added later
+  is stripped by default.
+
+**Proved.**
+- **The test Mac's rows, at the cut's own commits on base `a22f710b9a76`** (qa-01, nice 19):
+  - red at `66263bc7192b` (14:09:27–14:10:13Z): exactly SEVEN reds, each by its assertion or its own panic. fieldd's
+    vitest on the two files, 5 failed of 40 (agent-extensions 1, the reserved-name loop's `VIBEFIELD_TOKEN`;
+    env-prefixes-vibefield 4: an agent's PTY, a plugin's child, win32's case fold, the files worker). cargo
+    `cell_lifecycle`, the two named rows FAILED, panicking at lines 805 and 878. The form clean (biome, fieldd's tsc,
+    cargo fmt, clippy).
+  - green at `e7f12189bc2a` (14:11:55–14:32:53Z): the named rows pass (40/40; cargo's two). `gen:check` exit 0, the
+    porcelain clean after it. The four whole suites, 0 failed: contracts 2206 passed; fieldd 4648 passed, 15 skipped;
+    electron-shell 22 passed; `cargo test -p field-native` 695 passed, 15 ignored. The form clean (biome; tsc for
+    contracts, fieldd, electron-shell's two configs; cargo fmt; clippy).
+- **The replay**, read by git across the 42 commits from `a22f710b9a76` to `45edd5fb4309`:
+  - two of 576's seven paths moved there. `packages/contracts/src/registries.ts` (items 569, 570 and 581: SCOPES,
+    LIVE_PAGE_SCOPES, the host singletons), where 576's one hunk is `ENV_PREFIXES` and its doc. `docs/desk-gates.md`
+    (the packaged-plugins commit: rows 29, 31, 33, 39 and 40), where 576's four lines follow the smoke-only doors.
+    Each of 576's patches applies to main's blob exactly, with no offset and no fuzz.
+  - the other five are main's blobs as at the base (the new test file is new at both).
+  - no line added in those 42 commits names `VIBEFIELD_` (0; the control: 68 files at main name it), so no new
+    variable the strip would now hold back.
+- **The landing's own proof** is the assembly's V at the landed tree: cand2-v, `pnpm verify` whole at this land's top
+  `adc620f1f` on the test Mac, 2026-11-19 17:30:37Z → 17:41:24Z: **GREEN**, exit 0 in 646 s; 27 vitest suites passed,
+  none failed; field-app's typecheck ran at the 4096 limit. The kit of every target at the same commit, kit-cand2,
+  17:43:15Z → 17:45:16Z: xcodebuild exit 0 in 121 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0, with `gen:check` at
+  that tree (main's own registries.ts changes leave the generated registries.rs as it
+  was, so the regenerated line is the only move).
+
+**Not covered.** An agent's own terminal is covered by the reading above (`terminal-service.ts:1823`), not by a run of
+its own.
+
+**Owed.**
+- DR's `ENV_KEEP_NAMES` and the `VF_` prefix go on 576's landed tip, then item 589's rows (its reading is prepared).
+
+## FL — the bundled list's comment names all four of its readers, the conformance check among them (M456)
+
+(2026-11-19; one commit, `adc620f1f` "FL: the bundled list's comment names all four of its readers, the conformance
+check
+among them", one file, `apps/desktop/packaging/bundled-list.mjs` +11 −8, a comment only. The fixer made it inside its
+assembly from prod-builder's diff and message: `importers.r2-on-45edd5fb.diff` on main `45edd5fb4309`, carried by its
+tool's anchor, the whole old comment block at the file's top.)
+
+**What a person sees.** Nothing: it is a comment.
+
+**What it corrects.** M448's list comment named three importers: the package's stager, smoke:bundled's stager and the
+notices.
+- At main `45edd5fb4309` the list has four. The fourth is item 566's `scripts/check-bundled-plugins.mjs`, which landed
+  in the same assembly as M448. M448's entry said the gap.
+- The comment now names all four.
+- It is re-wrapped within 100 columns; it ran to 118. Its other words are unchanged, held by the tool, which compares
+  the old block's words with the new block's.
+- The export line is unchanged.
+
+**Proved before the commit, on the development Mac.** check-importers-1.out, 2026-11-19 13:43:22Z to 13:43:28Z, under
+the light lock. The check ran in a private copy of main `45edd5fb4309` (git archive, its own git init, nothing
+added):
+- **The control:** the copy's own list with its export line mis-spaced. biome check exited 1, naming the file and its
+  format. That proves the harness reads the file, not that the comment is right.
+- **The made file laid:** `biome check --error-on-warnings` exited 0.
+- **All six of check:walls exited 0.** check-test-temp-roots read 1304 and 1346 test files and check-floor-shutdown
+  read 42; the import walls print no count.
+- **The importers:** four over scripts, apps, packages and tooling, each named in the comment.
+
+**Not covered.** No typecheck or test ran for it; a comment changes no output. The joined verify is the assembly's.
