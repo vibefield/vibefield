@@ -5,21 +5,21 @@ export function mountAddressEditor({ container, editor }: ObjectDomHost) {
   const sheet = container.ownerDocument.createElement("style");
   sheet.textContent = `
     textarea[data-browser-pane-address] {
-      color: var(--vf-text-primary, #252525) !important;
-      caret-color: var(--vf-text-primary, #252525) !important;
-      background: var(--vf-chrome-solid, #fafafa) !important;
-      font-family: var(--vf-font-sans, sans-serif) !important;
+      color: var(--vf-text-primary) !important;
+      caret-color: var(--vf-text-primary) !important;
+      background: var(--vf-chrome-solid) !important;
+      font-family: var(--vf-font-sans) !important;
       border-radius: 999px;
       padding-inline: 10px !important;
       white-space: pre !important;
       overflow: hidden !important;
       pointer-events: auto !important;
-      outline: 2px solid var(--vf-select, #518ef5) !important;
+      outline: 2px solid var(--vf-select) !important;
       outline-offset: 1px;
     }
     textarea[data-desk-editor][data-browser-pane-address]::selection {
-      background: var(--vf-select, #518ef5);
-      color: var(--vf-state-on-solid, white);
+      background: var(--vf-select);
+      color: var(--vf-state-on-solid);
     }
   `;
   container.appendChild(sheet);
