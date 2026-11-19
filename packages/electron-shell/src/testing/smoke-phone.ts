@@ -630,7 +630,8 @@ export function judgeNone(s: NoneSeen): string[] {
   return out;
 }
 
-/** SIM-STAGED: the plugin enabled with `surface.capture`, the phone on its chip, laid, and bound to a face. */
+/** SIM-STAGED: the plugin enabled with `surface.simulator` (item 569), the phone on its chip, laid, and bound to a
+ * face. */
 export interface StagedSeen {
   readonly plugin: { readonly enabled: boolean; readonly granted: readonly string[] } | null;
   readonly hung: readonly string[];
@@ -645,8 +646,10 @@ export function judgeStaged(s: StagedSeen): string[] {
   if (s.plugin === null) out.push("SIM-STAGED: fieldd has no vibefield.simulator plugin");
   else {
     if (!s.plugin.enabled) out.push("SIM-STAGED: the simulator plugin is not enabled");
-    if (!s.plugin.granted.includes("surface.capture"))
-      out.push(`SIM-STAGED: surface.capture is not granted (${JSON.stringify(s.plugin.granted)})`);
+    if (!s.plugin.granted.includes("surface.simulator"))
+      out.push(
+        `SIM-STAGED: surface.simulator is not granted (${JSON.stringify(s.plugin.granted)})`,
+      );
   }
   if (!s.hung.includes(PHONE.type))
     out.push(`SIM-STAGED: the devices chip hangs no phone (${JSON.stringify(s.hung)})`);

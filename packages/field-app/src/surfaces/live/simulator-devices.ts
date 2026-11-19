@@ -107,7 +107,7 @@ const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
 
 /**
  * Whether an object that may show a Simulator stands on the open board: one whose plugin is granted the Simulator's scopes
- * (`surface.attach` + `surface.capture` — the gate's own pair, by the same grants). False with no document open.
+ * (`surface.attach` + `surface.simulator` — the gate's own pair, by the same grants). False with no document open.
  */
 export function simulatorObjectsStand(deps: {
   readonly engine: CanvasEngine;

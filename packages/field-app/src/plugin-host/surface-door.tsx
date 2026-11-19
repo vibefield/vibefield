@@ -87,9 +87,16 @@ export interface PluginSurfacePoolDeps {
 }
 
 /** DT-D3's kind→creation-scope matrix, the same rows SurfaceService enforces
- * daemon-side for the window principal. */
-function creationScopeFor(kind: string): string {
-  return kind === "browser" ? "surface.browser" : "surface.capture";
+ * daemon-side for the window principal (item 569: a device-bound Simulator
+ * costs `surface.simulator`, and `surface.capture` as well at a crop other than
+ * `auto`, which only the Simulator app's window can give; absent is `auto`, the
+ * wire's default). */
+function creationScopesFor(source: PluginLiveSurfaceOptions["source"]): readonly string[] {
+  if (source.kind === "browser") return ["surface.browser"];
+  if (source.kind !== "ios-simulator-device") return ["surface.capture"];
+  return (source.crop?.mode ?? "auto") === "auto"
+    ? ["surface.simulator"]
+    : ["surface.simulator", "surface.capture"];
 }
 
 /** The window's pool, or null on any host that has no live-surface plane. A
@@ -248,8 +255,7 @@ export function createPluginSurfacePool(deps: PluginSurfacePoolDeps): PluginAtta
       // refusal face carries the same vocabulary fieldd uses, so a plugin
       // author reads one language wherever the denial happened.
       const granted = deps.grantedCapabilities();
-      const creationScope = creationScopeFor(opts.source.kind);
-      for (const scope of ["surface.attach", creationScope]) {
+      for (const scope of ["surface.attach", ...creationScopesFor(opts.source)]) {
         if (!granted.includes(scope)) {
           return unavailableHandle(
             new Error(`FORBIDDEN_SCOPE: plugin ${deps.pluginId} is not granted ${scope}`),

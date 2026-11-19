@@ -483,6 +483,19 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
     // off the Mac, no Mac note
     const offMac = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, false);
     expect(offMac.powers.map((power) => power.under)).toEqual([null, null]);
+    // a capture holder has its Mac note on the Mac, none off it (item 569: the simulator holds capture no more)
+    const capturing: PluginRecord = {
+      ...simulators,
+      requestedCapabilities: ["surface.capture"],
+      grantedCapabilities: ["surface.capture"],
+    };
+    expect(pluginPage(capturing, null, PLUGINS_FIXTURE_SNAPSHOT, true).powers[0]).toMatchObject({
+      key: "surface.capture",
+      words: "See other apps' windows",
+      under: "macOS asks you once, for Screen Recording",
+    });
+    const capturingOff = pluginPage(capturing, null, PLUGINS_FIXTURE_SNAPSHOT, false);
+    expect(capturingOff.powers[0]?.under).toBeNull();
   });
 
   it("takes a registry plugin's maker and own words from the signed list alone, never its folder's copy (item 321)", () => {

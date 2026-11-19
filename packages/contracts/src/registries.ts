@@ -1857,12 +1857,19 @@ export const SCOPES = [
   "settings.manage", // trusted desktop shell/renderer app-preference surface
   "tokens.mint", // shell-main only: mint per-window renderer tokens (Track A bootstrap)
   // DT-D3 (thinking-devtools-pack.md) — the live-surface doors. Deliberately
-  // three: `attach` redeems view tickets and drives demand on any kind;
+  // four: `attach` redeems view tickets and drives demand on any kind;
   // `browser` creates browser sources (and later carries their human input +
-  // navigation); `capture` creates SCK window/Simulator sources — split out
-  // because capturing OTHER apps' windows is a different consent class
-  // (Screen Recording gravity, A5/EL7). `surface.control` (the DT-5 agent
-  // lane) is reserved and deliberately NOT minted by any v1 manifest.
+  // navigation); `capture` creates SCK window and UDID-keyed Simulator
+  // sources — split out because capturing OTHER apps' windows is a different
+  // consent class (Screen Recording gravity, A5/EL7); `simulator` creates the
+  // device-bound Simulator source at its default crop and lists this Mac's
+  // devices — the device's own display, read through Xcode, never a window
+  // (any other crop captures the Simulator's window, and costs `capture` as
+  // well: fieldd's matrix). `surface.control` (the DT-5 agent lane) is
+  // reserved and deliberately NOT minted by any v1 manifest.
+  // *Amended 2026-11-19 (item 569): this said three doors, `capture` creating
+  // every Simulator source. The device-bound kind takes no other app's window,
+  // so it has a door of its own.*
   // *Dated 2026-11-17 (EY-0; EY-D8 A, draft/thinking-agents-eyes.md): the
   // reservation is retired, and that scope is never minted. An agent's call
   // on a page is the internal `shell.surfaces.control` (shell.ts), which only
@@ -1871,6 +1878,7 @@ export const SCOPES = [
   "surface.attach",
   "surface.browser",
   "surface.capture",
+  "surface.simulator",
   // AR-1 (thinking-ar-data-topology.md §7, AR-D15…D22) — the agent-index and
   // agent-distribution management doors. `index.manage` mutates THIS user's
   // consent record: which discovered agent roots rosettad may read, which

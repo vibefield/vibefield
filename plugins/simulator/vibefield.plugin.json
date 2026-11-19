@@ -4,7 +4,7 @@
   ],
   "capabilities": [
     "surface.attach",
-    "surface.capture"
+    "surface.simulator"
   ],
   "contributes": {
     "objects": [

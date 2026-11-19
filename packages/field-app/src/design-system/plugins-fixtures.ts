@@ -381,7 +381,7 @@ export const PLUGINS_FIXTURE_SNAPSHOT = PluginRegistrySnapshot.parse({
         object("Tablet", "SimTablet"),
         object("Watch", "SimWatch", "Apple Watch"),
       ],
-      granted: ["surface.capture", "canvas.read"],
+      granted: ["surface.simulator", "canvas.read"],
     }),
     record({
       id: "vibefield.comment-pad",
@@ -624,12 +624,12 @@ export const PLUGINS_FIXTURE_SWITCHES_SNAPSHOT = PluginRegistrySnapshot.parse({
         object("Tablet", "SimTablet"),
         object("Watch", "SimWatch", "Apple Watch"),
       ],
-      granted: ["surface.capture", "canvas.read"],
+      granted: ["surface.simulator", "canvas.read"],
       denied: [
         { capability: "canvas.write", reason: "revoked" },
         { capability: "process.spawn", reason: "entry-kind" },
       ],
-      requested: ["surface.capture", "canvas.read", "canvas.write", "process.spawn"],
+      requested: ["surface.simulator", "canvas.read", "canvas.write", "process.spawn"],
     }),
     record({
       id: "vibefield.comment-pad",

@@ -33,6 +33,12 @@ export const PLUGIN_POWER_WORDS = {
     words: "See other apps' windows",
     macNote: "macOS asks you once, for Screen Recording",
   },
+  // item 569 (2026-11-19), ‹draft›: no Mac note — it reaches the device's own display alone, which macOS does not ask
+  // about (a crop that captures the Simulator's window costs `surface.capture` as well)
+  "surface.simulator": {
+    group: "desk",
+    words: "Make and run iPhone simulators from Xcode, and use them on the desk",
+  },
   "agent.observe": { group: "agents", words: "See what your agents are doing" },
   "agent.spawn": { group: "agents", words: "Start your agents and manage their sign-ins" },
   "agent.control": { group: "agents", words: "Pause or stop what your agents are doing" },

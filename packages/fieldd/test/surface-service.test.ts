@@ -335,7 +335,7 @@ describe("SurfaceService.open — the kind→scope matrix", () => {
     expect(authority.minted[0]?.source).toStrictEqual(SCK_SOURCE);
   });
 
-  it("PT-S2 (R1): a phone bound by its device type and runtime costs the capture scope — it is the Simulator's window captured, whatever main resolves it to", async () => {
+  it("PT-S2 (R1); item 569: a Simulator bound by its device type and runtime costs the simulator scope — at its default crop, the device's own display, whatever main resolves it to", async () => {
     const authority = fakeAuthority();
     const { surfaces, audit } = service(authority);
     const refused = await refusal(
@@ -345,10 +345,10 @@ describe("SurfaceService.open — the kind→scope matrix", () => {
       }),
     );
     expect(refused.kind).toBe("FORBIDDEN_SCOPE");
-    expect(refused.details).toEqual({ required: "surface.capture" });
+    expect(refused.details).toEqual({ required: "surface.simulator" });
     expect(authority.minted).toEqual([]);
 
-    const opened = await surfaces.open(windowContext(["surface.attach", "surface.capture"]), {
+    const opened = await surfaces.open(windowContext(["surface.attach", "surface.simulator"]), {
       source: PHONE_SOURCE,
       reuseKey: "desk:phone-1",
     });
@@ -380,6 +380,41 @@ describe("SurfaceService.open — the kind→scope matrix", () => {
     expect(refused.details).toEqual({ required: "surface.simulator" });
     expect(authority.minted).toEqual([]);
   });
+
+  it("item 569: a device-bound Simulator at a crop other than `auto` costs the capture scope as well — it is the Simulator app's window", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    const crops = [
+      { mode: "none" },
+      { mode: "explicit", sourceRect: { x: 0, y: 0, width: 10, height: 10 } },
+    ] as const;
+    for (const crop of crops) {
+      const refused = await refusal(
+        surfaces.open(windowContext(["surface.attach", "surface.simulator"]), {
+          source: { ...PHONE_SOURCE, crop },
+        }),
+      );
+      expect(refused.kind).toBe("FORBIDDEN_SCOPE");
+      expect(refused.details).toEqual({ required: "surface.capture" });
+    }
+    expect(authority.minted).toEqual([]);
+    const ctx = windowContext(["surface.attach", "surface.simulator", "surface.capture"]);
+    await surfaces.open(ctx, { source: { ...PHONE_SOURCE, crop: { mode: "none" } } });
+    expect(authority.minted).toHaveLength(1);
+  });
+
+  it("item 569: the simulator scope opens no other app's window and no UDID-keyed Simulator — those stay the capture scope's", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    for (const source of [SCK_SOURCE, SIM_SOURCE]) {
+      const error = await refusal(
+        surfaces.open(windowContext(["surface.attach", "surface.simulator"]), { source }),
+      );
+      expect(error.kind).toBe("FORBIDDEN_SCOPE");
+      expect(error.details).toEqual({ required: "surface.capture" });
+    }
+    expect(authority.minted).toEqual([]);
+  });
 });
 
 describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device list", () => {
@@ -395,11 +430,11 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
       },
     ];
     const { surfaces, audit } = service(authority);
-    const result = await surfaces.simulatorDevices(windowContext(["surface.capture"]), {});
+    const result = await surfaces.simulatorDevices(windowContext(["surface.simulator"]), {});
     expect(result.devices).toEqual(authority.devices);
     expect(authority.listed).toEqual([{}]);
     // a bare call asks the same nothing
-    await surfaces.simulatorDevices(windowContext(["surface.capture"]), undefined);
+    await surfaces.simulatorDevices(windowContext(["surface.simulator"]), undefined);
     expect(authority.listed).toEqual([{}, {}]);
     // a read: nothing is audited, nothing is minted
     expect(audit.rows).toEqual([]);
@@ -413,12 +448,12 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
       "com.apple.CoreSimulator.SimRuntime.iOS-18-6",
     ];
     const { surfaces } = service(authority);
-    const result = await surfaces.simulatorDevices(windowContext(["surface.capture"]), {});
+    const result = await surfaces.simulatorDevices(windowContext(["surface.simulator"]), {});
     expect(result).toEqual({ devices: [], runtimes: authority.runtimes });
     // one that is not CoreSimulator's runtime id is refused at this door, as a row with a UDID is
     authority.runtimes = ["ABCDEF01-2345-6789-ABCD-EF0123456789"];
     await expect(
-      surfaces.simulatorDevices(windowContext(["surface.capture"]), {}),
+      surfaces.simulatorDevices(windowContext(["surface.simulator"]), {}),
     ).rejects.toThrow();
   });
 
@@ -426,7 +461,7 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
     const authority = fakeAuthority();
     authority.devices = [DEVICE_ROW];
     const { surfaces } = service(authority);
-    const result = await surfaces.simulatorDevices(agentContext(["surface.capture"]), {});
+    const result = await surfaces.simulatorDevices(agentContext(["surface.simulator"]), {});
     expect(result.devices).toEqual([DEVICE_ROW]);
   });
 
@@ -434,7 +469,9 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
     const authority = fakeAuthority();
     authority.available = false;
     const { surfaces } = service(authority);
-    const error = await refusal(surfaces.simulatorDevices(windowContext(["surface.capture"]), {}));
+    const error = await refusal(
+      surfaces.simulatorDevices(windowContext(["surface.simulator"]), {}),
+    );
     expect(error.kind).toBe("UNAVAILABLE");
     expect(error.retryable).toBe(true);
     expect(error.details).toEqual({ service: "surfaces", state: "authority-unavailable" });
@@ -447,7 +484,9 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
       throw shellUnavailable();
     };
     const { surfaces } = service(authority);
-    const error = await refusal(surfaces.simulatorDevices(windowContext(["surface.capture"]), {}));
+    const error = await refusal(
+      surfaces.simulatorDevices(windowContext(["surface.simulator"]), {}),
+    );
     expect(error.kind).toBe("UNAVAILABLE");
     expect(error.details).toEqual({ service: "surfaces", state: "authority-unavailable" });
   });
@@ -456,7 +495,7 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
     const authority = fakeAuthority();
     const { surfaces } = service(authority);
     const error = await refusal(
-      surfaces.simulatorDevices(windowContext(["surface.capture"]), "devices"),
+      surfaces.simulatorDevices(windowContext(["surface.simulator"]), "devices"),
     );
     expect(error.kind).toBe("PRECONDITION_FAILED");
     expect(authority.listed).toEqual([]);
@@ -472,7 +511,7 @@ describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device l
     ];
     const { surfaces } = service(authority);
     await expect(
-      surfaces.simulatorDevices(windowContext(["surface.capture"]), {}),
+      surfaces.simulatorDevices(windowContext(["surface.simulator"]), {}),
     ).rejects.toThrow();
   });
 });

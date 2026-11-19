@@ -54,7 +54,7 @@
 //  - ITS TEXTURE LET GO (PT-5b ruling 4): the kind charges each face's bytes to the desk's budget; when the budget evicts
 //    one the kind says so (`BROWSER_NAVIGATION.evict`) and the writer is destroyed — the film, or its still when next seen.
 //  - A BOUND SIMULATOR (PT-S2; the brief's Part 3): a spec the SDK reads as a device (`liveSimulatorSpec`) opens a lane of its
-//    own (`openSimulator`) — its gate's scopes the source's (`surface.attach` + `surface.capture`: live-gate.ts), its mint the
+//    own (`openSimulator`) — its gate's scopes the source's (`surface.attach` + `surface.simulator`: live-gate.ts), its mint the
 //    phone's BINDING and never a UDID, its pool key the face's key AND its binding (a phone bound anew never re-holds the
 //    grace-kept stream of the device it left), device input when available, and no page navigation. It is a `Lane`
 //    in the one map: the six-alive cap, the rests, the stills' clock and the shelf are the pages' own (`seatOf`,

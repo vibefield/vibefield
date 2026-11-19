@@ -5,8 +5,9 @@
 // activation is — `computeEffectiveGrants`). A browser page needs `surface.attach` and `surface.browser` — the plugin door's own
 // pair (surface-door.tsx), with the same words for a refusal. A type no plugin contributes (the desk's built-ins) opens nothing.
 // PT-S2: the scopes are the SOURCE's — the desk's LIVE service names what a face shows (`LiveFaceSource`), and the gate asks
-// the pair that source needs: a bound Simulator's is `surface.attach` and `surface.capture` (its window captured — Screen
-// Recording's consent class), as fieldd's kind→scope matrix asks of its mint. Still by the OBJECT: a phone's spec grants nothing.
+// the pair that source needs: a bound Simulator's is `surface.attach` and `surface.simulator` (item 569: at its default
+// crop, the device's own display, never another app's window), as fieldd's kind→scope matrix asks of its mint. Still by
+// the OBJECT: a phone's spec grants nothing.
 
 import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { PrefabId } from "@vibecook/ice";
@@ -17,7 +18,7 @@ import type { LiveFaceSource, LiveGateAnswer } from "./desk-live";
 /** What a browser page asks of the plugin whose object opens it. */
 export const BROWSER_PAGE_SCOPES = ["surface.attach", "surface.browser"] as const;
 /** PT-S2: what a bound Simulator asks of the plugin whose phone opens it. */
-export const SIMULATOR_SCOPES = ["surface.attach", "surface.capture"] as const;
+export const SIMULATOR_SCOPES = ["surface.attach", "surface.simulator"] as const;
 
 /** PT-S2: each source's scopes — the pair the gate asks of the object's plugin. */
 export const LIVE_FACE_SCOPES: Readonly<Record<LiveFaceSource, readonly string[]>> = {

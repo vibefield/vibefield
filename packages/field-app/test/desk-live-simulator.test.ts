@@ -187,7 +187,7 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
   it("the gate is asked for the SOURCE's scopes (a page's when unsaid): a refusal is a failed face with the words, nothing acquired; no live surfaces in the window says `no-simulator`; a spec that names no device of this desk opens nothing", () => {
     const refusing = vi.fn(
       (_key: string, _source?: LiveFaceSource): LiveGateAnswer => ({
-        refused: "FORBIDDEN_SCOPE: plugin vibefield.simulator is not granted surface.capture",
+        refused: "FORBIDDEN_SCOPE: plugin vibefield.simulator is not granted surface.simulator",
       }),
     );
     const t = setup({ gate: refusing });
@@ -195,7 +195,8 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
     expect(refusing).toHaveBeenCalledWith(PHONE, "ios-simulator");
     expect(face.state()).toEqual({
       is: "failed",
-      reason: "may-not: FORBIDDEN_SCOPE: plugin vibefield.simulator is not granted surface.capture",
+      reason:
+        "may-not: FORBIDDEN_SCOPE: plugin vibefield.simulator is not granted surface.simulator",
     });
     expect(t.handles).toHaveLength(0);
     expect(t.live.faces()[0]).toMatchObject({

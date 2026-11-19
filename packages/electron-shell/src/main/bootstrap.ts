@@ -407,6 +407,8 @@ async function mint(
       "surface.attach",
       "surface.browser",
       "surface.capture",
+      // item 569: the device-bound Simulator's door, and the attach's device list
+      "surface.simulator",
       "agent.spawn",
       "agent.observe",
       "agent.control",

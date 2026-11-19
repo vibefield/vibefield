@@ -93,10 +93,10 @@ export interface RendererPluginContext {
    * STATE OF PLAY (corrected 2026-08-28 — this paragraph originally said
    * `surface.attach` was not yet plugin-eligible, which DT-2b-3 falsified the
    * same evening it was written): `surface.attach`/`surface.browser`/
-   * `surface.capture` are renderer-eligible in `PLUGIN_CAPABILITY_ELIGIBILITY`
-   * (contracts/plugins.ts), so a granted plugin really mints here —
-   * `vibefield.browser` is the first. An ungranted one still gets the refusal
-   * face this door was built to show. */
+   * `surface.capture`/`surface.simulator` (item 569) are renderer-eligible in
+   * `PLUGIN_CAPABILITY_ELIGIBILITY` (contracts/plugins.ts), so a granted plugin
+   * really mints here — `vibefield.browser` is the first. An ungranted one still
+   * gets the refusal face this door was built to show. */
   readonly pool: PluginAttachmentPool;
   /** present iff the manifest DECLARES contributes.commands (§8.3/§10.2 — the
    * absent-API law: no contribution, no API surface) */

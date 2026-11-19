@@ -1076,7 +1076,7 @@ export const ShellSurfacesReleaseResult = z.object({ released: z.boolean() }).pa
 export type ShellSurfacesReleaseResult = z.infer<typeof ShellSurfacesReleaseResult>;
 
 /** PT-S2 (R11) — the attach's device list asks nothing: no window, no participant (a list of what this Mac holds binds
- * no authority, and the row's `surface.capture` is the whole gate). */
+ * no authority, and the row's `surface.simulator` is the whole gate; item 569). */
 export const ShellSurfacesSimulatorDevicesParams = z.object({}).passthrough();
 export type ShellSurfacesSimulatorDevicesParams = z.infer<
   typeof ShellSurfacesSimulatorDevicesParams

@@ -1096,8 +1096,8 @@ export const SimulatorSetupStatus = z.discriminatedUnion("stage", [
 ]);
 export type SimulatorSetupStatus = z.infer<typeof SimulatorSetupStatus>;
 
-/** PT-S2 (R11): the attach's device list asks nothing — what this Mac holds is main's to say (`surface.capture`, as
- * `sources` is: a device list is a capture kind's catalogue). */
+/** PT-S2 (R11): the attach's device list asks nothing — what this Mac holds is main's to say (`surface.simulator`, item
+ * 569: a device list is the device-bound kind's catalogue). */
 export const SurfaceSimulatorDevicesParamsV1 = z.object({}).passthrough();
 export type SurfaceSimulatorDevicesParamsV1 = z.infer<typeof SurfaceSimulatorDevicesParamsV1>;
 

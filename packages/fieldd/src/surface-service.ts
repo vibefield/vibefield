@@ -1,6 +1,7 @@
 import {
   type CallerContext,
   type LiveSurfaceSourceKindV1,
+  type LiveSurfaceSourceSpecV1,
   type RendererParticipantIdentity,
   type Scope,
   type ShellSurfacesEnumerateParams,
@@ -33,22 +34,39 @@ import { RpcCallError } from "./native-link";
 // What this file deliberately does NOT do: re-check the METHODS registry scope.
 // ProductAPI checks `def.scope` against the connection's grant before a handler
 // runs (product-api.ts, the `def.scope !== null` gate), so `surface.attach` on
-// open/close and `surface.capture` on sources are already enforced on arrival.
+// open/close, `surface.capture` on sources and `surface.simulator` on the
+// device list are already enforced on arrival.
 // The matrix below is the ADDITIONAL gate that one registry row — one scope per
 // row — cannot express.
 
 /** The kind→scope matrix (DT-D3). The registry row carries the base
  * `surface.attach`; CREATING a source of a given kind costs one scope more,
  * because capturing another app's window is a different consent class from
- * rendering a browser view we own (A5/EL7 — Screen Recording gravity). */
+ * rendering a browser view we own (A5/EL7 — Screen Recording gravity), and a
+ * simulated device's own display is a third (item 569). */
 const SURFACE_KIND_SCOPE: Readonly<Record<LiveSurfaceSourceKindV1, Scope>> = {
   browser: "surface.browser",
   "sck-window": "surface.capture",
   "ios-simulator": "surface.capture",
-  // PT-S2 (R1): a phone bound by its device type and runtime is the Simulator's window captured, whatever main resolves
-  // the binding to on this Mac — the same Screen Recording gravity as the UDID-keyed kind.
-  "ios-simulator-device": "surface.capture",
+  // PT-S2 (R1); item 569: a Simulator bound by its device type and runtime is, with its default crop, `auto`, the
+  // device's own display, read through Xcode's SimulatorKit on the framebuffer path (production's default): main lists
+  // no window and macOS asks nothing. Any other crop captures the Simulator app's window, so it costs `surface.capture`
+  // as well (`creationScopes`).
+  // *Corrected 2026-11-19 (item 569): this said a Simulator bound by its device type and runtime is the Simulator's
+  // window captured, whatever main resolves the binding to on this Mac — the same Screen Recording gravity as the
+  // UDID-keyed kind. The framebuffer path, production's default, falsified it for the default crop.*
+  "ios-simulator-device": "surface.simulator",
 };
+
+/** What CREATING `source` costs (item 569): its kind's scope, and `surface.capture` as well for a device-bound
+ * Simulator at a crop other than `auto`, which main can only take from the Simulator app's window. The kind's scope is
+ * asked first, so a caller holding neither is told the kind's. */
+function creationScopes(source: LiveSurfaceSourceSpecV1): readonly Scope[] {
+  const kind = SURFACE_KIND_SCOPE[source.kind];
+  return source.kind === "ios-simulator-device" && source.crop.mode !== "auto"
+    ? [kind, "surface.capture"]
+    : [kind];
+}
 
 /** How many `surface.open` answers are remembered for idempotent retries.
  * ProductAPI has no generic dedupe — the registry's `idempotent: true` column
@@ -208,9 +226,10 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
     },
 
     // PT-S2 (R11) — the attach's device list. Shaped as `sources` is: a read of what this device could show, so no
-    // principal fact is read and the registry's `surface.capture` row is the whole policy (no window: a list binds
-    // nothing; a phone's own open still pays the matrix's scope). Main answers REDACTED rows — the ids a binding is made
-    // of, never a UDID — and this door re-parses them, so a row main got wrong is refused here, not handed on.
+    // principal fact is read and the registry's `surface.simulator` row (item 569) is the whole policy (no window: a
+    // list binds nothing; a phone's own open still pays the matrix's scope). Main answers REDACTED rows — the ids a
+    // binding is made of, never a UDID — and this door re-parses them, so a row main got wrong is refused here, not
+    // handed on.
     async simulatorDevices(_ctx, params) {
       // a bare call (no params at all) asks the same nothing as `{}`
       const parsed = SurfaceSimulatorDevicesParamsV1.safeParse(params ?? {});
@@ -242,9 +261,10 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
       // DT-1c's continuity key (a desk object's durable key): forwarded to main's mint, where custody dedupes on it so
       // a renderer reload re-binds the SAME running page instead of restarting it (PT-2 — it was parsed and dropped here)
       const reuseKey = parsed.data.reuseKey;
-      const required = SURFACE_KIND_SCOPE[source.kind];
-      if (!scopesOf(ctx).includes(required)) {
-        throw new RpcCallError("FORBIDDEN_SCOPE", `requires ${required}`, false, { required });
+      for (const required of creationScopes(source)) {
+        if (!scopesOf(ctx).includes(required)) {
+          throw new RpcCallError("FORBIDDEN_SCOPE", `requires ${required}`, false, { required });
+        }
       }
       const rendererParticipant = rendererParticipantOf(ctx);
       const owner = ownerOf(ctx);

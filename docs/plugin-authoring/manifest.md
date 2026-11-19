@@ -114,6 +114,7 @@ with `entry-kind` even when the manifest asks for it.
 | `surface.attach` | yes | — |
 | `surface.browser` | yes | — |
 | `surface.capture` | yes | — |
+| `surface.simulator` | yes | — |
 | `terminal.attach` | yes | — |
 | `workspace.read` | yes | yes |
 

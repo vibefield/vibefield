@@ -1718,6 +1718,8 @@ export const PLUGIN_CAPABILITY_ELIGIBILITY: Readonly<
   "surface.attach": { renderer: true },
   "surface.browser": { renderer: true },
   "surface.capture": { renderer: true },
+  // item 569 (2026-11-19): the device-bound Simulator's own door, a view inside ONE window as the others are
+  "surface.simulator": { renderer: true },
   "agent.spawn": { renderer: true },
   "agent.control": { renderer: true },
   "shell.windows": { renderer: true },
