@@ -4,8 +4,11 @@
 // variation: a chevron is drawn pointing right, redo is undo flipped.
 import { type CSSProperties, createElement, type ReactElement } from "react";
 import { GLYPHS, type GlyphName, type GlyphShape } from "./data";
+import type { GlyphTurn } from "./svg";
 
-export type GlyphTurn = 0 | 90 | 180 | 270;
+// A quarter turn's type is defined in svg.ts, the glyphs' DOM leaf, which reaches no .tsx (item 570); it is
+// re-exported here, where it stood until then.
+export type { GlyphTurn };
 
 export interface FieldGlyphProps {
   readonly name: GlyphName;

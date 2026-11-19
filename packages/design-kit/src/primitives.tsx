@@ -10,11 +10,10 @@ import {
   useRef,
 } from "react";
 import "./primitives.css";
+import { uiButtonClass, uiFieldClass, uiIconButtonClass, uiLabelClass } from "./primitive-classes";
 
-export const uiLabelClass = "vf-ui-label";
-export const uiFieldClass = "vf-ui-field";
-export const uiButtonClass = "vf-ui-button";
-export const uiIconButtonClass = "vf-ui-icon-button";
+// The four class names are defined in primitive-classes.ts, which reaches no .tsx (item 570); re-exported here.
+export { uiButtonClass, uiFieldClass, uiIconButtonClass, uiLabelClass };
 
 export type UiButtonVariant = "quiet" | "primary" | "danger";
 

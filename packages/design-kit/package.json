@@ -8,9 +8,11 @@
     "./face": "./src/face.tsx",
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
+    "./primitive-classes": "./src/primitive-classes.ts",
     "./project-ink": "./src/project-ink.ts",
     "./spark-face": "./src/spark-face/index.ts",
     "./glyphs": "./src/glyphs/index.ts",
+    "./glyphs/svg": "./src/glyphs/svg.ts",
     "./living-mark": "./src/living-mark/LivingMark.tsx"
   },
   "sideEffects": [
