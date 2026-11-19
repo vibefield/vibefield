@@ -30,6 +30,15 @@ import { BUNDLED_PLUGINS } from "../apps/desktop/packaging/bundled-list.mjs";
 const ROOT = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const KIT = join(ROOT, "tooling/plugin-cli/bin/vibefield-plugin.mjs");
 
+/** The suite's rows (tooling/plugin-cli/src/check.ts): each says something about a bundled one. */
+export const ROWS = ["manifest", "wall", "schema", "activation", "artifact"];
+
+/** The notes a bundled plugin may carry: the kit's two ceilings, the same for every plugin. */
+export const STANDING_NOTES = new Set([
+  "object-wgsl-not-compiled",
+  "artifact-singleton-build-time",
+]);
+
 /** One run of the kit, from the repository root: its exit and what it wrote. */
 export function runKit(args) {
   const run = spawnSync(process.execPath, [KIT, ...args], {
@@ -40,12 +49,36 @@ export function runKit(args) {
   return { status: run.status, signal: run.signal, stdout: run.stdout ?? "" };
 }
 
+function describe(verdict) {
+  const at = verdict.pointer === undefined ? "" : ` at ${verdict.pointer}`;
+  return `${verdict.check} ${verdict.code}${at}: ${verdict.detail}`;
+}
+
 /** What stands against a bundled plugin, read from one `check <dir> --json` run; [] is a pass. */
 export function judge(run) {
-  // the kit's own verdict and nothing more: its exit
-  if (run.status === 0) return [];
-  const how = run.status === null ? `on ${run.signal}` : `${run.status}`;
-  return [`the kit exited ${how} (1 is a refusal, 2 the kit's own failure)`];
+  const findings = [];
+  const verdicts = [];
+  for (const line of run.stdout.split("\n")) {
+    if (line.trim() === "") continue;
+    try {
+      verdicts.push(JSON.parse(line));
+    } catch {
+      findings.push(`not a verdict: ${line.slice(0, 200)}`);
+    }
+  }
+  if (run.status !== 0) {
+    const how = run.status === null ? `on ${run.signal}` : `${run.status}`;
+    findings.push(`the kit exited ${how} (1 is a refusal, 2 the kit's own failure)`);
+  }
+  for (const verdict of verdicts) {
+    if (verdict.level === "refuse") findings.push(`refused: ${describe(verdict)}`);
+    else if (verdict.level === "note" && !STANDING_NOTES.has(verdict.code))
+      findings.push(`not judged: ${describe(verdict)}`);
+  }
+  for (const row of ROWS)
+    if (!verdicts.some((verdict) => verdict.check === row))
+      findings.push(`the ${row} row said nothing`);
+  return findings;
 }
 
 function check() {
