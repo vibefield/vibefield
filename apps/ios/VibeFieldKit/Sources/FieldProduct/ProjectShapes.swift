@@ -41,7 +41,9 @@ public struct PlaceRef: Sendable, Equatable, Hashable, Codable {
 
 /// One place of a project (`ProjectPlace`): its folder's own name, its class,
 /// its branch, whether its folder is there. `path` rides an answer to the
-/// person's own devices only, and the phone never draws it.
+/// person's own devices only. History never draws it (PJ-L9); the launch
+/// sheet draws it in the line under its folders, and never sends it.
+/// *Corrected 2026-11-19 (item 586):* this said the phone never draws it.
 public struct ProjectPlace: Sendable, Equatable, Identifiable {
   public let ref: PlaceRef
   public let name: String

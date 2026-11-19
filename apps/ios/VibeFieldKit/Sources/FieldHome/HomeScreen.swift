@@ -450,7 +450,10 @@ public struct HomeScreen: View {
         }
       #endif
     }
-    .sheet(item: $createSheet) { launch in CreateSessionSheet(model: launch) }
+    // Item 586 — the launch sheet's buds and Start wear the agents' own marks: the home's drawing, as History's
+    .sheet(item: $createSheet) { launch in
+      CreateSessionSheet(model: launch).environment(\.launchAgentMark, launchAgentMark)
+    }
     // --- IOS-6d: every projection and every change of the card's subject
     // folds the ledgers; the theme's tint moves the project colours with it.
     // On the stage for the same reason as the cover above.
@@ -660,28 +663,39 @@ public struct HomeScreen: View {
     createSheet = workspaceLaunch
   }
 
+  /// Item 586 — an agent's mark on the launch sheet, by its catalog row's mark key (the id unless the row names
+  /// another): the asset catalog's drawing, or nil, and the sheet sets the agent's letter in its place.
+  private var launchAgentMark: LaunchAgentMark {
+    LaunchAgentMark { row, size in
+      let mark = row.mark ?? row.id
+      guard AgentGlyph.drawnAsset(for: mark) != nil else { return nil }
+      return AnyView(AgentGlyph(mark: mark).frame(width: size, height: size))
+    }
+  }
+
   /// PJ-7 — a project's places as a launch names them: by ref, by their
-  /// folder's name, with why one cannot take a launch.
+  /// folder's name, with why one cannot take a launch. Item 586 — and the
+  /// path the answer carried, which the sheet draws and never sends.
   private func launchPlaces(_ places: [ProjectPlace]) -> [LaunchPlace] {
     let now = Date()
     return places.map { place in
       let drawn = FieldHistoryModel.place(place, now: now)
       return LaunchPlace(
         ref: place.ref, name: drawn.name, branch: drawn.branch, desktop: place.ref.device, reason: drawn.reason,
-        lastAt: place.lastAt, last: drawn.last)
+        lastAt: place.lastAt, last: drawn.last, path: place.path)
     }
   }
 
-  /// From a project (its New agent): its places first in the folder sheet,
-  /// its recipe filling the rows.
+  /// From a project (its New agent): its places in WHERE on every desktop,
+  /// its recipe choosing the place, the agent and the profile.
   private func projectContext(_ key: String) -> LaunchContext {
     let projects = historyDesktops.projects
     guard let summary = projects.summaries[projects.moved(key) ?? key] else { return LaunchContext() }
     return LaunchContext(projectName: summary.name, places: launchPlaces(summary.places), recipe: summary.recipe)
   }
 
-  /// From the field (the hold, or the bloom's desktop and profile): FS-2's
-  /// sheet as it is, filled with the newest place known on that desktop.
+  /// From the field (the hold, or the bloom's desktop and profile): the
+  /// launch sheet on them, WHERE filled with the newest places known there.
   private func fieldContext(desktop: String? = nil, profileSet: String? = nil) -> LaunchContext {
     let summaries = historyDesktops.projects.summaries.values.filter(FieldHistoryModel.listed)
     return LaunchContext(

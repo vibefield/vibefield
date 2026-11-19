@@ -12,9 +12,10 @@ import Testing
 /// with one git place that has a remote and a scripted agent
 /// (`packages/fieldd/test/fixtures/ios-phone-place.ts`). The phone's own
 /// readers then do what the phone does: History reads `project.list` and opens
-/// the project (`project.get`), the launch sheet fills its folder row from the
-/// project's places and launches BY PLACE with a profile, and History reads the
-/// session back in `project.sessions` at that PlaceRef, on that desktop.
+/// the project (`project.get`), the launch sheet fills WHERE from the project's
+/// places and launches BY PLACE under the profile a bloom would give it (item
+/// 586: the agent is a bud that profile runs), and History reads the session
+/// back in `project.sessions` at that PlaceRef, on that desktop.
 /// The fixture's handshake: its default path, or the one a run names
 /// (`TEST_RUNNER_PJ7_PHONE_HANDSHAKE` on the xcodebuild line, matching the
 /// fixture's own `$PJ7_PHONE_HANDSHAKE`), so two lanes never share one file.
@@ -53,13 +54,13 @@ private let handshake =
     let place = try #require(
       summary.places.first { $0.ref.device == device && $0.canTakeLaunch && (placeName == nil || $0.name == placeName) })
 
-    // the launch sheet: filled from the project's places, a profile chosen, launched by place
+    // the launch sheet: filled from the project's places, under the profile asked for, launched by place
     let now = Date()
     let places = summary.places.map { p in
       let drawn = FieldHistoryModel.place(p, now: now)
       return LaunchPlace(
         ref: p.ref, name: drawn.name, branch: drawn.branch, desktop: p.ref.device, reason: drawn.reason,
-        lastAt: p.lastAt, last: drawn.last)
+        lastAt: p.lastAt, last: drawn.last, path: p.path)
     }
     var asked: [(String, JSONValue?)] = []
     let launch = WorkspaceLaunch(
@@ -68,13 +69,11 @@ private let handshake =
       asked.append((method, params))
       return try await client.call(method, params: params)
     }
-    await launch.begin(.init(projectName: summary.name, places: places, recipe: summary.recipe))
-    try #require(launch.place?.ref == place.ref, "the folder row comes filled with the project's place")
-    if launch.provider != provider {
-      launch.provider = provider
-      await launch.providerChanged()
-    }
-    await launch.chooseProfile(wantedProfile)
+    await launch.begin(
+      .init(projectName: summary.name, places: places, recipe: summary.recipe, profileSet: wantedProfile))
+    try #require(launch.place?.ref == place.ref, "WHERE comes filled with the project's place")
+    launch.chooseAgent(provider)
+    try #require(launch.provider == provider, "the agent is a bud the profile runs")
     let profile = try #require(launch.profileSet, "a profile is chosen")
     try #require(profile == wantedProfile)
     try #require(await launch.spawn())

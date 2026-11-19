@@ -42,6 +42,9 @@
     "panes",
     "duplicate",
     "sparkle",
-    "reset"
+    "reset",
+    "folder",
+    "search",
+    "close"
   ]
 }

@@ -4,11 +4,11 @@ import Observation
 
 /// A sheet's choices and reads; only the daemon's fold adds a new field row.
 ///
-/// PJ-7 — how it starts: the Agent Profile (`agents.profileSets.list`), the
-/// model and its effort (`agent.models {provider, profileSet}`, never a path),
-/// and WHERE — a place by its ref (a project's, or the usual one the sheet
-/// comes filled with) or, from Browse, a folder by its path (until PJ-8).
-/// Every ask goes to the chosen desktop's own door.
+/// Item 586 (2026-11-19) — what a launch carries: WHERE, a place by its ref (a pill: a project's place, or the newest
+/// on the sheet's desktop) or a folder by its path (Browse's, until PJ-8); WHO, an agent of the desktop's catalog that
+/// the sheet's profile can run; and the Agent Profile, the bloom's (else the recipe's, else one that runs the agent),
+/// which the sheet says and never offers. No model selection is sent: each agent runs its own (PJ-7's Model and Effort
+/// rows left with the redesign). Every ask goes to the chosen desktop's own door.
 @MainActor
 @Observable
 public final class WorkspaceLaunch {
@@ -18,86 +18,103 @@ public final class WorkspaceLaunch {
   public private(set) var reader: WorkspaceReads?
   public private(set) var agents: [AgentCatalogRow] = []
   /// fix7 — the chosen desktop's agents were asked and answered (or refused):
-  /// until then the Agent row says it is reading, never "No agent available"
+  /// until then WHO says it is reading, never "No agent available"
   public private(set) var agentsRead = false
-  /// fix7 — the agents could not be read (the footer says fieldd's words)
+  /// fix7 — the agents could not be read (the sheet says fieldd's words)
   public private(set) var agentsFailed = false
-  public var provider: String = ""
-  /// FS-2 — a folder chosen in Browse (its absolute path; sent as `cwd`)
+  /// the chosen agent's catalog id ("" for none)
+  public private(set) var provider: String = ""
+  /// FS-2 — a folder chosen in Browse (its absolute path; sent as `cwd`), while it is the chosen one
   public private(set) var folder: WorkspaceChoice?
+  /// Item 586 — the folder Browse chose, which leads WHERE while the sheet stays on its desktop
+  public private(set) var picked: WorkspaceChoice?
   /// PJ-7 — a place chosen or filled in (sent by its ref, P1)
   public private(set) var place: LaunchPlace?
   public private(set) var context = LaunchContext()
   public private(set) var profileSets: [AgentProfileSet] = []
   public private(set) var profilesRead = false
   public private(set) var profileSet: String?
-  public private(set) var models: AgentModelsResult?
-  public private(set) var modelsLoading = false
-  public private(set) var modelsError: String?
-  /// nil: "Each agent's own" — no selection is sent
-  public private(set) var modelId: String?
-  /// nil: "Its own" — no control is sent
-  public private(set) var effort: String?
   public private(set) var spawning = false
   public private(set) var message: String?
+  /// Item 586 — the agent this phone last started, which a sheet comes chosen with next (kept while the app runs)
+  public private(set) var lastProvider: String?
   @ObservationIgnored private let request: Request
   @ObservationIgnored private let home: String?
   @ObservationIgnored private var readers: [String: WorkspaceReads] = [:]
   @ObservationIgnored private var epoch = 0
-  @ObservationIgnored private var modelsEpoch = 0
 
   public init(desktops: [WorkspaceDesktop], home: String?, request: @escaping Request) {
     self.desktops = desktops; self.home = home; self.selected = home ?? desktops.first?.id; self.request = request
   }
   public var desktop: WorkspaceDesktop? { desktops.first { $0.id == selected } }
+  /// the profile the sheet runs under, as the desktop named it
+  public var profile: AgentProfileSet? { profileSets.first { $0.id == profileSet } }
+  /// the chosen agent's row
+  public var agent: AgentCatalogRow? { agents.first { $0.id == provider } }
+  /// Item 586 — whether the sheet's profile can run an agent: a bud it holds no sign-in for is never chosen
+  public func runs(_ agent: AgentCatalogRow) -> Bool { LaunchModel.signedIn(agent.id, under: profile) }
   public var canSpawn: Bool {
     !spawning && desktop?.online == true && (place?.desktop == selected || folder?.device == selected)
-      && agents.contains { $0.id == provider && $0.canSpawn }
+      && agent.map { $0.canSpawn && runs($0) } == true
   }
-  /// Nowhere to start yet: the folder sheet opens by itself (PJ-D12 (a)).
+  /// Nowhere to start yet: Browse opens by itself (PJ-D12 (a)).
   public var needsFolder: Bool { place == nil && folder == nil }
 
-  // MARK: The rows' words (DESIGN.md §8: one answer, or none, said in the row)
+  // MARK: What the sheet says (DESIGN.md §8: a part says what it waits on)
 
-  /// fix7 — the Agent row's quiet fact (nil: a menu of several): reading,
-  /// refused, none, or the one there is — never "No agent available" while
-  /// the desktop has not answered.
-  public var agentRowWords: String? {
-    LaunchModel.agentRow(agents, read: agentsRead, failed: agentsFailed, online: desktop?.online == true)
+  /// Item 586 — the header's mono line: the profile the sheet runs under (`AS WORK`), or that it is being read.
+  public var profileWords: String? {
+    guard desktop?.online == true, !agentsFailed else { return nil }
+    guard profilesRead else { return "READING PROFILES…" }
+    return profile.map { "AS \(LaunchModel.profileLabel($0).uppercased())" } ?? "AS THE DESKTOP'S DEFAULT"
   }
-  public var profileChoices: [ProfileChoice] { LaunchModel.profileChoices(profileSets, provider: provider) }
-  public var profileRowWords: String? {
-    if agentsFailed || (agentsRead && agents.isEmpty) { return "Not read — no agent to run" }
-    return profilesRead
-      ? LaunchModel.profileRow(profileChoices, desktop: desktop?.name ?? "this desktop") : "Reading profiles…"
+  /// fix7, item 586 — WHO's words in the buds' place (nil: the buds)
+  public var whoWords: String? {
+    LaunchModel.whoRow(
+      agents, read: agentsRead, failed: agentsFailed, online: desktop?.online == true,
+      desktop: desktop?.name ?? "This desktop")
   }
-  public var modelChoices: [AgentModelChoice] { models?.catalog?.models ?? [] }
-  public var model: AgentModelChoice? { modelChoices.first { $0.id == modelId } }
-  public var modelRowWords: String? {
-    if agentsFailed || (agentsRead && agents.isEmpty) { return "Each agent's own · not read" }
-    return LaunchModel.modelRow(models, loading: modelsLoading, error: modelsError)
+  /// Item 586 — WHERE's pills: the folder Browse chose first, then the recent places, the chosen place among them
+  /// even when it is older than the newest four.
+  public var whereChoices: [LaunchWhere] {
+    guard let selected else { return [] }
+    var places = LaunchModel.recentPlaces(
+      context.usual, desktop: selected, online: online, everyDesktop: !context.places.isEmpty)
+    if let place, !places.contains(place) { places.insert(place, at: 0) }
+    let browsed = picked.flatMap { $0.device == selected ? LaunchWhere.folder($0) : nil }
+    return (browsed.map { [$0] } ?? []) + places.map { LaunchWhere.place($0) }
   }
-  public var effortRowWords: String? { LaunchModel.effortRow(model: model) }
-  /// The footer: a refusal first, else how old the models' read is.
-  public var footer: String {
-    message ?? LaunchModel.modelsAge(models, now: Date()) ?? "The agent opens in the folder you choose."
-  }
-
-  /// Q7 — a project's places by desktop for the folder sheet: the chosen
-  /// desktop's first, then the home's, then the rest as the project lists them.
-  public var placesByDesktop: [(desktop: String, places: [LaunchPlace])] {
-    var order: [String] = []
-    for id in [selected, home].compactMap({ $0 }) where !order.contains(id) { order.append(id) }
-    for place in context.places where !order.contains(place.desktop) { order.append(place.desktop) }
-    return order.compactMap { id in
-      let places = context.places.filter { $0.desktop == id }
-      return places.isEmpty ? nil : (id, places)
+  /// the chosen pill
+  public var chosen: LaunchWhere? { place.map { LaunchWhere.place($0) } ?? folder.map { LaunchWhere.folder($0) } }
+  /// the home's path on the sheet's desktop, which the sheet draws as `~`
+  public var homePath: String? { reader?.roots.first { $0.browse == "home" }?.path }
+  /// the chosen folder's absolute path, where it is known
+  public var chosenPath: String? { place?.path ?? folder?.path }
+  /// Item 586 — the line under the pills: where the chosen folder lives, its branch, its last use
+  public var whereLine: String? {
+    if let place {
+      return LaunchModel.whereLine(path: place.path, branch: place.branch, last: place.last, home: homePath)
     }
+    return folder.flatMap { LaunchModel.whereLine(path: $0.path, branch: nil, last: nil, home: homePath) }
+  }
+  /// Item 586 — the places known on the sheet's desktop, whose ages Browse's rows wear
+  public var placesHere: [LaunchPlace] { context.usual.filter { $0.desktop == selected } }
+  /// Item 586 — where Browse opens: beside the chosen folder, else at the home's top
+  public var browseStart: LaunchModel.BrowseAt? {
+    LaunchModel.browseStart(folder: folder, placePath: place?.path, roots: reader?.roots ?? [])
+  }
+  /// Item 586 — Start's small line: the agent, why it cannot run, or that it is starting
+  public var startLine: String {
+    LaunchModel.startLine(
+      agent: agent?.label, runs: agent.map { runs($0) } ?? true,
+      profile: profile.map { LaunchModel.profileLabel($0) } ?? LaunchModel.nativeLabel, starting: spawning)
+  }
+  /// Item 586 — Start as a screen reader says it
+  public var startSentence: String {
+    LaunchModel.startSentence(agent: agent?.label, folder: chosen?.name, starting: spawning)
   }
 
   private var online: Set<String> { Set(desktops.filter(\.online).map(\.id)) }
-  /// The recipe, when it is this agent's (its profile and models are its own).
-  private var recipe: ProjectRecipe? { context.recipe?.provider == provider ? context.recipe : nil }
 
   public func update(_ desktops: [WorkspaceDesktop]) {
     self.desktops = desktops
@@ -106,13 +123,13 @@ public final class WorkspaceLaunch {
 
   // MARK: Beginning a launch
 
-  /// A new launch: where it begins, and the place the folder row comes filled
-  /// with (synchronously, so the sheet knows at once whether to open the
-  /// folder sheet by itself). `select` reads the rest.
+  /// A new launch: where it begins, and the place WHERE comes filled with
+  /// (synchronously, so the sheet knows at once whether Browse opens by
+  /// itself). `select` reads the rest.
   public func prepare(_ context: LaunchContext) {
     guard !spawning else { return }
     self.context = context
-    folder = nil; message = nil; provider = ""
+    folder = nil; picked = nil; message = nil; provider = ""
     let desk = context.desktop ?? home ?? selected ?? ""
     place = LaunchModel.usualPlace(recipe: context.recipe, places: context.usual, desktop: desk, online: online)
     selected = place?.desktop ?? (desktops.contains { $0.id == desk } ? desk : selected)
@@ -127,11 +144,10 @@ public final class WorkspaceLaunch {
     guard !spawning, let desktop = desktops.first(where: { $0.id == device }) else { return }
     epoch += 1; let ticket = epoch
     let previous = provider
-    if selected != device { folder = nil }
+    if selected != device { folder = nil; picked = nil }
     if place?.desktop != device { place = nil }
     selected = device; agents = []; agentsRead = false; agentsFailed = false; provider = ""; message = nil
     profileSets = []; profilesRead = false; profileSet = nil
-    models = nil; modelsError = nil; modelId = nil; effort = nil
     let reader = readers[device] ?? WorkspaceReads(device: device, name: desktop.name) { [request] method, params in
       try await request(device, method, params)
     }
@@ -142,15 +158,15 @@ public final class WorkspaceLaunch {
     // call's whole 20 s: they are read beside the agents, never before them
     let roots = Task { await reader.refreshRoots() }
     guard desktop.online, !Task.isCancelled else { return }
+    // the agent the sheet had (a desktop changed under it), the recipe's, the last one started
+    let wanted = [previous.isEmpty ? nil : previous, context.recipe?.provider, lastProvider]
     do {
       let catalog = try AgentCatalogResult(json: await request(device, "agent.catalog", AgentCatalogParams.phone.json))
       guard ticket == epoch, !Task.isCancelled else { return }
       agentsRead = true
       agents = catalog.catalog.filter { $0.canSpawn && $0.phone != false }
-      // the agent already chosen stays when this desktop offers it, else the recipe's
-      provider = (agents.first { $0.id == previous } ?? agents.first { $0.id == context.recipe?.provider })?.id
-        ?? agents.first?.id ?? ""
-      if agents.isEmpty { message = "This desktop offers no agents to launch" }
+      // a bud comes chosen at once; the profile, read next, may move it to one the profile runs
+      provider = LaunchModel.firstAgent(agents, profile: nil, wanted: wanted) ?? ""
     } catch {
       if ticket == epoch {
         agentsRead = true; agentsFailed = true
@@ -167,14 +183,18 @@ public final class WorkspaceLaunch {
       guard ticket == epoch else { return }
     }
     profilesRead = true
-    profileSet = LaunchModel.firstProfile(profileChoices, wanted: [kept, recipe?.profileSet, context.profileSet])
-    await readModels()
-    // the sheet's reads end with its roots (the folder sheet's first page)
+    profileSet = LaunchModel.sheetProfile(
+      profileSets, wanted: [kept, context.profileSet, context.recipe?.profileSet],
+      for: LaunchModel.wantedAgent(agents, wanted: wanted))?.id
+    provider = LaunchModel.firstAgent(agents, profile: profile, wanted: wanted) ?? ""
+    // the sheet's reads end with its roots (Browse's first page)
     await roots.value
   }
 
-  /// Q7 — a place chosen in the folder sheet; one on another desktop brings
-  /// its desktop, and the profile stays when that desktop has it.
+  // MARK: Where and who
+
+  /// Q7 — a place chosen in WHERE; one on another desktop brings its desktop, and the profile and the agent stay
+  /// when that desktop has them.
   public func choose(_ place: LaunchPlace) async {
     guard !spawning, place.reason == nil, online.contains(place.desktop) else { return }
     if place.desktop != selected {
@@ -186,74 +206,39 @@ public final class WorkspaceLaunch {
     folder = nil; message = nil
   }
 
-  public func chooseCurrentFolder() -> Bool {
-    guard let choice = reader?.choice, choice.device == selected else { return false }
-    folder = choice; place = nil; message = nil; return true
-  }
-
-  // MARK: How it starts
-
-  /// The agent changed: its profiles and its models are its own.
-  public func providerChanged() async {
-    modelId = nil; effort = nil
-    profileSet = LaunchModel.firstProfile(profileChoices, wanted: [recipe?.profileSet, context.profileSet])
-    await readModels()
-  }
-
-  public func chooseProfile(_ id: String) async {
-    guard profileChoices.contains(where: { $0.id == id }), id != profileSet else { return }
-    profileSet = id
-    modelId = nil; effort = nil
-    await readModels()
-  }
-
-  /// A model (nil: "Each agent's own"): its effort comes back as the project
-  /// last ran it, else its own.
-  public func chooseModel(_ id: String?) {
-    modelId = id.flatMap { id in modelChoices.contains { $0.id == id } ? id : nil }
-    effort = model.flatMap { LaunchModel.effort(for: $0, recipe: recipe) }
-  }
-
-  public func chooseEffort(_ value: String?) {
-    effort = value.flatMap { value in model?.effort?.values.contains { $0.id == value } == true ? value : nil }
-  }
-
-  private func readModels() async {
-    guard let device = selected, !provider.isEmpty, online.contains(device) else { return }
-    modelsEpoch += 1; let ticket = modelsEpoch
-    modelsLoading = true; models = nil; modelsError = nil
-    defer { if ticket == modelsEpoch { modelsLoading = false } }
-    do {
-      let answer = try AgentModelsResult(
-        json: await request(device, "agent.models", AgentModelsParams(provider: provider, profileSet: profileSet).json))
-      guard ticket == modelsEpoch, !Task.isCancelled else { return }
-      models = answer
-      if modelId == nil, let wanted = recipe?.selection?.modelId { chooseModel(wanted) }
-    } catch {
-      guard ticket == modelsEpoch else { return }
-      modelsError = (error as? FieldProductError)?.message ?? "Models could not be read"
+  /// Item 586 — a WHERE pill chosen: a place, or the folder Browse chose.
+  public func choose(_ choice: LaunchWhere) async {
+    switch choice {
+    case .place(let place): await choose(place)
+    case .folder(let folder):
+      guard !spawning, folder.device == selected, folder == picked else { return }
+      self.folder = folder; place = nil; message = nil
     }
   }
 
-  // MARK: The launch
-
-  /// The selection a spawn carries: none for "Each agent's own"; the model
-  /// and, when chosen, its effort control — every id the agent's own.
-  public var selection: AgentModelSelection? {
-    guard let modelId else { return nil }
-    var controls: [String: String] = [:]
-    if let effort, let control = model?.effort { controls[control.id] = effort }
-    return AgentModelSelection(modelId: modelId, controls: controls)
+  /// Browse's Use: the folder Browse is in becomes the chosen one, and leads WHERE.
+  public func chooseCurrentFolder() -> Bool {
+    guard !spawning, let choice = reader?.choice, choice.device == selected else { return false }
+    folder = choice; picked = choice; place = nil; message = nil
+    return true
   }
+
+  /// Item 586 — a bud chosen: an agent the desktop offers and the sheet's profile can run.
+  public func chooseAgent(_ id: String) {
+    guard !spawning, let row = agents.first(where: { $0.id == id }), runs(row) else { return }
+    provider = id; message = nil
+  }
+
+  // MARK: The launch
 
   /// Non-idempotent: one tap, one ask. A lost reply is never retried here.
   public func spawn() async -> Bool {
     guard canSpawn, let device = selected else { return false }
     let params =
       if let place {
-        AgentSpawnParams(provider: provider, place: place.ref, profileSet: profileSet, modelSelection: selection)
+        AgentSpawnParams(provider: provider, place: place.ref, profileSet: profileSet)
       } else {
-        AgentSpawnParams(provider: provider, cwd: folder?.path, profileSet: profileSet, modelSelection: selection)
+        AgentSpawnParams(provider: provider, cwd: folder?.path, profileSet: profileSet)
       }
     spawning = true; message = nil
     defer { spawning = false }
@@ -262,6 +247,7 @@ public final class WorkspaceLaunch {
       guard result["session"]?["runtimeRunId"]?.stringValue != nil else {
         throw WireDecodeError(shape: "agent.spawn", reason: "missing run receipt")
       }
+      lastProvider = provider
       return true
     } catch {
       if let refusal = error as? FieldProductError, ["UNAVAILABLE", "TIMEOUT"].contains(refusal.kind) {

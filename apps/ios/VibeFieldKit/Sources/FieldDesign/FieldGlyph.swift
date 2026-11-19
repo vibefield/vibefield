@@ -49,6 +49,12 @@ public enum FieldGlyphName: String, CaseIterable, Sendable {
   /// the Mac's create) and ↻ Another face (`reset`).
   case sparkle
   case reset
+  /// Item 586 — the launch sheet (DESIGN.md §8, "The phone's launch sheet asks two things"): a recent folder's pill,
+  /// Start's folder and Browse's rows (`folder`), Browse's search circle and field (`search`), the sheet's close
+  /// circle (`close`).
+  case folder
+  case search
+  case close
 
   var assetName: String { "glyph-\(rawValue)" }
 }

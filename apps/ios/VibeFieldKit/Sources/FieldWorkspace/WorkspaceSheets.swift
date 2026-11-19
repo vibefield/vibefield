@@ -3,389 +3,469 @@ import FieldProduct
 import SwiftUI
 import UIKit
 
-/// Folder first; the chooser has its own presenter above a single-detent
-/// launch sheet. Agent choices never change the launch sheet's height.
-///
-/// PJ-7 — Profile · Model · Effort, menu rows that never come or go; a choice
-/// with one answer, or none, is said in its row (DESIGN.md §8's FS-2 entry).
-/// The folder row comes filled with the usual place, else the folder sheet
-/// opens by itself.
+/// Item 586 (2026-11-19) — the launch sheet asks two things, where and who (DESIGN.md §8, "The phone's launch sheet
+/// asks two things"). The header says what the bloom chose, once: the desktop and the Agent Profile. WHERE is the
+/// recent places as pills, and Browse, which raises this same sheet into the browser (`LaunchBrowse`); WHO is the
+/// desktop's agents as the bloom's buds; Start is the agent's ticket. It replaced FS-2's Form over a folder sheet of
+/// its own, and PJ-7's Profile, Model and Effort rows; fix7 stands: the sheet is presented by its model, and a part
+/// says what it waits on.
 public struct CreateSessionSheet: View {
   @Bindable private var model: WorkspaceLaunch
-  @State private var choosingFolder = false
+  @State private var browsing = false
+  @State private var browseOpens = LaunchBrowse.Opening.beside
+  /// the menu's own height, which its detent takes: the sheet is as tall as what it holds
+  @State private var menuHeight: CGFloat = 560
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   public init(model: WorkspaceLaunch) { self.model = model }
 
   public var body: some View {
-    NavigationStack {
-      Form {
-        Section {
-          Button { choosingFolder = true } label: {
-            HStack {
-              Image(systemName: "folder")
-              VStack(alignment: .leading) {
-                if let place = model.place {
-                  Text(place.label)
-                  Text(model.desktops.first { $0.id == place.desktop }?.name ?? "")
-                    .font(.caption).foregroundStyle(ChromePalette.inkSecondary)
-                } else {
-                  Text(model.folder == nil ? "Choose a folder" : "Folder")
-                  if let folder = model.folder {
-                    Text(folder.path).font(.caption.monospaced()).foregroundStyle(ChromePalette.inkSecondary)
-                      .lineLimit(1).truncationMode(.middle)
-                  }
-                }
-              }
-              Spacer()
-              Image(systemName: "chevron.right").foregroundStyle(ChromePalette.inkSecondary)
-            }
-          }
-          .disabled(model.spawning)
-          HStack {
-            Text("Desktop")
-            Spacer()
-            if let desktop = model.desktop { WorkspaceDesktopLabel(desktop: desktop) }
-            else { Text("Connect a desktop").foregroundStyle(ChromePalette.inkSecondary) }
-          }
-          if let words = model.agentRowWords {
-            fact("Agent", words)
-          } else {
-            Picker("Agent", selection: Binding(get: { model.provider }, set: { provider in
-              model.provider = provider
-              Task { await model.providerChanged() }
-            })) {
-              ForEach(model.agents) { Text($0.label).tag($0.id) }
-            }.disabled(model.spawning)
-          }
-          if let words = model.profileRowWords {
-            fact("Profile", words)
-          } else {
-            Picker("Profile", selection: Binding(get: { model.profileSet ?? "" }, set: { id in
-              Task { await model.chooseProfile(id) }
-            })) {
-              ForEach(model.profileChoices) { Text($0.label).tag($0.id) }
-            }.pickerStyle(.menu).disabled(model.spawning)
-          }
-          if let words = model.modelRowWords {
-            fact("Model", words)
-          } else {
-            Picker("Model", selection: Binding(get: { model.modelId }, set: { model.chooseModel($0) })) {
-              Text("Each agent's own").tag(String?.none)
-              ForEach(model.modelChoices) { Text($0.label).tag(String?.some($0.id)) }
-            }.pickerStyle(.menu).disabled(model.spawning)
-          }
-          if let words = model.effortRowWords {
-            fact("Effort", words)
-          } else {
-            Picker("Effort", selection: Binding(get: { model.effort }, set: { model.chooseEffort($0) })) {
-              Text("Its own").tag(String?.none)
-              ForEach(model.model?.effort?.values ?? []) { Text($0.label).tag(String?.some($0.id)) }
-            }.pickerStyle(.menu).disabled(model.spawning)
-          }
-        } footer: {
-          Text(model.footer)
-            .foregroundStyle(ChromePalette.inkSecondary)
-        }
-        Button {
-          // "Starting…" keeps its look while it runs (item 241), so it is enabled then; a second press asks nothing
-          guard !model.spawning else { return }
-          Task {
-            // DESIGN.md §8: success or warning at the birth
-            let born = await model.spawn()
-            UINotificationFeedbackGenerator().notificationOccurred(born ? .success : .warning)
-            if born { dismiss() }
-          }
-        } label: {
-          HStack {
-            Spacer()
-            if model.spawning { ProgressView().tint(ChromePalette.keyOnInk) }
-            else { FieldGlyph(.start, size: FieldGlyph.box(for: 15)) }
-            Text(model.spawning ? "Starting…" : "Start \(model.agents.first { $0.id == model.provider }?.label ?? "session")")
-            Spacer()
-          }
-        }
-        .buttonStyle(ChromePillStyle(.primary))
-        // DESIGN.md §7 "Off" (item 241): the pill draws off itself. "Starting…" says its own press runs, so it keeps
-        // its look with its hits off
-        .disabled(!model.canSpawn && !model.spawning)
-        .allowsHitTesting(model.canSpawn)
-        .listRowBackground(Color.clear)
-        .listRowInsets(EdgeInsets())
-      }
-      .scrollContentBackground(.hidden)
-      .background(ChromePalette.paper)
-      .navigationTitle("New session")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(model.spawning) } }
-      .sheet(isPresented: $choosingFolder) {
-        WorkspaceFolderSheet(model: model)
-          .presentationDetents([.large])
-          .presentationDragIndicator(.visible)
-          .presentationCornerRadius(40)
-          .fieldGlassSheet()
-      }
-      .task {
-        // PJ-D12 (a): nowhere to start yet, the folder sheet opens by itself
-        if model.needsFolder { choosingFolder = true }
-        if let device = model.selected { await model.select(device) }
-        #if DEBUG
-          if let scenario = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-demo-workspace=") })?.split(separator: "=").last {
-            if ["folder", "launch", "refused", "spawning"].contains(String(scenario)) {
-              if let reader = model.reader, let root = reader.roots.first(where: { $0.browse == "home" }) {
-                await reader.open(root, path: "Projects/workbench")
-                if scenario != "folder" { _ = model.chooseCurrentFolder() }
-              }
-            }
-            if scenario == "offline" {
-              model.update(model.desktops.map { .init(id: $0.id, name: $0.name, platform: $0.platform, online: false) })
-            }
-            choosingFolder = ["roots", "folder", "offline"].contains(String(scenario))
-            if scenario == "refused" { _ = await model.spawn() }
-            if scenario == "spawning" { Task { _ = await model.spawn() } }
-          }
-        #endif
+    ZStack(alignment: .top) {
+      if browsing {
+        LaunchBrowse(model: model, opening: browseOpens) { show(browsing: false) }
+          .transition(.opacity.combined(with: .move(edge: .trailing)))
+      } else {
+        menu
+          .transition(.opacity.combined(with: .move(edge: .leading)))
       }
     }
     .tint(ChromePalette.ink)
     .interactiveDismissDisabled(model.spawning)
-    .presentationDetents([.medium])
+    .presentationDetents(browsing ? [.large] : [.height(menuHeight)])
     .presentationDragIndicator(.visible)
     .presentationCornerRadius(40)
     .fieldGlassSheet()
-  }
-}
-
-extension CreateSessionSheet {
-  /// A row with one answer, or none: the fact in its place, never a menu.
-  fileprivate func fact(_ title: String, _ words: String) -> some View {
-    HStack {
-      Text(title)
-      Spacer()
-      Text(words).foregroundStyle(ChromePalette.inkSecondary).multilineTextAlignment(.trailing)
+    .task {
+      #if DEBUG
+        if LaunchArguments.current.contains(where: { $0.hasPrefix("-vf-demo-workspace=") }) {
+          if let device = model.selected { await model.select(device) }
+          await stageDemo()
+          return
+        }
+      #endif
+      // PJ-D12 (a): nowhere to start yet, Browse opens by itself
+      if model.needsFolder { browsing = true }
+      if let device = model.selected { await model.select(device) }
     }
-    .accessibilityElement(children: .combine)
-  }
-}
-
-public struct WorkspaceFolderSheet: View {
-  @Bindable private var model: WorkspaceLaunch
-  @State private var query = ""
-  @State private var copied: String?
-  @Environment(\.dismiss) private var dismiss
-  public init(model: WorkspaceLaunch) { self.model = model }
-
-  public var body: some View {
-    NavigationStack {
-      List {
-        // Q7 — from a project: its places first, under each desktop's mark
-        ForEach(model.placesByDesktop, id: \.desktop) { group in
-          Section {
-            ForEach(group.places) { place in placeRow(place) }
-          } header: {
-            if let desktop = model.desktops.first(where: { $0.id == group.desktop }) {
-              WorkspaceDesktopLabel(desktop: desktop)
-            }
-          }
-        }
-        Section {
-          if model.desktops.count > 1 {
-            Picker("Desktop", selection: Binding(
-              get: { model.selected ?? "" },
-              set: { device in query = ""; Task { await model.select(device) } }
-            )) {
-              ForEach(model.desktops) { desktop in WorkspaceDesktopLabel(desktop: desktop).tag(desktop.id) }
-            }
-          } else if let desktop = model.desktop {
-            WorkspaceDesktopLabel(desktop: desktop)
-          } else {
-            Text("Connect a desktop to browse its folders").foregroundStyle(ChromePalette.inkSecondary)
-          }
-        }
-        if let reader = model.reader {
-          if let message = reader.message {
-            Section {
-              HStack {
-                if reader.state == .loading { ProgressView() }
-                Text(message).font(.callout).foregroundStyle(ChromePalette.inkSecondary)
-                Spacer()
-                if reader.state != .loading && reader.state != .ready {
-                  Button("Retry") { Task { await refresh(reader) } }
-                }
-              }
-            }
-          }
-          if reader.root == nil { roots(reader) } else { contents(reader) }
-        }
-      }
-      .scrollContentBackground(.hidden)
-      .background(ChromePalette.paper)
-      .navigationTitle(model.context.projectName.map { "Where in \($0)" } ?? "Choose a folder")
-      .navigationBarTitleDisplayMode(.inline)
-      .toolbar {
-        ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
-        ToolbarItem(placement: .confirmationAction) {
-          Button("Use folder") { if model.chooseCurrentFolder() { dismiss() } }
-            .disabled(model.reader?.choice == nil)
-        }
-      }
-      .safeAreaInset(edge: .bottom) {
-        if copied != nil {
-          Text("Path copied").font(.caption).padding().background(.regularMaterial, in: Capsule())
-            .padding(.bottom)
-        }
-      }
-      .task(id: query) {
-        guard let reader = model.reader, reader.root != nil else { return }
-        do { try await Task.sleep(for: .milliseconds(250)); try Task.checkCancellation() }
-        catch { return }
-        await reader.search(query)
-      }
-      .onChange(of: model.selected) { query = "" }
-    }.tint(ChromePalette.ink)
   }
 
-  /// A project's place: its folder's name and branch, then its last use or
-  /// why it cannot take a launch; the chosen one checked. A tap brings its
-  /// desktop and returns.
-  private func placeRow(_ place: LaunchPlace) -> some View {
-    let awake = model.desktops.first { $0.id == place.desktop }?.online == true
-    let available = place.reason == nil && awake && !model.spawning
+  /// Browse rises over the island curve and comes back down the same way; reduced motion, it is there.
+  private func show(browsing: Bool) {
+    browseOpens = .beside
+    if reduceMotion {
+      self.browsing = browsing
+    } else {
+      withAnimation(FieldMotion.island(0.38)) { self.browsing = browsing }
+    }
+  }
+
+  // MARK: The menu
+
+  private var menu: some View {
+    VStack(alignment: .leading, spacing: 0) {
+      header
+      LaunchLabel("WHERE").padding(.top, 24)
+      places.padding(.top, 10)
+      browseRow.padding(.top, 8)
+      if let line = model.whereLine {
+        Text(line)
+          .font(ChromeType.mono(12))
+          .foregroundStyle(ChromePalette.inkSecondary)
+          .lineLimit(1)
+          .truncationMode(.middle)
+          .padding(.horizontal, 4)
+          .padding(.top, 10)
+      }
+      LaunchLabel("WHO").padding(.top, 24)
+      buds.padding(.top, 12)
+      if let message = model.message {
+        Text(message)
+          .font(ChromeType.sans(13))
+          .foregroundStyle(ChromePalette.inkSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.top, 14)
+      }
+      start.padding(.top, 22)
+    }
+    .padding(.horizontal, 20)
+    .padding(.top, 24)
+    .padding(.bottom, 22)
+    .fixedSize(horizontal: false, vertical: true)
+    .onGeometryChange(for: CGFloat.self) { proxy in
+      proxy.size.height
+    } action: { height in
+      menuHeight = height
+    }
+  }
+
+  /// The bloom's words, `New agent on studio`, the verb at 40%; under them the profile the sheet runs under, in mono.
+  private var header: some View {
+    HStack(alignment: .top, spacing: 12) {
+      VStack(alignment: .leading, spacing: 6) {
+        (Text("New agent on ").foregroundStyle(ChromePalette.ink.opacity(0.4))
+          + Text(model.desktop?.name ?? "a desktop").foregroundStyle(ChromePalette.ink))
+          .font(ChromeType.sans(28, .heavy))
+          .tracking(ChromeType.tracking(-0.04, of: 28))
+          .lineLimit(1)
+          .minimumScaleFactor(0.75)
+          .accessibilityAddTraits(.isHeader)
+        if let words = model.profileWords {
+          HStack(spacing: 6) {
+            if let profile = model.profile {
+              Image(
+                systemName: ProfileGlyphSymbols.symbol(
+                  glyph: profile.glyph, native: profile.kind == "native", filled: profile.isDefault)
+              )
+              .font(.system(size: 11, weight: .semibold))
+            }
+            Text(words)
+              .font(FieldType.mono(11, .bold))
+              .tracking(FieldType.tracking(0.1, of: 11))
+          }
+          .foregroundStyle(ChromePalette.inkTertiary)
+          .frame(height: 16)
+          .accessibilityElement(children: .combine)
+        }
+      }
+      Spacer(minLength: 0)
+      Button {
+        dismiss()
+      } label: {
+        FieldGlyph(.close, size: 14)
+          .foregroundStyle(ChromePalette.inkSecondary)
+          .frame(width: 34, height: 34)
+          .background(Circle().fill(ChromePalette.wellFill))
+          .contentShape(Circle())
+      }
+      .buttonStyle(.plain)
+      .disabled(model.spawning)
+      .accessibilityLabel("Cancel")
+    }
+  }
+
+  /// WHERE: the recent places as pills, two to a row; a dashed pill when there is none yet.
+  @ViewBuilder private var places: some View {
+    let choices = model.whereChoices
+    if choices.isEmpty {
+      Text("No recent folders on \(model.desktop?.name ?? "this desktop") yet")
+        .font(ChromeType.sans(14))
+        .foregroundStyle(ChromePalette.inkTertiary)
+        .lineLimit(1)
+        .frame(maxWidth: .infinity, minHeight: 40)
+        .overlay(Capsule().strokeBorder(ChromePalette.wellHairline, style: StrokeStyle(lineWidth: 1, dash: [3, 3])))
+    } else {
+      LazyVGrid(columns: pillColumns, alignment: .leading, spacing: 8) {
+        ForEach(choices) { choice in pill(choice) }
+      }
+    }
+  }
+
+  private var pillColumns: [GridItem] { [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)] }
+
+  /// A recent folder: the `folder` glyph and its name, inverted when chosen. A project's place on another desktop
+  /// wears that desktop's OS mark where the glyph stands, and choosing it moves the sheet there (Q7).
+  private func pill(_ choice: LaunchWhere) -> some View {
+    let on = model.chosen == choice
+    let elsewhere = choice.desktop == model.selected ? nil : model.desktops.first { $0.id == choice.desktop }
     return Button {
-      Task {
-        await model.choose(place)
-        if model.place == place { dismiss() }
-      }
+      Task { await model.choose(choice) }
     } label: {
-      HStack {
-        Image(systemName: "folder")
-        Text(place.label).lineLimit(1)
-        Spacer()
-        Text(place.reason ?? (awake ? place.last : "asleep")).font(.caption)
-        if model.place == place { Image(systemName: "checkmark") }
-      }
-      .foregroundStyle(available ? ChromePalette.ink : ChromePalette.inkSecondary)
-    }
-    .disabled(!available)
-    .accessibilityValue(model.place == place ? "chosen" : "")
-  }
-
-  @ViewBuilder private func roots(_ reader: WorkspaceReads) -> some View {
-    Section("Recent places") {
-      if reader.recent.isEmpty && reader.state == .ready { Text("No recent places").foregroundStyle(ChromePalette.inkSecondary) }
-      ForEach(reader.recent) { rootRow($0, reader: reader) }
-    }
-    Section("Browse") { ForEach(reader.browse) { rootRow($0, reader: reader) } }
-    if reader.rootsClipped { Text("Showing the most recent places").font(.caption).foregroundStyle(ChromePalette.inkSecondary) }
-  }
-
-  private func rootRow(_ root: WorkspaceRoot, reader: WorkspaceReads) -> some View {
-    pathRow(name: root.name, path: root.path, kind: "dir", detail: root.missing ? "Folder is missing" : nil,
-      available: reader.state == .ready && !root.missing, reader: reader) {
-      query = ""; Task { await reader.open(root) }
-    }
-  }
-
-  @ViewBuilder private func contents(_ reader: WorkspaceReads) -> some View {
-    Section {
-      breadcrumbs(reader)
-      if let path = reader.absolutePath {
-        HStack {
-          Text(path).font(.caption.monospaced()).foregroundStyle(ChromePalette.inkSecondary).textSelection(.enabled)
-          Spacer()
-          copyButton(path, reader: reader)
+      HStack(spacing: 7) {
+        if let elsewhere {
+          DeviceMark(platform: elsewhere.platform, size: 16)
+        } else {
+          FieldGlyph(.folder, size: 16)
         }
+        Text(choice.name)
+          .font(ChromeType.sans(15, .medium))
+          .lineLimit(1)
+          .truncationMode(.middle)
       }
-      TextField("Search this folder", text: $query)
-        .textInputAutocapitalization(.never).autocorrectionDisabled()
-        .accessibilityLabel("Search within this folder")
-      Toggle("Show files", isOn: Binding(get: { reader.showFiles }, set: { value in
-        Task { await reader.filter(files: value) }
-      }))
+      .padding(.leading, 12)
+      .padding(.trailing, 14)
+      .frame(maxWidth: .infinity, minHeight: 40, maxHeight: 40, alignment: .leading)
+      .foregroundStyle(on ? ChromePalette.keyOnInk : ChromePalette.ink)
+      .background(Capsule().fill(on ? ChromePalette.keyOnFill : ChromePalette.wellFill))
+      .contentShape(Capsule())
     }
-    Section {
-      let rows = reader.query.isEmpty ? reader.entries : reader.hits
-      if rows.isEmpty && reader.state == .ready {
-        Text(reader.query.isEmpty ? (reader.showFiles ? "This folder is empty" : "No folders here") : (reader.showFiles ? "No matching entries" : "No matching folders"))
+    .buttonStyle(.plain)
+    .disabled(model.spawning)
+    .accessibilityLabel(pillWords(choice, elsewhere: elsewhere?.name))
+    .accessibilityAddTraits(on ? .isSelected : [])
+  }
+
+  private func pillWords(_ choice: LaunchWhere, elsewhere: String?) -> String {
+    var words = choice.name
+    if case .place(let place) = choice, let branch = place.branch { words += ", \(branch)" }
+    if let elsewhere { words += ", on \(elsewhere)" }
+    return words
+  }
+
+  /// Browse studio: an outlined pill with the desktop's OS mark; it raises the sheet into the browser.
+  private var browseRow: some View {
+    Button {
+      show(browsing: true)
+    } label: {
+      HStack(spacing: 7) {
+        DeviceMark(platform: model.desktop?.platform, size: 16)
+          .foregroundStyle(ChromePalette.inkSecondary)
+        Text("Browse \(model.desktop?.name ?? "the desktop")")
+          .font(ChromeType.sans(15, .medium))
+          .lineLimit(1)
+        Spacer(minLength: 0)
+        FieldGlyph(.chevron, size: 12)
+          .foregroundStyle(ChromePalette.inkTertiary)
+      }
+      .padding(.leading, 12)
+      .padding(.trailing, 14)
+      .frame(height: 40)
+      .foregroundStyle(ChromePalette.ink)
+      .overlay(Capsule().strokeBorder(ChromePalette.wellHairline, lineWidth: 1))
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .disabled(model.spawning || model.reader == nil)
+  }
+
+  /// WHO: the desktop's agents as the bloom's buds, sideways past five; what the row waits on is said in its place.
+  @ViewBuilder private var buds: some View {
+    if let words = model.whoWords {
+      HStack(spacing: 8) {
+        if !model.agentsRead && model.desktop?.online == true { ProgressView().controlSize(.small) }
+        Text(words)
+          .font(ChromeType.sans(14))
           .foregroundStyle(ChromePalette.inkSecondary)
       }
-      ForEach(rows, id: \.path) { entry in
-        pathRow(name: entry.name, path: entry.path, kind: entry.kind,
-          detail: entry.childCount.map { "\($0) items" },
-          available: reader.state == .ready && entry.kind == "dir", reader: reader) {
-          query = ""; Task { await reader.enter(entry) }
-        }
-      }
-      if reader.query.isEmpty, reader.nextCursor != nil {
-        Button("Load more (\(reader.entries.count) of \(reader.total))") { Task { await reader.more() } }
-          .disabled(reader.state != .ready)
-      }
-    } footer: {
-      VStack(alignment: .leading) {
-        if !reader.query.isEmpty && !reader.complete { Text("Searched part of this folder") }
-        if reader.clipped { Text(reader.query.isEmpty ? "More entries are available" : "More matches are available. Narrow your search.") }
-      }
-    }
-  }
-
-  private func breadcrumbs(_ reader: WorkspaceReads) -> some View {
-    let parts = reader.relativePath.split(separator: "/").map(String.init)
-    return ScrollView(.horizontal) {
-      HStack {
-        Button("Places") { query = ""; reader.showRoots() }
-        if let root = reader.root {
-          Image(systemName: "chevron.right").font(.caption)
-          Button(root.name) { query = ""; Task { await reader.open(root) } }
-          ForEach(parts.indices, id: \.self) { index in
-            Image(systemName: "chevron.right").font(.caption)
-            Button(parts[index]) {
-              query = ""; Task { await reader.open(root, path: parts.prefix(index + 1).joined(separator: "/")) }
+      .frame(maxWidth: .infinity, minHeight: LaunchBud.height, alignment: .leading)
+    } else {
+      ScrollView(.horizontal) {
+        HStack(alignment: .top, spacing: 2) {
+          ForEach(model.agents) { agent in
+            LaunchBud(
+              agent: agent, chosen: agent.id == model.provider, runs: model.runs(agent),
+              profile: model.profile.map { LaunchModel.profileLabel($0) } ?? LaunchModel.nativeLabel
+            ) {
+              model.chooseAgent(agent.id)
             }
           }
         }
-      }.buttonStyle(.borderless)
-    }.scrollIndicators(.hidden)
-  }
-
-  private func pathRow(name: String, path: String, kind: String, detail: String?, available: Bool,
-    reader: WorkspaceReads, open: @escaping () -> Void) -> some View {
-    HStack {
-      Button(action: open) {
-        HStack(alignment: .top) {
-          Image(systemName: kind == "dir" ? "folder" : kind == "symlink" ? "link" : "doc")
-          VStack(alignment: .leading, spacing: 4) {
-            Text(name).font(.body)
-            Text(path).font(.caption.monospaced()).multilineTextAlignment(.leading).lineLimit(2).truncationMode(.middle)
-            if let detail { Text(detail).font(.caption) }
-          }
-          Spacer(minLength: 0)
-        }.foregroundStyle(available ? ChromePalette.ink : ChromePalette.inkSecondary)
-      }.buttonStyle(.borderless).disabled(!available)
-      copyButton(path, reader: reader)
+        .padding(.horizontal, 20)
+      }
+      .scrollIndicators(.hidden)
+      .scrollClipDisabled()
+      .padding(.horizontal, -20)
+      .frame(height: LaunchBud.height)
+      .disabled(model.spawning)
     }
-    .contextMenu { Button("Copy path", systemImage: "doc.on.doc") { copy(path, reader: reader) } }
   }
 
-  private func copyButton(_ path: String, reader: WorkspaceReads) -> some View {
-    Button { copy(path, reader: reader) } label: { Image(systemName: "doc.on.doc").padding(.vertical, 8) }
-      .buttonStyle(.borderless).foregroundStyle(ChromePalette.inkSecondary)
-      .accessibilityLabel("Copy path").accessibilityValue(path)
+  /// Start, the agent's ticket. "Starting…" keeps its look while it runs (item 241): enabled, its hits off.
+  private var start: some View {
+    Button {
+      guard !model.spawning else { return }
+      Task {
+        // DESIGN.md §8: success or warning at the birth
+        let born = await model.spawn()
+        UINotificationFeedbackGenerator().notificationOccurred(born ? .success : .warning)
+        if born { dismiss() }
+      }
+    } label: {
+      LaunchTicket(
+        agent: model.agent, line: model.startLine, folder: model.chosen?.name ?? "Choose a folder",
+        starting: model.spawning)
+    }
+    .buttonStyle(ChromeCapsuleStyle(live: .primary, off: .quiet))
+    // DESIGN.md §7 "Off" (item 241): the pill draws off itself
+    .disabled(!model.canSpawn && !model.spawning)
+    .allowsHitTesting(model.canSpawn)
+    .accessibilityLabel(model.startSentence)
   }
-  private func copy(_ path: String, reader: WorkspaceReads) {
-    reader.copyPath(path) { UIPasteboard.general.string = $0 }; copied = path
-    Task { try? await Task.sleep(for: .seconds(2)); if copied == path { copied = nil } }
-  }
-  private func refresh(_ reader: WorkspaceReads) async {
-    await reader.refreshRoots()
-    if reader.state == .ready, let root = reader.root { await reader.open(root, path: reader.relativePath) }
+
+  #if DEBUG
+    /// The demo door's scenes (`-vf-demo-workspace=…`, DEBUG only): Browse in a folder, the menu with it chosen, a
+    /// refused start or one running, the desktop's places, the desktop asleep.
+    private func stageDemo() async {
+      guard
+        let scene = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-demo-workspace=") })?
+          .split(separator: "=").last.map(String.init)
+      else { return }
+      if ["folder", "launch", "refused", "spawning"].contains(scene), let reader = model.reader,
+        let home = reader.roots.first(where: { $0.browse == "home" })
+      {
+        await reader.open(home, path: "Projects/workbench")
+        if scene != "folder" { _ = model.chooseCurrentFolder() }
+      }
+      if scene == "offline" {
+        model.update(model.desktops.map { .init(id: $0.id, name: $0.name, platform: $0.platform, online: false) })
+      }
+      browseOpens = scene == "roots" ? .places : .asIs
+      browsing = ["roots", "folder", "offline"].contains(scene)
+      if scene == "refused" { _ = await model.spawn() }
+      if scene == "spawning" { Task { _ = await model.spawn() } }
+    }
+  #endif
+}
+
+/// Item 586 — a part's word over it (`WHERE`, `WHO`), in the bloom's mono.
+private struct LaunchLabel: View {
+  let words: String
+  init(_ words: String) { self.words = words }
+
+  var body: some View {
+    Text(words)
+      .font(FieldType.mono(10, .heavy))
+      .tracking(FieldType.tracking(0.1, of: 10))
+      .foregroundStyle(ChromePalette.inkTertiary)
+      .accessibilityAddTraits(.isHeader)
   }
 }
 
-/// A desktop as a choice: its OS mark (PJ-7: the desktop's own marks,
-/// `DeviceMark`, where FS-2 drew SF Symbols) and its name.
-private struct WorkspaceDesktopLabel: View {
-  let desktop: WorkspaceDesktop
+/// Item 586 — an agent as the bloom's bud (DESIGN.md §8, "Hold, reach, let go"): a disc in `bloomBud` ringed at 22%
+/// ink, the agent's own mark, its name in mono under it. Chosen, it inverts to the ink and lifts; one the sheet's
+/// profile holds no sign-in for stays in its place, its disc dashed and faint, and cannot be chosen. Its name and
+/// `NO SIGN-IN` say why, so they are words that must be read: t3 (item 242), never the disc's fade.
+private struct LaunchBud: View {
+  /// the row's height: the disc, its gap, two lines of name
+  static let height: CGFloat = 86
+
+  let agent: AgentCatalogRow
+  let chosen: Bool
+  let runs: Bool
+  let profile: String
+  let choose: @MainActor () -> Void
+  @Environment(\.accessibilityReduceMotion) var reduceMotion
+
   var body: some View {
-    Label { Text(desktop.name) } icon: { DeviceMark(platform: desktop.platform, size: 17) }
-      .foregroundStyle(desktop.online ? ChromePalette.ink : ChromePalette.inkSecondary)
+    Button(action: choose) {
+      VStack(spacing: 8) {
+        ZStack {
+          Circle().fill(chosen ? FieldPalette.textMain : FieldPalette.bloomBud)
+          Circle().strokeBorder(
+            FieldPalette.textMain.opacity(chosen ? 0 : 0.22),
+            style: StrokeStyle(lineWidth: 1.25, dash: runs ? [] : [3, 3]))
+          LaunchAgentGlyph(agent: agent, size: 22)
+            .foregroundStyle(chosen ? FieldPalette.bloomBud : FieldPalette.textMain)
+        }
+        .frame(width: 52, height: 52)
+        .opacity(runs ? 1 : 0.45)
+        .scaleEffect(chosen && !reduceMotion ? 1.08 : 1)
+        Text(runs ? agent.label.uppercased() : "\(agent.label.uppercased())\nNO SIGN-IN")
+          .font(FieldType.mono(9.5, .bold))
+          .tracking(0.57)
+          .multilineTextAlignment(.center)
+          .lineLimit(2)
+          .foregroundStyle(runs ? FieldPalette.textMain.opacity(chosen ? 1 : 0.78) : ChromePalette.inkTertiary)
+          .frame(width: 66, height: 26, alignment: .top)
+      }
+      .frame(width: 66)
+      .contentShape(Rectangle())
+    }
+    // drawn as it is given, off or not: the plain style would fade an off bud's words under t3
+    .buttonStyle(LaunchBudStyle())
+    .disabled(!runs)
+    .animation(reduceMotion ? nil : FieldMotion.lift(0.18), value: chosen)
+    .accessibilityLabel(runs ? agent.label : "\(agent.label), no sign-in as \(profile)")
+    .accessibilityAddTraits(chosen ? .isSelected : [])
+  }
+}
+
+/// A bud's button draws its label as it is given: the bud says itself what it is.
+private struct LaunchBudStyle: ButtonStyle {
+  func makeBody(configuration: Configuration) -> some View { configuration.label }
+}
+
+/// Item 586 — Start as the agent's ticket: its mark in a disc of the inverse ink, its name small in the buds' mono
+/// over the folder, big, and the `start` glyph as the verb; a spinner while it starts. The name is a word that must be
+/// read, so it is t3 (item 242), the inversion's: `inkTertiary` as the other theme draws it, as a card's ink takes its
+/// ground's scheme. Off (§7), the disc gives up its inversion with the pill, and every word is t4.
+private struct LaunchTicket: View {
+  let agent: AgentCatalogRow?
+  let line: String
+  let folder: String
+  let starting: Bool
+  @Environment(\.isEnabled) var isEnabled
+  @Environment(\.colorScheme) var colorScheme
+
+  /// the scheme the pill's own words are drawn in: the other one while it is inverted
+  private var inkScheme: ColorScheme { isEnabled ? (colorScheme == .dark ? .light : .dark) : colorScheme }
+
+  var body: some View {
+    HStack(spacing: 9) {
+      ZStack {
+        Circle().fill(isEnabled ? ChromePalette.keyOnInk : ChromePalette.wellFill)
+        if let agent {
+          LaunchAgentGlyph(agent: agent, size: 20)
+            .foregroundStyle(isEnabled ? ChromePalette.keyOnFill : ChromePalette.inkT4)
+        }
+      }
+      .frame(width: 38, height: 38)
+      VStack(alignment: .leading, spacing: 2) {
+        Text(line)
+          .font(FieldType.mono(9.5, .heavy))
+          .tracking(FieldType.tracking(0.06, of: 9.5))
+          .lineLimit(1)
+          .foregroundStyle(isEnabled ? ChromePalette.inkTertiary : ChromePalette.inkT4)
+          .environment(\.colorScheme, inkScheme)
+        HStack(spacing: 5) {
+          FieldGlyph(.folder, size: 14)
+          Text(folder)
+            .font(ChromeType.sans(16, .bold))
+            .lineLimit(1)
+            .truncationMode(.middle)
+        }
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      if starting {
+        ProgressView().controlSize(.small).tint(ChromePalette.keyOnInk)
+      } else {
+        FieldGlyph(.start, size: 20)
+      }
+    }
+    .padding(.leading, 6)
+    .padding(.trailing, 15)
+    .frame(maxWidth: .infinity, minHeight: ChromePillStyle.wideHeight, maxHeight: ChromePillStyle.wideHeight)
+    .accessibilityElement(children: .ignore)
+  }
+}
+
+/// Item 586 — how the launch sheet draws an agent's mark. The sheet knows no vendor glyph (AR-L1): the home hands
+/// its drawing in, as it does History's (`HistoryAgentGlyph`). Without one, and for an agent the home draws no mark
+/// for, the agent's letter stands in the mark's place.
+public struct LaunchAgentMark: Sendable {
+  /// The mark for a catalog row, fitted to a square of the size given; nil where the home draws none for it.
+  public let draw: @MainActor @Sendable (AgentCatalogRow, CGFloat) -> AnyView?
+
+  public init(_ draw: @escaping @MainActor @Sendable (AgentCatalogRow, CGFloat) -> AnyView?) {
+    self.draw = draw
+  }
+}
+
+private struct LaunchAgentMarkKey: EnvironmentKey {
+  static let defaultValue: LaunchAgentMark? = nil
+}
+
+extension EnvironmentValues {
+  /// The home's drawing of an agent's mark for the launch sheet; nil draws the agent's letter.
+  public var launchAgentMark: LaunchAgentMark? {
+    get { self[LaunchAgentMarkKey.self] }
+    set { self[LaunchAgentMarkKey.self] = newValue }
+  }
+}
+
+/// An agent's mark in the ink it sits in: the home's drawing, else the id's first character (the reference's own
+/// fallback, `AgentIcon.tsx`).
+private struct LaunchAgentGlyph: View {
+  let agent: AgentCatalogRow
+  let size: CGFloat
+  @Environment(\.launchAgentMark) var mark
+
+  var body: some View {
+    if let drawn = mark?.draw(agent, size) {
+      drawn.frame(width: size, height: size)
+    } else {
+      Text(agent.id.prefix(1).uppercased())
+        .font(.system(size: size * 0.78, weight: .heavy, design: .monospaced))
+        .frame(width: size, height: size)
+    }
   }
 }
