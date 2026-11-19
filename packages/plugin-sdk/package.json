@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./ui": "./src/ui.ts",
+    "./ui-dom": "./src/ui-dom.ts",
     "./canvas": "./src/canvas.ts",
     "./behavior": "./src/behavior.ts",
     "./desk": "./src/desk.ts",

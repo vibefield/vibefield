@@ -2359,6 +2359,9 @@ export type HostSingletonExternal = (typeof HOST_SINGLETON_EXTERNALS)[number];
 export const HOST_SINGLETON_MODULE_SPECIFIERS = [
   ...HOST_SINGLETON_EXTERNALS,
   "@vibefield/plugin-sdk/ui",
+  // Item 570 (2026-11-19): the DOM door, the kit's glyphs and control classes for a plugin with no React; it reaches
+  // no .tsx, so a plugin whose tsconfig sets no `jsx` type-checks through it.
+  "@vibefield/plugin-sdk/ui-dom",
   "@vibefield/plugin-sdk/canvas",
   "@vibefield/plugin-sdk/behavior",
   // DK-6: the object door — every plugin KIND's bundle names it bare (the example

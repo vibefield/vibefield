@@ -134,6 +134,7 @@ What plugin runtime code may import, and nothing else:
 
 - `@vibefield/plugin-sdk`
 - `@vibefield/plugin-sdk/ui`
+- `@vibefield/plugin-sdk/ui-dom`
 - `@vibefield/plugin-sdk/canvas`
 - `@vibefield/plugin-sdk/behavior`
 - `@vibefield/plugin-sdk/desk`
@@ -176,6 +177,7 @@ copy:
 - `@vibecook/ice`
 - `loro-crdt`
 - `@vibefield/plugin-sdk/ui`
+- `@vibefield/plugin-sdk/ui-dom`
 - `@vibefield/plugin-sdk/canvas`
 - `@vibefield/plugin-sdk/behavior`
 - `@vibefield/plugin-sdk/desk`

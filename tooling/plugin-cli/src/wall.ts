@@ -41,6 +41,7 @@ export const R10_FORBIDDEN_PREFIXES = ["node:", "@ice/"] as const;
 export const R10_ALLOWED_DOOR = [
   "@vibefield/plugin-sdk",
   "@vibefield/plugin-sdk/ui",
+  "@vibefield/plugin-sdk/ui-dom",
   "@vibefield/plugin-sdk/canvas",
   "@vibefield/plugin-sdk/behavior",
   "@vibefield/plugin-sdk/desk",
