@@ -41,7 +41,7 @@ export const PHONE_FLAG = "--phone";
 export const PHONE = {
   type: "vibefield.simulator",
   category: "devices",
-  label: "Phone",
+  label: "iOS Simulator",
   /** its size on the desk, world units */
   size: { w: 188.71, h: 393.7 },
   /** a bound phone's face row's source */
