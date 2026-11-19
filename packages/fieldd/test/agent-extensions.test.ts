@@ -1576,16 +1576,22 @@ describe("AgentExtensionService adding once (AR-S4d)", () => {
         agents: [],
       }),
     ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED", details: { reason: "hides-a-value" } });
-    for (const name of ["PATH", "NODE_OPTIONS", "CODEX_HOME", "FIELDD_TOKEN"]) {
-      await expect(
-        t.extensions.add({
+    // item 576 (2026-11-19): VIBEFIELD_ is a class an agent's own environment keeps too. Each add's
+    // outcome is asserted, so a name taken in is refused by assertion, not by an awaited rejection
+    for (const name of ["PATH", "NODE_OPTIONS", "CODEX_HOME", "FIELDD_TOKEN", "VIBEFIELD_TOKEN"]) {
+      let outcome: unknown = { added: name };
+      try {
+        await t.extensions.add({
           set: "work",
           name: "search",
           definition: { transport: "stdio", command: "npx", args: ["search-mcp"], env: [name] },
           values: { [name]: "x" },
           agents: [],
-        }),
-      ).rejects.toMatchObject({
+        });
+      } catch (error) {
+        outcome = error;
+      }
+      expect(outcome).toMatchObject({
         kind: "PRECONDITION_FAILED",
         details: { reason: "reserved-name" },
       });

@@ -729,6 +729,9 @@ async fn a_real_pty_never_inherits_the_daemon_private_prefixes() {
         &[
             ("FIELD_SMUGGLE", "field-must-not-escape"),
             ("FIELDD_SMUGGLE", "fieldd-must-not-escape"),
+            // item 576 (2026-11-19): a dev run's VIBEFIELD_ names reach the cell the same way (not
+            // `*_SMUGGLE`: its name would hold `FIELD_SMUGGLE`, which the prefix loop reads)
+            ("VIBEFIELD_CARRIED", "vibefield-must-not-escape"),
             ("VF_CELL_CONTROL", "this-one-must-arrive"),
         ],
         Stdio::null(),
@@ -805,6 +808,79 @@ async fn a_real_pty_never_inherits_the_daemon_private_prefixes() {
     );
 
     let _ = client.terminate(&session.id, "strip-row").await;
+    drop(stdin);
+    let _ = lines.next();
+    let _ = wait_exit(child, Duration::from_secs(10));
+}
+
+/// Item 576 (2026-11-19) — the strip is at a PTY's BIRTH, never a filter on what the shell does
+/// after: a `VIBEFIELD_*` value the cell inherited is gone, and one a person gives on the command
+/// line inside the terminal reaches the command it was given to. That is how a release or packaging
+/// variable is set now: on the command line or in the shell's own profile, never inherited from the
+/// shell that started VibeField.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_value_given_on_the_command_line_still_reaches_the_command() {
+    use field_native::services::terminal_client::ControlClient;
+
+    let root = short_root();
+    let dump = root.path().join("envdump-576.txt");
+    let dump_path = dump.to_str().expect("utf8 dump path").to_string();
+
+    let (mut child, control, _frame) = spawn_cell_with_env(
+        root.path(),
+        12,
+        &[("VIBEFIELD_CARRIED", "vibefield-must-not-escape")],
+        Stdio::null(),
+    );
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    writeln!(stdin, "{}", serde_json::json!({ "token": "tok-576" })).expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let _hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+
+    let (client, _events) = ControlClient::connect(&control, "tok-576")
+        .await
+        .expect("dial the cell's control socket");
+
+    // The shell is told the value on its own command line, then reports what its command saw.
+    let session = client
+        .create_session(serde_json::json!({
+            "executable": "/bin/sh",
+            "args": ["-c", format!("VIBEFIELD_ON_THE_LINE=given env > {dump_path}")],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "environment": {"mode": "inherit"},
+        }))
+        .await
+        .expect("create a session on the real cell");
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let dumped = loop {
+        if let Ok(text) = std::fs::read_to_string(&dump) {
+            if !text.is_empty() {
+                break text;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the tenant never wrote its environment to {dump_path}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+
+    assert!(
+        dumped.contains("VIBEFIELD_ON_THE_LINE=given"),
+        "a value given on the command line inside the terminal must reach its command:\n{dumped}"
+    );
+    assert!(
+        !dumped.contains("vibefield-must-not-escape"),
+        "an inherited VIBEFIELD_* value reached the PTY:\n{dumped}"
+    );
+
+    let _ = client.terminate(&session.id, "item-576-row").await;
     drop(stdin);
     let _ = lines.next();
     let _ = wait_exit(child, Duration::from_secs(10));
