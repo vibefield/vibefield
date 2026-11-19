@@ -1006,7 +1006,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks | not yet, as objects |
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
-| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page, its recipe its plugin's own and not yet named here (BROWSER.md Q-10); and the phone's, the recipe **cover glass** (`vibefield.simulator`, PT-S1 — its numbers below) |
+| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page, its recipe its plugin's own and not yet named here (BROWSER.md Q-10); and the iOS Simulator's, the recipe **cover glass** (`vibefield.simulator`, PT-S1 — its numbers below) |
 
 **The five guardrails** (thinking-the-desk §6): **no material without a meaning** — no ornament
 that does not inform (a glass portal that refracts the mat passes; the stitched-leather calendar
@@ -1022,21 +1022,24 @@ gains its recipe's name when a VibeField surface first wears it. Not yet drawn: 
 as objects and instruments — each the desk migration's follow-on program, never a half-port.
 *Corrected 2026-10-18 (PT-S1, at its source):* the portals row read "not yet — PORTALS (DK-D19,
 DK-D20)" and this paragraph listed portals as not yet drawn, after the browser pane landed wearing
-glass (PT-6, 2026-10-14). Portals are drawn; the phone's cover glass is their second wearer. And
+glass (PT-6, 2026-10-14). Portals are drawn; the simulator's cover glass is their second wearer. And
 this stub said every recipe is ICE's: a plugin kind's are its plugin's own `theme.ts` — the pane's
 glass in `plugins/browser-pane/src/theme.ts` (none a DESIGN.md token yet, BROWSER.md Q-10), the
-phone's in `plugins/simulator/src/theme.ts` and its law, held to the section below by its design
-test — and the portals row names the phone's recipe, **cover glass** (corrected 2026-10-29, PT-S1's
+simulator's in `plugins/simulator/src/theme.ts` and its law, held to the section below by its design
+test — and the portals row names the simulator's recipe, **cover glass** (corrected 2026-10-29, PT-S1's
 review).
 
-#### The phone's materials — cover glass, border ink, three metals (PT-S1)
+#### The iOS Simulator's materials — cover glass, border ink, three metals (PT-S1)
 
-The iOS Simulator on the desk is a phone lying face up at its true size (the note's scale: `MM` =
+*Renamed 2026-11-19 (item 572; James named the object "iOS Simulator", 07:56Z):* this section was "The phone's
+materials", and its text called the object "the phone".
+
+The iOS Simulator on the desk is an iPhone lying face up at its true size (the note's scale: `MM` =
 2.6247 world units a millimetre — a 17 Pro is 189 × 394), its screen a live Simulator (the PT-S
 design, ruled 2026-10-18). Its recipes are written here before any of its drawing code (James's
 Q-6): its plugin's `theme.ts` colours and its law's material knobs — the cover glass, the three
 metals, the screen's light and its dims, the night's glow, the marks — hold no number this section
-lacks (`plugins/simulator/test/design.test.ts` reads them). The law's other numbers — how the phone
+lacks (`plugins/simulator/test/design.test.ts` reads them). The law's other numbers — how the simulator
 lies, lifts and casts on the desk (its rest on its camera, its lift and hover, the eye's frame, its
 shadow and contact, its buttons' proud), what its stream is asked for and how long its morph takes —
 are its object's grammar, each cited in the law to where it comes from (PHONE.md §1, §4, §6, §7 and
@@ -1051,7 +1054,7 @@ What each material means under the guardrails:
   gold home-button phones and the 7's red, whose fronts were white.
 - **The three metals** (aluminium, steel, titanium) are the band, and **their meaning is the
   device's likeness: which iPhone the object stands for** — the model's own band (the `model` prop,
-  which an unbound phone wears too), read with its size and its sensor housing (the PT-S design §1:
+  which an unbound simulator wears too), read with its size and its sensor housing (the PT-S design §1:
   "42 models read from Xcode's own data").
   Under the first guardrail that is their meaning — they inform: they say which device — and they
   carry no other. *Ruled 2026-10-29 (James, the PT-S gap note §6, choice 6).* The finishes below
@@ -11067,13 +11070,13 @@ grants file, read by these four ways, and it has one more way not to be read: a 
 VibeField remembers handing out is set aside as the second way says, nothing in it is granted, and it is said in
 fieldd's log. A person reads nothing new.*
 
-**The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the phone's
+**The simulator's honest faces** (track PT, PT-S1; the PT-S design §3, ruled 2026-10-18) — what the simulator's
 screen says of its device, in the voice's words, quoted exactly by the plugin (`plugins/simulator`'s
 `face.ts`; its design test reads this table). `iPhone 17 Pro` stands for the device's name: the host's
-word for it, else the bound device type's name (a face is drawn only for a phone bound to a device;
-the model's name is the unbound phone's, in hand). A face with words shows them light over the dark
+word for it, else the bound device type's name (a face is drawn only for a simulator bound to a device;
+the model's name is the unbound simulator's, in hand). A face with words shows them light over the dark
 panel, or over the device's last still dimmed to 0.16; one with a mark shows its still at 0.7. The act is a capsule
-under the words. With a direct device connection, a held phone accepts taps, drags, scrolling and hardware keys.
+under the words. With a direct device connection, a held simulator accepts taps, drags, scrolling and hardware keys.
 **Home** sends the device to its Home Screen. An explicit window capture shows **View only**.
 
 | State | The face says | Its act |
@@ -11088,12 +11091,13 @@ under the words. With a direct device connection, a held phone accepts taps, dra
 | at rest | its last frame, with the rest mark | — |
 | stopped | "The Simulator stopped", over its still | "Try again" |
 
-**The phone's selection menu** offers **Simulator settings…** and **Finish**. Double-clicking a new phone opens setup.
-Choose an installed iOS version and a compatible iPhone model to create a separate local device for each selected phone.
-The device starts when visible. Copies get their own devices. Each pane keeps its apps and data for each model and iOS
-version, including when you switch away and return. VibeField shuts down devices it booted on quit or ten minutes
-after their last pane releases them. Reopening a pane during that time keeps its device warm.
+**The simulator's selection menu** offers **Simulator settings…** and **Finish**. Double-clicking a new simulator opens
+setup. Choose an installed iOS version and a compatible iPhone model to create a separate local device for each selected
+simulator. The device starts when visible. Copies get their own devices. Each pane keeps its apps and data for each
+model and iOS version, including when you switch away and return. VibeField shuts down devices it booted on quit or ten
+minutes after their last pane releases them. Reopening a pane during that time keeps its device warm.
 Finish cycles through the model's available finishes.
+*Renamed 2026-11-19 (item 572):* this paragraph was "The phone's selection menu".
 
 *Amended 2026-11-19 (track PT; James's own commits `111f5bc6f` "feat(panes): integrate GPU browser controls and
 interactive iOS simulators", 2026-11-18 23:34Z, and the four after it to `87e71631c`, 2026-11-19 00:42Z):* the

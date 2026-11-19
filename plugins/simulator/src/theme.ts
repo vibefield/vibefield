@@ -1,5 +1,5 @@
-// The PHONE's LOOK (DESIGN.md §5.1, "The phone's materials" — every colour here is a number of that section's, and
-// test/design.test.ts holds them to it; the prototype's lab/theme.ts `PHONE_FINISHES`, `PHONE_LOOK`, `phoneFinish`,
+// The PHONE's LOOK (DESIGN.md §5.1, "The iOS Simulator's materials" — every colour here is a number of that section's,
+// and test/design.test.ts holds them to it; the prototype's lab/theme.ts `PHONE_FINISHES`, `PHONE_LOOK`, `phoneFinish`,
 // `phoneLook`, moved). Its colours are its own, like the clock's dials and the pane's glass — as TOKENS, each naming its
 // DESIGN.md source; a host may dress the phone by naming `simulators` in its palette (`SimulatorPalette`). One is read from
 // the host's palette: the colour a shadow casts on the mat (`KindPalette.cast`, ICE I46 — the desk's, never a copy).

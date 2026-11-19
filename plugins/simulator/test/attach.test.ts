@@ -19,10 +19,10 @@ import { configurationPatch, iosLabel, simulatorChoice } from "../src/setup";
 import { fakeHost, TYPE } from "./fakes";
 
 const DESIGN = readFileSync(resolve(import.meta.dirname, "../../../DESIGN.md"), "utf8");
-/** §9's paragraph of the phone's menu: from its head to the blank line that ends it. */
+/** §9's paragraph of the simulator's menu: from its head to the blank line that ends it. */
 const MENU_WORDS = (() => {
-  const at = DESIGN.indexOf("**The phone's selection menu**");
-  if (at < 0) throw new Error("DESIGN.md says nothing of the phone's menu");
+  const at = DESIGN.indexOf("**The simulator's selection menu**");
+  if (at < 0) throw new Error("DESIGN.md says nothing of the simulator's menu");
   const end = DESIGN.indexOf("\n\n", at);
   return end < 0 ? DESIGN.slice(at) : DESIGN.slice(at, end);
 })();

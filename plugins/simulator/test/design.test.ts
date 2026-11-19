@@ -1,6 +1,7 @@
-// DESIGN.md FIRST (James's Q-6; the PT-S1 brief): the phone's plugin holds no colour or material number DESIGN.md §5.1 lacks,
-// and says no face's words §9 does not. This unit reads DESIGN.md itself — the phone's materials section and the simulator's
-// faces table — and holds theme.ts (every finish, every ink, the sky the glass mirrors, the words' ink), the law's material
+// DESIGN.md FIRST (James's Q-6; the PT-S1 brief): the simulator's plugin holds no colour or material number DESIGN.md
+// §5.1 lacks, and says no face's words §9 does not. This unit reads DESIGN.md itself — the iOS Simulator's materials
+// section and the simulator's faces table — and holds theme.ts (every finish, every ink, the sky the glass mirrors, the
+// words' ink), the law's material
 // knobs (the cover glass, the three metals, the screen's light and its dims, the night's glow, the marks), the one scale and
 // face.ts's lines and acts to it, value for value. A number changed in the code alone, or in the book alone, is red here.
 // It holds the metals' MEANING too (James's choice 6, ruled 2026-10-29: the device's likeness), and one faces row per state.
@@ -30,7 +31,7 @@ function section(heading: string): string {
   return end < 0 ? rest : rest.slice(0, end);
 }
 
-const MATERIALS = section("#### The phone's materials");
+const MATERIALS = section("#### The iOS Simulator's materials");
 const VOICE = section("**The simulator's honest faces**");
 /** A row of a table in `text` whose first cell starts with `first`. */
 const row = (text: string, first: string): string => {
@@ -39,7 +40,7 @@ const row = (text: string, first: string): string => {
   return line;
 };
 
-describe("DESIGN.md §5.1 holds every number the phone's look and law carry", () => {
+describe("DESIGN.md §5.1 holds every number the simulator's look and law carry", () => {
   it("names the desk's one scale the phone draws at", () => {
     expect(MATERIALS).toContain(MM.toFixed(4));
   });
