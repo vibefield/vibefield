@@ -1752,8 +1752,12 @@ export const NAMESPACES = {
 } as const;
 
 /** Env prefixes registered with Ghosttea's strip list (G1′) — daemon secrets never enter agent PTYs (EL7).
- * Note: "FIELDD_" does NOT match the "FIELD_" prefix (5th char) and needs its own entry. */
-export const ENV_PREFIXES = ["FIELD_", "FIELDD_"] as const;
+ * Note: "FIELDD_" does NOT match the "FIELD_" prefix (5th char) and needs its own entry.
+ * Item 576 (2026-11-19): `VIBEFIELD_` joins them, so what VibeField's own tools hand each other (the dev runner's
+ * paths and build id among them) never reaches a terminal or any other child of fieldd or the floor, and a name
+ * added later is stripped by default. A release or packaging variable is set on the command line or in the
+ * shell's own profile, never inherited from the shell that started VibeField. */
+export const ENV_PREFIXES = ["FIELD_", "FIELDD_", "VIBEFIELD_"] as const;
 
 /** LOG-44 — physical diagnostic streams. The value is the ONLY category /
  * basename pair callers may resolve beneath the platform log root. Dynamic
