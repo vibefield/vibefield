@@ -37,6 +37,7 @@ import {
   DESKTOP_APP_ID,
   DESKTOP_TRAY_GUID,
   ENV_KEEP_NAMES,
+  ENV_PREFIXES,
   HOST_SINGLETON_EXTERNALS,
   HOST_SINGLETON_MODULE_SPECIFIERS,
   INDEX_MESH,
@@ -72,6 +73,15 @@ import { TerminalRenewAttachParams } from "../src/terminal-pipeline";
 describe("item 589 — the names fieldd hands back after VibeField's prefixes strip them", () => {
   it("is the smoke's run mark alone", () => {
     expect([...ENV_KEEP_NAMES]).toEqual(["VF_SMOKE_RUN"]);
+  });
+
+  it("strips VF_ with VibeField's other prefixes, so every kept name is one they strip", () => {
+    expect([...ENV_PREFIXES]).toEqual(["FIELD_", "FIELDD_", "VIBEFIELD_", "VF_"]);
+    for (const name of ENV_KEEP_NAMES)
+      expect(
+        ENV_PREFIXES.some((prefix) => name.startsWith(prefix)),
+        name,
+      ).toBe(true);
   });
 });
 

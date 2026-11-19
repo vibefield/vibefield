@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { ENV_PREFIXES, WORKSPACE_SERVICE } from "@vibefield/contracts";
+import { ENV_KEEP_NAMES, ENV_PREFIXES, WORKSPACE_SERVICE } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FilesHostLaunch } from "./launch";
 import {
@@ -152,12 +152,18 @@ interface Generation {
 
 const STDERR_TAIL_LINES = 4;
 
-/** The worker's environment: fieldd's, less the daemon's own prefixes. */
+/** Item 589 (2026-11-19) — the names under ENV_PREFIXES a worker keeps, by exact name: a smoke's
+ * run mark, so the census still finds a worker a smoke leaves behind. */
+const KEPT_NAMES: ReadonlySet<string> = new Set(ENV_KEEP_NAMES);
+
+/** The worker's environment: fieldd's, less the daemon's own prefixes, save the names kept by
+ * exact name (`KEPT_NAMES`). The files worker's and the transcripts worker's. */
 export function workerEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined) continue;
-    if (ENV_PREFIXES.some((prefix) => key.toUpperCase().startsWith(prefix))) continue;
+    const stripped = ENV_PREFIXES.some((prefix) => key.toUpperCase().startsWith(prefix));
+    if (stripped && !KEPT_NAMES.has(key)) continue;
     out[key] = value;
   }
   return out;

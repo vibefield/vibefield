@@ -6,6 +6,7 @@ import {
   AGENT_CATALOG,
   AGENT_DISTRIBUTION_FORMAT,
   AgentDistributionRecord,
+  ENV_KEEP_NAMES,
   ENV_PREFIXES,
   LAYOUT,
 } from "@vibefield/contracts";
@@ -582,12 +583,18 @@ export function readTypedAgentForwards(forwards: string): TypedAgentForward[] {
 
 /** The variables of a run's environment an agent must never be handed: the
  * kit's own (the shim strips them before exec) and VibeField's private ones
- * (EL7: a shell of ours is born without them). */
+ * (EL7: a shell of ours is born without them), save a name fieldd hands a
+ * plain shell back by EXACT name (ENV_KEEP_NAMES). Item 589 (2026-11-19): that
+ * is a smoke's run mark alone, minted for one smoke run, no secret, and absent
+ * from a person's own run; an agent typed into the shell carries it, as it did
+ * before `VF_` was a prefix. An agent fieldd births is never handed it. */
 export function leakedVariables(call: Pick<TypedAgentCall, "envKeys">): string[] {
+  const kept: ReadonlySet<string> = new Set(ENV_KEEP_NAMES);
   return call.envKeys.filter(
     (name) =>
-      name.startsWith(KIT_VARIABLE_PREFIX) ||
-      ENV_PREFIXES.some((prefix) => name.startsWith(prefix)),
+      !kept.has(name) &&
+      (name.startsWith(KIT_VARIABLE_PREFIX) ||
+        ENV_PREFIXES.some((prefix) => name.startsWith(prefix))),
   );
 }
 

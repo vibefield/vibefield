@@ -1756,8 +1756,10 @@ export const NAMESPACES = {
  * Item 576 (2026-11-19): `VIBEFIELD_` joins them, so what VibeField's own tools hand each other (the dev runner's
  * paths and build id among them) never reaches a terminal or any other child of fieldd or the floor, and a name
  * added later is stripped by default. A release or packaging variable is set on the command line or in the
- * shell's own profile, never inherited from the shell that started VibeField. */
-export const ENV_PREFIXES = ["FIELD_", "FIELDD_", "VIBEFIELD_"] as const;
+ * shell's own profile, never inherited from the shell that started VibeField.
+ * Item 589 (2026-11-19): `VF_` joins them, the prefix of every harness and lab variable (a smoke's run mark, a
+ * probe's folder, a lab's switches). fieldd hands back the smoke's mark by name (ENV_KEEP_NAMES). */
+export const ENV_PREFIXES = ["FIELD_", "FIELDD_", "VIBEFIELD_", "VF_"] as const;
 
 /** Item 589 (2026-11-19) — the names fieldd hands back, by exact name, to a child of its own once VibeField's
  * prefixes (ENV_PREFIXES) have stripped them. One: a smoke's run mark (`VF_SMOKE_RUN`), minted for one smoke run

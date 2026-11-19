@@ -6,7 +6,7 @@ pub const APP_ID: &str = "vibefield";
 
 /// Env prefixes joining Ghosttea's strip list (G1′/EL7) — daemon secrets
 /// never enter agent PTYs.
-pub const ENV_PREFIXES: &[&str] = &["FIELD_", "FIELDD_", "VIBEFIELD_"];
+pub const ENV_PREFIXES: &[&str] = &["FIELD_", "FIELDD_", "VIBEFIELD_", "VF_"];
 
 /// Item 345 — the socket alias's parent, a HARNESS seam both planes read: tests, smokes and lab
 /// runs give each run a short folder of its own; nothing in the product sets it. See registries.ts.

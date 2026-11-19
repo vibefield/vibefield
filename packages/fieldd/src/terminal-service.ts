@@ -18,6 +18,7 @@ import {
   type AgentSessionPlacement,
   CELL_SUPERVISION,
   type CellEndpointSet,
+  ENV_KEEP_NAMES,
   ENV_PREFIXES,
   type ForwardedFor,
   NATIVE_SUPERVISION,
@@ -437,6 +438,24 @@ function fenceOverrides(answer: Record<string, string>): {
     else kept[name] = value;
   }
   return { kept, dropped };
+}
+
+/** Item 589 (2026-11-19) — THE HAND-BACK. `VF_` is in ENV_PREFIXES, so the floor strips a smoke's
+ * run mark from what a shell inherits, and the fence drops any override of it. Each name in
+ * ENV_KEEP_NAMES that fieldd's OWN environment holds is added after the fence, its value fieldd's,
+ * so the smoke census still finds a shell a smoke leaves behind. None held, the overrides stand as
+ * they were: outside a smoke a shell is born byte for byte as before. An agent's PTY never takes
+ * this road: it is born `clean`, from agentEnvironment's allow-list. */
+function handBack(
+  overrides: Record<string, string> | undefined,
+  environment: Readonly<Record<string, string | undefined>>,
+): Record<string, string> | undefined {
+  let out = overrides;
+  for (const name of ENV_KEEP_NAMES) {
+    const value = environment[name];
+    if (value !== undefined) out = { ...out, [name]: value };
+  }
+  return out;
 }
 
 /** Free-shell spawn geometry until an attached view claims resize authority
@@ -1633,7 +1652,11 @@ export class TerminalService {
     const scrollbackBytes = classScrollbackBytes(params.workloadClass);
     const integration =
       basename(executable) === INTEGRATED_SHELL ? this.integrationFor(executable) : undefined;
-    const overrides = this.overridesFor(binding, integration);
+    // item 589 (2026-11-19): the names fieldd hands back go AFTER the fence (`handBack`)
+    const overrides = handBack(
+      this.overridesFor(binding, integration),
+      this.opts.environment ?? process.env,
+    );
     const born = await this.birth(cell, client, executable, {
       ...(params.creationId === undefined ? {} : { creationId: params.creationId }),
       executable,
