@@ -4578,9 +4578,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   recoverable.
 
   **The comment pad and the browser pane (2026-11-09; the same lineup):** the comment pad hangs on no hook and lies on
-  no user's first board; the selection bar's Comment is its door. The browser pane ships in no packaged app (it left
-  `BUNDLED_PLUGINS`), so what this file says of it holds for a dev run until it returns, and Settings › General's
-  Clear browsing data stands only where a pane is.
+  no user's first board; the selection bar's Comment is its door. The browser pane ships Built in again, with the
+  iOS Simulator, so what this file says of it holds in a packaged app. Settings › General's Clear browsing data
+  stands only where a pane is.
+  *Amended 2026-11-19 (James; DECISIONS "FL", as amended):* this said the browser pane ships in no packaged app
+  (it left `BUNDLED_PLUGINS`), so what this file says of it held for a dev run until it returned.
 - **The pegboard — Objects, behind the line** (Chrome on the Mat §3.4–§3.5; MC-D7 ⊕ Objects, B,
   ruled through One Frame's lock; MC-D3 ruled 2026-10-01: segmented; One Frame §7; ICE I21; R14,
   R19, R21; DK-13): **the door is the line's create on Canvas** (§8, the line): Objects, B, calling
@@ -6286,9 +6288,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     run wears on its own pane, for any agent, not only a spark. During an act it says
     **‹name› is driving**, and a small mark shows where the act lands. The caption is item 42's
     (above), reworded for the desk's pick-up: **pick it up to take it back**. There is no veil: the
-    person is watching the page. The browser pane has shipped in no packaged app since 2026-11-09 (§8
-    "Tools in hand", its note on the comment pad and the browser pane), so these words hold for a dev
-    run until it returns.
+    person is watching the page.
+    *Amended 2026-11-19 (James; DECISIONS "FL", as amended):* this said the browser pane had shipped in no
+    packaged app since 2026-11-09, so these words held for a dev run until it returned. It ships Built in at 0.9.
   - **A run a Stop has not stopped** (track ST, ST-D4 (a); ruled by James on the board: the place
     at `ds-d4-place`, Accept, 2026-10-31 06:16:32Z, and the look at `ds-d4-look`, "Accept all
     three", 06:29:00Z, as VF-PM proposed them at 06:16Z and in the convention read of 06:26Z).
