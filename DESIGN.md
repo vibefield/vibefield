@@ -8862,45 +8862,82 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     address. **One thing is accepted:** the grant the phone reads a session with also opens, on that desktop,
     a picture of another session to a holder who already knows that picture's digest. That is rosetta's stated
     design, and on this road every holder is one of the same person's own devices.
-- **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
-  keeps one system medium detent through loading, selection, refusal and spawning. Folder
-  comes first, chosen in its own large sheet above the launch sheet. No task field: the
-  terminal takes the task. A single agent or desktop is a quiet fact, multiple choices a
-  dropdown. A desktop choice shows its platform mark and name in the chrome's neutral ink.
-  The picker lists recent places, then home and volumes; folder rows carry child counts
-  when known and the desktop's absolute path. Files and links stay muted behind Show files;
-  links are never traversed. Every row has a discoverable Copy path action. Breadcrumbs and
-  search stay within the chosen export. Offline rows keep their last-known paths and say
-  “studio is asleep · read 11:42”; starting/restarting and partial search coverage are
-  stated explicitly. Forms use the existing chrome palette, system prose and monospaced
-  paths; the sheet radius remains 40 pt, as the phone's other sheets.
-  **PJ-7 (2026-10-14; Q5, Q6, Q7, PJ-D12 (a)) — how it starts, in three more rows.** Under
-  Folder, Desktop and Agent the same Form at the same medium detent takes **Profile · Model ·
-  Effort**, menu rows (the system's `.menu` picker) that never come or go: a choice with one
-  answer, or none, is a quiet fact in its own row instead — `Default — the only profile on
-  studio`, `Haiku has no effort setting`, `Each agent's own · Sign in to see models` — never an
-  empty menu and never a row that vanishes. **Profile** offers the desktop's Agent Profiles that
-  hold a sign-in for the agent, and its agents' own folders, which the phone names **Default**
-  (the wire's "This Mac" is a desktop's word for itself). **Model** offers "Each agent's own"
-  first, then the agent's own picker as that desktop last read it under that profile; the
-  footer says how old the read is (`models read 2h ago`), and a failed read is said in words
-  (`Sign in to see models`). **What a row waits on is said, at once** (fix7, 2026-10-14 — the first
-  open from the field stood empty for a minute): the sheet is presented BY its model, never by a
-  flag beside it; the folder roots (the files worker's) are read beside the agents, never before
-  them; a row being read says so — `Reading agents…`, `Reading profiles…`, `Each agent's own ·
-  reading models…` — and a refused read is said in every row it empties (`Agents could not be
-  read`, `Not read — no agent to run`, `Each agent's own · not read`) with fieldd's words in the
-  footer; "No agent available" only when the desktop answered with none. **Effort** offers "Its own" first, then the chosen model's own
-  effort values; switching model brings back the effort the project last ran that model at.
-  **The folder row comes filled**: the place the project's last launch entered (its recipe's
-  place), else the newest place on the sheet's desktop that can take a launch, named by its
-  folder's name and branch; with neither, the folder sheet opens by itself. **From a project**
-  the folder sheet lists that project's places first — under each desktop's mark and name, a
-  place that cannot take a launch dimmed with its reason — then Recent places and Browse. A
-  place is launched by its ref; only Browse sends a path, until PJ-8. **New agent** on a
-  project screen stands in the stepper's slot: the 48 pt glass capsule 10 above the bar, the
-  `start` glyph and "New agent", then the usual place's desktop mark and name (`asleep` when
-  it cannot be asked).
+- **The phone's launch sheet asks two things: where, and who** (item 586, 2026-11-19; the launch sheet's redesign,
+  its lean: the bloom's buds for the agents, Terminal beside Start, Start drawn as the agent's ticket). The bloom has
+  chosen the desktop and the Agent Profile, so the sheet says them once and asks the rest. One sheet, presented by its
+  model (fix7), radius 40, on the phone's glass: the menu takes a detent as tall as what it holds (never the medium
+  one), 20 pt in from the sides, 24 above the title and 22 under the buttons; Browse raises the same sheet to its large
+  detent.
+  **The header** is the bloom's words, `New agent on studio` in SF 28/800 at −0.04em, the verb at 40%; under them one
+  mono line, 11/700 at +0.1em in tertiary ink: the profile's glyph (the phone's one table, `ProfileGlyphSymbols`,
+  filled for the default) and `AS WORK` — `AS DEFAULT` for the agents' own folders (Q5), `READING PROFILES…` while
+  they are read. A 34 pt circle in the well's fill (`close`) is Cancel. Neither is offered again here: another desktop
+  or another profile is another bloom. From a project's New agent, or a hold that does not bloom, the header names
+  what the sheet resolved: the usual place's desktop; the recipe's profile, else one that can run the agent it will
+  choose (the desktop's default first), else the desktop's default.
+  **WHERE** (mono 10/800 at +0.1em, tertiary) is the recent folders as pills, two to a row, 40 pt and radius 20: the
+  `folder` glyph at 16 and the folder's name in 15 medium, cut in the middle. They are the places that can take a
+  launch, newest first, at most four: from the field the bloom's desktop's alone; from a project its places on every
+  desktop that answers, the sheet's desktop's first, where a place on another desktop wears that desktop's OS mark in
+  the glyph's place and choosing it moves the sheet there (Q7; the header follows, and the profile and the agent stay
+  when that desktop has them). The chosen pill inverts to the ink (`keyOnFill` under `keyOnInk`); the rest lie in the
+  well's fill. A folder chosen in Browse leads the pills while the sheet stays on its desktop. With none, one dashed
+  pill says `No recent folders on studio yet`. Under them, **Browse studio**: a pill outlined in the well's hairline,
+  the desktop's OS mark, its words and a chevron. Under that, one mono line, 12 in secondary ink, says where the
+  chosen folder lives — `~/Projects/vibe-field · main · 2h`: its path with the desktop's home as `~`, its branch, its
+  last use. A place's path rides an answer to the person's own devices (P1 (a)); a launch still names the place by its
+  ref, and History's rows still show no path (PJ-L9).
+  **WHO** is the agents this desktop offers a phone, in the catalog's order, as the bloom's buds: 52 pt discs in
+  `bloomBud` ringed 1.25 pt at 22% ink, the agent's own mark at 22 (its letter where the phone draws none, §13), its
+  name under it in mono 9.5/700 at 78%. The chosen bud inverts to the ink and lifts to 1.08 (`lift`); one the sheet's
+  profile holds no sign-in for stays in its place, its disc dashed and at 45%, and cannot be chosen; its name over
+  `NO SIGN-IN` says why, so it stays a word that must be read, t3 (`inkTertiary`, item 242). Past five the row scrolls
+  sideways; it never wraps. The agent comes chosen: the one the sheet had when its
+  desktop changed under it, else the recipe's, else the one this phone last started (kept while the app runs), each
+  only if the profile runs it; else the first the profile runs. What the row waits on is said in its place, as fix7
+  said it in rows: `Reading agents…`, `Agents could not be read` (fieldd's words over the buttons),
+  `studio offers no agents to launch`, `studio is asleep`.
+  **Start is the agent's ticket**, the 50 pt primary pill: the agent's mark at 20 in a 38 pt disc of the inverse ink
+  at its left; the agent's name in mono 9.5/800 over the folder (`folder` at 14, the name in 16 bold, cut in the
+  middle); the `start` glyph at its right as the verb. The name is a word that must be read, t3, as the inversion
+  draws it (`inkTertiary` in the other theme, as a card's ink takes its ground's scheme); off, it is t4 with the rest
+  of the pill's words (§7). A screen reader hears the sentence it draws in parts,
+  `Start Claude Code in vibe-field`. Starting, the glyph turns to a spinner and the small line reads
+  `STARTING CLAUDE CODE…`, the pill keeping its look with its hits off (item 241). It is Off (§7) with no folder
+  (`Choose a folder` in the folder's place), with no agent the profile runs (`NO SIGN-IN AS WORK`), or with the
+  desktop asleep. Success or warning at the birth; success puts the sheet away. A refusal is said over the buttons in
+  secondary ink, in fieldd's own words, and a lost reply as `The desktop did not confirm the launch. Check the field
+  before trying again.`, never retried. **Terminal** stands beside Start, `prompt` and the word in the well's fill and
+  hairline: a shell in the chosen folder under the header's profile. It waits on the desktop's door (item 587: today
+  a phone's shell under a profile is refused, and `terminal.create` cannot name a place), and until that lands Start
+  has the row to itself.
+  **No Model, no Effort**: the spawn sends no model selection, and each agent runs its own. A project's recipe still
+  chooses the place, the agent and the profile.
+  **Browse is the same sheet, risen**, never a sheet over it. A 40 pt back circle (the chevron turned) and, inside a
+  root, a search circle top it; under them the folder you are in, SF 30/800 at −0.04em, then the way back as mono
+  crumbs (12; the current one bold in the ink, the rest tertiary, every one a tap): the desktop — its places, Home and
+  every volume, where there is nothing to Use and the pill says `Open a place to choose a folder` — then `~` or the
+  volume, then the folders, folded to `…` past four steps and 42 characters. It opens beside the chosen folder (in its
+  parent, the folder's row marked `CHOSEN`), else at the home's top; with no folder chosen at all, the sheet opens on
+  Browse by itself (PJ-D12 (a)). Its rows are folders only: `folder` at 21, the name in 16 medium, a recent place's
+  age (`2H`) or `CHOSEN` in mono 10/800, a chevron. A row opens its folder and chooses nothing; a long press copies
+  its path. The search circle opens a field under the crumbs that searches everything under the folder you are in
+  (`workspace.search`), each hit naming its parent; `Searched part of vibe-field` when the desktop searched part of
+  it. `Load more (40 of 120)` ends a long folder. **Use “packages”** (the primary pill, `check`) chooses the folder
+  you are in and brings the sheet back down to the menu, the folder leading WHERE; back walks up a folder, and from a
+  root's top returns to the menu with nothing changed. Its honest states keep FS-2's words in a line under the crumbs:
+  `Reading folders…` with a spinner, `Files are starting on studio`, `No folders here`, and asleep, the last rows read
+  staying, dimmed, under `studio is asleep · read 11:42` and Try again. Reduced motion: Browse is there without
+  travel, and a chosen bud does not lift.
+  *Amended 2026-11-19 (item 586):* this paragraph was FS-2's launch sheet (2026-10-05) with PJ-7's three rows
+  (2026-10-14): a Form at the medium detent — Folder, Desktop, Agent, then Profile · Model · Effort as menu rows that
+  never came or went, a choice with one answer said in its row — over a folder sheet of its own (Recent places, then
+  home and volumes; each row's absolute path and child count; Copy path on every row; Show files). The bloom already
+  says the desktop and the profile, and the redesign asks only where and who. Kept from it: the sheet presented by its
+  model; a part that says what it waits on; the folder filled with the recipe's place, else the newest on the
+  desktop; a place launched by its ref, and only Browse sending a path, until PJ-8.
+  **New agent** on a project screen stands in the stepper's slot: the 48 pt glass capsule 10 above the bar, the
+  `start` glyph and "New agent", then the usual place's desktop mark and name (`asleep` when it cannot be asked).
 - **The phone's session card attaches in words, and never waits forever** (fix8, 2026-10-15 —
   PJ-7's second phone run: ATTACH minted one ticket and the card read "connecting over the
   mesh…" for good, after the run had ended too). Between the tap and the first frame an attach
