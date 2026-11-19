@@ -4665,6 +4665,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   object under the pointer first. **The comment command** (DK-D24: the C key's wrap of the
   selection, which leaves the keymap) becomes a row here when DK-8's comment kind exists. The bare
   mat's own menu (Paste here, New note here) is not built (a Marks on the Mat item).
+  *Added 2026-11-19 (item 578; James, 2026-11-19):* **Download…** follows **Open** in the near group, only
+  when exactly one print is selected and this desk holds its picture. It opens the system's save panel at the folder
+  it last saved to in this run, else Downloads, named "Picture" and the day it is saved, and saves the picture as the
+  desk holds it, never re-encoded. The status line says **"Saved to ‹folder›"**, or **"Couldn't save this
+  picture. Try again, or choose another place."**, with the reason in the log; a cancelled panel says nothing. It has
+  no key and no place in the tools in hand until §13 has a glyph for it.
 - **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
   readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
   `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element
