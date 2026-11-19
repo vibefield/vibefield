@@ -36,6 +36,7 @@ import {
   AGENT_FIELD,
   DESKTOP_APP_ID,
   DESKTOP_TRAY_GUID,
+  ENV_KEEP_NAMES,
   HOST_SINGLETON_EXTERNALS,
   HOST_SINGLETON_MODULE_SPECIFIERS,
   INDEX_MESH,
@@ -67,6 +68,12 @@ import {
   TerminalTerminateParams,
 } from "../src/terminal";
 import { TerminalRenewAttachParams } from "../src/terminal-pipeline";
+
+describe("item 589 — the names fieldd hands back after VibeField's prefixes strip them", () => {
+  it("is the smoke's run mark alone", () => {
+    expect([...ENV_KEEP_NAMES]).toEqual(["VF_SMOKE_RUN"]);
+  });
+});
 
 describe("PRODUCT_API_LIMITS — the door's inbound cap is a registry number (DS wave 3 landing)", () => {
   it("names the 4 MiB inbound cap the door enforces, beside the outbound pair in MESH_CONTROL_LIMITS", () => {

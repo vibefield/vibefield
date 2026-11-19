@@ -1759,6 +1759,16 @@ export const NAMESPACES = {
  * shell's own profile, never inherited from the shell that started VibeField. */
 export const ENV_PREFIXES = ["FIELD_", "FIELDD_", "VIBEFIELD_"] as const;
 
+/** Item 589 (2026-11-19) — the names fieldd hands back, by exact name, to a child of its own once VibeField's
+ * prefixes (ENV_PREFIXES) have stripped them. One: a smoke's run mark (`VF_SMOKE_RUN`), minted for one smoke run
+ * (the run's profile name, set by the smoke launchers; apps/desktop/packaging/smoke-daemons.mjs) and absent from a
+ * person's own run, so the census still finds every process of the run. Never in an agent's PTY or a helper fieldd
+ * births (agentEnvironment's allow-list, AGENT_ENV_PASSTHROUGH); an agent a person types into a plain shell carries
+ * what that shell carries, the mark among them, as on main. A second name here is one more thing handed past the
+ * strip: read why this one is here first. TS-only: the floor strips by prefix alone, and its own children keep the
+ * mark they inherit. */
+export const ENV_KEEP_NAMES = ["VF_SMOKE_RUN"] as const;
+
 /** LOG-44 — physical diagnostic streams. The value is the ONLY category /
  * basename pair callers may resolve beneath the platform log root. Dynamic
  * component, window, session, and plugin identities belong in record fields,
