@@ -61043,3 +61043,1253 @@ notes and ROADMAP's row, 2026-11-18, is the day the pin's edits were written (th
 - Item 556's own words for the OpenCode refusal follow as their own commits.
 
 **Not done, and not claimed:** no push of its own.
+
+## EL8 — ICE 0.18.0: the pegboard's set and its hidden types (I54) (M437)
+
+(2026-11-19; one commit, 19 paths +48 −25. Cut by MK on main `599f4edadcca` as `f6c440de35ec` (tree `c538d6aff26b`) on
+branch `mk/el8-ice018-on-599f4edadcca`. On main it is `f94bf02a1` "EL8: ICE 0.18.0 — the pegboard's set and its hidden
+types
+(I54; MK-7)". Every other id here is a run's or ICE's.)
+
+**What landed.**
+- `@vibecook/ice` 0.17.0 → 0.18.0, one EL8 event. 0.18.0 was published on 2026-11-18 from `2223993a5032`; the tag
+  `v0.18.0` peels to ICE main's merge `14124028da5d`, whose second parent is `2223993a5032`, the two with one tree.
+  - siblings.lock.json's `ice` entry: `sha` `5714ca30` → `2223993a5032` (the revision the tarball was packed and
+    published from, as 0.17.0's EL8 pinned), `release.npm` 0.18.0. `node scripts/siblings.mjs render --prod --check`
+    agrees.
+  - pnpm-workspace.yaml: the overrides row (rendered from the lock) with its dated note; `minimumReleaseAgeExclude`
+    `@vibecook/ice@0.18.0`, the 0.17.0 row kept for the one install that rewrote the lock, then cut; a frozen install
+    proves the lock without it.
+  - preflight's `PIN_EXPECTATIONS`: the ICE row, still end-anchored, and its note.
+  - pnpm-lock.yaml is pnpm's: the `@vibecook/ice` entries alone move (+10 −10), the resolution the published
+    `sha512-PVVTTxuY…IeG==`; strata and loro do not move.
+  - fieldd's ICE1 probe fixtures, rewritten by their own `generate.mjs` (its golden-0.11.0 frame proof passed; peer ids
+    are random by design): 13 files under `fixtures/`, the manifest's `"ice"` 0.18.0. `fixtures-compacted/` untouched.
+- What 0.18.0 carries (petition I54): a host can lay a set of object types across the pegboard's categories
+  (`handle.tray.only`) and hide a type from the board while its objects on the desk draw as before
+  (`handle.tray.hide`). The public types widen: `DeskTrayDoor.only`/`.hide` and `TrayAnchor.only` become required.
+- The one consumer they reach: field-app's test/pegboard.test.tsx, whose fake tray door and hand-built anchor now name
+  the new members (+15), as the desk's own door writes them at 0.18.0.
+- docs/ROADMAP.md §7: the ICE pins row and its upstream bullet.
+- What a person sees: nothing, by default. One edge moves: a specimen lifted off the pegboard while its category is
+  switched under it now flies back to the board; 0.17.0 sent that copy onto the desk.
+
+**What was proved.** Every row ran on the test Mac on 2026-11-19, in a clean clone detached at main `599f4edadcca`, the
+edits made by the cut's tool (`el8-ice018-edits.py`, `62135e6ec726`) with `--day 2026-11-19`.
+- A (el8m-a2, 11:47:40Z → 11:49:23Z; run.log `835da69715747cc7`): GREEN. The read-back of 0.18.0 and its integrity;
+  preflight 0 on the untouched base (OK, with the base's own one warning); the lock and the render, the ice row; the
+  typed phase; the one install, the ice key and its integrity; drop-old-age and a frozen install, the lock unmoved;
+  the ICE1 generator, 13 fixtures, the compacted set unmoved; field-app's typecheck; pegboard and plugins-popup
+  147/147; fieldd's ICE1 probes 18/18; check:deps one copy each of ICE, strata and loro. Its 19 paths are its patch
+  (`1af4eb57d1ce413f`, 491 lines, `git diff --binary`), each at the sum its record names.
+- V (el8m-v1, 11:53:12Z → 12:03:25Z; run.log `e926c1587805d9ec`), on A's tree held to that patch before, after the
+  staging, after the install and at the end: `pnpm verify` whole, exit 0 (verify.clean.log `5cb289f543f9cd51`). fieldd
+  4650 passed and 15 skipped; field-app 5444; electron-shell 3186 passed and 3 skipped; contracts 2206; simulator 133
+  passed and 1 skipped; browser-pane 169; cargo 694.
+- The cut, on the development Mac, 12:06:00Z → 12:06:34Z (cut-run.log `c34b386fbe5f3911`): A's own patch laid on main by
+  `git apply` in a standing lane, detached; each of the 19 paths held to A's sum as laid and again as committed; through
+  the pre-commit hook (`siblings.mjs render --prod --check --staged`); then one create-only ref. Before it, a lay in a
+  scratch folder: the patch applies to the base's 19 files and leaves each at A's sum. The fetched file copies were
+  not used: the fetch masks line by line, so the binary fixtures arrive unequal; the patch is exact.
+- The red on the way: el8m-a1 (11:44:52Z) did not start, the test Mac's disk at 38582 MiB under the stage's 40000.
+- The landing's verify is V above, on the landed tree: `f94bf02a1`'s diff from `599f4edadcca` is A's patch, read by git
+  at
+  the landing. No later run is claimed here.
+
+**Not covered.**
+- `pnpm still` and the desk smokes (`pnpm gate:landing`) not run (owed). That the stills stay byte for byte is
+  reasoning (no shader source moved between the two tags), not a run.
+- ICE's suite holds the hidden-type put-back; a test row for the category case is prepared upstream and not yet merged.
+
+**Not done, and not claimed:** no push of its own.
+
+## 564 — The two official plugins' dialogs read the kit's tokens, and a wall holds every plugin's styles to them (M438)
+
+(2026-11-19; three commits: `c34d44094` (design, "564 (design): DESIGN.md §5 writes down the dialog's shadow, which
+Settings already wears"), `9c2ba1715` (red, "564 (red): the plugins' own styles answer to the kit's tokens, and two
+dialogs
+do not yet") and `f6550715b` (green, "564 (green): the browser pane's and the simulator's dialogs read the kit's tokens,
+bare"). The browser pane and the simulator ship as official plugins (James, 2026-11-19). Item 564 is section D of the
+reading of their on-screen words and tokens at `87e71631c083`: the CSS of their dialogs and of the browser pane's
+address editor read names that are not tokens and hand-picked fallbacks, and no gate read a plugin's CSS. The words
+(that reading's sections A and B) and the kit's glyphs and primitives in the dialogs are later items.)
+
+**What a person sees.** By day and by night (the values are the tokens', composed over the dialog's ground; no run
+drew them):
+
+| What | By day | By night |
+|---|---|---|
+| The device form's error line | #b53b32 → #d70015 | #b53b32 → #ff453a |
+| The setup dialog's close circle and done marker | about #efefef (a 13% grey over white) → #f2f2f7 | about #2a2a2c → #2c2c2e |
+| The shadows of the device form and the sound note | black 20% at 0 16px 56px with 6.7% at 0 2px 8px (the note: 13% at 0 3px 20px) → 8% at 0 8px 30px | the same old values → 40% at 0 8px 30px |
+| The setup dialog's shadow | black 20% at 0 18px 60px → 18% at 0 42px 100px with 10% at 0 12px 36px | → 48% at 0 48px 120px with 30% at 0 14px 40px |
+| Behind the setup dialog (modal) | black 13% → 10% | black 13% → 40% |
+
+Nothing else: every other colour, the fonts and the layout are as they were.
+
+**What changed.**
+- `DESIGN.md` §5: its table of shadow recipes gains a "Dialog" row, after the Search popup's: `--vf-shadow-dialog`,
+  which tokens.css carried and Settings wore (`packages/field-app/src/panels/settings.css`) with no §5 text. Written
+  first, so the setup dialog, a modal over the dim, takes it by name. Text only.
+- `packages/field-app/test/ui-system-boundaries.test.ts` gains one row, walking every source file under
+  `plugins/*/src` as `glyphs.test.tsx` walks them: a `--vf-` name is one tokens.css declares; a token is read bare,
+  never `var(--vf-x, fallback)` (a plugin's DOM mounts in the app's document under the kit's root, and a fallback
+  could only be one theme's value); and no line holds a colour literal of UA-7's spelling, except six files whose lines
+  are COUNTED exactly: the three kinds' `theme.ts` (the browser pane 16, the simulator 101, the comment pad 14), a
+  look's ink printed as `rgb(…)` (the browser pane's `kind.ts` 1, the simulator's `face.ts` 1) and that ink in each
+  committed still's key (`face-words.gen.ts` 6).
+- `plugins/browser-pane/src/device-menu.ts`, `address-editor.ts` and `plugins/simulator/src/setup-view.ts`:
+  - 41 fallbacks dropped (17, 7 and 17). Three spelled their token's own value (`white` for `--vf-state-on-solid`,
+    twice, and `#fff` for `--vf-chrome-solid`, its day value); the other 38 were hand-picked values. The green
+    commit's message says "none its token's": that holds for the 38 only;
+  - `--vf-text-danger` (never a token) → `--vf-ink-danger` (§2.5); `--vf-fill-subtle` (never a token, twice) →
+    `--vf-fill` (§2.2);
+  - the device form and the sound note take `--vf-shadow-island` (§5: a solid menu wears the island shadow); the
+    setup dialog takes `--vf-shadow-dialog` and, behind it, `--vf-backdrop-dim`;
+  - the device form's own height, `--vf-browser-menu-height`, is `--browser-pane-menu-height`, out of the kit's
+    namespace.
+
+**Proved.**
+- The cut: `hl/564-on-87e71631c` at `c15e5eea8b00`, three commits on James's main `87e71631c083`, made by `cut-564.sh`
+  (sum `cf4ba414…`) in a lane clone: biome on the four code paths, then each commit through the repository's hook (its
+  line in each of `cut/commit-*.log`), then one create-only fetch into the repository (one ref added, none moved). The
+  cut ran 08:11:04Z to 08:11:06Z, 2026-11-19. Each commit's diff from its parent is its prepared diff by sum.
+- On the development Mac, in that lane clone under env -i on one frozen offline install (the lane's harness; its log
+  reads "downloaded 0" and "Lockfile passes supply-chain policies (668 entries in 11.4s)"), each run on the tree
+  then committed:
+  - `eff056e85a7d` on the cut (9c2ba1715's patch), 08:06:12Z: ui-system-boundaries.test.ts, the new row failed with 84
+    findings in the three files (45 fallbacks, 6 names tokens.css lacks, 33 lines with a colour literal), the other
+    62 passed. On the same tree, 08:06:29Z, the two tests that read DESIGN.md nearest
+    §5: field-app's night-tokens.test.ts 4 of 4; the simulator's design.test.ts (§5.1) 8 of 8. Nothing in tests,
+    scripts or tooling reads §5's table of recipes (git grep).
+  - `c15e5eea8b00` on the cut (f6550715b's patch), 08:06:42Z to 08:08:46Z: biome on the four code files, clean;
+    ui-system-boundaries.test.ts 63 of 63; tsc of the browser pane, the simulator and field-app, exit 0 each; the
+    simulator's tests 134 of 134, the browser pane's 169 of 169; eight field-app test files (the seven that load the
+    plugins, and night-tokens.test.ts), 60 of 60; `check:walls`' three scripts (the import wall, test temp roots
+    and floor shutdown), each its self-test then its run, exit 0.
+- Preflight did not run on the cut's trees. On an earlier green tree (before the dialog row), it exited 1 on the
+  lane's setup alone: its FAIL lines name a missing `../rosetta-pin`, and cargo-typify and rustc 1.99.1 "not
+  installed" under the harness. None is 564's.
+- The logs are in the lane's `logs/` (`test-red-2`, `test-design-readers`, `biome-green-2`, `test-green-2`,
+  `tsc-green2-*`, `test-green2-*`, `walls-green-3`, `preflight-green`).
+- The train's verify:
+cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z → 13:23:39Z:
+**GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same commit, kit-cand1,
+13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not run, and owed.**
+- No run drew a dialog. The table above is read from the tokens. The dim behind the setup dialog shows only if
+  `::backdrop` takes its dialog's tokens in the app's Chromium (Electron 43), which no run here has shown: a look at
+  the setup dialog in the app, by day and by night, is owed now that this is on main. If it failed, the dialog would
+  show no dim at all.
+- The dialogs' text ✕ and ✓ and their hand-made controls: the kit's glyphs and primitives through item 570's door,
+  in a later item. The device form's ⇄ becomes the word Rotate, with the form's own mends, and the two plugins'
+  words come in a later item.
+- No DECISIONS row: the wall's rule is its row's own text, and the dialog's shadow is DESIGN.md's.
+
+## Item 566 — every bundled plugin is judged by the authoring kit's own check, built, in every verify (M439)
+
+(2026-11-19; three commits, in order: 10a68b772 "566 (red): a bundled plugin with no build passes the kit's check, and
+nothing in verify runs it", 77628e7f5 "566 (green): a bundled plugin passes only a check that judged it, built", and the
+rider 457080a49 "566: the kit's header said plain Node imports neither /ui nor /canvas; /canvas loads (corrected)". The
+two were cut on main `87e71631c083` as `c88dd5eb499c` (the red) and `746ab81c1c2e` (the green, branch
+`pg/i566-on-87e71631`), 08:11:17Z to 08:11:21Z; their `git patch-id --stable` at the cut: red `0c7862dd94dd`,
+green `ca3d0cf53a54`, to which 10a68b772 and 77628e7f5 are held at the fill. The rider is a diff made on
+`activation-check.ts` as it stands at `746ab81c1c2e`, one hunk, comment lines alone (numstat 7/2). Files:
+`scripts/check-bundled-plugins.mjs` new (+219, then +37 −4), `package.json` +2 −1,
+`tooling/plugin-cli/src/activation-check.ts` +7 −2.)
+
+**What a person sees.** Nothing in the app. `pnpm verify` gains one stage, `check:bundled-plugins`, right after
+`census:assert` (which builds every plugin package): every plugin the app ships is judged, built, by the authoring
+kit's own front door, `vibefield-plugin check <dir> --json`.
+
+**The gap it closes.**
+- The plugin architecture spec (§24.2) says every built-in passes the conformance suite. Until 10a68b772, nothing ran
+  the suite on one.
+- The kit passes a plugin with no build: its activation and artifact rows are NOTES (`activation-unbuilt`,
+  `artifact-absent`), and a note never fails it. On the test Mac the kit passed all three plugins unbuilt (exit 0,
+  both notes, no refusal; step 1 of the row below).
+
+**What landed.**
+- 10a68b772: `scripts/check-bundled-plugins.mjs` runs the kit on every row of `BUNDLED_PLUGINS`
+  (`apps/desktop/packaging/bundled-list.mjs`, the list the stager and `smoke:bundled` read), from the repository root.
+  Its judge there is the exit code alone. `pnpm check:bundled-plugins` runs its `--self-test`, then the check. The
+  self-test is red by design: it wants 10 of 10 and gets 4. The control holds: the kit itself passes the unbuilt
+  fixture, noting `activation-unbuilt`.
+- 77628e7f5: the judge holds a bundled plugin to more than the kit does. The kit exits 0 and every line it writes is a
+  verdict; each of the five rows (manifest, wall, schema, activation, artifact) says something; and no note stands
+  but the kit's two ceilings, the same for every plugin (`object-wgsl-not-compiled`, `artifact-singleton-build-time`).
+  Any other note fails the row: no build, a module plain Node cannot load, a dev alias id, an unknown manifest key, or
+  a code the kit adds later. The kit is unchanged; its notes stay notes for every other author. The self-test's two
+  kit rows run the kit on a fixture plugin under the OS temp, removed after: unbuilt, it fails; built, it passes.
+- 457080a49: the kit's header said plain Node can import neither the SDK's `/ui` nor `/canvas`. The row below falsified
+  it for `/canvas` (it re-exports ICE's root, which `/desk` loads anyway): the browser pane's built bundle, which
+  imports it, loaded in plain Node through the kit's bin. The header now names `/ui` alone, with a dated correction
+  at its source. `/ui` was not measured.
+- `BUNDLED_PLUGINS` held the comment pad at 77628e7f5; a row added to that one list is judged the day it lands.
+
+**Proved before the cut, on the development Mac, nothing of record.**
+- biome 2.5.4, run natively under the repository's own config, on the drafted files (07:58:56Z, 08:00:04Z): format,
+  lint and check clean ("No fixes applied").
+- The self-test at each cut commit, under `env -i` with the run's own HOME and TMPDIR, 08:14:52Z to 08:15:51Z: at
+  `c88dd5eb499c` on the cut (10a68b772's patch), exit 1, "4 of 10", the six wanted findings missing (an unbuilt run, a
+  module plain Node cannot load, a row that said nothing, a refusal named, a line that is no verdict, an unbuilt
+  bundled plugin); at `746ab81c1c2e` on the cut (77628e7f5's patch), exit 0, "10 of 10". The one entry left under its
+  TMPDIR was Node's compile cache, no fixture.
+
+**Proved on the test Mac.** The row at `746ab81c1c2e` on the cut (77628e7f5's patch), reported 12:20:48Z to
+12:20:54Z, with a frozen offline install of the cut's lock, and no plugin build before step 1:
+- 1. the kit on the three plugins unbuilt (comment pad, browser pane, simulator): exit 0 each, `activation-unbuilt`
+  and `artifact-absent`, no refusal. The gap, on the real plugins.
+- 2. the build, census:assert's own: exit 0, `dist/renderer.js` for all three.
+- 4. the kit on each built: exit 0, all five rows, no refusal, no note but the two ceilings. Each activation: ok (the
+  kind's declaration), ok (its WGSL, read as text), the note `object-wgsl-not-compiled`, then "deactivation released
+  every timer this activation created".
+- The browser pane's `/canvas` import loaded in plain Node, with no `activation-not-loadable-here` (457080a49's
+  finding).
+- The artifact row on each bundle: "renderer artifact ./dist/renderer.js imports only mappable specifiers". Two of
+  the simulator's four matched lines in step 3's grep are text (`terminal.config.import`), not imports; the kit's scan
+  was not misled.
+- 5. `pnpm check:bundled-plugins`: exit 0, the self-test 10 of 10, "PASS plugins/comment-pad", 1 of 1.
+
+cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z → 13:23:39Z:
+**GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same commit, kit-cand1,
+13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not run, and owed.**
+- 457080a49 ran nowhere on its own: a comment only, carried into the assembly's V above.
+- GitHub's verify on the next push.
+- `pnpm gate:landing`, `smoke:bundled` (row 29 of `docs/desk-gates.md`) among it.
+- The kit's two ceilings stand for every plugin: an object's WGSL is read, never compiled, and the artifact's
+  singleton is held at build time. `/ui`'s load in plain Node was not measured.
+
+## Item 568, part a — a simulator a pane's shell booted, left running by a crash, is shut down by the next start (M440)
+
+(2026-11-19; two commits, in order:
+- `5205e7805` (red, "568a (red): a simulator a pane's shell booted, left running by a crash, is shut down by the next
+  start");
+- `5cdc0d6fa` (green, "568a (green): the shell keeps a ledger of the simulators it booted, in its own userData").
+Cut on base `87e71631c083` as `92f26f2c5d01` (the red) and `09a5e09057f9` (the green, branch `um/i568a-on-87e71631c`),
+08:26:25Z, in a lane worktree. The red's branch `um/i568a-red-on-87e71631c` was made after the cut, create-only
+(12:03:41Z), for the test Mac's red row. Six files in electron-shell: the red is
+`test/owned-simulator-devices.test.ts` alone (+99 −1); the green is five source files (+114 −12). The cut's patch-ids
+(`git patch-id --stable`): red `266a7478fedb4593`, green `764ab7afae859784`.)
+
+**What a person sees.** An iOS simulator a pane's shell booted, which a crash or a Force Quit left running, is shut
+down by the next start once its last pane lets it go, or at that start's quit. Before, it ran on after the panes were
+gone and after the quit. A simulator the shell did not boot runs on, as before.
+
+**The seams.**
+- `src/main/live-surfaces/owned-simulator-devices.ts`: `OwnedDeviceLedger`, and `fileOwnedDeviceLedger(path, warn)`,
+  one small file `{ v: 1, booted: [udid…] }`, written whole (a temporary, then a rename).
+  - A Booted device the ledger holds is the shell's own again: shut down when its panes let it go, and at quit.
+  - Any other running device stays alone, as before. The existing row "leaves an already running device alone"
+    stands unchanged.
+  - The record is made before the boot, so a shell that ends mid-boot still knows the device. A failed boot takes it
+    back out, and the shutdown removes it.
+  - A file that cannot be read starts the ledger empty, with one warning. A failed write warns, and this run's devices
+    still shut down as before.
+- `src/main/live-surfaces/ios-simulator-device-runtime.ts`: `SimulatorDeviceSessions` takes the ledger as
+  `ownedLedger`. Without one nothing changes.
+- `src/main/live-surfaces/authority-production.ts`: the support's `simulatorBootedFile`, which makes the file ledger
+  with the `desktop.live_surfaces.simulator_ledger` warning.
+- `src/main/index.ts`: `<userData>/simulator/booted.json`. It is main's own state, as its theme and updates files are,
+  not a LAYOUT path.
+- `src/main/live-surfaces/simctl.ts` (item 568's side finding 2): the header's `shutdown` line and the method's doc
+  said no act runs it, untrue since the pane-owned devices. Both are corrected at their source with the day, and the
+  method's doc moves off `waitUntilReady` onto `shutdown`.
+
+**The known limit, said in the green's message.** The ledger proves "this data root booted it", not "nobody else is
+using it now". The app boots a device and crashes. A dev shell with the same synced desk finds it Booted and uses it,
+rightly leaving it alone. The app restarts, finds it in its own ledger, and shuts it down under the dev shell's view
+when its panes let it go or at its quit. Two builds that share one userData share one ledger the same way. It is rare,
+and it costs a view, not data. The ledger is not the list a "Remove VibeField's phones" control would read (the
+device-name pattern is); it gives that control its one safety.
+
+**The rows.** `test/owned-simulator-devices.test.ts`, four new rows (`5205e7805`), beside the file's three:
+- "is its own again: shut down once its last pane lets it go, and gone from the record";
+- "is shut down at quit too";
+- "is never another VibeField's: a running device its record does not hold runs on" (the guard: today's behaviour);
+- "keeps what it is told across a start, writes whole files, and reads a broken one as empty".
+The red does not typecheck alone: its rows pass a fourth argument the constructor does not take yet, and import an
+export that does not exist yet. vitest strips types, so the rows run. The green adds both.
+
+**Proved at the cut, on the development Mac.** The cut (`cut-568a.sh` 6a972e5a, console `cut-568a.console`
+32a2cbd1) made both commits from the edit tool (`i568-edits.py` 5787199d), each file held to the sums of its trial on
+a fresh archive of the base. The commit hook's siblings render check passed. The native biome over the six files
+exited 0 ("No fixes applied"). No typecheck and no test ran there: those are the test Mac's.
+
+**Proved red, on the test Mac.** `i568a-red` at `92f26f2c5d01` on the cut (`5205e7805`'s patch), 12:22:24Z to END
+12:22:30Z, AS WANTED: in a tree found detached and clean and returned as found, refs and the Keychains folder unmoved.
+No typecheck ran at the red (it does not typecheck alone, above).
+- electron-shell's vitest on the four files exited 1: "Tests 3 failed | 74 passed (77)", "Test Files 1 failed | 3
+  passed (4)".
+- owned-simulator-devices.test.ts, 7 rows, 3 failed, each by the kind wanted:
+  - "is its own again …": `AssertionError: expected false to be true`;
+  - "is shut down at quit too": `AssertionError: expected [] to deeply equal [ [ 'test-guest-0' ] ]`;
+  - "keeps what it is told across a start …": `TypeError: (0 , fileOwnedDeviceLedger) is not a function`.
+- The guard row and the file's three old rows passed. authority-production 10 of 10, ios-simulator-device-runtime 21 of
+  21 and simctl 39 of 39 passed.
+
+**Proved green, on the test Mac.** `i568a-green-2` at `09a5e09057f9` on the cut (`5cdc0d6fa`'s patch), 12:30:24Z to END
+12:30:45Z, AS WANTED: in a tree found detached and clean and returned as found, refs and the Keychains folder unmoved.
+- electron-shell's typecheck exited 0 in 16 s with no error line, both its tsc runs (`tsc --noEmit && tsc --noEmit -p
+  tsconfig.renderer.json`).
+- vitest on the four files exited 0: "Tests 77 passed (77)", "Test Files 4 passed (4)". owned-simulator-devices passed
+  7 of 7, authority-production 10, ios-simulator-device-runtime 21 and simctl 39.
+- The first run, `i568a-green` (12:23:31Z), is RECORDED RED for the stage, not the code: the stage kept the
+  typecheck's exit in a variable that its own vitest helper overwrote with a clock. Its content read tsc 0, 77 of 77
+  rows, AS WANTED, with the tree clean after. It re-ran once as `i568a-green-2`, and that run's verdict is the
+  green's.
+
+**The joined verify.** This piece has no verify of its own: cand1-v, `pnpm verify` whole at this land's top `d182ae690`
+on the test Mac, 2026-11-19 13:13:37Z → 13:23:39Z: **GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The
+kit of every target at the same commit, kit-cand1, 13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed
+3,131, Skipped 3, Failed 0.
+
+**Not covered.**
+- No row runs a real `simctl`: the rows drive the device control through its fake, as the file's other rows do.
+- The limit above (one data root's ledger, not a census of who views a device) is said, not closed.
+- macOS only: the simulator is.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) are owed at the landing; nothing pushed.
+
+## 569 + 572 — the iOS Simulator's own power, `surface.simulator`, and its name (M441)
+
+(2026-11-19; six commits on `es/i569-on-87e71631c`, cut by ES on main `87e71631c083`: 569 (design) `b0eab94b5`, 569
+(red)
+`5149ae0ed`, 569 (green) `bb889cf5c`, 572 (design) `cebc130f3`, 572 (red) `28f717203`, 572 (green) `7e98721b5`. On the
+cut they are `3c0d7f10d`,
+`bb2edc133`, `9c668e3bc`, `4b9283ec1`, `a9416566b` and `f14a029eb`. 569 was ruled B by VF-PM at 07:48:11Z on MK's
+proposal (ITEM-569.md), with one kind (07:50:25Z) and the crop rule (i) (08:03:09Z), each in VF-PM's messages; ow-design
+gave the power's words. 572 is James's name for the object, typed in VF-PM's session: `call Phone "IOS Simulator"`, kept
+in the manifest's spelling "iOS Simulator"; ow-design drafted the DESIGN.md sweep and the listing's words. MK read both
+items, named their reader by VF-PM at 08:03:09Z.)
+
+**What was wrong.**
+- The simulator plugin held `surface.capture`, "See other apps' windows": any app's window and the window list. Its
+  default path never uses either. With the framebuffer on (production's default), a device-bound Simulator at its
+  default crop is the device's own display, read through Xcode's SimulatorKit: no window is listed and macOS asks
+  nothing.
+- fieldd's comment on the kind→scope matrix said "a phone bound by its device type and runtime is the Simulator's window
+  captured … the same Screen Recording gravity as the UDID-keyed kind". The framebuffer path falsified it for the
+  default crop.
+- The object was called "Phone" on its row, its pegboard label and DESIGN.md's PT-S parts; James named it "iOS
+  Simulator" on 2026-11-19.
+
+**What moved (569).**
+- contracts: a fourth live-surface door, `surface.simulator` (registries.ts, with a dated note), renderer-eligible
+  (plugins.ts), its words "Make and run iPhone simulators from Xcode, and use them on the desk" (plugin-words.ts,
+  ‹draft›, no Mac note), and `surface.simulator.devices` moved to it (methods.ts; the docs in live-surfaces.ts and
+  shell.ts). DESIGN.md §9 says the words first; the core powers are twenty-eight, with a dated note.
+- fieldd: `ios-simulator-device` costs `surface.simulator`. `creationScopes` asks `surface.capture` as well at a crop
+  other than `auto`, which main can only take from the Simulator app's window. `sck-window` and `ios-simulator` stay
+  `surface.capture`'s. The falsified comment is corrected at its source, dated 2026-11-19.
+- electron-shell: the window's token holds `surface.simulator`; smoke-phone.ts's SIM-STAGED checks it.
+- field-app: the live gate's simulator pair, the plugin door's `creationScopesFor` (the same rows as fieldd's, crop
+  included), the catalog's Simulators fixture, and a test-local record that keeps the page's Mac note row covered.
+- plugin-sdk: the door's doc. plugins/simulator: the manifest asks `surface.attach` + `surface.simulator`, and the
+  emitted vibefield.plugin.json follows. gen:docs adds the power to docs/plugin-authoring/manifest.md's table.
+- A Built in plugin's reviewed preset is its manifest's request (v1's source policy), so the manifest's move is the
+  preset's. An absent stored decision is a grant: a profile that held `surface.capture` for the simulator holds
+  `surface.simulator` at its next registration, with no ask.
+
+**What moved (572).**
+- DESIGN.md: a hand sweep of the PT-S parts alone (§5.1's portals row, its correction note and "The iOS Simulator's
+  materials"; §9's honest faces' lead and "The simulator's selection menu", re-wrapped at 120), with two dated rename
+  notes. Kept: the lines whose "phone" means a real iPhone model, "pane" in James's own lines, and the faces' words.
+- Two tests that find those sections by their words moved with them in the design commit (design.test.ts's §5.1
+  lookup, attach.test.ts's menu lookup); theme.ts's citation of §5.1 followed.
+- plugins/simulator: the object's title and pegboard label are "iOS Simulator"; the plugin's and the object's
+  descriptions take the words as set (‹draft›); vibefield.plugin.json follows.
+
+**§9's note on the simulator's touch and setup, named as 572 names the object** (`0cdfe443d`, "572 (design): §9's note
+on the simulator's touch and setup names the object as 572 does"; DESIGN.md alone, after 572's own commit).
+
+**What a person sees.** Nothing in the app: the change is DESIGN.md's text. What a reader of DESIGN.md sees: §9's dated
+note on the touch and setup that landed (track PT, added 2026-11-19 by `9807dad49`) no longer calls the desk's object
+"the phone" in its own words, right under 572's rename of that object in §9.
+
+**The text.** One hunk, on the note's own six lines (11102-11107 at `599f4edadcca`), rewrapped inside its paragraph:
+- Three uses in the note's own prose take 572's running form, lowercase "simulator":
+  - "a held phone takes taps…" → "a held simulator takes taps…";
+  - "**Attach** bound each phone to a Simulator of this Mac's own" → "…bound each simulator to a Simulator device of
+    this Mac's own". The object is lowercase, and Apple's app and its device keep the capital;
+  - "setup gives each phone a device of its own" → "…each simulator…".
+- Two old words stay, as quotes of what was said before:
+  - the tools' old line, "the phone takes no tap, key or button until PT-S4's touch lands", already in quotation marks;
+  - the menu paragraph's old heading, "The phone's two acts on the selection menu", moved from bold into quotation
+    marks, as 572 quotes its own old heading.
+- The last line is joined ("set to. The superseded text is in git…"), so the hunk is six lines out and six in.
+
+**Proved.**
+- `git apply -p1 --check` of the rider (`572-note-rider.diff` 5a309a1c) was clean on DESIGN.md at `599f4edadcca`.
+  Its context starts at the note's third line, so 572's "*Renamed…*" line, inserted before the note, never meets it.
+- 572's own form was read against `4b9283ec1` (lowercase "simulator" in running prose; "iOS Simulator" as the
+  object's name and §5.1's heading; capital "Simulator" for the app or its device). 572's author read the rider
+  against it and found no difference.
+- The assembly's step `diff r572note` is held to six lines out and six in on DESIGN.md by the fixer's trial.
+- No test reads this text, so nothing else ran for it.
+
+**Owed.** Nothing.
+
+**Untouched.**
+- `surface.capture`'s words and Mac note; `sck-window`, the UDID-keyed `ios-simulator` kind and `surface.sources` (the
+  window list) stay its own, and a plugin holding it still opens those through the plugin door.
+- The setup dialog's failure line (S22): its new words are ow-design's step two (I3, M-S3 in its 572 README), on James's
+  look card by MK's and ow-design's messages.
+- No contracts fixture, generated schema, contracts.rs, registries.rs or Swift mirror carries a `surface.*` scope id (0
+  hits for "surface." in them, with a control); none moved. Other scope ids are carried (the hello-ack fixtures, below).
+
+**The proof.**
+- Cut: 569 at 08:36:29Z → 08:36:34Z (`lanes/es/logs/cut-569.console`), 572 at 08:55:37Z → 08:55:39Z
+  (`cut-572-r2.console`), each once on VF-PM's word, each held to its parent, its paths and each file's sha-256 against
+  the prepared set, through the repo's pre-commit hook. A first run of 572's script stopped at its first hold, with no
+  write: its prepared-set path kept 569's round, `out-r6`, where 572's set is `out-r4` (`cut-572.console`). The fixed
+  script ran on VF-PM's new word.
+- On James's Mac, in ES's lane on main `87e71631c083` (one offline install 08:11:24Z → 08:12:15Z, 0 packages downloaded;
+  its supply-chain check read registry metadata, 668 entries), each row under the light lock, on the bytes the commits
+  carry:
+  - 569's red tree: vitest red by name: plugins/simulator 1 of 8, contracts 2 of 94, field-app 9 of 181 in 4 files
+    (`lanes/es/logs/i569-red-*.log`). tsc exit 0 in contracts, plugins/simulator, fieldd and field-app (said in the
+    session's console; no file kept).
+  - 569's green tree: vitest plugins/simulator 8 of 8, contracts 94 of 94, electron-shell smoke-phone 74 of 74,
+    plugin-cli docs-anchors 7 of 7, field-app 425 of 425 in 15 files (`i569-green-*.log`); biome given 26 files, 25
+    checked, 0 errors, 2 warnings on unchanged lines (`i569-biome-green.log`); gen:docs and gen:manifest wrote exactly
+    the committed files (console only). tsc exit 0 in contracts,
+    plugin-sdk, plugins/simulator, fieldd, electron-shell (both configs) and field-app (console only).
+  - 572: design.test.ts 8 of 8 on its DESIGN.md (`i572-design-sim.log`); the red tree 2 of 9 red on 'Phone' vs 'iOS
+    Simulator' (`i572-red-sim.log`); the green tree vitest 37 of 37 on manifest, design, kind and attach
+    (`i572-green-sim-r2.log`; an earlier green run had found attach.test.ts red at load, `i572-green-sim.log`, which
+    moved it into the design commit); gen:manifest wrote the committed file, biome 0 errors and tsc exit 0 (each
+    console only).
+- On the test Mac (qa-01), fieldd's surface-service.test.ts alone, by ROWS-569.md: at `bb2edc133` (569 (red)) AS
+  WANTED at 11:17:28Z, "Tests 1 failed | 35 passed (36)", the one row failing by the file's refusal() helper (qa-01's
+  message).
+- The train's V:
+cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z → 13:23:39Z:
+**GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same commit, kit-cand1,
+13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Found at the fact-check (2026-11-19), not mended here.**
+- 569 (green)'s message says "No generated schema, contracts.rs or registries.rs carries a scope id, and no Swift mirror
+  names one." The Swift half overstates: the kit's hello-ack fixtures carry scope ids (for example
+  `Tests/FieldHistoryTests/Fixtures/hello-ack.valid.json`, `"canvas.read"`). It holds for `surface.*` ids alone. A
+  landed message is not amended; this records it.
+- Said before the land and withdrawn here: docs/ROADMAP.md:1954 does not name the simulator's pair. It is the SNAP
+  track's row ("SNAP-2 under `surface.capture`").
+
+**Not covered.**
+- No smoke ran on a lane tree (smoke-phone.ts's SIM-STAGED change included); the landing gates are the train's.
+- No live Simulator was opened under the new scope, and no stored grant on a real profile was read.
+
+**Not done, and not claimed:**
+- ROWS-569's Row 2, fieldd's file at `9c668e3bc` (569 (green)), held by VF-PM behind the pin's push proof at 11:17Z,
+  unless the train's V carries it.
+- docs/DECISIONS.md:144's PT-S row ("the manifest carries `surface.attach` and `surface.capture`") is amended at its
+  source in this land's records, not here: MK's records-p1c-edit.py (260680dd) adds "item 569: `surface.simulator`, the
+  simulator's own power, stands in place of `surface.capture`".
+- If James's answer to Q7 sends 0.9 to the window path, `surface.simulator`'s words gain "macOS asks you once, for
+  Screen Recording" then.
+- The setup dialog's line (S22) is ow-design's step two. Nothing is pushed.
+
+## Item 565 — the iOS Simulator plugin runs on a Mac alone; fieldd refuses it on Windows and Linux (M442)
+
+(2026-11-19; two commits, in order:
+- `2412372c4` (red, "565 (red): the iOS Simulator plugin runs on a Mac alone — the rows first");
+- `e008c9fb3` (green, "565 (green): the iOS Simulator plugin runs on a Mac alone — its engines name darwin").)
+
+**What a person sees.** On a Mac, nothing changes: the plugin registers, compatible and on. On Windows or Linux, where
+fieldd finds the plugin (a developer's tree; no packaged app bundles it, below), its record is `incompatible` and off,
+and its last error is fieldd's sentence "not built for platform win32" (or linux). Where a person reads that, by a
+reading at main `87e71631c`, not a run: Settings → Diagnostics' Plugins section shows the state and the sentence,
+and the Plugins page's row says "iOS Simulator can't run on this VibeField" (its words are marked draft), with no
+Try again.
+
+**The seams.**
+- `plugins/simulator/src/manifest.ts` (`e008c9fb3`): `engines: { app: ">=0.0.0", contracts: "^0.1.0", platforms:
+  ["darwin"] }`, under its dated line, "item 565 (2026-11-19): CoreSimulator is macOS's alone, so fieldd refuses this
+  plugin elsewhere". `engines.platforms` is the schema's own optional field (contracts' `plugins.ts`: an array
+  of `darwin`, `linux` or `win32`, at least one entry).
+- `plugins/simulator/vibefield.plugin.json` (`e008c9fb3`): the plugin's own emission (its `gen:manifest` script,
+  `tsx scripts/emit-manifest.ts`, which calls plugin-build's emitter; canonical), the one key added.
+- Nothing in fieldd moves. Its registry (`plugin-registry.ts`) already holds a record compatible only when the
+  manifest names no platform or names `process.platform` (`platformOk`). It gives one refused for its platform
+  alone (its contracts range holding, as the simulator's `^0.1.0` does) the state `incompatible`, `enabled`
+  false, and `lastError` PLUGIN_INCOMPATIBLE, "not built for platform" and the platform's name.
+
+**The rows.**
+- `packages/fieldd/test/plugin-registry-platform.test.ts`, new (`2412372c4`), three rows, under "the iOS Simulator
+  plugin's own manifest, by platform (item 565)". Each copies the plugin's OWN committed manifest into an unkeyed
+  bundled root in a temporary folder, as a developer's tree is walked, builds a `PluginRegistryService` over it, and
+  sets `process.platform` around its one `refresh`, putting the real one back after:
+  - "registers on a Mac: compatible and on": `enabled`, compatible, no last error;
+  - "is refused on win32: …" and "… on linux: …": `incompatible`, not compatible, not enabled, and the last error
+    {PLUGIN_INCOMPATIBLE, "not built for platform win32"} (or linux).
+- `plugins/simulator/test/manifest.test.ts` (`2412372c4`), one row: "runs only on a Mac: its engines name darwin alone,
+  so fieldd refuses it on any other platform (item 565)". The file's byte row, already there, holds the committed
+  JSON to its canonical emission.
+
+**Proved.**
+- The cut (`recut-565.sh` c6db3910, its log `recut-565.log` 2ec8ba93) made `a6e7c6d6a` and `3739ad780` on
+  `f14a029eb` (569 and 572's tip), in the lane's 565 worktree, whose install is that tip's lock (no install).
+  - It re-made the first cut (`cut-565.sh` 6620b2ca: `e1a1559cd` and `d06cf37bf` on main `87e71631c`). The first
+    green changed the `engines:` line right under 572's new `description:` text, so git refused the pick.
+  - Each message is the first cut's, byte for byte.
+  - Each file's change is the first cut's: fieldd's file is the same blob, manifest.test.ts the same patch-id, and
+    manifest.ts and the JSON the same changed lines (their context is 572's description).
+- On the tip, and on each commit's tree before it was committed:
+  - `tsc --noEmit` of fieldd and of the plugin exited 0 with no "error TS" line;
+  - the native biome exited 0, with no warning, on the commit's TypeScript files;
+  - the plugin's manifest test: 9 rows pass at the tip (572's included); on the red tree, 10 rows, the new row alone
+    failing, by an AssertionError; on the green tree, 10 of 10.
+- On the green tree the emitter (`gen:manifest`'s script) ran and wrote the JSON as laid.
+- fieldd's file did not run at the cut: fieldd's vitest setup builds field-native with cargo first. It ran on the
+  test Mac, on the FIRST cut's commits, through its QA lane (the stage rows-one, `rows-one.remote.sh` dae17f9e at both
+  runs): the file alone at each commit, the Keychains folder unmoved before and after each run. Each clock is the END
+  line of the run's own run.log; the run folders are the lane's clean-run records, by the names below:
+  - `e1a1559cd` on the first cut (`2412372c4`'s patch): `i565-red` (END 11:04:40Z): "Tests 2 failed | 1 passed (3)". The
+    two failures are the win32 and linux rows, by one shared AssertionError block, "expected 'enabled' to be
+    'incompatible'", and no other kind of error in the failed tests section; the darwin row passed.
+  - `d06cf37bf` on the first cut (`e008c9fb3`'s change, its context the description before 572's): `i565-green` (END
+    11:14:00Z): "Tests 3 passed (3)", exit 0.
+- The train's V: cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z →
+  13:23:39Z: **GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same
+  commit, kit-cand1, 13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not covered.**
+- No packaged app bundles the plugin: `apps/desktop/packaging/bundled-list.mjs` names the comment pad alone, so a
+  packaged app on Windows shows nothing of it today. Adding the simulator to that list is its own change.
+- The words, by a reading at main `87e71631c`, not a run: neither the Plugins page's line nor fieldd's sentence says
+  "a Mac". The page's line reads the state alone, so it cannot tell a platform refusal from a contracts refusal.
+  fieldd's sentence says "win32" for every Windows, and "built for" where the cause is what the manifest declares.
+  Any change to either is outside this item.
+- fieldd's rows ran on the first cut's commits, not on `2412372c4` and `e008c9fb3` themselves.
+- `pnpm verify` whole did not run on these two commits alone; the train's V above is the joined one.
+
+## Item 573 — the plugins fixture shows the iOS Simulator as it ships; a made-up set plays the rest (M443)
+
+(2026-11-19; 80bb73187, the cut's "573 (fixture): the simulator is the real Built in plugin; a made-up pack takes the
+rest". One commit, eleven files under packages/field-app, +542 −418. It was cut twice on 572's green
+`f14a029eb227`: first as `eeb8b7c4f3c6`, then as `a7d7608f7177` with one test file re-printed as biome prints it
+(below). The second is the one landed.)
+
+**What a person sees.** In the design catalog's Plugins section:
+- The plugins that ship are drawn as they ship:
+  - the iOS Simulator: Built in, 0.1.0, its one object on the devices shelf, asking for `surface.attach` and
+    `surface.simulator`;
+  - Comment pad, with no setting.
+- A made-up set from the list, Brass & Glass (a Barometer, a Compass and a Spirit level), plays what no shipped
+  plugin can:
+  - the list's featured set;
+  - a set hung two ways;
+  - a power its kind of plugin can't have (a new plate, `switches-kind`);
+  - the settings plates.
+- The old made-up Simulators set (1.2.0; a Phone, a Tablet and a Watch) is gone.
+- Nothing changes in the product's own Plugins popup: only its fixture and catalog plates move.
+
+**The seams.**
+- `packages/field-app/src/design-system/plugins-fixtures.ts`:
+  - The base desktop holds the real iOS Simulator. Its object is every field the manifest has: 188.71 × 393.7,
+    binding `simulator`, tray on the devices shelf at 0.4 of its size, label "iOS Simulator".
+  - Brass & Glass stands on the listed, switches and settings desktops, never the base one. A registry plugin with
+    no list read is pilled Community, so on the base desktop it would draw a made-up Community row.
+  - `settings-here` opens the example Key-value store, whose one setting is made up and said so. Comment pad's
+    made-up setting is gone.
+- `PluginsPreview.tsx`:
+  - the `switches-kind` state and its page;
+  - the settings plates open Brass & Glass and read the list that names it;
+  - the shelf's plates stand on the listed desktop, so the featured tile still says Installed.
+- `sections/PluginsSection.tsx`: the switches specimen's title, and the new specimen for `switches-kind`.
+- The tests that read the fixture follow it: plugins-community, -install, -model, -popup, -runtime-failures,
+  -settings, -shelf and -updates.
+  - The model and popup tests read `surface.simulator`'s words through `pluginPowerWords`, never typed.
+  - Updates' Built in guard names the iOS Simulator in a list made up inside the test.
+  - The popup's switch count on the real plugin's page is 3: its own switch and one for each of its two powers.
+
+**Proved.**
+- ES's lane, by copy (check `door/i573-check.zsh`, run once, console `logs/i573-check-r2.console`):
+  - The eleven files were laid over 572's green `f14a029eb227` (es/i569-on-87e71631c) and run 08:59:44Z → 09:01:34Z:
+    field-app's tsc exited 0, and vitest on twelve plugin test files gave "Test Files 12 passed (12)" and "Tests 357
+    passed (357)". The lane was put back clean.
+  - These were the first cut's bytes. The landed commit differs from them in one format hunk, which tsc and vitest
+    do not read.
+  - The pack's first run (08:56:01Z → 08:57:40Z) was red at 7 of 357. Six settings rows still keyed the old set's
+    settings, and one popup row wanted 4 switches where the real plugin has 3. Both were mended in the tests, by
+    the rule that the tests follow the real plugin.
+- The first cut, `eeb8b7c4f3c6` (fa/i573-on-f14a029eb227, 09:06:12Z), was BIOME RED in the plugins assembly's first
+  scratch (`73a22dd9b993`) at `plugins-settings.test.tsx:250-257`: one array that the rename had made short enough
+  to print on one line.
+- The re-cut, `a7d7608f7177` (fa/i573b-on-f14a029eb227, 12:46:12Z), is the same commit with that file as biome
+  prints it.
+  - Before it, biome 2.5.4 (`check --error-on-warnings`, vcs off) ran on 573's eleven paths in two trees made from
+    git (`check-573b.sh`, 12:44:06Z): the mended tree exited 0 ("Checked 11 files"); the committed control exited 1,
+    "Found 1 error", that file's format alone.
+  - The re-cut's tree differs from the first cut's in that one file alone, and its message is the first cut's byte
+    for byte.
+
+cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z → 13:23:39Z:
+**GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same commit, kit-cand1,
+13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Found.**
+- A rename that SHORTENS a construct is biome's to judge as much as one that lengthens it. No biome ran on 573's
+  paths before its first cut; a check of over-long lines cannot see it.
+- After item 569, the iOS Simulator asks for `surface.attach` and `surface.simulator`, not `surface.capture`.
+
+**Not covered, and owed.**
+- The catalog's plates have not been looked at on screen since this change: the Plugins section, `switches-kind`
+  and the settings plates on Brass & Glass. Owed: one look in Studio's Design System section.
+- Brass & Glass's words are ow-design's, set as a draft until VF-PM rules on them.
+- The fixture's simulator object carries the manifest's type, title, size, binding and tray. It does not carry its
+  description, interaction, `provides` or props, which no plate reads.
+
+---
+
+## Item 581 — an agent never places a kind that shows something live; it is told to ask the user (M444)
+
+(2026-11-19; three commits, in order: 85defb042 "581 (red): an agent can place a kind that shows something live, and is
+not
+told why it may not", 2eb87202d "581: an agent never places a kind that shows something live; it is told to ask the
+user",
+c70f3c277 "581: the live face's gate reads contracts' one list of live-surface pairs". 85defb042 and 2eb87202d were cut
+on item 569's
+tip `f14a029eb227` (`es/i569-on-87e71631c`, 569 and 572 on main `87e71631c083`) as `509a2ff9a6f4` (the red, branch
+`ob/item581-red-on-i569-f14a029e`) and `0adf5a14ab02` (the green, branch `ob/item581-on-i569-f14a029e`), 2026-11-19
+11:32:34Z to 11:32:48Z. 85defb042 carries the red patch-equal (`git patch-id --stable` `7cf3e4db7b028476`) and 2eb87202d
+the green
+(`1258e78696d5f537`). c70f3c277 has no cut of its own: it was made inside the plugins' assembly from a prepared diff.
+Files:
+85defb042 `packages/contracts/src/registries.ts` +12, `packages/contracts/test/registry.test.ts` +19,
+`packages/fieldd/src/objects/kinds.ts` +2, `packages/fieldd/test/desk-kinds.test.ts` +68 −4,
+`packages/fieldd/test/desk-room.test.ts` +24; 2eb87202d `packages/fieldd/src/objects/kinds.ts` +19 −3,
+`packages/fieldd/src/tool-plane/rooms/desk/verbs.ts` +6 −1; c70f3c277 two field-app files, +12 −5.)
+
+**What a person sees.** Nothing yet. Neither official live plugin gives its kind an agent half today, so an agent
+could not place the browser pane or the iOS Simulator before this either; for those two only the refusal's words
+change. Once a live plugin's kind has an agent half, an agent that asks to place it is refused before anything opens,
+and told "input.kind: VibeField can't place <kind>: it shows a live page, device or app window, and only the user adds
+those to the desk. If you need one, ask the user. It can place: <the kinds it can>." Such a kind is also left out of
+the kinds `canvas_kinds` names to an agent. The person adds those kinds themselves, as before. The kinds an agent could
+place before (a note, a whiteboard, a mini mat, a plugin's ordinary kind with an agent half) are placed as before.
+
+**Why.** A live kind runs signed in as the person: a browser page with their cookies, a device bound to their
+Simulator. An agent that could place one could open the person's pages by itself. Until now `canvas_place` would
+place any plugin kind with an agent half, live or not. The official live plugins carry no agent half yet; this closes
+the door before one is given.
+
+**What landed.**
+- 85defb042:
+  - contracts' `LIVE_PAGE_SCOPES` (`registries.ts`), each pair of powers that shows something live, by what it shows:
+    `browser` (`surface.attach` + `surface.browser`), `ios-simulator` (`surface.attach` + `surface.simulator`, item
+    569) and `window-capture` (`surface.attach` + `surface.capture`, the plugin door's alone);
+  - the `livePages` field's type on fieldd's `DeskKind`, read by nothing yet;
+  - five rows, all "(item 581)":
+    - registry.test.ts: "names a live face's powers by its source: the attach and one power each, a plugin's to ask,
+      never the phone's";
+    - desk-kinds.test.ts: "keeps a kind whose plugin asks a live face's whole pair from an agent, whatever the person
+      granted"; "keeps the official live plugins' kinds from an agent, by what their own manifests request" (it reads
+      `plugins/browser-pane` and `plugins/simulator`'s own `vibefield.plugin.json`, gives each kind an agent half and
+      requests what its manifest requests); "lets an agent place a kind whose plugin asks only half a pair: nothing
+      live opens on it";
+    - desk-room.test.ts: "says a live page, device or app window is the user's to add, and to ask, before the window".
+- 2eb87202d:
+  - fieldd's `pluginDeskKinds` marks a kind `livePages` when its plugin REQUESTS a whole pair (`asksLiveFaces`, any pair
+    of the list), by the request and never the grants. The person's toggles move the grants, and a kind an agent
+    placed while one was off would wake live at the re-grant;
+  - such a kind is never `placeable` (`placeable: object.agent !== undefined && !livePages`);
+  - canvas_place's unplaceable-kind refusal says why for such a kind and tells the agent to ask the user. The words for
+    any other unplaceable kind are unchanged;
+  - such a kind is left out of `canvas_kinds`' list (the desk-room row holds that `canvas_kinds` names `desk.note`
+    alone).
+- c70f3c277, the window's gate:
+  - `packages/field-app/src/surfaces/live/live-gate.ts`: `BROWSER_PAGE_SCOPES` and `SIMULATOR_SCOPES` are
+    `LIVE_PAGE_SCOPES.browser` and `LIVE_PAGE_SCOPES["ios-simulator"]`, the list fieldd's `canvas_place` refuses a
+    kind by. The door and the gate cannot disagree. `LIVE_FACE_SCOPES` keeps its two face sources; the list's
+    `window-capture` pair is the plugin door's.
+  - `packages/field-app/test/live-gate.test.ts`: the scopes row holds `LIVE_FACE_SCOPES` equal to the list's two face
+    keys.
+  - It has no red to show: the gate's values are the same before and after. The row holds the gate to the list from
+    now on, which is the change.
+- A plugin that requests half a pair stays placeable: the window's gate grants a live face only on a whole pair (read
+  at `live-gate.ts`), and desk-kinds' row "lets an agent place a kind whose plugin asks only half a pair" holds it.
+
+**Proved before the cut, on the development Mac, nothing of record.** check-581b.sh in a scratch worktree, at the red
+tree `b2a9147d1c9a` and the green `f1c457a5abf2` (the cut's trees), 11:29:32Z to 11:31:22Z, 0 failing: tsc in contracts
+and fieldd; the pinned biome at warn level over the changed files and `biome check .`; the import walls, the test
+temp-roots wall, the floor-shutdown wall and check-retired-names; the plugin-authoring docs regenerated with no diff.
+A first run of the same check, on earlier trees (red `301df4d98b8b`, green `a454a00a6f0c`), ended 11:29:04Z with 4
+failing: biome at both levels on both trees, one format error in `registry.test.ts`. The file was formatted and the
+trees re-made before the run above.
+
+**Proved red, on the test Mac.** The series `i581-red-series`, one file per run at `509a2ff9a6f4` on the cut
+(85defb042's
+patch), 2026-11-19 12:10:30Z to 12:12:03Z, 3 of 3 AS WANTED. Each run was in a tree found detached and clean and
+returned as found, with no ref written (159 refs before and after each).
+- `i581-red-registry`, registry.test.ts: "Tests 66 passed (66)". The new row is green from its birth: it holds the
+  list's shape, and the list is in the red. So is desk-kinds' half-pair row (below): half a pair was never a bar.
+- `i581-red-kinds`, desk-kinds.test.ts: "Tests 2 failed | 7 passed (9)", both by `AssertionError` at
+  `toMatchObject({ placeable: false, livePages: true })`. Each received `"placeable": true` and no `livePages`:
+  - "keeps a kind whose plugin asks a live face's whole pair…", on its first pair: "surface.attach+surface.browser:
+    expected { kind: 'live.page', …(6) } to match object" (`:127`);
+  - "keeps the official live plugins' kinds…", on its first plugin: "vibefield.browser-pane: expected { Object (kind,
+    title, ...) } to match object" (`:152`).
+- `i581-red-room`, desk-room.test.ts: "Tests 1 failed | 28 passed (29)", by `AssertionError` at `:309`. It received
+  "input.kind: VibeField can't place example.live. It can place: desk.note."
+- No other error kind, missing module or timeout in any of the three.
+
+**Proved green, on the test Mac.** The series `i581-green-series`, one file per run at `0adf5a14ab02` on the cut
+(2eb87202d's patch), 2026-11-19 12:13:20Z to 12:18:49Z, 8 of 8 AS WANTED, each in a tree found and returned as found,
+with
+no ref written:
+- 581's three files: registry.test.ts 66 of 66, desk-kinds.test.ts 9 of 9, desk-room.test.ts 29 of 29;
+- four fieldd files whose rows place `desk.note` through canvas_place: desk-hardening 19 of 19, desk-presence 21 of
+  21, desk-grants 25 of 25, objects-this-boot 20 of 20. Their kinds come from the desk fixtures, which set `placeable`
+  directly, so 581's rule (in `pluginDeskKinds` alone) cannot move them. The arms stand for that;
+- tool-plane-service 20 of 20, which names canvas_place only in its tool lists and places nothing.
+
+**The gate's row.** The test Mac's row `i581gate`, AS WANTED at 13:01:42Z: field-app's typecheck exit 0, and vitest on
+test/live-gate.test.ts 6 of 6 passed, at `73a22dd9b993`, an earlier make of the assembly that carries c70f3c277's patch.
+The landing tree differs from it in three files, none of which the gate reads:
+`apps/desktop/packaging/package-manifest.json`, `packages/field-app/test/plugins-settings.test.tsx` and
+`plugins/simulator/README.md`.
+
+**The joined verify.** cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z
+→ 13:23:39Z: **GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same
+commit, kit-cand1, 13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not covered.**
+- A plugin update that adds a pair after agents placed its kinds: the kind stops being placeable at the update, but
+  objects already on the desk would open live once the person grants the pair. Which run placed an object is not kept
+  durably: fieldd's grant to a plain run ends with the run, and a spark's waits for the spark's next run (item 585,
+  parked: it must close before any third-party live plugin ships).
+- fieldd's own wiring: the daemon builds its kinds from the registry's records (`daemon.ts`,
+  `pluginDeskKinds(plugins.snapshot().plugins, …)`). Every 581 row builds its record by hand, so only tsc holds that
+  the registry's records carry the manifest's request as `requestedCapabilities`.
+- When R-2's room field lands after this, `placeable` becomes the conjunction of both rules (R-2's room, then this
+  one), and canvas_place answers a room's kind with the room's words first. That join is prepared as files, not landed.
+- No row runs the real window. The refusal comes before the window sees the call, and the desk-room row holds the
+  scripted window's `win.seen` empty.
+- macOS only.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## 570 — The SDK opens `/ui-dom`: the kit's glyphs and control classes for a plugin with no React (M445)
+
+(2026-11-19; four commits: `0b6f90c46` (red, "570 (red): the SDK has no DOM door, and its React door refuses a plugin
+with
+no jsx"), `49e6ceac4` (kit, "570 (kit): the glyphs' SVG leaf and the control classes reach no .tsx"), `57fb97dbc`
+(green, "570
+(green): the SDK opens /ui-dom, the kit's glyphs and control classes without React") and `6f60a8ad3` (mend, "570 (mend):
+the
+comments name the day, and the authoring doc says what /ui-dom carries", the readers' points as one commit on top).
+Item 564 measured it: a plugin whose tsconfig sets no `jsx` could not import `@vibefield/plugin-sdk/ui`, whose tsc
+failed with four TS6142, because `/ui` re-exports the kit's React primitives as .tsx source. The one thread that pulled
+a .tsx behind `glyphSvg` was a type: glyphs/svg.ts imported `GlyphTurn` from FieldGlyph.tsx.)
+
+**What a person sees.** Nothing: no plugin imports the door yet. The two official plugins' dialogs move to it in a
+later item.
+
+**What changed.**
+- The red: `packages/plugin-sdk/test/ui-dom-door.test.ts` type-checks two probes, held in memory, through the
+  TypeScript API under the create-plugin template's own compiler options (its tsconfig: no `jsx`; its ambient WebGPU
+  and Node types set aside). Through `/ui-dom` the probe must be clean; through `/ui` it must show TS6142, the row's
+  control.
+- The kit, no behaviour change:
+  - `GlyphTurn` is defined in glyphs/svg.ts; FieldGlyph.tsx imports and re-exports it. glyphs/data.ts is generated
+    (tooling/glyphs/build.mjs) and not touched.
+  - svg.ts re-exports `GLYPH_NAMES` and `GlyphName`.
+  - The four control class names move to the new src/primitive-classes.ts; primitives.tsx re-exports them.
+  - Two entries: `./glyphs/svg` and `./primitive-classes`.
+- The green:
+  - `packages/plugin-sdk/src/ui-dom.ts` and its `./ui-dom` entry: GLYPH_NAMES, GlyphName, GlyphSvgOptions, GlyphTurn,
+    glyphSvg and the four class names. It reaches no .tsx.
+  - contracts' `HOST_SINGLETON_MODULE_SPECIFIERS` gains the door, with registry.test.ts's list. It rides with the SDK's
+    files: the renderer build binds every listed specifier at once (a singleton chunk and an import-map entry each),
+    so the list cannot name a door no package exports yet.
+  - tooling/plugin-cli's `R10_ALLOWED_DOOR` gains it, held to the SDK's exports by wall-parity.test.ts. The
+    repository's own R10 (scripts/check-import-boundaries.mjs) is a deny list and admitted the door already.
+  - docs/plugin-authoring/context.md, re-made by gen:docs: the door in both of its lists.
+- The mend: four comments name the day; the authoring doc's generator says the door carries the class NAMES only,
+  their rules being the kit's primitives.css, which the app loads; plugin-build's bindable-specifiers test names the
+  door.
+
+**Proved.**
+- The cut: `hl/570-on-87e71631c` at `a6bc7eec861c`, three commits on James's main `87e71631c083`, made by `cut-570.sh`
+  (sum `9c4875c2…`), 08:36:12Z to 08:36:26Z; then `hl/570m-on-87e71631c` at `0b7fd1cd8ca0`, the mend on it, made by
+  `cut-570m.sh` (sum `e5124efa…`), 08:52:20Z to 08:52:33Z, 2026-11-19. Each in a lane clone: biome on the code paths,
+  each commit through the repository's hook (its line in each `commit*.log`), one create-only fetch into the
+  repository (one ref added, none moved). Each commit's diff from its parent is its prepared diff by sum.
+- On the development Mac, in that lane clone under env -i on one frozen offline install (the lane's harness; its log
+  reads "downloaded 0" and "Lockfile passes supply-chain policies (668 entries in 11.4s)"), each run on the tree
+  then committed:
+  - `982497d0bd28` on the cut (0b6f90c46's patch), 08:16:50Z to 08:17:36Z: the door test failed on its one diagnostic,
+    TS2307 (no `/ui-dom`), and its `/ui` control passed (TS6142 seen); biome on the file, clean; the SDK's tsc, exit 0.
+  - `829b286a64a9` on the cut (49e6ceac4's patch), 08:18:44Z to 08:20:38Z: biome on six files, clean; tsc of the kit,
+    the
+    SDK and field-app, exit 0 each; field-app's glyphs (with the glyph generator's --check), off-pill and
+    ui-system-boundaries tests, 97 of 97; the door test still red on the same TS2307.
+  - `a6bc7eec861c` on the cut (57fb97dbc's patch), 08:21:11Z to 08:24:18Z: biome on the five code files, clean; tsc of
+    the
+    SDK, contracts, the CLI, plugin-build and electron-shell, exit 0 each; the SDK's suite, 108 of 108 (the door
+    test 2 of 2); contracts' registry test, 65 of 65; the CLI's wall-parity, docs and docs-anchors, 33 of 33;
+    electron-shell's host-singletons and security-policy, 106 of 106; plugin-build's specifier rows, 3 (its 18 others
+    skipped by the filter); create-plugin's output test, 15 of 15; `check:walls`' three scripts (the import
+    wall, test temp roots and floor shutdown), each its self-test then its run, exit 0; gen:docs twice, exit 0 each.
+  - `0b7fd1cd8ca0` on the cut (6f60a8ad3's patch), 08:37:49Z to 08:39:39Z: biome on five code files, clean; tsc of the
+    kit,
+    the CLI and plugin-build, exit 0; the CLI's three test files, 33 of 33; plugin-build's specifier rows, 3; the
+    door test, 2 of 2; gen:docs twice, exit 0 each, the second's output byte-equal to the first's by `cmp` (not
+    logged).
+- The logs are in the lane's `logs/` (`i570-*` and `i570m-*`).
+- On the test Mac, run `i570-css` at `0b7fd1cd8ca0` on the cut (6f60a8ad3's patch, the tip), 12:09:21Z to 12:09:26Z,
+  "STAGE
+  ROWSONE (i570-css) IS AS WANTED (GREEN)":
+  - `pnpm --filter @vibefield/electron-shell run build:renderer`: exit 0, its last line "production UI boundary OK —
+    108 files, 13,103,340 bytes; Studio, Design System catalog, perf lab and System control absent".
+  - index.html links five stylesheets; `.vf-ui-button{` is counted 1 in `assets/primitives-DiidYJPM.css` and 1 in
+    `assets/main-jhz9_gxm.css`, 0 in the other three: the kit's control rules are in the document's first load.
+  - `assets/singleton-vibefield-plugin-sdk-ui-dom.js` is present (288 B): the listed specifier is bound.
+- The packaged app's census: `apps/desktop/packaging/package-manifest.json` did not list 570's four new renderer
+  chunks, so `pnpm census:assert` on the assembled tree was red with them as unexpected. The i570-css run above did
+  not run the census, and 570's commits do not move the manifest. The landing's last commit, the census tool's own
+  `--update` on the assembled tree, adds them (on the test Mac, `census:assert` with it in place: exit 0):
+  - `data-[hash].js` 12,708 B and `primitive-classes-[hash].js` 106 B are among the built index.html's modulepreload
+    links, so they load at start. The glyph data moved out of `FieldGlyph-[hash].js`, 13,194 B to 1,087 B on the
+    same build.
+  - `svg-[hash].js`, 858 B, is not named in index.html; only the SDK's two ui singletons import it.
+  - `singleton-vibefield-plugin-sdk-ui-dom.js`, 288 B, is named once in index.html, not as a preload, and no chunk
+    imports it: it loads when a plugin imports the door.
+- Where a plugin's DOM mounts is a cited read, not a run: ICE 0.17.0 lends each object's DOM half the desk's own
+  container (`container: host.container`); none of ICE's 17 built files, nor field-app's src, attaches a shadow root;
+  field-app mounts `<Desk>` in its own tree (`CanvasStage.tsx`). So the rules counted above apply there.
+- The train's verify:
+cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z → 13:23:39Z:
+**GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same commit, kit-cand1,
+13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not run, and owed.**
+- CLAUDE.md's Workspace taxonomy still says plugin-sdk's "`ui.ts` is the only design-kit re-export plugins may touch".
+  With `ui-dom.ts` that is no longer true; its dated correction is James's word.
+- No plugin wears the door yet, so no plugin's control was drawn with the kit's classes.
+- Not taken from the readers: a line on how an older host meets a plugin that names the door (`engines.app`); what
+  that field does was not read.
+- No DECISIONS row: the door is the SDK's curated surface, as `/ui` is, and contracts' list is where the host's
+  surface is widened.
+
+## FL (records) — the browser pane and the iOS Simulator ship in the first launch (M446)
+
+(2026-11-19; two commits, docs only. Cut by MK on main `a22f710b9a76`: p1a `4f9df83da5dd` (2 paths +14 −9) on branch
+`mk/p1a-on-a22f710b9`, p1b `9edf70289237` (1 path +8 −6) on `mk/p1b-on-a22f710b9`. On main they are `127c0712f`
+"FL (records): the first launch's lineup is amended — the browser pane and the iOS Simulator ship" and `4330fead0`
+"FL (records): DESIGN.md says the browser pane ships again, with the bundled list", carried onto the assembly by the
+fixer, with the bundling commit between them.)
+
+**What landed.**
+- p1a: DECISIONS row FL gains its amendment of 2026-11-19, quoting James's ruling and the name's casing ("iOS
+  Simulator"). The Browser pane leaves CUT and the Emulator (`plugins/simulator`) leaves STAY OUT: both ship Built in
+  at 0.9, in `BUNDLED_PLUGINS`. FL's own clause that RL6 had been corrected "in `thinking-release-management.md`" is
+  corrected at its source: that correction had never been written, and is now, dated, in the draft corpus's snapshot,
+  committed before this.
+- p1a, ROADMAP: RL6's fourth goal returns, widened by one (the browser pane and the iOS Simulator in a packaged
+  build), with a dated mark beside the 2026-11-09 correction it answers; EY-1's open line on whether the pane returns
+  gains its dated answer; the question whether the phone ships among `BUNDLED_PLUGINS` is struck in the file's own
+  form; the first launch's lineup is rewritten in place with a dated mark.
+- p1b: DESIGN.md's two "ships in no packaged app" sentences for the browser pane are corrected with the day, as true
+  once the bundling commit lands (it goes after it).
+- DECISIONS' PT-S row: "the manifest carries `surface.attach` and `surface.capture`" gains its dated amendment at the
+  source: item 569 put `surface.simulator`, the simulator's own power, in place of `surface.capture`.
+- ROADMAP: the lineup's owed list gains the iOS Simulator's one gap, as ruled: a person who launches with
+  `VF_SIMULATOR_FRAMEBUFFER=0` gets the window path, so Screen Recording is asked under the `surface.simulator` power,
+  whose words carry no Screen Recording note (item 567's other half, waiting James's choice of the launch picture
+  path).
+
+**What was proved.** Docs only: no test can be red first, and none was run for them. p1a's and p1b's edits were made
+by one tool (`p1-edits.py`, `50437a0385ff`), every edit anchored by its text and held to occur once; it ran green on
+main `a22f710b9a76`'s files (the cut, 11:27:37Z, each file held to the scratch try's sum, through the pre-commit hook)
+and on `9c9d0181b`'s files (a scratch try), the same hunks. The last two bullets are two anchored edits
+(`records-p1c.diff`, `6e4b04a580b5`), each laid by its file's records step after the assembly, never in it: the
+DECISIONS amendment in this landing's records commit, the ROADMAP row in the ROADMAP commit right after it. The
+assembly's own verify covers the tree p1a and p1b land in; the two later commits are docs only.
+
+**Not covered.** The browser pane's title waits James's card; it moves later in a manifest commit, not here.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 572, its leftover — the phone smoke calls the simulator plugin by its own name, iOS Simulator (M447)
+
+(2026-11-19; one commit, `be77b6c54` "572: the phone smoke calls the simulator plugin by its own name, iOS Simulator",
+one file, `packages/electron-shell/src/testing/smoke-phone.ts` +1 −1. The fixer made it inside the plugins' assembly
+from prod-builder's diff and message: `phone-label.diff` on 572's cut `f14a029eb227`, carried by its tool's one anchor.
+Held at the landing candidate `d182ae69089a`, whose commit this is:
+- its file is the prepared copy's blob, and its parent's file is the prepared base's;
+- its message is the prepared message (hold-packet-cand.out).)
+
+**What a person sees.** Nothing; it is a testing file. A phone row that cannot find its specimen now names it "iOS
+Simulator", the title the plugin's manifest gives it, where it said "Phone".
+
+**The seam.** `PHONE.label` is the smoke's own copy of the plugin's facts; the smoke never imports the plugin.
+- It has one reader at the landing candidate `d182ae69089a`: `smoke-phone.ts:2475`, which hands it to `layObject`
+  (`smoke-browser-pane.ts`).
+- `layObject` finds the chip and the specimen by type and category. It uses the label only in its refusal, "the board
+  hangs no ${kind.label} on its ${kind.category} chip" (`:759`).
+- git grep at that candidate over electron-shell, scripts, apps/desktop/packaging and desk-gates.md finds no other
+  reader (hold-packet-cand.out). No row's verdict moves.
+
+**Proved before the landing.** git reads only (hold-packet-cand.out, 2026-11-19 13:21:58Z to 13:22:01Z). Nothing ran
+for it.
+
+**Not covered.** The phone rows themselves (desk-gates row 33) did not run for it.
+
+## FL — the packaged app bundles the browser pane and the iOS Simulator beside the comment pad (M448)
+
+(2026-11-19; one commit, `fea74a734` "FL: the packaged app bundles the browser pane and the iOS Simulator beside the
+comment pad", five files:
+- `apps/desktop/packaging/bundled-list.mjs` +7 −5;
+- `apps/desktop/native/macos/live-surface-capture/simulator-framebuffer.mm` +4 −1;
+- `docs/desk-gates.md` +5 −3;
+- `packages/electron-shell/src/testing/smoke.ts` +2 −1;
+- `packages/field-app/test/browser-data-section.test.tsx` +1 −1.
+
+The fixer made it inside the plugins' assembly from prod-builder's r2 diff and message: `official-plugins.r2.diff` on
+`87e71631c083`, whose five base files were byte-equal to main `9c9d0181b`'s, carried by its two tools' anchors. Held
+at the landing candidate `d182ae69089a`, whose commit this is:
+- its five files are the prepared copies' blobs, and its parent's five are the prepared bases';
+- its message is the prepared message (hold-packet-cand.out).
+
+It lands after the FL records' first commit, which amends DECISIONS "FL"; the list's comment cites that amendment.)
+
+**What a person sees.** The change shows at the first packaged build from this main; a nightly is the first.
+- The app carries the browser pane and the iOS Simulator as built-in plugins beside the comment pad. They are staged
+  under the signed bundled index, as the comment pad is.
+- A dev run is unchanged. Only the package's stager, smoke:bundled's stager, the notices and item 566's check read the
+  list (hold-packet-cand.out).
+- This commit does not change the first-run board.
+
+**The seams.**
+- `bundled-list.mjs`:
+  - `BUNDLED_PLUGINS` is `["plugins/comment-pad", "plugins/browser-pane", "plugins/simulator"]`. The comment pad stays
+    first, because row 29's corrupt run flips the first renderer-bearing plugin's renderer
+    (`stage-bundled-fixture.mjs`).
+  - Both new plugins are renderer-only, with `@vibefield/contracts` and `@vibefield/plugin-sdk` their only runtime
+    dependencies (read at `87e71631c083`). The index is signed by the trust root's `bundled` role, as the comment pad's
+    is, so there is no new key.
+  - The comment names three importers. Item 566's `scripts/check-bundled-plugins.mjs`, earlier in the same landing, is
+    a fourth it does not name (hold-packet-cand.out). A one-line follow-up is prepared; it is not in this commit.
+- `simulator-framebuffer.mm:13`: the stale "only in the opt-in benchmark helper" is corrected at its source, dated.
+  The framebuffer is built in by default (`--window-only` leaves it out), and production uses it unless
+  `VF_SIMULATOR_FRAMEBUFFER=0` (`authority-production.ts`).
+- `docs/desk-gates.md`:
+  - row 29's corrupt clause now says 2 staged, with a dated note on the old "0 staged";
+  - row 31 is un-parked;
+  - row 33 gets a dated note: its scripts pin the framebuffer off;
+  - new rows 39 `phone:framebuffer` and 40 `live-surfaces:simulator-signed`, both "not yet run".
+- Two sentences the list made false are corrected:
+  - `smoke.ts`'s "no packaged app carries the pane since 2026-11-09";
+  - the browser data section test's title ("a packaged app carries none"). At the candidate no file reads the title
+    (hold-packet-cand.out).
+- Since item 566, `pnpm verify` runs the kit's check over every row of the list, so this commit is the first where the
+  two plugins are judged as bundles.
+- The gap, said in the message: a person who launches with `VF_SIMULATOR_FRAMEBUFFER=0` gets the ScreenCaptureKit
+  window path. Screen Recording is then asked under `surface.simulator`, whose words carry no Screen Recording note.
+
+**Proved before the landing.** git reads only (hold-packet-cand.out). The preparer built and ran nothing.
+
+**The trial's rows.** These are ROWS-bundling-trial.md, under VF-PM's ruling of 12:46:36Z:
+- R1, `check:bundled-plugins`, is read from the candidate verify's `bundled` stage.
+- R2, row 29 with three plugins, runs once over ssh with `--use-mock-keychain`, after the candidate's verify and kit.
+  If the app never reaches its smoke lines, it is owed before any packaged build from this main.
+- R3 compares the notices at the FL records' first commit's tree with the candidate's.
+
+Their verdicts are the landing's record; this entry claims none of them.
+
+**Not covered.**
+- Row 40, library validation on the signed helper (its loads of the private CoreSimulator and SimulatorKit): not yet
+  run. It waits on a signed nightly from this main.
+- Row 39, the default framebuffer path's phone: it waits on a person at the test Mac.
+- Row 39-pre, the framebuffer over ssh with no grant: it waits on its script.
+- Row 31 (smoke:profile): owed on the first signed nightly that carries the pane.
+- Each measure on the test Mac is on Xcode 27.3 beta.
+
+**Not done, and not claimed:** gate:landing, row 29 among it, was not run for this entry; it is owed at the landing.
+
+## Item 574 — the iOS Simulator plugin's folder says what it is, what a Mac needs and its limits (M449)
+
+(2026-11-19; one commit, 090a4800e, whose subject begins "574: the iOS Simulator plugin's README". One path, docs only.)
+
+**What a person had.** The simulator plugin ships Built in at the launch, and the repository is public, but
+`plugins/simulator` had no README. Its folder said nothing of what the plugin is, what a Mac needs, or what it
+cannot do.
+
+**What landed.** 090a4800e adds `plugins/simulator/README.md` (99 lines), for a person who meets the plugin in the
+repository and for an author working on it. It says:
+- what the plugin is, in its listing's words: the title "iOS Simulator" and its description;
+- what a Mac needs: macOS (another system does not load it), the full Xcode with its license accepted and its first
+  launch finished, and one iOS runtime, in the setup dialog's own step names;
+- its two powers, in the plugin page's words, and that it holds no other;
+- the five parts that live in the app and not in the folder, and so why it ships Built in;
+- its two generated files, the catalog and the faces' words, and how each is re-made;
+- development: `pnpm dev`, the manifest, the tests and the host-bound still golden, with a file table in the plugin
+  template's shape;
+- three limits: Apple's private simulator frameworks, which an Xcode update can break; a newer Xcode's iPhones
+  drawn with the iPhone 17 Pro's body until the catalog is re-made; and the devices it makes, which stay on the Mac.
+  A device a crash left running runs on until an iPhone asks for it again, and is then VibeField's own; a device an
+  older iPhone uses is not shut down; none is ever deleted.
+
+Its lines on the listing's words, Built in, the Mac guard, the simulator's power and crash-left devices describe
+572, FL's bundling, 565, 569 and 568a, which land before it in this assembly.
+
+**How it was checked.**
+- Its claims were drafted from git reads at main `87e71631c` and from the stacked items' own words. The file was
+  read whole before the cut, and two fixes and the landing version's lines were folded in.
+- ONE read-only check then read every claim against the trial top `89232f069c15`, where an earlier text stood
+  (`7a3f5826c`, blob `fb08f7c8eb75`). That text held in substance, but the check named ten points said imprecisely
+  or without support. The main one: a device a crash left running is taken back only when an iPhone asks for it
+  again, not at the next start. This text corrects all ten, and so does the commit's message.
+- The landed blob is the corrected file as read (`76329b5a6b24`), and the message is its file as read, text for
+  text.
+- No row ran for it: it moves no code. The assembly's whole verify is that entry's.
+
+**Not covered, and owed.**
+- The corrected text was not checked again by a second agent, and it was not looked at as rendered.
+- Item 568's remove control is not ruled. If one lands, the README's "never deletes one" owes a dated correction
+  at its source.
+- The README names the catalog's 42 iPhones and Xcode 26.6. A re-made catalog owes it the new numbers.
+- `pnpm gate:landing` not run (owed).
+
+## Item 579 — the release manifest's header says where main's own natives are filed, and why that is safe (M450)
+
+(2026-11-19; one commit, `0c8765dfe` "579: the release manifest's header says main's own natives are filed with fieldd's
+plane, and why that is safe", one file, `scripts/release-manifest.mjs` +10 −0, a comment only. The fixer made it
+inside the plugins' assembly from prod-builder's diff and message: `item-579.diff` on `a22f710b9a76`, carried by its
+tool's one anchor, the header's `shell:` line. Held at the landing candidate `d182ae69089a`, whose commit this is:
+- its file is the prepared copy's blob, and its parent's is the prepared base's;
+- its message is the prepared message (hold-packet-cand.out).)
+
+**What a person sees.** Nothing: it is a comment, and no manifest a release writes changes.
+
+**What it corrects.** The header said every other file under `bin/` is fieldd's.
+- Main's own natives are staged there too, and `planeOf` files them with fieldd's plane though main runs them:
+  `bin/live-surface-capture-helper`, `bin/live-surface-adapter.node`, `bin/desktop-haptics.node` and
+  `bin/desktop-sound-player.node`. EY-1's pages engine will be the fifth once it is staged.
+- The reading found why that is safe (READING-579.md, git reads at `a22f710b9a76`):
+  - no client reads the manifest's fieldd or shell row, or `touched`. Main's `native-plane.ts` judges field-native
+    alone, by its own hash of its named members;
+  - every apply stops fieldd and ends the shell, whatever the manifest says. That is `apply.ts`'s stop, and fieldd's
+    restart announcement names its planes by the kind of stop.
+- The rule recorded: a main-owned binary is never added to field-native's set.
+- A named list that moves main's natives to the shell's plane waits for a client that reads those rows.
+
+**Proved before the landing.** git reads only. Nothing ran.
+
+**Not covered.**
+- Whose child `bin/field-screenshot-helper.app` is was not read. It is filed fieldd's either way, being a directory.
+- Whether a running pages engine outlives main's quit is the broker's (EY-1 1e); it went to the broker as a
+  requirement.
+
+## Item 567, S3 — loadRenderer's doc names the launch environment's preview-batching door (M451)
+
+(2026-11-19; one commit, in the plugins' assembly: 0bb59d899 ("567: loadRenderer's doc names the launch environment's
+preview-batching door"), a comment only.)
+
+**What a person sees.** Nothing. No code moves and no test changes. What a developer reads: the doc above
+`loadRenderer` (`packages/electron-shell/src/main/windows.ts`) named its harness doors, `search`, with "nothing but a
+smoke passes one". It did not mention the one door that comes from the launch environment, and now it does.
+
+**The door, as it stands.**
+- `VF_SIMULATOR_PREVIEW_BATCHING`, "0" or "1", sets the renderer URL's `simulatorPreviewBatch` in EVERY mode,
+  including a packaged app in production. "0" turns the simulator preview's batching off, "1" forces it on, and unset
+  it is automatic.
+- It changes only smoothness: no grant, key, page or state. A launch from Finder carries none. Whoever starts the
+  app's process with the variable set reaches it: a shell running the binary, or `launchctl setenv` before a Dock
+  launch.
+- `test/windows-branding.test.ts`, "preview batching on the canvas window", pins it in production and dev on purpose
+  (`it.each(["production", "dev"])`, expecting [null, "1", "0"]), and stands as written.
+
+**Why a sentence and not a gate.** Item 567 read every benchmark and test switch that a shipped build of the two
+official plugins (the browser pane and the iOS Simulator) could reach. Only two come from outside a package, both env
+at launch: S3, this one, and S4, `VF_SIMULATOR_FRAMEBUFFER`, the phone's picture path. The ruling for S3 was (a): keep
+the door, as the test says, and name it in the doc. The other choice, (b), would have gated it to dev and the smokes
+and changed one line of that test. Under (a) nothing changes anywhere.
+
+**Proved.**
+- The rider's file: from main `9c9d0181b` (windows.ts `b509a64ebe1aac67`, unchanged through `599f4edad`) to
+  `d7cc026c6ac07a17`. 0bb59d899's windows.ts is that blob, and it is the commit's only file (+7 −1). Its message is the
+  rider's own text.
+- No row of its own: no code or test moved. The assembly's checks are its proof:
+  - the test Mac's V at the assembly top `89232f069c15` (`pnpm verify` whole: typecheck, biome, and
+    windows-branding.test.ts unchanged and passing);
+  - cand1-v, `pnpm verify` whole at this land's top `d182ae690` on the test Mac, 2026-11-19 13:13:37Z → 13:23:39Z:
+    **GREEN**, exit 0 in 602 s; 27 vitest suites passed, none failed. The kit of every target at the same commit,
+    kit-cand1, 13:25:01Z → 13:27:01Z: xcodebuild exit 0 in 120 s; 3,134 rows, Passed 3,131, Skipped 3, Failed 0.
+
+**Not covered, and owed.**
+- **S4, `VF_SIMULATOR_FRAMEBUFFER=0`:** the phone's picture path, which ScreenCaptureKit asks Screen Recording for. Its
+  gate waits on the ruling on the picture path's consent words. **S4b** rides with it: the producer class's default
+  (`ios-simulator-producer.ts`, `=== "1"`) disagrees with the product's read (`authority-production.ts`, `!== "0"`),
+  and the option becomes required.
+- S1 and S2, the query doors `simulatorBenchmark` and `simulatorPreviewBatch`, need no gate. Main writes the main
+  window's address alone, and outside dev every navigation is refused. S1's one writer is the testing bundle, which
+  never ships (`neverShip` in the package manifest). That is read from the rule, not from inside a built package.
+
+## Item 571 — what sits on the mat is an object, built on the plugin path (M452)
+
+(2026-11-19; one commit, `b31b61287` "571 (DESIGN.md): what sits on the mat is an object, built on the plugin path". It
+is
+DESIGN.md +8 −0, one rule in §10, after "The mat's places". The assembly carries it as `7e0d57a67f98`, below SH-0's
+carry. Its added lines are the prepared diff's line for line (`lanes/ob-ui/i571/571-design.diff`, `d32b8dd8`), and its
+message is `571-design.msg.txt`; both were read by git. ow-design drafted the diff, by its message to the SH lead of
+11:04:06Z.)
+
+**What a person sees.** Nothing: Chat stays the cover's view, unchanged. No spark card and no flow object comes with it.
+
+**What it asked.** James's words to VF-PM on 2026-11-19, as VF-PM relayed them to the SH lead at 07:56:54Z (a message,
+not a file):
+- first, "by the way, does the spark's agent flow panel on canvas count as our core plugin too? how is it implemented
+  right now?";
+- then, "for the flow view, it does sit on canvas, right? if a thing sit on canvas, it should be implemented via the
+  object kit and via plugin path, so we do need it to be done that way instead, find a proper owner for this."
+
+The SH lead's file quotes the second (`lanes/sh/i571/ITEM-571-flow-on-canvas.md`).
+
+**What was read.** That file read the code at main `87e71631c083`; reads only, nothing built. It found three things:
+- **Chat is not on the mat.** It is the cover's view over a parked, blurred still of the desk, and no part of a spark's
+  flow is drawn on the mat.
+- **Its spark calls are app-only.** Chat's spark acts and reads (`compose.sparks.*` and `needs.*`) ride `sparks.use`,
+  which the contracts define as never plugin-eligible. Chat also calls `agent.pause`, `agent.subscribe`,
+  `agent.providers` and `agent.models` under the agent scopes. The file said "every one of Chat's acts and reads" until
+  a correction dated at its source the same day.
+- **The built-ins are the engine's.** The desk's four built-in kinds are ICE's own, and a plugin may not import a
+  built-in kind (K-L4).
+
+The file leaned (d): (c) now, then a spark's card on the mat as a bundled plugin. Two reviews agreed with that lean:
+- ow-design, `lanes/ob-ui/i571/REVIEW-571-design.md`. Its R2 gives the line the rule now states: an object has a row
+  in the desk's document, and marks and chrome are the host's.
+- ob-foundation, `lanes/ob-build/i571/READ-571-object-kit.md`, on conditions for the card that James's answer made
+  moot.
+
+**The answer.** The file asked James one question: "Do you want a spark's conversation to be a thing you can put on
+your desk and move around, like a note or a browser pane? Or is Chat fine as the full view it is now, as long as
+everything that really sits on the desk is built as a plugin?" His words, typed in the SH lead's session on 2026-11-19:
+"Item 571: no". VF-PM took it as way (c) in its message of 11:01:28Z: the rule binds what will sit on the mat, and the
+view stays.
+
+**What it records.** In §10:
+- every new kind of object is built through the object kit, on the plugin path (`@vibefield/plugin-sdk/desk`, a
+  plugin's `contributes.objects`);
+- the desk's marks under the camera (the at-work mark of item 550 among them) and the chrome over it are not objects,
+  and stay the host's;
+- a view off the mat (Chat, Godview, History, Settings) is not bound by it;
+- the engine's built-in kinds stay the engine's.
+
+**Proved.** Text only; no run.
+
+**Owed.** Nothing by the SH lead. A new kind on the desk, such as CP-4c's flow-run board if it is a new kind, is a
+plugin kind. VF-PM said in its 11:01:28Z message that it sends that line to aw and cp-landing.
+
+## SH-0 — the tutorials' records come first: the pencil, the lesson layer and the beats in DESIGN.md (M453)
+
+(2026-11-19; one commit, `97d9dfb15` "SH-0: the tutorials' records first: the pencil, the lesson layer and the beats in
+DESIGN.md".)
+
+**The cut.** Cut on main `a22f710b9a76` as `3292220219765522`, branch `sh/sh0-on-a22f710b`. The script
+(`lanes/sh/sh0-prep/sh0-cut.zsh`, its log `sh0-cut.log`) was launched at 11:26:02Z, and the commit's stamp is
+11:26:43Z. The cut was made in a sparse worktree of the SH lane (`lanes/sh/sh0`): the root's files,
+`packages/design-kit/src`, `scripts` and `apps/ios/VibeFieldKit`, with the files standing directly in their parent
+folders.
+
+**What changes.** Two files: `DESIGN.md` +163 −4 and `packages/design-kit/src/tokens.css` +9 −0.
+
+**The carry.** The assembly carries it as `89232f069c15`, on top of 571's carry.
+- Its added and removed lines are the cut's line for line, and its message is the cut's byte for byte. Both were read
+  by git.
+- Its patch-id differs only because commits below it, 571's among them, moved DESIGN.md's context: SH-0's §10 hunk
+  stands at line 11864 there, against 11840 on the cut. Read by git.
+
+**What a person sees.** Nothing yet. These are records only: nothing wears the five tokens until SH-2 (the layer), so
+they stand unused, as the card's two shadows did.
+
+**What it records.** Track SH (in-app tutorials, the page *The Blue Pencil*). DESIGN.md first:
+- **§2.5:** the pencil (`--vf-select`'s hue lifted to L .76, ICE's `MARKS.inks.pencil`) and its four tokens. The dim is
+  `--vf-field-ground`, at 62% → 86%.
+- **§3:** two rows. The tutorial's act is 40px at 780, §3's one heavy big type, under an amendment beside the law. The
+  note's hand is Caveat 600, bundled with the app, never fetched.
+- **§5:** the lesson layer (the dim, the hole, the ring, the Marker card, the hints). §5.1's ink gains its second
+  wearer.
+- **§6:**
+  - the retract gets its token;
+  - the arrival's "the one staggered entrance that is not 26ms" is amended at its source;
+  - a new paragraph, "A tutorial's beats": the card's six strokes 72ms apart, and the glow on §6's breath, 1.1s each
+    way, twice, 4.4s. The beacon is the travel, three times.
+- **§8:** "Tutorials: the beacon, the spotlight, the chapter".
+- **§9:** "The tutorials' words".
+- **§10:** the lesson layer at 75 in the stack: above every popup and Settings, under the loading veil.
+
+`tokens.css` follows it, in `:root` only, one value in both themes: `--vf-tutor` `#79b5f8`, `--vf-tutor-ink`
+`#08162b`, `--vf-tutor-keyline` `rgb(4 8 20 / 55%)`, `--vf-tutor-glass` `rgb(10 22 40 / 86%)`, and `--vf-ease-retract`
+`cubic-bezier(0.4, 0, 1, 1)`.
+
+**The rulings it writes down** (`draft/thinking-tutorials.md` §3; DECISIONS' SH row, prepared):
+- SH-D11…SH-D16 (a), James on the page's earlier copy (its db read 2026-11-09 03:54Z).
+- SH-D21 **Marker**, his click on the page at 2026-11-17 16:39:22Z and his words at 16:41:23Z, "i choose marker,
+  update the page with my pick".
+- SH-D22…SH-D24 (a), his words typed in the SH lead's session on 2026-11-19, "all with lean". The page could not be
+  opened from his current account, so its db holds no doc for these three.
+  - D22 carries SH-D17…D20 and the laws SH-L11…L20 at their leans.
+  - D23 keeps the act's 780.
+  - D24 is §6's pace.
+
+**Read before the cut.** ow-design read the DESIGN.md text whole and said yes in its message of 11:07:06Z (a message,
+not a file), with three fixes folded in:
+- Settings → Tutorials, since VibeField has no Help menu; the chapter's end leaves that line out until SH-7;
+- "the pencil for anything but a tutorial and the selection's own marks";
+- the keyline at 4.2:1 on Godview's parchment, and the stepper's words at 6.7:1 or more.
+
+In the same message it re-measured the ink on the swipe at 7.82–8.13:1 (8.43 on pure pencil), so §2.5's "7.8–8.4:1"
+holds. It also read the stack at `a22f710b9a76`: Settings 65, the palette and the setup sheet 70, the loading veil 80.
+The fact-check read the same four values in the code.
+
+**Proved before the cut, on the development Mac.** No test ran: no code changed, and no typecheck ran.
+- The maker (`make-sh0.py`, `01a73e78`) found each of its 14 anchors exactly once before it wrote ("anchors: 12 in
+  DESIGN.md, 2 in tokens.css, each found once", `sh0-cut.log`). It writes nothing unless its round trip holds (undoing
+  every edit gives back the input byte for byte), and it wrote.
+- The two results equal the after-files prepared from the base's blobs by sum: `DESIGN-after.md` `de31a9009ae3792b…`
+  and `tokens-after.css` `c1fa137e3341f153…`. The committed blobs equal them too (`sh0-cut.log`'s DONE line).
+- The pre-commit hook ran on the commit: "siblings:render: the committed rows (staged) are the lock's (15 npm, 0 cargo
+  + 6 released on the registry, 3 swift)" (`sh0-cut.log`).
+- Its own check had run read-only first, in the same worktree, and exited 0 (`add-kit-cone.log`).
+
+**On the test Mac.**
+- **SH-0's own rows did not run before the land.** `lanes/sh/sh0-prep/ROWS-sh0.md` (`a83a02e9`) holds the 53 tests that
+  read DESIGN.md or tokens.css, in six package rows on two arms. qa-01 says not run, on either arm.
+  - The commit's message says the readers "run on the test Mac against it before it lands, and its LANDED entry names
+    them". This entry corrects that: they did not run as rows of their own.
+- **A probe ran on it.** qa-01's verify probe `vprobe1` ran at the first scratch `73a22dd9b993`, whose tip commit is
+  SH-0's carry (its lines are the cut's, read by git), from 12:44:50Z to 12:54:41Z. It ran verify's 22 stages each
+  alone, and 20 were green, test across 28 projects among them. This is qa-01's count, in its message; it is a probe,
+  not the landing's V.
+- **Its first landing test run is the landing's V.** That V runs at the scratch forty that carries item 570's census
+  patch, not at `89232f069c15` (VF-PM, 12:57:03Z, as qa-01 relays it). Its line is the fixer's.
+
+**Found on the way.**
+- **The stack.** The stack in code holds the palette and the setup sheet at 70 and the loading veil at 80. So the layer
+  stands at 75, not the draft's 68, which would have left the palette undimmed over the dim.
+- **The words.** "Help → Tutorials" named a place that does not exist.
+- **The hand.** The app bundles Caveat at 500 and 600 only, so the card's line is 600, not the page's 620.
+- **Sparse trees.** A sparse worktree needs two things known before its first commit:
+  - cone mode also checks out the files standing directly in every ancestor folder of a cone folder (cl's catch);
+  - the pre-commit hook's lock check refuses while `apps/ios/VibeFieldKit/Package.resolved` is outside the cone. Cone
+    mode marks the file skip-worktree, and the check (`siblings.mjs:818-826`, `lockHidden` at `:899-910`, "S " in
+    `git ls-files -v`) reads that as a dev overlay. By reading the code, and by that check run read-only in the sparse
+    tree before the cone was widened: exit 1, "apps/ios/VibeFieldKit/Package.resolved is skip-worktree — an overlay is
+    active …" (said to VF-PM at 11:20:03Z; the output is not in a run file). The cone takes `apps/ios/VibeFieldKit`
+    (VF-PM's ruling, 11:20:33Z), and the hook is never bypassed.
+
+**Owed.**
+- DECISIONS' SH row: prepared on the landing's DECISIONS in `lanes/sh/sh0-prep/decisions-89232f06/` (base blob
+  `29bc23f19293`, inserted `db84e858…`, numstat 1 0). The row carries its own three marks for the records step.
+- ROADMAP's SH line: the SH lead's, made on main after the puppeteer pin's turn.
+- 590-D1 with 590-A1 (tl) is re-made on SH-0's landed DESIGN.md. It carries SH-0's two Godview lines by content: the
+  keyline "4.3:1 on Godview's paper" and the dim's "3.7:1 on Godview by day" (`godview-paper-lines.diff`, `1ee14465`).
+- Next for the track: SH-1, the ledger (`tutorial:<id>` in `setup.moment`).
