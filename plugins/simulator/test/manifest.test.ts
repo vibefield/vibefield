@@ -128,6 +128,10 @@ describe("vibefield.simulator", () => {
     await session.close();
   });
 
+  it("runs only on a Mac: its engines name darwin alone, so fieldd refuses it on any other platform (item 565)", () => {
+    expect(simulatorManifest.engines.platforms).toEqual(["darwin"]);
+  });
+
   it("keeps the committed manifest byte-identical to its validated canonical emission", () => {
     const result = validatePluginManifest(simulatorManifest);
     if (!result.ok) throw new Error(result.issues.join(" · "));
