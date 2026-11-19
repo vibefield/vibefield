@@ -13,6 +13,7 @@ import {
   Specimen,
   type WidgetType,
 } from "@vibecook/ice";
+import { LIVE_PAGE_SCOPES } from "@vibefield/contracts";
 import * as pane from "@vibefield/plugin-browser-pane";
 import * as pad from "@vibefield/plugin-comment-pad";
 import type { RegisteredPlugin } from "@vibefield/plugin-runtime";
@@ -123,6 +124,11 @@ describe("the live face's gate — the host's, by the object (ruling 3)", () => 
       "ios-simulator": ["surface.attach", "surface.simulator"],
     });
     expect(SIMULATOR_SCOPES).toEqual(["surface.attach", "surface.simulator"]);
+    // item 581: the gate's two face sources are contracts' list, the one fieldd's canvas_place refuses by
+    expect(LIVE_FACE_SCOPES).toEqual({
+      browser: LIVE_PAGE_SCOPES.browser,
+      "ios-simulator": LIVE_PAGE_SCOPES["ios-simulator"],
+    });
   });
 
   it("PT-S2; item 569: opens the device-bound Simulator — its plugin is granted surface.attach and surface.simulator — and no page of it; the pane opens no Simulator", () => {

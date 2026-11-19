@@ -11,14 +11,15 @@
 
 import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { PrefabId } from "@vibecook/ice";
-import { computeEffectiveGrants } from "@vibefield/contracts";
+import { computeEffectiveGrants, LIVE_PAGE_SCOPES } from "@vibefield/contracts";
 import type { PluginRegistry, RegisteredPlugin } from "@vibefield/plugin-runtime";
 import type { LiveFaceSource, LiveGateAnswer } from "./desk-live";
 
-/** What a browser page asks of the plugin whose object opens it. */
-export const BROWSER_PAGE_SCOPES = ["surface.attach", "surface.browser"] as const;
-/** PT-S2: what a bound Simulator asks of the plugin whose phone opens it. */
-export const SIMULATOR_SCOPES = ["surface.attach", "surface.simulator"] as const;
+/** What a browser page asks of the plugin whose object opens it: contracts' one list (item 581, 2026-11-19 — the pairs
+ * fieldd's `canvas_place` refuses a kind by, so the door and the gate never disagree). */
+export const BROWSER_PAGE_SCOPES = LIVE_PAGE_SCOPES.browser;
+/** PT-S2: what a bound Simulator asks of the plugin whose phone opens it (the same list, item 581). */
+export const SIMULATOR_SCOPES = LIVE_PAGE_SCOPES["ios-simulator"];
 
 /** PT-S2: each source's scopes — the pair the gate asks of the object's plugin. */
 export const LIVE_FACE_SCOPES: Readonly<Record<LiveFaceSource, readonly string[]>> = {
