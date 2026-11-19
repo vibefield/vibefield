@@ -87,7 +87,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * exercised on every `pnpm smoke:canvas`, not only when someone builds a package.
  *
  * `search` adds a harness's own doors to the production URL (DK-5: `smoke:canvas`'s
- * relaunch-heal row loads `deskRefuseFirstDevice=1`); nothing but a smoke passes one. */
+ * relaunch-heal row loads `deskRefuseFirstDevice=1`); nothing but a smoke passes one.
+ *
+ * One door rides the launch environment instead, in every mode, a packaged app's
+ * production included (item 567, 2026-11-19): `VF_SIMULATOR_PREVIEW_BATCHING` "0"
+ * or "1" sets `simulatorPreviewBatch`, the simulator preview's batching turned off
+ * or forced on (unset, it is automatic). It changes smoothness only, and a launch
+ * from Finder carries none; windows-branding.test.ts holds it in production and dev. */
 export async function loadRenderer(
   win: BrowserWindow,
   mode: ShellMode,
