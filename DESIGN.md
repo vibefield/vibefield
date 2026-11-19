@@ -11573,15 +11573,20 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   "Where your plugins and their settings are."
 - **The powers' plain words** (MK-D7; MK-E12). A power is said as what it lets the plugin do, in one sentence, the
   same on the install card and on the plugin's page, and never by its id. The core powers a plugin may hold are
-  `PLUGIN_CAPABILITY_ELIGIBILITY`'s (contracts `plugins.ts`), twenty-seven. The page drew sixteen; four are changed
+  `PLUGIN_CAPABILITY_ELIGIBILITY`'s (contracts `plugins.ts`), twenty-eight. The page drew sixteen; four are changed
   here, `workspace.read`, `shell.dialog` and `shell.open` to what the power does and `artifact.publish` to §9 "Apps"'
-  word (the page drew "pages"). Those four and the eleven it did not draw are ‹draft›: `doc.read`, `doc.write`,
-  `index.read`, `approval.respond`, `mcp.consume`, `terminal.attach`, `agent.spawn`, `agent.control`, `shell.windows`,
-  `shell.clipboard` and `shell.webcontents`.
+  word (the page drew "pages"). Those four, the eleven it did not draw and `surface.simulator` are ‹draft›:
+  `doc.read`, `doc.write`, `index.read`, `approval.respond`, `mcp.consume`, `terminal.attach`, `agent.spawn`,
+  `agent.control`, `shell.windows`, `shell.clipboard`, `shell.webcontents` and `surface.simulator`.
+  *Amended 2026-11-19 (item 569):* this said twenty-seven. `surface.simulator` joined for the simulator's device-bound
+  kind, which takes no other app's window, so the simulator no longer holds `surface.capture`.
   - On the desk: `canvas.read` "Read what's on the desk" · `canvas.write` "Change what's on the desk" · `doc.read`
     "See your desks" · `doc.write` "Make, open, rename and delete desks" · `surface.attach` "Show live windows on the
     desk" · `surface.browser` "Open web pages in a pane" · `surface.capture` "See other apps' windows", with "macOS
-    asks you once, for Screen Recording" under it.
+    asks you once, for Screen Recording" under it · `surface.simulator` "Make and run iPhone simulators from Xcode,
+    and use them on the desk".
+    *Amended 2026-11-19 (item 569):* `surface.simulator` joined this list with no Mac note: it reaches the device's own
+    display alone, which macOS does not ask about. Capturing the Simulator app's window still costs `surface.capture`.
   - Your agents: `agent.observe` "See what your agents are doing" · `agent.spawn` "Start your agents and manage their
     sign-ins" · `agent.control` "Pause or stop what your agents are doing" · `approval.respond` "Answer what your
     agents ask you to allow" · `mcp.consume` "Use the tools other plugins offer" · `mcp.contribute` "Give your agents
