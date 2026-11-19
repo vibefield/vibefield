@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   type DeskKind as BuiltInKind,
   DESK_KINDS,
+  LIVE_PAGE_SCOPES,
   OBJECT_LIMITS,
   type ObjectConcurrency,
   type ObjectContribution,
@@ -68,22 +69,32 @@ const readGuide = (root: string | undefined, guide: string | undefined): string 
   }
 };
 
+/** Item 581 (2026-11-19): whether a plugin REQUESTS a whole pair of a live surface's powers, by its request and never
+ * its grants: the person's toggles move the grants, and a kind an agent placed while one was off would wake live,
+ * signed in as the person, at the re-grant. Half a pair opens nothing live: the gate and the door ask the whole
+ * pair. */
+const asksLiveFaces = (requested: readonly string[]): boolean =>
+  Object.values(LIVE_PAGE_SCOPES).some((pair) => pair.every((scope) => requested.includes(scope)));
+
 const fromPlugin = (
   object: ObjectContribution,
   root: string | undefined,
   plugin: string,
+  livePages: boolean,
 ): DeskKind => {
   const guide = readGuide(root, object.agent?.guide);
   return {
     kind: object.type,
     title: object.title,
-    // no agent half, no declaration of what an agent would be placing: only the person's hand makes one
-    placeable: object.agent !== undefined,
+    // no agent half, no declaration of what an agent would be placing: only the person's hand makes one; nor a kind
+    // that shows a live page, device or app window (item 581): only the person adds those
+    placeable: object.agent !== undefined && !livePages,
     concurrency: object.agent?.concurrency ?? "many",
     tools: object.agent?.tools ?? [],
     ...(object.agent !== undefined ? { summary: object.agent.summary } : {}),
     ...(guide !== undefined ? { guide, guideFrom: plugin } : {}),
     version: object.schemaVersion,
+    ...(livePages ? { livePages: true as const } : {}),
   };
 };
 
@@ -95,7 +106,12 @@ export const pluginDeskKinds = (
   records.flatMap((record) =>
     record.enabled
       ? record.contributions.objects.map((object) =>
-          fromPlugin(object, rootPath(record.id), record.title),
+          fromPlugin(
+            object,
+            rootPath(record.id),
+            record.title,
+            asksLiveFaces(record.requestedCapabilities),
+          ),
         )
       : [],
   );

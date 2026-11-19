@@ -338,9 +338,14 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
           .kinds()
           .filter((k) => k.placeable)
           .map((k) => k.kind);
+        // item 581 (2026-11-19): a live page, device or app window is the user's to add; the agent is told to ask
+        const why =
+          kind?.livePages === true
+            ? ": it shows a live page, device or app window, and only the user adds those to the desk. If you need one, ask the user"
+            : "";
         throw refuse(
           "bad-input",
-          `input.kind: VibeField can't place ${input.kind}. It can place: ${names.join(", ")}.`,
+          `input.kind: VibeField can't place ${input.kind}${why}. It can place: ${names.join(", ")}.`,
           { path: "kind", expected: { enum: names } },
         );
       }
