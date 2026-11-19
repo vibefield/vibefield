@@ -2732,7 +2732,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
       ...document.body.querySelectorAll<HTMLButtonElement>('.vf-plugins-power [role="switch"]'),
     ].map((node) => node.getAttribute("aria-label"));
     expect(names).toEqual([
-      pluginPowerWords("surface.capture", { onMac: false }),
+      pluginPowerWords("surface.simulator", { onMac: false }),
       "Read what's on the desk",
       "Change what's on the desk",
     ]);

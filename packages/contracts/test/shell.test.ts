@@ -961,11 +961,11 @@ describe("AH-3/AH-4 static shell provider", () => {
     expect(METHODS.some((method) => method.method === "shell.openLink")).toBe(false);
   });
 
-  it("PT-S2 (R11): the attach's device list is a local `surface.capture` read, carried by an INTERNAL provider verb, and its rows never hold a UDID", () => {
+  it("PT-S2 (R11); item 569: the attach's device list is a local `surface.simulator` read, carried by an INTERNAL provider verb, and its rows never hold a UDID", () => {
     expect(METHODS.find((method) => method.method === "surface.simulator.devices")).toEqual({
       surface: "product",
       method: "surface.simulator.devices",
-      scope: "surface.capture",
+      scope: "surface.simulator",
       idempotent: true,
       locality: "local",
     });

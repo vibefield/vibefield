@@ -447,9 +447,9 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       ],
       powers: [
         {
-          key: "surface.capture",
-          words: "See other apps' windows",
-          under: "macOS asks you once, for Screen Recording",
+          key: "surface.simulator",
+          words: "Make and run iPhone simulators from Xcode, and use them on the desk",
+          under: null,
           whose: null,
           switch: true,
           cant: null,
@@ -652,7 +652,7 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
     };
     const page = pluginPage(asked, null, PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, false);
     expect(page.powers.map((power) => [power.key, power.switch, power.cant])).toEqual([
-      ["surface.capture", true, null],
+      ["surface.simulator", true, null],
       ["canvas.read", true, null],
       ["canvas.write", false, null],
       ["process.spawn", null, words.SWITCH_WORDS.cant["entry-kind"]],
@@ -823,7 +823,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
     const simulators = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator");
     const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, false);
     expect(page.powers.map((power) => [power.key, power.switch, power.cant])).toEqual([
-      ["surface.capture", true, null],
+      ["surface.simulator", true, null],
       ["canvas.read", true, null],
       // taken back: its switch off
       ["canvas.write", false, null],
@@ -880,7 +880,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
       requestedCapabilities: [...simulators.requestedCapabilities, "made.up"],
     };
     expect([
-      powerSwitchOf(simulators, "surface.capture"),
+      powerSwitchOf(simulators, "surface.simulator"),
       powerSwitchOf(simulators, "canvas.write"),
       // can't have it here, never asked for it, or no words to say it: no switch
       powerSwitchOf(simulators, "process.spawn"),

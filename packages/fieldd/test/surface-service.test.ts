@@ -366,6 +366,20 @@ describe("SurfaceService.open — the kind→scope matrix", () => {
     });
     expect(JSON.stringify(audit.rows)).not.toContain("SimDeviceType");
   });
+
+  it("item 569: the capture scope opens no device-bound Simulator — that costs a scope of its own", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    const refused = await refusal(
+      surfaces.open(windowContext(["surface.attach", "surface.capture"]), {
+        source: PHONE_SOURCE,
+        reuseKey: "desk:phone-1",
+      }),
+    );
+    expect(refused.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refused.details).toEqual({ required: "surface.simulator" });
+    expect(authority.minted).toEqual([]);
+  });
 });
 
 describe("SurfaceService.simulatorDevices — PT-S2 (R11), the attach's device list", () => {

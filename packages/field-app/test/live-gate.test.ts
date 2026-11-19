@@ -2,8 +2,8 @@
 // its entity, its type, the plugin that contributes it, that plugin's effective capabilities — never by a kind's spec. On a REAL
 // engine and document: the browser pane (granted `surface.attach` + `surface.browser`) opens; the comment pad (granted neither) is
 // refused in the plugin door's own words; a desk built-in and an unknown key open nothing; a staged plugin's grants are its
-// record's. PT-S2 — the scopes are the SOURCE's: the phone (granted `surface.attach` + `surface.capture`, its manifest's since
-// PT-S2's attach) opens a bound Simulator and no page; the pane opens no Simulator.
+// record's. PT-S2 — the scopes are the SOURCE's: the simulator's object (granted `surface.attach` + `surface.simulator`, its
+// manifest's since item 569) opens a bound Simulator and no page; the pane opens no Simulator.
 import {
   defineQuery,
   Not,
@@ -117,28 +117,28 @@ describe("the live face's gate — the host's, by the object (ruling 3)", () => 
     ce.dispose();
   });
 
-  it("PT-S2: the scopes are the SOURCE's — a page asks surface.attach + surface.browser (the default), a bound Simulator surface.attach + surface.capture", () => {
+  it("PT-S2: the scopes are the SOURCE's — a page asks surface.attach + surface.browser (the default), a bound Simulator surface.attach + surface.simulator (item 569)", () => {
     expect(LIVE_FACE_SCOPES).toEqual({
       browser: ["surface.attach", "surface.browser"],
-      "ios-simulator": ["surface.attach", "surface.capture"],
+      "ios-simulator": ["surface.attach", "surface.simulator"],
     });
-    expect(SIMULATOR_SCOPES).toEqual(["surface.attach", "surface.capture"]);
+    expect(SIMULATOR_SCOPES).toEqual(["surface.attach", "surface.simulator"]);
   });
 
-  it("PT-S2: opens the PHONE's Simulator — its plugin is granted surface.attach and surface.capture — and no page of it; the pane opens no Simulator", () => {
+  it("PT-S2; item 569: opens the device-bound Simulator — its plugin is granted surface.attach and surface.simulator — and no page of it; the pane opens no Simulator", () => {
     const { ce, registry, gate, keyOf } = board();
     const phoneKey = keyOf(phone.SIMULATOR_TYPE);
     const bundled = registry.plugin(phone.SIMULATOR_TYPE);
     if (bundled === undefined) throw new Error("the phone is not registered");
-    expect([...grantsOf(bundled)].sort()).toEqual(["surface.attach", "surface.capture"]);
+    expect([...grantsOf(bundled)].sort()).toEqual(["surface.attach", "surface.simulator"]);
     expect(gate(phoneKey, "ios-simulator")).toEqual({ type: "vibefield.simulator" });
-    // asked as a page — the default — it is refused: capture grants no browser
+    // asked as a page — the default — it is refused: the simulator scope grants no browser
     expect(gate(phoneKey)).toEqual({
       refused: "FORBIDDEN_SCOPE: plugin vibefield.simulator is not granted surface.browser",
     });
-    // the pane's plugin is granted no capture: its object opens no Simulator, whatever a spec says
+    // the pane's plugin is granted no simulator scope: its object opens no Simulator, whatever a spec says
     expect(gate(keyOf(pane.BROWSER_PANE_TYPE), "ios-simulator")).toEqual({
-      refused: "FORBIDDEN_SCOPE: plugin vibefield.browser-pane is not granted surface.capture",
+      refused: "FORBIDDEN_SCOPE: plugin vibefield.browser-pane is not granted surface.simulator",
     });
     // the comment pad is granted neither: refused at the first
     expect(gate(keyOf(pad.COMMENT_PAD_TYPE), "ios-simulator")).toEqual({

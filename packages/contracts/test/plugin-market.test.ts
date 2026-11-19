@@ -246,6 +246,11 @@ describe("the powers' plain words (MK-D7; DESIGN.md §9)", () => {
     expect(PLUGIN_POWER_WORDS["surface.capture"].macNote).toBe(
       "macOS asks you once, for Screen Recording",
     );
+    // item 569: the simulator's own power, the same on and off the Mac
+    for (const onMac of [true, false])
+      expect(pluginPowerWords("surface.simulator", { onMac })).toBe(
+        "Make and run iPhone simulators from Xcode, and use them on the desk",
+      );
   });
 
   it("say whose a plugin's own power is", () => {

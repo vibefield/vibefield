@@ -34,6 +34,16 @@ const SOURCE: LiveSurfaceSourceSpecV1 = {
   logicalViewport: { width: 800, height: 600 },
 };
 
+/** item 569: a Simulator bound by its device type and runtime, at its default crop. */
+const DEVICE_SOURCE: LiveSurfaceSourceSpecV1 = {
+  kind: "ios-simulator-device",
+  binding: {
+    deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+    runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+  },
+  crop: { mode: "auto" },
+};
+
 const TICKET: LiveSurfaceAttachTicketV1 = {
   v: 1,
   token: "door_test_ticket_token_0123456789_abcdefgh",
@@ -211,7 +221,7 @@ let nextPluginId = 0;
  * fake pool (or none), and hand back everything both sides recorded. */
 async function stageWithPool(
   poolFake: FakePool | null,
-  acquires: readonly { key: string; reuseKey?: string }[],
+  acquires: readonly { key: string; reuseKey?: string; source?: LiveSurfaceSourceSpecV1 }[],
   granted: readonly string[] = SURFACE_GRANTS,
 ): Promise<Staged> {
   nextPluginId += 1;
@@ -228,7 +238,7 @@ async function stageWithPool(
           handles.push(
             ctx.pool.liveSurface({
               key: acquire.key,
-              source: SOURCE,
+              source: acquire.source ?? SOURCE,
               ...(acquire.reuseKey === undefined ? {} : { reuseKey: acquire.reuseKey }),
               initialDemand: { mode: "live", targetFps: 30, priority: 50, interactive: false },
             }),
@@ -351,6 +361,44 @@ describe("ctx.pool.liveSurface", () => {
     expect(staged.mintCalls).toEqual([]);
 
     await staged.deactivate();
+  });
+
+  it("item 569: a device-bound Simulator costs surface.simulator at the door — the capture scope alone opens none", async () => {
+    const staged = await stageWithPool(
+      fakePool(),
+      [{ key: "device", source: DEVICE_SOURCE }],
+      ["surface.attach", "surface.capture"],
+    );
+    expect(staged.handles[0]?.status).toBe("lost");
+    expect(staged.handles[0]?.error?.message).toContain("FORBIDDEN_SCOPE");
+    expect(staged.handles[0]?.error?.message).toContain("surface.simulator");
+    expect(staged.acquired).toEqual([]);
+    expect(staged.mintCalls).toEqual([]);
+
+    await staged.deactivate();
+  });
+
+  it("item 569: surface.simulator opens a device-bound Simulator at its default crop, and any other crop asks surface.capture as well", async () => {
+    const granted = ["surface.attach", "surface.simulator"];
+    const framed = await stageWithPool(
+      fakePool(),
+      [{ key: "device", source: DEVICE_SOURCE }],
+      granted,
+    );
+    expect(framed.handles[0]?.status).not.toBe("lost");
+    expect(framed.acquired).toHaveLength(1);
+    await framed.deactivate();
+
+    const windowed = await stageWithPool(
+      fakePool(),
+      [{ key: "device", source: { ...DEVICE_SOURCE, crop: { mode: "none" } } }],
+      granted,
+    );
+    expect(windowed.handles[0]?.status).toBe("lost");
+    expect(windowed.handles[0]?.error?.message).toContain("FORBIDDEN_SCOPE");
+    expect(windowed.handles[0]?.error?.message).toContain("surface.capture");
+    expect(windowed.acquired).toEqual([]);
+    await windowed.deactivate();
   });
 
   it("hands the plugin a handle with no presentation on it (PA-22)", async () => {
