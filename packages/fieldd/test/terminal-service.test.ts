@@ -26,6 +26,7 @@ import {
   AGENT_FIELD,
   CONTRACTS_VERSION,
   type DeviceInfo,
+  ENV_KEEP_NAMES,
   ENV_PREFIXES,
   grantSigningInput,
   isPipeEndpoint,
@@ -3669,6 +3670,8 @@ function fakeFloorService(
       terminalEndpoints: floor.endpoints,
       on: () => undefined,
     },
+    // item 589: fieldd's own environment is the row's to give, never the runner's
+    environment: {},
     ...opts,
   });
   cleanup.push(() => service.dispose());
@@ -3930,9 +3933,11 @@ describe("AR-7d — a free shell is born integrated (the fake floor)", () => {
 /** SB-2 — a profile's binding as a runtime answers it. The NAMES are the fake's
  * own — VibeField spells no vendor's variable, in a test either (AR-L1) — and
  * the values say where they came from, so a row can look for them anywhere. */
+// item 589 (2026-11-19): named under no prefix VibeField registers (they were `VF_PROBE_*` until
+// `VF_` joined ENV_PREFIXES), so the fence keeps them; item 589's first row holds that
 const BINDING = {
-  VF_PROBE_ROOT: "/profiles/work/probe-0001",
-  VF_PROBE_MODE: "managed-probe-value",
+  PROBE_ROOT: "/profiles/work/probe-0001",
+  PROBE_MODE: "managed-probe-value",
 };
 
 /** A binding seam that answers from `answers` (an unknown set otherwise) and
@@ -5714,5 +5719,95 @@ describe("the terminal scheme (TL-4a)", () => {
     expect(existsSync(box.schemeFile)).toBe(false);
     expect(box.floor.colors()).toEqual([]);
     expect(await box.schemeRecords()).toEqual([]);
+  });
+});
+
+// item 589 (2026-11-19) — A PLAIN SHELL KEEPS THE RUN MARK FIELDD HOLDS, AND NO OTHER VF_
+// NAME. `VF_` joins ENV_PREFIXES, so the floor strips a smoke's run mark from what a shell
+// inherits and the fence drops any override of it; fieldd hands the mark back after the fence,
+// from its own environment and by exact name (ENV_KEEP_NAMES), so the smoke census still finds
+// a shell a smoke leaves behind. Outside a smoke there is no mark and nothing is added.
+describe("item 589 — a plain shell keeps the run mark fieldd holds, and no other VF_ name (the fake floor)", () => {
+  const [MARK] = ENV_KEEP_NAMES;
+
+  it("the fixtures' variables lie under no prefix VibeField registers, so the rows above hold whatever it strips", () => {
+    for (const name of [...Object.keys(BINDING), ...Object.keys(INTEGRATION)])
+      expect(
+        ENV_PREFIXES.some((prefix) => name.startsWith(prefix)),
+        name,
+      ).toBe(false);
+  });
+
+  it("outside a smoke a birth is the bare inherit mode, byte for byte, and an integration's overrides stand alone", async () => {
+    const floor = await startFakeFloor();
+    const environment = { PATH: "/usr/bin:/bin", VF_LAB_589: "1" };
+    const bare = fakeFloorService(floor, { defaultShell: () => "/bin/zsh", environment });
+    await bare.create({});
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    const integrated = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: () => INTEGRATION,
+      environment,
+    });
+    await integrated.create({});
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: INTEGRATION,
+    });
+  });
+
+  it("under a smoke a birth carries fieldd's run mark as an override, after the binding's and the integration's", async () => {
+    const floor = await startFakeFloor();
+    const environment = { PATH: "/usr/bin:/bin", [MARK]: "run-589" };
+    const bare = fakeFloorService(floor, { defaultShell: () => "/bin/zsh", environment });
+    await bare.create({});
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { [MARK]: "run-589" },
+    });
+    const bound = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      shellIntegration: () => INTEGRATION,
+      profileBinding: bindingSeam({ work: WORK }).profileBinding,
+      environment,
+    });
+    await bound.create({ profileSet: "work" });
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { ...BINDING, ...INTEGRATION, [MARK]: "run-589" },
+    });
+  });
+
+  it("a binding's or the integration's own VF_ name, the mark among them, is dropped by the fence, and the shell gets fieldd's mark", async () => {
+    const floor = await startFakeFloor();
+    const logs: CapturedLog[] = [];
+    const service = fakeFloorService(floor, {
+      defaultShell: () => "/bin/zsh",
+      logger: captureLogger(logs),
+      shellIntegration: () => ({
+        ...INTEGRATION,
+        [MARK]: "the-integration-says",
+        VF_LAB_589: "1",
+      }),
+      profileBinding: bindingSeam({
+        work: {
+          state: "bound",
+          label: "Work",
+          variables: { ...BINDING, [MARK]: "the-binding-says" },
+        },
+      }).profileBinding,
+      environment: { [MARK]: "run-589" },
+    });
+    await service.create({ profileSet: "work" });
+    expect(floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: { ...BINDING, ...INTEGRATION, [MARK]: "run-589" },
+    });
+    const integration = logs.filter(
+      (log) => log.event === "fieldd.terminal.shell_integration_reserved",
+    );
+    expect(integration[0]?.attrs?.["dropped"]).toEqual([MARK, "VF_LAB_589"]);
+    const binding = logs.filter((log) => log.event === "fieldd.terminal.profile_binding_reserved");
+    expect(binding[0]?.attrs).toEqual({ profileSet: "work", dropped: 1 });
   });
 });

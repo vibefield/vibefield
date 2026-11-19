@@ -348,6 +348,9 @@ export interface TerminalServiceOptions {
    * the daemon's is on disk under the user root, so a session born with the
    * app closed is still told it; absent = one kept in memory. */
   scheme?: TerminalSchemeStore;
+  /** Item 589 (2026-11-19) — fieldd's own environment, which a shell's birth reads for the names
+   * ENV_KEEP_NAMES hands back by exact name (a smoke's run mark); absent = `process.env`. */
+  environment?: Readonly<Record<string, string | undefined>>;
   /** item 42 — the device roster each attach grant's holder face is read from
    * (`holderFaceFor`), as a GETTER like `shell`: the daemon's DeviceService is
    * built after this service. Absent, or answering null, a grant carries no

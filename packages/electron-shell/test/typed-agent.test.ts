@@ -13,7 +13,13 @@ import { createServer, type IncomingHttpHeaders } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
-import { AGENT_CATALOG, AgentDistributionRecord, ENV_PREFIXES, LAYOUT } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG,
+  AgentDistributionRecord,
+  ENV_KEEP_NAMES,
+  ENV_PREFIXES,
+  LAYOUT,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   HISTORY_SEED_WORDS,
@@ -759,6 +765,18 @@ describe("what the step reads back", () => {
         ],
       }),
     ).toEqual(["PUPPETEER_SHIM_DIR", ...ENV_PREFIXES.map((prefix) => `${prefix}LOG_DIR`)]);
+  });
+
+  it("does not name a smoke's run mark, which an agent typed into a plain shell carries (item 589)", () => {
+    expect(leakedVariables({ envKeys: ["PATH", ...ENV_KEEP_NAMES] })).toEqual([]);
+  });
+
+  it("names every other VF_ name, and FIELD_ and FIELDD_ ones as before (item 589)", () => {
+    expect(
+      leakedVariables({
+        envKeys: ["PATH", ...ENV_KEEP_NAMES, "VF_LAB_589", "FIELD_LOG_DIR", "FIELDD_LOG_DIR"],
+      }),
+    ).toEqual(["VF_LAB_589", "FIELD_LOG_DIR", "FIELDD_LOG_DIR"]);
   });
 
   it("reads which startup files ONE shell read, by its pid", () => {

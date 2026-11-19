@@ -732,7 +732,9 @@ async fn a_real_pty_never_inherits_the_daemon_private_prefixes() {
             // item 576 (2026-11-19): a dev run's VIBEFIELD_ names reach the cell the same way (not
             // `*_SMUGGLE`: its name would hold `FIELD_SMUGGLE`, which the prefix loop reads)
             ("VIBEFIELD_CARRIED", "vibefield-must-not-escape"),
-            ("VF_CELL_CONTROL", "this-one-must-arrive"),
+            // item 589 (2026-11-19): named under no prefix VibeField registers (it was
+            // `VF_CELL_CONTROL` until `VF_` joined ENV_PREFIXES); the first check below holds it so
+            ("STRIP_ROW_CONTROL", "this-one-must-arrive"),
         ],
         Stdio::null(),
     );
@@ -792,7 +794,13 @@ async fn a_real_pty_never_inherits_the_daemon_private_prefixes() {
     // THE CONTROL FIRST: if this is absent the run proves nothing about the
     // strip, because nothing was inherited for it to act on.
     assert!(
-        dumped.contains("VF_CELL_CONTROL=this-one-must-arrive"),
+        !field_native::registries::ENV_PREFIXES
+            .iter()
+            .any(|prefix| "STRIP_ROW_CONTROL".starts_with(*prefix)),
+        "the control is named under a stripped prefix, so it can never arrive"
+    );
+    assert!(
+        dumped.contains("STRIP_ROW_CONTROL=this-one-must-arrive"),
         "an unprefixed variable must reach the PTY, or this row is vacuous:\n{dumped}"
     );
     for prefix in field_native::registries::ENV_PREFIXES {
@@ -881,6 +889,86 @@ async fn a_value_given_on_the_command_line_still_reaches_the_command() {
     );
 
     let _ = client.terminate(&session.id, "item-576-row").await;
+    drop(stdin);
+    let _ = lines.next();
+    let _ = wait_exit(child, Duration::from_secs(10));
+}
+
+/// Item 589 (2026-11-19) — `VF_` is a prefix the floor strips, and the one name fieldd hands
+/// back by exact name (contracts' `ENV_KEEP_NAMES`: a smoke's run mark) arrives as an override,
+/// which ghosttea applies AFTER the strip. So a plain shell keeps fieldd's mark and no other
+/// `VF_*` value the cell inherited, the cell's own inherited mark included.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_plain_shell_keeps_the_mark_fieldd_hands_back_and_no_other_vf_name() {
+    use field_native::services::terminal_client::ControlClient;
+
+    let root = short_root();
+    let dump = root.path().join("envdump-589.txt");
+    let dump_path = dump.to_str().expect("utf8 dump path").to_string();
+
+    let (mut child, control, _frame) = spawn_cell_with_env(
+        root.path(),
+        14,
+        &[
+            ("VF_CARRIED", "vf-must-not-escape"),
+            ("VF_SMOKE_RUN", "inherited-mark-must-not-escape"),
+            ("CONTROL_589", "this-one-must-arrive"),
+        ],
+        Stdio::null(),
+    );
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    writeln!(stdin, "{}", serde_json::json!({ "token": "tok-589" })).expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let _hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+
+    let (client, _events) = ControlClient::connect(&control, "tok-589")
+        .await
+        .expect("dial the cell's control socket");
+
+    // fieldd's birth of a plain shell under a smoke: inherit, its mark the one override
+    let session = client
+        .create_session(serde_json::json!({
+            "executable": "/bin/sh",
+            "args": ["-c", format!("env > {dump_path}")],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "environment": {"mode": "inherit", "overrides": {"VF_SMOKE_RUN": "fieldds-mark"}},
+        }))
+        .await
+        .expect("create a session on the real cell");
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let dumped = loop {
+        if let Ok(text) = std::fs::read_to_string(&dump) {
+            if !text.is_empty() {
+                break text;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the tenant never wrote its environment to {dump_path}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+
+    assert!(
+        dumped.contains("CONTROL_589=this-one-must-arrive"),
+        "an unprefixed variable must reach the PTY, or this row is vacuous:\n{dumped}"
+    );
+    assert!(
+        dumped.contains("VF_SMOKE_RUN=fieldds-mark"),
+        "the mark fieldd hands back must reach the shell:\n{dumped}"
+    );
+    assert!(
+        !dumped.contains("must-not-escape"),
+        "an inherited VF_* value reached the PTY:\n{dumped}"
+    );
+
+    let _ = client.terminate(&session.id, "item-589-row").await;
     drop(stdin);
     let _ = lines.next();
     let _ = wait_exit(child, Duration::from_secs(10));
