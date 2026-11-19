@@ -858,6 +858,7 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 | Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe); the left tray retired into the hand at HN-1 (2026-10-29), and the right twin, which wore it mirrored, into the pill's sheet at HN-8 (2026-10-30): no wearer since, and `--vf-shadow-edge`, `--vf-drop-edge` and `--vf-drop-island` stand in `tokens.css` until a token pass removes them, doc first |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
 | Search popup (the Peek, §8 "Search"; GV-D8, built 2026-10-08) | `0 40px 100px rgba(0,0,0,0.24), 0 12px 30px rgba(0,0,0,0.10)` · dark `0 40px 100px rgba(0,0,0,0.6)` and a 6% top light (`inset 0 1px 0` white/6) — ringed by the strong hairline |
+| Dialog (`--vf-shadow-dialog`; Settings, and the simulator's setup over the desk; written here 2026-11-19, the token older) | `0 42px 100px rgba(0,0,0,0.18), 0 12px 36px rgba(0,0,0,0.10)` · dark `0 48px 120px rgba(0,0,0,0.48), 0 14px 40px rgba(0,0,0,0.30)`, over the backdrop dim (below) |
 
 *Corrected 2026-10-28 (the housekeeping pass), recording DK-13 and DK-17:* the two card rows are the
 record of the DOM card, which retired with the 0.11 canvas (DK-17); their tokens stand in
