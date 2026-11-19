@@ -14,6 +14,16 @@
 //     it supervises) and `plugins/` (the roots it reads at spawn);
 //   - shell: every other file in the app (Electron, the asar, the frameworks, the identity).
 //
+// *Corrected 2026-11-19 (Item 579):* the fieldd line above says too much. MAIN's own natives are staged under `bin/`
+// too: `bin/live-surface-capture-helper`, `bin/live-surface-adapter.node`, `bin/desktop-haptics.node` and
+// `bin/desktop-sound-player.node`, and the pages engine once the stage carries it. `planeOf` files them with fieldd's
+// plane, though main runs them and fieldd never does. That errs toward a restart too many, never a missed one: no
+// client reads the fieldd or shell row (main's `native-plane.ts` judges field-native alone, by its own hash of its
+// named members), and every apply stops fieldd and ends the shell whatever the manifest says (`apply.ts`'s stop;
+// fieldd's restart announcement names its planes by the kind of stop). So a main-owned binary is NEVER added to
+// field-native's set: a change to it would read the floor touched and stop its sessions for a binary the floor never
+// execs. Before any client reads the fieldd or shell row, main's natives move to the shell's plane by a named list.
+//
 // TD-4 (LP-D16, 2026-11-05): a field-native member that is a signed Mach-O is digested by its CodeDirectory (its line
 // `bin/<name>\0cdhash:<hex>`), never its bytes: a Developer ID signature's CMS blob carries a signing time and a secure
 // timestamp, so the same code signed to new bytes every release and field-native read touched every time. Anything else
