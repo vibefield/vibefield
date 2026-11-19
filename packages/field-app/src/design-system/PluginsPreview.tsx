@@ -86,6 +86,8 @@ export type PluginsPlateState =
   | "page-listed"
   | "count"
   | "switches"
+  // item 573: a power its kind of plugin can't have, on the made-up Brass & Glass
+  | "switches-kind"
   | "switches-off"
   | "switches-away"
   | "settings"
@@ -124,6 +126,8 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
   "page-listed": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
   count: { catalog: CATALOG_UPDATES, refresh: CATALOG_UPDATES },
   switches: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
+  // item 573: the plates that open Brass & Glass read the list that names it, so its pill is VibeField's
+  "switches-kind": { catalog: CATALOG_FIXTURES.ready, refresh: CATALOG_FIXTURES.ready },
   "switches-off": {
     catalog: CATALOG_FIXTURES.unconfigured,
     refresh: CATALOG_FIXTURES.unconfigured,
@@ -132,7 +136,7 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
     catalog: CATALOG_FIXTURES.unconfigured,
     refresh: CATALOG_FIXTURES.unconfigured,
   },
-  settings: { catalog: CATALOG_FIXTURES.unconfigured, refresh: CATALOG_FIXTURES.unconfigured },
+  settings: { catalog: CATALOG_FIXTURES.ready, refresh: CATALOG_FIXTURES.ready },
   "settings-off": {
     catalog: CATALOG_FIXTURES.unconfigured,
     refresh: CATALOG_FIXTURES.unconfigured,
@@ -141,10 +145,7 @@ const PLATE_READS: Readonly<Record<PluginsPlateState, PluginsFixtureRead>> = {
     catalog: CATALOG_FIXTURES.unconfigured,
     refresh: CATALOG_FIXTURES.unconfigured,
   },
-  "settings-unread": {
-    catalog: CATALOG_FIXTURES.unconfigured,
-    refresh: CATALOG_FIXTURES.unconfigured,
-  },
+  "settings-unread": { catalog: CATALOG_FIXTURES.ready, refresh: CATALOG_FIXTURES.ready },
   community: { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
   "community-ask": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
   "community-held": { catalog: CATALOG_LISTED, refresh: CATALOG_LISTED },
@@ -179,12 +180,13 @@ const PLATE_PAGES: Readonly<Partial<Record<PluginsPlateState, string>>> = {
   narrow: "vibefield.simulator",
   "page-listed": "acme.kanban",
   switches: "vibefield.simulator",
+  "switches-kind": "vibefield.brass-glass",
   "switches-off": "example.desk-clock",
   "switches-away": "vibefield.simulator",
-  settings: "vibefield.simulator",
+  settings: "vibefield.brass-glass",
   "settings-off": "example.desk-clock",
-  "settings-here": "vibefield.comment-pad",
-  "settings-unread": "vibefield.simulator",
+  "settings-here": "example.kv-service",
+  "settings-unread": "vibefield.brass-glass",
   "community-held-page": "acme.kanban",
   "shelf-page": "vibefield.desk-things",
   "shelf-downloading": "vibefield.desk-things",
@@ -201,6 +203,8 @@ function plateSnapshot(state: PluginsPlateState) {
   if (state === "not-working") return PLUGINS_FIXTURE_NOT_WORKING_SNAPSHOT;
   if (UPDATES_PLATES.includes(state)) return PLUGINS_FIXTURE_OUTDATED_SNAPSHOT;
   if (state === "page-listed") return PLUGINS_FIXTURE_LISTED_SNAPSHOT;
+  // item 573: the shelf's desktop has its featured set, Brass & Glass, from the list
+  if (state.startsWith("shelf")) return PLUGINS_FIXTURE_LISTED_SNAPSHOT;
   if (state.startsWith("community-held")) return PLUGINS_FIXTURE_HELD_SNAPSHOT;
   if (state.startsWith("switches")) return PLUGINS_FIXTURE_SWITCHES_SNAPSHOT;
   if (state.startsWith("settings")) return PLUGINS_FIXTURE_SETTINGS_SNAPSHOT;

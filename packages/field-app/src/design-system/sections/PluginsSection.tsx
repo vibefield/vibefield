@@ -149,11 +149,18 @@ export function PluginsSection(): ReactElement {
         <PluginsPlate state="update-card" />
       </Specimen>
       <Specimen
-        title="A plugin's switches — its one switch and its powers', one taken back, one it can't have"
+        title="A plugin's switches — its one switch and its powers', one taken back"
         source="frame/plugins/PluginsView.tsx · frame/plugins/plugins-model.ts"
         bleed
       >
         <PluginsPlate state="switches" />
+      </Specimen>
+      <Specimen
+        title="A plugin's switches — a power its kind of plugin can't have"
+        source="frame/plugins/plugins-model.ts"
+        bleed
+      >
+        <PluginsPlate state="switches-kind" />
       </Specimen>
       <Specimen
         title="A plugin in development, turned off — its powers wait for it"

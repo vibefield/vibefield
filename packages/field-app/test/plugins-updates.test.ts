@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { type PluginRecord, pluginPowerWords } from "@vibefield/contracts";
+import { type PluginRecord, PluginsCatalog, pluginPowerWords } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   CATALOG_UPDATES,
@@ -96,8 +96,30 @@ describe("which updates (§8 'Which updates')", () => {
     const timers = rowOf("vibefield.timers", listed);
     expect([timers.changes, timers.asksFirst]).toEqual(["Adds Alarm · Removes Stopwatch", true]);
     expect(rowOf("vibefield.burndown", listed).compatible).toBe(false);
-    // a Built in, Development or Sideloaded plugin is never an update here, whatever the list holds
-    expect(listed.some((row) => row.id === "vibefield.simulator")).toBe(false);
+    // a Built in, Development or Sideloaded plugin is never an update here, whatever the list holds:
+    // a list naming the Built in iOS Simulator newer makes no row (item 573: made up here, since a
+    // Built in plugin is never listed)
+    const naming = PluginsCatalog.parse({
+      ...CATALOG_UPDATES,
+      plugins: [
+        ...CATALOG_UPDATES.plugins,
+        {
+          id: "vibefield.simulator",
+          listedAs: "vibefield",
+          latest: {
+            version: "9.0.0",
+            artifactUrl: "artifacts/vibefield.simulator-9.0.0.vfplugin",
+            sha256: `sha256:${"a".repeat(64)}`,
+            minApp: "0.9.0",
+            minContracts: "0.1.0",
+            publishedAt: PLUGINS_FIXTURE_READ_AT,
+          },
+          compatible: true,
+        },
+      ],
+    });
+    const named = updateRows(PLUGINS_FIXTURE_OUTDATED_SNAPSHOT, naming);
+    expect(named.some((row) => row.id === "vibefield.simulator")).toBe(false);
   });
 
   it("keeps the rows whose plugin holds the typed words, and an update this opening took", () => {

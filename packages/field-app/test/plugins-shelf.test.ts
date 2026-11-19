@@ -44,7 +44,7 @@ describe("the shelf's columns (§8, MK-4e)", () => {
 describe("Discover's shelf from the list held (§8 'Discover', MK-4e)", () => {
   it("puts the featured set first, then VibeField's by title, and never one with no listing", () => {
     const shelf = discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "", false);
-    expect(shelf.featured?.title).toBe("Simulators");
+    expect(shelf.featured?.title).toBe("Brass & Glass");
     expect(shelf.tiles.map((tile) => tile.title)).toEqual(["Burndown", "Desk things"]);
     expect(shelf.none).toBeNull();
     expect(shelf.communityOff).toBeNull();
@@ -53,16 +53,20 @@ describe("Discover's shelf from the list held (§8 'Discover', MK-4e)", () => {
   it("says each tile's act, count and source: Installed, Install, or a set that needs a newer VibeField", () => {
     const shelf = discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "", false);
     expect(shelf.featured).toEqual({
-      id: "vibefield.simulator",
-      title: "Simulators",
-      summary: "An iPhone, an iPad and a Watch, live on your desk.",
+      id: "vibefield.brass-glass",
+      title: "Brass & Glass",
+      summary: "A barometer, a compass and a spirit level in brass, for the desk.",
       count: "3 objects",
-      // this desktop has it as a Built in plugin: its row's pill, never the list's
-      source: words.SOURCE_WORDS.bundled,
+      // the list's pill: this desktop doesn't have it (item 573: a Built in plugin is never listed, and
+      // the made-up Brass & Glass stands only where a list names it)
+      source: words.SOURCE_WORDS.vibefield,
       community: false,
-      act: "installed",
+      act: "install",
       has: null,
     });
+    // a desktop that has it from the list says Installed, with the list's pill
+    const had = discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_LISTED_SNAPSHOT, "", false).featured;
+    expect([had?.act, had?.source]).toEqual(["installed", words.SOURCE_WORDS.vibefield]);
     const [burndown, things] = shelf.tiles;
     expect([burndown?.act, burndown?.count, burndown?.source]).toEqual([
       "needs-newer",
@@ -77,9 +81,9 @@ describe("Discover's shelf from the list held (§8 'Discover', MK-4e)", () => {
   });
 
   it("adds the community's sets after VibeField's only while community plugins are on", () => {
-    expect(titles(CATALOG_SHELF)).toEqual(["Simulators", "Burndown", "Desk things"]);
+    expect(titles(CATALOG_SHELF)).toEqual(["Brass & Glass", "Burndown", "Desk things"]);
     expect(titles(CATALOG_SHELF, "", true)).toEqual([
-      "Simulators",
+      "Brass & Glass",
       "Burndown",
       "Desk things",
       "Kanban",
@@ -96,7 +100,7 @@ describe("Discover's shelf from the list held (§8 'Discover', MK-4e)", () => {
   });
 
   it("finds a set by its title, its summary or an object's label, and says the object it was found by", () => {
-    expect(titles(CATALOG_SHELF, "desk")).toEqual(["Desk things", "Simulators"]);
+    expect(titles(CATALOG_SHELF, "desk")).toEqual(["Brass & Glass", "Desk things"]);
     const ruler = discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "ruler", false);
     // no featured row while words are typed
     expect(ruler.featured).toBeNull();
@@ -104,11 +108,11 @@ describe("Discover's shelf from the list held (§8 'Discover', MK-4e)", () => {
       ["Desk things", words.SHELF_WORDS.has("Ruler")],
     ]);
     // a word its own words hold says no object
-    expect(discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "watch", false).tiles).toEqual([
-      expect.objectContaining({ title: "Simulators", has: null }),
-    ]);
+    expect(
+      discoverShelf(CATALOG_SHELF, PLUGINS_FIXTURE_SNAPSHOT, "barometer", false).tiles,
+    ).toEqual([expect.objectContaining({ title: "Brass & Glass", has: null })]);
     // every word must be held
-    expect(titles(CATALOG_SHELF, "clock simulators")).toEqual([]);
+    expect(titles(CATALOG_SHELF, "clock brass")).toEqual([]);
   });
 
   it("says none was found, and while community plugins are off that their sets aren't searched", () => {
@@ -200,7 +204,7 @@ describe("Discover's categories (§8 'Discover', item 433; MK-D2)", () => {
     expect(things.featured).toBeNull();
     expect(under("things")).toEqual(["Burndown", "Desk things"]);
     // the featured set too stands under its category, as a tile of the grid
-    expect(under("devices")).toEqual(["Simulators"]);
+    expect(under("devices")).toEqual(["Brass & Glass"]);
     expect(under("tools")).toEqual(["Desk things"]);
     // a community set joins after VibeField's while community plugins are on
     expect(under("things", true)).toEqual(["Burndown", "Desk things", "Kanban"]);

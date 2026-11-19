@@ -192,7 +192,7 @@ describe("a plugin held while community plugins are off (MK-O3D; O3-C's `held`)"
     expect([page.held, page.onOff, page.elsewhere]).toEqual([HELD_LINE.objects, null, null]);
     expect(page.powers.every((power) => power.switch === null)).toBe(true);
     expect(JSON.stringify(page)).not.toContain("aren't here yet");
-    expect(installedFoot(PLUGINS_FIXTURE_HELD_SNAPSHOT)).toBe("5 plugins, 7 objects · 2 off");
+    expect(installedFoot(PLUGINS_FIXTURE_HELD_SNAPSHOT)).toBe("5 plugins, 5 objects · 2 off");
   });
 
   it("says what it can do once on, never that it does nothing, while it holds no power", () => {

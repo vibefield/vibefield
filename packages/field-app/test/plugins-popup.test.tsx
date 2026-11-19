@@ -224,6 +224,8 @@ async function mount(
 
 const pop = (): HTMLElement | null => document.body.querySelector<HTMLElement>(".vf-plugins-pop");
 const bodyText = (): string => document.body.querySelector(".vf-plugins-body")?.textContent ?? "";
+/** The iOS Simulator's own power in item 569's words (item 573: its switch plates stand on the plugin as it ships). */
+const SIMULATOR_POWER = pluginPowerWords("surface.simulator", { onMac: false }) ?? "";
 const footText = (): string => document.body.querySelector(".vf-plugins-said")?.textContent ?? "";
 const chosen = (): string =>
   document.body.querySelector('.vf-plugins-seg [aria-checked="true"]')?.textContent ?? "";
@@ -266,11 +268,11 @@ describe("the read on open (MK-D5)", () => {
     await mount(port);
     // MK-4e: the held list's count is the foot's; the body is its shelf
     expect(footText()).toContain("1 plugin, 3 objects");
-    expect(bodyText()).toContain("Simulators");
+    expect(bodyText()).toContain("Brass & Glass");
     await act(async () => answerHeld(CATALOG_FIXTURES.unread));
     await settle();
     expect(footText()).toContain("1 plugin, 3 objects");
-    expect(bodyText()).toContain("Simulators");
+    expect(bodyText()).toContain("Brass & Glass");
   });
 });
 
@@ -291,8 +293,8 @@ describe("its states, in the body — never a blank", () => {
     const titles = [...document.body.querySelectorAll(".vf-plugins-title")].map(
       (n) => n.textContent,
     );
-    expect(titles).toEqual(["Comment pad", "Simulators", "Desk clock", "Key-value store"]);
-    expect(footText()).toBe("4 plugins, 5 objects · 1 off");
+    expect(titles).toEqual(["Comment pad", "iOS Simulator", "Desk clock", "Key-value store"]);
+    expect(footText()).toBe("4 plugins, 3 objects · 1 off");
   });
 
   it("no registry: Updates says the plugins that come with VibeField update with it", async () => {
@@ -323,7 +325,7 @@ describe("its states, in the body — never a blank", () => {
   it("a list held: Discover's shelf (MK-4e), and the foot's count and when it was read", async () => {
     await mount({ catalog: CATALOG_FIXTURES.ready, refresh: CATALOG_FIXTURES.ready });
     const featured = document.body.querySelector('.vf-plugins-tile-item[data-featured="true"]');
-    expect(featured?.querySelector(".vf-plugins-tile-title")?.textContent).toBe("Simulators");
+    expect(featured?.querySelector(".vf-plugins-tile-title")?.textContent).toBe("Brass & Glass");
     expect(bodyText()).not.toContain("1 plugin, 3 objects");
     const when = words.listTime(PLUGINS_FIXTURE_READ_AT, PLUGINS_FIXTURE_NOW);
     expect(footText()).toBe(`1 plugin, 3 objects · checked ${when}`);
@@ -356,17 +358,17 @@ describe("its states, in the body — never a blank", () => {
         );
         input.dispatchEvent(new Event("input", { bubbles: true }));
       });
-    type("watch");
+    type("simulator");
     expect(bodyText()).toContain(words.NO_REGISTRY.title);
     act(() => {
       input?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     const titles = () =>
       [...document.body.querySelectorAll(".vf-plugins-title")].map((node) => node.textContent);
-    expect(titles()).toEqual(["Simulators"]);
+    expect(titles()).toEqual(["iOS Simulator"]);
     type("nothing here");
     expect(bodyText()).toBe(words.noMatchWords("nothing here"));
-    expect(footText()).toBe("4 plugins, 5 objects · 1 off");
+    expect(footText()).toBe("4 plugins, 3 objects · 1 off");
   });
 
   it("an opening after neither door answered says the read, never the last opening's words", async () => {
@@ -673,12 +675,12 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
     const { port, calls } = counting(pluginsFixturePort(NO_REGISTRY));
     await mount(port);
     toInstalled();
-    // Comment pad, then Simulators: Built in first, then by title
+    // Comment pad, then iOS Simulator: Built in first, then by title
     act(() => rows()[1]?.click());
-    expect(pageTitle()).toBe("Simulators");
+    expect(pageTitle()).toBe("iOS Simulator");
     expect(bodyText()).toContain(words.PAGE_WORDS.builtIn);
-    expect(bodyText()).toContain("Read what's on the desk");
-    expect(bodyText()).toContain("Apple Watch");
+    expect(bodyText()).toContain("Show live windows on the desk");
+    expect(bodyText()).toContain(SIMULATOR_POWER);
     const back = document.body.querySelector<HTMLButtonElement>(".vf-plugins-back");
     expect(back?.getAttribute("aria-label")).toBe(words.PAGE_WORDS.back("Installed"));
     act(() => back?.click());
@@ -709,9 +711,9 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first')", () => {
       toInstalled();
       expect(hotTitle()).toBe("Comment pad");
       press("ArrowDown");
-      expect(hotTitle()).toBe("Simulators");
+      expect(hotTitle()).toBe("iOS Simulator");
       const last = seen.at(-1);
-      expect(last?.row.querySelector(".vf-plugins-title")?.textContent).toBe("Simulators");
+      expect(last?.row.querySelector(".vf-plugins-title")?.textContent).toBe("iOS Simulator");
       expect(last?.options).toEqual({ block: "nearest" });
       for (let i = 0; i < 5; i += 1) press("ArrowDown");
       expect(hotTitle()).toBe("Key-value store");
@@ -932,11 +934,11 @@ describe("Show them on the pegboard (MK-4d; MK-D8's fallback B, §8 'The pegboar
   it("says Show on the pegboard for a set of one, and offers none where the board hangs none of the set or the plugin is off", async () => {
     await mount(NO_REGISTRY);
     toInstalled();
-    // Simulators: its Phone and Tablet hang nowhere, its Watch does
-    openInstalled("Simulators");
+    // the iOS Simulator: its one object hangs on its shelf
+    openInstalled("iOS Simulator");
     expect(showAct()?.textContent).toBe(`${words.showWords(1)}↵`);
     act(() => showAct()?.click());
-    expect(boardReveal()?.types).toEqual(["SimWatch"]);
+    expect(boardReveal()?.types).toEqual(["vibefield.simulator"]);
     resetBoardRevealForTest();
     // Comment pad's one object hangs nowhere, Desk clock is turned off, Key-value store adds no object
     for (const title of ["Comment pad", "Desk clock", "Key-value store"]) {
@@ -1029,22 +1031,24 @@ describe("the pegboard's names in the popup (MK-4d's names; James's MK-O10 pick 
         PLUGINS_FIXTURE_LISTED_SNAPSHOT,
       );
       toInstalled();
-      expect(lineSaid("Simulators")).toBe("3 objects · Devices · 1.2.0 · comes with VibeField");
+      expect(lineSaid("iOS Simulator")).toBe("Hangs under Devices · 0.1.0 · comes with VibeField");
+      expect(lineSaid("Brass & Glass")).toBe("3 objects · Devices · 1.2.0");
       expect(lineSaid("Kanban")).toBe("2 objects · Devices · 2.1.0");
       expect(lineSaid("Comment pad")).toBe("1 object · 0.1.0 · comes with VibeField");
-      openInstalled("Simulators");
+      // item 573: the made-up Brass & Glass, its Barometer hung as a Weather glass
+      openInstalled("Brass & Glass");
       expect(addsSaid()).toEqual([
-        ["Phone", null],
-        ["Tablet", null],
-        ["Apple Watch", words.hangsUnder("Devices")],
+        ["Weather glass", words.hangsUnder("Devices")],
+        ["Compass", null],
+        ["Spirit level", null],
       ]);
       // the board names the category anew on its next frame: the page follows, never by its id
       board.publish([{ id: "devices", label: "On the bench", count: 3 }]);
-      expect(addsSaid()[2]).toEqual(["Apple Watch", words.hangsUnder("On the bench")]);
+      expect(addsSaid()[0]).toEqual(["Weather glass", words.hangsUnder("On the bench")]);
       expect(bodyText()).not.toContain("devices");
       // a board that hangs that category no more: no place
       board.publish([{ id: "things", label: "Things", count: 1 }]);
-      expect(addsSaid()[2]).toEqual(["Apple Watch", null]);
+      expect(addsSaid()[0]).toEqual(["Weather glass", null]);
     } finally {
       board.unmount();
     }
@@ -1055,14 +1059,14 @@ describe("the pegboard's names in the popup (MK-4d's names; James's MK-O10 pick 
     try {
       await mount(NO_REGISTRY);
       toInstalled();
-      expect(lineSaid("Simulators")).toBe("3 objects · Devices · 1.2.0 · comes with VibeField");
+      expect(lineSaid("iOS Simulator")).toBe("Hangs under Devices · 0.1.0 · comes with VibeField");
     } finally {
       board.unmount();
     }
     // the desk gone (a remount's gap, or none mounted): no name to say a place by
-    expect(lineSaid("Simulators")).toBe("3 objects · 1.2.0 · comes with VibeField");
-    openInstalled("Simulators");
-    expect(addsSaid().map(([, under]) => under)).toEqual([null, null, null]);
+    expect(lineSaid("iOS Simulator")).toBe("1 object · 0.1.0 · comes with VibeField");
+    openInstalled("iOS Simulator");
+    expect(addsSaid().map(([, under]) => under)).toEqual([null]);
   });
 });
 
@@ -1090,8 +1094,9 @@ const SHELF: PluginsFixtureRead = { catalog: CATALOG_SHELF, refresh: CATALOG_SHE
 describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
   it("shows the featured set, then VibeField's, each saying its act, and asks fieldd nothing more", async () => {
     const { port, calls } = counting(pluginsFixturePort(SHELF));
-    await mount(port);
-    expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+    // item 573: this desktop has Brass & Glass from the list (a Built in plugin is never listed)
+    await mount(port, PLUGINS_FIXTURE_LISTED_SNAPSHOT);
+    expect(tileTitles()).toEqual(["Brass & Glass", "Burndown", "Desk things"]);
     expect(tileActs()).toEqual([
       words.PAGE_WORDS.installed,
       words.SHELF_WORDS.needsNewer,
@@ -1107,14 +1112,14 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
       [...document.body.querySelectorAll(".vf-plugins-body [data-plugin]")].map((node) =>
         node.getAttribute("data-plugin"),
       ),
-    ).toEqual(["vibefield.simulator", "vibefield.burndown", "vibefield.desk-things"]);
+    ).toEqual(["vibefield.brass-glass", "vibefield.burndown", "vibefield.desk-things"]);
     expect(bodyText()).not.toContain("vibefield.desk-things");
     expect(calls).toEqual({ catalog: 1, refresh: 1 });
   });
 
   it("walks its tiles from the field, ↓ ↑ a row and ← → one, and ↵ opens the hot one's page", async () => {
     await mount(SHELF);
-    expect(hotTile()).toBe("Simulators");
+    expect(hotTile()).toBe("Brass & Glass");
     press("ArrowDown");
     expect(hotTile()).toBe("Burndown");
     press("ArrowRight");
@@ -1122,7 +1127,7 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
     press("ArrowLeft");
     expect(hotTile()).toBe("Burndown");
     press("ArrowUp");
-    expect(hotTile()).toBe("Simulators");
+    expect(hotTile()).toBe("Brass & Glass");
     press("ArrowDown");
     press("ArrowRight");
     press("Enter");
@@ -1142,9 +1147,9 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
   });
 
   it("opens a set's page on a press, and a set this desktop has opens its own page", async () => {
-    await mount(SHELF);
-    act(() => tile("Simulators")?.click());
-    expect(pageTitle()).toBe("Simulators");
+    await mount(SHELF, PLUGINS_FIXTURE_LISTED_SNAPSHOT);
+    act(() => tile("Brass & Glass")?.click());
+    expect(pageTitle()).toBe("Brass & Glass");
     expect(bodyText()).toContain(words.PAGE_WORDS.can);
     expect(document.body.querySelector(".vf-plugins-page-act")?.textContent).toBe(
       words.PAGE_WORDS.installed,
@@ -1157,13 +1162,13 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
     expect(tileTitles()).toEqual(["Desk things"]);
     expect(bodyText()).toContain(words.SHELF_WORDS.has("Ruler"));
     expect(bodyText()).toContain(words.SHELF_WORDS.communityOff);
-    // "desk" finds two sets (Simulators by its summary). → would walk to the second, so the hot
-    // tile staying says → is the caret's while words are typed
+    // "desk" finds two sets, by title (Brass & Glass by its summary). → would walk to the second, so
+    // the hot tile staying says → is the caret's while words are typed
     typeWords("desk");
-    expect(tileTitles()).toEqual(["Desk things", "Simulators"]);
-    expect(hotTile()).toBe("Desk things");
+    expect(tileTitles()).toEqual(["Brass & Glass", "Desk things"]);
+    expect(hotTile()).toBe("Brass & Glass");
     press("ArrowRight");
-    expect(hotTile()).toBe("Desk things");
+    expect(hotTile()).toBe("Brass & Glass");
     typeWords("nothing here");
     expect(bodyText()).toContain(words.SHELF_WORDS.none("nothing here"));
     expect(tileTitles()).toEqual([]);
@@ -1183,7 +1188,7 @@ describe("Discover's shelf (MK-4e; §8 'Discover')", () => {
       ),
     );
     await settle();
-    expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things", "Kanban"]);
+    expect(tileTitles()).toEqual(["Brass & Glass", "Burndown", "Desk things", "Kanban"]);
     expect(bodyText()).not.toContain(words.SHELF_WORDS.communityOff);
   });
 });
@@ -1248,12 +1253,12 @@ describe("Discover's categories (item 433; §8 'Discover', MK-D2)", () => {
       press("ArrowRight");
       expect(hotTile()).toBe("Desk things");
       act(() => categorySegment("devices")?.click());
-      expect(tileTitles()).toEqual(["Simulators"]);
-      expect(hotTile()).toBe("Simulators");
+      expect(tileTitles()).toEqual(["Brass & Glass"]);
+      expect(hotTile()).toBe("Brass & Glass");
       // All again: the featured set first
       act(() => categorySegment("")?.click());
       expect(categoriesSaid().chosen).toBe("");
-      expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+      expect(tileTitles()).toEqual(["Brass & Glass", "Burndown", "Desk things"]);
     } finally {
       board.unmount();
     }
@@ -1321,13 +1326,13 @@ describe("Discover's categories: their door, typed words and the board they foll
       render("plugins", "");
       await settle();
       expect(categoriesSaid().chosen).toBe("");
-      expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+      expect(tileTitles()).toEqual(["Brass & Glass", "Burndown", "Desk things"]);
       // a category no shown set hangs under (Paper): All, the featured set first
       render(null, "paper");
       render("plugins", "paper");
       await settle();
       expect(categoriesSaid().chosen).toBe("");
-      expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+      expect(tileTitles()).toEqual(["Brass & Glass", "Burndown", "Desk things"]);
     } finally {
       board.unmount();
     }
@@ -1344,7 +1349,7 @@ describe("Discover's categories: their door, typed words and the board they foll
       expect(bodyText()).toContain(words.SHELF_WORDS.has("Ruler"));
       typeWords("");
       expect(categoriesSaid().chosen).toBe("devices");
-      expect(tileTitles()).toEqual(["Simulators"]);
+      expect(tileTitles()).toEqual(["Brass & Glass"]);
     } finally {
       board.unmount();
     }
@@ -1374,7 +1379,7 @@ describe("Discover's categories: their door, typed words and the board they foll
     }
     // the desk gone (a remount's gap): no name, so no row, and the shelf shows All
     expect(categoriesSaid().ids).toEqual([]);
-    expect(tileTitles()).toEqual(["Simulators", "Burndown", "Desk things"]);
+    expect(tileTitles()).toEqual(["Brass & Glass", "Burndown", "Desk things"]);
   });
 
   it("in the frame, opens Discover on the category its door asked for (More in Plugins…)", async () => {
@@ -1397,7 +1402,7 @@ describe("Discover's categories: their door, typed words and the board they foll
       act(() => root.render(frame("plugins")));
       await settle();
       expect(categoriesSaid().chosen).toBe("devices");
-      expect(tileTitles()).toEqual(["Simulators"]);
+      expect(tileTitles()).toEqual(["Brass & Glass"]);
     } finally {
       board.unmount();
       resetPluginUpdates();
@@ -1672,10 +1677,10 @@ describe("Install and the install card (O2-C; §8 'Every install asks first')", 
 
   it("offers the hot tile's Install in Discover's foot, and none for a set this desktop has", async () => {
     const { port, sent } = installs(pluginsFixturePort(SHELF));
-    await mount(port);
+    await mount(port, PLUGINS_FIXTURE_LISTED_SNAPSHOT);
     const footAct = (): HTMLButtonElement | null =>
       document.body.querySelector<HTMLButtonElement>(".vf-plugins-foot .vf-plugins-act");
-    // Simulators, featured, is installed here: no act
+    // Brass & Glass, featured, is installed here from the list: no act
     expect(footAct()).toBeNull();
     press("ArrowDown");
     press("ArrowRight");
@@ -1904,7 +1909,7 @@ describe("Remove… on a plugin's page (MK-4f; §8 'The destructive uninstall af
     root = createRoot(host);
     await mount(pluginsFixturePort(LISTED), PLUGINS_FIXTURE_LISTED_SNAPSHOT);
     toInstalled();
-    for (const title of ["Simulators", "Desk clock", "Key-value store"]) {
+    for (const title of ["iOS Simulator", "Desk clock", "Key-value store"]) {
       act(() =>
         rows()
           .find((row) => row.textContent?.includes(title))
@@ -1980,7 +1985,7 @@ describe("Remove… on a plugin's page (MK-4f; §8 'The destructive uninstall af
     expect(document.activeElement).toBe(field());
     expect(hotTitle()).toBe("Comment pad");
     press("ArrowDown");
-    expect(hotTitle()).toBe("Simulators");
+    expect(hotTitle()).toBe("iOS Simulator");
   });
 
   it("asks again before its data goes: this desktop alone, your others named, Remove data", async () => {
@@ -2475,22 +2480,22 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   it("is one switch on the row and the page: a press sends one request, and neither moves until fieldd's next snapshot", async () => {
     const { port, sent } = await mountSwitches();
     toInstalled();
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
-    act(() => rowSwitch("Simulators")?.click());
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("true");
+    act(() => rowSwitch("iOS Simulator")?.click());
     await settle();
     expect(sent).toEqual(["disable vibefield.simulator"]);
     // fieldd answered; the switch waits for its snapshot
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
-    openRow("Simulators");
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("true");
+    openRow("iOS Simulator");
     expect(pageSwitch()?.getAttribute("aria-checked")).toBe("true");
     const off = turned(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", false);
     act(() => root.render(<Window port={port} snapshot={off} open />));
     await settle();
     expect(pageSwitch()?.getAttribute("aria-checked")).toBe("false");
     esc();
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("false");
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("false");
     // the page's switch sends its own one request, the other way
-    openRow("Simulators");
+    openRow("iOS Simulator");
     act(() => pageSwitch()?.click());
     await settle();
     expect(sent).toEqual(["disable vibefield.simulator", "enable vibefield.simulator"]);
@@ -2499,7 +2504,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   it("sends nothing for a second press while its request is out", async () => {
     const { sent } = await mountSwitches("pending");
     toInstalled();
-    openRow("Simulators");
+    openRow("iOS Simulator");
     act(() => {
       pageSwitch()?.click();
       pageSwitch()?.click();
@@ -2515,19 +2520,19 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   it("says a refusal in its own words, never the error's text, and the switch stays where fieldd has it", async () => {
     const { sent } = await mountSwitches("refuses");
     toInstalled();
-    act(() => rowSwitch("Simulators")?.click());
+    act(() => rowSwitch("iOS Simulator")?.click());
     await settle();
     expect(sent).toEqual(["disable vibefield.simulator"]);
-    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    const line = rowOf("iOS Simulator")?.querySelector(".vf-plugins-line");
     expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(false));
     expect(line?.getAttribute("data-tone")).toBe("attention");
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
-    openRow("Simulators");
-    act(() => powerSwitch("Change what's on the desk")?.click());
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("true");
+    openRow("iOS Simulator");
+    act(() => powerSwitch(SIMULATOR_POWER)?.click());
     await settle();
     expect(sent).toEqual([
       "disable vibefield.simulator",
-      "grant vibefield.simulator canvas.write true",
+      "grant vibefield.simulator surface.simulator true",
     ]);
     const refusals = [...document.body.querySelectorAll(".vf-plugins-page-refused")].map(
       (node) => node.textContent,
@@ -2543,16 +2548,16 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     });
     const sent = await mountRefusing(refusal);
     toInstalled();
-    act(() => rowSwitch("Simulators")?.click());
+    act(() => rowSwitch("iOS Simulator")?.click());
     await settle();
     expect(sent).toEqual(["disable vibefield.simulator"]);
-    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    const line = rowOf("iOS Simulator")?.querySelector(".vf-plugins-line");
     expect(line?.textContent, "the Installed row says the plugin is updating").toBe(
       words.SWITCH_WORDS.updating,
     ); // RED before the view
     expect(line?.getAttribute("data-tone")).toBe("attention");
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
-    openRow("Simulators");
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("true");
+    openRow("iOS Simulator");
     const page = document.body.querySelector(".vf-plugins-page-refused");
     expect(page?.textContent, "and its page says it too").toBe(words.SWITCH_WORDS.updating);
     expect(document.body.textContent).not.toContain(said);
@@ -2562,12 +2567,12 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     const said = "vibefield.simulator: updating; the switch was not applied";
     const sent = await mountRefusing(new FielddRpcError("PRECONDITION_FAILED", said, true));
     toInstalled();
-    act(() => rowSwitch("Simulators")?.click());
+    act(() => rowSwitch("iOS Simulator")?.click());
     await settle();
     expect(sent).toEqual(["disable vibefield.simulator"]);
-    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    const line = rowOf("iOS Simulator")?.querySelector(".vf-plugins-line");
     expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(false));
-    openRow("Simulators");
+    openRow("iOS Simulator");
     const page = document.body.querySelector(".vf-plugins-page-refused");
     expect(page?.textContent).toBe(words.SWITCH_WORDS.refused(false));
     expect(document.body.textContent).not.toContain(said);
@@ -2576,26 +2581,26 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   it("drops a refusal once fieldd's snapshot shows the switch the way it was being turned (VF-PM 19:05:12Z, 4)", async () => {
     const { port } = await mountSwitches("refuses");
     toInstalled();
-    act(() => rowSwitch("Simulators")?.click());
+    act(() => rowSwitch("iOS Simulator")?.click());
     await settle();
-    expect(rowOf("Simulators")?.querySelector(".vf-plugins-line")?.textContent).toBe(
+    expect(rowOf("iOS Simulator")?.querySelector(".vf-plugins-line")?.textContent).toBe(
       words.SWITCH_WORDS.refused(false),
     );
     // a snapshot that still shows it on keeps the refusal
     const again = { ...PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, generation: 9 };
     act(() => root.render(<Window port={port} snapshot={again} open />));
     await settle();
-    expect(rowOf("Simulators")?.querySelector(".vf-plugins-line")?.textContent).toBe(
+    expect(rowOf("iOS Simulator")?.querySelector(".vf-plugins-line")?.textContent).toBe(
       words.SWITCH_WORDS.refused(false),
     );
     // one that shows it off, the way it was being turned, drops it
     const off = turned(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", false);
     act(() => root.render(<Window port={port} snapshot={off} open />));
     await settle();
-    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    const line = rowOf("iOS Simulator")?.querySelector(".vf-plugins-line");
     expect(line?.textContent).toBe(words.INSTALLED_LINE.off);
     expect(line?.hasAttribute("data-tone")).toBe(false);
-    openRow("Simulators");
+    openRow("iOS Simulator");
     expect(document.body.querySelector(".vf-plugins-page-refused")).toBeNull();
   });
 
@@ -2613,15 +2618,15 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     act(() => root.render(<Window port={port} snapshot={stopped} open />));
     await settle();
     toInstalled();
-    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    const line = rowOf("iOS Simulator")?.querySelector(".vf-plugins-line");
     expect(line?.textContent).toBe(words.INSTALLED_LINE.stopped);
     expect(line?.getAttribute("data-tone")).toBe("attention");
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("false");
-    act(() => rowSwitch("Simulators")?.click());
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("false");
+    act(() => rowSwitch("iOS Simulator")?.click());
     await settle();
     expect(sent).toEqual(["enable vibefield.simulator"]);
     // its page's switch says the same
-    openRow("Simulators");
+    openRow("iOS Simulator");
     expect(pageSwitch()?.getAttribute("aria-checked")).toBe("false");
   });
 
@@ -2633,7 +2638,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     act(() => {
       for (const node of switches()) node.click();
     });
-    openRow("Simulators");
+    openRow("iOS Simulator");
     act(() => {
       for (const node of switches()) node.click();
     });
@@ -2650,7 +2655,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
     act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_LISTED_SNAPSHOT} open />));
     await settle();
     toInstalled();
-    for (const title of ["Kanban", "Key-value store", "Simulators", "Desk clock"]) {
+    for (const title of ["Kanban", "Key-value store", "iOS Simulator", "Desk clock"]) {
       expect(rowSwitch(title), title).not.toBeNull();
     }
     act(() => rowSwitch("Key-value store")?.click());
@@ -2682,16 +2687,19 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   it("sends one grant for a power's switch, and none for a power it can't have or on a plugin that is off", async () => {
     const { sent } = await mountSwitches();
     toInstalled();
-    openRow("Simulators");
-    expect(powerSwitch("Read what's on the desk")?.getAttribute("aria-checked")).toBe("true");
-    expect(powerSwitch("Change what's on the desk")?.getAttribute("aria-checked")).toBe("false");
-    // a power its kind of plugin can't have: why, and no switch
+    openRow("iOS Simulator");
+    expect(powerSwitch("Show live windows on the desk")?.getAttribute("aria-checked")).toBe("true");
+    expect(powerSwitch(SIMULATOR_POWER)?.getAttribute("aria-checked")).toBe("false");
+    expect(bodyText()).toContain(words.SWITCH_WORDS.elsewhere);
+    act(() => powerSwitch(SIMULATOR_POWER)?.click());
+    await settle();
+    expect(sent).toEqual(["grant vibefield.simulator surface.simulator true"]);
+    // a power its kind of plugin can't have: why, and no switch (item 573: on the made-up
+    // Brass & Glass, since no plugin that ships asks for one)
+    esc();
+    openRow("Brass & Glass");
     expect(bodyText()).toContain(words.SWITCH_WORDS.cant["entry-kind"]);
     expect(powerSwitch(pluginPowerWords("process.spawn", { onMac: false }) ?? "")).toBeNull();
-    expect(bodyText()).toContain(words.SWITCH_WORDS.elsewhere);
-    act(() => powerSwitch("Change what's on the desk")?.click());
-    await settle();
-    expect(sent).toEqual(["grant vibefield.simulator canvas.write true"]);
     // Desk clock, in development and off: its powers wait, and its page never says your other desktops
     esc();
     openRow("Desk clock");
@@ -2708,7 +2716,7 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
       for (const node of waiting) node.click();
     });
     await settle();
-    expect(sent).toEqual(["grant vibefield.simulator canvas.write true"]);
+    expect(sent).toEqual(["grant vibefield.simulator surface.simulator true"]);
     // its one switch still turns it on
     expect(pageSwitch()?.disabled).toBe(false);
   });
@@ -2716,26 +2724,22 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
   it("names each switch by what it turns, the same on and off", async () => {
     const { port } = await mountSwitches();
     toInstalled();
-    expect(rowSwitch("Simulators")?.getAttribute("aria-label")).toBe("Simulators");
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-label")).toBe("iOS Simulator");
     const off = turned(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator", false);
     act(() => root.render(<Window port={port} snapshot={off} open />));
     await settle();
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("false");
-    expect(rowSwitch("Simulators")?.getAttribute("aria-label")).toBe("Simulators");
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("false");
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-label")).toBe("iOS Simulator");
     act(() =>
       root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_SWITCHES_SNAPSHOT} open />),
     );
     await settle();
-    openRow("Simulators");
-    expect(pageSwitch()?.getAttribute("aria-label")).toBe("Simulators");
+    openRow("iOS Simulator");
+    expect(pageSwitch()?.getAttribute("aria-label")).toBe("iOS Simulator");
     const names = [
       ...document.body.querySelectorAll<HTMLButtonElement>('.vf-plugins-power [role="switch"]'),
     ].map((node) => node.getAttribute("aria-label"));
-    expect(names).toEqual([
-      pluginPowerWords("surface.simulator", { onMac: false }),
-      "Read what's on the desk",
-      "Change what's on the desk",
-    ]);
+    expect(names).toEqual(["Show live windows on the desk", SIMULATOR_POWER]);
   });
 
   it("puts no control inside another: each switch is a stop of Tab of its own, and a row's press is none", async () => {
@@ -2756,10 +2760,11 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches')", () => {
       (rowOf(title)?.querySelector(":scope > .vf-plugins-chevron") ?? null) !== null;
     // a Sideloaded plugin's row has its switch too (N18)
     expect([chevronIn("Key-value store"), chevronBeside("Key-value store")]).toEqual([false, true]);
-    expect([chevronIn("Simulators"), chevronBeside("Simulators")]).toEqual([false, true]);
-    openRow("Simulators");
+    expect([chevronIn("iOS Simulator"), chevronBeside("iOS Simulator")]).toEqual([false, true]);
+    openRow("iOS Simulator");
     expect(nested()).toEqual([]);
-    expect(switches().length).toBe(4);
+    // the iOS Simulator's own switch and one for each of its two powers (item 573)
+    expect(switches().length).toBe(3);
     // the one row with no switch: a plugin held while community plugins are off
     esc();
     act(() => root.render(<Window port={port} snapshot={PLUGINS_FIXTURE_HELD_SNAPSHOT} open />));
@@ -2894,8 +2899,8 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
     return fieldd;
   }
 
-  /** Simulators' line while it says its set: no board is mounted, so no place is said. */
-  const SIMULATORS_SET = "3 objects · 1.2.0 · comes with VibeField";
+  /** iOS Simulator's line while it says its set: no board is mounted, so no place is said. */
+  const SIMULATORS_SET = "1 object · 0.1.0 · comes with VibeField";
   /** A row's Try again: the one act an Installed row carries. */
   const againOf = (title: string): HTMLButtonElement | null =>
     rowOf(title)?.querySelector<HTMLButtonElement>(".vf-plugins-act") ?? null;
@@ -2924,8 +2929,8 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
     act(() => root.render(<FrameWindow client={client} surface="plugins" />));
     await settle();
     toInstalled();
-    // Simulators' renderer failed in a window still connected, and Key-value store's service failed
-    expect(lineSaid("Simulators")).toBe("Simulators isn't working right now");
+    // iOS Simulator's renderer failed in a window still connected, and Key-value store's service failed
+    expect(lineSaid("iOS Simulator")).toBe("iOS Simulator isn't working right now");
     expect(lineSaid("Key-value store")).toBe("Key-value store isn't working right now");
     // Comment pad's failure is the last report of a window that left: not read
     expect(lineSaid("Comment pad")).toBe("1 object · 0.1.0 · comes with VibeField");
@@ -2938,31 +2943,31 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
 
   it("lets the read go as the popup folds, and reads it afresh as it opens again", async () => {
     const fieldd = await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
-    expect(lineSaid("Simulators")).toBe("Simulators isn't working right now");
+    expect(lineSaid("iOS Simulator")).toBe("iOS Simulator isn't working right now");
     act(() => root.render(<FrameWindow client={fieldd.client} surface={null} />));
     await settle();
     expect(fieldd.unsubscribed).toContain("plugins.runtime.subscribe");
-    // opened again over a runtime read that names no plugin failed: Simulators says its set
+    // opened again over a runtime read that names no plugin failed: iOS Simulator says its set
     fieldd.streams({ ...PLUGINS_FIXTURE_RUNTIME, plugins: [] });
     act(() => root.render(<FrameWindow client={fieldd.client} surface="plugins" />));
     await settle();
     toInstalled();
-    expect(lineSaid("Simulators")).toBe(SIMULATORS_SET);
-    expect(againOf("Simulators")).toBeNull();
+    expect(lineSaid("iOS Simulator")).toBe(SIMULATORS_SET);
+    expect(againOf("iOS Simulator")).toBeNull();
   });
 
   it("reads none as failed once the client ends the read, never its last data as live", async () => {
     const fieldd = await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
-    expect(lineSaid("Simulators")).toBe("Simulators isn't working right now");
+    expect(lineSaid("iOS Simulator")).toBe("iOS Simulator isn't working right now");
     act(() => fieldd.end());
     await settle();
-    expect(lineSaid("Simulators")).toBe(SIMULATORS_SET);
-    expect(againOf("Simulators")).toBeNull();
+    expect(lineSaid("iOS Simulator")).toBe(SIMULATORS_SET);
+    expect(againOf("iOS Simulator")).toBeNull();
   });
 
   it("offers Try again on a plugin that isn't working wherever its switches stand, which turns it off and on", async () => {
     const { sent } = await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
-    const again = againOf("Simulators");
+    const again = againOf("iOS Simulator");
     // the act's look with no ↵ printed: ↵ opens the hot row's page
     expect(again?.textContent).toBe(words.INSTALL_WORDS.tryAgain);
     expect(again?.hasAttribute("aria-keyshortcuts")).toBe(false);
@@ -2977,7 +2982,7 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
       "plugins.disable vibefield.simulator",
       "plugins.enable vibefield.simulator",
     ]);
-    // the Sideloaded one's press sends its switch's two requests, as Simulators' did
+    // the Sideloaded one's press sends its switch's two requests, as iOS Simulator's did
     act(() => againOf("Key-value store")?.click());
     await settle();
     expect(switchCalls(sent).slice(2)).toEqual([
@@ -2991,17 +2996,17 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
       runtime: PLUGINS_FIXTURE_RUNTIME,
       refuse: "plugins.disable",
     });
-    act(() => againOf("Simulators")?.click());
+    act(() => againOf("iOS Simulator")?.click());
     await settle();
     expect(switchCalls(sent)).toEqual(["plugins.disable vibefield.simulator"]);
-    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    const line = rowOf("iOS Simulator")?.querySelector(".vf-plugins-line");
     expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(false));
     expect(line?.getAttribute("data-tone")).toBe("attention");
-    expect(againOf("Simulators")?.disabled).toBe(false);
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+    expect(againOf("iOS Simulator")?.disabled).toBe(false);
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("true");
     expect(document.body.textContent).not.toContain(PLUGINS_FIXTURE_REFUSAL);
     // pressed again, it asks again from the start
-    act(() => againOf("Simulators")?.click());
+    act(() => againOf("iOS Simulator")?.click());
     await settle();
     expect(switchCalls(sent)).toEqual([
       "plugins.disable vibefield.simulator",
@@ -3014,13 +3019,13 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
       runtime: PLUGINS_FIXTURE_RUNTIME,
       refuse: "plugins.enable",
     });
-    act(() => againOf("Simulators")?.click());
+    act(() => againOf("iOS Simulator")?.click());
     await settle();
     expect(switchCalls(sent)).toEqual([
       "plugins.disable vibefield.simulator",
       "plugins.enable vibefield.simulator",
     ]);
-    const line = rowOf("Simulators")?.querySelector(".vf-plugins-line");
+    const line = rowOf("iOS Simulator")?.querySelector(".vf-plugins-line");
     expect(line?.textContent).toBe(words.SWITCH_WORDS.refused(true));
     expect(line?.getAttribute("data-tone")).toBe("attention");
   });
@@ -3031,15 +3036,15 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
       hold: "plugins.disable",
     });
     act(() => {
-      againOf("Simulators")?.click();
-      againOf("Simulators")?.click();
+      againOf("iOS Simulator")?.click();
+      againOf("iOS Simulator")?.click();
     });
     await settle();
-    act(() => rowSwitch("Simulators")?.click());
+    act(() => rowSwitch("iOS Simulator")?.click());
     await settle();
     expect(switchCalls(sent)).toEqual(["plugins.disable vibefield.simulator"]);
-    expect(againOf("Simulators")?.disabled).toBe(true);
-    expect(rowSwitch("Simulators")?.disabled).toBe(true);
+    expect(againOf("iOS Simulator")?.disabled).toBe(true);
+    expect(rowSwitch("iOS Simulator")?.disabled).toBe(true);
   });
 
   it("keeps the keyboard in the field as it is pressed, and stands, taking no press, until both are answered", async () => {
@@ -3047,7 +3052,7 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
       runtime: PLUGINS_FIXTURE_RUNTIME,
       hold: "plugins.enable",
     });
-    const again = againOf("Simulators");
+    const again = againOf("iOS Simulator");
     act(() => again?.focus());
     expect(document.activeElement).toBe(again);
     act(() => again?.click());
@@ -3063,18 +3068,18 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
       setPluginRegistrySnapshot(turned(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator", false)),
     );
     await settle();
-    expect(lineSaid("Simulators")).toBe(words.INSTALLED_LINE.off);
-    expect(againOf("Simulators")?.disabled).toBe(true);
-    expect(rowSwitch("Simulators")?.disabled).toBe(true);
+    expect(lineSaid("iOS Simulator")).toBe(words.INSTALLED_LINE.off);
+    expect(againOf("iOS Simulator")?.disabled).toBe(true);
+    expect(rowSwitch("iOS Simulator")?.disabled).toBe(true);
     // the on answered while the snapshot still shows it off: Try again goes, and the switch takes a press
     act(() => fieldd.answer());
     await settle();
-    expect(againOf("Simulators")).toBeNull();
-    expect(rowSwitch("Simulators")?.disabled).toBe(false);
+    expect(againOf("iOS Simulator")).toBeNull();
+    expect(rowSwitch("iOS Simulator")?.disabled).toBe(false);
     // on again and its runtime still failed: Try again stands once more, and takes a press
     act(() => setPluginRegistrySnapshot(PLUGINS_FIXTURE_SNAPSHOT));
     await settle();
-    expect(againOf("Simulators")?.disabled).toBe(false);
+    expect(againOf("iOS Simulator")?.disabled).toBe(false);
   });
 
   it("takes no press while this window's fieldd client isn't ready", async () => {
@@ -3082,18 +3087,18 @@ describe("a plugin whose runtime failed, and its Try again (MK-5b; §8 'Installe
       runtime: PLUGINS_FIXTURE_RUNTIME,
       status: "reconnecting",
     });
-    expect(againOf("Simulators")?.disabled).toBe(true);
-    act(() => againOf("Simulators")?.click());
+    expect(againOf("iOS Simulator")?.disabled).toBe(true);
+    act(() => againOf("iOS Simulator")?.click());
     await settle();
     expect(switchCalls(sent)).toEqual([]);
   });
 
   it("is a stop of Tab of its own beside the press, never inside it, and the switch stands with it", async () => {
     await openFrameOnInstalled({ runtime: PLUGINS_FIXTURE_RUNTIME });
-    const again = againOf("Simulators");
+    const again = againOf("iOS Simulator");
     expect(again?.closest(".vf-plugins-row")).toBeNull();
     expect(again?.tabIndex).toBe(0);
-    expect(rowSwitch("Simulators")?.getAttribute("aria-checked")).toBe("true");
+    expect(rowSwitch("iOS Simulator")?.getAttribute("aria-checked")).toBe("true");
   });
 
   it("offers Try again on a plugin that cannot start in this window too (item 476)", async () => {

@@ -2,6 +2,7 @@ import {
   type PluginRecord,
   PluginRegistrySnapshot,
   PluginsCatalog,
+  pluginPowerWords,
   SettingsGetResult,
 } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
@@ -154,10 +155,10 @@ describe("Installed (§8 'Installed', read only)", () => {
       },
       {
         id: "vibefield.simulator",
-        title: "Simulators",
+        title: "iOS Simulator",
         source: "Built in",
         community: false,
-        line: "3 objects · 1.2.0 · comes with VibeField",
+        line: "1 object · 0.1.0 · comes with VibeField",
         onOff: true,
       },
       {
@@ -186,15 +187,19 @@ describe("Installed (§8 'Installed', read only)", () => {
     expect(ids("")).toHaveLength(4);
     expect(ids("  ")).toHaveLength(4);
     expect(ids("CLOCK")).toEqual(["example.desk-clock"]);
-    expect(ids("tablet")).toEqual(["vibefield.simulator"]);
-    expect(ids("apple")).toEqual(["vibefield.simulator"]);
+    // an object's name, or its label on the pegboard: on the made-up Brass & Glass of the listed
+    // desktop (item 573: the iOS Simulator's object and label are its own title)
+    const listedIds = (query: string) =>
+      installedRows(PLUGINS_FIXTURE_LISTED_SNAPSHOT, null, query).map((row) => row.id);
+    expect(listedIds("level")).toEqual(["vibefield.brass-glass"]);
+    expect(listedIds("weather")).toEqual(["vibefield.brass-glass"]);
     expect(ids("pad comment")).toEqual(["vibefield.comment-pad"]);
     expect(ids("pad clock")).toEqual([]);
     expect(words.noMatchWords(" pad clock ")).toBe("None of your plugins matches “pad clock”.");
   });
 
   it("says its foot: how many plugins, how many objects, how many off", () => {
-    expect(installedFoot(PLUGINS_FIXTURE_SNAPSHOT)).toBe("4 plugins, 5 objects · 1 off");
+    expect(installedFoot(PLUGINS_FIXTURE_SNAPSHOT)).toBe("4 plugins, 3 objects · 1 off");
   });
 
   it("takes every word of a registry plugin's pill from the signed list, or says Community", () => {
@@ -292,7 +297,7 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
     // running, it says its set in the line's own ink, its switch on
     const running = row(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, null, "vibefield.simulator");
     expect([running?.line, running?.attention, running?.onOff]).toEqual([
-      "3 objects · 1.2.0 · comes with VibeField",
+      "1 object · 0.1.0 · comes with VibeField",
       undefined,
       true,
     ]);
@@ -321,7 +326,7 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
     });
     for (const snapshot of [invalid, incompatible]) {
       const simulators = row(snapshot, null, "vibefield.simulator");
-      expect(simulators?.line).toBe("Simulators can't run on this VibeField");
+      expect(simulators?.line).toBe("iOS Simulator can't run on this VibeField");
       expect(simulators?.onOff).toBeNull();
     }
   });
@@ -394,8 +399,8 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
       ]);
       // a set, and a plugin with no object: the line fieldd's own faults read, never the reason
       const simulators = rowOf(fixture, "vibefield.simulator", unstarted);
-      expect(simulators?.line).toBe(words.INSTALLED_LINE.broken("Simulators"));
-      expect(simulators?.line).toBe("Simulators isn't working right now");
+      expect(simulators?.line).toBe(words.INSTALLED_LINE.broken("iOS Simulator"));
+      expect(simulators?.line).toBe("iOS Simulator isn't working right now");
       // its switch stands: turning it off and on is a person's own way to try again
       expect(simulators?.onOff).toBe(true);
       const store = rowOf(fixture, "example.kv-service", unstarted);
@@ -415,7 +420,7 @@ describe("Installed's honest rows (MK-5, N21; §9 'Installed, off and Remove…'
     // out of the set, each says its ordinary line again
     const none: Unstarted = new Map();
     const running = rowOf(fixture, "vibefield.simulator", none);
-    expect(running?.line).toBe("3 objects · 1.2.0 · comes with VibeField");
+    expect(running?.line).toBe("1 object · 0.1.0 · comes with VibeField");
     expect(rowOf(fixture, "example.kv-service", none)?.line).toBe("No objects · a service");
     const crashed = rowOf(stopped, "vibefield.simulator", none);
     expect(crashed?.line).toBe(words.INSTALLED_LINE.stopped);
@@ -435,28 +440,25 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
     const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, true);
     expect(page).toEqual({
       id: "vibefield.simulator",
-      title: "Simulators",
+      title: "iOS Simulator",
       source: "Built in",
       community: false,
       summary: null,
       // by its pegboard label, or by its title when it hangs nowhere
-      adds: [
-        { key: "object:SimPhone", words: "Phone" },
-        { key: "object:SimTablet", words: "Tablet" },
-        { key: "object:SimWatch", words: "Apple Watch" },
-      ],
+      adds: [{ key: "object:vibefield.simulator", words: "iOS Simulator" }],
       powers: [
         {
-          key: "surface.simulator",
-          words: "Make and run iPhone simulators from Xcode, and use them on the desk",
+          key: "surface.attach",
+          words: "Show live windows on the desk",
           under: null,
           whose: null,
           switch: true,
           cant: null,
         },
         {
-          key: "canvas.read",
-          words: "Read what's on the desk",
+          // item 569's power, read from its words (they are §9's to rule, never typed here)
+          key: "surface.simulator",
+          words: pluginPowerWords("surface.simulator", { onMac: true }),
           under: null,
           whose: null,
           switch: true,
@@ -465,7 +467,7 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
       ],
       nothing: null,
       madeBy: words.PAGE_WORDS.builtIn,
-      version: "1.2.0",
+      version: "0.1.0",
       // MK-4c2a: a Built in plugin carries its switches, and says they reach your other desktops
       onOff: true,
       powersLive: true,
@@ -665,13 +667,11 @@ describe("a plugin's page, read only (MK-4c; §8 'Read only first', §9 MK-4c's 
     };
     const page = pluginPage(asked, null, PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, false);
     expect(page.powers.map((power) => [power.key, power.switch, power.cant])).toEqual([
-      ["surface.simulator", true, null],
-      ["canvas.read", true, null],
-      ["canvas.write", false, null],
-      ["process.spawn", null, words.SWITCH_WORDS.cant["entry-kind"]],
+      ["surface.attach", true, null],
+      ["surface.simulator", false, null],
       ["made.up", null, words.SWITCH_WORDS.cant["entry-kind"]],
     ]);
-    expect(page.powers[4]?.words).toBe(words.PAGE_WORDS.unnamed);
+    expect(page.powers[2]?.words).toBe(words.PAGE_WORDS.unnamed);
   });
 
   it("calls tools what a plugin brings your agents, never its commands — on Installed's row and its page alike (VF-PM 16:05:52Z)", () => {
@@ -832,22 +832,34 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
     expect(pluginPage(broken, null, PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, true).onOff).toBeNull();
   });
 
-  it("puts a Built in plugin's one switch and each power it asked for on its page, and says why one can't be had", () => {
+  it("puts a Built in plugin's one switch and each power it asked for on its page", () => {
     const simulators = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.simulator");
     const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, false);
     expect(page.powers.map((power) => [power.key, power.switch, power.cant])).toEqual([
-      ["surface.simulator", true, null],
-      ["canvas.read", true, null],
+      ["surface.attach", true, null],
       // taken back: its switch off
-      ["canvas.write", false, null],
-      // its kind of plugin can't have it: no switch, and why
-      ["process.spawn", null, words.SWITCH_WORDS.cant["entry-kind"]],
+      ["surface.simulator", false, null],
     ]);
     expect([page.onOff, page.powersLive, page.elsewhere, page.offLine]).toEqual([
       true,
       true,
       words.SWITCH_WORDS.elsewhere,
       null,
+    ]);
+  });
+
+  it("says why a power its kind of plugin can't have can't be had (item 573: on the made-up Brass & Glass)", () => {
+    const brassGlass = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.brass-glass");
+    const page = pluginPage(
+      brassGlass,
+      CATALOG_FIXTURES.ready,
+      PLUGINS_FIXTURE_SWITCHES_SNAPSHOT,
+      false,
+    );
+    expect(page.powers.map((power) => [power.key, power.switch, power.cant])).toEqual([
+      ["canvas.read", true, null],
+      // its kind of plugin can't have it: no switch, and why
+      ["process.spawn", null, words.SWITCH_WORDS.cant["entry-kind"]],
     ]);
   });
 
@@ -888,15 +900,16 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
     const clock = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "example.desk-clock");
     const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
     const held = recordOf(PLUGINS_FIXTURE_HELD_SNAPSHOT, "acme.kanban");
+    const brassGlass = recordOf(PLUGINS_FIXTURE_SWITCHES_SNAPSHOT, "vibefield.brass-glass");
     const asked = {
       ...simulators,
       requestedCapabilities: [...simulators.requestedCapabilities, "made.up"],
     };
     expect([
+      powerSwitchOf(simulators, "surface.attach"),
       powerSwitchOf(simulators, "surface.simulator"),
-      powerSwitchOf(simulators, "canvas.write"),
       // can't have it here, never asked for it, or no words to say it: no switch
-      powerSwitchOf(simulators, "process.spawn"),
+      powerSwitchOf(brassGlass, "process.spawn"),
       powerSwitchOf(simulators, "doc.write"),
       powerSwitchOf(asked, "made.up"),
       // off: what it would hold once on, taking no press
@@ -939,16 +952,20 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
       false,
       true,
     ]);
-    const granting = { id: "vibefield.simulator", capability: "canvas.write", turningOn: true };
+    const granting = {
+      id: "vibefield.simulator",
+      capability: "surface.simulator",
+      turningOn: true,
+    };
     const granted = {
       ...snapshot,
       plugins: snapshot.plugins.map((plugin) =>
         plugin.id === "vibefield.simulator"
           ? {
               ...plugin,
-              grantedCapabilities: [...plugin.grantedCapabilities, "canvas.write"],
+              grantedCapabilities: [...plugin.grantedCapabilities, "surface.simulator"],
               deniedCapabilities: plugin.deniedCapabilities.filter(
-                (entry) => entry.capability !== "canvas.write",
+                (entry) => entry.capability !== "surface.simulator",
               ),
             }
           : plugin,
@@ -963,11 +980,12 @@ describe("a plugin's switches (MK-4c2a; §8 'Its switches', §9 MK-4c2a's block)
   });
 });
 
-/** One of Simulators' settings, as its page draws it (MK-4c2b's fixture). */
-function simulatorsSetting(key: string): PageSetting {
-  const record = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
+/** One of Brass & Glass's settings, as its page draws it (MK-4c2b's fixture; item 573: a made-up set, since no
+ * plugin that ships declares a setting). */
+function brassGlassSetting(key: string): PageSetting {
+  const record = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.brass-glass");
   const setting = settingsOf(record)?.rows.find((row) => row.key === key);
-  if (setting === undefined) throw new Error(`the fixture's Simulators declares no ${key}`);
+  if (setting === undefined) throw new Error(`the fixture's Brass & Glass declares no ${key}`);
   return setting;
 }
 
@@ -983,28 +1001,28 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
     expect(settingKind("user", {})).toBe("unsupported");
   });
 
-  it("lists a Built in plugin's settings in its order, with its own words and bounds, and says where they go back", () => {
-    const simulators = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
-    const settings = settingsOf(simulators);
+  it("lists a plugin's settings, from the list, in its order, with its own words and bounds, and says where they go back", () => {
+    const brassGlass = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.brass-glass");
+    const settings = settingsOf(brassGlass);
     expect(settings?.rows.map((setting) => [setting.key, setting.kind])).toEqual([
       ["showFrame", "switch"],
-      ["phone", "choice"],
-      ["frameRate", "integer"],
+      ["units", "choice"],
+      ["rate", "integer"],
       ["caption", "text"],
       ["token", "secret"],
-      ["sizes", "unsupported"],
+      ["calibrations", "unsupported"],
     ]);
     expect(settings?.rows[2]).toEqual({
-      key: "frameRate",
-      title: "Frames each second",
-      description: "How often a screen is drawn on your desk.",
+      key: "rate",
+      title: "Readings per second",
+      description: "How often an instrument is read on your desk.",
       kind: "integer",
       options: [],
       min: 1,
       max: 60,
       fallback: 30,
     });
-    expect(settings?.rows[1]?.options).toEqual(["iPhone 17", "iPhone 17 Pro", "iPhone Air"]);
+    expect(settings?.rows[1]?.options).toEqual(["Metric", "Imperial", "Nautical"]);
     expect(settings?.rows[1]?.description).toBeNull();
     expect([settings?.live, settings?.foot, settings?.offLine]).toEqual([
       true,
@@ -1015,7 +1033,7 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
     expect(Object.keys(settings ?? {}).sort()).toEqual(["foot", "live", "offLine", "rows"]);
     expect(Object.values(words.SETTINGS_WORDS).join(" ")).not.toMatch(/\b(undo|redo|reset)\b/i);
     // the page carries the same section
-    const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, true);
+    const page = pluginPage(brassGlass, null, PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, true);
     expect(page.settings).toEqual(settings);
   });
 
@@ -1027,17 +1045,17 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
       words.SETTINGS_WORDS.footSynced,
     ]);
     // one that is on but not working takes no input either, and is not called off
-    const simulators = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
-    const broken = settingsOf({ ...simulators, state: "invalid" });
+    const brassGlass = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.brass-glass");
+    const broken = settingsOf({ ...brassGlass, state: "invalid" });
     expect([broken?.live, broken?.offLine]).toEqual([false, null]);
-    // one whose settings all stay on this desktop
-    const pad = settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.comment-pad"));
-    expect(pad?.foot).toBe(words.SETTINGS_WORDS.footHere);
+    // one whose settings all stay on this desktop (item 573: the made-up Key-value store's one)
+    const store = settingsOf(recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "example.kv-service"));
+    expect(store?.foot).toBe(words.SETTINGS_WORDS.footHere);
   });
 
   it("offers a kept setting its way back, a kept secret its removal, and one at its default none (MK-4c2c)", () => {
-    const simulators = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.simulator");
-    const rows = settingsOf(simulators)?.rows ?? [];
+    const brassGlass = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.brass-glass");
+    const rows = settingsOf(brassGlass)?.rows ?? [];
     const of = (key: string): PageSetting => {
       const found = rows.find((setting) => setting.key === key);
       if (found === undefined) throw new Error(`no setting ${key}`);
@@ -1049,7 +1067,7 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
     const noSecret = SettingsGetResult.parse({ isSet: false, secret: true });
     expect(settingAct(of("showFrame"), kept)).toBe("toDefault");
     expect(settingAct(of("showFrame"), unset)).toBeNull();
-    expect(settingAct(of("sizes"), kept)).toBe("toDefault");
+    expect(settingAct(of("calibrations"), kept)).toBe("toDefault");
     expect(settingAct(of("token"), keptSecret)).toBe("forget");
     expect(settingAct(of("token"), noSecret)).toBeNull();
   });
@@ -1082,27 +1100,30 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
     };
     expect(settingsOf(held)).toBeNull();
     expect(pluginPage(held, null, PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, true).settings).toBeNull();
+    // the iOS Simulator and Comment pad, as they ship
     const bare = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
     expect(settingsOf(bare)).toBeNull();
+    const pad = recordOf(PLUGINS_FIXTURE_SETTINGS_SNAPSHOT, "vibefield.comment-pad");
+    expect(settingsOf(pad)).toBeNull();
     const contributions = { ...bare.contributions, settings: { properties: {} } };
     expect(settingsOf({ ...bare, contributions })).toBeNull();
   });
 
   it("shows what fieldd keeps, or the default while nothing is kept, and never a secret", () => {
-    const frame = simulatorsSetting("showFrame");
+    const frame = brassGlassSetting("showFrame");
     expect(settingDraft(frame, { isSet: false })).toBe("true");
     expect(settingDraft(frame, { isSet: true, value: false })).toBe("false");
-    const phone = simulatorsSetting("phone");
-    expect(settingDraft(phone, { isSet: true, value: "iPhone Air" })).toBe("2");
+    const units = brassGlassSetting("units");
+    expect(settingDraft(units, { isSet: true, value: "Nautical" })).toBe("2");
     // nothing kept and no default, or a kept choice it no longer offers: no choice shown
-    expect(settingDraft(phone, { isSet: false })).toBe("");
-    expect(settingDraft(phone, { isSet: true, value: "iPhone 4" })).toBe("");
-    const rate = simulatorsSetting("frameRate");
+    expect(settingDraft(units, { isSet: false })).toBe("");
+    expect(settingDraft(units, { isSet: true, value: "Furlongs" })).toBe("");
+    const rate = brassGlassSetting("rate");
     expect(settingDraft(rate, { isSet: false })).toBe("30");
     expect(settingDraft(rate, { isSet: true, value: 45 })).toBe("45");
-    expect(settingDraft(simulatorsSetting("caption"), { isSet: false })).toBe("");
+    expect(settingDraft(brassGlassSetting("caption"), { isSet: false })).toBe("");
     // a secret's field is empty, kept or not, whatever an answer carries
-    const token = simulatorsSetting("token");
+    const token = brassGlassSetting("token");
     const carried = { isSet: true, secret: true, value: "plum orchard lantern" };
     expect(settingDraft(token, carried) === "").toBe(true);
     expect(settingDraft(token, { isSet: false, secret: true }) === "").toBe(true);
@@ -1110,22 +1131,22 @@ describe("a plugin's settings (MK-4c2b; §8 'Its settings', corrected for James'
 
   it("sends a field's words, a number as a number and a secret as typed; nothing unchanged, blank or unreadable", () => {
     const unset = { isSet: false };
-    const rate = simulatorsSetting("frameRate");
+    const rate = brassGlassSetting("rate");
     expect(settingToSend(rate, "30", unset)).toBeNull();
     expect(settingToSend(rate, "45", unset)).toEqual({ value: 45 });
     expect(settingToSend(rate, " ", unset)).toBeNull();
     expect(settingToSend(rate, "lots", unset)).toBeNull();
-    const caption = simulatorsSetting("caption");
+    const caption = brassGlassSetting("caption");
     expect(settingToSend(caption, "", unset)).toBeNull();
     expect(settingToSend(caption, "Lab bench", unset)).toEqual({ value: "Lab bench" });
-    const token = simulatorsSetting("token");
+    const token = brassGlassSetting("token");
     const kept = { isSet: true, secret: true };
     const typed = "plum orchard lantern";
     expect(settingToSend(token, "", kept)).toBeNull();
     expect(settingToSend(token, typed, kept)?.value === typed).toBe(true);
     // a switch and a choice send from their own controls, never from a field
-    expect(settingToSend(simulatorsSetting("showFrame"), "false", unset)).toBeNull();
-    expect(settingToSend(simulatorsSetting("phone"), "1", unset)).toBeNull();
+    expect(settingToSend(brassGlassSetting("showFrame"), "false", unset)).toBeNull();
+    expect(settingToSend(brassGlassSetting("units"), "1", unset)).toBeNull();
   });
 });
 
@@ -1313,8 +1334,10 @@ describe("the pegboard's names in the popup (MK-4d's names; James's MK-O10 pick 
   it("says where a set hangs on Installed's line by the board's names, as §9's ruled line", () => {
     const rows = installedRows(PLUGINS_FIXTURE_LISTED_SNAPSHOT, CATALOG_LISTED, "", BOARD);
     const line = (id: string) => rows.find((row) => row.id === id)?.line;
-    // Simulators' Watch hangs under Devices; its Phone and Tablet hang nowhere, and still count
-    expect(line("vibefield.simulator")).toBe("3 objects · Devices · 1.2.0 · comes with VibeField");
+    // the iOS Simulator's one object hangs under Devices (item 573); Brass & Glass's Barometer hangs
+    // there too, its Compass and Spirit level nowhere, and they still count
+    expect(line("vibefield.simulator")).toBe("Hangs under Devices · 0.1.0 · comes with VibeField");
+    expect(line("vibefield.brass-glass")).toBe("3 objects · Devices · 1.2.0");
     expect(line("acme.kanban")).toBe("2 objects · Devices · 2.1.0");
     // Comment pad's one object hangs nowhere: its set alone; off, and no object, as before
     expect(line("vibefield.comment-pad")).toBe("1 object · 0.1.0 · comes with VibeField");
@@ -1328,25 +1351,33 @@ describe("the pegboard's names in the popup (MK-4d's names; James's MK-O10 pick 
   });
 
   it("says a set of one as hanging, and a set across categories once each, in the board's order", () => {
-    const simulators = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
-    const watch = reshaped(simulators, (objects) => objects.filter((o) => o.type === "SimWatch"));
+    // the iOS Simulator is a set of one as it ships (item 573)
+    const simulator = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
     const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
     // its Card moved under Things: the board names Things before Devices
     const across = reshaped(kanban, (objects) => objects.map(cardUnderThings));
     const twice = reshaped(kanban, (objects) => [...objects, ...objects]);
     const lines = (plugins: PluginRecord[]) =>
       installedRows({ ...PLUGINS_FIXTURE_SNAPSHOT, plugins }, null, "", BOARD).map((r) => r.line);
-    expect(lines([watch])).toEqual(["Hangs under Devices · 1.2.0 · comes with VibeField"]);
+    expect(lines([simulator])).toEqual(["Hangs under Devices · 0.1.0 · comes with VibeField"]);
     expect(lines([across])).toEqual(["2 objects · Things, Devices · 2.1.0"]);
     expect(lines([twice])).toEqual(["4 objects · Devices · 2.1.0"]);
   });
 
   it("says under each object in What it adds where it hangs, and nothing under one that hangs nowhere", () => {
-    const simulators = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
-    expect(pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, true, BOARD).adds).toEqual([
-      { key: "object:SimPhone", words: "Phone" },
-      { key: "object:SimTablet", words: "Tablet" },
-      { key: "object:SimWatch", words: "Apple Watch", under: "Hangs under Devices" },
+    // item 573: the made-up Brass & Glass, from the list that names it
+    const brassGlass = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "vibefield.brass-glass");
+    const its = pluginPage(
+      brassGlass,
+      CATALOG_LISTED,
+      PLUGINS_FIXTURE_LISTED_SNAPSHOT,
+      true,
+      BOARD,
+    );
+    expect(its.adds).toEqual([
+      { key: "object:VfBarometer", words: "Weather glass", under: "Hangs under Devices" },
+      { key: "object:VfCompass", words: "Compass" },
+      { key: "object:VfLevel", words: "Spirit level" },
     ]);
     // its tools keep their own line, with nothing under it
     const kanban = recordOf(PLUGINS_FIXTURE_LISTED_SNAPSHOT, "acme.kanban");
@@ -1361,10 +1392,10 @@ describe("the pegboard's names in the popup (MK-4d's names; James's MK-O10 pick 
 
   it("says no place with no board to read, where the board names none, or while the plugin is off", () => {
     const simulators = recordOf(PLUGINS_FIXTURE_SNAPSHOT, "vibefield.simulator");
-    const set = "3 objects · 1.2.0 · comes with VibeField";
+    const set = "1 object · 0.1.0 · comes with VibeField";
     for (const names of [null, new Map([["things", "Things"]]), new Map<string, string>()]) {
       const page = pluginPage(simulators, null, PLUGINS_FIXTURE_SNAPSHOT, true, names);
-      expect(page.adds.map((line) => line.under)).toEqual([undefined, undefined, undefined]);
+      expect(page.adds.map((line) => line.under)).toEqual([undefined]);
       const rows = installedRows(PLUGINS_FIXTURE_SNAPSHOT, null, "", names);
       expect(rows.find((row) => row.id === "vibefield.simulator")?.line).toBe(set);
     }

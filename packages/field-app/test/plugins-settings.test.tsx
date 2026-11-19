@@ -34,13 +34,16 @@ const NO_REGISTRY: PluginsFixtureRead = {
 };
 /** A made-up phrase. Every assertion that touches it is a boolean, so a red never prints it. */
 const SECRET = "plum orchard lantern";
-const SIMULATORS = "vibefield.simulator";
-const FRAME = "Show each device's frame";
-const RATE = "Frames each second";
-const TOKEN = "Account token";
-const PHONE = "Phone to show";
-const AIR = "iPhone Air";
-const KEYS = ["showFrame", "phone", "frameRate", "caption", "token", "sizes"];
+// item 573: the settings plates stand on Brass & Glass, a made-up set from the list (no plugin that
+// ships declares a setting)
+const BRASS_GLASS = "vibefield.brass-glass";
+const FRAME = "Show the brass frames";
+const RATE = "Readings per second";
+const TOKEN = "Weather service token";
+const UNITS = "Units";
+const NAUTICAL = "Nautical";
+const CAPTION = "Caption under each instrument";
+const KEYS = ["showFrame", "units", "rate", "caption", "token", "calibrations"];
 /** N18: a plugin from the list and a Sideloaded one, each with its one setting — its id, its title, the setting's
  * key and title, and the foot it says (Kanban's syncs; the store's stays on this desktop). */
 const LISTED_AND_SIDELOADED = [
@@ -95,7 +98,7 @@ function recording(inner: PluginsPort): { port: PluginsPort; sent: Sent[] } {
 
 const fixture = (acts: PluginsFixtureActs = "answers"): PluginsPort =>
   pluginsFixturePort(NO_REGISTRY, acts, PLUGINS_FIXTURE_SETTINGS);
-/** The unread plate's fieldd: Simulators' frame rate is one it refuses to read. */
+/** The unread plate's fieldd: Brass & Glass's readings per second is one it refuses to read. */
 const unreadFixture = (): PluginsPort =>
   pluginsFixturePort(NO_REGISTRY, "answers", PLUGINS_FIXTURE_SETTINGS_UNREAD);
 
@@ -208,7 +211,7 @@ async function press(button: HTMLButtonElement | null): Promise<void> {
   act(() => button?.click());
   await settle();
 }
-const allGets = (): Sent[] => KEYS.map((key) => ({ what: "get", id: SIMULATORS, key }));
+const allGets = (): Sent[] => KEYS.map((key) => ({ what: "get", id: BRASS_GLASS, key }));
 
 function typeInto(input: HTMLInputElement | null, text: string): void {
   act(() => {
@@ -236,7 +239,7 @@ async function leave(input: HTMLInputElement | null): Promise<void> {
 describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => {
   it("stands in the first column after What it adds, reads each setting once as the page opens, and has no Undo or Redo", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     const first = document.body.querySelector(".vf-plugins-page-column:not([data-column])");
     expect(first?.querySelector(".vf-plugins-settings")).not.toBeNull();
     const heads = [...(first?.querySelectorAll(".vf-plugins-page-head") ?? [])];
@@ -244,14 +247,7 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
       words.PAGE_WORDS.adds,
       words.SETTINGS_WORDS.head,
     ]);
-    expect(titles()).toEqual([
-      FRAME,
-      "Phone to show",
-      RATE,
-      "Caption under each device",
-      TOKEN,
-      "Screen sizes",
-    ]);
+    expect(titles()).toEqual([FRAME, UNITS, RATE, CAPTION, TOKEN, "Calibrations"]);
     expect(sent).toEqual(allGets());
     const buttons = [...document.body.querySelectorAll("button")];
     expect(buttons.length).toBeGreaterThan(0);
@@ -267,20 +263,20 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
   });
 
   it("shows what fieldd keeps, or the declared default, and never a secret's value", async () => {
-    await openPage(fixture(), SIMULATORS);
+    await openPage(fixture(), BRASS_GLASS);
     expect(switchOf(FRAME)?.getAttribute("aria-checked")).toBe("false");
-    expect(row("Phone to show")?.querySelector("select")?.value).toBe("1");
+    expect(row(UNITS)?.querySelector("select")?.value).toBe("1");
     const rate = fieldOf(RATE);
     expect([rate?.type, rate?.value, rate?.min, rate?.max]).toEqual(["number", "30", "1", "60"]);
-    expect(fieldOf("Caption under each device")?.value).toBe("");
+    expect(fieldOf(CAPTION)?.value).toBe("");
     const token = fieldOf(TOKEN);
     expect([token?.type, token?.value, token?.placeholder]).toEqual([
       "password",
       "",
       words.SETTINGS_WORDS.saved,
     ]);
-    expect(row("Screen sizes")?.textContent).toContain(words.SETTINGS_WORDS.cantDraw);
-    expect(row("Screen sizes")?.querySelector("input, select, button")).toBeNull();
+    expect(row("Calibrations")?.textContent).toContain(words.SETTINGS_WORDS.cantDraw);
+    expect(row("Calibrations")?.querySelector("input, select, button")).toBeNull();
   });
 
   it("a switch sends one set with its new value, takes no second press while it is out, and moves when fieldd's next read says so", async () => {
@@ -296,10 +292,10 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
         return inner.settingsSet(id, key, value);
       },
     });
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     act(() => switchOf(FRAME)?.click());
     await settle();
-    expect(sets(sent)).toEqual([{ what: "set", id: SIMULATORS, key: "showFrame", value: true }]);
+    expect(sets(sent)).toEqual([{ what: "set", id: BRASS_GLASS, key: "showFrame", value: true }]);
     expect(switchOf(FRAME)?.getAttribute("aria-checked")).toBe("false");
     expect(switchOf(FRAME)?.disabled).toBe(true);
     act(() => switchOf(FRAME)?.click());
@@ -326,32 +322,32 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
         return inner.settingsSet(id, key, value);
       },
     });
-    await openPage(port, SIMULATORS);
-    choose(menuOf(PHONE), "2");
+    await openPage(port, BRASS_GLASS);
+    choose(menuOf(UNITS), "2");
     await settle();
-    expect(sets(sent)).toEqual([{ what: "set", id: SIMULATORS, key: "phone", value: AIR }]);
-    expect(menuOf(PHONE)?.value).toBe("1");
-    expect(menuOf(PHONE)?.disabled).toBe(true);
+    expect(sets(sent)).toEqual([{ what: "set", id: BRASS_GLASS, key: "units", value: NAUTICAL }]);
+    expect(menuOf(UNITS)?.value).toBe("1");
+    expect(menuOf(UNITS)?.disabled).toBe(true);
     act(() => {
       for (const go of held) go();
     });
     await settle();
-    expect(menuOf(PHONE)?.value).toBe("2");
-    expect(menuOf(PHONE)?.disabled).toBe(false);
-    expect(gets(sent, "phone")).toBe(2);
+    expect(menuOf(UNITS)?.value).toBe("2");
+    expect(menuOf(UNITS)?.disabled).toBe(false);
+    expect(gets(sent, "units")).toBe(2);
   });
 
   it("a menu with nothing kept and no default says Choose… above its options", async () => {
-    await openPage(pluginsFixturePort(NO_REGISTRY), SIMULATORS);
-    const options = menuOf(PHONE)?.querySelectorAll("option") ?? [];
+    await openPage(pluginsFixturePort(NO_REGISTRY), BRASS_GLASS);
+    const options = menuOf(UNITS)?.querySelectorAll("option") ?? [];
     const said = [...options].map((option) => option.textContent);
-    expect(said).toEqual([words.SETTINGS_WORDS.choose, "iPhone 17", "iPhone 17 Pro", AIR]);
-    expect(menuOf(PHONE)?.value).toBe("");
+    expect(said).toEqual([words.SETTINGS_WORDS.choose, "Metric", "Imperial", NAUTICAL]);
+    expect(menuOf(UNITS)?.value).toBe("");
   });
 
   it("a refusal says §9's words under the setting, never the error's own text, and keeps the value", async () => {
     const { port, sent } = recording(fixture("refuses"));
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     act(() => switchOf(FRAME)?.click());
     await settle();
     expect(refusedLine(FRAME)).toBe(words.SETTINGS_WORDS.refused);
@@ -362,20 +358,20 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
   it("a field sends what was typed on ↵ or on leaving it, a number as a number, and nothing when it is unchanged", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     await leave(fieldOf(RATE));
     await enter(fieldOf(RATE));
     expect(sets(sent)).toEqual([]);
     typeInto(fieldOf(RATE), "45");
     await enter(fieldOf(RATE));
-    expect(sets(sent)).toEqual([{ what: "set", id: SIMULATORS, key: "frameRate", value: 45 }]);
+    expect(sets(sent)).toEqual([{ what: "set", id: BRASS_GLASS, key: "rate", value: 45 }]);
     expect(fieldOf(RATE)?.value).toBe("45");
-    expect(gets(sent, "frameRate")).toBe(2);
-    typeInto(fieldOf("Caption under each device"), "Lab bench");
-    await leave(fieldOf("Caption under each device"));
+    expect(gets(sent, "rate")).toBe(2);
+    typeInto(fieldOf(CAPTION), "Lab bench");
+    await leave(fieldOf(CAPTION));
     expect(sets(sent).at(-1)).toEqual({
       what: "set",
-      id: SIMULATORS,
+      id: BRASS_GLASS,
       key: "caption",
       value: "Lab bench",
     });
@@ -383,7 +379,7 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
   it("a secret is sent as typed and never shown: once it is kept, its field empties and says it is saved", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     typeInto(fieldOf(TOKEN), SECRET);
     await enter(fieldOf(TOKEN));
     expect(sets(sent).some((s) => s.key === "token" && s.value === SECRET)).toBe(true);
@@ -394,7 +390,7 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
   it("a secret that is refused stays in its masked field, and its refusal line never says it", async () => {
     const { port, sent } = recording(fixture("refuses"));
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     typeInto(fieldOf(TOKEN), SECRET);
     await enter(fieldOf(TOKEN));
     expect(sets(sent).some((s) => s.key === "token" && s.value === SECRET)).toBe(true);
@@ -419,12 +415,12 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
   it("while fieldd isn't answering, reads nothing and takes no input; when it answers again, each setting is read", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS, true);
+    await openPage(port, BRASS_GLASS, true);
     expect(titles()).toHaveLength(KEYS.length);
     expect(sent).toEqual([]);
     expect(switchOf(FRAME)?.disabled).toBe(true);
     expect(fieldOf(RATE)?.disabled).toBe(true);
-    await openPage(port, SIMULATORS, false);
+    await openPage(port, BRASS_GLASS, false);
     expect(sent).toEqual(allGets());
     expect(switchOf(FRAME)?.disabled).toBe(false);
     expect(fieldOf(RATE)?.disabled).toBe(false);
@@ -432,10 +428,10 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
   it("reads nothing anew when fieldd answers again after being away, once each setting was read (S1)", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS);
-    await openPage(port, SIMULATORS, true);
+    await openPage(port, BRASS_GLASS);
+    await openPage(port, BRASS_GLASS, true);
     expect(switchOf(FRAME)?.disabled).toBe(true);
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     expect(sent).toEqual(allGets());
     expect(switchOf(FRAME)?.getAttribute("aria-checked")).toBe("false");
     expect(switchOf(FRAME)?.disabled).toBe(false);
@@ -443,7 +439,7 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
   it("a setting fieldd refuses to read says §9's words under it, never the error's own text, and takes no input", async () => {
     const { port, sent } = recording(unreadFixture());
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     expect(refusedLine(RATE)).toBe(words.SETTINGS_WORDS.unread);
     expect(document.body.textContent?.includes(PLUGINS_FIXTURE_READ_REFUSAL)).toBe(false);
     expect(fieldOf(RATE)?.disabled).toBe(true);
@@ -451,7 +447,7 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
     typeInto(fieldOf(RATE), "45");
     await enter(fieldOf(RATE));
     expect(sets(sent)).toEqual([]);
-    expect(gets(sent, "frameRate")).toBe(1);
+    expect(gets(sent, "rate")).toBe(1);
     // the other settings were read, and take input
     expect(refusedLine(FRAME)).toBeNull();
     expect(switchOf(FRAME)?.disabled).toBe(false);
@@ -463,20 +459,20 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
     const { port, sent } = recording({
       ...inner,
       settingsGet: (id, key) => {
-        if (refusing && key === "frameRate") {
+        if (refusing && key === "rate") {
           return Promise.reject(new Error(PLUGINS_FIXTURE_READ_REFUSAL));
         }
         return inner.settingsGet(id, key);
       },
     });
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     expect(refusedLine(RATE)).toBe(words.SETTINGS_WORDS.unread);
     refusing = false;
-    await openPage(port, SIMULATORS, true);
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS, true);
+    await openPage(port, BRASS_GLASS);
     expect(refusedLine(RATE)).toBeNull();
     expect([fieldOf(RATE)?.value, fieldOf(RATE)?.disabled]).toEqual(["30", false]);
-    expect(gets(sent, "frameRate")).toBe(2);
+    expect(gets(sent, "rate")).toBe(2);
     // the settings that were read are not read again (S1)
     expect(gets(sent, "showFrame")).toBe(1);
   });
@@ -487,24 +483,24 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
     const { port, sent } = recording({
       ...inner,
       settingsGet: (id, key) => {
-        if (key === "frameRate") {
+        if (key === "rate") {
           reads += 1;
           if (reads === 2) return Promise.reject(new Error(PLUGINS_FIXTURE_READ_REFUSAL));
         }
         return inner.settingsGet(id, key);
       },
     });
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     typeInto(fieldOf(RATE), "45");
     await enter(fieldOf(RATE));
-    expect(sets(sent)).toEqual([{ what: "set", id: SIMULATORS, key: "frameRate", value: 45 }]);
+    expect(sets(sent)).toEqual([{ what: "set", id: BRASS_GLASS, key: "rate", value: 45 }]);
     expect(refusedLine(RATE)).toBe(words.SETTINGS_WORDS.unread);
     expect(fieldOf(RATE)?.disabled).toBe(true);
     // a dispatched change reaches the row, which sends nothing while its read is refused
     typeInto(fieldOf(RATE), "50");
     await enter(fieldOf(RATE));
     expect(sets(sent)).toHaveLength(1);
-    expect(gets(sent, "frameRate")).toBe(2);
+    expect(gets(sent, "rate")).toBe(2);
   });
 
   it("a plugin from the list's page, and a Sideloaded one's, carries its settings, each read once (N18)", async () => {
@@ -558,8 +554,9 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
   });
 
   it("a plugin whose settings all stay on this desktop says so in the foot", async () => {
-    await openPage(fixture(), "vibefield.comment-pad");
-    expect(titles()).toEqual(["Show resolved comments"]);
+    // item 573: the made-up Key-value store's one setting (Comment pad, as it ships, declares none)
+    await openPage(fixture(), "example.kv-service");
+    expect(titles()).toEqual(["Largest value"]);
     expect(foot()).toBe(words.SETTINGS_WORDS.footHere);
   });
 
@@ -588,44 +585,44 @@ describe("a plugin's settings on its page (MK-4c2b; §8 'Its settings')", () => 
 
 describe("a setting's way back on its page (MK-4c2c; James's click, 2026-11-14 08:19:36Z)", () => {
   it("a kept setting has Back to default, a kept secret Remove the saved secret…, and one at its default none", async () => {
-    await openPage(fixture(), SIMULATORS);
+    await openPage(fixture(), BRASS_GLASS);
     expect(actsOf(FRAME).map((b) => b.textContent)).toEqual([words.SETTINGS_WORDS.toDefault]);
-    expect(actsOf(PHONE).map((b) => b.textContent)).toEqual([words.SETTINGS_WORDS.toDefault]);
+    expect(actsOf(UNITS).map((b) => b.textContent)).toEqual([words.SETTINGS_WORDS.toDefault]);
     expect(actsOf(TOKEN).map((b) => b.textContent)).toEqual([words.SETTINGS_WORDS.forget]);
-    for (const title of [RATE, "Caption under each device", "Screen sizes"]) {
+    for (const title of [RATE, CAPTION, "Calibrations"]) {
       expect(actsOf(title)).toEqual([]);
     }
   });
 
   it("Back to default sends the reset once, with the plugin and the key, takes no second press while it is out, and reads the setting again", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS);
-    const back = actOf(PHONE, words.SETTINGS_WORDS.toDefault);
+    await openPage(port, BRASS_GLASS);
+    const back = actOf(UNITS, words.SETTINGS_WORDS.toDefault);
     act(() => {
       back?.click();
       back?.click();
     });
     await settle();
-    expect(resets(sent)).toEqual([{ what: "reset", id: SIMULATORS, key: "phone" }]);
-    expect(gets(sent, "phone")).toBe(2);
+    expect(resets(sent)).toEqual([{ what: "reset", id: BRASS_GLASS, key: "units" }]);
+    expect(gets(sent, "units")).toBe(2);
     // nothing is kept now: the menu shows the declared default, and the act is gone
-    expect(menuOf(PHONE)?.value).toBe("");
-    expect(actsOf(PHONE)).toEqual([]);
+    expect(menuOf(UNITS)?.value).toBe("");
+    expect(actsOf(UNITS)).toEqual([]);
   });
 
   it("while it is out, the act takes no press", async () => {
     const { port, sent } = recording(fixture("pending"));
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     await press(actOf(FRAME, words.SETTINGS_WORDS.toDefault));
     expect(actOf(FRAME, words.SETTINGS_WORDS.toDefault)?.disabled).toBe(true);
     expect(switchOf(FRAME)?.disabled).toBe(true);
     await press(actOf(FRAME, words.SETTINGS_WORDS.toDefault));
-    expect(resets(sent)).toEqual([{ what: "reset", id: SIMULATORS, key: "showFrame" }]);
+    expect(resets(sent)).toEqual([{ what: "reset", id: BRASS_GLASS, key: "showFrame" }]);
   });
 
   it("Remove the saved secret… asks first, in place: its line, Cancel leading and holding the keyboard, Remove in the danger ink; Cancel sends nothing", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS);
+    await openPage(port, BRASS_GLASS);
     await press(actOf(TOKEN, words.SETTINGS_WORDS.forget));
     const ask = row(TOKEN)?.querySelector("[data-setting-ask]");
     expect(ask?.querySelector(".vf-plugins-card-line")?.textContent).toBe(
@@ -657,11 +654,11 @@ describe("a setting's way back on its page (MK-4c2c; James's click, 2026-11-14 0
         return answer;
       },
     };
-    await openPage(watched, SIMULATORS);
+    await openPage(watched, BRASS_GLASS);
     await press(actOf(TOKEN, words.SETTINGS_WORDS.forget));
     const asked = row(TOKEN)?.querySelectorAll<HTMLButtonElement>("[data-setting-ask] button");
     await press(asked?.[1] ?? null);
-    expect(resets(sent)).toEqual([{ what: "reset", id: SIMULATORS, key: "token" }]);
+    expect(resets(sent)).toEqual([{ what: "reset", id: BRASS_GLASS, key: "token" }]);
     expect(sets(sent)).toEqual([]);
     // nothing kept: the field says nothing is saved, and the act is gone
     expect(fieldOf(TOKEN)?.placeholder ?? "").toBe("");
@@ -675,7 +672,7 @@ describe("a setting's way back on its page (MK-4c2c; James's click, 2026-11-14 0
   });
 
   it("a refused way back says §9's words under the setting, never the error's own text, and keeps its act", async () => {
-    await openPage(fixture("refuses"), SIMULATORS);
+    await openPage(fixture("refuses"), BRASS_GLASS);
     await press(actOf(FRAME, words.SETTINGS_WORDS.toDefault));
     expect(refusedLine(FRAME)).toBe(words.SETTINGS_WORDS.refused);
     expect(document.body.textContent?.includes(PLUGINS_FIXTURE_REFUSAL)).toBe(false);
@@ -684,8 +681,8 @@ describe("a setting's way back on its page (MK-4c2c; James's click, 2026-11-14 0
 
   it("while fieldd isn't answering, no act stands: nothing was read", async () => {
     const { port, sent } = recording(fixture());
-    await openPage(port, SIMULATORS, true);
-    for (const title of [FRAME, PHONE, TOKEN]) expect(actsOf(title)).toEqual([]);
+    await openPage(port, BRASS_GLASS, true);
+    for (const title of [FRAME, UNITS, TOKEN]) expect(actsOf(title)).toEqual([]);
     expect(sent).toEqual([]);
   });
 });

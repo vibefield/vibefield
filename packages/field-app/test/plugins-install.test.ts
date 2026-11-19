@@ -355,9 +355,10 @@ describe("Show them on the pegboard (MK-4d; MK-D8's fallback B, §8 'The pegboar
       "DeskThingsCalendar",
       "DeskThingsClock",
     ]);
-    // Simulators' Phone and Tablet have no pegboard entry: they hang nowhere, so Watch alone is
-    // shown
-    expect(boardSet(mine("vibefield.simulator"))).toEqual(["SimWatch"]);
+    // Brass & Glass's Compass and Spirit level have no pegboard entry: they hang nowhere, so its Barometer
+    // alone is shown; the iOS Simulator's one object hangs on its shelf (item 573)
+    expect(boardSet(mine("vibefield.brass-glass"))).toEqual(["VfBarometer"]);
+    expect(boardSet(mine("vibefield.simulator"))).toEqual(["vibefield.simulator"]);
     // once this desktop has Desk things, its page's act carries its four
     const entry = CATALOG_SHELF.plugins.find((listed) => listed.id === "vibefield.desk-things");
     if (entry === undefined) throw new Error("the fixture has no Desk things");

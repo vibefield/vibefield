@@ -24,9 +24,12 @@ import type { PluginsPort } from "../frame/plugins/plugins-port";
 // a list held with three updates for plugins the desktop has from it (one that
 // needs a newer VibeField), and what an update's download answers — the row and
 // what it can do that the version you have can't. MK-5b: each plugin's runtime
-// as fieldd's runtime read says it, each carrying a failure: Simulators' renderer
+// as fieldd's runtime read says it, each carrying a failure: iOS Simulator's renderer
 // and Key-value store's service failed, Desk clock's failed while it is off, and
 // Comment pad's is in a window that left. No fieldd, no network, no child.
+// Item 573 (2026-11-19): the plugins that ship are drawn as they ship (the iOS Simulator, Built in, its one
+// object and the powers it asks for; Comment pad, no setting), and what the plates need beyond them is a
+// made-up set from the list, Brass & Glass, and the made-up examples beside it.
 
 /** The clock every plate reads: twelve minutes after its list was read. */
 export const PLUGINS_FIXTURE_READ_AT = 1762823100000;
@@ -41,19 +44,20 @@ export const CATALOG_FIXTURES = {
   unread: PluginsCatalog.parse({ state: "unread", ...NO_LIST }),
   unreachable: PluginsCatalog.parse({ state: "unreachable", ...NO_LIST }),
   refused: PluginsCatalog.parse({ state: "refused", ...NO_LIST }),
-  /** A list held (a state no build reaches today: none configures a registry). */
+  /** A list held (a state no build reaches today: none configures a registry). Its one set, Brass & Glass, is made
+   * up (item 573): a Built in plugin is never listed. */
   ready: PluginsCatalog.parse({
     state: "ready",
     checkedAt: PLUGINS_FIXTURE_READ_AT,
-    featured: ["vibefield.simulator"],
+    featured: ["vibefield.brass-glass"],
     updates: 0,
     plugins: [
       {
-        id: "vibefield.simulator",
+        id: "vibefield.brass-glass",
         listedAs: "vibefield",
         latest: {
           version: "1.2.0",
-          artifactUrl: "artifacts/vibefield.simulator-1.2.0.vfplugin",
+          artifactUrl: "artifacts/vibefield.brass-glass-1.2.0.vfplugin",
           sha256: PIN,
           minApp: "0.9.0",
           minContracts: "0.1.0",
@@ -61,13 +65,13 @@ export const CATALOG_FIXTURES = {
         },
         compatible: true,
         listing: {
-          title: "Simulators",
-          summary: "An iPhone, an iPad and a Watch, live on your desk.",
+          title: "Brass & Glass",
+          summary: "A barometer, a compass and a spirit level in brass, for the desk.",
           publisherName: "VibeField",
           objects: [
-            { type: "vibefield.simulator.phone", label: "Phone", category: "devices" },
-            { type: "vibefield.simulator.tablet", label: "Tablet", category: "devices" },
-            { type: "vibefield.simulator.watch", label: "Watch", category: "devices" },
+            { type: "vibefield.brass-glass.barometer", label: "Barometer", category: "devices" },
+            { type: "vibefield.brass-glass.compass", label: "Compass", category: "devices" },
+            { type: "vibefield.brass-glass.level", label: "Spirit level", category: "devices" },
           ],
         },
       },
@@ -118,8 +122,8 @@ function release(id: string, version: string): Record<string, unknown> {
   };
 }
 
-/** A list held with sets to show (MK-4e's shelf plates): Simulators, featured, which this desktop has as a
- * Built in plugin; Desk things, four objects it doesn't have; Burndown, which needs a newer VibeField; Kanban, a
+/** A list held with sets to show (MK-4e's shelf plates): Brass & Glass, featured, which the listed desktop has
+ * from it; Desk things, four objects it doesn't have; Burndown, which needs a newer VibeField; Kanban, a
  * community set, shown only while community plugins are on; and one the list holds with no listing, never
  * shown. */
 export const CATALOG_SHELF = PluginsCatalog.parse({
@@ -365,23 +369,54 @@ function record(fields: {
   };
 }
 
-/** The plugins a desktop has: two that come with VibeField, one in
- * development, turned off, and one sideloaded that runs a service. */
+/** The iOS Simulator's one object as it ships (item 573; plugins/simulator's manifest, its title and label after
+ * item 572): a phone the default model's size, on a shelf under Devices at 0.4 of that size. */
+const SIMULATOR_OBJECT = {
+  type: "vibefield.simulator",
+  title: "iOS Simulator",
+  schemaVersion: 1,
+  size: { w: 188.71, h: 393.7 },
+  binding: { kind: "simulator" },
+  tray: {
+    category: "devices",
+    label: "iOS Simulator",
+    order: 0,
+    hang: {
+      w: 75.48,
+      h: 157.48,
+      accessory: "shelf",
+      pegs: [
+        [-1, 0.5],
+        [1, 0.5],
+      ],
+    },
+  },
+};
+
+/** The powers the iOS Simulator asks for (item 569). */
+const SIMULATOR_POWERS = ["surface.attach", "surface.simulator"];
+
+/** Brass & Glass's three objects, made up (item 573): a Barometer that hangs under Devices as a Weather glass, and a
+ * Compass and a Spirit level that hang nowhere. */
+const BRASS_GLASS_OBJECTS = [
+  object("Barometer", "VfBarometer", "Weather glass"),
+  object("Compass", "VfCompass"),
+  object("Spirit level", "VfLevel"),
+];
+
+/** The plugins a desktop has: two that come with VibeField, as they ship (item
+ * 18); one in development, turned off; and one sideloaded that runs a service. */
 export const PLUGINS_FIXTURE_SNAPSHOT = PluginRegistrySnapshot.parse({
   generation: 1,
   problems: [],
   plugins: [
     record({
       id: "vibefield.simulator",
-      title: "Simulators",
-      version: "1.2.0",
+      title: "iOS Simulator",
+      version: "0.1.0",
       source: "bundled",
-      objects: [
-        object("Phone", "SimPhone"),
-        object("Tablet", "SimTablet"),
-        object("Watch", "SimWatch", "Apple Watch"),
-      ],
-      granted: ["surface.simulator", "canvas.read"],
+      objects: [SIMULATOR_OBJECT],
+      granted: SIMULATOR_POWERS,
     }),
     record({
       id: "vibefield.comment-pad",
@@ -499,7 +534,7 @@ function runtimeOf(fields: {
 /** MK-5b: each plugin's runtime as fieldd's runtime read says it, for the desktop `PLUGINS_FIXTURE_SNAPSHOT` holds,
  * in fieldd's order (by id): Desk clock, off, keeps the last report of a renderer that failed; Key-value store's
  * service failed; Comment pad's renderer failed in a window that has since left, whose last report fieldd keeps;
- * Simulators' renderer failed in a window still connected. */
+ * the iOS Simulator's renderer failed in a window still connected. */
 export const PLUGINS_FIXTURE_RUNTIME = PluginRuntimeDiagnosticsSnapshot.parse({
   version: 1,
   generation: 1,
@@ -572,6 +607,16 @@ export const PLUGINS_FIXTURE_LISTED_SNAPSHOT = PluginRegistrySnapshot.parse({
   problems: [],
   plugins: [
     ...PLUGINS_FIXTURE_SNAPSHOT.plugins,
+    // item 573: Brass & Glass, a made-up VibeField set this desktop has from the list (CATALOG_LISTED names it),
+    // so its pill is the list's; its three objects hang in two ways
+    record({
+      id: "vibefield.brass-glass",
+      title: "Brass & Glass",
+      version: "1.2.0",
+      source: "registry",
+      objects: BRASS_GLASS_OBJECTS,
+      granted: ["canvas.read"],
+    }),
     record({
       id: "acme.kanban",
       title: "Kanban",
@@ -606,30 +651,35 @@ export const PLUGINS_FIXTURE_LISTED_SNAPSHOT = PluginRegistrySnapshot.parse({
 });
 
 /** The same desktop as its powers' switches show it (MK-4c2a's switch plates):
- * Simulators, on, holds two powers, had one taken back, and asked for one its
- * kind of plugin can't have; Desk clock, in development and off, asked for two,
- * one taken back. Each record says what fieldd's would: an off plugin holds no
- * power, and every power it asked for is held or denied. */
+ * the iOS Simulator, on, holds one of the two powers it asks for and had the
+ * other taken back; Brass & Glass, made up, on, holds one and asked for one its
+ * kind of plugin can't have (item 573: no plugin that ships asks for one here);
+ * Desk clock, in development and off, asked for two, one taken back. Each
+ * record says what fieldd's would: an off plugin holds no power, and every
+ * power it asked for is held or denied. */
 export const PLUGINS_FIXTURE_SWITCHES_SNAPSHOT = PluginRegistrySnapshot.parse({
   generation: 3,
   problems: [],
   plugins: [
     record({
       id: "vibefield.simulator",
-      title: "Simulators",
-      version: "1.2.0",
+      title: "iOS Simulator",
+      version: "0.1.0",
       source: "bundled",
-      objects: [
-        object("Phone", "SimPhone"),
-        object("Tablet", "SimTablet"),
-        object("Watch", "SimWatch", "Apple Watch"),
-      ],
-      granted: ["surface.simulator", "canvas.read"],
-      denied: [
-        { capability: "canvas.write", reason: "revoked" },
-        { capability: "process.spawn", reason: "entry-kind" },
-      ],
-      requested: ["surface.simulator", "canvas.read", "canvas.write", "process.spawn"],
+      objects: [SIMULATOR_OBJECT],
+      granted: ["surface.attach"],
+      denied: [{ capability: "surface.simulator", reason: "revoked" }],
+      requested: SIMULATOR_POWERS,
+    }),
+    record({
+      id: "vibefield.brass-glass",
+      title: "Brass & Glass",
+      version: "1.2.0",
+      source: "registry",
+      objects: BRASS_GLASS_OBJECTS,
+      granted: ["canvas.read"],
+      denied: [{ capability: "process.spawn", reason: "entry-kind" }],
+      requested: ["canvas.read", "process.spawn"],
     }),
     record({
       id: "vibefield.comment-pad",
@@ -658,51 +708,61 @@ export const PLUGINS_FIXTURE_SWITCHES_SNAPSHOT = PluginRegistrySnapshot.parse({
   ],
 });
 
-/** The same desktop as a plugin's settings show it (MK-4c2b's plates): Simulators, on, declares one setting of
- * each kind the page draws, and one it can't; Desk clock, in development and off, one that syncs; Comment pad, on,
- * one kept on this desktop alone; a plugin from the list, one that syncs, and a Sideloaded one, one kept on this
- * desktop alone, which their pages carry since N18, as a Built in plugin's does. */
+/** The same desktop as a plugin's settings show it (MK-4c2b's plates): Brass & Glass, made up, on, declares one
+ * setting of each kind the page draws, and one it can't; Desk clock, in development and off, one that syncs; a
+ * plugin from the list, one that syncs, and a Sideloaded one, one kept on this desktop alone (made up: the example
+ * declares none), which their pages carry since N18, as a Built in plugin's does. The iOS Simulator and Comment pad
+ * declare none, as they ship (item 573). */
 export const PLUGINS_FIXTURE_SETTINGS_SNAPSHOT = PluginRegistrySnapshot.parse({
   generation: 4,
   problems: [],
   plugins: [
     record({
       id: "vibefield.simulator",
-      title: "Simulators",
-      version: "1.2.0",
+      title: "iOS Simulator",
+      version: "0.1.0",
       source: "bundled",
-      objects: [object("Phone", "SimPhone"), object("Tablet", "SimTablet")],
+      objects: [SIMULATOR_OBJECT],
+      granted: SIMULATOR_POWERS,
+    }),
+    record({
+      id: "vibefield.brass-glass",
+      title: "Brass & Glass",
+      version: "1.2.0",
+      source: "registry",
+      objects: BRASS_GLASS_OBJECTS,
+      granted: ["canvas.read"],
       settings: {
         showFrame: {
-          title: "Show each device's frame",
-          description: "The bezel around its screen.",
+          title: "Show the brass frames",
+          description: "The rim around its face.",
           scope: "user",
           schema: { type: "boolean", default: true },
         },
-        phone: {
-          title: "Phone to show",
+        units: {
+          title: "Units",
           scope: "user",
-          schema: { type: "string", enum: ["iPhone 17", "iPhone 17 Pro", "iPhone Air"] },
+          schema: { type: "string", enum: ["Metric", "Imperial", "Nautical"] },
         },
-        frameRate: {
-          title: "Frames each second",
-          description: "How often a screen is drawn on your desk.",
+        rate: {
+          title: "Readings per second",
+          description: "How often an instrument is read on your desk.",
           scope: "device",
           schema: { type: "integer", minimum: 1, maximum: 60, default: 30 },
         },
         caption: {
-          title: "Caption under each device",
+          title: "Caption under each instrument",
           scope: "user",
           schema: { type: "string", default: "" },
         },
         token: {
-          title: "Account token",
+          title: "Weather service token",
           description: "Kept on this Mac.",
           scope: "secret",
           schema: { type: "string" },
         },
-        sizes: {
-          title: "Screen sizes",
+        calibrations: {
+          title: "Calibrations",
           scope: "user",
           schema: { type: "array" },
         },
@@ -714,13 +774,6 @@ export const PLUGINS_FIXTURE_SETTINGS_SNAPSHOT = PluginRegistrySnapshot.parse({
       version: "0.1.0",
       source: "bundled",
       objects: [object("Comment pad", "commentPad")],
-      settings: {
-        resolved: {
-          title: "Show resolved comments",
-          scope: "device",
-          schema: { type: "boolean", default: false },
-        },
-      },
     }),
     record({
       id: "example.desk-clock",
@@ -760,23 +813,23 @@ export const PLUGINS_FIXTURE_SETTINGS_SNAPSHOT = PluginRegistrySnapshot.parse({
   ],
 });
 
-/** What the settings plates' fieldd keeps: Simulators' frame turned off, a phone chosen and a token kept (its value
+/** What the settings plates' fieldd keeps: Brass & Glass's frame turned off, units chosen and a token kept (its value
  * never here); every other setting unset, so its page shows the declared default. */
 export const PLUGINS_FIXTURE_SETTINGS: PluginsFixtureSettings = {
-  "vibefield.simulator": {
+  "vibefield.brass-glass": {
     showFrame: { value: false },
-    phone: { value: "iPhone 17 Pro" },
+    units: { value: "Imperial" },
     token: { secret: true, kept: true },
   },
 };
 
-/** The unread plate's fieldd (MK-4c2b, Unread): the settings plates' own, with Simulators' frame
- * rate one it refuses to read. */
+/** The unread plate's fieldd (MK-4c2b, Unread): the settings plates' own, with Brass & Glass's readings
+ * each second one it refuses to read. */
 export const PLUGINS_FIXTURE_SETTINGS_UNREAD: PluginsFixtureSettings = {
   ...PLUGINS_FIXTURE_SETTINGS,
-  "vibefield.simulator": {
-    ...PLUGINS_FIXTURE_SETTINGS["vibefield.simulator"],
-    frameRate: { unread: true },
+  "vibefield.brass-glass": {
+    ...PLUGINS_FIXTURE_SETTINGS["vibefield.brass-glass"],
+    rate: { unread: true },
   },
 };
 

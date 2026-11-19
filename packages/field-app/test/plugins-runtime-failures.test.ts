@@ -50,7 +50,7 @@ describe("which plugins' runtime failed (MK-5b)", () => {
     const simulators = PLUGINS_FIXTURE_RUNTIME.plugins.find(
       (plugin) => plugin.pluginId === "vibefield.simulator",
     );
-    if (simulators === undefined) throw new Error("the fixture holds no runtime for Simulators");
+    if (simulators === undefined) throw new Error("the fixture holds no iOS Simulator runtime");
     const says = (code: PluginRuntimeDoctorIssueCode, severity: "warning" | "error"): boolean => {
       const issue = {
         code,
@@ -78,7 +78,7 @@ describe("which plugins' runtime failed (MK-5b)", () => {
     const simulators = PLUGINS_FIXTURE_RUNTIME.plugins.find(
       (plugin) => plugin.pluginId === "vibefield.simulator",
     );
-    if (simulators === undefined) throw new Error("the fixture holds no runtime for Simulators");
+    if (simulators === undefined) throw new Error("the fixture holds no iOS Simulator runtime");
     // its failure is still among the issues, its window's renderer-disconnected mark past the limit
     const left = PluginRuntimeDiagnosticsSnapshot.parse({
       ...PLUGINS_FIXTURE_RUNTIME,
@@ -100,10 +100,10 @@ describe("Installed's rows of plugins that aren't working, and Try again (MK-5b)
     const rows = rowsOf(PLUGINS_FIXTURE_SNAPSHOT, null);
     expect(rowOf(rows, "vibefield.simulator")).toEqual({
       id: "vibefield.simulator",
-      title: "Simulators",
+      title: "iOS Simulator",
       source: "Built in",
       community: false,
-      line: words.INSTALLED_LINE.broken("Simulators"),
+      line: words.INSTALLED_LINE.broken("iOS Simulator"),
       onOff: true,
       retry: true,
     });
