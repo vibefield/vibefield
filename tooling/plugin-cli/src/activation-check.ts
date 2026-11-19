@@ -9,11 +9,16 @@
 //    so an absent renderer artifact is `activation-unbuilt` — a note, not a
 //    refusal.
 //  - A renderer bundle's module graph may be a BROWSER graph. It reaches JSX and CSS
-//    through the SDK's `/ui` and `/canvas` doors, and plain Node can import
-//    neither. When the import dies for that reason the row says so
+//    through the SDK's `/ui` door, and plain Node cannot import it. When the
+//    import dies for that reason the row says so
 //    (`activation-not-loadable-here`) and names the playground, which owns a
 //    real engine; it never pretends the plugin passed, and it never blames the
 //    plugin for the harness's ceiling.
+//    Corrected (566, 2026-11-19): this said plain Node can import neither `/ui`
+//    nor `/canvas`. `/canvas` re-exports ICE's root, which `/desk` loads anyway,
+//    and 566's row loaded the browser pane's built bundle, which imports it, in
+//    plain Node through the kit's bin, with no `activation-not-loadable-here`.
+//    `/ui` was not measured there.
 //
 // DK-6 (desk/landing): an OBJECT row's binding is its module's export, not a registration — so the
 // object rows (object-check.ts) read the imported namespace as the host does, with no device, through
