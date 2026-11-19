@@ -186,11 +186,13 @@ const PIN_EXPECTATIONS = [
   // 0.16.0-portals.3, LT3's render half contained; PT-5a: 0.16.0-portals.4, LT4 — the asks
   // PORTALS found); DK-18 had pinned 0.15.0 FINAL, the cutover's release.
   // 0.17.0 (2026-11-03) adds native desk navigation, zoom feedback, retired-widget data,
-  // and presentation controls. The anchor rejects prereleases and longer version suffixes.
+  // and presentation controls. 0.18.0 (2026-11-19, petition I54) lets a host lay a set of
+  // object types on the pegboard and hide a type. The anchor rejects prereleases and longer
+  // version suffixes.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.17\.0\s*$/m,
-    label: '"@vibecook/ice": 0.17.0',
+    re: /"@vibecook\/ice":\s*0\.18\.0\s*$/m,
+    label: '"@vibecook/ice": 0.18.0',
   },
   // The EL8 to ghosttea 0.13.1 (2026-10-22/23): the five ghosttea rows move together, and since this event each is
   // anchored to the line's end like ice's, so a later `0.13.1-…` never passes for the release. The cargo row and the

@@ -34,6 +34,8 @@ import {
   scrollTray,
   selectedEntities,
   setTrayCategory,
+  setTrayHidden,
+  setTrayOnly,
   specimensOf,
   Tray,
   toggleTray,
@@ -42,7 +44,9 @@ import {
   trayEntity,
   trayEntryCount,
   trayFocus,
+  trayHidden,
   trayHung,
+  trayOnly,
   trayOpen,
   Viewport,
 } from "@vibecook/ice";
@@ -161,6 +165,16 @@ function trayDoor(engine: CanvasEngine): TestDoor {
       return trayCategory(w);
     },
     categories: () => trayCategories(w),
+    // ICE 0.18.0's set and hidden types (I54), written as the desk's own door writes them,
+    // less the publish its `only` asks, which no row here reads (MK-7, 2026-11-19)
+    only(types) {
+      if (types !== undefined) setTrayOnly(w, types);
+      return trayOnly(w);
+    },
+    hide(types) {
+      if (types !== undefined) setTrayHidden(w, types);
+      return trayHidden(w);
+    },
     anchor(): TrayAnchor {
       const f = frame();
       const out = trayOpen(w);
@@ -175,6 +189,7 @@ function trayDoor(engine: CanvasEngine): TestDoor {
         entries: trayEntryCount(w),
         category: trayCategory(w),
         categories: trayCategories(w),
+        only: trayOnly(w),
         focused: drawnFocus,
       };
     },
