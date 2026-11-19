@@ -35,7 +35,8 @@
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
+    "//typecheck": "Item 599 (2026-11-19): tsc's heap limit, set here so every host checks this program at the SAME size (GitHub's runner gave node about 2 GB, which the program outgrew; a larger Mac's default hid it). 4096 MiB is the measured need with room (Memory used 2633093K, peak RSS 2.9 GB, at 45edd5fb4309). To re-measure: run `node --max-old-space-size=8192 node_modules/typescript/bin/tsc --noEmit --extendedDiagnostics` here and raise this to the next whole GiB above 1.5 times its Memory used.",
+    "typecheck": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc --noEmit",
     "perf:godview:corpora": "vitest run --config vitest.perf.config.ts perf/corpora.generate.perf.ts",
     "perf:godview:model": "vitest run --config vitest.perf.config.ts perf/model-streams.generate.perf.ts",
     "perf:godview:projection": "vitest run --config vitest.perf.config.ts perf/projection-bench.perf.ts",
