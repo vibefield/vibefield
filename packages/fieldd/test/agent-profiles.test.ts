@@ -483,14 +483,16 @@ describe("AgentProfileService — what each profile runs on (AR-S2c)", () => {
     // never made from the plan word, which all four carry as they came
     const words = cases.map(([set]) => persona(set)?.identity?.plan);
     expect(words).toEqual(["max", "max", "max", "max"]);
-    // puppeteer 0.4.2's plans and holdings copy named fields alone, so no tier reaches them at this
-    // pin. The EL8 to the release that sends one turns these red: they become the carry, the plan's
-    // account and the holding each with the identity's tier
+    // puppeteer 0.4.4 (#94) copies the identity's tier into each plan's account and each holding;
+    // the feed reads both through the contract's own reader, so a token it cannot carry is not
+    // read there either (the EL8 of 2026-11-18)
     for (const [set] of cases) {
+      const tier = persona(set)?.identity?.planTier;
       const plan = feed.sets.find((each) => each.id === set)?.plans?.[0];
       expect(plan?.account).toMatchObject({ plan: "max" });
-      expect(plan?.account).not.toHaveProperty("planTier");
-      expect(persona(set)?.holds?.[0]).not.toHaveProperty("planTier");
+      expect(plan?.account?.planTier).toEqual(tier);
+      expect(persona(set)?.holds?.[0]).toMatchObject({ plan: "max" });
+      expect(persona(set)?.holds?.[0]?.planTier).toEqual(tier);
     }
   });
 });

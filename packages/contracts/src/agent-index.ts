@@ -2632,8 +2632,10 @@ export type AgentSignInService = z.infer<typeof AgentSignInService>;
 
 /** The longest tier label the profiles feed carries (puppeteer's `PLAN_TIER_LABEL_MAX`, in the release that sends the
  * tier): a short word for a badge, never a sentence. How wide a face draws it is DESIGN.md's. The kit's
- * `AgentPlanTier.labelMax` is pinned to it (check-ios-fixtures); fieldd's agent-monitor-pin test holds the pinned
- * puppeteer, which names none yet, and turns red at the release that does. */
+ * `AgentPlanTier.labelMax` is pinned to it (check-ios-fixtures); fieldd's agent-monitor-pin test holds it equal to the
+ * pinned puppeteer's, which names it since 0.4.4 (the EL8 of 2026-11-18).
+ * Correction 2026-11-18: this said the pinned puppeteer named none yet and the test turned red at the release that did;
+ * true until the EL8 to 0.4.4, where the test became the equality. */
 export const PLAN_TIER_LABEL_MAX = 8;
 /** A tier label's characters: one word of letters, digits, `.`, `+` and `-`. No space and no underscore, so a vendor's
  * raw token never passes for a label. */

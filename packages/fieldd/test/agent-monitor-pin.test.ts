@@ -4,12 +4,15 @@ import { fileURLToPath } from "node:url";
 import {
   AGENT_MONITOR_SCHEMA_VERSION,
   AgentMonitorMirror,
+  AgentPlanTier,
   NATIVE_PROFILE_SET_ID,
   PLAN_TIER_LABEL_MAX,
 } from "@vibefield/contracts";
 import {
+  PlanTierSchema,
   AGENT_MONITOR_SCHEMA_VERSION as UPSTREAM_MONITOR_SCHEMA_VERSION,
   NATIVE_PROFILE_SET_ID as UPSTREAM_NATIVE_PROFILE_SET_ID,
+  PLAN_TIER_LABEL_MAX as UPSTREAM_PLAN_TIER_LABEL_MAX,
 } from "@vibefield/puppeteer-core";
 import { NATIVE_PROFILE_SET as MONITOR_NATIVE_PROFILE_SET } from "@vibefield/puppeteer-monitor";
 import { describe, expect, it } from "vitest";
@@ -50,14 +53,31 @@ describe("This Mac's profile id against the pinned puppeteer", () => {
 });
 
 // A plan's tier label: its cap is puppeteer's, mirrored in contracts (and from there in the kit, which
-// check-ios-fixtures pins to it). The pinned puppeteer names no cap yet, so this holds the contract's own and that
-// absence. The EL8 to the release that sends a tier turns it red: then it becomes the equality with that release's
-// `PLAN_TIER_LABEL_MAX`, and its label pattern is read beside it.
+// check-ios-fixtures pins to it). Since the EL8 to puppeteer 0.4.4 (2026-11-18) the pinned core names the cap and the
+// tier's schema, so this holds the equality and reads the two patterns side by side. puppeteer writes a label that
+// starts with a letter or a digit; the contract, the tolerant reader, reads any run of letters, digits, `.`, `+` and
+// `-`. So every label puppeteer writes, the contract reads, and the row that tells them apart is a label puppeteer
+// never writes.
 describe("a plan's tier label against the pinned puppeteer", () => {
-  it("the pinned puppeteer names no tier cap yet, so the contract's stands alone", async () => {
-    const upstream = Object.keys(await import("@vibefield/puppeteer-core"));
-    expect(upstream).not.toContain("PLAN_TIER_LABEL_MAX");
-    expect(upstream).not.toContain("PlanTierSchema");
+  it("the contract's cap IS the pinned puppeteer's", () => {
+    expect(PLAN_TIER_LABEL_MAX).toBe(UPSTREAM_PLAN_TIER_LABEL_MAX);
     expect(PLAN_TIER_LABEL_MAX).toBe(8);
+  });
+
+  it.each(["20x", "200", "1.5x", "a+b"])("reads %s, a label puppeteer writes", (label) => {
+    expect(PlanTierSchema.safeParse({ label }).success).toBe(true);
+    expect(AgentPlanTier.safeParse({ label }).success).toBe(true);
+  });
+
+  it("reads '.x', which puppeteer never writes, as the tolerant reader it is", () => {
+    expect(PlanTierSchema.safeParse({ label: ".x" }).success).toBe(false);
+    expect(AgentPlanTier.safeParse({ label: ".x" }).success).toBe(true);
+  });
+
+  it("refuses what both refuse: past the cap, a space, an underscore", () => {
+    for (const label of ["123456789", "20 x", "max_20x"]) {
+      expect(PlanTierSchema.safeParse({ label }).success).toBe(false);
+      expect(AgentPlanTier.safeParse({ label }).success).toBe(false);
+    }
   });
 });
