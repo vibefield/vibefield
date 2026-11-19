@@ -22,6 +22,7 @@ import {
 } from "./ios-simulator-producer";
 import { MacosCaptureHelperSupervisor } from "./macos-capture-helper";
 import { loadMacosCaptureNativeAdapter } from "./macos-capture-native";
+import { fileOwnedDeviceLedger } from "./owned-simulator-devices";
 import { SckLiveSurfaceRuntime } from "./sck-producer";
 import { type SimctlCall, type SimctlCallCounts, SimctlService } from "./simctl";
 
@@ -86,6 +87,9 @@ export function createProductionLiveSurfaceSupport(opts: {
    * harness's count of main's simctl calls by NAME — never an argument, so never a UDID. The shared simctl bumps it at
    * each call (its `onCall`), and `census().simctl` reads a copy. Absent (production): nothing is counted. */
   simctlCalls?: SimctlCallCounts;
+  /** Item 568 (2026-11-19): the file that keeps which simulators this shell booted (main's userData), so a device a
+   * crash left running is shut down by the next start's panes. Absent: none is kept, and such a device runs on. */
+  simulatorBootedFile?: string;
   logger?: Logger;
 }): ProductionLiveSurfaceSupport {
   const simctlCalls = opts.simctlCalls;
@@ -164,6 +168,13 @@ export function createProductionLiveSurfaceSupport(opts: {
           return { resolver: stack.deviceResolver, client: stack.supervisor };
         },
         openSettings: opts.openSettings ?? (() => Promise.resolve()),
+        ...(opts.simulatorBootedFile === undefined
+          ? {}
+          : {
+              ownedLedger: fileOwnedDeviceLedger(opts.simulatorBootedFile, (message) =>
+                opts.logger?.warn("desktop.live_surfaces.simulator_ledger", message),
+              ),
+            }),
         ...(opts.logger === undefined ? {} : { logger: opts.logger }),
       });
     }

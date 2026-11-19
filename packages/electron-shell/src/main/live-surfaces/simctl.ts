@@ -18,7 +18,9 @@ import type { BootedSimulatorDevice, SimulatorDeviceCatalog } from "./ios-simula
 //    per second — the device runtimes' watches, the inner resolvers' 1 s revalidation and the attach's device list all
 //    read the same snapshot);
 //  - `boot` — a device already booted (or booting) counts as booted;
-//  - `shutdown` — for completeness: no act runs it in v1 (a device is the person's, and nothing main does shuts one down);
+//  - `shutdown` — of a device main booted for a pane, when its panes let it go and at quit
+//    (owned-simulator-devices.ts); never of the person's own. (Corrected 2026-11-19, item 568: this said no act runs
+//    it in v1 and nothing main does shuts one down; untrue since main's pane-owned devices, which it shuts down.)
 //  - `create` — answers the new device's UDID, which stays in main;
 //  - `show` — Simulator.app, the vetted Xcode's own, opened on that device (`-CurrentDeviceUDID`).
 // An ALLOW-LIST refuses any other simctl verb (`ui`, `openurl`, `install`, `launch`, `privacy`, `push`… — view-only means
@@ -615,13 +617,15 @@ export class SimctlService implements SimulatorDeviceCatalog {
     }
   }
 
-  /** `simctl shutdown`: a device already shut down counts as shut down. No v1 act runs it (a device is the person's). */
   /** A newly booted guest can spend minutes migrating its data before SpringBoard is ready. */
   async waitUntilReady(udid: string): Promise<void> {
     assertUdid(udid);
     await this.simctl("bootstatus", [udid], SIMCTL_TIMEOUTS_MS.bootstatus);
   }
 
+  /** `simctl shutdown`: a device already shut down counts as shut down. Main runs it only for a device it booted for a
+   * pane, when its panes let it go and at quit (owned-simulator-devices.ts). (Corrected 2026-11-19, item 568: this
+   * said no v1 act runs it, and it stood above waitUntilReady.) */
   async shutdown(udid: string): Promise<void> {
     assertUdid(udid);
     try {

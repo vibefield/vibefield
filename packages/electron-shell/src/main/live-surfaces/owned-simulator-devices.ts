@@ -1,3 +1,5 @@
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { dirname } from "node:path";
 import type { LiveSurfaceIosSimulatorBindingV1 } from "@vibefield/contracts";
 import { pickDevice, type SimctlService } from "./simctl";
 
@@ -15,8 +17,65 @@ interface DeviceUse {
   timer: ReturnType<typeof setTimeout> | undefined;
 }
 
+/** Item 568 (2026-11-19) — what this shell booted, kept where it outlives the shell (main's userData): at its next
+ * start, a device it booted and left running when it ended without its quit (a crash, a Force Quit) is told from one
+ * another VibeField is running, which is never this shell's to shut down. */
+export interface OwnedDeviceLedger {
+  has(udid: string): boolean;
+  add(udid: string): void;
+  remove(udid: string): void;
+}
+
+/** simctl's UDID alphabet (`simctl.ts`): a row in another shape is dropped as the ledger is read. */
+const LEDGER_UDID = /^[A-Za-z0-9][A-Za-z0-9-]{7,127}$/u;
+
+/** The ledger's file as read, before it is held to its shape. */
+type LedgerFile = { v?: unknown; booted?: unknown } | null;
+
+/** The ledger as one small file, `{ v: 1, booted: [udid…] }`, written whole (a temporary, then a rename). A file that
+ * cannot be read as one starts the ledger empty, and `warn` says so; a write that fails is said too, and this run's
+ * devices are still shut down when their panes let them go. */
+export function fileOwnedDeviceLedger(
+  path: string,
+  warn?: (message: string) => void,
+): OwnedDeviceLedger {
+  const booted = new Set<string>();
+  try {
+    const record = JSON.parse(readFileSync(path, "utf8")) as LedgerFile;
+    if (record?.v !== 1 || !Array.isArray(record.booted)) throw new Error("not a v1 ledger");
+    for (const udid of record.booted)
+      if (typeof udid === "string" && LEDGER_UDID.test(udid)) booted.add(udid);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT")
+      warn?.("the record of the simulators this shell booted could not be read; it starts empty");
+  }
+  const write = (): void => {
+    try {
+      mkdirSync(dirname(path), { recursive: true });
+      const temporary = `${path}.${process.pid}.tmp`;
+      writeFileSync(temporary, `${JSON.stringify({ v: 1, booted: [...booted] })}\n`);
+      renameSync(temporary, path);
+    } catch {
+      warn?.("the record of the simulators this shell booted could not be written");
+    }
+  };
+  return {
+    has: (udid) => booted.has(udid),
+    add: (udid) => {
+      if (booted.has(udid)) return;
+      booted.add(udid);
+      write();
+    },
+    remove: (udid) => {
+      if (booted.delete(udid)) write();
+    },
+  };
+}
+
 /** One host-side lease per pane, model and OS. An installed runtime is shared,
- * but the guest data and the decision to power down belong to this configuration. */
+ * but the guest data and the decision to power down belong to this configuration.
+ * Item 568 (2026-11-19): with a ledger, a device this shell booted before it ended without its quit is its own again;
+ * a running device the ledger does not hold stays alone. */
 export class OwnedSimulatorDevices {
   readonly #uses = new Map<string, DeviceUse>();
   #closed = false;
@@ -25,6 +84,7 @@ export class OwnedSimulatorDevices {
     private readonly simctl: DeviceControl,
     private readonly graceMs = 10 * 60_000,
     private readonly shutdownFailed?: () => void,
+    private readonly ledger?: OwnedDeviceLedger,
   ) {}
 
   acquire(binding: LiveSurfaceIosSimulatorBindingV1): OwnedSimulatorLease {
@@ -65,15 +125,25 @@ export class OwnedSimulatorDevices {
     this.simctl.invalidate();
     const pick = pickDevice(await this.simctl.list(), binding);
     if (this.#closed || !use.users) throw new Error("Simulator pane closed");
-    if (pick.device?.state === "Booted" || pick.device?.state === "Booting")
+    if (pick.device?.state === "Booted" || pick.device?.state === "Booting") {
+      // Item 568: one this shell booted before it ended without its quit is its own again; any other stays alone
+      if (this.ledger?.has(pick.device.udid)) use.booted = pick.device.udid;
       return pick.device.udid;
+    }
     const plan = pick.create;
     const udid =
       pick.device?.udid ??
       (plan && (await this.simctl.create(plan.name, plan.deviceType, plan.runtime)));
     if (!udid) throw new Error("Simulator configuration unavailable");
     if (this.#closed || !use.users) throw new Error("Simulator pane closed");
-    await this.simctl.boot(udid);
+    // recorded before the boot, so a shell that ends mid-boot still knows the device at its next start
+    this.ledger?.add(udid);
+    try {
+      await this.simctl.boot(udid);
+    } catch (error) {
+      this.ledger?.remove(udid);
+      throw error;
+    }
     use.booted = udid;
     return udid;
   }
@@ -98,7 +168,10 @@ export class OwnedSimulatorDevices {
     const stop = async () => {
       if (startup) await startup.catch(() => {});
       if ((!this.#closed && use.users) || !use.booted) return;
-      await this.simctl.shutdown?.(use.booted);
+      if (this.simctl.shutdown) {
+        await this.simctl.shutdown(use.booted);
+        this.ledger?.remove(use.booted);
+      }
       delete use.booted;
     };
     use.stopping = stop()

@@ -18,7 +18,11 @@ import {
   type IosSimulatorResolutionProvider,
   type ResolvedIosSimulatorCapture,
 } from "./ios-simulator-producer";
-import { OwnedSimulatorDevices, type OwnedSimulatorLease } from "./owned-simulator-devices";
+import {
+  type OwnedDeviceLedger,
+  OwnedSimulatorDevices,
+  type OwnedSimulatorLease,
+} from "./owned-simulator-devices";
 import type { LiveSurfaceRuntimeAttachContext, LiveSurfaceRuntimeAttachment } from "./runtime";
 import {
   createLiveSurfaceRuntimeSupportSnapshot,
@@ -86,6 +90,9 @@ export interface SimulatorDeviceCapture {
 export interface SimulatorDeviceSessionsOptions {
   readonly framebuffer?: boolean;
   readonly ownedIdleMs?: number;
+  /** Item 568: what this shell booted, kept past it (main's userData), so a device a crash left running is its own
+   * again at the next start. Absent: nothing is kept, and such a device runs on. */
+  readonly ownedLedger?: OwnedDeviceLedger;
   readonly simctl: SimulatorDeviceSimctl;
   /** Built lazily, at the first look; THROWS on a shell with no capture half (not a Mac, or no helper) — the face's
    * `no-simulator` (R5), never a mint error. */
@@ -1109,11 +1116,15 @@ export class SimulatorDeviceSessions {
       if (value !== undefined) positive(value, `bound Simulator ${name}`);
     }
     this.#options = options;
-    this.#owned = new OwnedSimulatorDevices(options.simctl, options.ownedIdleMs, () =>
-      options.logger?.warn(
-        "desktop.live_surfaces.simulator_shutdown_failed",
-        "Could not shut down a pane-owned simulator",
-      ),
+    this.#owned = new OwnedSimulatorDevices(
+      options.simctl,
+      options.ownedIdleMs,
+      () =>
+        options.logger?.warn(
+          "desktop.live_surfaces.simulator_shutdown_failed",
+          "Could not shut down a pane-owned simulator",
+        ),
+      options.ownedLedger,
     );
   }
 

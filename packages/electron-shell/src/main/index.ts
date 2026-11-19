@@ -1404,6 +1404,9 @@ async function main(
         harnessShellOpens.opened.push(url);
         return Promise.resolve();
       },
+      // Item 568: which simulators this shell booted, kept in its own userData, so one a crash left running is its own
+      // again at the next start
+      simulatorBootedFile: join(app.getPath("userData"), "simulator", "booted.json"),
       // PT-S3 (P2): a smoke's simctl developer directory, the probe's ONLY candidate (SIM-NONE points it at an empty one)
       ...(SMOKE_SIMCTL_DEVELOPER_DIR === undefined
         ? {}
