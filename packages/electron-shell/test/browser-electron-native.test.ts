@@ -403,7 +403,7 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
     ).toMatchObject({ scale: 1 });
   });
 
-  it("maps root input coordinates and wheel travel into the scaled view image", async () => {
+  it("maps root input coordinates into the scaled view while preserving the document scroll distance", async () => {
     const r = recording();
     await r.native.setBackingRaster(
       { width: 320, height: 180 },
@@ -415,7 +415,7 @@ describe("PT-5c (ruling 1) — the page SAYS its scale; the hand's commands neve
     await r.native.dispatchMouse({ type: "mouseWheel", x: 200, y: 100, deltaX: -8, deltaY: 24 });
     const sent = r.sent.filter((c) => c.method === "Input.dispatchMouseEvent");
     expect(sent[0]?.params).toMatchObject({ x: 100, y: 50 });
-    expect(sent[1]?.params).toMatchObject({ x: 100, y: 50, deltaX: -4, deltaY: 12 });
+    expect(sent[1]?.params).toMatchObject({ x: 100, y: 50, deltaX: -8, deltaY: 24 });
     await r.native.setBackingRaster(
       { width: 640, height: 360 },
       { width: 320, height: 180 },

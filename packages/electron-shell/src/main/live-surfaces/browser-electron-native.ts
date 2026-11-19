@@ -1168,17 +1168,9 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       await this.ensureDebugger();
       for (const routed of this.routeMouse(input, arrived, heardUntil ?? arrived)) {
         const sent = performance.now();
+        // Chromium scrolls by the supplied CSS distance independent of the capture scale.
+        // Only the point that identifies the target uses view-image coordinates.
         const command = { ...input, ...this.onSession(routed) };
-        // Chromium undoes desktop view-image scaling for both the wheel point and its delta.
-        // Separately targeted child frames receive wheel travel directly in CSS pixels.
-        if (
-          input.type === "mouseWheel" &&
-          routed.target.session === undefined &&
-          this.#captureScale !== 1
-        ) {
-          command.deltaX = (input.deltaX ?? 0) * this.#captureScale;
-          command.deltaY = (input.deltaY ?? 0) * this.#captureScale;
-        }
         await this.hinted(input.type === "mousePressed", routed.target.session === undefined, () =>
           this.handCommand("Input.dispatchMouseEvent", command, routed.target.session),
         ).catch((error: unknown) => {
