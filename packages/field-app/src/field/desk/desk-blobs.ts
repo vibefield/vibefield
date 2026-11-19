@@ -43,6 +43,10 @@ export interface DeskBlobStore extends BlobStore {
   persistence(): Promise<DeskBlobPersistence>;
   /** Hashes held in memory now (a witness, not an index of what OPFS keeps). */
   size(): number;
+  /** Item 578 — what memory holds under a hash NOW, with no read: a print this page has drawn is here (the desk
+   * asked for its bytes to draw it), one whose picture has not arrived is not. The bar asks it to know, as the
+   * selection is read, whether a print's picture can be saved. */
+  held(hash: string): StoredBlob | undefined;
   /** Keep `bytes` under `key` on the keyed shelf, in place of what it held. A key that is not a plain
    * name throws. */
   keep(key: string, bytes: Uint8Array<ArrayBuffer>, type: string): Promise<void>;
@@ -185,6 +189,7 @@ export function createDeskBlobStore(opts: { root?: DirectorySource } = {}): Desk
     },
     persistence: async () => ((await dir()) === undefined ? "memory" : "opfs"),
     size: () => memory.size,
+    held: (hash) => memory.get(hash),
     // The keyed shelf holds nothing in memory where the file system keeps it: its readers (the
     // explorer's `blob:` URLs) hold their own copy, and a board's still need not be held twice.
     async keep(key, bytes, type) {

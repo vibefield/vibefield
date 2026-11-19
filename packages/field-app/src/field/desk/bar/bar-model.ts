@@ -9,7 +9,8 @@ import { eyebrowOf, type ObjectWords } from "../desk-object-words";
 // host's own read of the selected objects (their types' words, whether the one selected opens). The host prints
 // what a kind declares and adds nothing; a kind's act prints NO key on this build (R1 — its declared keys are
 // ICE's demo's), while the DESK's acts print theirs (DK-D24; ⇧⌘L is the desk's, ICE's default keymap's — R23; ⌘C
-// the desk's Make a card, CS-D11).
+// the desk's Make a card, CS-D11). Item 578 (2026-11-19): Download… follows Open for one print whose picture the
+// desk holds; it is the host's act (the save is main's), prints no key, and has no cell on the bar itself.
 
 /** The desk's keys as this platform spells them (the frame's way, FR-5: said, never a cap). */
 export type DeskKeys = "mac" | "other";
@@ -39,6 +40,9 @@ export const MAKE_CARD_LABEL = "Make a card";
 /** Its tooltip, its key the desk's (⌘C over the desk; product-chords' `desk-copy`): "Make a card  ⌘C". */
 export const makeCardTip = (keys: DeskKeys): string => tipOf(MAKE_CARD_LABEL, KEYS[keys].copy);
 
+/** Download… — its ellipsis because it asks where before it acts (the system's save panel; item 578). */
+export const DOWNLOAD_LABEL = "Download…";
+
 /** What the host read of the selection — the anchor's facts and its own (the doors, §8). */
 export interface SelectionFacts {
   readonly count: number;
@@ -50,6 +54,9 @@ export interface SelectionFacts {
   readonly words: readonly ObjectWords[];
   /** Exactly one object selected whose type opens (`catalog.widget(type).openable`), not a container (R4). */
   readonly openable: boolean;
+  /** Exactly one object selected, a print whose picture this desk holds in a format the save door takes, where a
+   * save door exists (print-download.ts; item 578). */
+  readonly downloadable: boolean;
   /** The comment pad's kind is drawn here: the Comment row can lay one (DK-8's pad, DK-D24). */
   readonly commentable: boolean;
 }
@@ -132,7 +139,8 @@ export function barCells(f: SelectionFacts, keys: DeskKeys): BarCell[] {
 
 /** One row of the grown menu: its label and, at its end, its key (none for a kind's act — R1). */
 export interface MenuRow {
-  /** `act:<id>` for a kind's act; else open · comment · copy · duplicate · front · back · cleanup · tape · delete. */
+  /** `act:<id>` for a kind's act; else open · download · comment · copy · duplicate · front · back · cleanup · tape ·
+   * delete. */
   readonly id: string;
   readonly label: string;
   readonly key?: string;
@@ -145,6 +153,7 @@ export interface MenuRow {
 /**
  * The grown menu's rows in their groups, NEAREST FIRST (the group and the row next to the bar's own row first):
  * the kind's acts (no keys) · Open (one object whose type opens; a container has none — ⏎ enters it, R4) ·
+ * Download… (one print whose picture the desk holds; no key — item 578) ·
  * Comment (a pad laid at the selection's edge — the C key's wrap, DK-D24) · Make a card (⌘C — a card, not the
  * engine's, which has no copy op) | Duplicate (not while taped) · Bring to front · Send to back · Clean up (two or
  * more — DK-D29) | Tape it down, or Lift the tape | Delete.
@@ -155,6 +164,7 @@ export function menuGroups(f: SelectionFacts, keys: DeskKeys): MenuRow[][] {
   if (missingOf(f) === undefined)
     for (const act of f.menu) near.push({ id: `act:${act.id}`, label: act.label });
   if (f.openable) near.push({ id: "open", label: "Open", key: k.open });
+  if (f.downloadable) near.push({ id: "download", label: DOWNLOAD_LABEL });
   if (f.commentable) near.push({ id: "comment", label: "Comment" });
   near.push({ id: "copy", label: MAKE_CARD_LABEL, key: k.copy });
   const arrange: MenuRow[] = [];

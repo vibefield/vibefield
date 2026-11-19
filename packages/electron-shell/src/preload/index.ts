@@ -20,6 +20,7 @@ import {
   HandPictureWriteRequest,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
+  PictureSaveResult,
   type RendererReplaceReason,
   RendererReplaceRequest,
   type RendererReplaceResult,
@@ -32,6 +33,7 @@ import {
   ScreenshotStillBytesRequest,
   ScreenshotStillKeptRequest,
   SHELL_CLIPBOARD,
+  SHELL_PICTURE_SAVE,
   type ShellCommand,
   ShellPlatform,
   SimulatorSetupStatus,
@@ -497,6 +499,24 @@ contextBridge.exposeInMainWorld("vibefield", {
         throw ClipboardCopyRefusal.parse({ reason: "not-an-image" });
       }
       throw mainTooLarge(png.byteLength, result.bytes);
+    },
+  },
+  /** Item 578 — a print's picture saved where the person chooses (DESIGN.md §8 "The bar grown": Download…). The
+   * picture's bytes are all that crosses: main reads their format, makes the name and opens its own save panel, so
+   * no name and no path is the page's. A picture past the bound is answered here and never sent; the answer is
+   * parsed, so nothing outside the contract (a path among it) reaches the page. */
+  pictures: {
+    save: async (bytes: Uint8Array<ArrayBuffer>): Promise<PictureSaveResult> => {
+      if (!isStillBytes(bytes)) throw new Error("a picture is saved from the picture's bytes");
+      if (bytes.byteLength > SHELL_PICTURE_SAVE.MAX_BYTES) {
+        return PictureSaveResult.parse({
+          status: "refused",
+          reason: "too-large",
+          bytes: bytes.byteLength,
+        });
+      }
+      const answer: unknown = await ipcRenderer.invoke(IPC_CHANNELS.pictureSave, bytes);
+      return PictureSaveResult.parse(answer);
     },
   },
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {

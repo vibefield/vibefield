@@ -15,6 +15,7 @@ import {
   type CallerContext,
   SHELL_CLIPBOARD_AUDIT_ACTIONS,
   SHELL_CUSTODY_AUDIT_ACTIONS,
+  SHELL_PICTURE_AUDIT_ACTIONS,
   UPDATES_AUDIT_ACTIONS,
 } from "@vibefield/contracts";
 import {
@@ -52,6 +53,8 @@ const SHELL_ACTIONS = new Set<string>([
   // OB custody: what main did with its own custody root, and with an older pair when it made
   // one (an outcome and what was stopped, never a secret, never the wrapped bytes), named in contracts.
   ...Object.values(SHELL_CUSTODY_AUDIT_ACTIONS),
+  // Item 578: a print's picture saved through main's own panel (its size, format and file name, never a path).
+  ...Object.values(SHELL_PICTURE_AUDIT_ACTIONS),
 ]);
 
 export interface AuditServiceOptions {

@@ -43,6 +43,7 @@ const facts = (over: Partial<SelectionFacts>): SelectionFacts => ({
   menu: [],
   words: [NOTE],
   openable: false,
+  downloadable: false,
   commentable: true,
   ...over,
 });

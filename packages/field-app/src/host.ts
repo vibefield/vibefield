@@ -14,6 +14,7 @@ import type {
   FrameViewState,
   FrameZoomAct,
   GodviewDeckState,
+  PictureSaveResult,
   RendererParticipantIdentity,
   RendererReplaceReason,
   ScreenshotCaptureResult,
@@ -113,6 +114,15 @@ export interface FieldClipboardHost {
    * (`ClipboardCopyRefusal`, a plain record), and the copy then deals no card. Words alone
    * keep `FieldDiagnosticsHost.copyText`. */
   writeImage(png: Uint8Array, text?: string): Promise<void>;
+}
+
+/** Item 578 — a print's picture saved where the person chooses (DESIGN.md §8 "The bar grown": Download…). The page
+ * hands main the picture's bytes as the desk holds them, and nothing else: main reads their format, makes the name
+ * and opens its own save panel, so the page names no file and no place. The answer is saved with the folder's own
+ * name, cancelled, or refused with its reason; never a path. Absent in browser harnesses (the catalog), where there
+ * is no disk to save to, and the row is then not offered. */
+export interface FieldPicturesHost {
+  save(bytes: Uint8Array<ArrayBuffer>): Promise<PictureSaveResult>;
 }
 
 export interface FieldDiagnosticsHost {
@@ -260,6 +270,8 @@ export interface FieldHost {
   };
   /** Item 102 — the clipboard's read (`FieldClipboardHost`); absent where no main reads it. */
   readonly clipboard?: FieldClipboardHost;
+  /** Item 578 — a print's picture saved through main (`FieldPicturesHost`); absent where no main saves it. */
+  readonly pictures?: FieldPicturesHost;
   /** Optional native tactile feedback; browser hosts provide no implementation. */
   readonly haptics?: { zoomTick(): void };
   /** SD-2 — the field's sounds (`FieldSoundHost`); absent where no main plays them (a browser harness). */

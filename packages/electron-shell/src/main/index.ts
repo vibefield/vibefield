@@ -1,5 +1,6 @@
 import { randomBytes, randomUUID } from "node:crypto";
 import { accessSync, existsSync, constants as fsConstants, readFileSync } from "node:fs";
+import { writeFile } from "node:fs/promises";
 import { homedir, networkInterfaces, release, tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import {
@@ -99,6 +100,7 @@ import {
   registerHandFile,
   registerHandKept,
   registerHandPicture,
+  registerPictureSave,
   registerRendererReplace,
   registerScreenshotCapture,
   registerScreenshotPreview,
@@ -159,6 +161,7 @@ import {
 } from "./modes";
 import { NeedsNoticeObserver } from "./needs-notices";
 import { readCensus, requestConsentedStop } from "./pair-stop";
+import { localDay } from "./picture-save-door";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { createQuitGate, type QuitGate, type QuitPair } from "./quit-gate";
@@ -2199,6 +2202,40 @@ async function main(
   );
   registerHandKept(registry, (path) => handPictures.kept(path));
   app.once("will-quit", () => handPictures.disposeSync());
+  // Item 578: a print's picture is saved here, where the person chooses (DESIGN.md §8 "The bar grown": Download…).
+  // The page hands over the bytes alone. Main makes the name, and its own save panel over the asking window names
+  // the place: it opens at the folder the door last saved to in this run, else Downloads. A name the panel showed is
+  // written as chosen (the panel asked before replacing it); one the door had to finish with its extension is
+  // written only where no file stands. Audited best-effort, as the clipboard read is: a save never waits on fieldd.
+  // A marked run (`VF_SMOKE_RUN`) opens no panel, as it writes no clipboard: a smoke must never wait on a person.
+  const pictureLogger = logger.child({ component: "ipc.picture-save" });
+  registerPictureSave(
+    registry,
+    {
+      choose: async (sender, proposal) => {
+        if (process.env["VF_SMOKE_RUN"] !== undefined) return null;
+        const window = BrowserWindow.fromWebContents(sender);
+        if (window === null) throw new Error("the asking window is gone");
+        const result = await dialog.showSaveDialog(window, {
+          defaultPath: join(proposal.folder ?? app.getPath("downloads"), proposal.name),
+          filters: [{ name: "Picture", extensions: [...proposal.extensions] }],
+          properties: ["createDirectory", "showOverwriteConfirmation"],
+        });
+        return result.canceled || result.filePath === "" ? null : result.filePath;
+      },
+      write: (path, bytes, how) => writeFile(path, bytes, { flag: how === "new" ? "wx" : "w" }),
+      today: () => localDay(new Date()),
+      audit: (record) => appendShellAudit(record),
+      operationId: () => randomUUID(),
+      onAuditFailed: (error) =>
+        pictureLogger.warn(
+          "desktop.picture_save.audit_unavailable",
+          "A print's picture was saved or refused, and its audit record could not be appended",
+          { error: error instanceof Error ? error.message : String(error) },
+        ),
+    },
+    pictureLogger,
+  );
   // A global capture can finish with every product window closed. Keep the
   // latest result for the next field, without revealing it before the freeze.
   let pendingScreenshotResult: ScreenshotCaptureResult | null = null;

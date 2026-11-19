@@ -31,6 +31,7 @@ import {
 } from "./bar-model";
 import { TRAVEL_MS, useReducedMotion } from "./bar-motion";
 import { barStats } from "./bar-stats";
+import { downloadable, downloadPrint } from "./print-download";
 import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 
 // THE SELECTION BAR'S CONTROLLER (DK-11; DESIGN.md §8 "The doors", "The selection bar", "The bar grown — More, and
@@ -60,6 +61,10 @@ import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 // pill in hand, and ⌘C over the desk — run ONE act (copy/copy-to-hand.ts): the selection, or the object in hand, dealt
 // into the hand as one card. Nothing is drafted and nothing waits on the line, so the bar never steps aside for it;
 // the tools in hand stay under the head (plan addendum (50)).
+//
+// DOWNLOAD… (item 578; §8 "The bar grown"): the grown menu's row for one print whose picture the desk holds, the
+// host's own act (print-download.ts). Whether it is offered is read with the selection AND on every publish after,
+// because a print's picture can arrive after the print was selected, and the row must then appear.
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -169,6 +174,7 @@ function readSelection(
     words: typeWords,
     openable:
       widget?.openable === true && widget.container === undefined && typeWords[0]?.state === null,
+    downloadable: downloadable(desk, entities),
     commentable: pad !== undefined && words(COMMENT_PAD_TYPE).state === null,
   };
 }
@@ -184,6 +190,12 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
   // in hand the tools stay through a stroke or a line being written; only the flight home steps them aside
   const stepAside = !held && (anchor.gesturing || anchor.editing || anchor.held?.landing === true);
   const hand = readHand(anchor, prev?.hand ?? null);
+  // a print's picture may arrive after the print was selected: the one fact of the selection read again each publish
+  // (one lookup in memory). Deselected, the bar fades out saying what it said, so nothing is asked then.
+  const savable =
+    prev === null ||
+    anchor.count === 0 ||
+    prev.selection.downloadable === downloadable(desk, entities);
   if (
     prev !== null &&
     prev.key === key &&
@@ -194,7 +206,8 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     prev.onScreen === onScreen &&
     prev.inHand === held &&
     prev.stepAside === stepAside &&
-    prev.hand === hand
+    prev.hand === hand &&
+    savable
   ) {
     return prev;
   }
@@ -204,7 +217,8 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     prev.count === anchor.count &&
     prev.locked === anchor.locked &&
     prev.menuKey === menuKey &&
-    prev.faults === faults;
+    prev.faults === faults &&
+    savable;
   return {
     key,
     count: anchor.count,
@@ -359,6 +373,7 @@ function SelectionBarOn({
     (row: MenuRow): void => {
       if (row.waits !== undefined) return;
       if (row.id === "copy") copySelection(desk, "menu");
+      else if (row.id === "download") void downloadPrint(desk);
       else runBarAct(engine, row.id as BarActId, factsRef.current.locked);
     },
     [desk, engine],

@@ -403,6 +403,76 @@ export const SHELL_CLIPBOARD_AUDIT_ACTIONS = {
   READ: "shell.clipboard.read",
 } as const;
 
+/** Item 578 (2026-11-19) — the formats the picture save door takes (`IPC_CHANNELS.pictureSave`), a CLOSED list: a
+ * print's picture is saved as the desk holds it, never re-encoded, so the door takes only bytes that open as one of
+ * these. Anything else (a document, a page, a program) is refused before a panel opens. */
+export const PICTURE_SAVE_TYPES = ["image/png", "image/jpeg", "image/gif", "image/webp"] as const;
+export const PictureSaveType = z.enum(PICTURE_SAVE_TYPES);
+export type PictureSaveType = z.infer<typeof PictureSaveType>;
+
+/** The extensions a saved picture's name may end in, by its format; the first is the one main makes a name with. */
+export const PICTURE_SAVE_EXTENSIONS = {
+  "image/png": ["png"],
+  "image/jpeg": ["jpg", "jpeg"],
+  "image/gif": ["gif"],
+  "image/webp": ["webp"],
+} as const satisfies Record<PictureSaveType, readonly [string, ...string[]]>;
+
+/** Which of the door's formats these bytes open as, read off their first bytes, or null: none of them. The page asks
+ * it to know whether to offer the row at all, and main asks it again of what it was handed, so the format is never
+ * the page's word. PURE. */
+export function pictureSaveTypeOf(bytes: Uint8Array): PictureSaveType | null {
+  const starts = (at: number, ...signature: number[]): boolean =>
+    signature.every((byte, index) => bytes[at + index] === byte);
+  if (starts(0, 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return "image/png";
+  if (starts(0, 0xff, 0xd8, 0xff)) return "image/jpeg";
+  // "GIF87a" or "GIF89a"
+  const gif = starts(0, 0x47, 0x49, 0x46, 0x38) && starts(5, 0x61);
+  if (gif && (bytes[4] === 0x37 || bytes[4] === 0x39)) return "image/gif";
+  // "RIFF", four bytes of length, "WEBP"
+  if (starts(0, 0x52, 0x49, 0x46, 0x46) && starts(8, 0x57, 0x45, 0x42, 0x50)) return "image/webp";
+  return null;
+}
+
+/** main → renderer: what became of a picture's save (`IPC_CHANNELS.pictureSave`; item 578). The request is the
+ * picture's bytes themselves, the invoke's one argument, checked in main: no field here.
+ *  · `saved` — written where the person chose. `folder` is that folder's OWN NAME for the status line ("Saved to
+ *    Downloads"), never a path; "" for a disk's own top, which has none;
+ *  · `cancelled` — the person closed the panel. Nothing is said for it;
+ *  · `refused` — nothing was written: `too-large` (past `SHELL_PICTURE_SAVE.MAX_BYTES`, with its size), `not-a-picture`
+ *    (the bytes open as none of `PICTURE_SAVE_TYPES`), `busy` (this door's panel is already open), `failed` (the panel
+ *    or the write failed; the cause is main's log line, never the page's).
+ * A sender this shell did not register, or a request that is not bytes, is no state of a product window: main throws
+ * for it and opens no panel. */
+export const PictureSaveResult = z.discriminatedUnion("status", [
+  z
+    .object({
+      status: z.literal("saved"),
+      folder: z
+        .string()
+        .max(255)
+        .refine((name) => !/[\\/]/u.test(name), "a folder's name, never a path"),
+    })
+    .passthrough(),
+  z.object({ status: z.literal("cancelled") }).passthrough(),
+  z
+    .object({
+      status: z.literal("refused"),
+      reason: z.enum(["too-large", "not-a-picture", "busy", "failed"]),
+      bytes: z.number().int().min(0).optional(),
+    })
+    .passthrough(),
+]);
+export type PictureSaveResult = z.infer<typeof PictureSaveResult>;
+export type PictureSaveRefusal = Extract<PictureSaveResult, { status: "refused" }>["reason"];
+
+/** Item 578 — the picture save door's audit action, appended by main through fieldd's `audit.append` (wall R17),
+ * which admits only registered shell-owned actions. One outcome record for every answer and every refusal: the
+ * bytes' count, the format and the saved file's own name, never the picture and never the folder it went to. */
+export const SHELL_PICTURE_AUDIT_ACTIONS = {
+  SAVE: "shell.picture.save",
+} as const;
+
 /** OB custody (C1) — what main records of its own custody root, appended by main through
  * fieldd's `audit.append` (wall R17), which admits only registered shell-owned actions.
  * Appended after a pair is up, never before: an append must never be what starts one, so

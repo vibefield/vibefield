@@ -166,6 +166,10 @@ export function mountProductHost(
         // HN-5 — a copy's picture, and its words, through main's door; the web's write is denied
         writeImage: (png, text) => window.vibefield.clipboard.writeImage(png, text),
       },
+      // Item 578 — a print's picture saved through main's own save panel; the page names no file and no place
+      pictures: {
+        save: (bytes) => window.vibefield.pictures.save(bytes),
+      },
       // DT-2a: the claimed transport reaches the product instead of only being
       // parked here. The promise is handed over as-is — the pool behind the seam
       // awaits it — while the LIFETIME stays this adapter's: pagehide above

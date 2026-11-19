@@ -5,6 +5,7 @@ import type {
   FrameViewState,
   FrameZoomAct,
   GodviewDeckState,
+  PictureSaveResult,
   RendererReplaceReason,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
@@ -164,6 +165,11 @@ declare global {
          * bytes and the copy's words in one write (LC-19), no focus asked (LC-18); a
          * refusal rejects typed (`ClipboardCopyRefusal`, a plain record), never in words. */
         writeImage(png: Uint8Array, text?: string): Promise<void>;
+      };
+      /** Item 578 — a print's picture saved where the person chooses: the bytes alone go to main, which names the
+       * file and opens its own save panel; the answer names the folder, never a path. */
+      pictures: {
+        save(bytes: Uint8Array<ArrayBuffer>): Promise<PictureSaveResult>;
       };
       /** Godview round 3 — the deck's state said by name; main owns the
        * window's lights (GV-D11) and lends ⌘W by the same word. */

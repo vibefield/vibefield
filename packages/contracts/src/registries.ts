@@ -2950,6 +2950,12 @@ export const IPC_CHANNELS = {
    * (LC-18): the shell session grants no Chromium permission (ESP §7.4), so the
    * web's own write is denied there by law. */
   clipboardWriteImage: "vibefield:clipboard:write-image",
+  /** renderer → main invoke: a picture's bytes → PictureSaveResult — a print's picture saved where the person chooses
+   * (item 578; DESIGN.md §8 "The bar grown": Download…). The bytes are the invoke's one argument and nothing else
+   * crosses: no name, no media type, no path. Main reads the format off the bytes against a closed list
+   * (`PICTURE_SAVE_TYPES`), makes the name, opens its OWN save panel for a registered product window, and writes the
+   * file; the answer names the folder, never a path. */
+  pictureSave: "vibefield:picture:save",
   /** renderer → main event: SoundAttention (shell.ts) — which floor session the window's person is typing into and
    * where each shown session sits across the window (SD-2; DESIGN.md §14 rules 3 and 9). Main takes it from the
    * window in front alone and maps sessions to runs itself; nothing comes back. */
@@ -2994,4 +3000,12 @@ export const SHELL_CLIPBOARD = {
    * read by both doors' checks. Past it the words are refused whole with their size,
    * never cut. UTF-8 bytes. */
   WRITE_TEXT_MAX_BYTES: 64 * 1024,
+} as const;
+
+/** Item 578 (2026-11-19) — the picture save door's bound (`IPC_CHANNELS.pictureSave`), not a number of its own: a
+ * print's picture is saved whole as the desk holds it, and the largest picture any door here carries whole is a still
+ * (`SCREENSHOT_STILL.MAX_BYTES`, the clipboard's picture bound too). Past it the save is refused with its size before
+ * any panel opens, never cut. The picture's bytes in its own format. */
+export const SHELL_PICTURE_SAVE = {
+  MAX_BYTES: SCREENSHOT_STILL.MAX_BYTES,
 } as const;

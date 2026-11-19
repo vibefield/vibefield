@@ -47,6 +47,7 @@ import {
 import type { FielddEnsure } from "./fieldd-handle-coordinator";
 import { createHandFileDoor, createHandKeptDoor, createHandPictureDoor } from "./hand-pictures";
 import { shellIdentity } from "./login-shell";
+import { createPictureSaveDoor, type PictureSaveDoorOptions } from "./picture-save-door";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
 import {
@@ -585,6 +586,29 @@ export function registerScreenshotStillKept(
   ipcMain.handle(IPC_CHANNELS.screenshotStillKept, (event, raw: unknown) =>
     door(event.sender, raw),
   );
+}
+
+/** Item 578 — a print's picture saved where the person chooses (DESIGN.md §8 "The bar grown": Download…): the
+ * picture's bytes are the invoke's one argument. Policy in picture-save-door.ts; this is the ipcMain wiring only. The
+ * registered-sender gate is `registry.owns`, as at every door here; the panel and the write are the caller's. A
+ * refusal's log line carries its reason, the bytes' count and a failure's cause, never a path. */
+export function registerPictureSave(
+  registry: WindowRegistry,
+  options: Omit<PictureSaveDoorOptions<WebContents>, "owns" | "onRefused">,
+  logger?: Logger,
+): void {
+  const door = createPictureSaveDoor<WebContents>({
+    ...options,
+    owns: (sender) => registry.owns(sender),
+    onRefused: (sender, reason, detail) => {
+      logger?.warn("desktop.ipc.picture_save_refused", "A print's picture was not saved", {
+        webContentsId: sender.id,
+        reason,
+        ...detail,
+      });
+    },
+  });
+  ipcMain.handle(IPC_CHANNELS.pictureSave, (event, raw: unknown) => door(event.sender, raw));
 }
 
 /** OB-D10 A — a card's picture written to the hand's folder at the play (policy in hand-pictures.ts). */
