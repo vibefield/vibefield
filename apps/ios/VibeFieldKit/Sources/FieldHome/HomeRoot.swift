@@ -39,7 +39,7 @@ public struct HomeRoot: View {
   }
 
   private var root: some View {
-    SplashGate { HomeScreen(lock: lock) }
+    SplashGate(lockCovered: lock.covers) { HomeScreen(lock: lock) }
       .phoneAppearance(phoneLook)
       .background {
         LockCurtain(

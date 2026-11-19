@@ -13,32 +13,124 @@ import Testing
 @MainActor
 @Suite("WI-1: the content holds the splash up, and brings it back")
 struct SplashHoldTests {
-  /// Reduce Motion's fades: the launch screen's and the splash's own, halved.
+  /// The reduced-motion exit.
   private static let fade: Duration = .milliseconds(120)
-  /// From the field's first frame, its fade and the floor, and a millisecond past them.
-  private static let floorStood: Duration = .milliseconds(120) + SplashTiming.floor + .milliseconds(1)
+  /// One millisecond past the end of each entrance fade.
+  private static let reducedEntrance: Duration = .milliseconds(81)
+  private static let liveEntrance: Duration = .milliseconds(161)
 
   /// A gate on the stepped timer, begun and not yet shown.
-  private func gate() -> (SplashGateModel, SplashSteps, SteadyByHand) {
+  private func gate(reduceMotion: Bool = true) -> (SplashGateModel, SplashSteps, SteadyByHand) {
     let steps = SplashSteps()
     let watch = SteadyByHand()
     let model = SplashGateModel(timer: steps, watch: watch)
-    model.begin(reduceMotion: true)
+    model.begin(reduceMotion: reduceMotion)
     return (model, steps, watch)
   }
 
-  /// A gate on the stepped timer: begun, its field's first frame up, the content steady and the floor stood.
+  @Test("the live launch waits for unlock and hands over on the final GPU frame")
+  func tearAfterUnlock() throws {
+    let (model, steps, watch) = gate(reduceMotion: false)
+    model.setVisible(false)
+    model.fieldPresented(at: CACurrentMediaTime())
+    watch.steady()
+    steps.advance(by: .seconds(12))
+    #expect(model.covers && !model.revealing)
+    model.setVisible(true)
+    let tear = try #require(model.tear)
+    steps.advance(by: .milliseconds(700))
+    #expect(!model.gone && !model.fading)
+    model.tearFinished(tear)
+    #expect(model.gone)
+    model.setVisible(false)
+    model.setVisible(true)
+    #expect(model.gone && model.tear == nil)
+  }
+
+  @Test("a hold or an obscured window cancels the tear and rejects late GPU callbacks")
+  func interruptedTear() throws {
+    let (model, steps, watch) = gate(reduceMotion: false)
+    model.fieldPresented(at: CACurrentMediaTime())
+    watch.steady()
+    steps.advance(by: Self.liveEntrance)
+    let first = try #require(model.tear)
+    model.setHold(true)
+    model.setHold(false)
+    watch.steady()
+    let second = try #require(model.tear)
+    model.setVisible(false)
+    model.tearFinished(second)
+    #expect(model.covers && !model.gone)
+    model.setVisible(true)
+    let last = try #require(model.tear)
+    model.tearFinished(first)
+    model.tearFinished(second)
+    #expect(!model.gone && model.tear == last)
+    model.tearFinished(last)
+    #expect(model.gone)
+  }
+
+  @Test("a ready Field opens as the entrance finishes and a stalled exit falls back after 950ms")
+  func tearTimeout() throws {
+    let (model, steps, watch) = gate(reduceMotion: false)
+    model.fieldPresented(at: CACurrentMediaTime())
+    watch.steady()
+    steps.advance(by: .milliseconds(159))
+    #expect(model.tear == nil)
+    steps.advance(by: .milliseconds(2))
+    let tear = try #require(model.tear)
+    steps.advance(by: .milliseconds(940))
+    #expect(!model.fading && !model.gone)
+    steps.advance(by: .milliseconds(10))
+    #expect(model.tear == tear && model.fading && !model.gone)
+    steps.advance(by: .milliseconds(240))
+    #expect(model.gone)
+  }
+
+  @Test("Reduce Motion and an unavailable Metal surface use the short fade")
+  func shaderFallbacks() {
+    let (model, steps, watch) = gate()
+    model.fieldPresented(at: CACurrentMediaTime())
+    watch.steady()
+    steps.advance(by: Self.reducedEntrance)
+    #expect(model.tear == nil && model.fading)
+    steps.advance(by: Self.fade)
+    #expect(model.gone)
+
+    let (still, timer, frames) = gate(reduceMotion: false)
+    still.fieldFailed("Metal unavailable")
+    frames.steady()
+    #expect(still.tear == nil && still.fading)
+    timer.advance(by: .milliseconds(240))
+    #expect(still.gone)
+  }
+
+  @Test("turning on Reduce Motion mid-tear finishes with the 120ms fade")
+  func reduceMotionDuringTear() throws {
+    let (model, steps, watch) = gate(reduceMotion: false)
+    model.fieldPresented(at: CACurrentMediaTime())
+    watch.steady()
+    steps.advance(by: Self.liveEntrance)
+    let tear = try #require(model.tear)
+    model.setReduceMotion(true)
+    model.tearFinished(tear)
+    #expect(model.fading && !model.gone)
+    steps.advance(by: Self.fade)
+    #expect(model.gone)
+  }
+
+  /// A gate on the stepped timer after its entrance, with the content steady.
   /// Unheld, the splash has started to leave; held, it stands.
   private func launched(held: Bool = false) -> (SplashGateModel, SplashSteps, SteadyByHand) {
     let (model, steps, watch) = gate()
     if held { model.setHold(true) }
     model.fieldPresented(at: CACurrentMediaTime())
     watch.steady()
-    steps.advance(by: Self.floorStood)
+    steps.advance(by: Self.reducedEntrance)
     return (model, steps, watch)
   }
 
-  @Test("held, the splash stays past its floor and the content's steadiness; released, it leaves by its own exit")
+  @Test("the hold keeps a steady Field covered until release")
   func aHoldKeepsTheSplash() {
     let (model, steps, watch) = gate()
     model.setHold(true)
@@ -46,7 +138,7 @@ struct SplashHoldTests {
     #expect(model.contentMounted)
     #expect(model.holding)
     watch.steady()
-    // past the floor and past the steadiness limit: a splash not held has left by now, whatever the frames did
+    // A held splash also stays past the steadiness timeout.
     steps.advance(by: SplashTiming.stableLimit + .milliseconds(500))
     #expect(!model.revealing)
     #expect(!model.gone)
@@ -54,7 +146,7 @@ struct SplashHoldTests {
     #expect(!model.holding)
     #expect(!model.revealing, "released, it watches the content again first")
     watch.steady()
-    #expect(model.revealing, "the content steady and the floor long stood: it leaves")
+    #expect(model.revealing)
     steps.advance(by: Self.fade)
     #expect(model.gone, "and is gone after its fade")
   }
@@ -70,9 +162,9 @@ struct SplashHoldTests {
     #expect(!model.gone)
     #expect(!model.revealing)
     #expect(model.contentMounted)
-    // the new surface's first frame: it stands its floor again, and the hold keeps it past that
+    // The hold outlasts the new surface's entrance.
     model.fieldPresented(at: CACurrentMediaTime())
-    steps.advance(by: Self.floorStood + .milliseconds(400))
+    steps.advance(by: Self.reducedEntrance + .milliseconds(400))
     #expect(!model.revealing)
     model.setHold(false)
     watch.steady()
@@ -103,9 +195,9 @@ struct SplashHoldTests {
     model.fieldPresented(at: CACurrentMediaTime())
     #expect(model.contentMounted)
     watch.steady()
-    #expect(!model.revealing, "the floor stands")
-    steps.advance(by: Self.floorStood)
-    #expect(model.revealing, "the floor stood and the content steady: it leaves")
+    #expect(!model.revealing, "the entrance is still fading in")
+    steps.advance(by: Self.reducedEntrance)
+    #expect(model.revealing)
     steps.advance(by: Self.fade)
     #expect(model.gone)
   }
@@ -121,9 +213,9 @@ struct SplashHoldTests {
     #expect(model.contentMounted)
     #expect(model.covers, "the content comes under it whole")
     watch.steady()
-    steps.advance(by: Self.floorStood - .milliseconds(2))
+    steps.advance(by: Self.reducedEntrance - .milliseconds(2))
     #expect(model.covers)
-    #expect(!model.revealing, "the floor still stands")
+    #expect(!model.revealing)
     steps.advance(by: .milliseconds(2))
     #expect(model.revealing)
     #expect(!model.covers, "leaving, it covers nothing")
@@ -145,12 +237,12 @@ struct SplashHoldTests {
     #expect(!model.covers)
     steps.advance(by: .milliseconds(10))
     #expect(model.covers, "whole once its fade has run")
-    // the new surface's first frame; released and steady, it leaves past its floor and covers nothing
+    // A new surface finishes entering before it leaves.
     model.fieldPresented(at: CACurrentMediaTime())
     model.setHold(false)
     watch.steady()
-    #expect(model.covers && !model.revealing, "the new field stands its floor")
-    steps.advance(by: Self.floorStood)
+    #expect(model.covers && !model.revealing)
+    steps.advance(by: Self.reducedEntrance)
     #expect(model.revealing)
     #expect(!model.covers)
   }
@@ -163,7 +255,7 @@ struct SplashHoldTests {
     steps.advance(by: .milliseconds(50))
     model.setHold(false)
     watch.steady()
-    #expect(model.revealing, "steady, and no new field to stand a floor: it leaves at once")
+    #expect(model.revealing)
     steps.advance(by: Self.fade)
     #expect(!model.covers, "the come-back's fade ended after it had started to leave again")
     #expect(model.gone)
@@ -178,7 +270,7 @@ struct SplashHoldTests {
     #expect(!model.revealing && !model.gone, "caught mid-fade, it comes back")
     model.setHold(false)
     watch.steady()
-    #expect(model.revealing, "its field up and its floor stood, it leaves again at once")
+    #expect(model.revealing)
     // the first fade's end, 80 ms into the second
     steps.advance(by: .milliseconds(80))
     #expect(!model.gone, "the first fade's end is not the second's")
@@ -186,7 +278,7 @@ struct SplashHoldTests {
     #expect(model.gone, "gone at the second fade's own end")
   }
 
-  @Test("L1: a come-back caught mid-fade keeps its field: the same surface's frame again stands no second floor")
+  @Test("L1: a hold caught mid-fade reuses the same surface without replaying the entrance")
   func aMidFadeComeBackKeepsItsField() {
     let (model, steps, watch) = launched()
     steps.advance(by: .milliseconds(50))
@@ -195,7 +287,7 @@ struct SplashHoldTests {
     model.fieldPresented(at: CACurrentMediaTime())
     model.setHold(false)
     watch.steady()
-    #expect(model.revealing, "its floor stood once: it leaves at once")
+    #expect(model.revealing)
   }
 
   @Test("L2: a re-hold ends the release's limit: the splash waits past the earlier limits for the next release's own")

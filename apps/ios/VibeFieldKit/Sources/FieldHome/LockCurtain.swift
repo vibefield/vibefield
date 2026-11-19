@@ -11,8 +11,8 @@ import UIKit
 /// It holds the splash's own surface (`SplashField`), which draws the launch picture until its field is up, so the
 /// app switcher's picture is the launch picture and a return reads as the launch. Face ID asks over it; a miss puts
 /// the way in's three places on it (`FieldHomeModel.wayInScreen(.locked)`). It stands at once, so the switcher's
-/// picture is taken of it, and leaves by the splash's own exit: a plain `ease` fade (half under Reduce Motion), and
-/// the window and its surface go with it.
+/// picture is taken of it. On unlock the curtain fades away. The launch gate underneath plays the shader
+/// reveal when a cold launch is ready.
 ///
 /// This view is only the anchor that finds the scene: it draws nothing in the home.
 struct LockCurtain: UIViewRepresentable {
@@ -26,7 +26,7 @@ struct LockCurtain: UIViewRepresentable {
 
   /// The window's level: over the app's sheets and its alerts' own level, under the system's.
   static let level = UIWindow.Level.alert + 1
-  /// The splash's exit (§8 "The phone's splash"): 240ms plain `ease`, halved under Reduce Motion.
+  /// The privacy window fades over 240ms on plain `ease`, halved under Reduce Motion.
   static let exit = 0.24
 
   func makeCoordinator() -> Coordinator { Coordinator() }
@@ -119,7 +119,7 @@ struct LockCurtain: UIViewRepresentable {
       UIAccessibility.post(notification: .screenChanged, argument: host.view)
     }
 
-    /// The splash's own exit, then the window and its surface are gone.
+    /// Remove the window and its surface once the curtain finishes fading.
     private func leave() {
       guard let window, leaving == nil else { return }
       let duration = UIAccessibility.isReduceMotionEnabled ? LockCurtain.exit / 2 : LockCurtain.exit

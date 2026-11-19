@@ -5513,14 +5513,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the mark, and the mark holds while the app starts, which the live field cannot cover (it can draw only once
   the app runs; 1.4s of a Debug launch in the simulator, 2026-11-01). The splash stands on that same picture,
   the still on exactly the live mark's pixels, until the field's first frame is up; then the field comes up
-  around the mark, which never moves (the launch screen fades from over it in 240ms plain `ease`, 120 under
-  reduced motion, run by the render server from that frame, so nothing on the main thread holds it). From then
-  the home is built under it, so its start (the swarm's shaders compiling) happens under the field, never in
-  front of it. **It leaves as the desk's splash does** (the reveal, above): once the home is frame-stable (six
-  frames on time in a row) and never before the field has stood **700ms** whole (FG-L6's floor, a floor and
-  never a stage), the splash fades 240ms on plain `ease` while the home settles `scale(0.99) → 1` over 560ms
-  on the island curve. Reduced motion: the mark at rest, one frame drawn, fades only, halved. Without Metal the
-  launch screen's picture stands until the home is steady and then fades: a first face never shows an error.
+  around the mark, which never moves. The first completed frame starts a Core Animation fade of the launch
+  still over 160ms on plain `ease`, or 80ms under Reduce Motion. The home starts building underneath during
+  that fade. Once the entrance finishes, the home is frame-stable (six frames on time in a row), and the
+  launch is visible after any device unlock, the desktop's shader opens the iPhone field from its centre
+  over **700ms**. The mark fades during the first 168ms. The rim takes the desk's cool light by night and
+  warm white by day. The opening shows the live home, which settles from 0.99 over 280ms on the island
+  curve and takes input after the handoff. With Reduce Motion the still field fades out in 120ms. Without
+  Metal the launch picture fades out in 240ms. If the GPU stalls, the current picture begins fading out
+  950ms after the reveal was requested.
   Its accessible name is the desk's bar's, "Starting VibeField".
 - **The phone's way in** (track WI, 2026-11-02, from the design page *The Way In*; WI-L1…L7, WI-D1…D8 ruled A by
   James 2026-11-02 11:13–11:15Z; `FieldHome` over `FieldSplash`). Signed out, the splash holds: `SplashGate` keeps
@@ -5536,8 +5537,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   one glass for the acts (`ChromeMaterial.glass`), 8 pt in from the screen's edges and clear of the home indicator:
   the primary a **wide pill** (`ChromePillStyle(.primary, wide: true)`: 50 tall, the glass's full width) in the same
   place on every step, then the secondary, then a link or a note. Motion: the glass rises in 460ms on the island
-  curve, words and pictures fade in 280–360ms, and the hand-over is the splash's own exit (§8 "The phone's splash":
-  240ms `ease` while the home settles from 0.99 over 560ms on the island curve); under Reduce Motion everything fades
+  curve, words and pictures fade in 280–360ms, and the hand-over is the splash's own shader reveal (§8 "The
+  phone's splash"); under Reduce Motion everything fades
   only, in 120ms. *As built 2026-11-02 (WI-1, VF-PM's review of `1626ed4d2`):* the capsule shows **two** bars, **Sign
   in · Your computer**, until WI-3 brings the lock's step (Face ID), so it never promises a step that does not come.
   The mark keeps its place on every step, the found beat and Sign in again among them, until the splash's runtime can

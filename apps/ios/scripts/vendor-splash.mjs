@@ -12,10 +12,8 @@
 //
 // `--from` defaults to $VIBEFIELD_SPLASH, then ../vibefield-splash beside this checkout. The bake
 // runs in a temporary directory (node only: the splash's bake has no dependencies), so vendoring
-// needs nothing built there first. The copies are the bake's bytes, unedited: the generated files
-// name their own look and its hash, and the runtime is the splash project's own source. Its parity
-// with the look as tuned is the splash project's to witness (npm run check:splash:metal: the Metal
-// runtime against the lab's window, both appearances, iPhone sizes).
+// needs nothing built there first. splash-reveal.mjs translates the desktop exit into each iPhone
+// field and binds its two uniform slots. Pin both the upstream bytes and the installed result.
 
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -23,6 +21,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { applyShaderReveal, bindShaderReveal, desktopRevealSource } from "./splash-reveal.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const KIT = join(HERE, "..", "VibeFieldKit");
@@ -33,12 +32,14 @@ const ROOT = join(HERE, "..", "..", "..");
 // Metal bake that commit adds.
 const SOURCE = {
   revision: "6f770f9",
+  desktopReveal: "d5327de0c80dae85da6a4e223ef02cd9b6f77df10091c66746b934190c6068dd",
   looks: { dark: "8f52f9ad8acb", light: "727a3dc38ddb" },
   files: [
     {
       from: "SplashShaders.metal",
       to: "Sources/FieldSplash/Splash/SplashShaders.metal",
       sha256: "d895e1e9855809a12eb19a30aa5ddad857198f28a4cf26dc12140a42da52abfd",
+      installed: "ef0295489a9cd93c54372314357766f1f1045505ca7570c5e2fde05b8718dca9",
     },
     {
       from: "SplashBake.swift",
@@ -49,6 +50,7 @@ const SOURCE = {
       from: "SplashRuntime.swift",
       to: "Sources/FieldSplash/Splash/SplashRuntime.swift",
       sha256: "9368526d245c29a5c30644441ba1a9d09f4ee18bc604bfc11d90743cca995e41",
+      installed: "83605522e1965cc4ec5f3c4a5b5821521cc246acf07c98c154ade5612d18205c",
     },
     {
       from: "clock.json",
@@ -64,13 +66,15 @@ const check = args.includes("--check");
 const pin = args.includes("--pin");
 const fromAt = args.indexOf("--from");
 const from = resolve(fromAt >= 0 ? args[fromAt + 1] : (process.env.VIBEFIELD_SPLASH ?? join(ROOT, "..", "vibefield-splash")));
+const desktopReveal = sha256(desktopRevealSource);
+if (!pin && desktopReveal !== SOURCE.desktopReveal) throw new Error("the desktop shader reveal changed; regenerate the iOS splash pins");
 
 if (check) {
   const wrong = [];
   for (const f of SOURCE.files) {
     const path = join(KIT, f.to);
     if (!existsSync(path)) wrong.push(`${f.to} is missing`);
-    else if (sha256(readFileSync(path)) !== f.sha256) wrong.push(`${f.to} is not its pin (${f.from} ${f.sha256.slice(0, 12)})`);
+    else if (sha256(readFileSync(path)) !== (f.installed ?? f.sha256)) wrong.push(`${f.to} differs from its pin`);
   }
   if (wrong.length) {
     console.error(`the vendored splash differs from its pins:\n  ${wrong.join("\n  ")}`);
@@ -88,22 +92,35 @@ try {
   const revision = execFileSync("git", ["-C", from, "rev-parse", "--short", "HEAD"], { encoding: "utf8" }).trim();
   const dirty = execFileSync("git", ["-C", from, "status", "--porcelain", "--", "splash", "src"], { encoding: "utf8" }).trim() !== "";
   const looks = { dark: report.looks.dark.hash, light: report.looks.light.hash };
-  if (pin) {
-    const files = SOURCE.files.map((f) => ({ ...f, sha256: sha256(readFileSync(join(out, f.from))) }));
-    console.log(JSON.stringify({ revision: `${revision}${dirty ? " + uncommitted changes" : ""}`, looks, files }, null, 2));
-    process.exit(0);
-  }
-  if (looks.dark !== SOURCE.looks.dark || looks.light !== SOURCE.looks.light) {
-    throw new Error(`the bake at ${from} is of looks ${looks.dark} · ${looks.light}, not the pinned ${SOURCE.looks.dark} · ${SOURCE.looks.light}: a new look is a deliberate move of SOURCE's pins (--pin prints them)`);
-  }
+  const outputs = new Map();
   for (const f of SOURCE.files) {
-    const bytes = readFileSync(join(out, f.from));
-    const got = sha256(bytes);
-    if (got !== f.sha256) throw new Error(`${f.from} baked at ${from} is ${got}, not its pin ${f.sha256}: a new bake is a deliberate move of SOURCE's pins (--pin prints them)`);
-    const to = join(KIT, f.to);
-    mkdirSync(dirname(to), { recursive: true });
-    writeFileSync(to, bytes);
-    console.log(`${relative(ROOT, to)} ← ${f.from} (${got.slice(0, 12)})`);
+    const raw = readFileSync(join(out, f.from));
+    let bytes = raw;
+    if (f.from === "SplashShaders.metal") bytes = Buffer.from(await applyShaderReveal(raw.toString(), from, out));
+    if (f.from === "SplashRuntime.swift") bytes = Buffer.from(bindShaderReveal(raw.toString()));
+    outputs.set(f.from, { bytes, rawHash: sha256(raw), hash: sha256(bytes) });
+  }
+  if (pin) {
+    const files = SOURCE.files.map(({ from, to }) => {
+      const { rawHash, hash } = outputs.get(from);
+      return { from, to, sha256: rawHash, ...(hash !== rawHash && { installed: hash }) };
+    });
+    console.log(JSON.stringify({ revision: `${revision}${dirty ? " + uncommitted changes" : ""}`, desktopReveal, looks, files }, null, 2));
+  } else {
+    if (looks.dark !== SOURCE.looks.dark || looks.light !== SOURCE.looks.light) {
+      throw new Error(`the bake at ${from} differs from the pinned looks (--pin prints the new hashes)`);
+    }
+    for (const f of SOURCE.files) {
+      const { rawHash, hash } = outputs.get(f.from);
+      if (rawHash !== f.sha256 || hash !== (f.installed ?? f.sha256)) throw new Error(`${f.from} differs from its pins (--pin prints the fresh bake's hashes)`);
+    }
+    for (const f of SOURCE.files) {
+      const to = join(KIT, f.to);
+      const { bytes, hash } = outputs.get(f.from);
+      mkdirSync(dirname(to), { recursive: true });
+      writeFileSync(to, bytes);
+      console.log(`${relative(ROOT, to)} ← ${f.from} (${hash.slice(0, 12)})`);
+    }
   }
 } finally {
   rmSync(out, { recursive: true, force: true });

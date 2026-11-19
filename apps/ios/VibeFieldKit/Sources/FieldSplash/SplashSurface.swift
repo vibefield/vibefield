@@ -23,8 +23,36 @@ struct SplashRequest: Sendable {
   var look: SplashLook
   var motion: Bool
   var active: Bool
-  /// How long the launch screen takes to leave the field once it is up.
-  var fadeIn: Double = 0.24
+  var tear: Int?
+}
+
+/// The desktop's TEAR curve and revealValues uniforms, timed for a phone launch.
+/// Start on the first drawable, with the noise clock starting at the first nonzero front.
+struct SplashTear {
+  static let duration = 0.7
+  /// Allow a quarter-second for drawable delivery before falling back to the short fade.
+  static let completionLimit: Duration = .seconds(duration) + .milliseconds(250)
+  let move: Int
+  let began: CFTimeInterval
+  private var noiseBegan: CFTimeInterval?
+  var sentFinalFrame = false
+
+  init(move: Int, began: CFTimeInterval) {
+    self.move = move
+    self.began = began
+  }
+
+  mutating func uniforms(at time: CFTimeInterval) -> SIMD4<Float> {
+    let progress = max(0, min(1, (time - began) / Self.duration))
+    if progress > 0, noiseBegan == nil { noiseBegan = time }
+    let mark = min(1, progress / 0.24)
+    return SIMD4(Float(progress * progress), Float(max(0, time - (noiseBegan ?? time))),
+                 Float(1 - mark * mark * (3 - 2 * mark)), 0.5)
+  }
+
+  static func ink(light: Bool) -> SIMD4<Float> {
+    light ? SIMD4(1, 0.955, 0.87, 0.3) : SIMD4(220.0 / 255, 230.0 / 255, 1, 0.3)
+  }
 }
 
 /// The surface the splash draws on: a `CAMetalLayer`, drawn on a thread of its own by the
@@ -35,11 +63,8 @@ struct SplashRequest: Sendable {
 /// Over it stands the launch screen until the field is up: the field's ground and the app's
 /// `SplashMark` — the still Info.plist's UILaunchScreen shows, drawn by this runtime from its first
 /// frame (apps/ios/scripts/splash-stills.mjs) — on exactly the pixels the live mark takes, so the
-/// field comes up around a mark that never moves. They are layers of this view, and the render
-/// thread fades them itself, on the first frame it presents, in a Core Animation transaction of its
-/// own: the render server runs it while the home's start holds the main thread. (A SwiftUI animation
-/// is stepped on the main thread, and a main-thread one is committed only when the main run loop
-/// next waits, which the home's mount, in the same turn or the next, can put off for a second.)
+/// field comes up around a mark that never moves. Core Animation fades the still once the GPU
+/// finishes the first frame. The Metal layer then composites the field directly over the home.
 @MainActor
 final class SplashSurfaceView: UIView {
   private let metalLayer = CAMetalLayer()
@@ -47,29 +72,34 @@ final class SplashSurfaceView: UIView {
   private let stillLayer = CALayer()
   private var request: SplashRequest
   private var loop: SplashLoop?
+  private var generation = 0
+  private let fadeIn: Double
+  private let onTearFinished: @MainActor @Sendable (Int) -> Void
   private let onFirstFrame: @MainActor @Sendable (CFTimeInterval) -> Void
   private let onFailure: @MainActor @Sendable (String) -> Void
 
   init(
     look: SplashLook, motion: Bool, active: Bool, fadeIn: Double,
+    onTearFinished: @escaping @MainActor @Sendable (Int) -> Void,
     onFirstFrame: @escaping @MainActor @Sendable (CFTimeInterval) -> Void,
     onFailure: @escaping @MainActor @Sendable (String) -> Void
   ) {
-    request = SplashRequest(look: look, motion: motion, active: active, fadeIn: fadeIn)
+    request = SplashRequest(look: look, motion: motion, active: active)
+    self.fadeIn = fadeIn
+    self.onTearFinished = onTearFinished
     self.onFirstFrame = onFirstFrame
     self.onFailure = onFailure
     super.init(frame: .zero)
-    isOpaque = true
+    isOpaque = false
     isUserInteractionEnabled = false
-    // an empty layer (before its first frame) shows the field's own ground
-    backgroundColor = look.light ? .white : .black
+    backgroundColor = .clear
     metalLayer.device = MTLCreateSystemDefaultDevice()
     metalLayer.pixelFormat = .bgra8Unorm
     // the look's colours are sRGB, as the web canvas it was tuned on is: matched to the panel, never
     // sent to a P3 display as they are (a CAMetalLayer with no colour space is not colour-matched)
     metalLayer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
     metalLayer.framebufferOnly = true
-    metalLayer.isOpaque = true
+    metalLayer.isOpaque = false
     layer.addSublayer(metalLayer)
     groundLayer.addSublayer(stillLayer)
     layer.addSublayer(groundLayer)
@@ -80,7 +110,6 @@ final class SplashSurfaceView: UIView {
   /// (absent in a host without the app's asset, a test's).
   private func dress(_ look: SplashLook) {
     let ground: UIColor = look.light ? .white : .black
-    backgroundColor = ground
     CATransaction.begin()
     CATransaction.setDisableActions(true)
     groundLayer.backgroundColor = ground.cgColor
@@ -95,12 +124,13 @@ final class SplashSurfaceView: UIView {
   @available(*, unavailable)
   required init?(coder: NSCoder) { fatalError("init(coder:) is not used") }
 
-  func update(look: SplashLook, motion: Bool, active: Bool) {
-    guard look.hash != request.look.hash || motion != request.motion || active != request.active else { return }
+  func update(look: SplashLook, motion: Bool, active: Bool, tear: Int?) {
+    guard look.hash != request.look.hash || motion != request.motion || active != request.active || tear != request.tear else { return }
     if look.hash != request.look.hash { dress(look) }
     request.look = look
     request.motion = motion
     request.active = active
+    request.tear = tear
     loop?.ask(request)
   }
 
@@ -131,7 +161,20 @@ final class SplashSurfaceView: UIView {
     super.didMoveToWindow()
     if window != nil {
       guard loop == nil else { return }
-      let loop = SplashLoop(layer: metalLayer, ground: groundLayer, request: request, onFirstFrame: onFirstFrame, onFailure: onFailure)
+      let generation = self.generation
+      let loop = SplashLoop(
+        layer: metalLayer, request: request, onTearFinished: { [weak self] move in
+          guard let self, self.generation == generation else { return }
+          self.onTearFinished(move)
+        },
+        onFirstFrame: { [weak self] at in
+          guard let self, self.generation == generation else { return }
+          self.fadeStill(at: at)
+          self.onFirstFrame(at)
+        }, onFailure: { [weak self] why in
+          guard let self, self.generation == generation else { return }
+          self.onFailure(why)
+        })
       self.loop = loop
       loop.start()
     } else {
@@ -139,8 +182,27 @@ final class SplashSurfaceView: UIView {
     }
   }
 
+  /// Schedule the still before mounting the home. Its layer belongs to a UIKit view, so the
+  /// transaction and any layout it triggers must run on the main thread.
+  private func fadeStill(at shown: CFTimeInterval) {
+    guard groundLayer.opacity != 0 else { return }
+    CATransaction.begin()
+    CATransaction.setDisableActions(true)
+    let fade = CABasicAnimation(keyPath: "opacity")
+    fade.fromValue = 1
+    fade.toValue = 0
+    fade.duration = fadeIn
+    fade.beginTime = max(shown, CACurrentMediaTime())
+    fade.fillMode = .backwards
+    fade.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
+    groundLayer.add(fade, forKey: "splash-still")
+    groundLayer.opacity = 0
+    CATransaction.commit()
+  }
+
   /// Stops the thread, and the renderer goes with it (its targets are most of the splash's memory).
   func stop() {
+    generation += 1
     loop?.stop()
     loop = nil
   }
@@ -156,13 +218,12 @@ private struct RunLoopRef: @unchecked Sendable {
 /// main thread asks crosses in one locked value; everything else stays on this thread.
 private final class SplashLoop: NSObject, CAMetalDisplayLinkDelegate, @unchecked Sendable {
   private let layer: CAMetalLayer
-  /// The launch screen over the field, which this thread fades on its first frame.
-  private let ground: CALayer
   private let request: OSAllocatedUnfairLock<SplashRequest>
   /// The thread's run loop once it runs, and whether it was asked to stop (before it ran, too).
   private let control = OSAllocatedUnfairLock<(runLoop: RunLoopRef?, stopped: Bool)>(initialState: (nil, false))
   private let onFirstFrame: @MainActor @Sendable (CFTimeInterval) -> Void
   private let onFailure: @MainActor @Sendable (String) -> Void
+  private let onTearFinished: @MainActor @Sendable (Int) -> Void
 
   // the render thread's own
   private var device: MTLDevice?
@@ -172,7 +233,7 @@ private final class SplashLoop: NSObject, CAMetalDisplayLinkDelegate, @unchecked
   private var link: CAMetalDisplayLink?
   private var startedAt: CFTimeInterval?
   private var presented = false
-  private var revealed = false
+  private var tear: SplashTear?
   /// Under Reduce Motion one frame is drawn, at rest, and the link idles until what it drew changes.
   private var stillDrawn: SplashRequest?
   #if DEBUG
@@ -180,13 +241,14 @@ private final class SplashLoop: NSObject, CAMetalDisplayLinkDelegate, @unchecked
   #endif
 
   init(
-    layer: CAMetalLayer, ground: CALayer, request: SplashRequest,
+    layer: CAMetalLayer, request: SplashRequest,
+    onTearFinished: @escaping @MainActor @Sendable (Int) -> Void,
     onFirstFrame: @escaping @MainActor @Sendable (CFTimeInterval) -> Void,
     onFailure: @escaping @MainActor @Sendable (String) -> Void
   ) {
     self.layer = layer
-    self.ground = ground
     self.request = OSAllocatedUnfairLock(initialState: request)
+    self.onTearFinished = onTearFinished
     self.onFirstFrame = onFirstFrame
     self.onFailure = onFailure
   }
@@ -292,8 +354,12 @@ private final class SplashLoop: NSObject, CAMetalDisplayLinkDelegate, @unchecked
       renderer = try self.renderer(for: r.look)
       try renderer.resize(width: r.width, height: r.height, scale: r.scale)
     } catch {
-      log.error("the splash stopped drawing: \(String(describing: error), privacy: .public)")
+      let why = String(describing: error)
+      log.error("the splash stopped drawing: \(why, privacy: .public)")
+      presented = false
       link.isPaused = true
+      let failure = onFailure
+      Task { @MainActor in failure(why) }
       return
     }
     let drawable = update.drawable
@@ -301,16 +367,34 @@ private final class SplashLoop: NSObject, CAMetalDisplayLinkDelegate, @unchecked
     guard let g = renderer.geometry, drawable.texture.width == g.W, drawable.texture.height == g.H,
       let cb = queue.makeCommandBuffer()
     else { return }
-    if startedAt == nil { startedAt = update.targetPresentationTimestamp }
-    let seconds = r.motion ? update.targetPresentationTimestamp - (startedAt ?? 0) : 0
-    renderer.encode(seconds: seconds, pose: r.motion ? r.look.logo.pose : .atRest, into: drawable.texture, commandBuffer: cb)
+    let at = update.targetPresentationTimestamp
+    if startedAt == nil { startedAt = at }
+    let seconds = r.motion ? at - (startedAt ?? at) : 0
+    if tear?.move != r.tear { tear = r.tear.map { SplashTear(move: $0, began: at) } }
+    let uniforms = tear?.uniforms(at: at) ?? SIMD4(0, 0, 1, 0)
+    renderer.encode(seconds: seconds, pose: r.motion ? r.look.logo.pose : .atRest, reveal: uniforms,
+                    revealInk: SplashTear.ink(light: r.look.light), into: drawable.texture, commandBuffer: cb)
+    if let move = r.tear, uniforms.x == 1, tear?.sentFinalFrame == false {
+      tear?.sentFinalFrame = true
+      let finished = onTearFinished
+      cb.addCompletedHandler { buffer in
+        if buffer.status == .completed { Task { @MainActor in finished(move) } }
+      }
+    }
     if !presented {
       // the first frame: said once its GPU work is done, with the time it is shown at (a drawable's
       // own presented handler is not in the simulator's SDK)
       presented = true
       let shown = onFirstFrame
-      let at = update.targetPresentationTimestamp
-      cb.addCompletedHandler { _ in Task { @MainActor in shown(at) } }
+      let failure = onFailure
+      cb.addCompletedHandler { buffer in
+        if buffer.status == .completed {
+          Task { @MainActor in shown(at) }
+        } else {
+          let why = buffer.error?.localizedDescription ?? "first frame failed"
+          Task { @MainActor in failure(why) }
+        }
+      }
     }
     #if DEBUG
       cb.addCompletedHandler { [self] cb in
@@ -320,32 +404,10 @@ private final class SplashLoop: NSObject, CAMetalDisplayLinkDelegate, @unchecked
     #endif
     cb.present(drawable)
     cb.commit()
-    if !revealed {
-      revealed = true
-      reveal(at: update.targetPresentationTimestamp, over: r.fadeIn)
-    }
     if !r.motion {
       stillDrawn = r
       wake()
     }
-  }
-
-  /// The launch screen leaves the field from the moment its first frame is shown: a Core Animation
-  /// fade on DESIGN.md §6's plain `ease` (CSS's own, cubic-bezier(0.25, 0.1, 0.25, 1)), committed
-  /// from this thread, so nothing on the main thread can hold it.
-  private func reveal(at shown: CFTimeInterval, over duration: Double) {
-    CATransaction.begin()
-    CATransaction.setDisableActions(true)
-    let fade = CABasicAnimation(keyPath: "opacity")
-    fade.fromValue = 1
-    fade.toValue = 0
-    fade.duration = duration
-    fade.beginTime = max(shown, CACurrentMediaTime())
-    fade.fillMode = .backwards
-    fade.timingFunction = CAMediaTimingFunction(controlPoints: 0.25, 0.1, 0.25, 1)
-    ground.add(fade, forKey: "splash-reveal")
-    ground.opacity = 0
-    CATransaction.commit()
   }
 
   #if DEBUG

@@ -447,7 +447,7 @@ public final class SplashRenderer {
     self.device = device
     self.look = look
     self.pixelFormat = pixelFormat
-    fieldData = Array(repeating: .zero, count: max(1, look.field.dyn.count))
+    fieldData = Array(repeating: .zero, count: look.field.dyn.count + 2)
     markData = Array(repeating: .zero, count: max(1, look.mark.dyn.count))
 
     func function(_ f: SplashFunction) throws -> MTLFunction {
@@ -593,11 +593,17 @@ public final class SplashRenderer {
   }
 
   /// Encodes one frame at `seconds` into `target` (W × H, `pixelFormat`): runtime.js encode().
-  public func encode(seconds: Double, pose: SplashPose, into target: MTLTexture, commandBuffer cb: MTLCommandBuffer) {
+  /// The reveal packs front, noise time, mark opacity and rim strength. The ink packs RGB and tear strength.
+  public func encode(
+    seconds: Double, pose: SplashPose, reveal: SIMD4<Float> = SIMD4(0, 0, 1, 0),
+    revealInk: SIMD4<Float> = .zero, into target: MTLTexture, commandBuffer cb: MTLCommandBuffer
+  ) {
     guard let g = geometry, let depthTex, let markMsaa, let markDepth, let markTex else { return }
     SplashClock.phases(look.phases, seconds: seconds, pose: pose, into: &values)
     g.write(into: &values)
     SplashClock.fill(look.field.dyn, values, into: &fieldData)
+    fieldData[look.field.dyn.count] = reveal
+    fieldData[look.field.dyn.count + 1] = revealInk
     SplashClock.fill(look.mark.dyn, values, into: &markData)
     let F = look.field
 

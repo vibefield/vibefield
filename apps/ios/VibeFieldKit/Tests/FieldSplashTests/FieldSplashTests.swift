@@ -52,6 +52,55 @@ private func close(_ a: Double, _ b: Double) -> Bool { abs(a - b) <= 1e-10 * max
 /// The same float32, or its neighbour (a libm's last bit before the rounding to float).
 private func sameFloat(_ a: Float, _ b: Float) -> Bool { a == b || abs(a - b) <= max(abs(b), 1) * Float.ulpOfOne }
 
+@Test func mobileTearUsesTheDesktopCurveIn700Milliseconds() {
+  var tear = SplashTear(move: 1, began: 0)
+  #expect(tear.uniforms(at: 0) == SIMD4(0, 0, 1, 0.5))
+  let halfMark = tear.uniforms(at: 0.12 * SplashTear.duration)
+  #expect(sameFloat(halfMark.x, 0.12 * 0.12) && halfMark.y == 0 && sameFloat(halfMark.z, 0.5))
+  let markGone = tear.uniforms(at: 0.24 * SplashTear.duration)
+  #expect(sameFloat(markGone.y, 0.084) && markGone.z == 0)
+  #expect(tear.uniforms(at: 0.35).x == 0.25)
+  #expect(tear.uniforms(at: 0.7).x == 1)
+}
+
+@Test(arguments: ["dark", "light"])
+func shaderOpensOntoTheHome(_ name: String) throws {
+  let look: SplashLook = name == "dark" ? .dark : .light
+  let device = try #require(MTLCreateSystemDefaultDevice())
+  let renderer = try SplashRenderer(device: device, library: try SplashLibrary.make(device: device), look: look)
+  try renderer.resize(width: 192, height: 416, scale: 1)
+  let g = try #require(renderer.geometry)
+  let desc = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .bgra8Unorm, width: g.W, height: g.H, mipmapped: false)
+  desc.storageMode = .shared
+  desc.usage = .renderTarget
+  let target = try #require(device.makeTexture(descriptor: desc))
+  let queue = try #require(device.makeCommandQueue())
+  var tear = SplashTear(move: 1, began: 0)
+  var pixels = [UInt8](repeating: 0, count: g.W * g.H * 4)
+  for progress in [0.0, 0.6, 1.0] {
+    let cb = try #require(queue.makeCommandBuffer())
+    let uniforms = tear.uniforms(at: progress * SplashTear.duration)
+    renderer.encode(seconds: 2, pose: look.logo.pose, reveal: uniforms, revealInk: SplashTear.ink(light: look.light),
+                    into: target, commandBuffer: cb)
+    cb.commit()
+    cb.waitUntilCompleted()
+    try #require(cb.status == .completed)
+    target.getBytes(&pixels, bytesPerRow: g.W * 4, from: MTLRegionMake2D(0, 0, g.W, g.H), mipmapLevel: 0)
+    let alpha = stride(from: 3, to: pixels.count, by: 4).map { pixels[$0] }
+    switch progress {
+    case 0:
+      #expect(alpha.allSatisfy { $0 == 255 })
+    case 1:
+      #expect(alpha.allSatisfy { $0 <= 1 })
+    default:
+      let centre = ((g.H / 2) * g.W + g.W / 2) * 4
+      #expect(pixels[centre..<(centre + 4)].allSatisfy { $0 == 0 })
+      #expect(alpha.first == 255 && alpha.last == 255)
+      #expect(alpha.contains { (1..<255).contains($0) })
+    }
+  }
+}
+
 @Test func theTwoLooksAreObsidianAndItsNegative() {
   #expect(SplashLook.dark.name == "Wormhole · Obsidian")
   #expect(SplashLook.light.name == "Wormhole · Obsidian Light")

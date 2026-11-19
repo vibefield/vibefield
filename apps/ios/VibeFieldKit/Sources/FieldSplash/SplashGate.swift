@@ -6,15 +6,15 @@ import UIKit
 /// The splash's clock (DESIGN.md §8 "The phone's splash"; §6's plain `ease` and island curve).
 public enum SplashTiming {
   /// The launch screen fades from over the field once its first frame is up (halved under Reduce
-  /// Motion): the surface's render thread runs it, as a Core Animation fade on plain `ease`.
-  public static let fadeIn = 0.24
-  /// Once in, it stands at least this long: FG-L6's floor for a repeat visit — a floor, never a stage.
-  public static let floor: Duration = .milliseconds(700)
-  /// Then it leaves as the desk's reveal does: a plain `ease` fade (halved under Reduce Motion)…
+  /// Motion), as a Core Animation fade on plain `ease`.
+  public static let fadeIn = 0.16
+  /// Additional dwell after the launch still fades. A ready phone can open the Field immediately.
+  public static let floor: Duration = .zero
+  /// The still or reduced-motion exit fades. The live field uses the desktop shader.
   public static let fadeOut = 0.24
-  /// …while the home settles from 0.99 on the island curve (fades only under Reduce Motion).
+  /// The home settles from 0.99 on the island curve (fades only under Reduce Motion).
   public static let settleFrom = 0.99
-  public static let settle = 0.56
+  public static let settle = 0.28
   /// The home is frame-stable after this many frames on time in a row (100ms at 60 a second).
   public static let steadyFrames = 6
   /// What the splash never waits past: its own first frame (the home comes under the launch
@@ -35,8 +35,8 @@ extension SplashLook {
 ///
 /// `content` is mounted behind it once the field shows, so the home's own start (the swarm's shader
 /// compile among it) happens under the splash, never in front of it; the splash draws on a thread of
-/// its own, so that work never stops it. It leaves once the content is frame-stable and the field
-/// has stood its floor.
+/// its own, so that work never stops it. Once the entrance fade finishes, it can open as soon as
+/// the content is frame-stable and the launch is visible.
 ///
 /// WI-1 (DESIGN.md §8 "The phone's way in"): while the content holds it (`.splashHolds`), the splash
 /// stays, and what the content puts on it (`.splashOverlay`) stands over its field; a hold that comes
@@ -46,27 +46,32 @@ extension SplashLook {
 /// hold takes away (a sign-out's tabs) stays under the splash until it does.
 public struct SplashGate<Content: View>: View {
   private let content: () -> Content
+  private let lockCovered: Bool
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.scenePhase) private var scenePhase
   @State private var model = SplashGateModel()
 
-  public init(@ViewBuilder content: @escaping () -> Content) {
+  public init(lockCovered: Bool = false, @ViewBuilder content: @escaping () -> Content) {
+    self.lockCovered = lockCovered
     self.content = content
   }
+
+  private var visible: Bool { scenePhase == .active && !lockCovered }
 
   public var body: some View {
     ZStack {
       if model.contentMounted {
+        let scale = model.settled || reduceMotion ? 1 : SplashTiming.settleFrom
         content()
-          .scaleEffect(model.settled || reduceMotion ? 1 : SplashTiming.settleFrom)
-          .accessibilityHidden(!model.revealing)
+          .modifier(SplashSettle(scale: scale).ignoredByLayout())
+          .allowsHitTesting(model.gone)
+          .accessibilityHidden(!model.gone)
           .environment(\.splashCovers, model.covers)
       }
       if !model.gone {
         splash
-          .opacity(model.revealing ? 0 : 1)
-          .allowsHitTesting(!model.revealing)
+          .opacity(model.fading ? 0 : 1)
           // under the way in the field is its ground, not a word of its own
           .accessibilityHidden(model.holding)
           // a splash that comes back over the content fades in (WI-1)
@@ -84,20 +89,46 @@ public struct SplashGate<Content: View>: View {
     .onPreferenceChange(SplashHoldKey.self) { [model] hold in
       Task { @MainActor in model.setHold(hold) }
     }
-    .onAppear { model.begin(reduceMotion: reduceMotion) }
+    .onAppear {
+      model.setVisible(visible)
+      model.begin(reduceMotion: reduceMotion)
+    }
+    .onChange(of: visible) { _, visible in model.setVisible(visible) }
+    .onChange(of: reduceMotion) { _, reduced in model.setReduceMotion(reduced) }
   }
 
   private var splash: some View {
     let model = model
     return SplashCanvas(
-      look: SplashLook.for(colorScheme), motion: !reduceMotion, active: scenePhase != .background,
+      look: SplashLook.for(colorScheme), motion: !reduceMotion,
+      // The curtain draws its own field. One frame underneath is enough to mount and prepare the home.
+      active: scenePhase != .background && (!lockCovered || !model.fieldShown),
       fadeIn: reduceMotion ? SplashTiming.fadeIn / 2 : SplashTiming.fadeIn,
+      tear: model.tear, onTearFinished: { model.tearFinished($0) },
       onFirstFrame: { model.fieldPresented(at: $0) },
       onFailure: { model.fieldFailed($0) }
     )
     .ignoresSafeArea()
     .accessibilityElement(children: .ignore)
     .accessibilityLabel("Starting VibeField")
+  }
+}
+
+/// Scale about the home's centre for drawing only, so the Field can extend under the status bar
+/// and home indicator throughout the reveal.
+private struct SplashSettle: GeometryEffect {
+  var scale: CGFloat
+
+  var animatableData: CGFloat {
+    get { scale }
+    set { scale = newValue }
+  }
+
+  func effectValue(size: CGSize) -> ProjectionTransform {
+    let inset = (1 - scale) / 2
+    return ProjectionTransform(
+      CGAffineTransform(translationX: size.width * inset, y: size.height * inset)
+        .scaledBy(x: scale, y: scale))
   }
 }
 
@@ -152,12 +183,15 @@ private final class SplashTask: SplashDue {
 }
 
 /// The splash's decisions, in order: the field shows → the content comes under it → the content
-/// steadies and the floor passes → the splash leaves → it is gone (its thread and memory with it).
+/// steadies and the entrance fade finishes → the splash leaves → its renderer is released.
 @MainActor
 @Observable
 final class SplashGateModel {
   private(set) var contentMounted = false
-  private(set) var revealing = false
+  private(set) var fading = false
+  /// Identifies the current shader exit, including callbacks already in flight on the GPU.
+  private(set) var tear: Int?
+  var revealing: Bool { tear != nil || fading || gone }
   private(set) var settled = false
   private(set) var gone = false
   /// WI-1 — the content asks the splash to stand (`.splashHolds`): it never leaves while this holds.
@@ -169,13 +203,13 @@ final class SplashGateModel {
   private(set) var covers = true
 
   @ObservationIgnored private var begun = false
-  @ObservationIgnored private var fieldShown = false
+  private(set) var fieldShown = false
   @ObservationIgnored private var reduceMotion = false
+  @ObservationIgnored private var visible = true
+  @ObservationIgnored private var exitDue: (any SplashDue)?
   @ObservationIgnored private var stable = false
-  /// Whether the field has yet to stand its floor, counted from its first frame (never, if it does not
-  /// show), and the call that ends it.
-  @ObservationIgnored private var floorPending = false
-  @ObservationIgnored private var floorDue: (any SplashDue)?
+  @ObservationIgnored private var entrancePending = false
+  @ObservationIgnored private var entranceDue: (any SplashDue)?
   /// Counts the splash's moves (it leaves, it comes back), so a fade's end that a later move overtook
   /// does nothing.
   @ObservationIgnored private var moves = 0
@@ -236,7 +270,6 @@ final class SplashGateModel {
       if stamped && !arguments.contains("-vf-splash") {
         contentMounted = true
         settled = true
-        revealing = true
         gone = true
         covers = false
         return
@@ -246,7 +279,7 @@ final class SplashGateModel {
   }
 
   /// The field's first frame is done, shown at `at` (CACurrentMediaTime's clock), and the surface's
-  /// own thread has begun the launch screen's fade on it.
+  /// launch still has begun fading from it.
   func fieldPresented(at: CFTimeInterval) {
     guard !fieldShown, !revealing else { return }
     let fade = reduceMotion ? SplashTiming.fadeIn / 2 : SplashTiming.fadeIn
@@ -258,9 +291,9 @@ final class SplashGateModel {
       revealIfReady()
       return
     }
-    floorPending = true
-    floorDue = timer.after(.seconds(delay + fade) + SplashTiming.floor) { [weak self] in
-      self?.floorPending = false
+    entrancePending = true
+    entranceDue = timer.after(.seconds(delay + fade) + SplashTiming.floor) { [weak self] in
+      self?.entrancePending = false
       self?.revealIfReady()
     }
     // the content now: the fade is the render server's, so its start can hold the main thread
@@ -270,7 +303,31 @@ final class SplashGateModel {
   func fieldFailed(_ why: String) {
     // the launch screen's picture stands, honest and still, until the content has steadied
     note("the field could not start (\(why))")
+    fieldShown = false
+    if tear != nil { fadeAway() }
     mountContent()
+  }
+
+  /// During a cold launch Face ID owns a separate window. Start the exit when the user can see
+  /// it. A lock after handoff continues to be managed by the privacy curtain.
+  func setVisible(_ visible: Bool) {
+    guard self.visible != visible else { return }
+    self.visible = visible
+    guard !gone else { return }
+    if visible {
+      revealIfReady()
+    } else if revealing {
+      exitDue?.cancel()
+      moves += 1
+      tear = nil
+      fading = false
+      covers = true
+    }
+  }
+
+  func setReduceMotion(_ reduced: Bool) {
+    reduceMotion = reduced
+    if reduced, tear != nil { fadeAway() }
   }
 
   private func mountContent() {
@@ -293,7 +350,7 @@ final class SplashGateModel {
 
   /// WI-1 — the content's hold. Taken, the splash stays, and comes back over the content if it had
   /// gone or was leaving; released, the content is watched until it is steady again, then the splash
-  /// leaves by its own exit (the floor still counts from the field's first frame).
+  /// leaves by its own exit.
   func setHold(_ hold: Bool) {
     guard hold != holding else { return }
     holding = hold
@@ -326,22 +383,23 @@ final class SplashGateModel {
   private func comeBack() {
     note("the splash comes back")
     watch.stop()
-    // A splash that had gone comes back as a new surface, whose first frame stands a new floor. One caught
-    // mid-fade is the same surface, its field up and its floor stood (WI-1's review, L1).
+    // A new surface has its own entrance fade. A surface caught mid-exit already finished entering.
     if gone {
       fieldShown = false
-      floorPending = false
-      floorDue?.cancel()
+      entrancePending = false
+      entranceDue?.cancel()
     }
-    // the content is watched again once the hold is released; until then the new field stands its floor
+    // the content is watched again once the hold is released
     stable = false
     covers = false
+    exitDue?.cancel()
     moves += 1
     let move = moves
     let fade = reduceMotion ? SplashTiming.fadeOut / 2 : SplashTiming.fadeOut
     withAnimation(FieldMotion.plainEase(fade)) {
       gone = false
-      revealing = false
+      tear = nil
+      fading = false
     }
     timer.after(.seconds(fade)) { [weak self] in
       guard let self, self.moves == move, !self.revealing, !self.gone else { return }
@@ -351,26 +409,53 @@ final class SplashGateModel {
   }
 
   private func revealIfReady() {
-    guard contentMounted, stable, !revealing, !holding, !floorPending else { return }
+    guard visible, contentMounted, stable, !revealing, !holding, !entrancePending else { return }
     watch.stop()
+    stableDue?.cancel()
     note("the splash leaves")
     covers = false
     moves += 1
-    let fade = reduceMotion ? SplashTiming.fadeOut / 2 : SplashTiming.fadeOut
-    withAnimation(FieldMotion.plainEase(fade)) { revealing = true }
+    let move = moves
+    if fieldShown && !reduceMotion {
+      tear = move
+      // A GPU that stops delivering frames must still hand the screen over.
+      exitDue = timer.after(SplashTear.completionLimit) { [weak self] in
+        guard let self, self.tear == move else { return }
+        self.fadeAway()
+      }
+    } else {
+      fadeAway()
+    }
     if reduceMotion {
       settled = true
     } else {
       withAnimation(FieldMotion.island(SplashTiming.settle)) { settled = true }
     }
+  }
+
+  private func fadeAway() {
+    guard !fading else { return }
+    exitDue?.cancel()
+    let fade = reduceMotion ? SplashTiming.fadeOut / 2 : SplashTiming.fadeOut
     let move = moves
-    timer.after(.seconds(fade)) { [weak self] in
-      // a later move overtook this fade (a hold brought it back, and maybe it is leaving again): its end is not
-      // this fade's (WI-1's review, L1)
-      guard let self, self.moves == move, self.revealing else { return }
-      self.gone = true
-      self.note("the splash is gone")
+    withAnimation(FieldMotion.plainEase(fade)) { fading = true }
+    exitDue = timer.after(.seconds(fade)) { [weak self] in
+      guard let self, self.moves == move else { return }
+      self.finish()
     }
+  }
+
+  func tearFinished(_ move: Int) {
+    guard tear == move, !fading else { return }
+    finish()
+  }
+
+  private func finish() {
+    exitDue?.cancel()
+    exitDue = nil
+    gone = true
+    tear = nil
+    note("the splash is gone")
   }
 }
 
@@ -417,16 +502,19 @@ struct SplashCanvas: UIViewRepresentable {
   let motion: Bool
   let active: Bool
   let fadeIn: Double
+  var tear: Int? = nil
+  var onTearFinished: @MainActor @Sendable (Int) -> Void = { _ in }
   let onFirstFrame: @MainActor @Sendable (CFTimeInterval) -> Void
   let onFailure: @MainActor @Sendable (String) -> Void
 
   func makeUIView(context: Context) -> SplashSurfaceView {
     SplashSurfaceView(
-      look: look, motion: motion, active: active, fadeIn: fadeIn, onFirstFrame: onFirstFrame, onFailure: onFailure)
+      look: look, motion: motion, active: active, fadeIn: fadeIn, onTearFinished: onTearFinished,
+      onFirstFrame: onFirstFrame, onFailure: onFailure)
   }
 
   func updateUIView(_ view: SplashSurfaceView, context: Context) {
-    view.update(look: look, motion: motion, active: active)
+    view.update(look: look, motion: motion, active: active, tear: tear)
   }
 
   static func dismantleUIView(_ view: SplashSurfaceView, coordinator: ()) {

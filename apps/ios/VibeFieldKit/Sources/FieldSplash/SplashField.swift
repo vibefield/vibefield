@@ -21,6 +21,8 @@ public struct SplashField: View {
       fadeIn: reduceMotion ? SplashTiming.fadeIn / 2 : SplashTiming.fadeIn,
       onFirstFrame: { _ in }, onFailure: { _ in }
     )
+    // The privacy window always supplies an opaque ground, including between Metal drawables.
+    .background(colorScheme == .dark ? Color.black : Color.white)
     .ignoresSafeArea()
     .accessibilityHidden(true)
   }
