@@ -11106,12 +11106,12 @@ interactive iOS simulators", 2026-11-18 23:34Z, and the four after it to `87e716
 faces' last sentences and the paragraph above replace what PT-S2 ruled on 2026-10-30 (R11). The faces said the act
 was "offered only where the host can run it; it manages the device and never reaches inside iOS", and that in hand
 the tools say **View only**, "the phone takes no tap, key or button until PT-S4's touch lands". Touch has landed: a
-held phone takes taps, drags, scrolling and hardware keys, and **View only** stands only on an explicit window
-capture. The menu's paragraph was **The phone's two acts on the selection menu**. **Attach** bound each phone to a
-Simulator of this Mac's own: its model's booted device, else the first booted iPhone, else its model on the newest
-installed iOS. **Finish** turned it to its model's next launch colour, and there was no Model act. **Simulator
-settings…** replaces Attach: setup gives each phone a device of its own, of the model and iOS it is set to. The
-superseded text is in git (`git log -p -- DESIGN.md`, at `a8be46dd208c`).
+held simulator takes taps, drags, scrolling and hardware keys, and **View only** stands only on an explicit window
+capture. The menu's paragraph was "The phone's two acts on the selection menu". **Attach** bound each simulator
+to a Simulator device of this Mac's own: its model's booted device, else the first booted iPhone, else its model on
+the newest installed iOS. **Finish** turned it to its model's next launch colour, and there was no Model act.
+**Simulator settings…** replaces Attach: setup gives each simulator a device of its own, of the model and iOS it is
+set to. The superseded text is in git (`git log -p -- DESIGN.md`, at `a8be46dd208c`).
 
 **The update's words** (track AU, AU-L2, AU-L3, AU-L6; ruled 2026-10-29). **A version is said two ways:** exactly
 where it can be copied — `0.1.0-nightly.20261027` in mono on Settings → Updates' head — and in friendly words in a
