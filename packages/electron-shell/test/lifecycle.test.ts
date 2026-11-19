@@ -218,6 +218,8 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     installOnQuit?: (context: { readonly ended: number }) => Promise<void>;
     /** AL-6 — Keep running when VibeField quits: the caller's answer (it went to the background, or may not) */
     keepRunning?: () => boolean;
+    /** Item 601 — the stop waits for this (its re-ask box still up) */
+    stopWaits?: Promise<void>;
   }) {
     let primaryOpen = options.windowOpen ?? true;
     const close = vi.fn(() => {
@@ -236,19 +238,26 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       }),
       stop: vi.fn(async () => {
         order.push("stop");
-        return options.stop === "aborted"
-          ? { kind: "aborted" as const }
-          : {
-              kind: "done" as const,
-              complete: options.complete ?? true,
-              ended: options.ended ?? 0,
-            };
+        if (options.stopWaits !== undefined) await options.stopWaits;
+        if (options.stop === "aborted") {
+          // the gate's re-ask Cancel releases every hold before it answers (quit-gate.ts)
+          order.push("release");
+          return { kind: "aborted" as const };
+        }
+        return {
+          kind: "done" as const,
+          complete: options.complete ?? true,
+          ended: options.ended ?? 0,
+        };
       }),
     };
     const install = options.installOnQuit;
     const onQuitRequested = vi.fn(() => order.push("quit-requested"));
     const onQuitAborted = vi.fn(() => {
       primaryOpen = true;
+    });
+    const holdPairs = vi.fn(() => {
+      order.push("hold-pairs");
     });
     const flow = installLifecycle({
       registry,
@@ -260,6 +269,7 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       logger: logger(),
       closeLogging: async () => {},
       getQuitGate: () => gate,
+      holdPairs,
       onQuitAborted,
       ...(options.keepRunning !== undefined ? { keepRunningOnQuit: options.keepRunning } : {}),
       ...(install !== undefined
@@ -275,7 +285,16 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
       order.push("app.quit");
       electron.emit("before-quit", { preventDefault: vi.fn() });
     });
-    return { flow, gate, close, order, onQuitRequested, onQuitAborted, open: () => primaryOpen };
+    return {
+      flow,
+      gate,
+      close,
+      order,
+      onQuitRequested,
+      onQuitAborted,
+      holdPairs,
+      open: () => primaryOpen,
+    };
   }
 
   const settle = () => new Promise((resolve) => setImmediate(resolve));
@@ -354,6 +373,38 @@ describe("the quit gate in the lifecycle (AL-3)", () => {
     expect(rig.close).toHaveBeenCalledTimes(1); // the durable close, as ever
     electron.emit("window-all-closed");
     expect(rig.gate.stop).not.toHaveBeenCalled();
+  });
+
+  // Item 601 (2026-11-19) — a signal's quit leaves the pairs, and must never START one: until will-quit's teardown
+  // disposed the coordinators, a fieldd lost during the durable close was recovered with a spawn, and the quit then left
+  // the pair it had made. The quit holds every pair the moment it begins, as the gate's own hold does. The
+  // coordinator's half (a held coordinator spawns nothing) is fieldd-recovery.test.ts's.
+  it("item 601 — a signal's quit holds every pair before the durable close", () => {
+    const rig = gateRig({});
+    rig.flow.leavePairsOnQuit("signal");
+    expect(rig.holdPairs).toHaveBeenCalledTimes(1);
+    electron.emit("before-quit", { preventDefault: vi.fn() });
+    expect(rig.close).toHaveBeenCalledTimes(1); // the durable close, as ever
+    expect(rig.order.indexOf("hold-pairs")).toBeLessThan(rig.order.indexOf("quit-requested"));
+    expect(rig.holdPairs).toHaveBeenCalledTimes(1);
+  });
+
+  it("item 601 — a signal during the stop's re-ask box holds the pairs again once the aborted stop released them", async () => {
+    let answer: () => void = () => undefined;
+    const stopWaits = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const rig = gateRig({ stop: "aborted", stopWaits });
+    electron.emit("before-quit", { preventDefault: vi.fn() });
+    await vi.waitFor(() => expect(rig.close).toHaveBeenCalledTimes(1));
+    electron.emit("window-all-closed"); // the stop begins: a session born during the quit asks again
+    await vi.waitFor(() => expect(rig.gate.stop).toHaveBeenCalledTimes(1));
+    rig.flow.leavePairsOnQuit("signal"); // before that box answers
+    expect(rig.holdPairs).toHaveBeenCalledTimes(1);
+    answer(); // Cancel: the gate releases every hold, and the stop comes back aborted
+    await vi.waitFor(() => expect(rig.order.filter((s) => s === "app.quit")).toHaveLength(2));
+    expect(rig.holdPairs).toHaveBeenCalledTimes(2);
+    expect(rig.order.lastIndexOf("hold-pairs")).toBeGreaterThan(rig.order.indexOf("release"));
   });
 
   // AU-5a (B3's quit-seam review) — a signal that lands while the person's quit is still open to it is not the

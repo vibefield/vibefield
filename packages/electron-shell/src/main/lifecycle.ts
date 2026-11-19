@@ -87,6 +87,10 @@ export function installLifecycle(opts: {
   /** AL-3 — the quit gate, late-bound (it is built with the pairs, after boot); null or absent = no gate (smokes,
    * labs, a boot that never reached its pairs), and a person's quit leaves the pairs as before. */
   getQuitGate?: () => QuitGate | null;
+  /** Item 601 (2026-11-19) — hold every pair as the quit gate's own hold does: each coordinator refuses `ensure()` and
+   * recovers nothing, and a bundle born from then on starts held. It stops nothing. Late-bound by the caller, like
+   * `getQuitGate`; absent = nothing to hold. */
+  holdPairs?: () => void;
   /** AL-3 — a session was born during the quit and the person kept the app: give it back (the update abort's restore:
    * the registry's shutdown cancelled, the tray's `quitting` cleared, the primary window reopened). */
   onQuitAborted?: () => void;
