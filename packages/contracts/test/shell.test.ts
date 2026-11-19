@@ -249,7 +249,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   // meet at it in a merge and conflict out loud, where a number in the title
   // went stale in silence (item 102, found at HN's rebase rehearsal).
   it("exposes exactly its channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toHaveLength(45);
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(46);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "zoomHaptic",
       "windowBootstrap",
@@ -297,6 +297,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "clipboardRead", // item 102 — a paste's read through main, for the focused product window
       // HN-5 — a copy's picture written through main, for a registered window (no focus, LC-18)
       "clipboardWriteImage",
+      "pictureSave", // item 578 — a print's picture saved where the person chooses, through main's own panel
       // SD-2 (DESIGN.md §14, §8 "Settings → Sound") — the window's attention, a Play in Settings, the player's state
       "soundAttention",
       "soundPreview",
@@ -348,6 +349,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       simulatorSetupOpen: "vibefield:simulator:setup-open",
       clipboardRead: "vibefield:clipboard:read",
       clipboardWriteImage: "vibefield:clipboard:write-image",
+      pictureSave: "vibefield:picture:save",
       soundAttention: "vibefield:sound:attention",
       soundPreview: "vibefield:sound:preview",
       soundState: "vibefield:sound:state",

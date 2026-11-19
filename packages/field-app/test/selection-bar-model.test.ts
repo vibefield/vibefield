@@ -7,7 +7,7 @@
  * face, its name and word where the acts would stand, Duplicate still offered. Tooltips the frame's way with the DESK's
  * keys — Make a card's ⌘C among them — a kind's act prints none. The menu, nearest first: the kind's acts · Open ·
  * Comment · Make a card | Duplicate · Bring to front · Send to back · Clean up | Tape | Delete; the eyebrow names what
- * it acts on.
+ * it acts on. Item 578: Download… follows Open, for one print whose picture the desk holds.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -33,6 +33,7 @@ const facts = (over: Partial<SelectionFacts> = {}): SelectionFacts => ({
   menu: [],
   words: [note],
   openable: false,
+  downloadable: false,
   commentable: true,
   ...over,
 });
@@ -162,6 +163,39 @@ describe("the bar grown — its rows, nearest first", () => {
       ["tape"],
       ["delete"],
     ]);
+  });
+
+  // Item 578 — red until the model knows the row: a print whose picture the desk holds offers Download… after Open
+  // (DESIGN.md §8 "The bar grown"), with its ellipsis and no key; anything else has no such row.
+  it("Download… follows Open for one print whose picture the desk holds, and prints no key (item 578)", () => {
+    expect(ids(facts({ openable: true, downloadable: true }))[0]).toEqual([
+      "open",
+      "download",
+      "comment",
+      "copy",
+    ]);
+    expect(ids(facts({ downloadable: true }))[0]).toEqual(["download", "comment", "copy"]);
+    expect(ids(facts({ downloadable: true, locked: true }))[0]).toEqual([
+      "download",
+      "comment",
+      "copy",
+    ]);
+    const row = menuGroups(facts({ downloadable: true }), "mac")
+      .flat()
+      .find((r) => r.id === "download");
+    expect(row).toEqual({ id: "download", label: "Download…" });
+    expect(
+      menuGroups(facts({ downloadable: true }), "other")
+        .flat()
+        .find((r) => r.id === "download"),
+    ).toEqual({ id: "download", label: "Download…" });
+  });
+
+  it("no Download row unless the selection is one print the desk can save (item 578)", () => {
+    expect(ids(facts({ openable: true }))[0]).toEqual(["open", "comment", "copy"]);
+    expect(
+      ids(facts({ menu: [{ id: "seconds", label: "Seconds hand" }], downloadable: true }))[0],
+    ).toEqual(["act:seconds", "download", "comment", "copy"]);
   });
 
   it("Clean up with two or more selected (DK-D29)", () => {

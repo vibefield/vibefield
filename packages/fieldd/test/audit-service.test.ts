@@ -207,6 +207,49 @@ describe("LOG-L6 append-only audit ledger", () => {
     expect(read[0]?.attrs).toEqual({ webContentsId: 3, bytes: 12 });
   });
 
+  // Item 578 — red until the action is registered: main's record of a print's picture saved through its own panel
+  // is refused as not shell-owned. A record says the bytes' count, their media type and the file's own name, never
+  // the picture and never the folder it went to.
+  it("admits the picture save door's outcome from the shell: its size and the file's name, never a path (item 578)", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-picture-save-test" });
+    await service.start();
+    await service.appendFromCaller(shellContext(), {
+      action: "shell.picture.save",
+      target: { kind: "picture", id: "desk-print" },
+      phase: "outcome",
+      outcome: "succeeded",
+      operationId: "op_picture_01",
+      attrs: {
+        webContentsId: 3,
+        bytes: 11,
+        mediaType: "image/png",
+        name: "Picture 2026-11-19.png",
+      },
+    });
+    await service.appendFromCaller(shellContext(), {
+      action: "shell.picture.save",
+      target: { kind: "picture", id: "desk-print" },
+      phase: "outcome",
+      outcome: "cancelled",
+      reasonCode: "USER_CANCELLED",
+      operationId: "op_picture_02",
+      attrs: { webContentsId: 3, bytes: 11, mediaType: "image/png" },
+    });
+    await service.close();
+    const read = await records(service.root);
+    expect(read.map((record) => [record.action, record.outcome, record.reasonCode])).toEqual([
+      ["shell.picture.save", "succeeded", undefined],
+      ["shell.picture.save", "cancelled", "USER_CANCELLED"],
+    ]);
+    expect(read[0]?.attrs).toEqual({
+      webContentsId: 3,
+      bytes: 11,
+      mediaType: "image/png",
+      name: "Picture 2026-11-19.png",
+    });
+  });
+
   // OB custody — red until the two actions are registered: main's append of what it did with its
   // own custody root is refused as not shell-owned. A record says an outcome and what was stopped, never a secret;
   // one made before a pair existed says when the thing happened and that it was deferred.
