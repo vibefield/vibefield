@@ -48,6 +48,18 @@ describe("vibefield.simulator", () => {
     expect(isObjectKind(kind) ? kind.name : undefined).toBe(row?.type);
   });
 
+  it("item 572: names its object iOS Simulator on its row and on the pegboard, and says the listing's words", () => {
+    expect(simulatorManifest.title).toBe("iOS Simulator");
+    expect(row?.title).toBe("iOS Simulator");
+    expect(row?.tray?.label).toBe("iOS Simulator");
+    expect(simulatorManifest.description).toBe(
+      "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
+    );
+    expect(row?.description).toBe(
+      "Double-click to choose an iPhone and an iOS version, then use it on your desk.",
+    );
+  });
+
   it("lies on the desk by the SDK's key — and goes into no mini mat yet (it has no chip)", () => {
     expect(row?.provides).toEqual([SIMULATOR_TYPE, DESK_OBJECT]);
   });
@@ -92,7 +104,7 @@ describe("vibefield.simulator", () => {
     expect(tray?.category).toBe(SIMULATOR_CATEGORY);
     expect(tray?.category).toBe("devices");
     expect(["paper", "surfaces", "things", "comments", "portals"]).not.toContain(tray?.category);
-    expect(tray?.label).toBe("Phone");
+    expect(tray?.label).toBe("iOS Simulator");
     expect(tray?.hang.accessory).toBe("shelf");
     expect((tray?.hang.w ?? 0) / PHONE_SIZE.w).toBeCloseTo((tray?.hang.h ?? 0) / PHONE_SIZE.h, 3);
     // its specimen is drawn by its own pass with the screen off: bound to nothing, with no desk state
