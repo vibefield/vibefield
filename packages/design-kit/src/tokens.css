@@ -121,6 +121,13 @@
   --vf-yellow: #ffd60a;
   --vf-cyan: #5ac8fa;
   --vf-select: #4a90d9;
+  /* §2.5 the tutorial's pencil (track SH; SH-D11, SH-D21): ICE's MARKS.inks.pencil, --vf-select's
+     hue lifted to L .76, with its ink, its keyline and the stepper's glass. One value in both
+     themes; the dim is --vf-field-ground. */
+  --vf-tutor: #79b5f8;
+  --vf-tutor-ink: #08162b;
+  --vf-tutor-keyline: rgb(4 8 20 / 55%);
+  --vf-tutor-glass: rgb(10 22 40 / 86%);
   --vf-state-on-attention: #111111;
   --vf-state-on-solid: #ffffff;
   /* §2.5 text inks (GT-7): the same states as TEXT on light chrome, where every
@@ -445,6 +452,8 @@
   --vf-ease-island: cubic-bezier(0.25, 1, 0.3, 1);
   --vf-ease-lift: cubic-bezier(0.2, 0.9, 0.3, 1.2);
   --vf-ease-pop: cubic-bezier(0.34, 1.45, 0.64, 1);
+  /* §6 the retract (M4): it goes back the way it came; a tutorial's Leave wears it (track SH) */
+  --vf-ease-retract: cubic-bezier(0.4, 0, 1, 1);
 
   /* §7 Interactive states — the engine's P4 union box wraps rounded cards
      (world px; the chrome reflector zoom-scales it — widgetlab App law) */

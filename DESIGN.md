@@ -281,6 +281,27 @@ wears no cyan. Cyan marks one update only, the app's own: an install of VibeFiel
 update in words at its end, "1 update" in the row's secondary ink, and nothing of it reaches your face
 (§2.8 I-5; §8 "The Me menu").
 
+*Amended 2026-11-19 (track SH; SH-D11 (a) and SH-D21, ruled by James on the page *The Blue Pencil*; SH-D21 by his click
+at 2026-11-17 16:39:22Z and his words at 16:41:23Z, "i choose marker, update the page with my pick"):* `--vf-select`'s
+row says "selection ring **only**". Its twin, the pencil (§8 "The desk's chrome", MC-4), is also the tutorial's:
+whatever a tutorial draws is drawn in the pencil, and nothing else in VibeField glows blue (§8 "Tutorials"; SH-L11).
+
+The pencil is ICE's `MARKS.inks.pencil`: `--vf-select`'s hue (OKLCH 252°) lifted to a lightness of .76. It stays
+inside §2.9's withheld band (238°–265°), so no project's ink reads as a tutorial, just as none reads as the selection.
+It is light, not paint, so the Moon does not dim it, and its four tokens hold one value in both themes:
+
+| Token | Value | Meaning |
+|---|---|---|
+| `--vf-tutor` | `#79B5F8` | the pencil: a tutorial's ring and its glow, its card, every hint, the beacon. It marks your next move, never a status |
+| `--vf-tutor-ink` | `#08162B` | the words, keys and buttons on the pencil: 7.8–8.4:1 on the card's swipe (96% pencil over the dim, solid where strokes cross) |
+| `--vf-tutor-keyline` | `rgb(4 8 20 / 55%)` | under every pencil stroke, 2 wider, as ICE keys the brackets: 4.4:1 on light paper, 4.2:1 on Godview's parchment |
+| `--vf-tutor-glass` | `rgb(10 22 40 / 86%)` | the stepper's ground; its words are white at 60%, 6.7:1 or more over the dim |
+
+The dim is the field's own ground, `--vf-field-ground` (§2.1). It runs from 62% at the focus to 86% at the far
+corners, and over a light ground (Godview by day, a sheet) from 68% to 88%, so the ring keeps 3:1: 7.4:1 on the Sun's
+mat, 8.1:1 on the Moon's, 3.6:1 on Godview by day. On Godview by night the ground is already the dim's colour, so the
+dim falls on the bodies, the panes and the frame, and the ring carries the focus alone.
+
 ### 2.6 Organizational accents (containers, comments, tags)
 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
@@ -810,6 +831,8 @@ text belongs to Ghosttea's renderer, not CSS.
 | **Headline** (track ES, ES-D6 A, 2026-11-08) | 40px · **light** · 46 line height · −0.02em, in the night's t1 (§2.4) | the night's alone: Chat's empty panel, "Make your first spark" (§8 "Chat's list"); on the phone 30 light (§8 "The phone's Chat", ES-5) |
 | **Data small** | 12px · medium · `tabular-nums` | times, counts, sizes |
 | **Caption** | 9–10px · 40% opacity | sub-labels, the fields' time captions (10px, §8); *the clipboard's day captions and its notch's count (9px mono) left with the left tray at HN-1, recorded here at HN-8 (2026-10-30)* |
+| **The tutorial's act** (track SH, SH-D21; SH-D23 a; *added 2026-11-19*) | 40px · **780** · −0.034em, in `--vf-tutor-ink`; 32 from 13 characters, 27 from 20; 34, 28 and 24 on the phone | the tutorial card's act (§8 "Tutorials"), one to three words |
+| **The note's hand** (track SH, SH-D14 (a); *added 2026-11-19*) | Caveat, the face ICE's `paper/writing.ts` draws a note's handwriting in, bundled with the app as the desk's own faces (`field/desk/assets/fonts`, OFL) and never fetched: semibold (600, the `caveat-bold` face) at 24, 1.02 line height, on the card's line; 600 at 26 for a hint's words | a tutorial card's line, a hint's words |
 
 *Corrected 2026-10-28 (the housekeeping pass):* the Where column named the widgets' type (the
 clock's "CLOCK · WED 16", the stocks card's ticker, prices and "NASDAQ", the weather card's
@@ -819,6 +842,10 @@ ramp's roles stand.
 Laws: every number that can change is `tabular-nums`. Weight makes hierarchy *down* (big =
 light, small = medium) — the iOS inversion; never bold a hero numeral. Sentence case
 everywhere except eyebrows.
+
+*Amended 2026-11-19 (track SH; SH-D23 a, ruled by James on 2026-11-19, "all with lean"):* the tutorial's act is
+the one big type that is heavy. It is a marker's letters, ink drawn by hand (§5.1's ink), not the chrome's type, so
+"big = light" does not bind it. Every other big type stays light, the Headline's 40 among them.
 
 ---
 
@@ -898,6 +925,28 @@ two of the rows above and no new material — the *Search popup* shadow, ringed 
 hairline, and the *Search scrim* under it — as the Peek does, so the frame's two popups read as one
 family. Where it opens over Canvas the scrim blurs and dims the live desk, and the desk recedes with
 the frame, as MK-D2 rules (§6 "Plugins").
+
+**The lesson layer** (track SH; SH-D12 (a), SH-D13 (a), SH-D21; *added 2026-11-19*; §8 "Tutorials", §10). A tutorial
+step dims everything but one thing and draws on the glass above it. It wears no glass tier and no blur.
+- **The dim** is `--vf-field-ground` as a radial falloff from the focus (§2.5's amendment of 2026-11-19). It covers the
+  frame too.
+- **The hole** is cut in the dim around the focus: 14 out from an object, 8 from a frame control, with the thing's own
+  corners + 8. A round control gets a circle. What shows through it is live and works as always, and the hole passes
+  clicks to it.
+- **The ring** sits on the hole's edge: 2px of `--vf-tutor` on a keyline 1px each side (`--vf-tutor-keyline`), the
+  brackets' own construction. It glows at 55% over 16px and 26% over 42px, with 18px of pencil light spilling inside
+  at 30%.
+- **The card** is Marker (SH-D21): six strokes of the pencil, each 34 wide with round caps and a rough edge, seeded by
+  the step's words so a step always draws the same swipe.
+  - The swipe reaches about 20 past the card's box, and the box keeps that bleed inside the window as well as its 16.
+  - It is 372 wide on the Mac and 330 on the phone, tilted −1.8°.
+  - Its words are in `--vf-tutor-ink`: the act (§3), its key as 48px keycaps or, where a step has no key, its gesture
+    drawn in the pencil, and one line in the note's hand (§3).
+  - It gives off no light: it is drawn, not lit.
+- **The hints** are pencil strokes 3px wide over a 5px keyline, with round caps and joins and a 6px pencil glow,
+  written on once.
+
+The material book's **ink** row gains its second wearer (§5.1).
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -999,7 +1048,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | Material | Means | Wears it | On the desk |
 |---|---|---|---|
 | **paper** | writable | notes, the whiteboard's face; off the desk, the hand's cards (§5, HN-D1) | drawn |
-| **ink** | drawn by hand | strokes on a board or a page, a note's handwriting | drawn |
+| **ink** | drawn by hand | strokes on a board or a page, a note's handwriting; off the desk, a tutorial's card and its hints (§8 "Tutorials") | drawn |
 | **pictures** | a captured image | prints; off the desk, the print on a picture card (§8 "The hand") | drawn — device-local until the upload plane (DK-D21) |
 | **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
 | **boards** (the mat) | a place: it holds a desk | the mat itself, the ground (§2.1); the mini mat, a desk inside the desk | drawn |
@@ -1007,6 +1056,10 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
 | **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page, its recipe its plugin's own and not yet named here (BROWSER.md Q-10); and the iOS Simulator's, the recipe **cover glass** (`vibefield.simulator`, PT-S1 — its numbers below) |
+
+*Amended 2026-11-19 (track SH, SH-D21):* the ink row's second wearer. A tutorial's card is ink drawn by hand, a swipe of
+the pencil, as its hints are. That is the meaning the card wears, and it is why §3's tutorial act may be heavy
+(SH-D23 a).
 
 **The five guardrails** (thinking-the-desk §6): **no material without a meaning** — no ornament
 that does not inform (a glass portal that refracts the mat passes; the stitched-leather calendar
@@ -1203,7 +1256,8 @@ One more plain curve, with its reason: a **retract** goes back along the way it 
 `cubic-bezier(0.4, 0, 1, 1)` — an ease-in, a hair sharper off the mark than CSS's `ease-in`
 (0.42, 0, 1, 1) — with its fade on `ease` (the spawn bloom's buds, 180ms, §8; the prototype's
 stylesheet said 200ms, its constants table 180, and the table is the authority) — it accelerates
-home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay.
+home, the pop's reverse (M4). Leaving things never wait out an entrance's reveal delay. *Added 2026-11-19 (track
+SH):* its token is `--vf-ease-retract`, because a tutorial's Leave wears it ("A tutorial's beats", below).
 
 One more interval, with its reason — **the arrival** (track TS, TS-D8 ruled 2026-10-27; §8 "The Connect
 pane"). When a link lands, the account's devices arrive around your face **90ms apart**, not 26: each is a
@@ -1212,8 +1266,9 @@ wire drawn from the face on the island curve (560ms) and an OS mark popped at it
 arrive, which is the moment's whole point (TS-L8, arrival is the reward). The cap is the table's: the fifth
 device's delay, 360ms, is the last, and any after it arrive with the fifth. A coin face engraves its
 tailnet on the legend's lower arc over 900ms on the island curve, 260ms behind the first wire (§2.8, from
-96px). Under reduced motion they appear together in a 120ms fade. It is the one staggered entrance that is
-not 26ms.
+96px). Under reduced motion they appear together in a 120ms fade. *Amended 2026-11-19 (track SH):* this said "It is
+the one staggered entrance that is not 26ms". A tutorial card's six strokes are the second ("A tutorial's
+beats", below).
 
 Two more, with their reasons — **the hand-over** and **History's arc** (track AO; AO-D2, AO-D4 and AO-D8 ruled
 2026-10-27; §8 "The Setup Assistant's agent chapter"). **The hand-over** is a first run's reveal. Setting up's
@@ -1297,6 +1352,26 @@ breath after the dot before. Under reduced motion they stand still at 60%.
 *Since SP-1e2 (2026-11-05; SPE-Q35 (b), on James's plate RU-18):* a Working row's mark on Chat's crew card (§8
 "Chat's crew card") is a breath on its timing that breathes ink, not scale: a ring 10 round scaled by 1.06 moves less
 than a pixel. It stops when the row's state changes, and stands still under reduced motion.
+
+**A tutorial's beats** (track SH; SH-D21, SH-D24 a; *added 2026-11-19*; §8 "Tutorials"). Every beat is on a curve above:
+
+| Beat | Curve and time | Reduced motion |
+|---|---|---|
+| The dim fades in | 320ms `ease-out` | a 120ms fade |
+| The iris closes onto the focus, and between steps the hole glides to the next | 560ms island | a cross-fade |
+| The ring locks on from 8 further out (ICE's lock-on) | 180ms lift | a 120ms fade |
+| The card draws on: six strokes, 72ms apart, 550ms in all; then its words fade in from 300ms | each stroke 190ms island; the words 180ms `ease` | a 120ms fade |
+| A hint draws on, one at a time, after the card | 240–700ms by its length, island | it appears drawn |
+| Done: the check draws and the ring flashes | 260ms island, the flash on the lift | it appears |
+| A click on the dim: a ripple, the ring flashes | 420ms `ease-out`, the flash on the lift | the ring's flash only |
+| Leave: the iris opens and the dim fades | 420ms on the retract | a 120ms fade |
+
+- **The 72ms.** The card's strokes are the second staggered entrance that is not 26ms, for the arrival's reason: at
+  26ms the six land inside 130ms and read as a fill, not as a hand drawing. At 72ms each is seen to go on.
+- **The breath.** The ring's glow and the beacon wait on a fact the person makes (the step's act, the beacon's click),
+  so they are loops under the law above. The glow breathes on the breath's own timing (1.1s each way, `ease-in-out`)
+  twice, 4.4s, then holds still. The beacon's pulse is the travel, 1.1s, three times. Both stop inside WCAG 2.2.2's
+  five seconds and stand still under reduced motion (SH-L18).
 
 **Motion laws:**
 - **M1 — One element morphs.** A role change (the name pill into its sheet, the package circle
@@ -4349,6 +4424,71 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     longer stands aside for the limit moment (§8 "Asking again", amended the same day). The code moved at UM-3d,
     the same day. *(Corrected 2026-11-06, UM-3's review: this said "The code moves at UM-3; until then it draws the
     row this amendment describes.")*
+- **Tutorials: the beacon, the spotlight, the chapter** (track SH. SH-D11…SH-D20 at (a): six picked by James on the
+  page's earlier copy, read 2026-11-09 03:54Z, and the rest by his SH-D22 a; SH-D21 Marker on the page *The Blue
+  Pencil*; SH-D22…SH-D24 (a) ruled by James on 2026-11-19, "all with lean"; laws SH-L11…SH-L20,
+  `draft/thinking-tutorials.md`. *Written 2026-11-19, built from SH-1 on.*) A tutorial is unmistakable and never in the
+  way.
+  - **What it is.** It lights one thing in the pencil, dims everything else, and draws the next move on the glass. The
+    person does every step, and Esc leaves at any time. It has three pieces, and only three:
+    - **The beacon** offers. It is one pencil dot on one new thing; it pulses (§6) and then holds still, hover says
+      what it is, and a click starts its chapter. One stands at a time (SH-D19 a).
+    - **The spotlight** teaches one step: the dim, the hole and the ring (§5, the lesson layer), the card, and a drawn
+      hint. The lit thing is the real thing, and it works (SH-L12).
+    - **The chapter** strings up to four steps, about a minute (SH-L14).
+  - **The stepper** stands top centre on the head's axis (y 28): 36 tall, 10 from the top, on `--vf-tutor-glass` ringed
+    in the pencil at 35%, with chips 24 tall. It names the chapter and each step, lights the current step in ink on the
+    pencil, ticks the done ones with §13's `check`, and keeps **Leave** with its key. It is the one piece that stays
+    put (SH-D17 a).
+  - **The card** is Marker (§5): the only place a tutorial speaks. It is placed beside its focus, clear of it by 30
+    plus its bleed, and re-placed above or below when the window is short. It has eight states:
+    - A step that **asks**: the act, its key as keycaps, one line. It has no Next, so doing it, by any road, is the only
+      way on (SH-D16 a, SH-L13).
+    - A **gesture**: where a step has no key, its move is drawn (a hold is a ring that fills), and **Show me** plays a
+      pencil ghost of the hand once (SH-L19).
+    - A step that **tells**: **Next** (Return) and **Back** (←) on the same swipe; only a step that asks nothing has
+      them.
+    - **Done**: the key fades, a check draws itself on the swipe, and the spotlight moves on.
+    - **The offer**: the first launch, centred over the dim. It says the welcome and what it costs, with **Start the
+      tour** · **Not now** (SH-D18 a).
+    - **The chapter's end**: what you did, ticked in one line, and the next chapter if there is one.
+    - **Paused**: an agent needs you, so the dim lifts and the stepper says so; **Resume** picks the step up
+      (SH-L17).
+    - **On the phone**: the same swipe, 330 wide, with a fingertip where the Mac draws a pointer (SH-D20 a).
+  - **A click on the dim** answers with a ripple and the ring's flash, and does nothing else (SH-D15 a). Esc and Leave
+    are the deliberate ways out. Inside a terminal pane Esc stays the agent's, so there the stepper's Leave is the way
+    out (SH-L15).
+  - **The hints**, drawn once on the glass from the card toward the focus (SH-D14 a): an arrow, a loop, an underline,
+    a click's ticks (two sets for a double-click), a hold's ring drawn in the hold's own 520ms, a drag's dotted path, a
+    brace over a group, a done check, words in the note's hand (at most three), and the ghost.
+  - **The chapters.** On the Mac:
+    - Your desk (Select · Copy · Your hand · Objects), offered at the first launch.
+    - Godview (Open · Agents · Hold), by a beacon on Godview's cell the first day you have an agent.
+    - Talk to an agent (Open a terminal · Type to it · Answer it), by a beacon on your first terminal.
+    - Your hand (Copy · Raise · Play a card), by a beacon on your first card, if Your desk was never taken.
+    - Search (Search · Peek), by a beacon on the head's search the first time Godview holds five agents.
+    - Chat (New spark · Mention an agent · Send), by a beacon on Chat's cell the first time you open Chat.
+
+    On the iPhone (SH-D20 a, the kit's own overlay; TipKit decides only when a beacon shows):
+    - Your field (Tap an agent · Hold your face · Pull for apps), at the phone's first open after pairing.
+    - A new agent (Hold empty ground · Reach a Mac), once a second Mac is paired.
+    - Needs you (Orange · Answer), the first time an agent waits on you, after you answer and never before.
+  - **Asking.** A chapter is offered once, at its moment (§8 "The moments", AO-L6). **Not now** is final, never on a
+    launch after the first (TS-L6), and every chapter waits in **Settings → Tutorials** (SH-7): Start, Resume where you
+    left, or take it Again. That list shows checks and never a score (SH-L16).
+  - **Kept** in the setup ledger beside the moments (`tutorial:<id>`: offered, started, paused, left at step n,
+    finished; SH-1), so a chapter learned on one device is learned on both wherever the idea is shared.
+  - **Heard, reached and read** (SH-L20).
+    - Each step is announced once, politely: "Step 2 of 4. Copy it. Press Command C."
+    - The card is labelled by its act and is never `aria-modal`, so the lit thing stays reachable.
+    - A step that asks leaves focus on the thing; a step that tells moves it to Next; leaving puts it back where it
+      was.
+    - The focus is a line as well as a colour, so it reads in greyscale.
+    - The card's words read at 7.8:1 or more, the ring at 3:1 or more against the dim in both lights, and every button
+      on the card and the stepper is at least 24px.
+  - **Never:** a start on every launch, two chapters at once, a lesson over an agent that needs you, a badge, a count, a
+    percentage or a streak, a dim without a way out, or the pencil for anything but a tutorial and the selection's own
+    marks (§2.5).
 - **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
   lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
   cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
@@ -11017,6 +11157,22 @@ field gives them, and “q” what was typed.
   screen, in the pane, as part of what you send". Chat puts it on screen nowhere now: your bubble draws the chip by its
   words, and the id stays in the record.
 
+**The tutorials' words** (track SH; SH-D21; *added 2026-11-19*; where each stands is §8 "Tutorials").
+- **The act** is an imperative of one to three words, sentence case, with its key or its gesture beside it: "Copy
+  it", "Click the note", "Hold empty ground".
+- **The line** is one line in the person's terms, at most six words, in the note's hand: "The original stays put",
+  "A new terminal opens there". A hint's words are at most three: "click it", "press & hold", "this one".
+- **The offer**: "Welcome to your desk" · "Four steps. About a minute" · **Start the tour** · **Not now**. On the
+  phone: "Your field, in your pocket" · "Three steps. Under a minute".
+- **The chapter's end**: "That's your desk", then each step ticked, and **Next: Godview · 3 steps** · **Done**. When
+  SH-7 lands, the line "Every chapter waits in Settings → Tutorials" joins it, after "That's your desk"; until then it
+  names no place that does not exist.
+- **The stepper**: the chapter's name as an eyebrow, each step by its short name, **Leave** with its key. Paused reads
+  "Paused · an agent needs you" · **Resume**.
+- **Announced**: "Step 2 of 4. Copy it. Press Command C." (§8 "Tutorials").
+- **No word keeps a score**, no word praises, and none names VibeField's insides (§9 "VibeField's insides are never a
+  person's to read").
+
 **What VibeField keeps, when it cannot read it** (track CO, items 172 and 177; 2026-11-05). VibeField keeps eight kinds
 of record in signed files of its own: a spark's record, what waits on you (CP-3), the words that wait for a session,
 each spark's kept record, a flow's records (CP-4a1: the version of a flow you approved, and a spark's proposed flow),
@@ -11862,6 +12018,9 @@ VibeField and open it again." (§8 "The status line").
   above the line (63; §8 "The hand") — and the loading veil (and, until
   FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
   FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
+  **The lesson layer** (75; *added 2026-11-19*, track SH; §5 and §8 "Tutorials") stands above all of these but the
+  loading veil. It owns no place and lights one: its dim covers the frame, every popup and Settings, and only its hole
+  shows what lies under it, live.
   **The active view has ONE owner** — the window's, held in main beside the menu that names it,
   persisted for the window's life and Canvas at launch; the views track, the keys and the View
   menu all ask that owner and draw what it answers. **The keys:** ⌘1–⌘4 (Ctrl 1–4 on Windows) go
