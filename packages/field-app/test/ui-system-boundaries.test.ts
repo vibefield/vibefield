@@ -30,6 +30,20 @@ const onboardingFiles = (): string[] =>
     .filter((file) => /\.(?:tsx|css)$/.test(file))
     .sort();
 
+/** The repo's plugins (`plugins/*`), whose own styles a row below holds to the kit's tokens (item 564). */
+const REPO_ROOT = join(PACKAGE_ROOT, "..", "..");
+/** Every source file of every plugin, as `<plugin>/src/<path>`, discovered so a new plugin or a new file is covered the
+ * moment it exists. A folder with no package.json is a retired plugin's leftover, not a package (as glyphs.test.tsx). */
+const pluginSourceFiles = (): string[] =>
+  readdirSync(join(REPO_ROOT, "plugins"))
+    .filter((plugin) => existsSync(join(REPO_ROOT, "plugins", plugin, "package.json")))
+    .flatMap((plugin) =>
+      (readdirSync(join(REPO_ROOT, "plugins", plugin, "src"), { recursive: true }) as string[])
+        .filter((file) => /\.(?:tsx?|css)$/.test(file))
+        .map((file) => `${plugin}/src/${file.split("\\").join("/")}`),
+    )
+    .sort();
+
 /** A token's value in one theme's block of tokens.css (`:root` or `.dark`), as written. */
 const tokenValue = (tokens: string, theme: ":root" | ".dark", name: string): string => {
   const start = tokens.indexOf(`\n${theme} {`);
@@ -1665,6 +1679,53 @@ describe("UI system ownership boundaries", () => {
     expect(source("frame/cards/press/press-colours.ts")).toContain(
       "getComputedStyle(document.documentElement)",
     );
+  });
+
+  it("holds the plugins' own styles to the kit's tokens: every --vf- name a token, read bare, and no colour literal outside one (item 564)", () => {
+    // The browser pane and the simulator ship as official plugins (2026-11-19). Their dialogs and the address editor
+    // write CSS in template strings that no row read: R10 holds what a plugin imports, never how it draws. So every
+    // source file under plugins/*/src is read line by line (DESIGN.md §2 and §5; docs/UI_SYSTEM.md, tokens first): a
+    // `--vf-` name is one tokens.css declares, and it is read bare, never `var(--vf-x, fallback)`. A plugin's DOM mounts
+    // in the app's document under the kit's root, where every token stands, and a fallback could only be one theme's
+    // value. And no line holds a colour literal of UA-7's spelling. The lines that do are COUNTED, each file's count
+    // exact, never skipped: a kind's material is its own recipe in its palette, each colour naming its source (DESIGN.md
+    // §5.1: none a DESIGN.md token yet), and a kind prints a look's ink as `rgb(…)` where it draws words.
+    const allow = new Map<string, number>([
+      // the pane's glass, frost, film and mirrored room (§5.1; BROWSER.md Q-10)
+      ["browser-pane/src/theme.ts", 16],
+      // a failed page's words, in the look's `notice` ink
+      ["browser-pane/src/kind.ts", 1],
+      // the pad's paper, its sheet and its pens
+      ["comment-pad/src/theme.ts", 14],
+      // the phone's finishes, every colour a number of §5.1 "The phone's materials" (its own design.test.ts)
+      ["simulator/src/theme.ts", 101],
+      // a face's words, in the look's `words` ink, and that ink in each committed still's key (make-face-words.ts)
+      ["simulator/src/face.ts", 1],
+      ["simulator/src/face-words.gen.ts", 6],
+    ]);
+    const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
+    const declared = new Set([...tokens.matchAll(/(--vf-[\w-]+)\s*:/g)].map((match) => match[1]));
+    const found = new Map<string, number>();
+    const offenders: string[] = [];
+    for (const file of pluginSourceFiles()) {
+      readFileSync(join(REPO_ROOT, "plugins", file), "utf8")
+        .split("\n")
+        .forEach((line, index) => {
+          const at = `${file}:${index + 1}`;
+          for (const [, name = ""] of line.matchAll(/(--vf-[\w-]+)/g)) {
+            if (!declared.has(name)) offenders.push(`${at} ${name} is no token`);
+          }
+          for (const [, name = ""] of line.matchAll(/var\(\s*(--vf-[\w-]+)\s*,/g)) {
+            offenders.push(`${at} ${name} has a fallback`);
+          }
+          if (COLOUR_LITERAL.test(line)) {
+            if (allow.has(file)) found.set(file, (found.get(file) ?? 0) + 1);
+            else offenders.push(`${at} a colour literal`);
+          }
+        });
+    }
+    expect(offenders).toEqual([]);
+    expect(Object.fromEntries(found)).toEqual(Object.fromEntries(allow));
   });
 
   it("gives the chrome slot its rule — the profiles column stands at the stage's top left (AR-5b; UM-3)", () => {
