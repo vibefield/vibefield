@@ -32,9 +32,11 @@
   nightly takes James's two `release-signing` clicks. The app is `0.1.0` (`apps/desktop/package.json`) and stays
   `0.1.0` until the commit that cuts `v0.9.0-beta.1` (WP12-D6 as amended; James, 2026-10-28, the housekeeping page
   (Q7)): tags `nightly-YYYYMMDD[.N]` (`scripts/release-plan.mjs`), version and title `0.1.0-nightly.YYYYMMDD[.N]`. Manual dispatch can publish a numbered revision on the same UTC day (James, 2026-11-03); scheduled releases remain daily, and existing tags are never reused. 0.9.0 is
-  tagged when RL6's goals hold (History and Godview dogfooded daily · prod-shape deps · the release rails;
-  `draft/docket/release-docket.html`; *corrected 2026-11-09: RL6 named a fourth, the browser pane in a packaged build,
-  which fell with the pane at James's first launch's lineup, DECISIONS "FL"*), as betas `v0.9.0-beta.N`, then stable
+  tagged when RL6's goals hold (History and Godview dogfooded daily · prod-shape deps · the release rails · the
+  browser pane and the iOS Simulator in a packaged build; `draft/docket/release-docket.html`; *corrected 2026-11-09:
+  RL6 named a fourth, the browser pane in a packaged build, which fell with the pane at James's first launch's
+  lineup, DECISIONS "FL"; amended 2026-11-19: it returns, widened to the iOS Simulator, as FL's amendment ships
+  both*), as betas `v0.9.0-beta.N`, then stable
   after a soak; 1.0.0 at P0's exits (AR-6, the signed beta, the two-account witness).
 - **Heads** (read 2026-11-18). main = origin/main `bf205b7c7`, pushed 2026-11-18. The ledger runs to M431. The land
   of 2026-11-17 (pushed that day, main `8064bbdec`) reached main without its entries; the land of 2026-11-18 carried
@@ -1189,7 +1191,8 @@ agent is using"
     engine spawned only by main's broker (plan §5). Sitting 2 gates it beside sitting 1; its last full run, 11-01,
     read yellow, so EY-1 lands on its green or a declared yellow. EY-1's desk smoke row measures AB-3 and EY-S1-19
     onscreen. The browser pane ships in no packaged app since 11-09 (`apps/desktop/packaging/bundled-list.mjs`);
-    whether it returns is James's to decide, at EY-1's plan.
+    whether it returns is James's to decide, at EY-1's plan. *Answered 2026-11-19 (James; DECISIONS "FL", as
+    amended): it returns, Built in, at 0.9.*
   - EY-2, fieldd: the pages room, the shim with the pin's grammar, and the signed store that keeps grants (EY-D9 B).
     Owed before it: James's ask 3 (the reading of MT-L1 for way (b)) and the MT lead's rulings on openWorldHint and
     on where the `object`-scope hold lives (plan §6.2, §6.13).
@@ -1895,8 +1898,9 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
      - external TestFlight through Beta App Review;
      - the Mac's add-phone door naming the App Store. Until the listing is public it names the phone's button as the
        phone does, "Scan the code on your computer" (item 334): LANDED 2026-11-12 (M291 `cdfc4b253`).
-   - **The first launch's lineup** (James, 2026-11-09; DECISIONS "FL"; LANDED "FL-1"): the browser pane, the notebook
-     and the comment pad's hook are out; the note, the print, the mini mat and the whiteboard ship. Owed through the
+   - **The first launch's lineup** (James, 2026-11-09; DECISIONS "FL"; LANDED "FL-1"): the notebook and the comment
+     pad's hook are out; the note, the print, the mini mat and the whiteboard ship, and the browser pane and the iOS
+     Simulator ship Built in (*amended 2026-11-19; until then both were out, DECISIONS "FL"*). Owed through the
      betas: a desk picture card reaching an agent (`copy-to-hand.ts` sets `paste: ""`), several images dropped landing
      as several prints (`cards-outside.ts`), the note's typing and cut-off text (an ICE release), and the first board
      as a small moodboard (a design round, with images we own).
@@ -1964,8 +1968,9 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 - NF-D3/NF-D5's long-pending read, or record them as answered by the as-built code.
 - MB-D1…D9 and UP-D1…D8 (proposal pages owed first, LANDED :7954) · SP-D4, ~~D11~~ *(struck 2026-10-31: ANSWERED
   2026-10-29 by PG-D2 (a) and PG-L4.6, as DECISIONS' SP row, design-06 and `thinking-sync-planes.md` record it)*, D12.
-- Whether the phone (`vibefield.simulator`) ships among `BUNDLED_PLUGINS`: no, for 0.9 (James, 2026-11-09, DECISIONS
-  "FL") · WIN-D6…D9 · LOG-V8. `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
+- ~~Whether the phone (`vibefield.simulator`) ships among `BUNDLED_PLUGINS`~~ *(struck 2026-11-19: ANSWERED yes,
+  Built in at 0.9, by James's amendment of DECISIONS "FL"; on 2026-11-09 it was no)* · WIN-D6…D9 · LOG-V8.
+  `PT-S-vs-PHONE.md` §5's seven choices are ruled (James,
   2026-10-29 00:25Z, "Go with your leans"; its §6, the work kept) and leave the list.
 - DK's parked build rulings ((17)/(53), (48), (83), (92), (95), (97); DECISIONS DK addenda). (86) is answered by Q18
   and D22's "packaged built-ins" by WP8 (`5e7507d6c`); both leave the list.
