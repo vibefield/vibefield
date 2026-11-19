@@ -11979,6 +11979,14 @@ VibeField and open it again." (§8 "The status line").
   the clipboard and the right edge's drawer have left it, `cards` has joined it, and `fields` and
   `artifacts` are the pill's sheet's two shelves (the frame's places, above).* **The status line** (§8) is the head's: centred under it at y 56, or under the
   tools in hand at y 112 while an object is held (R12).
+- **What sits on the mat is an object** (item 571; James, 2026-11-19). An object has a row in the desk's document: a
+  person or an agent places, moves, saves and undoes it. Every new kind of object is built through the object kit, on
+  the plugin path (`@vibefield/plugin-sdk/desk`, a plugin's `contributes.objects`), never as app code drawn on the
+  desk. Two things on the mat are not objects, and they stay the host's: the desk's marks under the camera (the pencil
+  brackets, the laser guides, the tape, the printed rulers, and the at-work mark, item 550) and the chrome over it (§8
+  "The desk's chrome"). Each is the host's drawing of a state, never saved. A view that does not sit on the mat is not
+  bound by this: Chat on its cover, Godview, History and Settings. The engine's built-in kinds (the note, the print,
+  the whiteboard and the mini mat) stay the engine's.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the bar's question (the preamble's **The bar**). Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
