@@ -1959,6 +1959,18 @@ export const SCOPES = [
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
+/** Item 581 (2026-11-19): each pair of powers that lets a plugin show something live, by what it shows: a browser
+ * page (`surface.attach` + `surface.browser`); a device-bound Simulator (`surface.attach` + `surface.simulator`, item
+ * 569); and, through the plugin door alone, another app's window or a UDID-keyed Simulator (`surface.attach` +
+ * `surface.capture`). The window's live gate grants a desk face by the first two; fieldd's desk door reads all three
+ * to keep an agent from placing a kind whose plugin REQUESTS a whole pair (by the request, never the grants, which
+ * the person's toggles move). */
+export const LIVE_PAGE_SCOPES = {
+  browser: ["surface.attach", "surface.browser"],
+  "ios-simulator": ["surface.attach", "surface.simulator"],
+  "window-capture": ["surface.attach", "surface.capture"],
+} as const satisfies Readonly<Record<string, readonly Scope[]>>;
+
 /** The D32 tailnet-caller preset (C3): the scopes a WhoIs-authenticated tailnet
  * principal is granted on a served product surface. Broad product access MINUS
  * D32's local-only-forever set (doc.*, artifact mutations, tokens.mint,

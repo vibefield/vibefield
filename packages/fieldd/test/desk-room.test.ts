@@ -288,6 +288,30 @@ describe("the checks before the window sees a call (§5.5 step 3)", () => {
     const page = await verbs.canvas_place(A, { kind: PAGE.kind }).catch((err: unknown) => err);
     expect(factOf(page)).toBe("bad-input");
   });
+
+  it("says a live page, device or app window is the user's to add, and to ask, before the window (item 581)", async () => {
+    const live = {
+      ...NOTE,
+      kind: "example.live",
+      title: "Live",
+      placeable: false,
+      livePages: true,
+    } as const;
+    const h = world({ kinds: [NOTE, PAGE, live] });
+    const { verbs, win } = room(h);
+    await expect(verbs.canvas_kinds(A, {})).resolves.toEqual({
+      kinds: [{ kind: "desk.note", title: "Note", summary: "A note on the desk.", tools: true }],
+    });
+    const refused = await verbs.canvas_place(A, { kind: live.kind }).catch((err: unknown) => err);
+    expect(refused).toMatchObject({
+      details: { fact: "bad-input", path: "kind", expected: { enum: ["desk.note"] } },
+    });
+    expect((refused as Error).message).toBe(
+      "input.kind: VibeField can't place example.live: it shows a live page, device or app window, and only the " +
+        "user adds those to the desk. If you need one, ask the user. It can place: desk.note.",
+    );
+    expect(win.seen).toEqual([]);
+  });
 });
 
 describe("the window answers (§5.5)", () => {

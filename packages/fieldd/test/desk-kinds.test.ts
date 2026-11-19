@@ -1,7 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DESK_KINDS, OBJECT_LIMITS, type PluginRecord } from "@vibefield/contracts";
+import {
+  DESK_KINDS,
+  LIVE_PAGE_SCOPES,
+  OBJECT_LIMITS,
+  type PluginRecord,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { deskKinds, pluginDeskKinds } from "../src/objects/kinds";
 
@@ -35,8 +40,20 @@ const object = (type: string, agent?: unknown) => ({
   ...(agent !== undefined ? { agent } : {}),
 });
 
-const record = (id: string, enabled: boolean, objects: unknown[]) =>
-  ({ id, enabled, contributions: { objects } }) as unknown as PluginRecord;
+const record = (
+  id: string,
+  enabled: boolean,
+  objects: unknown[],
+  requested: string[] = [],
+  granted: string[] = requested,
+) =>
+  ({
+    id,
+    enabled,
+    requestedCapabilities: requested,
+    grantedCapabilities: granted,
+    contributions: { objects },
+  }) as unknown as PluginRecord;
 
 describe("the kinds a desk knows (OB-L2)", () => {
   it("reads the built-ins from the table, each by its type", () => {
@@ -98,6 +115,53 @@ describe("the kinds a desk knows (OB-L2)", () => {
     expect(map?.guideFrom).toBe("Mind Maps");
     expect(Buffer.byteLength(map?.guide ?? "")).toBeLessThanOrEqual(OBJECT_LIMITS.GUIDE_BYTES);
     expect(map?.guide?.endsWith("\uFFFD")).toBe(false);
+  });
+
+  it("keeps a kind whose plugin asks a live face's whole pair from an agent, whatever the person granted (item 581)", () => {
+    for (const pair of Object.values(LIVE_PAGE_SCOPES)) {
+      // asked, but revoked by the person's toggle: the request decides, so a re-grant never wakes an agent's object
+      const [kind] = pluginDeskKinds(
+        [record("com.live", true, [object("live.page", agentHalf)], [...pair], [])],
+        () => undefined,
+      );
+      expect(kind, pair.join("+")).toMatchObject({ placeable: false, livePages: true });
+    }
+  });
+
+  it("keeps the official live plugins' kinds from an agent, by what their own manifests request (item 581)", () => {
+    // read at the source, never copied from the list: a pair renamed in one place and not the other turns this red
+    for (const folder of ["browser-pane", "simulator"]) {
+      const manifest = JSON.parse(
+        readFileSync(
+          join(import.meta.dirname, "../../../plugins", folder, "vibefield.plugin.json"),
+          "utf8",
+        ),
+      ) as { id: string; capabilities: string[] };
+      const [kind] = pluginDeskKinds(
+        [
+          record(
+            manifest.id,
+            true,
+            [object(manifest.id, agentHalf)],
+            manifest.capabilities,
+            manifest.capabilities,
+          ),
+        ],
+        () => undefined,
+      );
+      expect(kind, manifest.id).toMatchObject({ placeable: false, livePages: true });
+    }
+  });
+
+  it("lets an agent place a kind whose plugin asks only half a pair: nothing live opens on it (item 581)", () => {
+    for (const scope of new Set(Object.values(LIVE_PAGE_SCOPES).flat())) {
+      const [kind] = pluginDeskKinds(
+        [record("com.half", true, [object("half.map", agentHalf)], [scope])],
+        () => undefined,
+      );
+      expect(kind, scope).toMatchObject({ placeable: true });
+      expect(kind?.livePages, scope).toBeUndefined();
+    }
   });
 
   it("goes without a guide the plugin no longer ships, and skips a disabled plugin", () => {

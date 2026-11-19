@@ -40,6 +40,7 @@ import {
   HOST_SINGLETON_MODULE_SPECIFIERS,
   INDEX_MESH,
   INDEX_STATUS_FEED,
+  LIVE_PAGE_SCOPES,
   LOG_STREAMS,
   MESH_CONTROL_LIMITS,
   PEER_FIELDD_SCOPES,
@@ -655,6 +656,24 @@ describe("logging registries (LOG-43/LOG-44)", () => {
       });
       expect(grants.granted, source).toEqual(["index.read"]);
       expect(grants.denied, source).toEqual([{ capability: "project.read", reason: "entry-kind" }]);
+    }
+  });
+
+  it("names a live face's powers by its source: the attach and one power each, a plugin's to ask, never the phone's (item 581)", () => {
+    // ONE list for the window's live gate and fieldd's desk door: the two never disagree on what makes a live page
+    expect(Object.keys(LIVE_PAGE_SCOPES).sort()).toEqual([
+      "browser",
+      "ios-simulator",
+      "window-capture",
+    ]);
+    for (const [source, pair] of Object.entries(LIVE_PAGE_SCOPES)) {
+      expect(pair, source).toHaveLength(2);
+      expect(pair[0], source).toBe("surface.attach");
+      for (const scope of pair) {
+        expect(SCOPES, source).toContain(scope);
+        expect(PLUGIN_CAPABILITY_ELIGIBILITY[scope]?.renderer, `${source}: ${scope}`).toBe(true);
+        expect(TAILNET_SCOPES, source).not.toContain(scope);
+      }
     }
   });
 

@@ -34,6 +34,8 @@ export interface DeskKind {
   /** whose words the guide is, for a plugin's kind (MT-L6) */
   readonly guideFrom?: string | undefined;
   readonly version: number;
+  /** item 581 (2026-11-19): its plugin asks a live surface's powers (`LIVE_PAGE_SCOPES`), so only the user adds one */
+  readonly livePages?: true | undefined;
 }
 
 /** At most `max` bytes of `text`, ending on a whole character. */
