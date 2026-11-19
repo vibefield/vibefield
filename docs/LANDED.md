@@ -60954,3 +60954,92 @@ stopped at 08:13:43Z at its own package resolve, exit 74, before any test ran), 
 
 **Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
 nothing pushed.
+
+## EL8 — puppeteer 0.4.4: a plan's tier beside its name; OpenCode 2.x is refused before it starts (M436)
+
+(2026-11-19; one commit, 27 paths +285 −247. Cut by 4a on main `a22f710b9` as `9c9d0181b` (tree `2df998a10983`)
+on branch `4a/el8-pup044-on-a22f710b9`. On main it is `9c9d0181b` "EL8: puppeteer 0.4.4 — a plan's tier beside its name;
+OpenCode 2.x is refused before it starts". Every other id here is a run's or a sibling's. The day in the commit's dated
+notes and ROADMAP's row, 2026-11-18, is the day the pin's edits were written (the tool's `--day`); its rows ran on
+2026-11-19.)
+
+**What landed.**
+- puppeteer `v0.4.4` = `4de5edd6`, the release #96; the 20 `@vibefield/puppeteer-*` packages VibeField pins, read
+  back at 0.4.4 from the registry. 0.4.3 (`v0.4.3` = `5955311b`, the release #92) was never pinned here and rides
+  with it. One EL8 event:
+  - pnpm-workspace.yaml: the seven override rows 0.4.2 → 0.4.4 (rendered from the lock), a dated note, and the 20
+    `minimumReleaseAgeExclude` rows at @0.4.4. The 20 rows at @0.4.2 were kept for the one install that rewrote
+    the lock, then cut; a frozen install proves the lock without them.
+  - preflight's `PIN_EXPECTATIONS`: the seven rows, still end-anchored, with their dated sentence.
+  - siblings.lock.json, by exact text edits: puppeteer's `sha` `325b6770` → `4de5edd6`, `release.npm` 0.4.4, and
+    the `"//"` lead. `node scripts/siblings.mjs render --prod --check` agrees.
+  - pnpm-lock.yaml is pnpm's: the 20 packages swap (+131 −131), and no package is gained or lost.
+- What 0.4.3 and 0.4.4 carry (#87, #89, #90, #91, #93; #94, #61, #97, #98, #60):
+  - a plan's tier travels beside its name, as a short label (`planTier`, #94). Claude's `max` at `max_20x` is the
+    plan `ultra` with no tier beside it; every other Claude tier is the tier token with its family taken off ("5x").
+  - an OpenCode 2.x executable is refused before `serve`, read from its `--version` (#61), as a launch refusal a
+    host reads (#97) with the code UNSUPPORTED_RELEASE_LINE and a sentence a person reads (#98).
+  - Claude's aged access token is a reading that failed, never a sign-out (#87); a new managed root opens no
+    first run (#89); before a usage read on an aged token of a managed root, Claude Code is started once to renew
+    it (#93); a registry a newer build wrote is read, its unknown fields dropped (#90); a forced usage refresh reads
+    past a failure that names no server refusal (#91); Antigravity 1.4.12's journals are read (#60).
+- Three moves the pin forces here, and no product code:
+  - fieldd's test/agent-monitor-pin.test.ts: its tier row held that the pin named no cap and was red by design at
+    the release that sends a tier. It is now the equality, `PLAN_TIER_LABEL_MAX` 8 = the contract's 8, with the two
+    patterns read side by side (7 rows where there was 1).
+  - contracts' agent-index.ts: the cap's comment said the same and is corrected at its source, dated. gen does not
+    move.
+  - fieldd's test/agent-profiles.test.ts: its tier loop held 0.4.2's plans and holdings, which copied no tier, and
+    its comment named this red in advance. 0.4.4 copies the identity's tier into each plan's account and each
+    holding, so the loop holds each to the identity's tier as the contract reads it.
+- Re-bless: the 8 phone goldens regenerated and copied to their 9 kit mirrors, by their stamp alone (each its three
+  version lines; the timeline golden also its note's version). Three hand strings move with what they cite.
+- docs/ROADMAP.md: the pin row says 0.4.4.
+- What a person sees: the sign-in Claude Code reports as `max` at `max_20x` is named "Claude Ultra" with nothing
+  beside it (measured on one account, 2026-11-17); any other reported Claude tier shows as a badge after the plan's
+  name, by the rule alone. An OpenCode 2.x executable is not started.
+- NOT here: puppeteer 0.4.5 (published 2026-11-19, `v0.4.5` = `e9e864d3`) is its own EL8, with the three notes it
+  owes.
+
+**What was proved.** Every row ran on the test Mac (a Mac mini) on 2026-11-19, in a clean clone detached at main
+`a22f710b9a76`, the edits made by the cut's tool (the run's `el8-pup044-edits-r3.py`, `ff6973ddbbfe`) with
+`--day 2026-11-18`.
+- A (el8p-a3b, 09:10:41Z → 09:11:12Z; run.log `2bf57e55f1213292`): GREEN. The 20 read back at 0.4.4 and the tag;
+  preflight 0 on the untouched base, its 20 at 0.4.2; the lock and the render, the seven rows; the typed phase, 9
+  paths; the one online install, the 20; drop-old-age and a frozen install, the lock unmoved; the 8 goldens and 9
+  mirrors; then preflight (OK, with the base's own one R23 warning, a candidate: `acp` could offer `spawn`),
+  check:deps, `render --prod --check` and the fixture checks, each 0. Its 27 paths are its patch
+  (`9b1d70824bc67570`, 1051 lines), each at the sum its record names.
+- V (el8p-v3, 10:15:47Z → 10:26:04Z; run.log `2f565171d520d0b0`), on A's tree held to that patch before, after the
+  staging, after the install and at the end: `pnpm verify` whole, exit 0 (verify.clean.log `f3607ce1fc4f2a58`).
+  fieldd 4650 passed and 15 skipped (4665); field-app 5444; electron-shell 3186 passed and 3 skipped; contracts
+  2206; simulator 133 passed and 1 skipped; browser-pane 169; cargo 694 passed, 0 failed.
+- K (el8p-k3, 10:29:04Z → 10:32:30Z; run.log `a6a198ef203fe53f`, rows.tsv `2d18ee5b2041cb14`), on the same tree: the
+  whole kit by `xcodebuild test` on the test Mac's simulator, exit 0, 17 targets, 3134 rows, none failed; the row
+  that reads ghosttea's version Passed, exactly one; the tree held to A's patch before, after the resolve and at the
+  end.
+- The cut, on the development Mac, 10:48:27Z → 10:48:31Z (cut-run.log `b30e54d61b64dc2f`): A's own patch laid on main by
+  `git apply` in a standing lane, detached; each of the 27 paths held to A's sum as laid and again as committed; through
+  the pre-commit hook (`siblings.mjs render --prod --check --staged`); then one create-only ref. Before it, a dry lay in
+  a scratch folder: the patch applies to the base's 27 files and leaves each at A's sum.
+- The reds on the way, each as it happened:
+  - el8p-a1 (08:23:54Z → 08:24:02Z) stopped at its first step, the clone at the base; nothing written.
+  - el8p-a2 (08:28:44Z → 08:29:18Z) was GREEN on 8 typed paths, at the earlier base `302bf55e3`.
+  - el8p-v1 (08:34:31Z) did not run: its tree was not held (its HEAD, `302bf55e3`, was not the base it held).
+  - el8p-v2 (08:40:10Z → 08:49:08Z) ended `pnpm verify` exit 1 on one row, fieldd's agent-profiles.test.ts tier
+    loop, which its own comment named in advance. The test moves with the pin (the third forced move above), and
+    the tool gained it as its ninth typed file.
+  - The base: `302bf55e3` (the ghosttea EL8's cut) is not an ancestor of main, which carries that change as
+    `87a60957c`, so A ran again at main `a22f710b9` as el8p-a3b, its nine typed files each at the tool's sums.
+- The landing's verify and kit are V and K above, on the landed tree: `9c9d0181b`'s diff from `a22f710b9` is A's patch
+  (`9b1d70824bc67570`), changed line for changed line in all 27 paths, read by git at the landing; both runs' COMMIT is
+  that base, and each run.log's END line holds the tree to that patch. No later run is claimed here: the push's own
+  verify and kit, at the pushed tip, are the push's.
+
+**Not covered.**
+- `pnpm gate:landing` not run (owed).
+- No Claude sign-in at `max_5x` was measured: that badge is shown by the rule alone. No adapter but Claude's sends a
+  tier, so ChatGPT Pro shows no badge (item 560).
+- Item 556's own words for the OpenCode refusal follow as their own commits.
+
+**Not done, and not claimed:** no push of its own.
