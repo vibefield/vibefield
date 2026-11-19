@@ -163,7 +163,7 @@ describe("Settings › General › Browsing data (BP-D4)", () => {
 });
 
 describe("where the section stands", () => {
-  it("is only where a browser pane is: a packaged app carries none (the first launch's lineup)", () => {
+  it("is only where the browser pane plugin is: none without a catalog or under another id", () => {
     expect(hasBrowserPane(null)).toBe(false);
     expect(hasBrowserPane({ plugins: [{ id: "vibefield.browser" }] } as never)).toBe(false);
     expect(hasBrowserPane({ plugins: [{ id: "vibefield.browser-pane" }] } as never)).toBe(true);

@@ -377,7 +377,8 @@ interface CanvasFacts {
  * fell back would look exactly like one that staged correctly — the field must
  * be filled the real way. Since FL-2 the staged renderer modules are FOUR: the
  * repo's two (VibeField's own comment pad, `plugins/comment-pad`, and the browser pane,
- * `plugins/browser-pane`, in a dev run's `plugins/` root; no packaged app carries the pane since 2026-11-09),
+ * `plugins/browser-pane`, in a dev run's `plugins/` root; the packaged app bundles the pane again since 2026-11-19,
+ * after none carried it from 2026-11-09),
  * built by build:all through field-app's dependencies) and two dev-linked examples — the behavior-conformance carrier and
  * the desk clock (DK-6: `examples/plugins/desk-clock`), built by build:all through
  * field-app's dev dependencies (the carrier since DK-8 — before that it staged

@@ -10,7 +10,10 @@
 #include <algorithm>
 #include <cmath>
 
-// Imported dynamically from the selected Xcode only in the opt-in benchmark helper.
+// Imported dynamically from the selected Xcode. The capture helper is built with this file by
+// default (build-live-surface-capture.mjs; `--window-only` leaves it out), and production uses it
+// unless VF_SIMULATOR_FRAMEBUFFER=0 (authority-production.ts). Corrected 2026-11-19: this line
+// said "only in the opt-in benchmark helper".
 @protocol VfSimContext
 + (id)sharedServiceContextForDeveloperDir:(NSString*)dir error:(NSError**)error;
 - (id)defaultDeviceSetWithError:(NSError**)error;
