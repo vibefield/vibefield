@@ -117,6 +117,14 @@ extension FieldHistoryModel {
     }
   }
 
+  /// Item 512 (2026-11-19) — the index's standing as the reader's log line says it: its phase, and beside it fieldd's
+  /// own words (`rosettad.detail`), which left the screen at item 505. The phase and the reading's counters are said
+  /// in the open; fieldd's words can carry rosettad's stderr, a path among them, so `HistoryReads.logIndex` keeps
+  /// them private.
+  public static func indexLogLine(_ index: IndexStanding?) -> (phase: String, detail: String?) {
+    ("", nil)  // item 512 (red): says nothing yet
+  }
+
   /// The index's sentence under the ledger's scope line (and a project's
   /// head), led by its desktop's mark on screen; nil while it is ready.
   public static func indexSentence(_ index: IndexStanding?, desktop: String) -> String? {

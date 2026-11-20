@@ -121,6 +121,27 @@ struct FieldHistoryModelTests {
     }
   }
 
+  @Test("item 512: the reader's log line says the index's phase, and fieldd's words only beside it")
+  func indexLogLine() {
+    let says: [(FieldHistoryModel.IndexStanding?, String, String?)] = [
+      (nil, "not offered", nil), (.ready, "ready", nil),
+      (.starting(detail: "waking the index"), "starting", "waking the index"),
+      (.starting(detail: nil), "starting", nil),
+      (.rebuilding(detail: "schema 7 to 8"), "rebuilding", "schema 7 to 8"),
+      (.indexing(percent: 61, done: "8,400", total: "13,700"), "reading 61% (8,400 of 13,700)", nil),
+      (.failed(reason: "rosettad stopped"), "failed", "rosettad stopped"),
+      (.unconfigured(reason: "no index configured"), "unconfigured", "no index configured"),
+      (.unconfigured(reason: nil), "unconfigured", nil),
+      (.stopped, "stopped", nil),
+    ]
+    for (index, phase, detail) in says {
+      let line = FieldHistoryModel.indexLogLine(index)
+      let named = String(describing: index)
+      #expect(line.phase == phase, "\(named)")
+      #expect(line.detail == detail, "\(named)")
+    }
+  }
+
   @Test("item 505: an empty ledger says how History stands in its own words, and fieldd's words stay off the screen")
   func emptyLedgerWords() {
     // item 516 — History opening, updating or reading, and no desktop answering, say no note: the place holds

@@ -82,6 +82,12 @@ private final class ProjectsDoor: HistoryDoor {
   func count(_ method: String) -> Int { asked.filter { $0.0 == method }.count }
 }
 
+/// Item 512 (2026-11-19) — the index standings a reader logged, in order.
+@MainActor
+private final class IndexLog {
+  var said: [FieldHistoryModel.IndexStanding?] = []
+}
+
 @MainActor
 private func settle(_ what: String, timeout: Duration = .seconds(5), _ condition: @MainActor () -> Bool) async {
   let deadline = ContinuousClock.now.advanced(by: timeout)
@@ -488,6 +494,28 @@ struct HistoryProjectsTests {
     let paused = door.count("index.status")
     try await Task.sleep(for: .milliseconds(300))
     #expect(door.count("index.status") == paused)
+    projects.close()
+  }
+
+  @Test("item 512: the reader logs the index's standing when it moves, once, never per poll")
+  @MainActor
+  func indexLoggedOncePerMove() async throws {
+    let door = ProjectsDoor()
+    door.status = try Fixture.json("index-status.failed")
+    door.emptyList = true
+    let log = IndexLog()
+    let projects = HistoryProjects(
+      source: studio, door: door, roster: roster, indexRecheck: .milliseconds(40), indexLog: { log.said.append($0) })
+    projects.start()
+    await settle("failed, and asked again") { door.count("index.status") >= 3 }
+    let failed = try #require(projects.index)
+    #expect(!failed.isReady)
+    #expect(log.said == [failed], "a standing that holds is logged once")
+    // the desktop's index comes back
+    door.status = try Fixture.json("index-status.valid")
+    door.emptyList = false
+    await settle("ready") { projects.index == .ready }
+    #expect(log.said == [failed, .ready])
     projects.close()
   }
 

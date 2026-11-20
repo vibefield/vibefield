@@ -124,6 +124,18 @@ public enum HistoryReads {
   public static func log(_ line: String) {
     logger.notice("\(line, privacy: .public)")
   }
+
+  /// Item 512 (2026-11-19) — the ledger's index standing on the device, once per change (`HistoryProjects`): its
+  /// phase in the open, fieldd's words private (`FieldHistoryModel.indexLogLine`), so Console shows the phase, and
+  /// a debugger or a logging profile the words.
+  public static func logIndex(_ index: FieldHistoryModel.IndexStanding?) {
+    let line = FieldHistoryModel.indexLogLine(index)
+    if let detail = line.detail {
+      logger.notice("index: \(line.phase, privacy: .public) · \(detail, privacy: .private)")
+    } else {
+      logger.notice("index: \(line.phase, privacy: .public)")
+    }
+  }
 }
 
 /// SE-P1 (SE-D4 A) — one desktop's answer to Live now's words: the lines its index matched in its live runs'

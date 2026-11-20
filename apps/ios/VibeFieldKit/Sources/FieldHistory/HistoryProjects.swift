@@ -74,6 +74,9 @@ public final class HistoryProjects {
   @ObservationIgnored private let cache: HistoryCache?
   @ObservationIgnored private let now: @MainActor () -> Date
   @ObservationIgnored private let indexRecheck: Duration
+  /// Item 512 (2026-11-19) — where the index's standing is logged when it moves (`HistoryReads.logIndex`; a
+  /// row's own hook)
+  @ObservationIgnored private let indexLog: @MainActor (FieldHistoryModel.IndexStanding?) -> Void
   @ObservationIgnored private var roster: [FieldHistoryModel.RosterDesktop]
   @ObservationIgnored private var order: [String] = []
   @ObservationIgnored private var sources: [CatalogSource] = []
@@ -134,7 +137,8 @@ public final class HistoryProjects {
     roster: [FieldHistoryModel.RosterDesktop] = [], now: @escaping @MainActor () -> Date = { Date() },
     indexRecheck: Duration = .seconds(HistoryReads.indexRecheckSeconds), wantsFigures: Bool = false,
     foldEvery: Duration = .milliseconds(HistoryReads.foldEveryMs),
-    keepEvery: Duration = .seconds(HistoryReads.keepEverySeconds)
+    keepEvery: Duration = .seconds(HistoryReads.keepEverySeconds),
+    indexLog: @escaping @MainActor (FieldHistoryModel.IndexStanding?) -> Void = { HistoryReads.logIndex($0) }
   ) {
     self.foldEvery = foldEvery
     self.keepEvery = keepEvery
@@ -146,6 +150,7 @@ public final class HistoryProjects {
     self.roster = roster
     self.now = now
     self.indexRecheck = indexRecheck
+    self.indexLog = indexLog
     corpus = .empty(desktop: "your desktops", deviceId: source ?? Self.cacheKey)
     standing = door == nil ? .asleep : .connected
   }
@@ -618,12 +623,18 @@ public final class HistoryProjects {
     do {
       let status = try await door.call("index.status", params: nil).decode(IndexStatusResult.self)
       guard !Task.isCancelled else { return }
-      index = FieldHistoryModel.indexStanding(status: status)
+      standIndex(FieldHistoryModel.indexStanding(status: status))
     } catch let refusal as FieldProductError where ["NOT_FOUND", "FORBIDDEN_SCOPE", "PRECONDITION_FAILED"].contains(refusal.kind) {
-      index = nil
+      standIndex(nil)
     } catch {
       // the door itself: `project.list` asks next and says so
     }
+  }
+
+  /// Item 512 — the index's standing, logged when it moves: fieldd's words left the screen at item 505, and the
+  /// device's log keeps them. A poll that finds the standing as it was says nothing.
+  private func standIndex(_ next: FieldHistoryModel.IndexStanding?) {
+    index = next  // item 512 (red): logs nothing yet
   }
 
   /// While the index is not ready, read the ledger (and the index) again.
