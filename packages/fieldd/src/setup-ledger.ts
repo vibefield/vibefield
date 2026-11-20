@@ -25,14 +25,17 @@ import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/log
 
 /** SH-1 (track SH; DESIGN.md §8 "Tutorials", "Kept") — what a tutorial answer may replace, by the
  * state it finds (the row) and the answer (the column): `write`, or `keep` (the row stands and
- * nothing is written). Every cell is said. RED: every cell writes. */
+ * nothing is written). Every cell is said. `declined` is Not now, final against an offer
+ * (SH-L16): only the person's own Start moves it. A started row is written again at a new step
+ * (Back may lower it), and Again starts a finished chapter over. An offer never lands on a chapter
+ * already begun, declined or done. */
 export const TUTORIAL_REPLACE: Readonly<
   Record<TutorialState, Readonly<Record<TutorialState, "write" | "keep">>>
 > = {
-  offered: { offered: "write", declined: "write", started: "write", finished: "write" },
-  declined: { offered: "write", declined: "write", started: "write", finished: "write" },
-  started: { offered: "write", declined: "write", started: "write", finished: "write" },
-  finished: { offered: "write", declined: "write", started: "write", finished: "write" },
+  offered: { offered: "keep", declined: "write", started: "write", finished: "keep" },
+  declined: { offered: "keep", declined: "keep", started: "write", finished: "keep" },
+  started: { offered: "keep", declined: "keep", started: "write", finished: "write" },
+  finished: { offered: "keep", declined: "keep", started: "write", finished: "keep" },
 };
 
 export interface SetupLedgerStoreOptions {
@@ -111,9 +114,14 @@ export class SetupLedgerStore {
 
   /** SH-1 — record one tutorial chapter's answer, beside the moments, by TUTORIAL_REPLACE.
    * Declarative: a started row at the same step of the same count is not written again. With no
-   * row, any answer is written. Returns whether the ledger changed. */
+   * row, any answer is written. Over a row a newer build wrote, which this one cannot read, the
+   * person's own acts (declined, started, finished) are written, since they have just acted here;
+   * an offer is not, for it would ask again where a newer build may have closed the chapter.
+   * Returns whether the ledger changed. */
   tutorial(chapter: TutorialChapter, state: TutorialState, step?: number, steps?: number): boolean {
     const held = setupTutorialRecord(this.ledger, chapter);
+    if (held === undefined && this.ledger.tutorials?.[chapter] !== undefined && state === "offered")
+      return false;
     if (held !== undefined) {
       if (TUTORIAL_REPLACE[held.state][state] === "keep") return false;
       if (held.state === state && held.step === step && held.steps === steps) return false;

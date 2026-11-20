@@ -4519,8 +4519,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **Asking.** A chapter is offered once, at its moment (§8 "The moments", AO-L6). **Not now** is final, never on a
     launch after the first (TS-L6), and every chapter waits in **Settings → Tutorials** (SH-7): Start, Resume where you
     left, or take it Again. That list shows checks and never a score (SH-L16).
-  - **Kept** in the setup ledger beside the moments (`tutorial:<id>`: offered, started, paused, left at step n,
-    finished; SH-1), so a chapter learned on one device is learned on both wherever the idea is shared.
+  - **Kept** in the setup ledger beside the moments (a `tutorials` map, by chapter: offered, declined, started at step
+    n, finished; SH-1), on the Mac it was taken on. *Corrected 2026-11-19 (SH-1; Q2 answered (a) by James, 2026-11-19):*
+    this said "(`tutorial:<id>`: offered, started, paused, left at step n, finished; SH-1), so a chapter learned on one
+    device is learned on both wherever the idea is shared". Paused and left are how a window shows a started row,
+    never written: a written "paused" would stand behind a crash. Not now has its record, `declined`, final against an
+    offer (SH-L16). Each Mac keeps its own ledger, as setup's answers are kept.
   - **Heard, reached and read** (SH-L20).
     - Each step is announced once, politely: "Step 2 of 4. Copy it. Press Command C."
     - The card is labelled by its act and is never `aria-modal`, so the lit thing stays reachable.
