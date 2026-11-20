@@ -22,13 +22,18 @@ function harness(
     wake: (run: string, fact: string) => woken.push({ run, fact }),
   } as unknown as AgentInputQueues;
   const spawned: Record<string, string> = { "run-ada": "sp-vela" };
-  const waker = new AgentWaker({
+  // SP-1e4 (S4) — the runs whose current turn the person's Pause ended, as the runtime's own record says it
+  const paused = new Set<string>();
+  const options = {
     queues,
-    spawnerOf: (run) => (origins !== undefined ? sparkOfOrigin(origins[run]) : spawned[run]),
-    sparkSession: (spark) => live[spark],
-    label: (run) => ({ "run-ada": "Ada", "run-ben": "Ben" })[run] ?? run,
-  });
-  return { waker, woken, live };
+    spawnerOf: (run: string) =>
+      origins !== undefined ? sparkOfOrigin(origins[run]) : spawned[run],
+    sparkSession: (spark: string) => live[spark],
+    label: (run: string) => ({ "run-ada": "Ada", "run-ben": "Ben" })[run] ?? run,
+    pausedTurn: (run: string) => paused.has(run),
+  };
+  const waker = new AgentWaker(options);
+  return { waker, woken, live, paused };
 }
 
 describe("the waker (CP-D4, CP2-D6)", () => {
@@ -53,6 +58,40 @@ describe("the waker (CP-D4, CP2-D6)", () => {
     h.waker.onEnded("run-ada");
     expect(h.woken).toEqual([
       { run: "run-vela", fact: "Ada finished" },
+      { run: "run-vela", fact: "Ada is asking you" },
+      { run: "run-vela", fact: "Ada failed" },
+      { run: "run-vela", fact: "Ada ended" },
+    ]);
+  });
+
+  it("SP-1e4 · says a turn the person paused was paused, never that it finished (S4)", () => {
+    const h = harness({ "sp-vela": "run-vela", "sp-orin": "run-orin" });
+    h.waker.watch("sp-orin", "run-ben", true);
+    h.waker.onMonitor("run-ada", row("working"));
+    h.waker.onMonitor("run-ben", row("working"));
+    h.paused.add("run-ada");
+    h.paused.add("run-ben");
+    h.waker.onMonitor("run-ada", row("idle"));
+    h.waker.onMonitor("run-ben", row("idle"));
+    // the next turn lets the Pause go: its end is a finish again
+    h.paused.clear();
+    h.waker.onMonitor("run-ada", row("working"));
+    h.waker.onMonitor("run-ada", row("idle"));
+    expect(h.woken).toEqual([
+      { run: "run-vela", fact: "Ada was paused by the user" },
+      { run: "run-orin", fact: "Ben was paused by the user" },
+      { run: "run-vela", fact: "Ada finished" },
+    ]);
+  });
+
+  it("SP-1e4 · a paused run that asks or fails says so, and its end is still an end", () => {
+    const h = harness();
+    h.waker.onMonitor("run-ada", row("working"));
+    h.paused.add("run-ada");
+    h.waker.onMonitor("run-ada", row("blocked", "permission"));
+    h.waker.onMonitor("run-ada", row("blocked", "failure"));
+    h.waker.onEnded("run-ada");
+    expect(h.woken).toEqual([
       { run: "run-vela", fact: "Ada is asking you" },
       { run: "run-vela", fact: "Ada failed" },
       { run: "run-vela", fact: "Ada ended" },
