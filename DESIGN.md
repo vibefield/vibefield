@@ -2832,7 +2832,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **the rows,** padded 4 8, one per member, in the order they started, as @ numbers them;
     - **the foot,** padded 6 8 8: **Open in Godview** (`panes` 14), the kit's quiet button at the needs-you card's act
       size (28 tall, corners 14, padded 0 12, 12.5/500), its glyph, then 6, then its word. It opens Godview (RU-7).
-      After it, at the foot's end, one line at most, 12 regular in tertiary ink (below).
+      While a member is at work, **Pause all** and **Stop all** follow it, 6 apart, the same quiet button, their
+      words alone (SP-1e4, "The crew's acts", below). After them, at the foot's end, one line at most, 12 regular in
+      tertiary ink (below).
   - **The count and the ring** (SPE-Q31 (a)): "2 of 4 done"; "1 of 4 done · 1 ended" once one has ended; `check` 13
     and "All done", with no ring, when every member is Done or Ended and one is Done; "All ended", alone, with no ring
     and no glyph, when every member ended (J1). *At the lean until James's pick (J1, the page
@@ -2849,6 +2851,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Needs you**, @'s word, in `--vf-ink-attention`, while it waits on you; its ask is the card at the foot;
     - **Done**, secondary, after `check` 12, when it is idle with nothing left in its input. An agent idle between
       two tasks it was given stays Working (SPE-Q32 (a)), so the count never goes backwards;
+    - **Paused**, secondary, when Pause all paused its turn, until its next turn starts (SP-1e4, S5). A paused
+      member is not done: the count reads it as at work no longer and done not yet, "2 of 4 done · 1 paused";
     - **Ended**, secondary, once its run has ended (SPE-Q14 (a)), or once the board, read, no longer holds it before
       fieldd's end reaches the record (SR-Q5 (i)). "No longer" means this window has seen the board hold it: fieldd
       keeps a member at its start before its run reaches the board, so one the board has not held yet is Starting.
@@ -2900,9 +2904,28 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the record's members first, then any board row whose crew is this one and which the record lacks. The line and
     the crews come on two roads, so a line can land a beat before its crew: it stands alone until the door names its
     crew, and the card then comes in place (SR-Q3).
-  - *Not here:* Stop all and Pause all (SP-1e4, owed: SPE-Q8 (a), James; SPE-Q25, SPE-Q26), a row's task words
-    (SPE-Q5 (a)), answering a member's ask on the card (AR-6), a member's face in Godview (TH-3; TH-Q20 (b)+(i)), the
-    watch card (SP-1e3), the phone (PC).
+  - **The crew's acts** (SP-1e4: SPE-Q8 (a), James; SPE-Q25 (a), his page's frame; SPE-Q26). *At the lean (SP-1e4,
+    2026-11-19); S3 and S5 await James's pick.* Two acts at the foot, each for the members at
+    work, each skipping a member that waits on you and never touching the spark's own run:
+    - **Stop all** ends each member that is Working or Starting, as a pane's **Stop agent** ends one
+      (`terminal.terminate`): its row reads "Stopping agent…", then **Ended**, and the names renumber, as @'s do
+      (S1). One press, as Stop agent takes one (S3).
+    - **Pause all** pauses each Working member's turn, as **Pause current turn** pauses one (`agent.pause`): its row
+      reads "Pausing current turn…", then **Paused** (S2, S5). The agent stays open. When fieldd cannot confirm the
+      cancellation, the row's state place says "Still running", in `--vf-ink-attention`, as Chat's head does (S6).
+    - The spark is told what came of it, in its wake's words: "vibe-field·2 ended" for a stopped member, as for
+      any end, and "vibe-field·2 was paused by the user" for a paused one, never "finished" (S4). That holds for
+      every Pause, a pane's and Chat's head's too: fieldd reads the run's own Pause, never a mark a door sets.
+    - Each act sends once per member and is not sent again while its rows read their passing words. A refusal is
+      the foot's line, the first one alone: "Couldn't stop vibe-field·2: ‹why›", "Couldn't pause vibe-field·2's
+      turn: ‹why›" (S8). ‹why› is fieldd's own words; for a member with no terminal of this desktop's to end, "it
+      has no terminal on this desktop", and "VibeField could not tell where its terminal is" when its runs can't be
+      read.
+    - Each act stands while it has a member to take: Stop all while one is Working or Starting, Pause all while one
+      is Working with a turn to pause. Neither stands for a member that waits on you, so neither is ever a press
+      that does nothing (S7).
+  - *Not here:* a row's task words (SPE-Q5 (a)), answering a member's ask on the card (AR-6), a member's face in
+    Godview (TH-3; TH-Q20 (b)+(i)), the watch card (SP-1e3), the phone (PC).
 - **The hand — the clipboard you can see** (Cards in Hand: HN-D1…HN-D10 ruled by James 2026-10-29,
   all at their leans — HN-D1 his own pick on the page; the record is `thinking-cards-in-hand.md`;
   built at HN-1, HN-2 and HN-4; it replaced the clipboard's edge tray): every copy made in VibeField,
@@ -11403,6 +11426,10 @@ field gives them, and “q” what was typed.
   - its rows' states, Starting · Working · Needs you · Done · Ended, and a row's name, "vibe-field·2, Opus 5.5, high,
     Working";
   - its foot, "Open in Godview", and a row's press, "Jumped to its pane" · "Could not jump — …";
+  - its acts (SP-1e4), "Pause all" · "Stop all", a row's passing words, "Pausing current turn…" · "Stopping agent…" ·
+    "Still running", the state "Paused", the count "2 of 4 done · 1 paused", and a refusal, "Couldn't stop
+    vibe-field·2: …" · "Couldn't pause vibe-field·2's turn: …", whose reasons of VibeField's own are "it has no
+    terminal on this desktop" · "VibeField could not tell where its terminal is";
   - its line, "VibeField can't read Vela's crews right now" · "VibeField can't read what's running right now" (@'s) ·
     "Vela is asleep — it hears these when it wakes".
 - A notify on the status line: "Vela — the build is green".
