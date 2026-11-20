@@ -105,6 +105,109 @@ test("the remedy names a command the user's shell actually has", async (t) => {
   );
 });
 
+// Item 621 (2026-11-20) — a remedy says what its stop costs before it: the pids are read from a
+// record that a daemon which died without its stop leaves behind, so one may since be another
+// program's, and stopping a floor ends the terminal sessions it keeps (a floor outlives its
+// fieldd).
+async function recordNaming(paths, product) {
+  const runDir = join(paths.dataRoot, "fieldd", "run");
+  await mkdir(runDir, { recursive: true });
+  await writeFile(join(runDir, "product.json"), JSON.stringify({ buildId: "dev-old", ...product }));
+}
+
+test("item 621 — the remedy warns of stale pids and of a floor's sessions", async (t) => {
+  const paths = await fixture(t);
+  await recordNaming(paths, { pid: 303, nativePid: 304 });
+
+  await assert.rejects(
+    acquireDevLock({
+      ...paths,
+      repoRoot: paths.root,
+      runnerPid: 404,
+      pidAlive: (pid) => pid === 304,
+    }),
+    (error) => {
+      assert.ok(error instanceof DevLockError);
+      assert.match(
+        error.message,
+        /still has live daemon pid 304 — a previous dev session exited uncleanly; /,
+      );
+      assert.match(
+        error.message,
+        /the pids are read from fieldd's product record, which a daemon that died /,
+      );
+      assert.match(
+        error.message,
+        /so one may now belong to another program: confirm each is VibeField's /,
+      );
+      assert.match(
+        error.message,
+        /stopping field-native ends every terminal session on it; stop them with: kill 304$/,
+      );
+      return true;
+    },
+  );
+});
+
+test("item 621 — a stale runner's lock says the same before its remedy", async (t) => {
+  const paths = await fixture(t);
+  await mkdir(paths.lockDir, { recursive: true });
+  await writeFile(
+    join(paths.lockDir, "owner.json"),
+    JSON.stringify({
+      version: 1,
+      repoRoot: paths.root,
+      runnerPid: 101,
+      electronPid: null,
+      buildId: "dev-stale",
+      startedAt: 1,
+    }),
+  );
+  await recordNaming(paths, { pid: 303, nativePid: 304 });
+
+  await assert.rejects(
+    acquireDevLock({
+      ...paths,
+      repoRoot: paths.root,
+      runnerPid: 404,
+      pidAlive: (pid) => pid === 304,
+    }),
+    (error) => {
+      assert.ok(error instanceof DevLockError);
+      assert.match(
+        error.message,
+        /\(field-native pid 304\) — the previous runner is gone; the pids are read /,
+      );
+      assert.match(
+        error.message,
+        /confirm each is VibeField's before you stop it; stopping field-native ends /,
+      );
+      assert.match(error.message, /every terminal session on it; stop the daemons with: kill 304$/);
+      return true;
+    },
+  );
+});
+
+test("item 621 — a record whose floor is gone warns of stale pids, not of sessions", async (t) => {
+  const paths = await fixture(t);
+  await recordNaming(paths, { pid: 303, nativePid: 304 });
+
+  await assert.rejects(
+    acquireDevLock({
+      ...paths,
+      repoRoot: paths.root,
+      runnerPid: 404,
+      pidAlive: (pid) => pid === 303,
+    }),
+    (error) => {
+      assert.match(error.message, /the pids are read from fieldd's product record/);
+      assert.doesNotMatch(error.message, /terminal session/);
+      assert.match(error.message, /before you stop it; stop them with: kill 303$/);
+      return true;
+    },
+  );
+});
+
 test("removes exact dead daemon run files before taking ownership", async (t) => {
   const paths = await fixture(t);
   const runDir = join(paths.dataRoot, "fieldd", "run");
