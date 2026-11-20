@@ -17,11 +17,17 @@ import { basename, join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
 import { leftByRun, leftNames, SMOKE_RUN_ENV } from "../apps/desktop/packaging/smoke-daemons.mjs";
-import { assertLabProfileProof, withLabProfile } from "./godview-lab-arms.mjs";
+import { assertLabProfileProof, smokeGodviewArgv, withLabProfile } from "./godview-lab-arms.mjs";
 
+// Item 610 (2026-11-19): `--use-mock-keychain`, for a machine whose login keychain no test may
+// reach, is handed to Electron as given; without it Electron's list is as before.
+const ADMITTED = ["--terminal-direct-proof", "--chat-night", "--use-mock-keychain"];
 const args = process.argv.slice(2);
-if (args.some((arg) => arg !== "--terminal-direct-proof" && arg !== "--chat-night")) {
-  throw new Error("Usage: node scripts/smoke-godview.mjs [--terminal-direct-proof | --chat-night]");
+const unknown = args.find((arg) => !ADMITTED.includes(arg));
+if (unknown !== undefined) {
+  throw new Error(
+    `Usage: node scripts/smoke-godview.mjs [--terminal-direct-proof | --chat-night] [--use-mock-keychain] (unknown: ${unknown})`,
+  );
 }
 const root = fileURLToPath(new URL("..", import.meta.url));
 const desktop = join(root, "apps", "desktop");
@@ -37,23 +43,12 @@ try {
     const mark = basename(directory);
     const verdicts = [];
     const result = await new Promise((done, fail) => {
-      const child = spawn(
-        electron,
-        [
-          ".",
-          "--smoke-godview",
-          ...args,
-          `--user-data-dir=${directory}`,
-          "--disable-renderer-backgrounding",
-          "--disable-backgrounding-occluded-windows",
-        ],
-        {
-          cwd: desktop,
-          // item 345: the run's own socket alias parent (withLabProfile made it and removes it)
-          env: { ...process.env, ...aliasEnv, [SMOKE_RUN_ENV]: mark },
-          stdio: ["ignore", "pipe", "pipe"],
-        },
-      );
+      const child = spawn(electron, smokeGodviewArgv(args, directory), {
+        cwd: desktop,
+        // item 345: the run's own socket alias parent (withLabProfile made it and removes it)
+        env: { ...process.env, ...aliasEnv, [SMOKE_RUN_ENV]: mark },
+        stdio: ["ignore", "pipe", "pipe"],
+      });
       child.stdout.pipe(process.stdout);
       child.stderr.pipe(process.stderr);
       createInterface({ input: child.stdout }).on("line", (line) => {
