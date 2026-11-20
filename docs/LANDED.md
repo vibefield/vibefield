@@ -62361,6 +62361,11 @@ CI's verify at the pushed head: read after the push and said then as a dated lin
 The first whole verify with field-app's typecheck at the 4096 heap passed on the test Mac: cand2-v, `pnpm verify` exit 0
 in 646 s, 2026-11-19 17:30:37Z → 17:41:24Z
 
+> **Read after the push (2026-11-19):** GitHub's `verify` at the pushed head `846ea63c7` passed: run 44593437959,
+> created 18:58:38Z, completed 19:52:21Z, about 54 minutes; `audit` passed at 18:59:14Z. It is the first green
+> `verify` after four red pushes, so the heap in field-app's typecheck script holds on the runner. The push script's
+> own CI read did not run (a quoting fault under zsh, mended for the next push); this result was read by hand.
+
 ## Item 576 — VibeField's own variables no longer reach a terminal or any child of fieldd (M455)
 
 (2026-11-19; three commits of its own in the fixer's assembly, nothing folded into them and nothing stacked on them:
@@ -62453,3 +62458,417 @@ added):
 - **The importers:** four over scripts, apps, packages and tooling, each named in the comment.
 
 **Not covered.** No typecheck or test ran for it; a comment changes no output. The joined verify is the assembly's.
+
+## Item 586 — the phone's launch sheet asks two things, where and who (M457)
+
+(2026-11-20; two commits: `6b85ca5f1` "586 (doc): the phone's launch sheet asks two things, where and who — DESIGN.md
+first" and `1cc0f173b` "586: the phone's launch sheet asks where and who — pills, buds and Browse in one sheet". Cut on
+main
+`a22f710b9a76` as `eff783592d2e` and `fdf1830ee068`, branch `sm/spawn-menu-on-a22f710b9`; replayed by patch onto main
+`846ea63c714a`, the patch-ids held: `37d6ffcfa7c7…`, `41f5a306f3dd…`.)
+
+**What a person sees.** The launch sheet after the bloom asks only where and who:
+- **The header:** `New agent on studio` and a mono `AS WORK`. The bloom chose the desktop and the Agent Profile, and
+  the sheet offers neither again.
+- **Where:** the recent places as pills, two to a row and at most four. Then Browse studio, and one mono line under
+  them saying where the chosen folder lives (`~/Projects/vibe-field · main · 2h`).
+- **Who:** the desktop's agents as the bloom's buds. One the profile holds no sign-in for keeps its place, dashed, and
+  is never chosen.
+- **Start:** drawn as the agent's ticket: its mark in an inverse disc, its name small, the folder big.
+- **No Model and no Effort:** the spawn sends no model selection.
+- **Browse:** the same sheet risen to its large detent, with crumbs, folders only, search and Use.
+- **Terminal beside Start** is drawn in DESIGN.md and waits on item 587.
+
+**Why.** James asked for it in the lane's session on 2026-11-19: the bloom already chooses the device and the profile,
+so the sheet asks only which folder (the recent ones and Browse) and which agent. Over the design canvas he chose the
+lean form (option C), Terminal beside Start (C2·b) and the compact Start drawn as the bud's ticket (S3). James chose the
+full path for the line under the pills (2026-11-20), as built; no code change.
+
+**What changed.**
+- `6b85ca5f1`: DESIGN.md alone, +76 −39. §8's paragraph "The phone's folder picker and launch sheet" becomes "The
+  phone's
+  launch sheet asks two things: where, and who", ending with a dated amendment. ow-design read the text before the
+  commit: yes, with two ink findings, both carried (a bud's words are t3 when it has no sign-in; Start's small line is
+  t3 as the inversion draws it, t4 when Off).
+- `1cc0f173b`: 17 files, +1555 −685: the kit (FieldWorkspace, FieldHome's HomeScreen, FieldDesign's three glyphs, a
+  ProjectShapes comment), `tooling/glyphs/picks.json` and three imagesets. ow-design ruled that the path line holds:
+  PJ-L9 is History's law, and the sheet has drawn paths since FS-2. ProjectShapes' comment was corrected at its source.
+
+**The replay**, read by git: of 586's 18 paths, only DESIGN.md moved between its base `a22f710b9a76` and main
+`846ea63c714a`. Main's DESIGN.md hunks since the base sit at the base's lines 283–1296, 4347–6285 and 11013 onward;
+586's one hunk is the base's 8718–8757, and none meets it (sm's read at `adc620f1f128`; DESIGN.md is unchanged from
+there to `846ea63c714a`). Both patches apply with their patch-ids held, and the landed commits' sizes are the cut's.
+
+**Proved.**
+- **Row K on the test Mac, `sm-586-k1`, at the cut's `fdf1830ee068`** (17:50:35Z–17:51:30Z), as wanted: xcodebuild
+  exit 0, TEST SUCCEEDED, 0 error lines; 35 rows, 33 passed and 2 skipped. LaunchDecisionTests 11, LaunchSheetTests 10,
+  WorkspaceLaunchTests 1, WorkspaceReadsTests 5, WorkspaceShapeTests 2, KitWordsNameNoOneTests 1 and
+  KitFaintWordsTests 3 all passed; PlaceLaunchLoopbackTests' and WorkspaceLoopbackTests' opt-in rows skipped, as
+  wanted.
+- **The landing's own proof** is the assembly's V at the landed tree: a15c-v, `pnpm verify` whole at the land's top
+  `59dae9fe7` on the test Mac, 2026-11-20 01:55:41Z → 02:05:42Z: **GREEN**, exit 0 in 601 s; typecheck and test each ran
+  for 28 projects, field-app's typecheck among them; 27 vitest suites, none failed; Rust 696 passed, 0 failed, 15
+  ignored. The kit of every target at the same commit, kit-a15c, 02:09:06Z → 02:12:00Z: xcodebuild exit 0 in 174 s;
+  3,151 rows, Passed 3,148, Skipped 3, Failed 0.
+
+**Not covered.**
+- No stills: Row S (the six `-vf-demo-workspace=` scenes) was not run, because it has no accepted form on the test Mac.
+- No live spawn from a phone: the loopback rows skip without the fixture handshake.
+
+**Owed.** 587c, the Terminal button: drafted, its §8 text read yes by ow-design and its Swift by the IOS lane. It is
+cut on a lane branch at the green of 587b's re-cut (i587b2), after that re-cut's rows, with 586's two commits replayed
+patch-equal.
+
+## 601 — A signal's quit holds every pair, so it leaves the pairs and never starts one (M458)
+
+(2026-11-20; two commits: `677ae6f4e` (red, "601 (red): a signal's quit never holds the pairs, so a fieldd it loses is
+started again") and `347fcd0eb` (green, "601 (green): a signal's quit holds every pair, so it leaves the pairs and never
+starts one"). At 17:22:18Z the QA stage's dev runner (main 45edd5fb4309, dev, `leave-running`) took a TERM:
+- the first fieldd logged its stop at 18.769Z;
+- main logged `desktop.lifecycle.quit_leaves_pairs` at 18.833Z;
+- at 18.949Z main logged `fieldd.supervisor.owned_child_exited`, `spawn_required` and "Spawned fieldd";
+- the new fieldd booted a new floor;
+- that floor lost its manager at 20.244Z, brought its mesh node up and ran its whole ten-minute orphan bound before
+  ending itself (`idle_exit`, 17:32:49Z);
+- at the stage's next start (its runner at 18:06:48Z, on 846ea63c714a), main logged
+  `desktop.crash.previous_run_unclean` at 18:07:08.396Z. That was true and expected: the TERM ended main mid-quit, its
+  last line at 17:22:20.010Z. The runner reclaimed the dead runner's lock and met nothing alive.
+
+The reading, by the code: main's fieldd handle coordinator recovers a lost fieldd at once with a spawn, and only a hold
+or its disposal stops that. An update's stop and a person's quit through the gate hold it; a signal's quit did not, and
+the coordinator is disposed only at will-quit's teardown, after the durable close. The supervisor and the runner's
+order were right.)
+
+**What a person sees.** Nothing new. A quit that a signal starts (a terminal's Ctrl-C or hangup, a process manager's
+TERM, the dev runner ending) leaves the pairs as before. When a fieldd goes away during that quit, it is no longer
+started again, so no pair is left behind that the quit made itself.
+
+**What changed.**
+- `packages/electron-shell/src/main/lifecycle.ts`:
+  - `installLifecycle` takes `holdPairs?: () => void`, the quit gate's own hold for every pair, late-bound like
+    `getQuitGate`;
+  - `leavePairsOnQuit` calls it the moment a signal's quit begins;
+  - `quitForSignal` calls it again. When a signal lands during the stop's re-ask box and the person cancels, the gate
+    has already released every hold (`quit-gate.ts`) before the signal's quit is replayed (AU-5a).
+- `packages/electron-shell/src/main/index.ts`:
+  - main has one `holdAllPairs`: the quit latch, and every pair bundle's `holdForStop()`. The attached pair's
+    coordinator is a bundle's, so it is held too.
+  - The quit gate's port uses it, in place of its own two lines.
+  - A module hook, `holdEveryPair`, hands it to the lifecycle's `holdPairs`. It is set once main has its pairs.
+- The hold stops nothing. A held coordinator refuses `ensure()` and recovers nothing, so "a signal leaves the pairs"
+  (ESR §7.3 as amended) stays true, and a fieldd that dies in the window stays dead.
+- `packages/electron-shell/test/lifecycle.test.ts`: the gate rig passes a `holdPairs` spy. Its stop can wait
+  (`stopWaits`), and pushes "release" when it aborts, as the real gate's re-ask Cancel does. Two rows:
+  - a signal's quit holds every pair before the durable close;
+  - a signal during the stop's re-ask box holds the pairs again once the aborted stop released them.
+- The coordinator's half was already a row: fieldd-recovery.test.ts's "held for an update: a closed client recovers
+  nothing and ensure() refuses — the no-spawn probe".
+
+**Proved.**
+- The cut: `hl/601-on-45edd5fb4` at `71a2062aa281`, two commits on main `45edd5fb4309`, made by `cut-601.sh`
+  (`5abc6b51…`) in a lane clone, 17:57:26Z to 17:57:28Z, 2026-11-19.
+  - First, biome with warnings failing on the three code paths.
+  - Each stage's files were laid and then committed through the repository's hook (its line in each
+    `cut-601/commit-*.log`).
+  - Each commit's diff from its parent is its prepared diff by sum.
+  - One create-only fetch into the repository: main and every `hl/` ref unmoved, no other head moved.
+- Main moved to `846ea63c714a` before the cut (599, 576, the bundled list's comment). None of its seven commits touches
+  `packages/electron-shell`, so the two commits are picked onto it unchanged.
+- On the development Mac, in that lane clone, `check-601.sh` (`b1a2ad8c…`) ran once, 17:52:26Z to 17:53:52Z:
+  "AS WANTED (every step PASS)", 15 of 15. The steps, on the cut's two trees:
+  - `a5be20fbad67` on the cut (677ae6f4e's patch, index.ts at main's):
+    - biome with warnings failing, clean;
+    - electron-shell's tsc, 0 errors;
+    - lifecycle.test.ts: exactly the two new rows fail, each by assertion ("expected "spy" to be called 1 times, but
+      got 0 times"), the other 40 pass;
+    - `check:walls`' three scripts, each its self-test then its run, exit 0, the three walls clean.
+  - `71a2062aa281` on the cut (347fcd0eb's patch):
+    - biome on the three files, clean;
+    - electron-shell's tsc and its renderer tsc, 0 errors;
+    - lifecycle, fieldd-recovery and signal-quit, 71 of 71 (42, 25 and 4);
+    - the walls, clean.
+  - Two controls on the green, each with one hold taken out, failed as they must: without quitForSignal's hold the
+    re-ask row fails alone (41 of 42); without leavePairsOnQuit's hold both new rows fail (40 of 42).
+- That clone's install is from an older lock (87e71631c's: ICE 0.17, ghosttea 0.15, puppeteer 0.4.2). electron-shell's
+  tsc was also clean on it at the untouched base (17:46:16Z, `i601-tsc-base`).
+- The logs are in the lane's `logs/` (`chk601-*`, `i601-tsc-base`) and `check-601.log`.
+- On the test Mac, ROWS-601 is the run of record, on main's install of each tree, 2026-11-19. AS WANTED at both refs:
+  - `i601-red`, at `a5be20fbad67`, 22:37:33Z to 22:37:59Z:
+    - electron-shell's type-check, exit 0, no error;
+    - lifecycle.test.ts, 2 failed and 40 passed of 42. The two failures are exactly the two new rows, each by
+      assertion ("expected "spy" to be called 1 times, but got 0 times"); no file error, no unhandled error;
+    - biome with warnings failing on the three paths, clean, and `pnpm check:walls`, exit 0 with its three walls clean.
+  - `i601-green`, at `71a2062aa281`, 22:41:22Z to 22:41:47Z:
+    - the type-check, exit 0, no error;
+    - lifecycle, fieldd-recovery and signal-quit in one run, 71 of 71 (42, 25 and 4); no file error, no unhandled
+      error;
+    - biome and `pnpm check:walls`, clean.
+  - Each run wrote no ref and left its tree clean. The records are in the test Mac's runs, `i601-red` and
+    `i601-green`.
+- The train's verify:
+a15c-v, `pnpm verify` whole at the land's top `59dae9fe7` on the test Mac, 2026-11-20 01:55:41Z → 02:05:42Z: **GREEN**,
+exit 0 in 601 s; typecheck and test each ran for 28 projects, field-app's typecheck among them; 27 vitest suites, none
+failed; Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the same commit, kit-a15c, 02:09:06Z →
+02:12:00Z: xcodebuild exit 0 in 174 s; 3,151 rows, Passed 3,148, Skipped 3, Failed 0.
+
+**Not covered, and owed.**
+- A signal before main has its pairs holds nothing: the hook is still null. A bundle born after such a signal is not
+  born held.
+- Follow-ups, each its own item:
+  - fieldd `detached` from Electron. It would change which processes a group signal reaches: a custody decision (EDP
+    §4.3), never a fix for this.
+  - A physical row that ends smoke:studio's runner by a TERM to its whole process group, then reads "nothing of the run
+    lives". It would have caught this. It is a test-Mac row, costs a landing gate's minutes and needs a signal, so it
+    takes its own ruling. No smoke today sends a signal to a whole run: smoke modes exit through `app.exit()`, and
+    smoke:studio ends through the runner's own shutdown, which stops Electron before the daemons.
+  - A next start of ANOTHER build meeting a left floor: whether it adopts the floor or replaces it was not read. The
+    same build adopts it: the next fieldd's hello takes the floor's single management slot and disarms its orphan
+    bound (AL-8a).
+- No DECISIONS row: the fix applies "a signal leaves the pairs" as it stands, with the hold the gate already had.
+
+## Item 589 — VibeField's harness variables (`VF_`) no longer reach a child of fieldd, save a smoke's run mark (M459)
+
+(2026-11-20; three commits of its own in the fixer's assembly: 7f692aca1 "589 (c0): contracts name the one variable
+fieldd
+hands back past VibeField's prefixes", d2a8b1a61 "589 (red): a VF_ name reaches a plain shell, the files worker and an
+adapter's variables", 7fd5fdc4b "589 (green): VF_ joins the stripped prefixes, and fieldd hands back only a smoke's run
+mark". Cut on main `846ea63c714a`; the patch-ids are held at the replay.)
+
+**What a person sees.** Nothing in a person's own run: no `VF_` variable is set there. Under a smoke, or with a lab
+switch exported in the shell that started VibeField, no `VF_` name reaches a plain terminal, a plugin's child, an
+adapter's own variables or the files and transcripts workers. The one exception is the smoke's run mark,
+`VF_SMOKE_RUN`. It is handed back by exact name where the smoke census looks for a run's processes: a plain shell and
+the workers. The stage's loopback token (`VF_PHONE_TOKEN`) no longer reaches a terminal of its run.
+
+**Why.** `VF_` is the prefix of every harness and lab variable: a smoke's switches, a stage's door and its token,
+the lab renderers' modes. ENV_PREFIXES (`FIELD_`, `FIELDD_`, and since item 576 `VIBEFIELD_`) held none of them back,
+so each reached every inheriting child of fieldd and the floor. Main's own login-shell probe and fieldd's supervisor
+already stripped `VF_` by hand (`login-shell.ts:158`, `supervisor.ts:55`).
+
+**What changed.**
+- contracts' registries.ts:
+  - ENV_PREFIXES gains `VF_`, and the generated `packages/field-native/src/registries.rs` moves by its one line, in
+    the green alone;
+  - `ENV_KEEP_NAMES = ["VF_SMOKE_RUN"]`, TS-only, with its doc's bound: never in an agent's PTY or a helper fieldd
+    births.
+- fieldd hands the kept names back after the fence, from its own environment:
+  - a plain shell's birth adds fieldd's value as an override (terminal-service.ts, `handBack`), so a binding's or
+    the integration's own value of it is dropped by the fence, and outside a smoke a birth is byte for byte as
+    before;
+  - `workerEnvironment` keeps it by exact name (the files and transcripts workers).
+- An agent's PTY and an adapter's helper stay agentEnvironment's allow-list and never carry the mark.
+- The godview smoke's typed-agent leak check (`leakedVariables`) exempts ENV_KEEP_NAMES by exact name. An agent typed
+  into a plain shell carries the mark, as it did on main, and the check is stricter for every other `VF_` name.
+- Two test fixtures lost a `VF_` prefix that would now be stripped: cell_lifecycle.rs's strip-row control
+  (`STRIP_ROW_CONTROL`, held to be under no prefix) and terminal-service.test.ts's binding (`PROBE_ROOT`,
+  `PROBE_MODE`).
+
+**No class of process carries the mark less than on main**, read for every class fieldd, the floor and main start
+(fifteen: fieldd, field-native, the cells, plain shells and what is typed into them, agent PTYs, helpers, puppeteer's
+services' children, the two workers and their git children, the flows host, plugin children, the floor's own door
+sessions, main's login-shell probe, Chromium's children). The one move is in a class the census never reads: a
+plugin's own addition of a `VF_` name is now stripped.
+
+**Proved.**
+- **c0's own try** (DR's, on main with c0 laid): contracts' four generators moved nothing; its typecheck exit 0,
+  its whole vitest 75 files and 2208 passed, biome with warnings failing; electron-shell's typechecks (both configs)
+  and the browser pane's exit 0. On an install older than main's lock, fieldd's and field-app's typechecks named
+  sibling exports that install lacks, the same with and without the commit: their proof is the test Mac's.
+- **The pre-cut check** at each of the three trees, on base `846ea63c714a` (check-589-3, all three as wanted):
+  - biome with warnings failing, 0;
+  - contracts' tsc 0, and its whole vitest at 2208, 2208 and 2209 passed;
+  - the six import walls 0, with a control that fails as it must;
+  - gen-registries-rs: registries.rs is the base's at c0 and c1, and moves by its one line at c2; gen/layout.json is
+    unmoved.
+  - The check's first run found one biome FORMAT line in the rows (terminal-service.test.ts, one `expect` call
+    biome breaks over four lines), so nothing was cut on it; biome's own printed lines were taken in by tool, every
+    file of the mended sets went through biome's formatter unchanged, and the second run was as wanted.
+- **The test Mac, at the cut's own commits, each tree with its own install.** qa-01 ran each arm; d5 judged each
+  record. The verdicts are lanes/d5/i589/VERDICT-589-{c0,red,green,smoke}.md.
+  - **Red, at c1 `52a3c2866878`** (the test Mac's runs/i589-red/), AS WANTED: exactly eight rows fail, each
+    by its own assertion or panic.
+    - env-prefixes-vf: 4 of 6;
+    - terminal-service: 2 of 140;
+    - typed-agent: 1 of 24;
+    - the plain-shell cargo row: at its third assert, "an inherited VF_* value reached the PTY".
+    - Every tsc is 0 (fieldd, electron-shell in both configs), and rustfmt and clippy are clean.
+  - **Green, at c2 `bdfe6ac82ff8`** (runs/i589-green/), AS WANTED: the named rows and both cargo rows pass, and
+    gen:check is clean. Each whole suite has 0 failed:
+    - contracts: 2209 passed;
+    - fieldd: 4674 passed, 15 skipped;
+    - electron-shell: 3192 passed, 3 skipped;
+    - field-native's cargo suite: 696 passed, 15 ignored.
+    - biome, every tsc (contracts, fieldd, electron-shell in both configs), rustfmt and clippy are clean.
+  - **The census smoke, at c2** (runs/i589-smoke/), AS WANTED: `pnpm smoke` with `--use-mock-keychain`.
+    - `SMOKE ok:true`, and one `SMOKE_DAEMONS` line with `"left": []`.
+    - No line says "handed variables it must never see".
+    - No dialog, and the Keychains folder is unmoved.
+    - **What it does not show:** `--smoke` starts no plain shell and no files worker (its teardown found
+      field-native ×2 and field-terminal-host ×2). It proves the census finds and stops every marked process it
+      starts. The hand-back's reach to a shell and a worker is the rows' proof: terminal-service's two item-589 rows,
+      env-prefixes-vf's worker row, and the cargo row on a real PTY.
+  - **c0's typechecks, at c0 `833c3657f15d`** (ref d5/i589-c0-on-846ea63c714a; runs/i589-c0/), AS WANTED: fieldd's
+    tsc and electron-shell's tsc (both configs) each exit 0. c0's TS-only list typechecks alone.
+- **The landing's own proof** is the assembly's V at the landed tree: a15c-v, `pnpm verify` whole at the land's top
+  `59dae9fe7` on the test Mac, 2026-11-20 01:55:41Z → 02:05:42Z: **GREEN**, exit 0 in 601 s; typecheck and test each ran
+  for 28 projects, field-app's typecheck among them; 27 vitest suites, none failed; Rust 696 passed, 0 failed, 15
+  ignored. The kit of every target at the same commit, kit-a15c, 02:09:06Z → 02:12:00Z: xcodebuild exit 0 in 174 s;
+  3,151 rows, Passed 3,148, Skipped 3, Failed 0.. field-app's typecheck, which c0's own try could not judge on an older
+  install, is the V's.
+
+**Owed.**
+- **smoke:godview is OWED, ruled outside 589's gate** (2026-11-19).
+  - On the test Mac no Electron run may reach the login keychain, and `scripts/smoke-godview.mjs` refuses every
+    argument but its two modes, so it cannot be handed `--use-mock-keychain`.
+  - It is the smoke whose typed-agent step reads `leakedVariables`, the check 589's exemption changes.
+  - It runs with the landing's other owed gates once item 610 lets the launcher take the flag.
+- The two hand-written prefix lists (`login-shell.ts:158` OWN_PREFIXES, `fieldd-supervisor/src/supervisor.ts:55`
+  DAEMON_PREFIXES) now equal ENV_PREFIXES and could read it. That is their owners' follow-up, not this item.
+- The flows host reads the mark by its literal name (`flows/supervisor.ts:163`) and could read ENV_KEEP_NAMES.
+
+## Item 578 — Download… saves a print's picture where the person chooses, through main's own panel (M460)
+
+(2026-11-20; three commits: `39a05b736` (design, "578 (design): DESIGN.md §8 says Download… in the grown bar, before the
+code"), `22d75e4f5` (red, "578 (red): no door saves a print's picture where a person chooses, and no row offers it") and
+`59dae9fe7` (green, "578 (green): Download… saves a print's picture where the person chooses, through main's panel").
+Asked for on 2026-11-19 together with the print's open state. The open state is item 577, upstream in the canvas
+engine; this item is the host's half alone. A print's bytes live in the window's own store and a page may not write
+the person's disk, so the save is main's: the page hands over the picture's bytes and nothing else.)
+
+**What a person sees.** With one print selected, its menu (the bar grown) has **Download…**. Taking it opens the
+system's save panel at the folder last saved to in this run, else Downloads, named "Picture" and the person's own
+calendar day, with the picture's own extension (png, jpg, gif or webp). The picture is written as the desk holds it,
+never re-encoded. The status line then says "Saved to ‹folder›", or "Couldn't save this picture. Try again, or choose
+another place."; a cancelled panel says nothing. The row has no key, and no place on the bar itself or in the tools in
+hand. It is absent for two or more objects, for any other kind, for a picture in a format the door does not take, and
+for a print whose picture this desk does not hold yet; it appears when that picture arrives.
+
+**Before and after the canvas engine's next release.**
+- On main at this landing (ICE 0.18.0) Download… is whole and waits for nothing: the row, the panel, the write, the
+  words, the audit record.
+- A print does not open there yet: a double click on it does nothing and its menu has no Open row. So Download… is the
+  first of the desk's own rows in that menu, before Comment and Make a card.
+- What waits for the EL8 to ICE 0.19.0 (item 577) is the open state alone: the double click and ⏎ open the print, and
+  the menu gains Open, which then stands before Download… as DESIGN.md §8 words it ("follows Open"). No host code is
+  owed for that: the bar already offers Open for every type the catalog calls openable.
+
+**What changed.**
+- `DESIGN.md` §8 "The bar grown": six lines. The row and where it stands, when it is offered, where the panel opens,
+  the name, the two sentences of the status line, no key, no place in the tools in hand until §13 has a glyph.
+- `packages/contracts`:
+  - `registries.ts`: `IPC_CHANNELS.pictureSave` = `vibefield:picture:save` (the closed list goes from 45 to 46), and
+    `SHELL_PICTURE_SAVE.MAX_BYTES`, which is the still's bound (`SCREENSHOT_STILL.MAX_BYTES`), not a number of its own.
+  - `shell.ts`: `PICTURE_SAVE_TYPES` (png, jpeg, gif, webp, a closed list), `PICTURE_SAVE_EXTENSIONS`,
+    `pictureSaveTypeOf(bytes)` (pure: the format read off the first bytes, null for anything else),
+    `PictureSaveResult` (`saved` with the folder's own name, never a path; `cancelled`; `refused` with `too-large`,
+    `not-a-picture`, `busy` or `failed`), and `SHELL_PICTURE_AUDIT_ACTIONS.SAVE` = `shell.picture.save`.
+- `packages/electron-shell`, main:
+  - `main/picture-save-door.ts` (new, pure, pinned without Electron). Only a window this shell registered may ask: a
+    stranger is warned, audited `denied` and thrown at, and so is a request that is not bytes. Bytes past the bound
+    are refused with their size before anything else is read. The format is read off the bytes, never taken from the
+    page. The name is main's own (`pictureSaveName`, `localDay`). The panel opens at the folder the door last saved to
+    in this run. A name the panel showed is written as chosen; one the door had to finish with its extension is
+    written only where no file stands (`savedPathOf`). One panel at a time: a second ask is refused `busy`. A
+    failure's cause for the log is the system's code or the error's class name, never its message (`causeOf`).
+  - `main/ipc.ts`: `registerPictureSave`, the ipcMain wiring. A refusal is one warn line,
+    `desktop.ipc.picture_save_refused`, with its reason, the bytes' count and the cause; never a path.
+  - `main/index.ts`: the caller's half. The save panel over the asking window (it may make a folder, and it asks
+    before replacing a file), the write, the day, the audit append. A marked smoke run (`VF_SMOKE_RUN`) opens no
+    panel and answers `cancelled`. A failed audit append is `desktop.picture_save.audit_unavailable`, worded as the
+    clipboard read's line is.
+- `packages/electron-shell`, the page's side: `preload/index.ts` exposes `pictures.save(bytes)`. The bytes alone are
+  sent; a picture past the bound is answered there and never sent; the answer is parsed against the contract, so
+  nothing outside it reaches the page. `renderer-host/product-host.ts` and `global.d.ts` carry it to the product.
+- `packages/field-app`:
+  - `host.ts`: `FieldPicturesHost`, the host's optional `pictures`. A browser harness has none, and the row is then
+    not offered.
+  - `field/desk/desk-blobs.ts`: `held(hash)`, what memory holds now, with no file read.
+  - `field/desk/bar/print-download.ts` (new): `downloadablePicture`, `downloadable`, `downloadPrint` and the words
+    (`DOWNLOAD_WORDS`). A failure is one warn line, `renderer.desk.picture_save_failed`, with a reason; when the
+    bridge itself throws, the reason is `door-threw` and nothing of the error is logged.
+  - `field/desk/bar/bar-model.ts`: `SelectionFacts.downloadable`, `DOWNLOAD_LABEL`, the `download` row after Open.
+  - `field/desk/bar/SelectionBar.tsx`: reads it with the selection and again on every publish, and takes the row.
+  - `design-system/SelectionBarPreview.tsx`: the catalog fixture's `downloadable: false`.
+- `packages/fieldd`: `audit-service.ts` admits `shell.picture.save`. The record is the bytes' count, the format and the
+  saved file's own name; never the picture and never the folder.
+- Rows. New files: contracts' `picture-save.test.ts` (6), electron-shell's `picture-save-door.test.ts` (12) and
+  `preload-picture-save.test.ts` (5), field-app's `print-download.test.ts` (9). Changed: contracts' `shell.test.ts`
+  (the count, the key and its string), field-app's `selection-bar-model.test.ts`, fieldd's `audit-service.test.ts`.
+
+**Proved.**
+- The cut: three commits on main `a22f710b9a76`. Design `d5c20cd06644`; red `066eed314050`
+  (`qa/print-download-red2-on-a22f710b9`); green `88e66e243d42` (`qa/print-download-green2-on-a22f710b9`). Each
+  commit went through the repository's hook.
+- It is the second cut. At the first (`f7f87f6b5715`, `41206f976c67`; those refs stand) the green passed its
+  typechecks and rows on the test Mac and failed two repository gates on two test files: an import out of biome's
+  order in `picture-save-door.test.ts`, and a raw channel string in `print-download.test.ts`, which wall R6 forbids
+  outside contracts. Both are mended in the red commit, where the two files enter; the test reads the channel from the
+  contracts registry. The green's sources are the first cut's, byte for byte.
+- On the development Mac, `check-578r.sh` (`765c2ae0…`) ran once, 2026-11-19 12:39Z, on trees laid for it:
+  - the control, the first cut's red as committed: biome's check exit 1, as it must;
+  - the re-made red's tree and the re-made green's tree: biome 2.5.4 `check --error-on-warnings` exit 0, the import
+    walls' self-test exit 0 and `--enforce` clean, at both.
+- On the test Mac, ROWS-578r (`f6339bce…`) is the run of record, 2026-11-19, AS WANTED at both refs:
+  - `i578r-red2`, at `066eed314050`, 22:53:12Z to 22:53:23Z. No typecheck at the red: its rows import what does not
+    exist yet.
+    - contracts: `picture-save.test.ts` 6 of 6 failed; `shell.test.ts` 2 failed and 70 passed of 72;
+    - electron-shell: `picture-save-door.test.ts` did not load (its module is missing);
+      `preload-picture-save.test.ts` 5 of 5 failed;
+    - field-app: `print-download.test.ts` did not load (its module is missing); `selection-bar-model.test.ts` 2 failed
+      and 13 passed of 15;
+    - fieldd: `audit-service.test.ts` 1 failed and 12 passed of 13;
+    - biome on the item's paths, exit 0; `check:walls` as its six scripts, each exit 0.
+  - `i578r-green`, at `88e66e243d42`, 22:55:26Z to 22:56:22Z.
+    - the four typechecks (field-app, contracts, electron-shell with its renderer project, fieldd), each exit 0 with
+      no error;
+    - contracts 99 of 99 (custody 21, picture-save 6, shell 72);
+    - electron-shell 39 of 39 (hand-pictures 13, picture-save-door 12, preload-clipboard 9, preload-picture-save 5);
+    - field-app 155 of 155 (copy-to-hand 28, desk-blobs 8, print-download 9, selection-bar-model 15, selection-bar 33,
+      ui-system-boundaries 62);
+    - fieldd 13 of 13 (audit-service);
+    - biome exit 0; the six scripts of `check:walls`, each exit 0.
+  - Each run wrote no ref and left its tree clean.
+  - An earlier run, `i578r-red` (22:44:22Z to 22:44:48Z), stands beside them as it ran. Its rows were red exactly as
+    wanted and its gates exit 0; it ended NOT AS WANTED because the stage's judge counted biome's last line, "Found 2
+    infos.", as a warning. The two infos are in `packages/contracts/scripts/gen-jsonschema.ts`, which this item does
+    not touch (one blob at the base, at both commits and on main). The judge was mended before `i578r-red2`.
+- Every run above is at the cut's own base, `a22f710b9a76`. Main has moved since. Five of the item's 23 paths changed
+  on main too, each in another place (read at `e8180f4c1`):
+  - `DESIGN.md`: the six lines go between "…is not built (a Marks on the Mat item)." and "- **Tools in hand**",
+    base lines 4523 and 4524, main's 4667 and 4668, still adjacent there. Main's nearest changes are 176 lines above
+    (65 lines added after base line 4347) and 53 lines below (base lines 4577 to 4579);
+  - `packages/contracts/src/registries.ts`: the item adds at base lines 2913 and 2958; main changed 1755 to 2341;
+  - `packages/contracts/src/shell.ts`: the item adds after base line 405; main changed one comment line, 1079;
+  - `packages/contracts/test/shell.test.ts`: the item changes lines 252, 299 and 350; main changed 964 and 968. Main's
+    closed channel count is still 45, so the item's 46 holds; any other item that adds a channel meets line 252;
+  - `packages/electron-shell/src/main/index.ts`: the item adds at base lines 2, 101, 161 and 2188; main added three
+    lines after 1406.
+- The train's verify:
+a15c-v, `pnpm verify` whole at the land's top `59dae9fe7` on the test Mac, 2026-11-20 01:55:41Z → 02:05:42Z: **GREEN**,
+exit 0 in 601 s; typecheck and test each ran for 28 projects, field-app's typecheck among them; 27 vitest suites, none
+failed; Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the same commit, kit-a15c, 02:09:06Z →
+02:12:00Z: xcodebuild exit 0 in 174 s; 3,151 rows, Passed 3,148, Skipped 3, Failed 0.
+
+**Not covered, and owed.**
+- No run of the app happened anywhere: nobody has seen the real panel. Five looks by hand are owed on the landed
+  build: the row in a print's menu, before Comment; the panel at Downloads, named "Picture" and today with the
+  picture's extension, its file-type filter reading "Picture"; Save says "Saved to ‹folder›" and the file opens;
+  Cancel says nothing and the next panel opens at the folder just saved to; a note, or two prints selected, has no
+  row. After them the desktop's own log is read: `desktop.ipc.picture_save_refused` expected 0, and one
+  `shell.picture.save` audit record for each outcome.
+- No smoke takes the row. A marked run opens no panel, so a smoke that took it would be answered `cancelled`.
+- Known, where this item meets item 601 of the same landing. The door's audit record goes to fieldd through the
+  attached pair's coordinator, and a coordinator held for a stop refuses `ensure()`. Item 601 extends that hold from a
+  person's quit and an update's stop to a signal's quit. A save answered while a quit holds the pairs still writes its
+  file and answers the page; its audit record is not appended, and main says so in one warn line,
+  `desktop.picture_save.audit_unavailable`, as the clipboard read's audit does there. That is the door's design, not
+  a fault of either item: the audit is best-effort and never awaited, because a save does not wait on fieldd. The
+  door's own row for a failed append holds its half (`picture-save-door.test.ts`); no row runs a save under a held
+  quit.
+- Not here, each its own item or already one:
+  - the open state of a print (item 577), which arrives with the EL8 to ICE 0.19.0;
+  - a Download in the tools in hand: no glyph for it yet (DESIGN.md §13);
+  - the channel's row in the draft corpus's spec table (a prepared diff, for the draft's own snapshot).
+- A print whose picture another device holds offers no row on this one until the picture arrives. Whether such a
+  print should offer a row that waits, and say why, was not asked.
+- No DECISIONS row: the design is DESIGN.md §8's six lines, dated and named there.
