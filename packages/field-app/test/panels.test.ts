@@ -118,6 +118,8 @@ describe("widgetlab panels", () => {
       Array.from(appearance?.querySelectorAll("button") ?? []).map((b) => b.textContent),
     ).toEqual(["Light", "Dark", "Auto"]);
     expect(container?.textContent).toContain("The same setting as Theme in your menu");
+    // item 614: the page's own line under its title, in the words the app uses for the desk
+    expect(container?.textContent).toContain("Light or dark, for the app and your desk.");
     expect(container?.textContent).not.toContain("Canvas palette");
     expect(container?.textContent).not.toContain("Overlap feedback");
 
