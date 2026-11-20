@@ -29,6 +29,12 @@ export {
   startNight,
 } from "./night";
 export {
+  type FlatStarFigure,
+  flatStarFigure,
+  type SparkPicture,
+  sparkPicture,
+} from "./picture";
+export {
   SparkFace,
   type SparkFaceProps,
   SparkFaceRenderer,
@@ -41,3 +47,4 @@ export {
   type SparkStatus,
   sparkStatusWord,
 } from "./statuses";
+export { FREE_FACE_ROOM, type StillFace, stillKey } from "./stills";

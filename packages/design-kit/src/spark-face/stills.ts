@@ -18,6 +18,9 @@ export interface StillFace {
   readonly framed: boolean;
   /** the ground behind the face, for its cut ring */
   readonly cut: SparkRgb;
+  /** A free face's box over its size: FREE_FACE_ROOM unless said. 1 draws it edge to edge, with no room for its
+   * props, as Godview's views draw a host's picture inside their own box (TH-3, 2026-11-19). */
+  readonly room?: number;
 }
 
 /** A free face's picture is half again its box, so its props (thought dots, Zzz, hearts) are whole. */
