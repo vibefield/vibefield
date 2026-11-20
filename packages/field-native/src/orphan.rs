@@ -459,6 +459,12 @@ mod tests {
         base + Duration::from_millis(ms)
     }
 
+    /// Item 615 (2026-11-20) — a verdict by its Debug name, so a row that names the two said verdicts compiles on a
+    /// base that lacks them.
+    fn said(verdict: Verdict) -> String {
+        format!("{verdict:?}")
+    }
+
     #[test]
     fn a_whole_span_with_no_client_and_a_counted_zero_stops() {
         let t0 = Instant::now();
@@ -476,11 +482,15 @@ mod tests {
         let t0 = Instant::now();
         let mut bound = OrphanBound::new(SPAN);
         bound.observe(at(t0, 0), Some(t0), Some(0));
-        assert_eq!(bound.observe(at(t0, 600), Some(t0), Some(1)), Verdict::Wait);
+        // item 615: a session's count is said once, and the read where that count is zero again begins the span
+        assert_eq!(
+            said(bound.observe(at(t0, 600), Some(t0), Some(1))),
+            "Held(1)"
+        );
         assert_eq!(bound.observe(at(t0, 1_200), Some(t0), None), Verdict::Wait);
         assert_eq!(
-            bound.observe(at(t0, 1_300), Some(t0), Some(0)),
-            Verdict::Wait
+            said(bound.observe(at(t0, 1_300), Some(t0), Some(0))),
+            "Released"
         );
         assert_eq!(
             bound.observe(at(t0, 2_299), Some(t0), Some(0)),
@@ -536,6 +546,86 @@ mod tests {
         assert_eq!(
             bound.observe(at(t0, 2_100), Some(t0), Some(0)),
             Verdict::Stop
+        );
+    }
+
+    // Item 615 (2026-11-20) — a planned leave, a new client's hello, then that client lost without one: the bound is
+    // armed with a fresh span from the last loss. It never stops while one session is counted, and stops one whole span
+    // after the count first reads zero.
+    #[test]
+    fn a_planned_leave_a_new_hello_and_an_unplanned_loss_arm_a_fresh_span_a_session_holds() {
+        let t0 = Instant::now();
+        let presence = ManagerPresence::new(t0);
+        presence.held();
+        presence.detach(3);
+        assert!(
+            presence.left(3, Departure::Closed, 0, at(t0, 100)),
+            "a detach, then its close: planned"
+        );
+        presence.held();
+        assert!(
+            !presence.left(5, Departure::Closed, 0, at(t0, 750)),
+            "a close with no detach: unplanned"
+        );
+        let vacant = presence.vacant_since();
+        assert_eq!(vacant, Some(at(t0, 750)), "the last loss is the vacancy");
+        let mut bound = OrphanBound::new(SPAN);
+        for ms in [750, 1_750, 5_000] {
+            assert_ne!(
+                bound.observe(at(t0, ms), vacant, Some(1)),
+                Verdict::Stop,
+                "one session holds the floor"
+            );
+        }
+        assert_ne!(bound.observe(at(t0, 5_001), vacant, Some(0)), Verdict::Stop);
+        assert_ne!(bound.observe(at(t0, 6_000), vacant, Some(0)), Verdict::Stop);
+        assert_eq!(bound.observe(at(t0, 6_001), vacant, Some(0)), Verdict::Stop);
+    }
+
+    // Item 615 (2026-11-20) — a held vacancy is said, once: its first counted read that is not zero (the count, as a
+    // number), and the first read where that count is zero again, when its span begins. A floor waiting on a session
+    // said nothing at all, which read as a bound never armed. When the bound stops is unchanged.
+    #[test]
+    fn a_held_vacancy_says_its_count_once_and_once_more_when_its_span_begins() {
+        let t0 = Instant::now();
+        let mut bound = OrphanBound::new(SPAN);
+        let vacant = Some(t0);
+        assert_eq!(said(bound.observe(at(t0, 0), vacant, Some(2))), "Held(2)");
+        assert_eq!(
+            said(bound.observe(at(t0, 100), vacant, Some(3))),
+            "Wait",
+            "once per vacancy"
+        );
+        assert_eq!(
+            said(bound.observe(at(t0, 200), vacant, None)),
+            "Wait",
+            "an unread count says nothing new"
+        );
+        assert_eq!(
+            said(bound.observe(at(t0, 300), vacant, Some(0))),
+            "Released"
+        );
+        assert_eq!(
+            said(bound.observe(at(t0, 400), vacant, Some(1))),
+            "Wait",
+            "held again, not said again"
+        );
+        assert_eq!(
+            said(bound.observe(at(t0, 500), vacant, Some(0))),
+            "Wait",
+            "its span begins again, unsaid"
+        );
+        assert_eq!(said(bound.observe(at(t0, 1_499), vacant, Some(0))), "Wait");
+        assert_eq!(
+            said(bound.observe(at(t0, 1_500), vacant, Some(0))),
+            "Stop",
+            "when it stops is unchanged"
+        );
+        // a new vacancy is said afresh
+        let again = Some(at(t0, 2_000));
+        assert_eq!(
+            said(bound.observe(at(t0, 2_100), again, Some(1))),
+            "Held(1)"
         );
     }
 
