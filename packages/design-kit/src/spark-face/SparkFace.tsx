@@ -10,14 +10,8 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  loadSparklings,
-  SPARK_FRAME,
-  type Sparklings,
-  type SparkRgb,
-  sparkFaceScale,
-} from "./engine";
-import { flatStar } from "./flat-star";
+import { loadSparklings, type Sparklings, type SparkRgb } from "./engine";
+import { flatStarFigure } from "./picture";
 import { type LiveFaceHandle, useSparkStage } from "./stage";
 import type { SparkStatus } from "./statuses";
 import { drawStill, FREE_FACE_ROOM } from "./stills";
@@ -190,23 +184,16 @@ function FlatStarView({
 }): ReactElement | null {
   // an id an SVG url() takes as it is
   const id = `vf-spark-${useId().replace(/[^\w-]/gu, "")}`;
-  const dna = engines.agentDNA(seed);
-  const palette = engines.PALETTES[dna.palette];
-  if (!palette) return null;
-  const shape = flatStar(
-    engines.makeBody(dna.seed, dna.body),
-    engines.makeEyes(dna.seed, dna.eyes),
-    sparkFaceScale(size),
-  );
-  const [, glowCentre, glowMid, glowRim] = palette.c;
-  const [discTop, discBottom] = palette.deep;
-  const radius = SPARK_FRAME.frameH;
-  // the box is the disc: the star sits 6% of its radius below the disc's centre; free, it is centred
-  const top = framed ? -radius - SPARK_FRAME.frameC[1] : -radius;
+  // one drawing for the face here and for its picture (`picture.ts`)
+  const figure = flatStarFigure(engines, { seed, size, framed });
+  if (!figure) return null;
+  const [glowCentre, glowMid, glowRim] = figure.glow;
+  const [discTop, discBottom] = figure.deep;
+  const { x, y, side } = figure.box;
   return (
     <svg
       className="vf-spark-face-flat"
-      viewBox={`${-radius} ${top} ${radius * 2} ${radius * 2}`}
+      viewBox={`${x} ${y} ${side} ${side}`}
       aria-hidden="true"
       focusable="false"
     >
@@ -221,17 +208,17 @@ function FlatStarView({
           <stop offset="1" stopColor={discBottom} />
         </linearGradient>
       </defs>
-      {framed ? (
+      {figure.disc ? (
         <circle
           className="vf-spark-face-disc"
           cx="0"
-          cy={-SPARK_FRAME.frameC[1]}
-          r={radius}
+          cy={figure.disc.cy}
+          r={figure.disc.r}
           fill={`url(#${id}-disc)`}
         />
       ) : null}
-      <path className="vf-spark-face-star" d={shape.outline} fill={`url(#${id}-body)`} />
-      {shape.eyes.map((eye) => (
+      <path className="vf-spark-face-star" d={figure.outline} fill={`url(#${id}-body)`} />
+      {figure.eyes.map((eye) => (
         <rect
           key={eye.x}
           className="vf-spark-face-eye"

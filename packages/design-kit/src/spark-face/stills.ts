@@ -50,11 +50,24 @@ function stillCanvas(
   return canvas;
 }
 
+/** A free face's room where it is not the default, else null (a framed face has none): a key names it only then,
+ * so every key a face without one makes is the key it made before. */
+function roomOf(face: StillFace): number | null {
+  return face.framed || face.room === undefined || face.room === FREE_FACE_ROOM ? null : face.room;
+}
+
 export function stillKey(face: StillFace, pixelRatio: number): string {
   const cut = face.cut.map((channel) => Math.round(channel * 255)).join(",");
-  return [face.seed, face.status, face.size, face.framed ? "framed" : "free", cut, pixelRatio].join(
-    "|",
-  );
+  const fields = [
+    face.seed,
+    face.status,
+    face.size,
+    face.framed ? "framed" : "free",
+    cut,
+    pixelRatio,
+  ];
+  const room = roomOf(face);
+  return (room === null ? fields : [...fields, `room=${room}`]).join("|");
 }
 
 /** The face's picture, or null where the window has no WebGL2 (the face is then the flat star). */
@@ -69,7 +82,7 @@ export function drawStill(engines: Sparklings, face: StillFace): string | null {
   }
   const still = stillCanvas(engines);
   if (!still) return null;
-  const box = face.framed ? face.size : face.size * FREE_FACE_ROOM;
+  const box = face.framed ? face.size : face.size * (roomOf(face) ?? FREE_FACE_ROOM);
   still.element.style.setProperty("--vf-spark-still-box", `${box}px`);
   still.engine.resize();
   still.engine.clear();
