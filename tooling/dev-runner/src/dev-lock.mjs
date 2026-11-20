@@ -15,6 +15,16 @@ import { clearDeadDevProductFiles, readDevProduct } from "./product.mjs";
 
 const OWNER_FILE = "owner.json";
 const RECLAIM_DIRECTORY = ".reclaim";
+/** Item 621 (2026-11-20) — said before every remedy: its pids are read from a record that a
+ * daemon which died without its stop leaves behind, and pid reuse is why the runner itself never
+ * stops them. */
+const RECORD_CAVEAT =
+  "the pids are read from fieldd's product record, which a daemon that died without its " +
+  "stop leaves behind, so one may now belong to another program: confirm each is " +
+  "VibeField's before you stop it";
+/** Item 621 — and when the record's floor is among them: a floor outlives its fieldd, holding the
+ * terminal sessions. */
+const FLOOR_CAVEAT = "stopping field-native ends every terminal session on it";
 
 export class DevLockError extends Error {
   constructor(message) {
@@ -60,13 +70,11 @@ export async function acquireDevLock({
           // crashed runner strands a live pair here. Refusal stays the safe
           // default (pid reuse makes blind kills wrong), but the message must
           // carry the remedy or the user is stuck.
+          const caveats = remedyCaveats(existingLive.includes(existingProduct?.nativePid));
+          const remedy = stopPidsRemedy(existingLive, platform);
           throw new DevLockError(
-            `the development data root still has live daemon pid ${existingLive.join(
-              ", ",
-            )} — a previous dev session exited uncleanly; stop them with: ${stopPidsRemedy(
-              existingLive,
-              platform,
-            )}`,
+            `the development data root still has live daemon pid ${existingLive.join(", ")} — a ` +
+              `previous dev session exited uncleanly; ${caveats}; stop them with: ${remedy}`,
           );
         }
         if (existingProduct) {
@@ -167,10 +175,20 @@ function describeLiveStack(live, platform = process.platform) {
   if (!daemonsOnly) return `another development stack is still live (${names})`;
   // Runner and Electron are gone but the pair survived (dev is
   // leave-running): tell the user how to get unstuck instead of only why.
-  return `another development stack is still live (${names}) — the previous runner is gone; stop the daemons with: ${stopPidsRemedy(
+  const caveats = remedyCaveats(live.some(([name]) => name === "field-native"));
+  const remedy = stopPidsRemedy(
     live.map(([, pid]) => pid),
     platform,
-  )}`;
+  );
+  return (
+    `another development stack is still live (${names}) — the previous runner is gone; ` +
+    `${caveats}; stop the daemons with: ${remedy}`
+  );
+}
+
+/** Item 621 (2026-11-20) — what the remedy's stop costs, said before it. */
+function remedyCaveats(floorLive) {
+  return floorLive ? `${RECORD_CAVEAT}; ${FLOOR_CAVEAT}` : RECORD_CAVEAT;
 }
 
 /** The remedy in the shell the user actually has. `taskkill` takes repeated
