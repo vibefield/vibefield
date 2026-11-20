@@ -161,6 +161,23 @@ export async function withLabProfile(run) {
   }
 }
 
+/**
+ * The Godview smoke's Electron arguments (scripts/smoke-godview.mjs; item 610, 2026-11-19): what
+ * the launcher's guard admitted goes in as given, between the mode flag and the profile. So
+ * `--use-mock-keychain` reaches Electron when asked, and without it the list is the one the smoke
+ * has always started Electron with.
+ */
+export function smokeGodviewArgv(args, directory) {
+  return [
+    ".",
+    "--smoke-godview",
+    ...args,
+    `--user-data-dir=${directory}`,
+    "--disable-renderer-backgrounding",
+    "--disable-backgrounding-occluded-windows",
+  ];
+}
+
 /** Refuse old reports, wrong effective paths and reuse before reading grades. */
 export function assertLabProfileProof(state, context, { expectedId, seen } = {}) {
   if (
