@@ -999,7 +999,7 @@ face's own (round 5): its type `--vf-card-type-ink` (86%), its faces `--vf-card-
 line `--vf-card-pass` (`#2b8a4f`, round 5's green), and `--vf-card-photo` (`#cfd3cf`) under a picture until it draws
 (`--vf-card-ink`, §2.2's white, stays Settings → Terminal's). **The agent's card** is the one dark stock
 (`--vf-card-dark-stock` `#1c1c1e`, `--vf-card-dark-edge` `#050506`, its cut `--vf-card-dark-cut`, white at 9%; its inks
-`--vf-card-dark-ink`, `-2`, `-3`, white at 92 / 62 / 40%), the
+`--vf-card-dark-ink`, `-2`, `-3`, white at 92 / 70 / 40%; `-2` was 62% until item 613), the
 session card's. **Its shadow is cast down and a little right**, as the desk's objects cast theirs, and
 grows as the card rises — for its lift `l` (0…1): `0 0.7px 0 0.15px` the edge · `0 0.6px 1.4px`
 black at 15% · `(0.5 + 1.5l)px (2 + 7l)px (5 + 12l)px` black at (7 + 5l)% · `(1 + 4l)px (7 + 20l)px
@@ -1053,16 +1053,21 @@ up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused
     light bends over softly and never passes 1.35. It is the card's own brightness, times the night's 86%
     (`--vf-card-dim`), so the face's ink and its picture take it with the paper. **The face's words that keep §2.4's
     4.5:1 held flat**: the name, the type's glyph, the first face along the foot, a text card's words, a file's lines,
-    and a terminal's output and its bold; on the agent's dark card, its name and its state. **By day, turned from the
-    lamp, the paper stock's keep it only on the line**: at its least, 0.68, a terminal's output, the lightest of them,
-    reads 4.5:1 and the rest more, by arithmetic; the dark card's state does not (3.90:1). **By night none of them
-    holds, at this commit**: turned from the lamp the card's light falls to 0.86 × 0.55, where a terminal's output
-    reads 2.96:1, the dark card's state 2.40:1 and the name 4.05:1; the floor that holds them is item 613's. **Toward
-    the lamp, at the worst turn, the window's words are under it**: there the paper goes to white and the varnish's
-    sheen greys the ink, and on a plate of 2026-11-20 (software GL, each ink in a solid block) a terminal's output
-    read 3.04:1 by day at its least and 3.76:1 by night, a file's lines 3.46:1 and a text card's words 4.27:1 by day,
-    while the name measured 7.9:1 (2026-11-19). It is a known break of §2.4 until the sheen's own question is decided
-    (item 619).
+    and a terminal's output and its bold; on the agent's dark card, its name and its state. **The card's light is
+    never taken under `--vf-card-light-floor` (0.72)**, and the dark card's state takes its white at 70% (item 613),
+    so turned from the lamp they keep it by day and by night: at the floor a terminal's output, the lightest of them,
+    read 4.61:1 by day and 4.57:1 by night at its least, a file's lines 5.10:1 and 5.03:1 and a text card's words
+    5.32:1 and 5.16:1 (2026-11-20, software GL, each ink in a solid block; the terminal's 4.81:1 by arithmetic), and
+    the dark card's state reads 5.09:1 and the name 8.38:1 by arithmetic. It is 0.72, not the 0.68 the terminal's
+    output needs, because the plate reads its least tile 4% to 5% under the arithmetic there, where the lamp's own
+    shade crosses the window. By night the floor holds the card at 0.72 where it would fall to 0.86 × 0.55; by day it
+    takes the far corner's 0.68 up to 0.72. The lamp's own give-back, the sheen and the back's lights, is figured over
+    the light the card is shown at, so it follows the floor: by night, turned from the lamp, the back's lights stay
+    under their rest. **Toward the lamp, at the worst turn, the window's words are under it**: there the paper goes to
+    white and the varnish's sheen greys the ink, and on a plate of 2026-11-20 (software GL, each ink in a solid block)
+    a terminal's output read 3.04:1 by day at its least and 3.76:1 by night, a file's lines 3.46:1 and a text card's
+    words 4.27:1 by day, while the name measured 7.9:1 (2026-11-19). It is a known break of §2.4 until the sheen's own
+    question is decided (item 619).
   - **What crosses it.** Over the side that is up, under its cut edge, **the lamp** draws what is left of the light,
     added to the print: the weave, the paper's tooth and the back's pressed mark shading and catching as their faces
     turn; the satin varnish's sheen where the lamp (up and to the right) and the room's soft light (above you) come back
