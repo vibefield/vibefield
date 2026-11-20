@@ -1,6 +1,6 @@
 {
   "spike": "DS-5 ICE1 envelope, 2026-09-30; regenerated on the desk at DK-4, 2026-10-03",
-  "ice": "0.18.0",
+  "ice": "0.20.0",
   "loro": "1.13.8",
   "objectType": "desk.note",
   "golden": {
@@ -119,15 +119,15 @@
     "file": "merged-roundtrip.ice1",
     "headerFrom": "a-checkpoint-1.ice1",
     "oplogVersion": {
-      "2759226782513893770": 20,
-      "1471203527838278389": 69
+      "6533423699651912563": 69,
+      "9742309328544153880": 20
     },
     "iceOpenedWidgets": 7
   },
   "livePush": {
     "file": "push-to-window-a.loro",
     "windowFrom": {
-      "1471203527838278389": 69
+      "6533423699651912563": 69
     },
     "widgetsBefore": 5,
     "widgetsAfter": 7,

@@ -203,7 +203,13 @@ overrides:
   # categories and hides a type while its objects on the desk draw as before; nothing here asks either yet.
   # Published from 2223993a (the lock's sha; tag v0.18.0 is on the merge 14124028, the same tree). strata
   # 0.13.0 and loro ^1.13.8 are unchanged.
-  "@vibecook/ice": 0.18.0
+  # EL8 2026-11-20: 0.18.0 → 0.20.0, two releases in one event. 0.19.0 (petition I55): the print opens into the hand,
+  # never past its own pixels (a kind's `open.natural` caps the reading fit). 0.20.0 (petition I56): a soft light,
+  # a second text of the light a host chooses once (`setLightText("soft")`); a host that asks for nothing compiles
+  # the light it compiled before. Additive: no type a host or plugin writes moves (`MatUniforms` grows at its end).
+  # Published from 4ee930bd (the lock's sha, the release commit; tag v0.20.0 is on the merge 2a2a9355). strata
+  # 0.13.0 and loro ^1.13.8 are unchanged.
+  "@vibecook/ice": 0.20.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -475,9 +481,9 @@ verifyDepsBeforeRun: prompt
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  # EL8 2026-11-19: reviewed ICE 0.18.0 (published 2026-11-18, inside the release-age window). The 0.17.0 row was
+  # EL8 2026-11-20: reviewed ICE 0.20.0 (published 2026-11-20, inside the release-age window). The 0.18.0 row was
   # retained through the install that regenerated the lock, then removed.
-  - '@vibecook/ice@0.18.0'
+  - '@vibecook/ice@0.20.0'
   # EL8 2026-11-17: reviewed mille 0.3.6 (tag v0.3.6 = 85c35e7d, published 2026-11-12). (Corrected 2026-11-18,
   # item 531: this said "inside the window". The registry dates 0.3.6 at 2026-11-12T06:40:04Z, read 2026-11-18:
   # five days before the EL8, and this file sets no minimumReleaseAge, so pnpm 11.13.1's default of 1440 minutes

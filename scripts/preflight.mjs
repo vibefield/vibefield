@@ -187,12 +187,13 @@ const PIN_EXPECTATIONS = [
   // PORTALS found); DK-18 had pinned 0.15.0 FINAL, the cutover's release.
   // 0.17.0 (2026-11-03) adds native desk navigation, zoom feedback, retired-widget data,
   // and presentation controls. 0.18.0 (2026-11-19, petition I54) lets a host lay a set of
-  // object types on the pegboard and hide a type. The anchor rejects prereleases and longer
-  // version suffixes.
+  // object types on the pegboard and hide a type. 0.19.0 (petition I55) opens the print into
+  // the hand, and 0.20.0 (2026-11-20, petition I56) adds a soft light. The anchor rejects
+  // prereleases and longer version suffixes.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.18\.0\s*$/m,
-    label: '"@vibecook/ice": 0.18.0',
+    re: /"@vibecook\/ice":\s*0\.20\.0\s*$/m,
+    label: '"@vibecook/ice": 0.20.0',
   },
   // The EL8 to ghosttea 0.13.1 (2026-10-22/23): the five ghosttea rows move together, and since this event each is
   // anchored to the line's end like ice's, so a later `0.13.1-…` never passes for the release. The cargo row and the

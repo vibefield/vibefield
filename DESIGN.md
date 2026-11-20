@@ -4714,6 +4714,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 
   **Prints (2026-11-02):** an image-backed canvas object, placed by image paste or a picture card dropped
   onto the desk. It is absent from the pegboard; existing and new prints display edge to edge without a white frame.
+  *Added 2026-11-19 (item 577; James, 2026-11-19):* **a print opens**, as the whiteboard does: a double-click,
+  ⏎ or the menu's Open picks it up into the hand (the tools in hand, above), on the same travel and the same hold. In
+  hand it is the picture alone, edge to edge, in the held object's reading fit (116 above, 100 below), and it opens
+  never past its own pixels at the window's density: a small picture opens at its own size, centred. ⌘-wheel or a
+  pinch still brings it closer, as for every held object. The tools in hand read Make a card · Done, for a print
+  declares no tools; Done, Esc or a click on the dimmed desk puts it down, as for every held object.
 
   **Calendar retired (2026-11-02):** its implementation stays in ICE, but VibeField does not mount its
   renderer, drivers or input. It is absent from the tray and new-board seeds; saved calendar rows,

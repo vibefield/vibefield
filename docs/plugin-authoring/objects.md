@@ -890,6 +890,19 @@ DECLARED ONLY — the bar shows it dim and never runs it: `check` refuses an op 
  */
 export interface OpenBinding {
     extent(ctx: Pick<ObjectContext, "rect" | "props">): ObjectRect;
+    /**
+     * The open extent's OWN PIXELS (petition I55, 2026-11-19: the print opens): the device pixels the kind's
+     * content holds across the WHOLE extent `extent` gives — the print's picture, its `width` × `height` — read with the extent, from
+     * the object's rect and props. The hand's reading fit never passes them: its scale is capped at 1:1 device pixels at the window's
+     * density (hold/pose.ts `naturalCap` → `readingTarget`'s `cap`), so a small picture opens at its own size, centred in the fit, and a
+     * large one fits the view as any kind does. The person's own ⌘-wheel and pinch (core's `HeldView.zoom`, up to 3×) still ride on top:
+     * the cap bounds only what opening does by itself. Absent, `undefined`, or a w or h that is not a positive finite number: the fit
+     * alone, as before it. One that throws is the kind's strike, as its `extent`'s is (petition I24).
+     */
+    natural?(ctx: Pick<ObjectContext, "rect" | "props">): {
+        readonly w: number;
+        readonly h: number;
+    } | undefined;
     readonly pose?: "camera" | "eye";
     openness?(ctx: Pick<ObjectContext, "entity" | "local">): number;
     readonly spread?: boolean;
@@ -1057,7 +1070,10 @@ export interface MatPass {
      * `@group(0) @binding(0)` as `u` (`kitWgsl`'s `view` piece). A kind never writes it and never keeps a copy.
      */
     readonly view: GPUBuffer;
-    /** The slot's animated gobo silhouette (r8, PLATE_SIZE²) — what an object's shadow and dapple sample. */
+    /**
+     * The slot's animated gobo silhouette (r8, PLATE_SIZE²) — what an object's shadow and dapple sample, through the kit's light
+     * (`sample_gobo`, `lit_gobo`). One level under the cone; under soft light (I56) the view of its four-level chain.
+     */
     readonly silhouette: GPUTextureView;
     /** The blue-noise tile (NOISE_SIZE², shared by every slot). */
     readonly noiseTexture: GPUTexture;

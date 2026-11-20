@@ -2253,7 +2253,7 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 |---|---|---|
 | truffle | `truffle-core = "=0.7.28"` (Cargo.toml) + the five npm sidecars 0.7.28 (protocol 13) · Swift exact 0.7.26 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.16.0 declares, as 0.15.0 and 0.14.0 did | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27, and the EL8 of 2026-11-18 (M363, `628233925`, `fc4434113`; DECISIONS TB) moved them to 0.7.28, protocol 13 standing; Swift rejoins at the first ghosttea declaring 0.7.27 · *Corrected 2026-11-18: this row still said `=0.7.27` and the sidecars 0.7.27 after M363 moved both to 0.7.28 (Cargo.toml:238; `apps/desktop/package.json`).* |
 | ghosttea | 0.16.0 on cargo (`=0.16.0`), npm and Swift: a host tells a session its colors (control protocol 1.20); libghostty-vt 1.0 (Ghostty `0fa3d577`) stands | the EL8 of 11-18 (0.15.0's: 11-12; 0.14.0's: 11-02, LANDED "EL8 — Ghostty 1.4"); no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
-| ICE | `@vibecook/ice` 0.18.0 exact (overrides row; the lock's `2223993a`, and tag v0.18.0 on the merge `14124028`, the same tree) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | the EL8 of 11-19 (0.17.0's: 11-03) |
+| ICE | `@vibecook/ice` 0.20.0 exact (overrides row; the lock's `4ee930bd`, the release commit, and tag v0.20.0 on the merge `2a2a9355`) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | the EL8 of 11-20 (0.18.0's: 11-19) |
 | puppeteer | `@vibefield/puppeteer-*` 0.4.4 exact (the lock's `4de5edd6`, v0.4.4, the release #96) | the EL8 of 11-18 (M436, `9c9d0181b`; LANDED "EL8: puppeteer 0.4.4": 0.4.3, never pinned here, rides with it), after the EL8 of 2026-11-17 (M356, `787552155`; LANDED "EL8: puppeteer 0.4.2": 0.4.1, never pinned here, rides with it) and the EL8 of 11-10 (LANDED "EL8 — puppeteer 0.4.0"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate · *Corrected 2026-11-18: this row still said 0.4.0 after M356 moved the pin to 0.4.2 on 2026-11-17.* |
 | rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.7 exact · the kit's `RosettaClient` 0.1.6 exact (`let rosettaRelease`; the dated split, DECISIONS RD: 0.1.7 changes no Swift path) · rosettad built from `../rosetta-pin` at `1bc7f45ef` (protocol and store schema 30) · MIT | EL8 11-14 (`ed67b0c5b`, M301; 0.1.6 at `31abf8792` → `ea26b0464`, M296, 11-13; 0.1.5 at `68b80fb95`, M230, 11-08); npm and the daemon archives released (v0.1.7), Swift at v0.1.6; adopting the archives remains RD-D7; the Swift row is PAID on vf-m2 by item 257 (M233 `b3a5930b2`); its exact-tree witness stays the old mini's |
 | mille | `@vibecook/mille` and `mille-ui` 0.3.6 exact (the overrides rows; the lock's `85c35e7d`, tag v0.3.6) | the EL8 of 2026-11-17 (M359, `0d1e63b07`; LANDED "EL8 — mille 0.3.6"): RD-5's exit for mille's npm plane, and FS-1b's sibling window closed; `../mille-pin` is the overlay's coordinate · *Corrected 2026-11-18: this row still said `link:../mille-pin` at `c8160d5` and no release past v0.3.4 after M359 moved mille to npm 0.3.6 on 2026-11-17.* |
@@ -2310,9 +2310,10 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 - **mille:** M11 (with WIN). **ICE:** I47, I48 (named, parked) · the remount edge (a pointer `leave` with no point; a
   candidate if presence UX needs it) · NodeNext portability. **strata:** S3/S4's residue (parked: a measured join or
   reload wall on a real desk document).
-- **ICE, upstream**: 0.18.0 (petition I54, the board's set and its hidden types) has been npm's `latest` since
-  2026-11-18, pinned here by the EL8 of 11-19. A `gate:landing` on the goldens' Mac is owed upstream (the last
-  recorded green there is 0.16.0's); the plugin market's use of the set and the hidden types is MK's next slice.
+- **ICE, upstream**: 0.20.0 (petition I56, a soft light) has been npm's `latest` since 2026-11-20, pinned here by the
+  EL8 of 11-20 with 0.19.0 (I55, the print opens) in the same event; 0.18.0 (I54, the board's set and its hidden
+  types) before them. A `gate:landing` on the goldens' Mac is owed upstream (its rigs, which need a console; the
+  last recorded green there is 0.16.0's); the plugin market's use of the set and the hidden types is MK's next slice.
 
 ## 8 Tracks
 
