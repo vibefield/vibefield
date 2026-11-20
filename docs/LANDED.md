@@ -62925,6 +62925,12 @@ at its start; a rebuild's pnpm child on a tree that went stale mid-session asks 
 `pnpm siblings use NAME` cannot answer the release-age question (its install ignores stdin), so a young unlisted
 version fails it, named.
 
+*Correction 2026-11-20 (item 641):* "CI installs afresh and does not see it" in this entry holds for the one-time stop
+it names, not for CI as a whole. A CI job that changes a workspace project after its install meets the same check as any
+headless shell: the nightly of 2026-11-20 stamped its prerelease version into `apps/desktop/package.json` after its
+install, and its next `pnpm run` stopped with "The workspace structure has changed since last install". Item 641 moves
+the stamp before the install.
+
 **Read before the cut.** The callers, each with today's and the ruled behaviour, are in the lane's `READING-554.md`.
 Order-free, proved on main `906328374319`'s text: item 554's nine lines against the EL8 to ICE 0.19.0's three
 workspace edits (MK) and the EL8 to puppeteer 0.4.6's three (4a), each tool read by `ast` and never run, and item
