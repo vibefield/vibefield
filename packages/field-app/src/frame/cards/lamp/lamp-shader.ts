@@ -12,6 +12,11 @@ import { LIGHT_GLSL, LIGHT_UNIFORMS } from "../press/light-glsl";
  *   the room's soft light cross the card; a picture's gloss in the window; and the back's three lights, which hold
  *   their colour in shadow.
  *
+ * The card's brightness is never taken under the floor (§5 "How brightly"; item 613, 2026-11-20), so what is given
+ * back here, the sheen and the back's three lights, is figured over the light the card is shown at: the flat light,
+ * or `uFloor` where that is more (the floor over the night's dim, since the brightness is the lamp's light times the
+ * dim). The shade and the lift are of the flat card, floor or none.
+ *
  * Head on and at rest it draws nothing: the print is that light already. One full quad over the side, premultiplied;
  * `vUV` runs from the side's top left; `uFrame` is where the side's right, its down and its normal point once the
  * card is turned (`frameOf`), and the eye stands `uEye` out from the card's middle, as the turn's perspective does.
@@ -45,6 +50,7 @@ uniform float uEye;
 uniform vec4 uWindow;
 uniform float uWindowR;
 uniform float uPhoto;
+uniform float uFloor;
 out vec4 outColor;
 
 ${LIGHT_GLSL}
@@ -84,8 +90,10 @@ void main() {
   vec3 flatN = uFrame[2];
   vec3 V = normalize(vec3(0.0, 0.0, uEye) - (T * p.x + B * p.y));
   vec3 N = normalize(flatN - T * g.x - B * g.y);
-  // the card's brightness carries the flat light; a side seen from behind draws nothing
+  // the card's brightness carries the flat light, and never less of the lamp's light than the floor; a side seen
+  // from behind draws nothing
   float flatDiff = lampDiffuse(flatN);
+  float carried = max(flatDiff, uFloor);
   float facing = step(0.0, dot(flatN, V));
   float nowDiff = lampDiffuse(N);
   vec3 nowSpec = lampSpecular(N, V, gloss, photo);
@@ -100,10 +108,10 @@ void main() {
   // the light that comes back, less what the print already holds of it; the cut edge takes its share, as printed
   float edge = 1.0 - smoothstep(0.0, uEdgeW, -d);
   float edgeK = mix(1.0, uEdgeShade, edge * 0.85);
-  vec3 spec = max(edgeK * (nowSpec / flatDiff - restSpec * (1.0 - photo) * min(ratio, 1.0)), 0.0);
+  vec3 spec = max(edgeK * (nowSpec / carried - restSpec * (1.0 - photo) * min(ratio, 1.0)), 0.0);
 
   // the back's three lights hold their colour in shadow: what the shade and the brightness took from them, given back
-  vec3 glow = bc * lit * (0.34 + 0.5 * uNight) * max(1.0 / flatDiff - min(ratio, 1.0), 0.0);
+  vec3 glow = bc * lit * (0.34 + 0.5 * uNight) * max(1.0 / carried - min(ratio, 1.0), 0.0);
 
   float k = cover * facing;
   outColor = vec4((spec + lift + glow) * k, shade * k);

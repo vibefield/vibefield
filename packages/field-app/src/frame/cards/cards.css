@@ -46,8 +46,9 @@
     var(--card-near-x) var(--card-near-y) var(--card-near-blur) var(--card-near),
     var(--card-far-x) var(--card-far-y) var(--card-far-blur) var(--card-far);
   /* the night's dim, times how brightly the lamp lights a card picked up as it turns (§5 "The lamp, live": 1
-     everywhere else, and for a card held flat) */
-  filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));
+     everywhere else, and for a card held flat), and never under the floor that keeps its words read turned from the
+     lamp (item 613) */
+  filter: brightness(max(var(--vf-card-light-floor), var(--vf-card-dim) * var(--vf-cards-lamp, 1)));
   cursor: grab;
   pointer-events: auto;
   transform: rotate(var(--vf-cards-r, 0deg)) scale(var(--vf-cards-s, 1));
@@ -764,7 +765,7 @@
     0 0.6px 1.4px rgb(0 0 0 / calc(0.15 * var(--vf-card-shade))),
     2px 9px 17px rgb(0 0 0 / calc(0.12 * var(--vf-card-shade))),
     5px 27px 48px rgb(0 0 0 / calc(0.17 * var(--vf-card-shade)));
-  filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));
+  filter: brightness(max(var(--vf-card-light-floor), var(--vf-card-dim) * var(--vf-cards-lamp, 1)));
   transform: rotateY(180deg);
   backface-visibility: hidden;
   pointer-events: auto;

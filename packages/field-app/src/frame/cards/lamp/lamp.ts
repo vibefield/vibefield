@@ -52,6 +52,21 @@ const DEFAULT_DEPS: LampDeps = {
   token: rootToken,
 };
 
+/** The two tokens a card's own brightness is made of (cards.css's one filter; DESIGN.md §5 "How brightly"). */
+const LIGHT_TOKENS = { floor: "--vf-card-light-floor", dim: "--vf-card-dim" } as const;
+
+/**
+ * The least of the lamp's light that a card's brightness carries (item 613, 2026-11-20): the stylesheet never takes a
+ * card's light, the night's dim times the lamp's light on it, under the floor, so of the lamp's light alone it carries
+ * the floor over the dim at the least. 0 where either is not read: then nothing holds the light up here, and the lamp
+ * gives back over the flat light alone. PURE.
+ */
+export function lampFloor(token: (name: string) => string): number {
+  const floor = Number.parseFloat(token(LIGHT_TOKENS.floor));
+  const dim = Number.parseFloat(token(LIGHT_TOKENS.dim));
+  return Number.isFinite(floor) && Number.isFinite(dim) && dim > 0 ? floor / dim : 0;
+}
+
 /** The size a lamp's surface is drawn at: the held print's. PURE. */
 export function lampSize(density: number): { readonly width: number; readonly height: number } {
   return {
@@ -102,6 +117,7 @@ export function lightLamp(
     gl.uniform4f(u("uWindow"), WINDOW.left, WINDOW.top, WINDOW.width, WINDOW.height);
     gl.uniform1f(u("uWindowR"), WINDOW.corner);
     gl.uniform1f(u("uPhoto"), spec.photo ? 1 : 0);
+    gl.uniform1f(u("uFloor"), lampFloor(deps.token));
     const frameAt = u("uFrame");
     const turned = new Float32Array(9);
     gl.viewport(0, 0, width, height);

@@ -236,7 +236,7 @@
   --vf-card-dark-stock: #1c1c1e;
   --vf-card-dark-edge: #050506;
   --vf-card-dark-ink: rgb(255 255 255 / 92%);
-  --vf-card-dark-ink-2: rgb(255 255 255 / 62%);
+  --vf-card-dark-ink-2: rgb(255 255 255 / 70%);
   --vf-card-dark-ink-3: rgb(255 255 255 / 40%);
   --vf-card-dark-cut: rgb(255 255 255 / 9%);
   /* the back's field and its rule (DESIGN.md §5 "the press", its colours are tokens): the press prints them, and the
@@ -244,6 +244,10 @@
   --vf-card-back: #2d4824;
   --vf-card-back-rule: #eee4c8;
   --vf-card-dim: 1;
+  /* §5 "The lamp, live", How brightly: a card's light, the night's dim times the lamp's light on it as it turns, is
+     never taken under this, so the face's words keep §2.4's 4.5:1 turned from the lamp, by day and by night; the
+     same number in both themes (item 613) */
+  --vf-card-light-floor: 0.72;
   --vf-card-shade: 1;
   --vf-paper-card-shadow: 0 0 0 0.5px rgb(58 46 22 / 22%), -1px 1.5px 3px rgb(0 0 0 / 28%);
   --vf-card-chip-shadow: 0 0 0 2px rgb(255 255 255 / 90%), 0 4px 14px rgb(0 0 0 / 35%);
