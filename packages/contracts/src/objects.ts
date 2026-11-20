@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { SparkId } from "./agent-session";
 
 // Objects at Work (track OB; `draft/thinking-objects-at-work.md`). The wire truth of the desk's room: what a chip can be
 // (OB-D1), what a desk object's name looks like (OB-L1: a name, never a grant), the eight desk tools' inputs and answers
@@ -18,8 +19,10 @@ export const ObjectRef = z
 export type ObjectRef = z.infer<typeof ObjectRef>;
 
 /** Whether the door can name the process that runs an agent's MCP servers: a pane's own, or a helper of the run's own that
- * puppeteer names to the host before anything can start a server (OB-3d). A string, not puppeteer-core's enum: the installed
- * one does not have `run-helper` yet. The one authority: fieldd's briefing and the window's landing table both read it. */
+ * puppeteer names to the host before anything can start a server (OB-3d). A string, not puppeteer-core's enum:
+ * contracts imports no sibling (wall R22). The one authority: fieldd's briefing and the window's landing table both read
+ * it. Corrected 2026-11-18 (item 550): this gave the string's reason as the installed enum not having `run-helper` yet;
+ * the pinned puppeteer-core lists it (since 0.4.2). */
 export function doorCanName(process: string | undefined): boolean {
   return process === "terminal" || process === "run-helper";
 }
@@ -468,11 +471,28 @@ export const ObjectsHeldParams = z
   .object({ docId: DeskDocId, key: DeskObjectKey, held: z.boolean() })
   .passthrough();
 
-/** §7 — one agent on one object, as the desk shows it. */
+/** Item 550 (2026-11-18) — the project a run works in, as this desktop deals it. Ids, never a colour: each is absent
+ * while fieldd does not know it, and a mark with none takes a neutral ink. Each is read tolerantly (2026-11-19): a
+ * malformed one is no id, and the row that carries it stays. */
+export const ObjectAtWorkProject = z
+  .object({
+    /** a folder NAME, never a path (EL7 B1) */
+    name: z.string().min(1).optional().catch(undefined),
+    /** the project's colour sequence as the agent field deals it: this desktop's own windows only (M16) */
+    seq: z.number().int().nonnegative().optional().catch(undefined),
+    /** the deal index of the project's ink (PJ-L7), as the project grouping holds it */
+    ink: z.number().int().nonnegative().optional().catch(undefined),
+  })
+  .passthrough();
+export type ObjectAtWorkProject = z.infer<typeof ObjectAtWorkProject>;
+
+/** §7 — one agent on one object, as the desk shows it. The window's feed alone carries it: an agent is told who is on
+ * an object by its handle and state, and never a project, a spark or who started a run. */
 export const ObjectAtWork = z
   .object({
     run: z.string().min(1),
     handle: z.string().min(1),
+    /** the agent's catalog id */
     agent: z.string().min(1),
     state: AtWorkState,
     /** when this state began, so a flickering "reading" can be held on screen */
@@ -482,6 +502,13 @@ export const ObjectAtWork = z
       .object({ label: z.string().min(1) })
       .passthrough()
       .optional(),
+    /** Item 550 (2026-11-18) — absent when fieldd knows none of the project's ids */
+    project: ObjectAtWorkProject.optional().catch(undefined),
+    /** Item 550 (2026-11-18) — the run is this spark's own session, as fieldd launched it (never a record's word) */
+    spark: SparkId.optional().catch(undefined),
+    /** Item 550 (2026-11-18) — a spark started this run, as this fieldd started it for that spark (never a record's
+     * word). Absent after fieldd restarts: what it started before then, it no longer knows. */
+    startedBy: SparkId.optional().catch(undefined),
   })
   .passthrough();
 export type ObjectAtWork = z.infer<typeof ObjectAtWork>;

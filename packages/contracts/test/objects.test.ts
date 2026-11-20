@@ -8,6 +8,7 @@ import {
   doorCanName,
   OBJECT_GRANTS_FORMAT,
   ObjectActInput,
+  ObjectAtWork,
   ObjectGrantsFile,
   ObjectIntent,
   ObjectIntentAnswer,
@@ -15,6 +16,7 @@ import {
   ObjectRecord,
   ObjectRef,
   ObjectsHandResult,
+  ObjectsPresenceSnapshot,
   ObjectsTakeBackResult,
 } from "../src/objects";
 import { LAYOUT, LAYOUT_ROOT_LEVEL } from "../src/registries";
@@ -191,6 +193,72 @@ describe("what fieldd keeps: an object's name, and the grants in one file (OB cu
     expect(ObjectsTakeBackResult.parse({ taken: true, kept: true }).kept).toBe(true);
     // a take-back always takes: there is no answer that says it did not
     expect(ObjectsTakeBackResult.safeParse({ taken: false, kept: false }).success).toBe(false);
+  });
+});
+
+describe("who is at work on an object, as the window's feed carries it (item 550)", () => {
+  it("carries a run's project, its spark and who started it as ids, each one optional", () => {
+    const snapshot = ObjectsPresenceSnapshot.parse(fixture("objects-presence.valid.json"));
+    const [own, crew] = snapshot.objects[0]?.agents ?? [];
+    expect(own).toMatchObject({
+      agent: "claude",
+      project: { name: "vibe-field", seq: 2, ink: 5 },
+      spark: "sp-7k2m9q4x",
+    });
+    expect(own?.startedBy).toBeUndefined();
+    // a crew run: started by the spark, not its own session, and no colour dealt for its project yet
+    expect(crew).toMatchObject({ project: { name: "vibe-field" }, startedBy: "sp-7k2m9q4x" });
+    expect(crew?.spark).toBeUndefined();
+    expect(crew?.project?.seq).toBeUndefined();
+  });
+
+  it("still reads a feed from before the ids, and keeps a field it does not know", () => {
+    const whole = fixture("objects-presence.valid.json") as {
+      objects: { agents: Record<string, unknown>[] }[];
+    };
+    const before = whole.objects.map((object) => ({
+      ...object,
+      agents: object.agents.map(({ project: _p, spark: _s, startedBy: _b, ...today }) => today),
+    }));
+    expect(ObjectsPresenceSnapshot.safeParse({ objects: before }).success).toBe(true);
+    const later = {
+      ...whole.objects[0]?.agents[0],
+      project: { seq: 2, tint: "later" },
+      crew: "c1",
+    };
+    const read = ObjectAtWork.parse(later);
+    expect(read.project).toEqual({ seq: 2, tint: "later" });
+    expect((read as Record<string, unknown>).crew).toBe("c1");
+  });
+
+  it("reads a malformed id as no id, and keeps the row", () => {
+    const agent = (fixture("objects-presence.valid.json") as { objects: { agents: object[] }[] })
+      .objects[0]?.agents[0];
+    const read = (patch: Record<string, unknown>) => {
+      const parsed = ObjectAtWork.safeParse({ ...agent, ...patch });
+      expect(parsed.success, JSON.stringify(patch)).toBe(true);
+      return parsed.data;
+    };
+    expect(read({ project: { seq: "amber" } })?.project).toEqual({});
+    const named = read({ project: { ink: -1, name: "vibe-field" } });
+    expect(named?.project).toEqual({ name: "vibe-field" });
+    expect(read({ project: { name: "", seq: 2.5 } })?.project).toEqual({});
+    expect(read({ project: "amber" })?.project).toBeUndefined();
+    expect(read({ spark: "Vela" })?.spark).toBeUndefined();
+    expect(read({ startedBy: "spark:sp-7k2m9q4x" })?.startedBy).toBeUndefined();
+    const kept = read({ spark: "vela", project: { name: "", seq: 2.5 } });
+    expect(kept).toMatchObject({ agent: "claude" });
+  });
+
+  it("still reads each well-formed id as itself", () => {
+    const agent = (fixture("objects-presence.valid.json") as { objects: { agents: object[] }[] })
+      .objects[0]?.agents[0];
+    const ids = {
+      project: { name: "vibe-field", seq: 0, ink: 11 },
+      spark: "sp-7k2m9q4x",
+      startedBy: "sp-a1b2c3",
+    };
+    expect(ObjectAtWork.parse({ ...agent, ...ids })).toMatchObject(ids);
   });
 });
 

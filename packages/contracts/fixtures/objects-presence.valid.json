@@ -1,0 +1,30 @@
+{
+  "objects": [
+    {
+      "ref": "vf:obj/7hk2qx4m",
+      "docId": "doc-main",
+      "key": "k1",
+      "agents": [
+        {
+          "run": "01JA7RUNAAAAAAAAAAAAAAAAAA",
+          "handle": "Claude Code in vibe-field",
+          "agent": "claude",
+          "state": "acting",
+          "since": 1763467200000,
+          "lastChange": { "label": "Added three ideas" },
+          "project": { "name": "vibe-field", "seq": 2, "ink": 5 },
+          "spark": "sp-7k2m9q4x"
+        },
+        {
+          "run": "01JA7RUNBBBBBBBBBBBBBBBBBB",
+          "handle": "Codex in vibe-field",
+          "agent": "codex",
+          "state": "reading",
+          "since": 1763467201000,
+          "project": { "name": "vibe-field" },
+          "startedBy": "sp-7k2m9q4x"
+        }
+      ]
+    }
+  ]
+}
