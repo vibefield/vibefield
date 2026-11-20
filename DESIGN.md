@@ -9400,6 +9400,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     only your own agents (a run with no spark, and not started by one), and a spark's need, or its agents' asks, is
     counted once, on Chat. In a thread the bar steps aside and the composer takes its place, as Messages does, and
     back brings it back (380ms).
+    On iOS 26 and later, the 188 pt capsule uses the system tab bar. UIKit sizes its icons, labels and badges,
+    and the blue selection follows a tap or a drag with the Liquid Glass lens. iOS 18 uses the dimensions above.
   - **A spark's row** (CH-D1, newest activity first): 76 tall, 16 from the sides, its separator from the words' edge.
     Its face is 48, framed, live while it works (§2.10). The name is 17 semibold and the time 15 tertiary, by the
     Mac's rule (now, 9:41 AM, a weekday, a date). Its status's word is 15 tertiary, and in the attention ink for

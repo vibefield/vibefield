@@ -221,10 +221,8 @@ public struct HomeScreen: View {
   /// software keyboard stands — a hardware keyboard (the simulator with the
   /// Mac's attached, an iPad's) raises none, and the row must stay at rest.
   @State private var keyboardInset: CGFloat = 0
-  /// The bar's glass morphs (the search circle into the field, the capsule
-  /// into its folded circle) and, apart, the tab pill's slide.
+  /// The bar's glass morphs, including the search circle into the field.
   @Namespace private var barGlass
-  @Namespace private var tabPill
   #if DEBUG || VF_TESTFLIGHT
     /// `-vf-mock`: the whole phone over invented facts and no tailnet (IOS-9d).
     @State private var mock: MockAccount?
@@ -2041,9 +2039,7 @@ public struct HomeScreen: View {
                 .padding(.leading, AppBar.margin)
                 .frame(maxWidth: .infinity, alignment: .leading)
             } else {
-              TabCapsule(
-                selection: $selectedTab, field: .field(waiting: waitingCount), chat: chatMark, pill: tabPill)
-                .liquidGlassCapsule()
+              TabCapsule(selection: $selectedTab, field: .field(waiting: waitingCount), chat: chatMark)
                 .glassID("tabs", in: barGlass)
             }
             searchCircle

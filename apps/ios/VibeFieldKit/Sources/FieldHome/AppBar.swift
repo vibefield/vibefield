@@ -24,30 +24,9 @@ enum AppTab: Hashable {
   }
 }
 
-/// The bar (IOS-9e): the account at the LEFT, the two tabs in a capsule at the
-/// centre, search at the RIGHT — one 62 pt row of Liquid Glass, the page's
-/// layout (The Account Pill, design A) at the system's own measure.
-///
-/// **Why it is ours and not `TabView`'s.** iOS 26's tab bar pins its capsule to
-/// the leading edge the moment search is a tab, and it has no seat for a
-/// control before the tabs — so IOS-9a's corner could only stand beside the
-/// search circle, at a size of its own. Asked for 2026-09-23: the account
-/// circle in the left corner, at the search circle's size. So the
-/// bar is composed here from the system's glass (`GlassEffectContainer`,
-/// `glassEffect`, `glassEffectID`) with every number taken off the system bar
-/// in the simulator (iPhone 17, iOS 26.5, 3× pixels): the row 62 pt tall and
-/// 21 pt from the side edges and the bottom; the capsule 188 wide, two 86 pt
-/// tabs; the selected pill 94 × 54; icons 26 pt over 10 pt semibold labels;
-/// the badge 20 pt at (+17, −8) from the icon's centre; the search glyph 22 pt.
-/// Every one of them is pinned by `AppBarTests`.
-///
-/// **Three tabs (IOS-12b, PC-D1 A; DESIGN.md §8 "The phone's Chat").** Chat
-/// joins the capsule and the capsule keeps the system's 188 and its 8 pt
-/// inset: the three tabs share what the two 86s did, 57⅓ each, and the pill
-/// is the tab plus the 8 the system's 94 had over its 86, so it still stands
-/// 4 pt inside. The circles and every other number stay. Chat's glyph is
-/// History's 22, and its mark is the count of the sparks that need you, else a
-/// cyan dot of 10 while a thread is unread (`TabMark`).
+/// The account and search circles flank the three tabs in a 62 pt row.
+/// On iOS 26 UIKit draws the center capsule and its selection lens. The
+/// earlier appearance uses the tab, icon, pill and badge dimensions below.
 enum AppBar {
   /// The row: the capsule's height, and both circles' diameter.
   static let height: CGFloat = 62
@@ -162,21 +141,32 @@ enum TabMark: Equatable {
   static func fieldWaiting(_ bubbles: [FieldBubble]) -> Int {
     bubbles.filter { $0.status == .blocked && !$0.ofSpark }.count
   }
+
+  func accessibilityValue(on tab: AppTab) -> String {
+    switch self {
+    case .count(let count): tab == .chat ? "\(count) need you" : "\(count) waiting"
+    case .unread: "a thread is unread"
+    case .none: ""
+    }
+  }
 }
 
-/// The three tabs in one capsule: an icon over a 10 pt label each, the
-/// selected one on a pill that slides between them, and each tab's mark —
-/// Field's orange count of the agents waiting on you, Chat's of the sparks
-/// that need you or its cyan dot (`TabMark`). The capsule's glass is its
-/// container's (`liquidGlassCapsule` at the call site).
 struct TabCapsule: View {
   @Binding var selection: AppTab
   let field: TabMark
   let chat: TabMark
-  /// The pill's matched geometry — its own namespace, not the glass one.
-  let pill: Namespace.ID
+  @Namespace private var pill
 
   var body: some View {
+    if #available(iOS 26.0, *) {
+      NativeHomeTabBar(selection: $selection, field: field, chat: chat)
+        .frame(width: AppBar.capsuleWidth, height: AppBar.height)
+    } else {
+      legacyTabs.liquidGlassCapsule()
+    }
+  }
+
+  private var legacyTabs: some View {
     HStack(spacing: 0) {
       item(.field, mark: field) {
         Image("tab-field", bundle: .module)
@@ -235,19 +225,8 @@ struct TabCapsule: View {
     }
     .buttonStyle(.plain)
     .accessibilityLabel(tab.title)
-    .accessibilityValue(Self.spoken(mark, on: tab))
+    .accessibilityValue(mark.accessibilityValue(on: tab))
     .accessibilityAddTraits(selected ? [.isSelected] : [])
-  }
-
-  /// A mark is a picture, so it is said: Field's agents are waiting, Chat's
-  /// sparks need you, and the dot says a thread is unread (the Mac's cell's
-  /// words, DESIGN.md §8).
-  private static func spoken(_ mark: TabMark, on tab: AppTab) -> String {
-    switch mark {
-    case .count(let count): tab == .chat ? "\(count) need you" : "\(count) waiting"
-    case .unread: "a thread is unread"
-    case .none: ""
-    }
   }
 }
 
