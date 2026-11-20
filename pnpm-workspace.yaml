@@ -464,6 +464,15 @@ catalog:
   tailwindcss: ^4.0.0
   typescript: ^5.6.0
   vitest: ^3.0.0
+# Item 554 (2026-11-20): pnpm asks before it installs, and stops where no one can answer. A script run on a tree
+# out of step with its lock asks at a terminal (Enter installs) and stops with "Run pnpm install" anywhere else: a
+# hook, an agent's shell, a stage launched without a terminal. An environment's
+# `pnpm_config_verify_deps_before_run` still overrides it. An install that would take a version younger than the
+# release-age window (pnpm 11's default, 1,440 minutes) and not listed below asks at a terminal, where the default
+# answer is no, and fails anywhere else, CI included, naming the versions. A frozen install resolves nothing, so
+# neither setting touches it. Both are pnpm 11.13.1's own, read in its source.
+verifyDepsBeforeRun: prompt
+minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
   # EL8 2026-11-19: reviewed ICE 0.18.0 (published 2026-11-18, inside the release-age window). The 0.17.0 row was
