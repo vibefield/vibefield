@@ -2,7 +2,13 @@ import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { projectInk } from "@vibefield/design-kit/project-ink";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import { agentMark } from "@vibefield/puppeteer-view-sdk/toolkit";
-import { type CSSProperties, type ReactElement, type ReactNode, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+  type RefObject,
+  useState,
+} from "react";
 import { headOf, nameOnFace, wordsOnFace } from "./card-fit";
 import { type Card, cardType, type FileFace, type SessionFace, type TextShow } from "./cards-model";
 import { AGENT_STATE_WORDS, cardName, HAND_WORDS, WAITING_WORDS } from "./cards-words";
@@ -46,6 +52,9 @@ export interface CardFaceProps {
   readonly held?: boolean;
   /** The reach brought it forward: its chip shows on its top right corner. */
   readonly reached?: boolean;
+  /** Picked up, where its lamp stands (§5 "The lamp, live"): over its face and under its cut edge. The held layer
+   * lights the lamp in it and draws it as the card turns. */
+  readonly lamp?: RefObject<HTMLElement | null> | undefined;
   readonly onRemove?: () => void;
 }
 
@@ -53,6 +62,7 @@ export function CardFace({
   card,
   held = false,
   reached = false,
+  lamp,
   onRemove,
 }: CardFaceProps): ReactElement {
   const first = card.faces[0];
@@ -69,6 +79,7 @@ export function CardFace({
         {first.type === "session" ? <AgentFace face={first} /> : <PrintedFace card={card} />}
       </div>
       <i className="vf-card-gloss" aria-hidden="true" />
+      {lamp !== undefined && <i ref={lamp} className="vf-card-lamp" aria-hidden="true" />}
       {reached && (
         <button
           type="button"

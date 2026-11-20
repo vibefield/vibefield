@@ -45,7 +45,9 @@
     0 0.6px 1.4px rgb(0 0 0 / calc(0.15 * var(--vf-card-shade))),
     var(--card-near-x) var(--card-near-y) var(--card-near-blur) var(--card-near),
     var(--card-far-x) var(--card-far-y) var(--card-far-blur) var(--card-far);
-  filter: brightness(var(--vf-card-dim));
+  /* the night's dim, times how brightly the lamp lights a card picked up as it turns (§5 "The lamp, live": 1
+     everywhere else, and for a card held flat) */
+  filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));
   cursor: grab;
   pointer-events: auto;
   transform: rotate(var(--vf-cards-r, 0deg)) scale(var(--vf-cards-s, 1));
@@ -123,7 +125,9 @@
   background-size: 300% 100%;
   mix-blend-mode: screen;
   pointer-events: none;
-  transition: background-position 300ms var(--vf-ease-island);
+  transition:
+    background-position 300ms var(--vf-ease-island),
+    opacity 240ms ease;
 }
 
 /* the cut edge and the catch of light along its top, over everything printed */
@@ -698,6 +702,37 @@
   transition: transform 280ms cubic-bezier(0.4, 0, 1, 1);
 }
 
+/* The turn (DESIGN.md §8 "Picking one up"; §6 "The hand", the turn; item 596): up, the card turns
+   toward the pointer about its level and its upright, as a card turns in your fingers. The held
+   layer writes the two turns here a frame at a time, on a spring: never a transition. It is seen
+   from the held card's 1000, so the turn and Flip it are one card's. */
+.vf-cards-turn {
+  transform: rotateY(calc(var(--vf-cards-turn-y, 0) * 1rad))
+    rotateX(calc(var(--vf-cards-turn-x, 0) * 1rad));
+  transform-style: preserve-3d;
+}
+
+/* The lamp (§5 "The lamp, live"): one small surface over the side that is up, under its cut edge,
+   on which the held layer draws what the lamp's light does as the card turns, added to the print
+   under it. Head on it holds nothing. The stock's own still gloss steps aside while it is lit. */
+.vf-card-lamp {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.vf-card-lamp > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.vf-cards-turn[data-lit] .vf-card-gloss {
+  opacity: 0;
+}
+
 /* Flip it (DESIGN.md §8 "Picking one up"): the card picked up turns about its upright to its
    printed back and again to its face, in 480ms on the island curve. Each side is hidden from
    behind. */
@@ -729,7 +764,7 @@
     0 0.6px 1.4px rgb(0 0 0 / calc(0.15 * var(--vf-card-shade))),
     2px 9px 17px rgb(0 0 0 / calc(0.12 * var(--vf-card-shade))),
     5px 27px 48px rgb(0 0 0 / calc(0.17 * var(--vf-card-shade)));
-  filter: brightness(var(--vf-card-dim));
+  filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));
   transform: rotateY(180deg);
   backface-visibility: hidden;
   pointer-events: auto;
@@ -769,6 +804,11 @@
 
 .vf-cards-held[data-motion="reduced"] .vf-cards-scrim {
   transition-duration: 120ms;
+}
+
+/* M6: the card stands flat on its print; it never turns toward the pointer. */
+.vf-cards-held[data-motion="reduced"] .vf-cards-turn {
+  transform: none;
 }
 
 /* M6, Flip it: no turn; the sides cross-fade in 90ms. These stand after the turn's own rules: the

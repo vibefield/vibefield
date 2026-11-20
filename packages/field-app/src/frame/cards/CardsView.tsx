@@ -12,7 +12,7 @@ import {
   useState,
 } from "react";
 import type { ViewKeys } from "../views";
-import { CardFace } from "./CardFace";
+import { CardFace, cardLook } from "./CardFace";
 import { DEAL_SETTLE_MS, dealStart, settle, whenVisible } from "./card-flight";
 import {
   CARD_H,
@@ -27,6 +27,8 @@ import {
 } from "./cards-model";
 import type { DealFrom } from "./cards-store";
 import { cardName, HAND_WORDS, OUTCOME_WORDS, provenance } from "./cards-words";
+import type { Turn } from "./lamp/turn";
+import { useHeldTurn } from "./lamp/use-held-turn";
 import "./cards.css";
 
 /**
@@ -35,10 +37,11 @@ import "./cards.css";
  * the fan and straightened as it rises; the card the reach brings forward with its × and, above
  * it, where it came from; the raised hand's keyboard card; a deal flying in from its source's box
  * (or rising from the window's foot); a card leaving past the foot; and the card picked up, at
- * reading size over the window out of focus, with the bar under the head. Controller-free
+ * reading size over the window out of focus, turning toward the pointer in the lamp's light, with
+ * the bar under the head. Controller-free
  * (docs/UI_SYSTEM.md): `Cards.tsx` feeds it from the store and the pointer, the catalog from
- * fixtures. What it keeps is presentation only: which deals have been let fly, and whether the
- * held card has left its place yet.
+ * fixtures. What it keeps is presentation only: which deals have been let fly, whether the held
+ * card has left its place yet, which of its sides is up and how it is turned (`use-held-turn`).
  *
  * For a reader (R-D 11): the fan is "Your hand"; raised, it is a list whose options are the cards,
  * each named by its name and where it came from, walked by `aria-activedescendant` (the controller
@@ -65,6 +68,9 @@ export interface HeldCard {
   /** up: at reading size over the scrim · home: back into its place after a 140ms lead · gone:
    * removed, shrinking where it stands */
   readonly phase: "up" | "home" | "gone";
+  /** a still's pose: the catalog stands the card at a turn (radians); the product never sets it, and
+   * the card turns toward the pointer */
+  readonly pose?: Turn;
 }
 
 export interface LeavingCard {
@@ -437,8 +443,10 @@ function keepKeyInside(event: ReactKeyboardEvent<HTMLDivElement>): void {
 /** A card picked up (HN-D5): it leaves its place in the fan for the middle at reading size while
  * the window behind it goes out of focus, and the bar under the head says what it is, in bold (its
  * `about`: said, not printed — round 5's face), and where it came from. Up, it is a modal dialog
- * named by the card. Flip it turns it to its printed back and again to its
- * face (DESIGN.md §8 "Picking one up"); put back, it goes home face up. */
+ * named by the card, and it turns toward the pointer as a card turns in your fingers, the lamp's
+ * light running across it as it turns (§5 "The lamp, live"; item 596). Flip it turns it to its
+ * printed back and again to its face (DESIGN.md §8 "Picking one up"); put back, it goes home face
+ * up and straight. */
 function HeldLayer({
   held,
   slot,
@@ -493,6 +501,19 @@ function HeldLayer({
     transform: `translate(${round(at.x, 1)}px, ${round(at.y, 1)}px) scale(${round(at.s, 3)})`,
     "--vf-cards-o": at.o,
   };
+  // the turn (§8 "Picking one up") and the lamp's light on it (§5 "The lamp, live")
+  const first = held.card.faces[0];
+  const turn = useHeldTurn({
+    up,
+    back,
+    reducedMotion,
+    layer: win,
+    middle: { x: centre.x + CARD_W / 2, y: centre.y + CARD_H / 2 },
+    printed: cardLook(held.card) !== "agent",
+    photo: held.card.waiting !== true && (first.type === "image" || first.type === "ref"),
+    density: (typeof window === "undefined" ? 1 : window.devicePixelRatio || 1) * HELD_SCALE,
+    pose: held.pose,
+  });
 
   const dialog = up
     ? { role: "dialog", "aria-modal": true, "aria-label": cardName(held.card) }
@@ -506,6 +527,8 @@ function HeldLayer({
       {...dialog}
       {...(reducedMotion ? { "data-motion": "reduced" } : {})}
       onKeyDown={keepKeyInside}
+      onPointerMove={turn.onPointerMove}
+      onPointerLeave={turn.onPointerLeave}
     >
       <div className="vf-cards-scrim" aria-hidden="true" onClick={onPutBack} />
       <div
@@ -514,9 +537,13 @@ function HeldLayer({
         style={cardStyle as CSSProperties}
         onDoubleClick={turnOver}
       >
-        <div className="vf-cards-flip" data-side={back ? "back" : "face"}>
-          <CardFace card={held.card} held />
-          <div className="vf-card-back" aria-hidden="true" />
+        <div ref={turn.turnRef} className="vf-cards-turn" {...(turn.lit ? { "data-lit": "" } : {})}>
+          <div ref={turn.flipRef} className="vf-cards-flip" data-side={back ? "back" : "face"}>
+            <CardFace card={held.card} held lamp={turn.frontLamp ? turn.frontLampRef : undefined} />
+            <div className="vf-card-back" aria-hidden="true">
+              {turn.backLamp && <i ref={turn.backLampRef} className="vf-card-lamp" />}
+            </div>
+          </div>
         </div>
       </div>
       <div className="vf-cards-bar" {...(up ? { "data-on": "" } : {})} inert={!up}>

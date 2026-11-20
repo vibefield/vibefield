@@ -3,12 +3,14 @@ import { useTheme } from "../../../theme";
 import { HELD_SCALE } from "../CardsView";
 import { type PrintSpec, printStock } from "./press";
 import { CARD_DESIGN } from "./press-numbers";
+import { markCardLight, markCardPrint } from "./print-light";
 
 /**
  * The hand's prints, put where every card can wear them (DESIGN.md §5 "the press"): the front and the back at the
  * window's pixel density, and again at a card picked up's 2.4×, for the theme's light, as four properties on the root,
  * with `data-vf-card-print="ready"` once the front has printed. They are printed after the window is idle and again only
  * when the theme or the pixel density changes. Until then, and where WebGL2 is refused, the cards wear the flat stock.
+ * The light itself is said on the root at once (`print-light.ts`), for a held card's lamp (§5 "The lamp, live").
  * The product's hand prints for the app's theme (`usePrintedStock`); the catalog hands its page's theme in
  * (`usePrintedStockFor`), as a host hands the product its own, and never reaches the theme's owner (item 403).
  */
@@ -58,6 +60,7 @@ export function usePrintedStockFor(night: boolean): void {
   const density = useDensity();
   useEffect(() => {
     let live = true;
+    markCardLight(document.documentElement, night);
     const spec = (side: PrintSpec["side"], scale: number): PrintSpec => ({
       side,
       width: CARD_DESIGN.width,
@@ -82,8 +85,7 @@ export function usePrintedStockFor(night: boolean): void {
         put(PROPS.back, back);
         put(PROPS.frontHeld, frontHeld);
         put(PROPS.backHeld, backHeld);
-        if (front === null) delete root.dataset.vfCardPrint;
-        else root.dataset.vfCardPrint = "ready";
+        markCardPrint(root, front !== null);
       });
     });
     return () => {

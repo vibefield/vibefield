@@ -1,7 +1,7 @@
-import { PAPER_TEX, paperTexture } from "@vibecook/ice/desk/kit";
-import { type BackPrints, type PressSurface, paintBack } from "./back-print";
+import { type BackPrints, paintBack } from "./back-print";
+import { bindQuad, bindTexture, deskPaper, linkProgram, setLight } from "./gl-kit";
 import { type PressColours, pressColours, rootToken } from "./press-colours";
-import { CARD_DESIGN, LAMP_COLOUR, PRESS } from "./press-numbers";
+import { CARD_DESIGN } from "./press-numbers";
 import { PRESS_FS, PRESS_VS } from "./press-shader";
 
 export { PRESS, PRESS_TOKENS } from "./press-numbers";
@@ -81,65 +81,6 @@ export function resetPressForTest(): void {
   printed.clear();
 }
 
-function compile(gl: WebGL2RenderingContext, type: number, src: string): WebGLShader {
-  const s = gl.createShader(type);
-  if (s === null) throw new Error("the press could not make a shader");
-  gl.shaderSource(s, src);
-  gl.compileShader(s);
-  if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
-    throw new Error(gl.getShaderInfoLog(s) ?? "shader");
-  return s;
-}
-
-function program(gl: WebGL2RenderingContext): WebGLProgram {
-  const p = gl.createProgram();
-  if (p === null) throw new Error("the press could not make a program");
-  gl.attachShader(p, compile(gl, gl.VERTEX_SHADER, PRESS_VS));
-  gl.attachShader(p, compile(gl, gl.FRAGMENT_SHADER, PRESS_FS));
-  gl.linkProgram(p);
-  if (!gl.getProgramParameter(p, gl.LINK_STATUS))
-    throw new Error(gl.getProgramInfoLog(p) ?? "program");
-  return p;
-}
-
-function texture(
-  gl: WebGL2RenderingContext,
-  unit: number,
-  source: { readonly bytes: Uint8Array; readonly size: number } | PressSurface | null,
-  repeat: boolean,
-): void {
-  const t = gl.createTexture();
-  gl.activeTexture(gl.TEXTURE0 + unit);
-  gl.bindTexture(gl.TEXTURE_2D, t);
-  const wrap = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, wrap);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, wrap);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-  if (source === null) {
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
-  } else if ("bytes" in source) {
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
-    gl.texImage2D(
-      gl.TEXTURE_2D,
-      0,
-      gl.RGBA,
-      source.size,
-      source.size,
-      0,
-      gl.RGBA,
-      gl.UNSIGNED_BYTE,
-      source.bytes,
-    );
-    gl.generateMipmap(gl.TEXTURE_2D);
-  } else {
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
-  }
-}
-
-let PAPER: Uint8Array | null = null;
-
 async function press(
   spec: PrintSpec,
   colours: PressColours,
@@ -158,50 +99,26 @@ async function press(
   if (gl === null) return null;
   const lose = (): void => gl.getExtension("WEBGL_lose_context")?.loseContext();
   try {
-    const prog = program(gl);
+    const prog = linkProgram(gl, PRESS_VS, PRESS_FS);
     // Item 620 (2026-11-20): WebGL's own `useProgram`, not a React hook
     // biome-ignore lint/correctness/useHookAtTopLevel: WebGL's own call, not a hook
     gl.useProgram(prog);
-    const quad = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
-    const aPos = gl.getAttribLocation(prog, "aPos");
-    gl.enableVertexAttribArray(aPos);
-    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
-    // the desk's own page: ICE's paper at its own seed, the one its notebook and calendar bake
-    PAPER ??= paperTexture();
-    texture(gl, 0, { bytes: PAPER, size: PAPER_TEX }, true);
+    bindQuad(gl, prog);
+    bindTexture(gl, 0, deskPaper(), true);
     const back =
       spec.side === "back"
         ? deps.paintBack(spec.density * (spec.width / CARD_DESIGN.width), colours)
         : null;
-    texture(gl, 1, back?.color ?? null, false);
-    texture(gl, 2, back?.mask ?? null, false);
-    texture(gl, 3, back?.height ?? null, false);
-    const u = (name: string): WebGLUniformLocation | null => gl.getUniformLocation(prog, name);
-    gl.uniform1i(u("uPaper"), 0);
-    gl.uniform1i(u("uBackC"), 1);
-    gl.uniform1i(u("uBackM"), 2);
-    gl.uniform1i(u("uBackH"), 3);
-    gl.uniform1i(u("uSide"), spec.side === "back" ? 1 : 0);
-    gl.uniform2f(u("uSize"), CARD_DESIGN.width, CARD_DESIGN.height);
-    gl.uniform1f(u("uRadius"), PRESS.corner);
-    gl.uniform3fv(
-      u("uPaperC"),
-      colours.paper.map((channel) => channel / 255),
-    );
-    gl.uniform3fv(u("uLight"), [...PRESS.lamp]);
-    gl.uniform3fv(u("uRoom"), [...PRESS.room]);
-    gl.uniform3fv(u("uLamp"), [...(spec.night ? LAMP_COLOUR.night : LAMP_COLOUR.day)]);
-    gl.uniform1f(u("uNight"), spec.night ? 1 : 0);
-    gl.uniform1f(u("uAmb"), spec.night ? PRESS.ambient.night : PRESS.ambient.day);
-    gl.uniform1f(u("uPitch"), PRESS.linen.pitch);
-    gl.uniform1f(u("uTip"), PRESS.linen.tip);
-    gl.uniform1f(u("uShin"), PRESS.varnish.shininess);
-    gl.uniform1f(u("uKs"), PRESS.varnish.strength);
-    gl.uniform1f(u("uEdgeShade"), PRESS.edge.shade);
-    gl.uniform1f(u("uEdgeW"), PRESS.edge.width);
-    gl.uniform2f(u("uHs"), 1.6 / Math.max(1, w), 1.6 / Math.max(1, h));
+    bindTexture(gl, 1, back?.color ?? null, false);
+    bindTexture(gl, 2, back?.mask ?? null, false);
+    bindTexture(gl, 3, back?.height ?? null, false);
+    setLight(gl, prog, {
+      side: spec.side,
+      night: spec.night,
+      paper: colours.paper,
+      width: w,
+      height: h,
+    });
     gl.viewport(0, 0, w, h);
     gl.clearColor(0, 0, 0, 0);
     gl.clear(gl.COLOR_BUFFER_BIT);

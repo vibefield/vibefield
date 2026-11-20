@@ -14,6 +14,10 @@ export type Measure = (text: string, px: number, weight: 400 | 700, tracking: nu
  * right side. */
 export const NAME = { max: 11.5, min: 10, step: 0.25, tracking: -0.22, room: 88.6 } as const;
 
+/** The window, 29–139: 100 × 110, 10 inside the card's sides, its corner 3.5 (`cards.css` draws it there; a held
+ * card's lamp reads where it is, §5 "The lamp, live"). */
+export const WINDOW = { left: 10, top: 29, width: 100, height: 110, corner: 3.5 } as const;
+
 /** A text window's three sizes, largest first, each with its line pitch; its words are inset 6 a side (88 of 100)
  * and its lines fit in 110 less 9. */
 export const WORDS = {

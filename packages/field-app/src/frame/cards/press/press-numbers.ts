@@ -14,6 +14,9 @@ export const PRESS = {
   /** the room's soft light above you */
   room: [0.18, -0.55, 0.82],
   ambient: { day: 0.68, night: 0.55 },
+  /** the lamp's diffuse: a flat card at rest reads 1; the lamp is never taken lower than `low`; past 1 the light
+   * bends over at `knee` and stops short of 1 + `over` */
+  diffuse: { low: 0.2, knee: 1.6, over: 0.35 },
   /** linen: a fine embossed weave this far apart, tipped this much */
   linen: { pitch: 1.35, tip: 0.11 },
   /** the satin varnish */
