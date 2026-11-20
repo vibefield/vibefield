@@ -85,6 +85,11 @@ public final class HistoryProjects {
   /// Item 353 — when each project's figures were read and the project's last activity then: a project that moved
   /// since is read again, no sooner than `HistoryReads.figuresRefreshSeconds` later.
   @ObservationIgnored private var figuresRead: [String: (at: Date, lastAt: Int64?)] = [:]
+  /// Item 398 (2026-11-19) — per project, the `contribution` rows asked for by id (`askFiguresById`): the listed
+  /// sessions its cut answer did not carry. Joined after the project's own; cleared when those are read again.
+  @ObservationIgnored private var figuresById: [String: [IndexContribution]] = [:]
+  /// Item 398 — per project, the sessions asked for by id since its figures were last read (`figuresKey`)
+  @ObservationIgnored private var figuresAsked: [String: Set<String>] = [:]
   /// Item 353 — the ledger's figures are on screen: every listed project's figures are read, a few at a time.
   @ObservationIgnored private var wantsFigures: Bool
   @ObservationIgnored private var figuresQueue: [String] = []
@@ -478,6 +483,7 @@ public final class HistoryProjects {
           rebuild()
         }
         if walk || page.cursor == nil { sessionsWalkedAt[page.key] = now() }
+        askFiguresById(page.key)
       } catch {
         refused(error)
         // Item 516 — a refused read is an answer: the list holds no longer
@@ -519,11 +525,49 @@ public final class HistoryProjects {
         figuresFailed.remove(key)
         figuresFailed.remove(answer.key)
         if figuresFailed.isEmpty { figuresRetries = 0 }
+        // Item 398 — what was asked for by id stood beside the answer before this one; it is asked for again
+        figuresById[answer.key] = nil
+        figuresAsked[answer.key] = nil
         rebuild()
+        askFiguresById(answer.key)
       } catch {
         if !(error is CancellationError) { figuresFailed.insert(key) }
         refused(error)
       }
+    }
+  }
+
+  /// Item 398 (2026-11-19) — the listed sessions a project's figures did not carry, asked for by id. A phone's answer
+  /// is cut at its bound (`clipped`: a hundred rows, the heaviest first), so a listed session past them wore no
+  /// figures. The door answers exactly the asked conversations (`ProjectFiguresParams.sessions`): a page of
+  /// `HistoryReads.listRows` at a time, in the listing's order, each once until the project's figures are read again.
+  private func askFiguresById(_ key: String) {
+    guard let door, !closed, tasks["figures-ids/\(key)"] == nil, let held = figures[key], held.clipped,
+      let rows = sessionsByKey[key]
+    else { return }
+    let have = Set(FieldHistoryModel.figuresBySession(held.contribution + (figuresById[key] ?? [])).keys)
+    let wanted = FieldHistoryModel.figuresWanted(rows, have: have, asked: figuresAsked[key] ?? [])
+    guard !wanted.isEmpty else { return }
+    figuresAsked[key, default: []].formUnion(
+      wanted.map { FieldHistoryModel.figuresKey(device: $0.device, sessionId: $0.sessionId) })
+    tasks["figures-ids/\(key)"] = Task { [weak self] in
+      guard let self else { return }
+      var answered = false
+      do {
+        let offset = TimeZone.current.secondsFromGMT() / 60
+        let params = ProjectFiguresParams(key: key, offsetMinutes: max(-840, min(840, offset)), sessions: wanted)
+        let answer = try ProjectFiguresResult(json: try await door.call("project.figures", params: params.json))
+        if !Task.isCancelled, answer.key == key {
+          figuresById[key, default: []] += answer.contribution
+          answered = true
+          rebuild()
+        }
+      } catch {
+        refused(error)
+      }
+      tasks["figures-ids/\(key)"] = nil
+      // the next page of them, once this one is answered
+      if answered { askFiguresById(key) }
     }
   }
 
@@ -691,6 +735,8 @@ public final class HistoryProjects {
     if let rows = sessionsByKey.removeValue(forKey: from), sessionsByKey[to] == nil { sessionsByKey[to] = rows }
     if let held = figures.removeValue(forKey: from), figures[to] == nil { figures[to] = held }
     if let read = figuresRead.removeValue(forKey: from), figuresRead[to] == nil { figuresRead[to] = read }
+    if let byId = figuresById.removeValue(forKey: from), figuresById[to] == nil { figuresById[to] = byId }
+    if let asked = figuresAsked.removeValue(forKey: from), figuresAsked[to] == nil { figuresAsked[to] = asked }
     if let walked = sessionsWalkedAt.removeValue(forKey: from), sessionsWalkedAt[to] == nil { sessionsWalkedAt[to] = walked }
     if figuresFailed.remove(from) != nil { figuresFailed.insert(to) }
     if sessionsAnswered.remove(from) != nil { sessionsAnswered.insert(to) }
@@ -718,13 +764,15 @@ public final class HistoryProjects {
     /// The ledger as it stands: the lifetimes and the marks this phone kept stand in it until the door's are read.
     var ledger: HistoryCorpus
     var clock: Date
+    /// Item 398 — per project, the rows asked for by id, joined after its own
+    var figuresById: [String: [IndexContribution]] = [:]
   }
 
   /// Everything read, as values, with the ledger that stands and the clock.
   var ledgerInputs: LedgerInputs {
     LedgerInputs(
       order: order, summaries: summaries, sessionsByKey: sessionsByKey, figures: figures, agentCounts: agentCounts,
-      sources: sources, roster: roster, source: source, ledger: corpus, clock: now())
+      sources: sources, roster: roster, source: source, ledger: corpus, clock: now(), figuresById: figuresById)
   }
 
   /// Item 364 (asked for 2026-11-12: History opens smoothly on the phone, where it was very janky at first, until
@@ -824,7 +872,7 @@ public final class HistoryProjects {
         // Item 393 — each session wears its row of the project's `contribution`, once the project's figures are read
         sessions[key] = FieldHistoryModel.projectSessionRows(
           rows, key: key, places: summary.places, desktops: desktops, now: clock,
-          contribution: inputs.figures[key]?.contribution ?? [])
+          contribution: (inputs.figures[key]?.contribution ?? []) + (inputs.figuresById[key] ?? []))
         live += rows.map { (key, $0) }
         agents.formUnion(rows.compactMap(\.provider))
       }

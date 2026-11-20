@@ -69,9 +69,10 @@ public struct HistoryLifetime: Equatable, Sendable, Codable {
   public let tokens: Double
   /// Estimated spend over every recorded day.
   public let spend: HistorySpend
-  /// Messages over the session rows the door gave.
+  /// Messages: the door's own total (`totals`, item 398), else a sum over the session rows it gave.
   public let messages: Double
-  /// The door cut the session rows for a phone: `messages` is a lower bound.
+  /// `messages` is a lower bound: the door cut the rows they were summed over, or (with its total) it says the
+  /// lifetime is not whole.
   public let clipped: Bool
   /// The days are not exact (a desktop did not answer, a split project, a conversation recorded twice).
   public let partial: Bool
@@ -129,9 +130,13 @@ extension FieldHistoryModel {
       spend = spend + HistorySpend(
         costMicroUsd: day.costMicroUsd, unpricedTokens: day.unpricedTokens, unrecordedOutput: day.unrecordedOutput)
     }
+    // Item 398 (2026-11-19) — the door's own sum over every row it gathered, when it gives one, never a cut page's.
+    // It is a lower bound while the door says the lifetime is not whole: a desktop did not answer, or rows were cut
+    // (the door does not yet say which, so a cut project keeps its `+`).
+    let messages = result.totals?.messages ?? result.contribution.reduce(0) { $0 + $1.messages }
+    let lowerBound = result.totals == nil ? result.clipped : result.lifetimePartial
     return HistoryLifetime(
-      tokens: tokens, spend: spend, messages: result.contribution.reduce(0) { $0 + $1.messages },
-      clipped: result.clipped, partial: result.partial)
+      tokens: tokens, spend: spend, messages: messages, clipped: lowerBound, partial: result.partial)
   }
 
   /// The ledger's figures over the projects it lists. `sessions` is the ledger's own count (`project.list`), whole

@@ -363,7 +363,7 @@ public struct ProjectFiguresResult: Sendable, Equatable {
     partial = object.bool("partial") ?? false
     lifetimePartial = object.bool("lifetimePartial") ?? false
     clipped = object.bool("clipped") ?? false
-    totals = nil  // item 398 (red): not read yet
+    totals = try? object.decodeObject("totals", ProjectFiguresTotals.init(json:))
     droppedRows = dropped
     unknownFields = object.unknownFields
   }
@@ -575,7 +575,7 @@ public struct ProjectFiguresParams: Sendable, Equatable {
     var fields: [String: JSONValue] = ["key": .string(key)]
     if let sinceMs { fields["sinceMs"] = .int(sinceMs) }
     if let offsetMinutes { fields["offsetMinutes"] = .int(Int64(offsetMinutes)) }
-    // item 398 (red): `sessions` not said yet
+    if let sessions { fields["sessions"] = .array(sessions.map(\.json)) }
     return .object(fields)
   }
 }

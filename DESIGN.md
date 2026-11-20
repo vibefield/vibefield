@@ -8353,7 +8353,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   a phone a hundred of a project's `contribution` rows, the heaviest by tokens first (the cut the messages
   figure wears as its `+`, item 353, below; a project that several desktops or several rosetta projects hold is
   cut one of them at a time, so its hundred are the first ones' heaviest), **until the door answers each listed
-  session's figures, which is item 398** (the door's own change, HG's; not built with this). A subagent's own
+  session's figures, which is item 398** (the door's own change, HG's; not built with this). *Amended 2026-11-19
+  (item 398, the phone's half): built. When a project's answer was cut, the phone asks the door for the listed
+  sessions it holds no row for, by id (`project.figures`' `sessions`), a hundred at a time in the listing's order;
+  every listed entry whose session has a row now wears its figures, past the hundred too.* A subagent's own
   row carries none, here as on the desktop: its figures are in its root's. One conversation that two desktops
   both recorded has one `contribution` row, the first desktop's; a row that speaks the other desktop's copy is
   not joined, and shows none. *Readings, not his rulings: "etc" is the rest of the desktop's line, which is the
@@ -8442,7 +8445,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     label under them at 9 pt medium, uppercase, in t3 (`inkTertiary`; both `inkFaint` until item 242,
     2026-11-17). Sessions are the ledger's own count, whole at once;
     the other three are sums over the projects whose figures are read, and a dash before the first is. Cost is
-    estimated at list prices and says so (`~`); a sum that is a lower bound says `+`.
+    estimated at list prices and says so (`~`); a sum that is a lower bound says `+`. *Amended 2026-11-19 (item
+    398): a project's messages are the door's own `totals` when it gives them (every row it gathered, before the
+    phone's cut), and their `+` stands while the door says the lifetime is not whole (`lifetimePartial`: a desktop
+    did not answer, or rows were cut; the door does not yet say which, so a cut project keeps its `+`). A desktop
+    of an earlier build gives none, and the sum of the rows it gave stands, as before.*
   - **One line under them says what is not whole, and nothing when all is** (11.5 pt, t3 `inkTertiary`; `inkFaint` until item 242,
     2026-11-17): `reading figures
     · 41 of 166 projects` · `figures for 3 projects failed · retrying` · `2 projects' days are not exact`.

@@ -13,6 +13,9 @@ import Testing
 /// The cut these rows hold too: a desktop answers a phone a hundred of a project's rows, so an entry past them has
 /// no figures and keeps the line it had. The door that would answer the rest is item 398, and is not built here.
 ///
+/// *Amended 2026-11-19 (item 398):* it is built. The reader asks for the rest by id (`wantedById` here; the ask
+/// itself in HistoryProjectsTests), and an entry past the hundred wears its figures once they are answered.
+///
 /// How the line reads on a phone, and whether it fits one line there, are to be seen on a device.
 @Suite("item 393 — a session's entry carries the desktop entry's figures")
 struct SessionFiguresTests {

@@ -341,7 +341,7 @@ extension FieldHistoryModel {
     let first = lastDays(figureWindowDays + 1, now: now).first ?? ""
     let windowed = withFigures(
       project, heatmap: result.heatmap.filter { $0.day >= first }, models: result.models.filter { $0.day >= first },
-      contribution: result.contribution, sessions: sessions, now: now)
+      contribution: result.contribution, sessions: sessions, now: now, messages: result.totals?.messages)
     return windowed.with(lifetime: lifetime(result))
   }
 }
@@ -370,6 +370,10 @@ extension FieldHistoryModel {
 // What the phone holds, and what it does not (DESIGN.md §8 says it): a desktop answers a phone a hundred of a
 // project's rows, the heaviest by tokens first. A project of up to a hundred sessions has a row for each; a project
 // past a hundred has rows for its hundred heaviest, and the door that would answer the rest is item 398.
+//
+// *Amended 2026-11-19 (item 398):* that door is built. When a project's answer was cut, the reader asks for its
+// listed sessions that have no row by id (`figuresWanted`, `HistoryProjects.askFiguresById`), and they are joined
+// here after the project's own rows.
 
 extension FieldHistoryModel {
   /// What a session's figures are joined by: the desktop that recorded it and its id there, the listing's own row
@@ -403,7 +407,16 @@ extension FieldHistoryModel {
   static func figuresWanted(
     _ rows: [IndexSessionRow], have: Set<String>, asked: Set<String>
   ) -> [ProjectFiguresSession] {
-    []  // item 398 (red): asks for none yet
+    var wanted: [ProjectFiguresSession] = []
+    var seen: Set<String> = []
+    for row in rows.sorted(by: { (lastAt($0) ?? -1) > (lastAt($1) ?? -1) }) {
+      guard let device = row.device, !device.isEmpty else { continue }
+      let key = figuresKey(device: device, sessionId: row.sessionId)
+      guard !have.contains(key), !asked.contains(key), seen.insert(key).inserted else { continue }
+      wanted.append(ProjectFiguresSession(device: device, sessionId: row.sessionId))
+      if wanted.count == HistoryReads.listRows { break }
+    }
+    return wanted
   }
 
   /// `214 msgs · 3h 12m · 48.2M · $31.40` — the figures of a session's entry, in the desktop's order (the room's

@@ -305,8 +305,8 @@ public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
   /// Item 393 — its figures, the desktop entry's own: its messages, its tokens and its estimated spend, its
   /// subagents' folded in. They are its row in its project's `contribution` (`project.figures`), joined by the
   /// desktop that recorded it and its id there (`FieldHistoryModel.sessionFigures`); `meta` says them. nil for a
-  /// session with no such row: a desktop answers a phone a hundred of a project's rows, the heaviest first, so a
-  /// project past a hundred has figures for those alone (the door for the rest is item 398). nil too for a
+  /// session with no such row: a desktop answers a phone a hundred of a project's rows, the heaviest first, and
+  /// since item 398 (2026-11-19) the rest of a project's listed sessions are asked for by id. nil too for a
   /// subagent's own row, for the mock's rows (their `meta` is the record's own line) and for a desktop's own
   /// listing; optional, so a session cached before item 393 still reads.
   public let messages: Int?

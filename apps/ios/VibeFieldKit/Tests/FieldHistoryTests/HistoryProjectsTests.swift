@@ -646,6 +646,9 @@ private final class ManyDoor: HistoryDoor {
 /// `contribution`, here as in `HistoryProjects.folded`, so both give a session its figures; without it every state
 /// that holds sessions and figures together would differ by that alone. What a row wears is held in
 /// SessionFiguresTests.
+///
+/// *Amended 2026-11-19 (item 398):* the same line takes, after the project's own rows, the rows asked for by id
+/// (`figuresById`), here as in `HistoryProjects.folded`.
 private func foldAsItWas(_ inputs: HistoryProjects.LedgerInputs) -> HistoryCorpus {
   var corpus = inputs.ledger
   let clock = inputs.clock
@@ -681,7 +684,7 @@ private func foldAsItWas(_ inputs: HistoryProjects.LedgerInputs) -> HistoryCorpu
     if !rows.isEmpty {
       sessions[key] = FieldHistoryModel.projectSessionRows(
         rows, key: key, places: summary.places, desktops: desktops, now: clock,
-        contribution: inputs.figures[key]?.contribution ?? [])
+        contribution: (inputs.figures[key]?.contribution ?? []) + (inputs.figuresById[key] ?? []))
       live += rows.map { (key, $0) }
       agents.formUnion(rows.compactMap(\.provider))
     }

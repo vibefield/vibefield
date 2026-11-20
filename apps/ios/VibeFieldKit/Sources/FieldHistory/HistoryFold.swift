@@ -166,9 +166,11 @@ extension FieldHistoryModel {
 
   /// The figures' fold, whichever door counted them (`index.project` for one
   /// desktop's project, `project.figures` merged across desktops, PJ-7).
+  /// Item 398 (2026-11-19) — `counted`: the door's own count of the project's messages (`project.figures`'
+  /// `totals`); without it they are the sum of the rows given.
   static func withFigures(
     _ project: HistoryProject, heatmap: [IndexHeatmapDay], models: [IndexModelDay], contribution: [IndexContribution],
-    sessions: [IndexSessionRow], now: Date
+    sessions: [IndexSessionRow], now: Date, messages counted: Double? = nil
   ) -> HistoryProject {
     let total = heatmap.reduce(0) { $0 + $1.tokens }
     let word = tokensWord(total)
@@ -178,7 +180,7 @@ extension FieldHistoryModel {
       sparkDay[start..<min(start + sparkBarDays, sparkDay.count)].reduce(0, +)
     }
     let peak = max(spark.max() ?? 0, 1)
-    let messages = contribution.reduce(0) { $0 + $1.messages }
+    let messages = counted ?? contribution.reduce(0) { $0 + $1.messages }
     let activeDays = heatmap.filter { $0.tokens > 0 }.count
     var modelTokens: [String: Double] = [:]
     for day in models { modelTokens[day.model, default: 0] += day.tokens }
