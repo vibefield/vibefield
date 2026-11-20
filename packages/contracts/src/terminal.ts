@@ -3,6 +3,7 @@ import { AgentProfileSetId } from "./agent-index";
 import { TerminalWorkloadClass } from "./envelope";
 import { UnavailableDetails } from "./errors";
 import { ObservedStaleCell, ObservedTerminal } from "./mgmt";
+import { PlaceRef } from "./project-places";
 
 // The terminal floor's PRODUCT surface (native-floor spec §6, NF-D5). TS-only
 // DELIBERATELY: these shapes ride fieldd's product API (renderers, peers via
@@ -268,6 +269,12 @@ export const TerminalCreateParams = z
      * `AGENT_FIELD.SUCCEEDS_LAPSE_MS`. */
     succeeds: z.string().min(1).max(128).optional(),
     cwd: z.string().optional(),
+    /** Item 587 (2026-11-19) — the folder named by its `PlaceRef` instead of its path (P1), as `agent.spawn`'s
+     * `place`: one of THIS desktop's places, resolved from fieldd's own place facts. Another device's ref is
+     * refused `not-here`, an id it does not know `unknown-place`, a folder gone or unmounted `missing-cwd`. Never
+     * beside `cwd`: a body naming both is refused. Absent: `cwd` as before. A fieldd older than this field passes
+     * it through unread, and the shell is born where a body with neither is born. */
+    place: PlaceRef.optional(),
     /** absolute shell path; default = the user's login shell */
     shell: z.string().optional(),
     title: z.string().optional(),
@@ -288,7 +295,10 @@ export const TerminalCreateParams = z
      * than this field does with it (the object passes it through unread). */
     profileSet: AgentProfileSetId.optional(),
   })
-  .passthrough();
+  .passthrough()
+  .refine((params) => params.cwd === undefined || params.place === undefined, {
+    message: "name a place or a cwd, not both",
+  });
 export type TerminalCreateParams = z.infer<typeof TerminalCreateParams>;
 
 /** SB-2 — one shell fieldd birthed under an Agent Profile: the session and the

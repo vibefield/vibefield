@@ -334,6 +334,28 @@ describe("SB-2 — the profile a shell was born under (AR-7g)", () => {
     }
   });
 
+  it("item 587 — terminal.create may name its folder by a place's ref, never beside a cwd", () => {
+    const placed = TerminalCreateParams.parse(fixture("terminal-create-params.place.json"));
+    expect(placed.place).toEqual({
+      device: "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      placeId: "pl_4c1e9a0b7d2f6e8a1b3c5d7e",
+    });
+    expect([placed.cwd, placed.profileSet]).toEqual([undefined, "work-7f3a"]);
+    expect(TerminalCreateParams.parse(fixture("terminal-create-params.valid.json")).place).toBe(
+      undefined,
+    );
+    // a place or a cwd, never both
+    expect(TerminalCreateParams.safeParse({ ...placed, cwd: "/repo" }).success).toBe(false);
+    // a ref is a device and an id, never a path
+    for (const place of [
+      { device: "", placeId: "pl_1" },
+      { device: "d1", placeId: "" },
+      { placeId: "pl_1" },
+      "/repo",
+    ])
+      expect(TerminalCreateParams.safeParse({ place }).success, JSON.stringify(place)).toBe(false);
+  });
+
   it("the create's answer and the roster say which set a bound shell was born under — and still never where it lives", () => {
     const created = TerminalCreateOpenResult.parse(fixture("tp-create-open.bound.json"));
     expect(created.profileSet).toBe("work");
