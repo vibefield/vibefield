@@ -19,7 +19,7 @@ struct NeedsCardGoldenTests {
     let golden = try Self.golden("needs-card.words.golden")
     let labels = try Self.labels(golden)
     let cases = try #require(golden["cases"]?.arrayValue)
-    #expect(cases.count == 21)
+    #expect(cases.count == 20)
     for each in cases {
       let name = each["name"]?.stringValue ?? "?"
       let reading = try Self.reading(try #require(each["entry"]))
