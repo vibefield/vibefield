@@ -1015,7 +1015,8 @@ overheads to our app"). Every card wears the same stock, so the stock is printed
 WebGL2 context on an OffscreenCanvas. It prints the **front** and the **back** at a card's size, at the window's pixel
 density, by day and by night, into images every card then wears under its face, and then it lets its context go. **At rest
 and in motion the hand asks nothing of the GPU**: the browser moves the printed cards as layers, so a reach, a deal, a carry
-and a flip are transforms. It prints again only when the theme, the pixel density or a printed size changes (a card picked
+and a flip are transforms. **The one card the GPU is asked for is a card picked up, while it turns** ("The lamp, live",
+below). It prints again only when the theme, the pixel density or a printed size changes (a card picked
 up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused, a card wears the flat stock above.
 - **The front:** the paper `#f4efe5` and its ink `#1c1611` (the stock and its inks, above, are them).
   The desk's own paper (ICE's `paperTexture`, the notebook's pages') gives its mottle and fibres over 64 units and its
@@ -1035,9 +1036,48 @@ up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused
   witness counts every `queue.submit`, whoever makes it, so cards drawn on it would break "a cover costs nothing". A device
   of the hand's own would be the fourth in Godview, beside the desk's, the swarm's and the terminals'. WebGL2 needs no
   device, prints in a frame's time and is gone, and is where Chat's faces already draw (§2.10). No canvas stands over the
-  window (the faces' rule, §2.10).
-- **What it costs:** a carried card does not bend with its speed, and the lamp's light does not run across a card as it
-  turns. The thin gloss above stands in.
+  window (the faces' rule, §2.10): a held card's lamp (below; item 596, 2026-11-19) is the card's own, the size of its
+  print and inside its cut edge, as a stage's layer is the stage's.
+- **What it costs:** a carried card does not bend with its speed, and the lamp's light does not run across a card in the
+  fan or in the carry as it turns. The thin gloss above stands in.
+  *Amended 2026-11-19 (item 596):* this said the lamp's light does not run across "a card" as it turns, any card. A card
+  picked up is lit live now (the next entry): held up at 2.4× and turned in the hand, a printed light read as a picture
+  of a card.
+- **The lamp, live — a card picked up** (item 596, 2026-11-19; *Card Stock* round 5's held card). Picked up, a card
+  turns toward the pointer (§8 "Picking one up"), and the lamp's light runs across it as it turns. It is the press's own
+  light: the same lamp, room, ambient, weave and varnish, in one piece of shader code that prints the stock and lights
+  the turn.
+  - **How brightly.** The side that is up brightens and darkens whole with how it faces the lamp, as the press's
+    diffuse says for a flat card: **1** held flat, which is the print's own light; down to the ambient (**0.68** by
+    day, **0.55** by night) turned from the lamp; up to **1.135** turned to it at the turn's full reach. Past 1 the
+    light bends over softly and never passes 1.35. It is the card's own brightness, times the night's 86%
+    (`--vf-card-dim`), so the face's ink and its picture take it with the paper. **The face's words that keep §2.4's
+    4.5:1 held flat**: the name, the type's glyph, the first face along the foot, a text card's words, a file's lines,
+    and a terminal's output and its bold; on the agent's dark card, its name and its state. **By day, turned from the
+    lamp, the paper stock's keep it only on the line**: at its least, 0.68, a terminal's output, the lightest of them,
+    reads 4.5:1 and the rest more, by arithmetic; the dark card's state does not (3.90:1). **By night none of them
+    holds, at this commit**: turned from the lamp the card's light falls to 0.86 × 0.55, where a terminal's output
+    reads 2.96:1, the dark card's state 2.40:1 and the name 4.05:1; the floor that holds them is item 613's. **Toward
+    the lamp, at the worst turn, the window's words are under it**: there the paper goes to white and the varnish's
+    sheen greys the ink, and on a plate of 2026-11-20 (software GL, each ink in a solid block) a terminal's output
+    read 3.04:1 by day at its least and 3.76:1 by night, a file's lines 3.46:1 and a text card's words 4.27:1 by day,
+    while the name measured 7.9:1 (2026-11-19). It is a known break of §2.4 until the sheen's own question is decided
+    (item 619).
+  - **What crosses it.** Over the side that is up, under its cut edge, **the lamp** draws what is left of the light,
+    added to the print: the weave, the paper's tooth and the back's pressed mark shading and catching as their faces
+    turn; the satin varnish's sheen where the lamp (up and to the right) and the room's soft light (above you) come back
+    to the eye, which stands 1000 out from the card's middle, the turn's own perspective; a picture's gloss in the
+    window (a picture is smooth: no weave shows on it); and the back's three lights, which hold their colour in shadow.
+    **Head on and flat it draws nothing**: the print is that light already. All that changes when the lamp is lit is
+    that the stock's still gloss (above) steps aside, in 240ms plain `ease`.
+  - **What it asks of the GPU.** One WebGL2 surface the size of the held print (288 × 403, at the window's pixel
+    density) for a side that is up: the front's, lit when the card comes up; the back's, lit the first time the card is
+    turned over. It draws only on a frame in which the turn moved or the card is turning over. A card held still, turned
+    or flat, draws nothing; its surfaces are kept until it goes home, and let go then. The fan, the reach, the deal and
+    the carry stay printed.
+  - **Where there is no lamp** (WebGL2 refused; the press not yet printed; the agent's dark card, until its window): the
+    card still turns, and still brightens and darkens whole. Nothing crosses it, and its still gloss stays.
+  - **Reduced motion** (M6): no turn and no lamp. The card stands flat on its print.
 - **Its colours are tokens** (item 403, 2026-11-14; VF-PM's ruling at 04:09Z: the press's hex leaves its code). The
   press reads every colour it prints with from the root as it stands when it prints, so a print is made in its theme's
   own values and the press's code holds none: the front's paper `--vf-card-press-paper` (`#f4efe5`), which is the
@@ -1633,11 +1673,16 @@ shrinks into the place it was let go over (to 0.12, 200ms on the retract curve) 
 and fades over 120ms. **Spring-loading:** the cell's ring fills over 520ms, linear, then the view switches
 as its key would. **The pick-up:** 560ms on the island curve to the window's centre at 2.4×, the scrim's
 blur and dim fading in over 240ms plain `ease`; putting it back waits 140ms (the scrim leaves first) and
-flies home in 440ms on the island curve. **Raised:** every card to its raised place in 240ms on the island
+flies home in 440ms on the island curve. **The turn** (item 596, 2026-11-19): a card picked up follows the
+pointer on a spring, stiffness **300** and damping **27**, never on a curve of the table's: it is held, and a
+hand has no duration. It arrives in about a quarter of a second and passes where it is going by a fiftieth.
+Put back, it straightens on the same spring from the moment it is let go, most of it in the 140ms lead and
+the rest as it flies home. **Raised:** every card to its raised place in 240ms on the island
 curve. **A twin paste** (HN-D10): the card rises 12 on the pop curve (280ms), holds 1.2s under its words,
 and settles on the retract curve. Reduced motion (M6): nothing travels — a dealt card fades into its place
 over 120ms, the reach and the raise move at once, a card pushed off fades, a played card's place rings
-once (its fade halved to 60ms), and a card picked up fades in at the centre over a scrim that fades with it (120ms);
+once (its fade halved to 60ms), and a card picked up fades in at the centre over a scrim that fades with it (120ms)
+and never turns;
 the hand's step out of the pegboard's way, and back, is at once, and a card's gloss stays where its turn leaves it.
 
 One more curve, with its reason — **the arc** (Cards in Hand, 2026-10-29; the ruled page's own toss):
@@ -3076,6 +3121,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the window behind it blurs 14 and dims 8% (the desk's held object, §8); the bar under the head,
     at the tools in hand's place (y 64), says what it is, in bold (12/600 in the primary ink), and where it came from
     (12/500 in the secondary), and holds **Remove**, **Flip it** and **Done**.
+    **Up, it turns toward the pointer** (item 596, 2026-11-19), as a card turns in your fingers: about its upright by
+    up to **0.42 rad** (24°) as the pointer nears the window's sides, and about its level by up to **0.30 rad** (17°) as
+    it nears the window's top and its foot, measured from the card's middle across half the window, on the turn's
+    spring (§6). It faces the pointer on either side. The pointer off the window, it straightens. It turns about its
+    own middle, seen from the same 1000 as Flip it, and the lamp's light runs across it as it turns (§5 "The lamp,
+    live").
     **Flip it**, or a double-click on the card, turns it over about its upright to show its printed back (§5 "the
     press"), and again to show its face: 480ms on the island curve, seen from 1000 (a perspective in the card's own
     units, so the turn reads as a card's and not a door's), the back drawn from its own print and never through the
