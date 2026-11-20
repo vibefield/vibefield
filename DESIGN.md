@@ -995,9 +995,17 @@ line at 90%), its cut edge (an inset 0.5px `--vf-card-cut`) and its thickness un
 of `--vf-card-edge` (`#d6d0c3`) before any shadow; the cut is `rgb(58 46 22 / 15%)`. Its inks are its own, never the theme's: `--vf-card-stock-ink`,
 `--vf-card-stock-ink-2`, `--vf-card-stock-ink-3` (the press's ink `#1c1611`, then `rgb(28 22 17)` at 64 / 42%); the
 face's own (round 5): its type `--vf-card-type-ink` (86%), its faces `--vf-card-face-ink` (78%, the first) and
-`--vf-card-face-ink-2` (34%), its window's hairline `--vf-card-frame` (12%) over `--vf-card-plate` (`#ebe4d7`); a pass
+`--vf-card-face-ink-2` (55%; 34% until item 616), its window's hairline `--vf-card-frame` (12%) over `--vf-card-plate` (`#ebe4d7`); a pass
 line `--vf-card-pass` (`#2b8a4f`, round 5's green), and `--vf-card-photo` (`#cfd3cf`) under a picture until it draws
-(`--vf-card-ink`, §2.2's white, stays Settings → Terminal's). **The agent's card** is the one dark stock
+(`--vf-card-ink`, §2.2's white, stays Settings → Terminal's).
+*Added 2026-11-20 (item 616):* **what a card prints holds §2.4's floors**, by night (0.86) and turned from the lamp
+(its floor, 0.72): on the paper stock its words at 74% of its ink or more and its marks (a prompt's `$`, the faces
+along its foot) at 55% or more, on the plate and on the paper's foot; on the agent's dark stock its words at 70% of
+its white or more (its state, item 613). Three stand under it until item 617 decides their look: the pass ink, 3.42:1
+by day on the plate; a file's comment at 36%, 2.21:1; and the dark card's project at white 40%, 3.79:1, whose token
+its state's dot also wears (2.49:1 turned). Toward the lamp, at the worst turn, the window's words and these marks are
+under it until item 619 decides the sheen (§5 "The lamp, live").
+**The agent's card** is the one dark stock
 (`--vf-card-dark-stock` `#1c1c1e`, `--vf-card-dark-edge` `#050506`, its cut `--vf-card-dark-cut`, white at 9%; its inks
 `--vf-card-dark-ink`, `-2`, `-3`, white at 92 / 70 / 40%; `-2` was 62% until item 613), the
 session card's. **Its shadow is cast down and a little right**, as the desk's objects cast theirs, and
@@ -1053,21 +1061,21 @@ up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused
     light bends over softly and never passes 1.35. It is the card's own brightness, times the night's 86%
     (`--vf-card-dim`), so the face's ink and its picture take it with the paper. **The face's words that keep §2.4's
     4.5:1 held flat**: the name, the type's glyph, the first face along the foot, a text card's words, a file's lines,
-    and a terminal's output and its bold; on the agent's dark card, its name and its state. **The card's light is
-    never taken under `--vf-card-light-floor` (0.72)**, and the dark card's state takes its white at 70% (item 613),
-    so turned from the lamp they keep it by day and by night: at the floor a terminal's output, the lightest of them,
-    read 4.61:1 by day and 4.57:1 by night at its least, a file's lines 5.10:1 and 5.03:1 and a text card's words
-    5.32:1 and 5.16:1 (2026-11-20, software GL, each ink in a solid block; the terminal's 4.81:1 by arithmetic), and
-    the dark card's state reads 5.09:1 and the name 8.38:1 by arithmetic. It is 0.72, not the 0.68 the terminal's
-    output needs, because the plate reads its least tile 4% to 5% under the arithmetic there, where the lamp's own
-    shade crosses the window. By night the floor holds the card at 0.72 where it would fall to 0.86 × 0.55; by day it
-    takes the far corner's 0.68 up to 0.72. The lamp's own give-back, the sheen and the back's lights, is figured over
-    the light the card is shown at, so it follows the floor: by night, turned from the lamp, the back's lights stay
-    under their rest. **Toward the lamp, at the worst turn, the window's words are under it**: there the paper goes to
-    white and the varnish's sheen greys the ink, and on a plate of 2026-11-20 (software GL, each ink in a solid block)
-    a terminal's output read 3.04:1 by day at its least and 3.76:1 by night, a file's lines 3.46:1 and a text card's
-    words 4.27:1 by day, while the name measured 7.9:1 (2026-11-19). It is a known break of §2.4 until the sheen's own
-    question is decided (item 619).
+    and a terminal's output, its bold and its summary line (item 616); on the agent's dark card, its name and its
+    state. **The card's light is never taken under `--vf-card-light-floor` (0.72)**, and the dark card's state takes
+    its white at 70% (item 613), so turned from the lamp they keep it by day and by night: at the floor a terminal's
+    output, the lightest of them, read 4.61:1 by day and 4.57:1 by night at its least, a file's lines 5.10:1 and
+    5.03:1 and a text card's words 5.32:1 and 5.16:1 (2026-11-20, software GL, each ink in a solid block; the
+    terminal's 4.81:1 by arithmetic), and the dark card's state reads 5.09:1 and the name 8.38:1 by arithmetic. It is
+    0.72, not the 0.68 the terminal's output needs, because the plate reads its least tile 4% to 5% under the
+    arithmetic there, where the lamp's own shade crosses the window. By night the floor holds the card at 0.72 where
+    it would fall to 0.86 × 0.55; by day it takes the far corner's 0.68 up to 0.72. The lamp's own give-back, the
+    sheen and the back's lights, is figured over the light the card is shown at, so it follows the floor: by night,
+    turned from the lamp, the back's lights stay under their rest. **Toward the lamp, at the worst turn, the window's
+    words are under it**: there the paper goes to white and the varnish's sheen greys the ink, and on a plate of
+    2026-11-20 (software GL, each ink in a solid block) a terminal's output read 3.04:1 by day at its least and 3.76:1
+    by night, a file's lines 3.46:1 and a text card's words 4.27:1 by day, while the name measured 7.9:1 (2026-11-19).
+    It is a known break of §2.4 until the sheen's own question is decided (item 619).
   - **What crosses it.** Over the side that is up, under its cut edge, **the lamp** draws what is left of the light,
     added to the print: the weave, the paper's tooth and the back's pressed mark shading and catching as their faces
     turn; the satin varnish's sheen where the lamp (up and to the right) and the room's soft light (above you) come back
@@ -2998,14 +3006,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       **Text:** what follows its name, as a mail's body under its subject (all its words when that is all it says), at
       the largest of 8.4, 7.4 and 6.4 (on 11.2, 10 and 8.8) at which they fit, tracked −0.05, 6 inside the window's
       sides and 5 under its top, in the ink at 84%. **Terminal:** what it printed, mono at 5.9 on 11, 6 inside the
-      window, in the ink at 74%, each line from its first mark: a prompt's `$` at 36% and its command in bold (600) at
-      90%, the test runner's summary line at 50%, and a pass (its ✓, the summary's count) in the pass ink.
+      window, in the ink at 74%, each line from its first mark: a prompt's `$` at 55% and its command in bold (600) at
+      90%, the test runner's summary line at 74%, and a pass (its ✓, the summary's count) in the pass ink.
       **File:** its first lines as a page, mono at 4.3 on 5.8, 6 inside the window's sides and 5 under its top, no line
       numbers, the code in the ink at 78% and the comment quieter, at 36%, fading out over its last 30; a file that is
       not words is a blank page. **Image:** the picture, filling the window about its middle. **Still on its way** in
       from another app, the window waits: words on the bare plate, a picture on a ground of the ink at 6%, a file
-      saying "Let go to see it" in its middle at 7.4 in `--vf-card-stock-ink-3`. *Until FACE-b:* a ref shows its
+      saying "Let go to see it" in its middle at 7.4 in the ink at 74%. *Until FACE-b:* a ref shows its
       still; a link its bare page.
+      *Amended 2026-11-20 (item 616), §2.4's floors on the stock (§5):* the prompt's `$` was at 36%, the summary line
+      at 50% and the waiting words in `--vf-card-stock-ink-3` (42%), each under its floor. A file's comment stays at
+      36%, and the pass ink as it is, until item 617.
     - **its faces** — each face as its type's glyph at 7.4 on 152.6, 10 apart from the column, in the order the
       bloom opens them; the first, what it is, in `--vf-card-face-ink`, the rest in `--vf-card-face-ink-2`.
       *(2026-11-14, item 405: the card's bloom waits for OB-1b; until then each card has one face, so the foot shows
