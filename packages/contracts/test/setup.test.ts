@@ -12,10 +12,15 @@ import {
   SetupAnswerParams,
   SetupLedger,
   SetupMomentParams,
+  SetupTutorialParams,
   SYNC_QUESTION_MOMENT,
   setupMomentRecord,
   setupMomentState,
   setupStepState,
+  setupTutorialRecord,
+  setupTutorialsUnread,
+  TUTORIAL_CHAPTERS,
+  TutorialChapter,
 } from "../src/setup";
 
 // AO-2 — the Setup Assistant's ledger (design-03 §4.3's `setup.*`). What it must
@@ -217,5 +222,58 @@ describe("TS-6 — the sync question a link owes (TS-D13)", () => {
     expect(
       SetupMomentParams.safeParse({ moment: SYNC_QUESTION_MOMENT, state: "owed" }).success,
     ).toBe(false);
+  });
+});
+
+describe("SH-1 — the tutorials beside the moments", () => {
+  it("reads a chapter of each state, and names the row a newer build wrote as unread", () => {
+    const ledger = SetupLedger.parse(fixture("setup-ledger-tutorials.valid"));
+    expect(setupTutorialRecord(ledger, "your-desk")?.state).toBe("finished");
+    expect(setupTutorialRecord(ledger, "godview")).toMatchObject({
+      state: "started",
+      step: 1,
+      steps: 3,
+    });
+    expect(setupTutorialRecord(ledger, "chat")?.state).toBe("declined");
+    expect(setupTutorialRecord(ledger, "search")?.state).toBe("offered");
+    expect(setupTutorialRecord(ledger, "your-hand")).toBeUndefined();
+    expect(setupTutorialsUnread(ledger)).toEqual(["your-hand"]);
+    // the moments beside them still read, and a ledger written before SH-1 has no tutorials
+    expect(setupMomentState(ledger, "limit")).toBe("retired");
+    expect(setupTutorialRecord(emptySetupLedger(), "chat")).toBeUndefined();
+    expect(setupTutorialsUnread(emptySetupLedger())).toEqual([]);
+  });
+
+  it("answers started at a step inside the chapter, and no other state with a step", () => {
+    expect(SetupTutorialParams.parse(fixture("setup-tutorial-params.valid"))).toMatchObject({
+      chapter: "godview",
+      state: "started",
+      step: 1,
+      steps: 3,
+    });
+    for (const answer of [
+      { chapter: "chat", state: "declined" },
+      { chapter: "your-desk", state: "finished" },
+      { chapter: "search", state: "offered" },
+      { chapter: "godview", state: "started", step: 0, steps: 1 },
+    ])
+      expect(SetupTutorialParams.safeParse(answer).success, JSON.stringify(answer)).toBe(true);
+    for (const answer of [
+      { chapter: "godview", state: "started" },
+      { chapter: "godview", state: "started", step: 3, steps: 3 },
+      { chapter: "godview", state: "started", step: 1 },
+      { chapter: "chat", state: "finished", step: 2, steps: 3 },
+      { chapter: "chat", state: "offered", steps: 3 },
+      { chapter: "chat", state: "replayed" },
+      { chapter: "Godview", state: "offered" },
+      { chapter: "chat:one", state: "offered" },
+    ])
+      expect(SetupTutorialParams.safeParse(answer).success, JSON.stringify(answer)).toBe(false);
+  });
+
+  it("names the Mac's six chapters once each, every one a chapter id", () => {
+    expect(new Set(TUTORIAL_CHAPTERS).size).toBe(6);
+    for (const chapter of TUTORIAL_CHAPTERS)
+      expect(TutorialChapter.safeParse(chapter).success, chapter).toBe(true);
   });
 });

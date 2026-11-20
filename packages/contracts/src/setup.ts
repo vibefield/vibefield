@@ -80,13 +80,16 @@ export type SetupMomentRecord = z.infer<typeof SetupMomentRecord>;
  * an older build never erases a newer one's answer. `hidden`: the person hid
  * Finish setting up; every step still lives on its page. `moments` (AO-6b) is
  * keyed by moment and read the same way (`setupMomentState`); absent from a
- * ledger written before AO-6b. */
+ * ledger written before AO-6b. `tutorials` (SH-1) is keyed by chapter and read
+ * the same way (`setupTutorialRecord`); absent from a ledger written before
+ * SH-1. */
 export const SetupLedger = z
   .object({
     format: z.literal(SETUP_LEDGER_FORMAT),
     steps: z.record(z.string(), z.unknown()),
     hidden: z.boolean(),
     moments: z.record(z.string(), z.unknown()).optional(),
+    tutorials: z.record(z.string(), z.unknown()).optional(),
   })
   .passthrough();
 export type SetupLedger = z.infer<typeof SetupLedger>;
@@ -137,6 +140,80 @@ export function setupMomentRecord(
 ): SetupMomentRecord | undefined {
   const row = SetupMomentRecord.safeParse(ledger.moments?.[moment]);
   return row.success ? row.data : undefined;
+}
+
+/** SH-1 (track SH; DESIGN.md §8 "Tutorials", "Kept"): a tutorial chapter's record, kept beside
+ * the moments. `offered`: the offer or its beacon was said. `declined`: Not now. Final against an
+ * offer (SH-L16): only the person's own Start moves it. `started`: running or left, at `step` of
+ * `steps`. A window shows "paused" and "left at step n" from this row, and fieldd never writes
+ * them (SH-1, Q-B). `finished`: every step done; Again starts it over. */
+export const TUTORIAL_STATES = ["offered", "declined", "started", "finished"] as const;
+export const TutorialState = z.enum(TUTORIAL_STATES);
+export type TutorialState = z.infer<typeof TutorialState>;
+
+/** A chapter's id: an open key under a moment's name rule, so a newer build's chapter rides
+ * through. The Mac's six are named here; the iPhone's are the kit's own (SH-9). */
+export const TutorialChapter = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+export type TutorialChapter = z.infer<typeof TutorialChapter>;
+export const TUTORIAL_CHAPTERS = [
+  "your-desk",
+  "godview",
+  "talk-to-an-agent",
+  "your-hand",
+  "search",
+  "chat",
+] as const;
+
+export const SetupTutorialRecord = z
+  .object({
+    state: TutorialState,
+    /** when it was recorded (ISO-8601) */
+    at: z.string().min(1),
+    /** started: the step it is at, 0-based */
+    step: z.number().int().min(0).optional(),
+    /** started: the chapter's step count when this was written, so a reader never trusts a step
+     * past a chapter that shrank */
+    steps: z.number().int().min(1).optional(),
+  })
+  .passthrough();
+export type SetupTutorialRecord = z.infer<typeof SetupTutorialRecord>;
+
+/** `setup.tutorial` (SH-1): one chapter's answer. `started` carries `step` < `steps`, and no other
+ * state carries either. Declarative: fieldd's table decides what each answer replaces. */
+export const SetupTutorialParams = z
+  .object({
+    chapter: TutorialChapter,
+    state: TutorialState,
+    step: z.number().int().min(0).optional(),
+    steps: z.number().int().min(1).optional(),
+  })
+  .passthrough()
+  .refine(
+    (p) =>
+      p.state === "started"
+        ? p.step !== undefined && p.steps !== undefined && p.step < p.steps
+        : p.step === undefined && p.steps === undefined,
+    { message: "started carries step < steps; no other state carries either" },
+  );
+export type SetupTutorialParams = z.infer<typeof SetupTutorialParams>;
+
+/** A chapter's record; undefined while it has no row it can read. A row it cannot read (a newer
+ * build's state) is carried and never read; `setupTutorialsUnread` names such rows for the reader
+ * to log. */
+export function setupTutorialRecord(
+  ledger: SetupLedger,
+  chapter: TutorialChapter,
+): SetupTutorialRecord | undefined {
+  const row = SetupTutorialRecord.safeParse(ledger.tutorials?.[chapter]);
+  return row.success ? row.data : undefined;
+}
+
+/** The chapters whose rows this build cannot read: logged by the reader as unknown, never
+ * thrown. */
+export function setupTutorialsUnread(ledger: SetupLedger): string[] {
+  return Object.entries(ledger.tutorials ?? {})
+    .filter(([, row]) => !SetupTutorialRecord.safeParse(row).success)
+    .map(([chapter]) => chapter);
 }
 
 /** TS-4 (TS-D7, TS-L6; DESIGN.md §8 "Asking again") — the places that ask to

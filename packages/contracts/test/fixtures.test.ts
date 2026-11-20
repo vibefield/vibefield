@@ -332,7 +332,12 @@ import {
   ScreenshotHelperCommand,
   ScreenshotHelperEvent,
 } from "../src/screenshot";
-import { SetupAnswerParams, SetupLedger, SetupMomentParams } from "../src/setup";
+import {
+  SetupAnswerParams,
+  SetupLedger,
+  SetupMomentParams,
+  SetupTutorialParams,
+} from "../src/setup";
 import {
   AppPreferences,
   CommunityStatement,
@@ -878,6 +883,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // TS-6 (TS-D13) — a link landed during setup: the sync question owed beside
   // AO's retired moment and TS-4's saying (fieldd's store reads it from disk)
   "setup-ledger-sync-question": SetupLedger,
+  // SH-1 — the tutorials beside the moments: a chapter of each state and one a newer build wrote
+  // (fieldd's store and the window's ledger read it from disk); and one chapter's answer, started
+  // at a step
+  "setup-ledger-tutorials": SetupLedger,
+  "setup-tutorial-params": SetupTutorialParams,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

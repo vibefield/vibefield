@@ -1594,6 +1594,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true, // declarative: the same answer twice is written once
     locality: "local",
   }),
+  // SH-1 (track SH) — a tutorial chapter's record, beside the moments: offered, declined (Not now),
+  // started at a step, finished. A trusted desktop caller's, as the other setup doors are.
+  defineMethod({
+    surface: "product",
+    method: "setup.tutorial",
+    scope: "settings.manage",
+    idempotent: true, // declarative: fieldd's table keeps what an answer may not replace
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "setup.hide",
