@@ -132,9 +132,11 @@ document's grid half left with the old ground: the document is v4, the plain gro
 the mat in CSS (below); everywhere else the plain ground.
 *Built 2026-10-07 (DK-16):* the mat in CSS is the kit's — `--vf-mat-ground` as the theme lights it,
 its lattice (`--vf-mat-lattice`) in its lit cream (`--vf-mat-line`: MAT.md §4's lines at full cover,
-(206, 183, 131) by the Sun and `#4C5254` in the Moon) at the line law's presences — one CSS px at 7 %
+(206, 183, 131) by the Sun and `#4C5254` in the Moon; `#7C7E76` since 2026-11-19, item 583's gentler night) at
+the line law's presences — one CSS px at 7 %
 every 25 and at 21 % every 100, ICE `MAT_GRID`'s 0.14 and 0.28 — and the words on it in
-`--vf-mat-ink`, paper white at 60 %: **4.0:1** on the Sun-lit sage and **5.2:1** in the Moon, where
+`--vf-mat-ink`, paper white at 60 %: **4.0:1** on the Sun-lit sage and **5.2:1** in the Moon (**4.8:1** since
+2026-11-19, item 583's gentler night), where
 the old splash's black/50 read 3.9:1 on its canvas (55 % measured 3.6:1 and was raised). The splash
 and the floor it shares (the Setup Assistant's, the switch's), the loading veil, the explorer's tiles
 before their still (a mini mat, the lattice at a quarter) and the terminal preview's miniature field
@@ -163,6 +165,18 @@ desk's own open hand, and other people's are §8's peers on the mat.
 **The cutting mat (2026-09-07).** The third ground is a material, not a token: its sage and
 cream are the same in both themes and the theme changes the light that falls on it. The
 gobo plates are the product's assets; the engine ships the mat's law and its two lights.
+*Amended 2026-11-19 (item 583; James, 2026-11-19, on the Gobo Herbarium page and in its lane):* by day the mat is lit
+by **soft light**: the shadow falls through a soft penumbra in place of the reference's cone, under the person's
+chosen plant (Monstera by default; §8 "Settings → Canvas"). By night it is the **gentler night**, whose colours take
+the place of the table's: the moonlit sage reads (52, 69, 72), `#344548`, in the dapples, and (41, 53,
+59), `#29353B`, in the plant's shadow, in place of `#313C40` and `#1C2027`. These are the engine's own reads (ICE I56,
+the build for item 582, on the GPU and on its CPU mirror alike). **On them, the mat's ink holds:** white at 60% reads
+**4.8:1** in the dapples, where it read 5.2:1, and 5.6:1 in the shadow, so its words keep the 4.5:1 floor at night.
+By day soft light leaves the lit mat at `#3D5A30`, so the day's 4.0:1 stands; in the deepest shade (`#2A4024`, the
+two layers crossing) it reads 5.2:1. In the dark theme `--vf-mat-ground` becomes `#344548`, and `--vf-mat-line`
+`#7C7E76`, the cream line as the gentler night lights it (`#5B605E` in the plant's shadow; the engine's arithmetic,
+which reads all four of today's tokens exactly). The lattice reads a step clearer at night than it did, as the
+Herbarium page drew it; it is a mark, never a word, and the mat's ink is held to the ground.
 
 ### 2.2 Surfaces
 
@@ -556,7 +570,8 @@ there, 3.1:1 on dark chrome, 5.3:1 on the light ground and 5.5:1 under the white
 *Erratum 2026-10-03 (DK-0d, against the desk — MC-D10 = DK-D23, R17, R22):* on the desk VibeField
 draws the peers' cursors itself (§8, peers on the mat), so the ink is drawn where it is seen rather
 than sent as the sender's colour — and there `#68686B` does not hold: it measures 1.4:1 on the
-Sun-lit sage (`#3D5A30`) and 2.0:1 on the Moon's dapples (`#313C40`), so on the mat the label is a
+Sun-lit sage (`#3D5A30`) and 2.0:1 on the Moon's dapples (`#313C40`; *corrected 2026-11-19, item 583:*
+1.8:1 on the gentler night's `#344548`), so on the mat the label is a
 chip on the line's glass in the chrome's text ink (R17, amended 13:40Z; §8, peers on the mat), and
 the arrow keeps the presence ink on its white edge. The contrasts above stand for the plain grounds
 and the chrome.
@@ -1403,6 +1418,9 @@ than a pixel. It stops when the row's state changes, and stands still under redu
   *Corrected 2026-11-09 (Q4; James, 2026-10-28, the housekeeping page): the wind read 20 s, ICE's default, and the explorer's
   still, which waits for the desk's rest, followed an edit by ≈ 22 s. 8 s is §8's peer idle, the time the desk already takes a
   pointer to have stopped, so the desk rests ≈ 10 s after the last touch. The night's own 20 s (below) stands.*
+  *Amended 2026-11-19 (item 583; James, 2026-11-19):* the wind's strength is the person's (§8 "Settings → Canvas":
+  Wind, Still … Breezy). At Still the desk's ambient stops, and it rests as at the end of its 8 s; the 8 s and the
+  2 s ease out are unchanged at every other strength. Reduce motion stills it, as before.
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
 
@@ -4356,6 +4374,31 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Where there is no system-sound player, the switch is off and disabled and its line says why: off macOS, "Sounds
   play on macOS."; in a build made without one, "This build has no sound player."; and where it would not start,
   "The sound player didn't start." Never a switch that silently does nothing.
+- **Settings → Canvas** (item 583; James, 2026-11-19): the desk's own page. Its first section is **Light**, above
+  Navigation and Objects, with the line "The plant whose shadow falls on your desk, and how the light moves. By day
+  it is sunlight, and by night moonlight." The night has no control: the theme decides it (§2.1).
+  - **The preview**, at the section's head: a still of the mat in CSS (§2.1), 16 : 9, corners 12, with the chosen
+    plant's silhouette as its shadow, taking every row below live but the wind. Settings' backdrop blurs the desk, so
+    the section shows its own; the desk behind takes every change too, the wind with it.
+  - **Plant**, eight tiles, four to a row (two where Settings is narrower than 720), 3 : 2, corners 10, each a small
+    mat with its plant and its name under it (12/500, secondary ink), the chosen one in the selection ring (§7):
+    **None** (the bare mat, in open light) · **Monstera**, the default · **Climbing monstera** · **Fan palm** ·
+    **Coconut palm** · **Under the palm** · **Palm** · **Canopy**. A plant's picture loads when it is chosen. The
+    tiles are one stop for Tab, and the arrows choose as they move: ← and → to the next and the one before, wrapping
+    at the ends; ↑ and ↓ to the tile over or under, as the rows lie at that width.
+  - **Mirror**, a switch, off: "Flip the plant's shadow left to right."
+  - **Softness** (Sharp … Soft), **Shade** (Lighter … Deeper), **Tint** (Neutral … Cool), **Size** (Smaller …
+    Larger) and **Wind** (Still … Breezy): Settings' sliders, words at their ends and no number, each moving the desk
+    as it is dragged and written when let go. Wind at Still stops the desk's ambient (§6 M5). Under Reduce motion,
+    Wind is disabled and says "Still while Reduce motion is on in System Settings." Shade and Tint are the day's: in
+    the dark theme they are disabled, and each says "Sets the daylight's shade." or "Sets the daylight's tint.", then
+    "In the dark theme, moonlight keeps its own."
+  - **Reset light**, a quiet button at the section's foot: every row back to its default, one undo step.
+  It is the person's, as every preference here is (`storage.appPreferences`, one key for the section), so a desk
+  looks the same on each of their desktops.
+  - **Objects**, below Navigation, was **Card behavior** until 2026-11-19, and its switch, **Snap objects**, was
+    **Snap cards**: a card is the hand's (§8 "The hand"), and these line up the desk's objects. Only the words
+    changed. The settings keep their stored keys, so what a person had set stays set.
 - **The moments** (track AO, AO-D11 and AO-D15 ruled 2026-10-27; AO-L6): a reminder is tied to a
   moment of need and shown once, as one row with its act; **Not now** retires it for good. What was
   retired, and what was acted on, is kept in the setup ledger beside the steps (`setup.moment`), so it
@@ -4971,7 +5014,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   which has no bar, showed it.)* A resize or a theme change while
   covered re-captures: thaw → one frame → capture → freeze (R16). A capture that answers nothing (a
   lost device) covers the mat's ground as the theme lights it — `--vf-mat-ground`, `#3D5A30` by day
-  and `#313C40` by night (§2.1's lit values; the token is DK-15's to add) — and says so once in the
+  and `#313C40` by night (§2.1's lit values; the token is DK-15's to add; `#344548` since 2026-11-19, item 583's
+  gentler night) — and says so once in the
   status line (R16), in the card's own words: "The desk lost its graphics device". Until I23 ships,
   `createImageBitmap` on the desk's own canvas stands in — a bitmap ICE does not promise, so its
   absence falls back the same way. **Godview's live backdrop** (GT-7's viewer glass,
@@ -4982,7 +5026,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   window's edge (≈12 px at 0.98) is the mat's ground as the theme lights it under the cover's tint —
   the still's own ring, `box-shadow: 0 0 0 2vmax var(--vf-mat-ground)`, never the canvas's colour
   (measured under History: (201, 209, 198) by day and (33, 37, 39) by night — the tint over the sage
-  and over the Moon's dapples; Godview's CRT vignette darkens its edge, so there the ring alone is
+  and over the Moon's dapples; *corrected 2026-11-20 (item 583):* under the gentler night's ground,
+  `#344548`, the night's rim computes as (35, 39, 42) from the tokens, not yet measured; Godview's
+  CRT vignette darkens its edge, so there the ring alone is
   held). A desk that never drew (no WebGPU, no adapter) is covered by the same ground and nothing is
   said — the card is the Canvas stage's, and it stands again as the cover lowers.
 - **Peers on the mat** (DK-16; MC-D10 = DK-D23, R22; UA-D17, §2.8 I-1, I-4; R17): another person's
@@ -5175,7 +5221,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   no stage since DK-17 — M5).
   *Amended 2026-10-07 (DK-16; §2.1's erratum, measured):* the veil wears the mat — its lit sage and
   its lattice, opaque — and its bar and label are in the mat's ink (`--vf-mat-ink`, white at 60 %:
-  4.0:1 by day, 5.2:1 by night), so a switch goes from desk to desk on one floor.
+  4.0:1 by day, 5.2:1 by night (4.8:1 since 2026-11-19, item 583's gentler night)), so a switch goes from desk to
+  desk on one floor.
   *Amended 2026-11-10 (item 281's veil; VF-PM's reading of James's IS-281 A, "the bar alone", which the page asked
   of the splash only, so it can be pulled alone):* while a doc loads the bar alone speaks, at the veil's centre, and
   no label stands under it. The label named each step in the DocManager's own words ("opening doc" … "drawing the
@@ -5207,7 +5254,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   arriving user's face, the eyebrow "Switching to" and their name.
   *Amended 2026-10-07 (DK-16; §2.1's erratum, measured):* the ground is the mat (`--vf-mat-ground`
   and `--vf-mat-lattice`), not the canvas and its dots — the floor the Setup Assistant and the switch
-  share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night,
+  share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night (4.8:1 since
+  2026-11-19, item 583's gentler night),
   where `/50` read 3.9:1 on the canvas), the bar white/15 under white/80, the ghost Retry white.
   *Amended 2026-10-29 (track FG; FG-L1, FG-D14 B; built at FG-1, a returning boot's tear at FG-2):* the ground is the
   **field** (§2.1): the website's splash, vendored (`boot/splash/`, generated from vibefield-dotdev's
@@ -6831,7 +6879,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (100% at the head, 88% at 38%, nothing at the foot) on the room's 64px. So the cover's raw colour
     lay at 100% to 88% over the first 24px, then fell in one straight ramp of 40px. Three faults:
     the cover's raw colour is the glass with the desk taken out of it (`#1C1C1E` by night, where the
-    glass over the mat reads (33, 37, 39); white by day, where it reads (201, 209, 198): §8 "The
+    glass over the mat read (33, 37, 39), and computes as (35, 39, 42) from the tokens under item
+    583's night ground, not yet measured (corrected 2026-11-20); white by day, where it reads
+    (201, 209, 198): §8 "The
     covers over the desk", the rim's measure), so the band stood apart from the glass around it, a
     slab darker by night and whiter by day; its first 24px left a line 12% of its ink or less; and a
     straight ramp of 2.2% a px ends in a corner the eye finds, across a line of text.
