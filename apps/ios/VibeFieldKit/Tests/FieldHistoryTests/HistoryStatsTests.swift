@@ -60,6 +60,27 @@ struct HistoryStatsTests {
     #expect(lifetime.clipped == false && lifetime.partial == true)
   }
 
+  @Test("item 398: a project's messages are the door's totals when it gives them, a lower bound while it says so")
+  func lifetimeTakesTheDoorsTotals() throws {
+    var answer = try #require(try Fixture.json("project-figures.valid").objectValue)
+    answer["totals"] = .object([
+      "conversations": .int(142), "messages": .int(6_210), "tokens": .int(9_184_000), "costMicroUsd": .int(61_530_000),
+    ])
+    answer["clipped"] = .bool(true)
+    let cut = try ProjectFiguresResult(json: .object(answer))
+    let lifetime = FieldHistoryModel.lifetime(cut)
+    #expect(lifetime.messages == 6_210, "the door's total, not the cut page's 109")
+    #expect(lifetime.clipped, "a lower bound while the door says its lifetime is not whole")
+    answer["clipped"] = .bool(false)
+    answer["lifetimePartial"] = .bool(false)
+    let whole = FieldHistoryModel.lifetime(try ProjectFiguresResult(json: .object(answer)))
+    #expect(whole.messages == 6_210 && !whole.clipped)
+    // the project's own four numbers say the same count
+    let project = FieldHistoryModel.withFigures(
+      Self.project("p", read: false), cut, sessions: [], now: Self.day(2026, 10, 10))
+    #expect(project.stats?.messages == "6,210")
+  }
+
   @Test("one answer over every day: the row's thirty days are cut from it, and the lifetime is all of it")
   func oneAnswer() throws {
     let figures = try ProjectFiguresResult(json: try Fixture.json("project-figures.valid"))

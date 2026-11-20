@@ -34,6 +34,9 @@ private final class ProjectsDoor: HistoryDoor {
   var status: JSONValue?
   /// fix7 — the listing holds no project (the golden's sources, no rows)
   var emptyList = false
+  /// Item 398 — `project.figures` answers as a phone's cut answer (`clipped`, without the listed session's row), and
+  /// an ask by id with exactly the asked rows
+  var figuresCut = false
 
   func call(_ method: String, params: JSONValue?) async throws -> JSONValue {
     asked.append((method, params))
@@ -57,6 +60,15 @@ private final class ProjectsDoor: HistoryDoor {
     case "project.figures":
       var figures = try #require(try Fixture.json("project-figures.valid").objectValue)
       figures["key"] = params?["key"] ?? figures["key"]
+      if figuresCut, let rows = figures["contribution"]?.arrayValue {
+        if let asked = params?["sessions"]?.arrayValue {
+          let ids = Set(asked.compactMap { $0["sessionId"]?.stringValue })
+          figures["contribution"] = .array(rows.filter { ids.contains($0["sessionId"]?.stringValue ?? "") })
+        } else {
+          figures["contribution"] = .array(rows.filter { $0["sessionId"]?.stringValue != "ses-9b2f0c7d" })
+          figures["clipped"] = .bool(true)
+        }
+      }
       return .object(figures)
     default: throw FieldProductError(kind: "NOT_FOUND", message: method)
     }
@@ -315,6 +327,28 @@ struct HistoryProjectsTests {
     let row = try #require(projects.corpus.sessions(of: vibeField).first)
     #expect(row.tokens == 182_000 && row.spend == HistorySpend(costMicroUsd: 1_240_000))
     #expect(row.meta.hasPrefix("88 msgs · 1h 53m · 182K · $1.24 · started "))
+    projects.close()
+  }
+
+  @Test("item 398: an opened project's sessions its cut answer lacks are asked for by id, once, and wear their figures")
+  @MainActor
+  func aCutAnswersSessionsAreAskedForById() async throws {
+    let door = ProjectsDoor()
+    door.figuresCut = true
+    let projects = HistoryProjects(source: studio, door: door, roster: roster)
+    projects.start()
+    await settle("the ledger") { projects.corpus.projects.count == 2 }
+    projects.open(vibeField)
+    await settle("the figures on the row, asked for by id") {
+      projects.corpus.sessions(of: vibeField).first?.messages == 88
+    }
+    let row = try #require(projects.corpus.sessions(of: vibeField).first)
+    #expect(row.meta.hasPrefix("88 msgs · 1h 53m · 182K · $1.24 · started "))
+    let byId = door.asked.filter { $0.0 == "project.figures" && $0.1?["sessions"] != nil }
+    #expect(byId.count == 1, "asked once")
+    let pairs = byId.first?.1?["sessions"]?.arrayValue ?? []
+    let listed: [JSONValue] = [.object(["device": .string(studio), "sessionId": .string("ses-9b2f0c7d")])]
+    #expect(pairs == listed)
     projects.close()
   }
 

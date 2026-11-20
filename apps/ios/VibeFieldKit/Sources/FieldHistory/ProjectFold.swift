@@ -397,6 +397,15 @@ extension FieldHistoryModel {
     return figures.messages > 0 || row.streamState == "indexed" ? figures : nil
   }
 
+  /// Item 398 (2026-11-19) — the listed sessions to ask the door for by id: those whose row the held figures lack,
+  /// in the order a project's page lists them (the newest first), never one already asked or one with no desktop
+  /// named, at most `HistoryReads.listRows` (a page: the door's own bound on an ask).
+  static func figuresWanted(
+    _ rows: [IndexSessionRow], have: Set<String>, asked: Set<String>
+  ) -> [ProjectFiguresSession] {
+    []  // item 398 (red): asks for none yet
+  }
+
   /// `214 msgs · 3h 12m · 48.2M · $31.40` — the figures of a session's entry, in the desktop's order (the room's
   /// `SessionListItem`: messages, the span, tokens, cost) and in the phone's own words: the count as `figure`
   /// writes it, tokens as `tokensWord`, cost as `spendWord` (`+` on a lower bound, `n/p` with no list price).

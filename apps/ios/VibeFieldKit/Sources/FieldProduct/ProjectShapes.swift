@@ -296,6 +296,40 @@ public struct FiguresSource: Sendable, Equatable {
   }
 }
 
+/// Item 398 (2026-11-19) — one listed conversation `project.figures` is asked for by id: the desktop whose listing
+/// named it and rosetta's canonical id there (a `project.sessions` row's `device` and `sessionId`).
+public struct ProjectFiguresSession: Sendable, Equatable {
+  public let device: String
+  public let sessionId: String
+
+  public init(device: String, sessionId: String) {
+    self.device = device
+    self.sessionId = sessionId
+  }
+
+  public var json: JSONValue { .object(["device": .string(device), "sessionId": .string(sessionId)]) }
+}
+
+/// Item 398 (2026-11-19) — `project.figures`' sums over every contribution row the door gathered, before a phone's
+/// cut, so a project's messages are never a cut page's sum. Money sums as SQL sums it (nil while every row's is).
+public struct ProjectFiguresTotals: Sendable, Equatable {
+  public let conversations: Int64
+  public let messages: Double
+  public let tokens: Double
+  public let costMicroUsd: Double?
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "ProjectFiguresTotals", value: json)
+    guard let messages = object.double("messages") else {
+      throw WireDecodeError(shape: "ProjectFiguresTotals", reason: "missing `messages`")
+    }
+    self.messages = messages
+    conversations = object.int("conversations") ?? 0
+    tokens = object.double("tokens") ?? 0
+    costMicroUsd = object.double("costMicroUsd")
+  }
+}
+
 /// `project.figures` — one merged figure across every desktop, honest when
 /// partial: the heatmap and its models (daily), each session's contribution
 /// with the desktop that recorded it (lifetime).
@@ -309,6 +343,9 @@ public struct ProjectFiguresResult: Sendable, Equatable {
   public let partial: Bool
   public let lifetimePartial: Bool
   public let clipped: Bool
+  /// Item 398 (2026-11-19) — the door's sums over every row it gathered, before the cut: nil when it was asked by id,
+  /// and from a desktop of an earlier build
+  public let totals: ProjectFiguresTotals?
   public let droppedRows: [String]
   public let unknownFields: [String]
 
@@ -326,6 +363,7 @@ public struct ProjectFiguresResult: Sendable, Equatable {
     partial = object.bool("partial") ?? false
     lifetimePartial = object.bool("lifetimePartial") ?? false
     clipped = object.bool("clipped") ?? false
+    totals = nil  // item 398 (red): not read yet
     droppedRows = dropped
     unknownFields = object.unknownFields
   }
@@ -521,17 +559,23 @@ public struct ProjectFiguresParams: Sendable, Equatable {
   public let key: String
   public let sinceMs: Int64?
   public let offsetMinutes: Int?
+  /// Item 398 (2026-11-19) — the conversations asked for by id (a listed page's), at most a page of them
+  public let sessions: [ProjectFiguresSession]?
 
-  public init(key: String, sinceMs: Int64? = nil, offsetMinutes: Int? = nil) {
+  public init(
+    key: String, sinceMs: Int64? = nil, offsetMinutes: Int? = nil, sessions: [ProjectFiguresSession]? = nil
+  ) {
     self.key = key
     self.sinceMs = sinceMs
     self.offsetMinutes = offsetMinutes
+    self.sessions = sessions
   }
 
   public var json: JSONValue {
     var fields: [String: JSONValue] = ["key": .string(key)]
     if let sinceMs { fields["sinceMs"] = .int(sinceMs) }
     if let offsetMinutes { fields["offsetMinutes"] = .int(Int64(offsetMinutes)) }
+    // item 398 (red): `sessions` not said yet
     return .object(fields)
   }
 }

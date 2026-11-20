@@ -194,6 +194,25 @@ struct SessionFiguresTests {
     #expect(FieldHistoryModel.sessionFigures(sessionA, in: twice)?.messages == 7)
   }
 
+  @Test("item 398: the listed sessions a cut answer lacks are asked for by id, the newest first, each once, a page")
+  func wantedById() throws {
+    let rows = [
+      try Self.session("old", lastAt: Self.lastAt - 60_000), try Self.session("held"),
+      try Self.session("asked", lastAt: Self.lastAt - 30_000), try Self.session("new", lastAt: Self.lastAt + 1),
+      try Self.session("other", on: Self.laptop, lastAt: Self.lastAt - 90_000),
+    ]
+    let have: Set = [FieldHistoryModel.figuresKey(device: Self.studio, sessionId: "held")]
+    let asked: Set = [FieldHistoryModel.figuresKey(device: Self.studio, sessionId: "asked")]
+    let wanted = FieldHistoryModel.figuresWanted(rows, have: have, asked: asked)
+    #expect(wanted.map(\.sessionId) == ["new", "old", "other"])
+    #expect(wanted.map(\.device) == [Self.studio, Self.studio, Self.laptop])
+    // a page at most: the door's own bound on one ask
+    let many = try (0..<150).map { try Self.session("s\($0)", lastAt: Self.lastAt - Int64($0)) }
+    let page = FieldHistoryModel.figuresWanted(many, have: [], asked: [])
+    #expect(page.count == HistoryReads.listRows)
+    #expect(page.first?.sessionId == "s0" && page.last?.sessionId == "s99")
+  }
+
   @Test("a session cached before item 393 still reads, with no figures; one cached with them keeps them")
   func cached() throws {
     let before = """

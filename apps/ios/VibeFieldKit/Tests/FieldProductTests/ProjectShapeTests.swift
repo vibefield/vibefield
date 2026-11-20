@@ -183,6 +183,32 @@ private func withoutNote(_ value: JSONValue) -> JSONValue {
     #expect(day.partial)
   }
 
+  @Test func theFiguresCarryTheDoorsTotalsWhenItGivesThem() throws {
+    // item 398 — a phone's answer, cut at its bound: its totals are every row the door gathered
+    let cut = try ProjectFiguresResult(json: try Fixture.json("project-figures.totals"))
+    let totals = try #require(cut.totals)
+    #expect(totals.conversations == 142 && totals.messages == 6_210)
+    #expect(totals.tokens == 9_184_000 && totals.costMicroUsd == 61_530_000)
+    #expect(cut.clipped && cut.lifetimePartial)
+    #expect(!cut.unknownFields.contains("totals"))
+    // an answer of an earlier build carries none
+    let earlier = try ProjectFiguresResult(json: try Fixture.json("project-figures.valid"))
+    #expect(earlier.totals == nil)
+  }
+
+  @Test func theFiguresAskedByIdMatchTheirGolden() throws {
+    // item 398 — the second ask: the listed page's conversations, by the desktop that listed each and its id there
+    let golden = withoutNote(try Fixture.json("project-figures-params.sessions"))
+    let asked = ProjectFiguresParams(
+      key: "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8", sinceMs: 1_727_568_000_000, offsetMinutes: -420,
+      sessions: [
+        ProjectFiguresSession(device: "01J9ZK3M5Q8XR2V7N4B6C1D0EF", sessionId: "ses-9b2f0c7d"),
+        ProjectFiguresSession(device: "01J9ZK3M5Q8XR2V7N4B6C1D0EF", sessionId: "ses-31c0de55"),
+      ]
+    ).json
+    #expect(asked == golden)
+  }
+
   @Test func theSubscribeOpensEmptyAndItsPingCarriesTheKeyMoves() throws {
     let open = try ProjectChangesSnapshot(json: try #require(try Fixture.json("project-changes-open.snapshot")["snapshot"]))
     #expect(open.epoch == "projects-3f2a9c1e-5b7d-4e0a-9c8b-1d2e3f4a5b6c")
