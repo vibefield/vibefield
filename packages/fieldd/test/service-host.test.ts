@@ -183,6 +183,30 @@ describe("ServiceHost — the worker end-to-end (§14.2)", () => {
     const off = await rpc.callErr(`${NS}.echo`, { msg: "x" });
     expect(off.data?.kind).toBe("NOT_FOUND");
   }, 60_000);
+
+  // Item 603 (2026-11-19) — a service's instance key is this desktop's persisted local id, never the roster's id,
+  // which moves when the mesh identity arrives. The mock floor answers a mesh identity ("dev-self", MockMgmtServer's
+  // own); a fresh target taken once the roster knows it still names the local id.
+  it("item 603 — the service's instance key is the persisted local id, with the mesh identity known", async () => {
+    const { daemon } = await setup();
+    await until(() => daemon.devices.currentDeviceId() === "dev-self", 15_000);
+    const local = daemon.devices.localDeviceId();
+    expect(local).not.toBe("dev-self");
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+
+    // a fresh target: the re-enable restarts fresh (§18.3) and sets it before it answers
+    await rpc.call("plugins.enable", { id: ID });
+    await until(() => serviceState(daemon) === "active", 8000);
+    const runtime = (await rpc.call("plugins.runtime.get", { pluginId: ID })) as {
+      plugins: Array<{
+        pluginId: string;
+        serviceController: { desired: { instanceKey?: { deviceId?: string } } | null } | null;
+      }>;
+    };
+    const desired = runtime.plugins.find((p) => p.pluginId === ID)?.serviceController?.desired;
+    expect(desired?.instanceKey?.deviceId).toBe(local);
+  });
 });
 
 describe("supervised processes through the worker (§17.1, P6)", () => {

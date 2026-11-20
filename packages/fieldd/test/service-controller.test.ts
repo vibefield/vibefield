@@ -119,6 +119,7 @@ function createRig(
   },
   mintLease?: (scopes: TokenGrant["scopes"], generation: number) => Promise<TokenGrant>,
   observation?: { readonly logger: Logger; readonly changed: () => void },
+  deviceId: () => string = () => "device-prc3c",
 ): {
   host: ServiceHost;
   registry: ServiceRegistry;
@@ -170,7 +171,7 @@ function createRig(
     plugins: plugins as unknown as PluginRegistryService,
     tokens: {} as TokenService,
     controlPort: () => 1,
-    deviceId: () => "device-prc3c",
+    deviceId,
     workerFactory: (_path: string, options: WorkerOptions): Worker => {
       const worker = new ControllerWorker();
       workers.push(worker);
@@ -656,5 +657,66 @@ describe("ServiceHost exact target controller (PRC-3c)", () => {
     } finally {
       rmSync(candidateRoot, { recursive: true, force: true });
     }
+  });
+
+  // Item 603 (2026-11-19) — a service's instance key never moves under an activation in flight. The roster's id moves
+  // when the mesh identity arrives; an attempt still in its lease mint refused itself as superseded for it, and the
+  // service stayed degraded. A grant generation that moves in the same window must still refuse: the fence fences.
+  const heldMint = (): {
+    readonly minting: Promise<void>;
+    release(): void;
+    mint(scopes: TokenGrant["scopes"], generation: number): Promise<TokenGrant>;
+  } => {
+    const started = deferred<void>();
+    const gate = deferred<void>();
+    return {
+      minting: started.promise,
+      release: () => gate.resolve(undefined),
+      mint: async (scopes, generation) => {
+        started.resolve(undefined);
+        await gate.promise;
+        return {
+          tokenId: `lease-${generation}`,
+          token: `secret-${generation}`,
+          scopes,
+          label: "item 603",
+          pluginId,
+        };
+      },
+    };
+  };
+  const settledAs = (start: Promise<void>): Promise<string> =>
+    start.then(
+      () => "resolved",
+      (error: unknown) => `rejected: ${String(error)}`,
+    );
+
+  it("item 603 — the device id moving during the lease mint does not supersede the activation", async () => {
+    let device = "local-id";
+    const held = heldMint();
+    const rig = createRig(undefined, held.mint, undefined, () => device);
+    const started = settledAs(rig.host.start(pluginId));
+    await held.minting;
+    device = "mesh-id"; // the mesh identity arrives while the lease is minted
+    held.release();
+
+    expect(await started).toBe("resolved");
+    expect(rig.revoked).toEqual([]);
+    expect(rig.workers).toHaveLength(1);
+    expect(rig.host.diagnostic(pluginId)?.state).toBe("active");
+    await rig.host.stop(pluginId);
+  });
+
+  it("item 603 — the control: a grant generation moving during the lease mint still refuses", async () => {
+    const held = heldMint();
+    const rig = createRig(undefined, held.mint);
+    const started = settledAs(rig.host.start(pluginId));
+    await held.minting;
+    rig.update((record) => ({ ...record, grantGeneration: 2 }));
+    held.release();
+
+    expect(await started).toMatch(/superseded after lease mint/);
+    expect(rig.revoked).toEqual(["lease-1"]);
+    expect(rig.workers).toHaveLength(0);
   });
 });
