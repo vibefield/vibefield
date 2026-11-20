@@ -8,7 +8,7 @@
 // benign already-gone race). The live create/terminate/attach path needs a
 // real PTY authority and lives in terminal-seam.test.ts.
 import { AsyncResource } from "node:async_hooks";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash, createHmac } from "node:crypto";
 import {
   existsSync,
@@ -32,6 +32,7 @@ import {
   isPipeEndpoint,
   LAYOUT,
   METHODS,
+  type PlaceFacts,
   type Scope,
   SHELL_PROVIDER_METHODS,
   type ShellDialogPickFileResult,
@@ -64,6 +65,7 @@ import {
   TerminalSchemeSetResult,
   type TerminalWorkloadClass,
 } from "@vibefield/contracts";
+import type { WsCtor } from "@vibefield/fieldd-client";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -81,8 +83,9 @@ import {
   type TerminalSuccessionClock,
 } from "../src/terminal-service";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
-import { productDoorPath } from "./link-fixture";
+import { productDoorPath, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint, shortTmpRoot } from "./native-harness";
+import { desktopSlice, registryPeer } from "./peer-roster";
 import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -5810,4 +5813,317 @@ describe("item 589 — a plain shell keeps the run mark fieldd holds, and no oth
     const binding = logs.filter((log) => log.event === "fieldd.terminal.profile_binding_reserved");
     expect(binding[0]?.attrs).toEqual({ profileSet: "work", dropped: 1 });
   });
+});
+
+// ── Item 587 (2026-11-19) — a phone's shell under a profile, at a place ──────────────────────────
+//
+// `terminal.create` reads a bound birth's spawn rights through the call's GRANT (`grantedScopesOf`), so the self
+// phone, which may already agent.spawn under a profile, may open a shell under one; a guest holds nothing. A peer
+// desktop never reaches it: terminal.create is local (D36), refused at the product door, so a shell at a place is
+// born only on the desktop that owns the place. It reads a place by agent.spawn's one rule (place-folder.ts): the
+// folder of this desktop's own place, or a refusal in agent.spawn's words before the floor is asked. ONE daemon per
+// row, over the fake floor, the scripted index (a place's facts are the catalog's) and the product door the sidecar
+// delivers the phone and a peer through.
+
+const FAKE_ROSETTAD = join(import.meta.dirname, "fixtures", "fake-rosettad.mjs");
+
+/** The peer link's dialer: this world reaches no other desktop. */
+class NoPeerDial extends WebSocket {
+  constructor(_url: string) {
+    super("ws://127.0.0.1:1/");
+  }
+}
+
+/** A place's facts as the scanner writes them: a plain folder. */
+function placeFacts(placeId: string, path: string): PlaceFacts {
+  return {
+    placeId,
+    path,
+    aliases: [],
+    kind: "project",
+    caseless: true,
+    exists: true,
+    mounted: true,
+    git: false,
+    remotes: [],
+    samples: [],
+    hits: [],
+    observedAt: 1,
+  };
+}
+
+async function placeWorld() {
+  const dataDir = makeDataDir();
+  writeLinkFixture(dataDir, TEST_LOGIN);
+  const shellDir = mkdtempSync(join(tmpdir(), "vf-587-place-"));
+  cleanup.push(() => rmSync(shellDir, { recursive: true, force: true }));
+  // the index: one project, its one session in the place's folder (rosetta's SessionRow, as the scripted daemon serves it)
+  const sessions = join(dataDir, "sessions.json");
+  const runtimes = join(dataDir, "runtimes.json");
+  writeFileSync(
+    sessions,
+    JSON.stringify([
+      {
+        id: "s-587",
+        native_session_id: "nat-587",
+        root_session_id: "s-587",
+        parent_session_id: null,
+        runtime_id: "rt-claude",
+        project_id: "p-587",
+        cwd: shellDir,
+        title: "title s-587",
+        summary: null,
+        started_at: 1_000,
+        updated_at: 2_000,
+        activity: { first_at: 1_000, last_at: 2_000 },
+        stream_state: "indexed",
+        role: "primary",
+        delegation: null,
+      },
+    ]),
+  );
+  writeFileSync(
+    runtimes,
+    JSON.stringify([
+      { id: "rt-claude", kind: "claude-code", data_root: "~/.claude", enabled: true },
+    ]),
+  );
+  const mock = await startMock(dataDir);
+  mock.helloTerminalMesh = true;
+  mock.meshPeers = [
+    registryPeer({ nodeId: "node-c", deviceId: "dev-c", name: "device-c", login: TEST_LOGIN }),
+  ];
+  mock.storeSlices = new Map<string, unknown>([["dev-c", desktopSlice("dev-c", "device-c")]]);
+  const floor = await startFakeFloor();
+  mock.terminalRoutes = keyedRoutes(1, [
+    {
+      cellInstanceId: 1,
+      cellBootId: "cell-587",
+      endpoints: floor.endpoints,
+      workloadClass: "interactive",
+      role: "class",
+      grantKey: KEY_I,
+      doors: {
+        controlUrl: "ws://127.0.0.1:50018/control",
+        framesUrl: "ws://127.0.0.1:50018/frames",
+      },
+    },
+  ]);
+  mock.observedState = observed([]);
+  const seam = bindingSeam({ work: WORK });
+  const env = {
+    FAKE_ROSETTAD_MODE: "ok",
+    FAKE_ROSETTAD_SESSIONS: sessions,
+    FAKE_ROSETTAD_RUNTIMES: runtimes,
+  };
+  const rosettadSpawn = ((_bin: string, args: readonly string[], options: object) =>
+    spawn(process.execPath, [FAKE_ROSETTAD, ...args], {
+      ...options,
+      env: { ...process.env, ...env },
+    })) as unknown as typeof spawn;
+  const home = join(dataDir, "home");
+  mkdirSync(home, { recursive: true });
+  const daemon = await bootstrap({
+    dataDir,
+    controlPort: 0,
+    dataPort: 0,
+    peerWebSocket: NoPeerDial as unknown as WsCtor,
+    rosettadBin: "/stand-in/rosettad",
+    rosettadSpawn,
+    rosettadHome: home,
+    indexCatalog: { batchMs: 20, digestIntervalMs: 300 },
+    terminalProfileBinding: seam.profileBinding,
+  });
+  cleanup.push(() => daemon.stop());
+  await until(() => daemon.health().rosettad.phase === "ready", 15_000, "rosettad ready");
+  await until(() => daemon.indexCatalog.ready, 30_000, "catalog ready");
+  await until(() => daemon.indexCatalog.projects.size === 1, 15_000, "the one project");
+  await until(
+    () => daemon.devices.currentDeviceId() === mock.meshDeviceId,
+    15_000,
+    "mesh identity",
+  );
+  await until(() => daemon.devices.isDocHost("dev-c"), 15_000, "the peer desktop");
+  await until(
+    () =>
+      daemon.mesh
+        .serves()
+        .some((s) => (s.serveId ?? s.name) === "terminal" && s.status === "active"),
+    5_000,
+    "the terminal serve",
+  );
+  // the places, through the catalog's own write path (the scanner's): the folder, and one whose folder is gone
+  daemon.indexCatalog.setPlaces(
+    new Map([
+      ["p-587", [placeFacts("pl_shell", shellDir), placeFacts("pl_gone", join(shellDir, "gone"))]],
+    ]),
+  );
+  const self = daemon.devices.currentDeviceId();
+
+  // the product door the way the sidecar DELIVERS a caller: the secret path, and the identity headers
+  const door = `ws://127.0.0.1:${daemon.controlPort}${productDoorPath(mock)}`;
+  const tailnet = async (
+    headers: Record<string, string>,
+    clientKind: "ios" | "peer-fieldd",
+  ): Promise<WsRpc> => {
+    const ws = new WebSocket(door, { headers });
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const rpc = new WsRpc(ws);
+    await rpc.call("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind,
+      ...(clientKind === "peer-fieldd" ? { deviceId: "dev-c" } : {}),
+    });
+    return rpc;
+  };
+  const phone = await tailnet({ "Tailscale-User-Login": TEST_LOGIN }, "ios");
+  const guest = await tailnet({ "Tailscale-User-Login": "else@example.com" }, "ios");
+  const peer = await tailnet(
+    { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": "node-c" },
+    "peer-fieldd",
+  );
+  const creates = (): number => floor.commands().filter((c) => c === "create-session").length;
+  const createRecords = async () =>
+    (await readAuditRecords(dataDir)).filter((r) => r.action === "terminal.session.create");
+  return { dataDir, shellDir, floor, seam, self, phone, guest, peer, creates, createRecords };
+}
+
+describe("Item 587 — a phone's shell under a profile, at a place (the fake floor, the scripted index)", () => {
+  it("the self phone opens a shell under a profile at a place: born in the place's folder, bound; a place with no profile opens a plain shell there; a peer desktop is refused, terminal.create does not federate", async () => {
+    const world = await placeWorld();
+    const { cat } = programs();
+    const ref = { device: world.self, placeId: "pl_shell" };
+    const created = TerminalCreateOpenResult.parse(
+      await world.phone.call("terminal.create", { shell: cat, place: ref, profileSet: "work" }),
+    );
+    expect(created.profileSet).toBe("work");
+    expect(world.floor.createOptions()?.["cwd"]).toBe(world.shellDir);
+    expect(world.floor.createOptions()?.["environment"]).toStrictEqual({
+      mode: "inherit",
+      overrides: BINDING,
+    });
+    expect(world.seam.asked).toEqual(["work"]);
+
+    // a place with no profile: a plain shell in the place's folder, for a caller that may already open one
+    TerminalCreateOpenResult.parse(
+      await world.phone.call("terminal.create", { shell: cat, place: ref }),
+    );
+    expect(world.floor.createOptions()?.["cwd"]).toBe(world.shellDir);
+    expect(JSON.stringify(world.floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+    expect(world.creates()).toBe(2);
+
+    // a peer desktop never reaches the door: terminal.create is local (D36), refused at the product
+    // door before its grant, its place or its binding is read, whatever the peer's preset holds
+    const peer = await world.peer.callErr("terminal.create", {
+      shell: cat,
+      place: ref,
+      profileSet: "work",
+    });
+    expect([peer.data?.kind, peer.message]).toEqual([
+      "FORBIDDEN_SCOPE",
+      "terminal.create is local to its device; it does not federate",
+    ]);
+    expect(peer.data?.details).toEqual({ method: "terminal.create", locality: "local" });
+    expect(world.seam.asked).toEqual(["work"]);
+    expect(world.creates()).toBe(2);
+  }, 90_000);
+
+  it("refuses before the floor: a guest's bound birth, a place and a cwd together, and a place by agent.spawn's three refusals in its own words", async () => {
+    const world = await placeWorld();
+    const { cat } = programs();
+    const here = { device: world.self, placeId: "pl_shell" };
+
+    // a guest holds nothing: its bound birth by place is refused at its grant
+    const guest = await world.guest.callErr("terminal.create", {
+      shell: cat,
+      place: here,
+      profileSet: "work",
+    });
+    expect(guest.data?.kind).toBe("FORBIDDEN_SCOPE");
+
+    // a place or a cwd, never both
+    const both = await world.phone.callErr("terminal.create", {
+      shell: cat,
+      place: here,
+      cwd: world.shellDir,
+    });
+    expect(both.data?.kind).toBe("PRECONDITION_FAILED");
+
+    // agent.spawn's three, with its words; the ref in the details, never a path, and no provider here
+    const refusal = async (place: { device: string; placeId: string }) => {
+      const refused = await world.phone.callErr("terminal.create", { shell: cat, place });
+      expect(JSON.stringify(refused)).not.toContain(world.shellDir);
+      return refused;
+    };
+    const elsewhere = { device: "dev-studio", placeId: "pl_shell" };
+    const notHere = await refusal(elsewhere);
+    expect([notHere.data?.kind, notHere.message]).toEqual([
+      "PRECONDITION_FAILED",
+      "that place is on another desktop; a desktop starts agents only in its own places",
+    ]);
+    expect(notHere.data?.details).toEqual({ reason: "not-here", place: elsewhere });
+    const nameless = { device: world.self, placeId: "pl_none" };
+    const unknown = await refusal(nameless);
+    expect([unknown.data?.kind, unknown.message]).toEqual([
+      "NOT_FOUND",
+      "this desktop knows no place by that id",
+    ]);
+    expect(unknown.data?.details).toEqual({ reason: "unknown-place", place: nameless });
+    const gone = { device: world.self, placeId: "pl_gone" };
+    const missing = await refusal(gone);
+    expect([missing.data?.kind, missing.message]).toEqual([
+      "PRECONDITION_FAILED",
+      "the place's folder is gone from this device",
+    ]);
+    expect(missing.data?.details).toEqual({ reason: "missing-cwd", place: gone });
+
+    // under a profile, the place is read before the binding is asked
+    const bound = await world.phone.callErr("terminal.create", {
+      shell: cat,
+      place: elsewhere,
+      profileSet: "work",
+    });
+    expect(bound.data?.details).toEqual({ reason: "not-here", place: elsewhere });
+    expect(world.seam.asked).toEqual([]);
+
+    // nothing reached the floor, and each refusal by place is a RECORDED attempt with a failed outcome
+    expect(world.creates()).toBe(0);
+    const records = await world.createRecords();
+    expect(records.filter((r) => r.phase === "outcome" && r.outcome === "failed")).toHaveLength(4);
+  }, 90_000);
+
+  it("the ledger names a birth's place by its ref, never its path; and a bound birth under a set this desktop lacks passes the grant and is refused in the binding's own words", async () => {
+    const world = await placeWorld();
+    const { cat } = programs();
+    const ref = { device: world.self, placeId: "pl_shell" };
+    const created = TerminalCreateOpenResult.parse(
+      await world.phone.call("terminal.create", { shell: cat, place: ref }),
+    );
+    const attempt = (await world.createRecords()).find((r) => r.phase === "attempt");
+    expect(attempt?.attrs?.["place"]).toEqual(ref);
+    expect(attempt?.attrs).not.toHaveProperty("cwd");
+    expect(JSON.stringify(attempt)).not.toContain(world.shellDir);
+    const outcome = (await world.createRecords()).find((r) => r.phase === "outcome");
+    expect(outcome?.attrs).toMatchObject({ sessionId: created.sessionId, bound: false });
+
+    // the parity row: the phone's grant holds agent.spawn, so the binding is asked, and it refuses a set that is gone
+    // exactly as it refuses every caller's (as agent.spawn's birth would be refused under it)
+    const lacking = await world.phone.callErr("terminal.create", {
+      shell: cat,
+      place: ref,
+      profileSet: "gone",
+    });
+    expect([lacking.data?.kind, lacking.message]).toEqual([
+      "NOT_FOUND",
+      "that profile no longer exists",
+    ]);
+    expect(lacking.data?.details).toEqual({ set: "gone" });
+    expect(world.seam.asked).toEqual(["gone"]);
+    expect(world.creates()).toBe(1);
+  }, 90_000);
 });
