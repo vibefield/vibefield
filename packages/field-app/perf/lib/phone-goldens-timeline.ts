@@ -71,12 +71,12 @@ type PaintModule =
 type TimelineInks = ReturnType<InksModule["resolveTimelineInks"]>;
 
 /**
- * PG-6 — THE PHONE'S TIMELINE VIEW, ITS MODEL GOLDEN: puppeteer-views' timeline (0.4.4, `views/timeline/`, its last
- * change `5a0ae86b`) over the home's window rows at every step of the witness run, which the kit's
+ * PG-6 — THE PHONE'S TIMELINE VIEW, ITS MODEL GOLDEN: puppeteer-views' timeline (0.4.7, `views/timeline/`, its last
+ * change `7879498a`) over the home's window rows at every step of the witness run, which the kit's
  * `Godview/Timeline/` transcribes and is held to (`Tests/FieldHomeTests/Timeline*ParityTests.swift`, through the
  * byte-identical copy CIF holds).
  *
- * What the phone draws is RUNTIME ONLY: the SDK's contract lends it no `history` (`view.d.ts:132-137`, DESIGN.md
+ * What the phone draws is RUNTIME ONLY: the SDK's contract lends it no `history` (`view.d.ts:140-145`, DESIGN.md
  * "Runtime only where no record is lent"), so every lane runs birth → now and no lane has a past or an end. The compute
  * refuses a lane that has either (never over a defect).
  *
@@ -87,18 +87,18 @@ type TimelineInks = ReturnType<InksModule["resolveTimelineInks"]>;
  * (`""`), and the timeline never draws one.
  *
  * The clock is `PHONE_BODY_NOW_MS`, following now on the default hour. The geometry is the kit device's stage: the
- * narrow columns at 402 pt (`TimelineView.js` `columnsFor` :46-50, the view's own, held by the kit's hand row), so the
- * track is 298 px, lanes 36 (`laneMax`) and terminals 18 (`TERMINAL_LANE` :36), the map 298 − 14 (`MAP_LEFT` :38).
+ * narrow columns at 402 pt (`TimelineView.js` `columnsFor` :49-53, the view's own, held by the kit's hand row), so the
+ * track is 298 px, lanes 36 (`laneMax`) and terminals 18 (`TERMINAL_LANE` :39), the map 298 − 14 (`MAP_LEFT` :41).
  */
 
 const MINUTE = 60_000;
-/** The track at the kit device's 402 pt: 402 − the narrow head column, 104 (`columnsFor`, TimelineView.js:46-50). */
+/** The track at the kit device's 402 pt: 402 − the narrow head column, 104 (`columnsFor`, TimelineView.js:49-53). */
 const TRACK = 298;
-/** The map's width: the track less its left inset (`MAP_LEFT`, TimelineView.js:38). */
+/** The map's width: the track less its left inset (`MAP_LEFT`, TimelineView.js:41). */
 const MAP_WIDTH = TRACK - 14;
-/** A bare terminal's lane (`TERMINAL_LANE`, TimelineView.js:36). */
+/** A bare terminal's lane (`TERMINAL_LANE`, TimelineView.js:39). */
 const TERMINAL_H = 18;
-/** The terminals' divider (`DIVIDER`, TimelineView.js:37). */
+/** The terminals' divider (`DIVIDER`, TimelineView.js:40). */
 const DIVIDER = 20;
 /** Looking back from now, in minutes: inside most current spans, before them, and before most births. */
 const BACK_MINUTES = [1, 30, 54] as const;
@@ -115,7 +115,7 @@ function untag(value: Tagged): number {
 }
 
 const NOTE =
-  "PG-6 — the phone's timeline view golden: puppeteer-views 0.4.4's timeline (views/timeline, 5a0ae86b; the SDK's lane-words and formatElapsed) over the home's window rows at every step of PG-3a's witness run (phone-goldens.ts windowRows), at PHONE_BODY_NOW_MS, following now on the default hour. RUNTIME ONLY: the phone is lent no history (view.d.ts:132-137), so no lane has a past or an end (the compute refuses one). Colours: the window rows wear currentColor (no theme), so the compute deals as the phone's ProjectLedger does (each step's drawn agents' projectName keys in drawn order, cumulatively) and colours with projectColour(seq, DEFAULT_PROJECT_TINT.light); a terminal wears \"\". The stage is the kit device's: the track 298 px (columnsFor at 402 pt), lanes 36, terminals 18, the map 284. Per step: agents and terminals (birth order; each lane's bornMs, sinceMs, status, fromMs, wait, colour, name, sub, label, its live readout and its readouts looking back 1, 30 and 54 minutes with stateAt's kind, and laneAlpha at no light), laneContentKey, dayStart and earliestHead for the four presets, each lane's wake at the default scale (segments, capsStart, the outline, the gradient by status, the sheens; cy at half the lane), and the map's summary (its rows, start, count, band order, base, kUp, kDn, and each band's top and bottom summed in order). The open step adds what a fixed vector holds: the map's arrays whole (Float32 values), the wakes at a held scale (20 minutes back, 15 minutes wide), and the calls (the scale words; tickStep; ticksBetween pinned ZONE-FREE by wall components, each tick an offset from its window's start and its hour flag, the instant never recorded, mid-month weekdays outside 01:00-03:59; formatElapsed; laneWaitWords; normalizeTimelineParameters; laneAlpha; wakeRadius; the outline, gradient, sheens and necks over synthetic runs; addCoverage, smooth and pulseScales; rgbaCss at its byte and toFixed(4) ties). A non-JSON input is a tagged string. The open step also carries the inks (resolveTimelineInks over the desktop Godview's own tokens: godview.css's theme blocks, their var() resolved in tokens.css; light and dark, as numbers) and paintWakes' stream in each theme over the open's lanes at the default window, recorded call by call through a recording 2D context (a path as its command count, first and last, the outline being the wakes' rows'; a gradient with its line and stops), its ticks' hairlines elided to one {op: \"ticks\"} because ticksBetween reads the local zone. Reached through puppeteer-views' root exports, puppeteer-view-sdk's ./toolkit, and by path timeline-inks.js and timeline-paint.js. Not here: paintPulse (by eye, the still pair; its hours read the local zone), the layout (TimelineView-private, the kit's hand rows; the paint's placement is layoutLanes' with room for every lane at laneMax). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens), pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures. A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
+  "PG-6 — the phone's timeline view golden: puppeteer-views 0.4.7's timeline (views/timeline, 7879498a; the SDK's lane-words and formatElapsed) over the home's window rows at every step of PG-3a's witness run (phone-goldens.ts windowRows), at PHONE_BODY_NOW_MS, following now on the default hour. RUNTIME ONLY: the phone is lent no history (view.d.ts:140-145), so no lane has a past or an end (the compute refuses one). Colours: the window rows wear currentColor (no theme), so the compute deals as the phone's ProjectLedger does (each step's drawn agents' projectName keys in drawn order, cumulatively) and colours with projectColour(seq, DEFAULT_PROJECT_TINT.light); a terminal wears \"\". The stage is the kit device's: the track 298 px (columnsFor at 402 pt), lanes 36, terminals 18, the map 284. Per step: agents and terminals (birth order; each lane's bornMs, sinceMs, status, fromMs, wait, colour, name, sub, label, its live readout and its readouts looking back 1, 30 and 54 minutes with stateAt's kind, and laneAlpha at no light), laneContentKey, dayStart and earliestHead for the four presets, each lane's wake at the default scale (segments, capsStart, the outline, the gradient by status, the sheens; cy at half the lane), and the map's summary (its rows, start, count, band order, base, kUp, kDn, and each band's top and bottom summed in order). The open step adds what a fixed vector holds: the map's arrays whole (Float32 values), the wakes at a held scale (20 minutes back, 15 minutes wide), and the calls (the scale words; tickStep; ticksBetween pinned ZONE-FREE by wall components, each tick an offset from its window's start and its hour flag, the instant never recorded, mid-month weekdays outside 01:00-03:59; formatElapsed; laneWaitWords; normalizeTimelineParameters; laneAlpha; wakeRadius; the outline, gradient, sheens and necks over synthetic runs; addCoverage, smooth and pulseScales; rgbaCss at its byte and toFixed(4) ties). A non-JSON input is a tagged string. The open step also carries the inks (resolveTimelineInks over the desktop Godview's own tokens: godview.css's theme blocks, their var() resolved in tokens.css; light and dark, as numbers) and paintWakes' stream in each theme over the open's lanes at the default window, recorded call by call through a recording 2D context (a path as its command count, first and last, the outline being the wakes' rows'; a gradient with its line and stops), its ticks' hairlines elided to one {op: \"ticks\"} because ticksBetween reads the local zone. Reached through puppeteer-views' root exports, puppeteer-view-sdk's ./toolkit, and by path timeline-inks.js and timeline-paint.js. Not here: paintPulse (by eye, the still pair; its hours read the local zone), the layout (TimelineView-private, the kit's hand rows; the paint's placement is layoutLanes' with room for every lane at laneMax). GENERATED by packages/field-app/perf/phone-goldens.generate.perf.ts (pnpm --filter @vibefield/field-app phone:goldens), pinned byte for byte by packages/field-app/test/phone-parity.test.ts, the kit's copy by pnpm check:ios-fixtures. A puppeteer EL8 moves it: regenerate and copy to the kit in the same commit. Never edit by hand; a regeneration is a re-bless, said in its commit, and never over a defect.";
 
 /** A readout as the golden records it; a recorded one is a defect here (no history). */
 function readout(value: TimelineReadout): {
@@ -198,7 +198,7 @@ function sum(values: Float32Array): number {
   return total;
 }
 
-/** The map of the day as the draw computes it at the default span (TimelineView.js:503, :512). */
+/** The map of the day as the draw computes it at the default span (TimelineView.js:505, :514). */
 function pulseOf(set: TimelineLaneSet, nowMs: number) {
   const start = dayStart(set, DEFAULT_SPAN_MS, nowMs);
   const rows = pulseRowsFor(set.agents, nowMs);

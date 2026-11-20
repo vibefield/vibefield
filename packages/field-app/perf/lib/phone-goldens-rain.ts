@@ -191,7 +191,7 @@ function recorder(draws: RainOp[][], seen: { font: Set<string>; align: Set<strin
     get(target, key) {
       if (key === "fillRect")
         return (x: number, y: number, w: number, h: number) => {
-          // a draw starts at the stage's fill, the whole frame (RainView.js:116-117)
+          // a draw starts at the stage's fill, the whole frame (RainView.js:128-129)
           if (x === 0 && y === 0 && w === RAIN_STILL.width && h === RAIN_STILL.height)
             draws.push([]);
           draws.at(-1)?.push({ rect: [x, y, w, h], fill: String(target.fillStyle) });

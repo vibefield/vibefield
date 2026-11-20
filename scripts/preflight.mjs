@@ -285,48 +285,52 @@ const PIN_EXPECTATIONS = [
   // (v0.4.2 = 325b6770: items 354, 357 and 361's options, and 0.4.1's spend words and Hermes refusal). 0.4.4 since
   // 2026-11-18 (v0.4.4 = 4de5edd6, carrying 0.4.3, never pinned here: an aged Claude token is a failed
   // reading, renewed with no message; a newer build's registry is read; a plan's tier travels beside its name; an
-  // OpenCode 2.x start is refused in words a host can say).
+  // OpenCode 2.x start is refused in words a host can say). 0.4.7 since 2026-11-20 (v0.4.7 = 9e24e28a, carrying
+  // 0.4.5 and 0.4.6, never pinned here: a Codex paste is confirmed on the thread's own record; a host's stop
+  // stage reaches the frame and the row; a run's turn ends are counted; an attach replays after the host's
+  // cursor; every view draws a host's mark on a row; a failed attach says the adapter's refusal or a generic
+  // sentence).
   // Anchored to the line's end like rosetta's.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-runtime":\s*0\.4\.4\s*$/m,
-    label: '"@vibefield/puppeteer-runtime": 0.4.4',
+    re: /"@vibefield\/puppeteer-runtime":\s*0\.4\.7\s*$/m,
+    label: '"@vibefield/puppeteer-runtime": 0.4.7',
     package: "@vibefield/puppeteer-runtime",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.4\.4\s*$/m,
-    label: '"@vibefield/puppeteer-builtin-providers": 0.4.4',
+    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.4\.7\s*$/m,
+    label: '"@vibefield/puppeteer-builtin-providers": 0.4.7',
     package: "@vibefield/puppeteer-builtin-providers",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-core":\s*0\.4\.4\s*$/m,
-    label: '"@vibefield/puppeteer-core": 0.4.4',
+    re: /"@vibefield\/puppeteer-core":\s*0\.4\.7\s*$/m,
+    label: '"@vibefield/puppeteer-core": 0.4.7',
     package: "@vibefield/puppeteer-core",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-record":\s*0\.4\.4\s*$/m,
-    label: '"@vibefield/puppeteer-record": 0.4.4',
+    re: /"@vibefield\/puppeteer-record":\s*0\.4\.7\s*$/m,
+    label: '"@vibefield/puppeteer-record": 0.4.7',
     package: "@vibefield/puppeteer-record",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-monitor":\s*0\.4\.4\s*$/m,
-    label: '"@vibefield/puppeteer-monitor": 0.4.4',
+    re: /"@vibefield\/puppeteer-monitor":\s*0\.4\.7\s*$/m,
+    label: '"@vibefield/puppeteer-monitor": 0.4.7',
     package: "@vibefield/puppeteer-monitor",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.4\.4\s*$/m,
-    label: '"@vibefield/puppeteer-view-sdk": 0.4.4',
+    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.4\.7\s*$/m,
+    label: '"@vibefield/puppeteer-view-sdk": 0.4.7',
     package: "@vibefield/puppeteer-view-sdk",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-views":\s*0\.4\.4\s*$/m,
-    label: '"@vibefield/puppeteer-views": 0.4.4',
+    re: /"@vibefield\/puppeteer-views":\s*0\.4\.7\s*$/m,
+    label: '"@vibefield/puppeteer-views": 0.4.7',
     package: "@vibefield/puppeteer-views",
   },
 ];
