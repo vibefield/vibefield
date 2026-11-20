@@ -63766,3 +63766,275 @@ the records commit over it and are read after the push.
   names `co-j1-flood-words` twice. Main has none. They were written 2026-11-07 and 2026-11-08, before the rule that
   a product comment says the item and the day, and they land as carried, since this is the tree the verify proves.
   One sweep commit after the carry re-says each by its item and day, with that tree's own verify.
+
+> **Read after the push (2026-11-20):** GitHub's `verify` at the pushed head `43973b6f2` passed: run 44798481181,
+> ended 19:54:10Z; `audit` passed, run 44798481158.
+
+## Item 641 — the nightly stamps its version before its install, so its pnpm runs meet the tree it recorded (M469)
+
+(2026-11-20; three commits, 3 paths: `58f7bcc512ed` (doc, "641 (doc): the ledger corrects item 554's "CI does not see
+it" for a job that moves a project"), `685dfb8b5caf` (red, "641 (red): the release build stamps its prerelease version
+after the install it then runs on") and `ce25ff821522` (green, "641 (green): the nightly stamps its version before the
+install, so its pnpm runs meet that tree"). Cut by the terminal-look lane on main `43973b6f2f88`, the first commit of
+the stack the ICE 0.20.0 pin (item 638) sits on.)
+
+**What was wrong.** The nightly of 2026-11-20 (run 44763648934, head `686f8fa90a7c`, which holds item 554) failed in its
+build job at "Package, signed", on its first command `pnpm run package:mac:release`: "[ERR_PNPM_VERIFY_DEPS_BEFORE_RUN]
+The workspace structure has changed since last install". Sign, converge, attest and publish were skipped, so there was
+no nightly that day. The job's step "Stamp the prerelease's version" rewrote `apps/desktop/package.json`'s version
+(`scripts/release-plan.mjs` `stampVersion`) AFTER "Install (frozen)". pnpm stores each workspace project's name and
+version with an install and compares them before every `pnpm run` or `pnpm exec` (pnpm 11.13.1, `dist/pnpm.mjs`
+`:196039-196048`). The stamp's own log line read at 19:01:05.096Z, and the package step's first `pnpm run` stopped 0.3 s
+later. Before item 554, pnpm's default `verifyDepsBeforeRun: install` re-installed silently at that step, a second
+install inside the release build. Item 554's `prompt` cannot answer with no terminal, so the drift stopped the job. The
+verify workflow and the push's verify never stamp, and a stable release skips the stamp, so only nightlies and betas met
+it.
+
+**What changes.**
+- `.github/workflows/release.yml`: "Stamp the prerelease's version" moves, unchanged, directly above "Install
+  (frozen)", under a comment that says why. The stamp needs no install: `release-plan.mjs` imports node's own modules
+  alone, as the siblings fetch before it does. Nothing else in the workflow moves.
+- `packages/electron-shell/test/updates/release-scripts.test.ts`: one row in "release.yml's shape" holds the stamp's
+  step before the install's.
+- `docs/LANDED.md`: a dated correction under item 554's "What a person sees", where "CI installs afresh and does not
+  see it" read as if CI were untouched.
+
+**Read before the cut.** No other workflow or script writes a workspace project after its install, read at main
+`43973b6f2f88`. `release.yml` is the only writer of `apps/desktop/package.json`; `stage-package.mjs` and
+`third-party-notices.mjs` read it. The other workflows (affected, audit, package-preview, terminal-perf, verify) hold no
+such line. The scripts that write a `package.json` write into `node_modules` (`build-fieldd-sea.mjs`'s poison probe) or
+a temporary fixture root. So the desk smokes, the packaged rows and `pnpm gate:landing` do not meet it.
+
+**Proved before the cut, on the development Mac.** biome 2.5.4 format (by stdin: unchanged) and check (warnings as
+errors, file-based) on the one changed `.ts` at the red and the green trees: 0 format changes, 0 check failures. The
+three patches apply forward to the made trees by `git apply`, and reverse to main's by `patch -p1 -R --fuzz=0`.
+
+**On the test Mac.** Row `641` (`ROW-641.md` `b0e43873`), AS WANTED in every run, on the cut's own commits. `i641-red`
+at the red `685dfb8b` (ended 19:31:11Z): release-scripts.test.ts 1 failed | 78 passed (79), the new row by assertion
+("expected 8 to be less than 5": the stamp was the build job's ninth step, the install its sixth). `i641-green` at the
+green `ce25ff82` (19:32:58Z): 79 passed (79), the same rows, one more passing. `i641-b` at the green (19:35:04Z), on an
+APFS clone of its installed tree (14 MiB to clone, 168 MiB over the run): B0, a frozen offline install and
+`pnpm exec node -e 0`, both exit 0, the lock byte-same, nothing fetched; B1, the nightly's order (the stamp, then the
+exec): the stamp prints its line, and the exec exits 1 with "[ERR_PNPM_VERIFY_DEPS_BEFORE_RUN] The workspace structure
+has changed since last install" and the non-interactive hint, the lock, `.modules.yaml` and the workspace state
+unchanged; B2, 641's order (a frozen offline install after the stamp): exit 0, the lock byte-same, nothing fetched, the
+workspace state recorded anew, and `git status --porcelain` names ` M apps/desktop/package.json` alone; B3, the exec
+again: exit 0.
+
+**The landing's own proof** is the stack's verify and kit at its top: `pnpm verify` whole at `380399a6b` (the census
+commit, the train's top) on the test Mac, run `v-train641c` (exit 0: the typecheck and the tests of 28 projects,
+`census:assert` OK, the Rust tests 696 passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL there, run
+`kit-train641c` (`xcodebuild` exit 0, 3,151 rows, row for row the rows of push 150's kit). The proof that counts is the
+next nightly, on its own schedule after the push.
+
+**Found on the way.** pnpm keys its install record by each project's ABSOLUTE folder (`createWorkspaceState`,
+`dist/pnpm.mjs:195793-195800`). An APFS clone of an installed tree at another path therefore reads "The workspace
+structure has changed since last install" before anything in it changes, until a frozen offline install settles it.
+Row 641's B0 settles its clone first.
+
+**Owed.** The next nightly's build, signed, carrying the fix: the proof that counts, on its own schedule after the push.
+
+## EL8 — ICE 0.20.0: the print opens (I55) and a soft light (I56), two releases in one pin (M470)
+
+(2026-11-20; item 638; one commit, 20 paths +58 −28. Cut on item 641's green `ce25ff821522` (three commits over main
+`43973b6f2f88`) as `0caaec63bbd7` (tree `6bfc703aa449`) on branch `mk/el8-ice020-r2-on-ce25ff821522`. On main it is
+`0caaec63b` "EL8: ICE 0.20.0 — the print opens (I55) and a soft light (I56), two releases in one pin". A FIRST CUT,
+`15a5dfdb326f` on branch `mk/el8-ice020-on-ce25ff821522`, does NOT land: its verify was red (below). Every other id here
+is a run's or ICE's.)
+
+**What landed.**
+- `@vibecook/ice` 0.18.0 → 0.20.0, one EL8 event carrying two releases. 0.19.0 was released and never pinned here, so
+  this commit carries it too. 0.20.0 was published on npm on 2026-11-20 at 18:39:09.552Z, `latest`, its integrity the
+  tarball's packed and checked before the publish (`sha512-dft2vSPk…xZg==`), read back from the registry with no
+  credential. The tag `v0.20.0` is on ICE main's merge `2a2a935555e2`, whose second parent is the release commit
+  `4ee930bd1544`, the two with one tree.
+  - siblings.lock.json's `ice` entry: `sha` `2223993a5032` → `4ee930bd1544`, the revision the tarball was packed and
+    published from, never its merge (as 0.18.0's EL8 pinned); `release.npm` 0.20.0. `render --prod --check` agrees.
+  - pnpm-workspace.yaml: the overrides row (rendered from the lock) with its dated note; `minimumReleaseAgeExclude`
+    gains `@vibecook/ice@0.20.0`, and the 0.18.0 row, kept for the one install that rewrote the lock, is cut; a frozen
+    install proves the lock without it. 0.20.0's own row stands until 0.20.0 is past pnpm's 1,440-minute window, at
+    2026-11-21 18:39:09Z; a one-row commit drops it then.
+  - preflight's `PIN_EXPECTATIONS`: the ICE row, still end-anchored, and its note.
+  - pnpm-lock.yaml is pnpm's: the `@vibecook/ice` entries alone move (+10 −10), the resolution the published integrity;
+    strata and loro do not move.
+  - fieldd's ICE1 probe fixtures, rewritten by their own `generate.mjs` (its golden-0.11.0 frame proof passed; peer ids
+    are random by design): 13 files under `fixtures/`, the manifest's `"ice"` 0.20.0. `fixtures-compacted/` and
+    `golden-0.11.0/` untouched.
+  - docs/plugin-authoring/objects.md, regenerated by `pnpm gen`: its generator quotes the installed ICE's published
+    declarations, so its quoted `OpenBinding` gains 0.19.0's `natural?`, and `MatPass`'s silhouette comment names
+    0.20.0's soft light. No other generated output moves.
+  - DESIGN.md §8: "a print opens", the words for 0.19.0's change, after "Prints".
+  - docs/ROADMAP.md §7: the ICE pins row and its upstream bullet.
+- What the two releases carry. 0.19.0 (petition I55): a print on the desk opens into the hand as the whiteboard does,
+  and what opening does by itself never draws it past its own pixels (`OpenBinding.natural?`, `readingTarget`'s
+  trailing `cap`). 0.20.0 (petition I56): a soft light, a second text of the light that a host chooses once
+  (`gobo.model: "soft"`, `setLightText`), and a night's `contrast` and `fromDay`; `MatUniforms` grows at its end, every
+  earlier field where it was. The upstream diff is additive.
+- Its consumers here: nothing calls `readingTarget` or `setLightText`, so the cone's light is drawn; the two plugins
+  that write an `OpenBinding` (browser-pane, simulator) leave `natural` unset; the three whose WGSL takes `MatUniforms`
+  (browser-pane, simulator, comment-pad) read it by field from the kit's own struct. No product source changes.
+- What a person sees: a print on the desk opens; a small picture opens at its own size, centred; ⌘-wheel or a pinch
+  brings it closer; Done, Esc or a click on the dimmed desk puts it down. Nothing else changes on screen.
+
+**What was proved.** On 2026-11-20. Each A ran on the test Mac in a clean clone detached at `ce25ff821522`, the edits
+made by the cut's tool (`el8-ice020-edits.py`, `2d87a98da48c`) with `--day 2026-11-20`; each V on the test Mac at its
+commit; the cut on the development Mac.
+- A2 (el8i-a2b-020, 20:13:49Z → 20:15:07Z; run.log `d1e64779aebdf5a3`): GREEN. The read-back of 0.20.0 and its
+  integrity; the tool's three phases; the one install, through the 0.20.0 exclude row, pnpm's supply-chain check run
+  whole and passing (668 entries); drop-old-age and a frozen install under the commit's yaml, the lock unmoved, the
+  check whole again (668); the ICE1 generator, 13 fixtures, the kept folders unmoved; THE WHOLE `pnpm gen`, which
+  changed one path beyond the EL8's 19, docs/plugin-authoring/objects.md; then `pnpm gen:check` exit 0, its second
+  generation moving nothing; the typecheck of field-app, plugin-sdk, browser-pane, simulator and comment-pad;
+  preflight; check:deps, one copy each of ICE, strata and loro; fieldd's ICE1 probes 18/18; the plugin SDK 108/108;
+  plugin-cli's docs.test.ts 22/22; the plugin playground's behavior-conformance 3/3. Its 20 paths are its patch
+  (`a3fb06716ff80ee4`, 439 lines, `git diff --binary`), each at the sum its record names.
+- The cut, on the development Mac, 20:21:17Z → 20:21:23Z (cut log `25bd14dbdb7da12d`): A2's own patch laid on the base
+  by `git apply` in a standing lane, detached; each of the 20 paths held to A2's sum as laid and again as committed;
+  the added text lines swept (none outside DESIGN.md's one dated note); through the pre-commit hook; then one
+  create-only ref. Before it, the patch applied to the base in a scratch index, and the cut's holds ran alone, writing
+  nothing.
+- V (v-638r2, 20:23:00Z → 20:33:28Z; run.log `37d6838043d6049d`, verify.clean.log `93f67a33741080ae`), at
+  `0caaec63bbd7` after an online frozen install whose supply-chain check ran whole (668 entries): `pnpm verify` whole,
+  exit 0. Typecheck and test each for 28 projects; plugin-cli's docs.test.ts 22/22; cargo 696 passed, 0 failed, 15
+  ignored; the gen stage wrote docs/plugin-authoring's 7 files and its diff was clean.
+- The train's verify and kit: `pnpm verify` whole at `380399a6b` (the census commit, the train's top) on the test Mac,
+  run `v-train641c` (exit 0: the typecheck and the tests of 28 projects, `census:assert` OK, the Rust tests 696 passed,
+  0 failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-train641c` (`xcodebuild` exit 0, 3,151
+  rows, row for row the rows of push 150's kit).
+
+**The red on the way: the first cut.** A (el8i-a020, 19:37:41Z → 19:39:42Z; run.log `da97e6409940ca36`) ran GREEN at
+the same base from the EL8's steps as first written, which regenerated the ICE1 fixtures and nothing else, as 0.18.0's
+and 0.19.0's steps did; it ran no plugin-cli test. The cut from it, `15a5dfdb326f` (19 paths +41 −27; cut log
+`a7e4f83e6f60928f`), was verified by v-638 (19:50:57Z → 19:59:18Z; run.log `a2255bfc8c7a97f8`): exit 1, typecheck
+green for 28 projects, ONE red row: plugin-cli `test/docs.test.ts` "freshness (the control run) › passes against the
+committed docs", `expected [ 'docs-stale' ] to deeply equal []` (1 failed, 126 passed). Its Rust tests and gen stage
+never ran.
+- THE FINDING: docs/plugin-authoring is generated (`pnpm gen:docs`, inside `pnpm gen`, held by verify's
+  `pnpm gen:check`), and its generator (`tooling/plugin-cli/src/docs-generate.ts`) quotes 23 declarations from the
+  INSTALLED ICE's published `.d.ts`, `OpenBinding` among them, and holds its view block to the kit's `MatUniforms`.
+  A pin that moves any of them moves the pages. That generator came after 0.18.0's EL8, so no earlier step list held
+  it.
+- The steps were corrected at their source: A runs the whole `pnpm gen` (any changed path beyond the EL8's set outside
+  docs/plugin-authoring stops it) and `pnpm gen:check`, and its tests gain plugin-cli's docs test and the playground's
+  conformance. The steps now list every reader of the installed ICE, for the next EL8 to start from: the generators
+  `generate.mjs` (fixtures/), `docs-generate.ts` (docs/plugin-authoring/) and `generate-compacted.mjs`
+  (fixtures-compacted/, held untouched); the tests plugin-sdk's behavior, the playground's behavior-conformance,
+  plugin-cli's docs and electron-shell's smoke-last-still. The re-cut is the commit above, on a new branch.
+- One launch on the way did not start: el8i-a2-020 (20:12Z) stopped before its first step, a stage file on the test
+  Mac standing at another sum.
+
+**Not covered, and owed.**
+- `pnpm still` and the desk smokes (`pnpm gate:landing`), on the Mac whose GPU blessed the goldens: not run. ICE's
+  shader sources moved in 0.20.0 (a second light text beside an untouched mat.wgsl); ICE measured its default text
+  byte for byte, and ours is still to be measured.
+- A look at a print's opening on the QA desktop, by hand.
+- The follow-up that drops `@vibecook/ice@0.20.0` from `minimumReleaseAgeExclude`, no earlier than 2026-11-21
+  18:39:09Z: one row, one file, the lock unmoved, proved by a frozen install under the strict policy without the row.
+
+**Not done, and not claimed:** no push of its own. The first cut's branch stays as written.
+
+## Item 583 — the desk wears soft light under a chosen plant, and Settings → Canvas has its Light (M471)
+
+(2026-11-20; three commits on `0caaec63bbd7`, 638's cut, the EL8 to `@vibecook/ice` 0.20.0 that this set needs: the
+design `00c19ea9b` "583 (design): DESIGN.md says the desk's soft light, its gentler night and Settings' Light
+section", the red `589db2c8c` "583 (red): the desk's light and Settings' Light have their tests, and ten of thirteen
+files fail" and the green `1004708ec` "583 (green): the desk wears soft light under a chosen plant, and Settings →
+Canvas has its Light". Cut in a scratch repository that reads the store through its alternates, each commit through the
+repository's own pre-commit hook, under a profile that denies writes to the checkout; written into the store as one
+create-only branch.
+Landed in the train M469–M472 with items 641, 638 and 614, by a fast-forward of main to the train's census commit over
+614's green.)
+
+**What a person sees.** By day the desk is lit by soft light falling through a plant, Monstera unless they choose
+another; by night it wears the gentler night, the moonlit sage `#344548` in the dapples and `#29353B` in the plant's
+shadow, where the darker night was `#313C40` and `#1C2027`. Settings → Canvas opens on a new first section, **Light**:
+a preview of the mat, eight tiles (None and seven plants), Mirror, five sliders with words at their ends (Softness,
+Shade, Tint, Size, Wind; no numbers), and Reset light. The desk behind Settings takes every change as it is made. The
+section that was Card behavior reads Objects, and its switch Snap objects. The choice is the person's, kept in their
+settings and the same on each of their desktops. Reduce motion stills the wind, and the dark theme's night has no
+control: the theme decides it (DESIGN.md §2.1, §6 M5, §8 "Settings → Canvas").
+
+**The seam.**
+- **The preference:** `desk.light` in storage.appPreferences (`packages/contracts/src/shell.ts`): the plant (an id
+  stored in the person's doc, so never renamed and never reused), mirror, and the five rows with their ranges and
+  rests. The setter is strict; the read is tolerant row by row (a row it cannot hold is dropped, the others stand); a
+  desk nobody touched stores nothing and wears the rests. fieldd carries the rows it understands; an older daemon's
+  snapshot reads as every row at its rest.
+- **The desk:** the engine's second light text (`lightText()`, ICE 0.20.0, petition I56), chosen as the desk's module
+  loads; a window store (`desk-light-live.ts`) that the field view feeds from the preference (`desk-light-bridge.ts`)
+  and the stage reads. The stage dresses the layer with `deskLook(theme)`, whose dark theme carries the gentler night
+  (`deskNightTheme`). A plant's plate loads when it is chosen: five new plates, each its own lazy chunk, beside the two
+  that shipped.
+- **Tokens:** `--vf-mat-ground` `#344548` and `--vf-mat-line` `#7C7E76` in tokens.css, as DESIGN.md states them, and
+  the code's pins of the old values moved with them (the smoke's covers and its rim judge's night ground among them).
+  History's glass over the mat by night moves with the ground: its row in ui-system-boundaries.test.ts reads
+  (35, 39, 42), computed from the tokens by the row's own arithmetic, where it read (34, 37, 40); DESIGN.md's two
+  figures measured under the old ground, (33, 37, 39), each gain a dated correction (computed, not yet measured).
+- **The catalog** mounts the shipping Light section on fixtures, never a copy.
+
+**On the test Mac** (qa-01's run `i583-trial-6756f442d302`, in the V lane's own clone at `0caaec63bbd7` with 0.20.0
+installed; the reference the whole verify `v-638r2` at that commit):
+- at the design commit, the whole TypeScript test run: green, every project's counts equal to the reference's
+  (28 projects, 1155 test files, 18071 tests);
+- at the red, the 13 test files, ten failing: six by their rows (contracts' desk-light 8 of 9, by TypeError and
+  assertion; field-app's desk-assets 1 of 4, panels 1 of 6, ui-system-boundaries 1 of 63 and wearing-the-mat 1 of 19;
+  fieldd's app-preferences 1 of 13), four not loading (field-app's desk-light, desk-feed, desk-light-live and
+  light-settings: their modules are the green's), and three passing (contracts' app-preference-set-expected,
+  electron-shell's smoke-peers and field-app's canvas-stage-desk, each for the reason its red message gives);
+- at the green: the same 13 green (13 files, 203 tests); the typecheck of contracts, fieldd, electron-shell and
+  field-app; `pnpm lint` exit 0 with no warning or info gained over the reference (188 and 57); the walls; field-app's
+  whole suite (378 files, 5508 tests).
+- The packaged app's census: `apps/desktop/packaging/package-manifest.json` did not list 583's eight new renderer
+  chunks, so `pnpm census:assert` on the assembled tree was red with them as unexpected (the train's verify
+  `v-train641`, at the bundle stage). The trial's rows above run no bundle stage, and 583's commits do not move the
+  manifest. The landing's last commit `380399a6b`, the census tool's own `--update` on the assembled tree, adds
+  them (on the test Mac, `census:assert` with it in place: exit 0). None of the eight is named in the built index.html,
+  and the entry imports none of them. Each plate is named once in the whole build, by a dynamic `import()` in
+  `desk-plates-[hash].js` behind its plant's own loader, which `loadPlate(name)` calls for that one plant and caches;
+  `desk-plates-[hash].js` is itself a dynamic import in `update-flow-[hash].js`, made when a plate is asked for:
+  - `gobo-canopy-1.rgba.gz-[hash].js`, 193,495 B: loaded when the canopy's plate is asked for.
+  - `gobo-climbing-monstera.rgba.gz-[hash].js`, 696,135 B: when the climbing monstera's is.
+  - `gobo-coconut-palm.rgba.gz-[hash].js`, 847,209 B: when the coconut palm's is.
+  - `gobo-fan-palm.rgba.gz-[hash].js`, 646,040 B: when the fan palm's is.
+  - `gobo-monstera.rgba.gz-[hash].js`, 578,179 B: when the monstera's is.
+  - `gobo-palm-1.rgba.gz-[hash].js`, 306,454 B: when the palm's is.
+  - `gobo-under-the-palm.rgba.gz-[hash].js`, 981,643 B: when the under-the-palm plate is.
+  - `plant-silhouettes-[hash].js`, 46,198 B: named once, by a dynamic `import()` inside an effect in
+    `SettingsPanel-[hash].js` (in the source, the Light section's), itself a dynamic import in `workspace-[hash].js`.
+    On the same build `desk-plates-[hash].js` fell from 500,217 B to 1,658 B: the two plates that shipped inside it
+    moved into chunks of their own.
+- Two runs came before it. A rehearsal on main `686f8fa90a7c` (run `i583-trial-b161f126dfe9`) held the forms and ended
+  at the green's field-app files, which could not load on ICE 0.18.0 (no `lightText`), the reason this set waits for
+  the EL8. The first trial on `0caaec63bbd7` (run `i583-trial-b8275e2f2a56`) ended at the green's 12 files: two rows of
+  canvas-stage-desk.test.tsx expected the engine's bare dark theme where the stage now dresses the dark mat in the
+  gentler night, as the set means it to. Those rows now read their look from `deskLook`; and a reading before the
+  next run found the History-glass row above, which joined the red.
+
+**Owed:**
+- `pnpm gate:landing` has not run for this train. Of its gates, `smoke:canvas` is the one that meets this change: it
+  draws the real desk, now in soft light, and its rim judge compares the night's ground that this set moves. `pnpm
+  still` should stay byte for byte: the playground reaches field-app only through object-types and desk-faces, and
+  neither loads any of this set's sources.
+- The look itself is held by no row, by pixel; the tests hold the rows, the stores and the words. History's glass by
+  night under the new ground is computed, not yet measured.
+
+## Item 614 — Settings' Appearance line reads "Light or dark, for the app and your desk." (M472)
+
+(2026-11-20; two commits on item 583's green `1004708ec`: the red `ddc23c140` "614 (red): Settings' Appearance
+page says "cards" for what the desk holds" and the green `e2414c56d` "614 (green): Appearance's line reads "Light or
+dark, for the app and your desk."". Cut as 583's were, in a scratch of its own; landed in the train M469–M472, not as
+its top: main fast-forwards to the train's census commit over this green.)
+
+**What a person sees.** Settings → Appearance's line, under the page's title, reads "Light or dark, for the app and
+your desk." where it read "The color mode used by app chrome and cards.": the theme also turns the desk between its
+day and its night, and what lies on a desk is an object, never a card.
+
+**The seam.** One string in `packages/field-app/src/panels/SettingsDialog.tsx`'s page list; the page's id, label and
+icon stand, and no stored key moves. `packages/field-app/test/panels.test.ts` reads the line by its words once the
+test has opened Appearance.
+
+**On the test Mac** (qa-01's run `i614-trial-b62ebdd933bb`, straight after item 583's rows, on 583's trial green): at
+the red, panels.test.ts 5 rows passing and 1 failing, by assertion; at the green it passes whole (6 rows); field-app's
+typecheck; `pnpm lint` with no warning or info gained over the reference `v-638r2` (188 and 57). The train's whole
+verify and the kit ALL at the train's top, the census commit over this green: `v-train641c` (`pnpm verify` exit 0) and
+`kit-train641c` (`xcodebuild` exit 0, 3,151 rows).
