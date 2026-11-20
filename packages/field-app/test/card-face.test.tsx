@@ -449,7 +449,10 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
     expect(card).toContain("--card-stock: var(--vf-card-stock);");
     expect(card).toContain("--card-ink: var(--vf-card-stock-ink);");
     expect(card).toContain("--card-cut: var(--vf-card-cut);");
-    expect(card).toContain("filter: brightness(var(--vf-card-dim));");
+    // …times the lamp's light on a card picked up as it turns (§5 "The lamp, live"; 1 everywhere else)
+    expect(card).toContain(
+      "filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));",
+    );
     expect(card).toContain("var(--vf-card-shade)");
     expect(CARDS_CSS).not.toMatch(/--card-ix|vf-card-ix|vf-card-index/u);
     expect(rule(".vf-card-stock::after")).toContain("background-image: var(--vf-card-grain);");
