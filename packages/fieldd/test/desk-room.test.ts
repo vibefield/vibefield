@@ -45,6 +45,10 @@ function handed(h: DeskWorld, key = "k1") {
 
 const factOf = (err: unknown) => (err as { details?: { fact?: string } }).details?.fact;
 
+/** Item 559, 2026-11-18 — one sentence for every intent that left and was never answered (§5.5 step 7). */
+const NO_ANSWER =
+  "The window did not answer, so VibeField cannot tell whether this happened. Look before you try again.";
+
 describe("MT-L4: yours by making or by hand", () => {
   it("answers not-handed, and how to get it, for an object the caller neither placed nor was handed", async () => {
     const h = world();
@@ -475,12 +479,30 @@ describe("no window (§5.5 step 6)", () => {
     });
   });
 
-  it("rejects a closed subscription's pending intents, never a queue that acts later", async () => {
+  it("answers a closed subscription's pending intents no-answer, never a queue that acts later (item 559)", async () => {
+    // they left for the window, which may have done them before it closed: whether they happened is unknown
     const h = world();
     const { verbs, win } = room(h, () => undefined);
     const pending = verbs.object_open(A, { ref: handed(h) });
     win.dispose();
-    await expect(pending).rejects.toMatchObject({ details: { state: "no-window" } });
+    await expect(pending).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      message: NO_ANSWER,
+      details: { service: "desk", state: "no-answer" },
+    });
+  });
+
+  it("says nothing was done only of an intent that never left: the window's send threw (item 559)", async () => {
+    const h = world();
+    const verbs = createDeskVerbs({ objects: h.desk });
+    h.window(() => {
+      throw new Error("the window's socket is gone");
+    });
+    await expect(verbs.object_open(A, { ref: handed(h) })).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      message: expect.stringContaining("nothing was done"),
+      details: { service: "desk", state: "no-window" },
+    });
   });
 
   it("gives a window its deadline, says it cannot tell what happened, and takes no late answer", async () => {
@@ -492,6 +514,7 @@ describe("no window (§5.5 step 6)", () => {
     await vi.advanceTimersByTimeAsync(OBJECT_LIMITS.INTENT_ANSWER_MS + 1);
     await expect(failed).resolves.toMatchObject({
       kind: "UNAVAILABLE",
+      message: NO_ANSWER,
       details: { service: "desk", state: "no-answer" },
     });
     expect(
@@ -518,7 +541,11 @@ describe("no window (§5.5 step 6)", () => {
     const old = h.window(() => undefined);
     const pending = verbs.object_open(A, { ref: handed(h) }).catch((err: unknown) => err);
     const fresh = h.window(ordinaryWindow);
-    await expect(pending).resolves.toMatchObject({ details: { state: "no-window" } });
+    // item 559: the old window was sent it and never answered, so it is no-answer, never "nothing was done"
+    await expect(pending).resolves.toMatchObject({
+      message: NO_ANSWER,
+      details: { state: "no-answer" },
+    });
     old.dispose();
     expect(h.desk.intents.holds(DOC)).toBe(true);
     await verbs.canvas_list(A, {});

@@ -1,11 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CallerContext, ObjectIntent } from "@vibefield/contracts";
 import { METHODS, ObjectsTakeBackResult, TAILNET_SCOPES } from "@vibefield/contracts";
-import { AuditActionV1 } from "@vibefield/contracts/diagnostics";
+import { AuditActionV1, type AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
-import { AuditService } from "../src/audit-service";
+import { AuditService, verifyAuditSegment } from "../src/audit-service";
 import { DocumentService } from "../src/doc-service";
 import type { DeskObjects } from "../src/objects/desk-objects";
 import {
@@ -15,7 +15,8 @@ import {
   registerObjectDoors,
 } from "../src/objects/doors";
 import type { ToolPlaneAudit } from "../src/tool-plane";
-import { cleanupWorlds, DOC, type Survivor, world } from "./desk-fixtures";
+import { createDeskVerbs } from "../src/tool-plane/rooms/desk/verbs";
+import { cleanupWorlds, DOC, ordinaryWindow, type Survivor, world } from "./desk-fixtures";
 
 // OB-3a — the window's door: ten `objects.*` rows, local-only, each held to a window's own token (a scope alone is not
 // the person's window), and the person's acts audited. Rows are called through a fake API, as registerObjectDoors hands
@@ -521,5 +522,80 @@ describe("a board fieldd does not hold has no intents feed (item 521)", () => {
     } finally {
       docs.dispose();
     }
+  });
+});
+
+describe("an undo the window was sent and never answered (item 559, LOG-45)", () => {
+  const NO_ANSWER =
+    "The window did not answer, so VibeField cannot tell whether this happened. Look before you try again.";
+
+  /** Waits for `happened`, by a deadline and never by a count of turns: the real writer's sync takes what it takes. */
+  async function until(happened: () => boolean, what: string): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (!happened()) {
+      if (Date.now() > deadline) throw new Error(`${what} did not happen within 10 s`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  async function trailOf(root: string): Promise<AuditRecordV1[]> {
+    const kept: AuditRecordV1[] = [];
+    for (const name of readdirSync(root)
+      .filter((n) => n.endsWith(".jsonl"))
+      .sort()) {
+      const verified = await verifyAuditSegment(join(root, name));
+      expect(verified.valid, `${name}: ${verified.reason}`).toBe(true);
+      kept.push(...verified.records);
+    }
+    return kept;
+  }
+
+  it("records its effect as unknown, never denied, tells the window so, and keeps the change on offer", async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doors-unknown-"));
+    trails.push(dataDir);
+    const service = new AuditService({ dataDir, bootId: "fieldd-doors-unknown" });
+    await service.start();
+    const h = world();
+    const { ask } = doors(h, h.desk, service);
+    const verbs = createDeskVerbs({ objects: h.desk });
+    const win = h.window((intent) => (intent.op === "undo" ? undefined : ordinaryWindow(intent)));
+    const ref = h.refOf("k1", "desk.note");
+    h.desk.hand(ref, "run-a");
+    await verbs.object_act(
+      { runtimeRunId: "run-a" },
+      { doing: "Change", ref, tool: "write_text", input: { text: "a" } },
+    );
+    const first = ask("objects.undoAgent", WINDOW, { ref, run: "run-a" });
+    // the inverse reaches the window, which reloads before it answers
+    await until(() => win.seen.some((i) => i.op === "undo"), "the inverse reaching the window");
+    h.window(ordinaryWindow);
+    await expect(first).resolves.toEqual({ undone: false, reason: NO_ANSWER });
+    // the change stays on offer: the window that came back can undo it
+    await expect(ask("objects.undoAgent", WINDOW, { ref, run: "run-a" })).resolves.toMatchObject({
+      undone: true,
+    });
+    expect(service.health()).toMatchObject({ state: "healthy", pendingRecoveryMarkers: 0 });
+    await service.close();
+    const kept = await trailOf(service.root);
+    const undos = kept.filter((r) => r.action === "objects.undo_agent");
+    expect(undos.map((r) => [r.phase, r.outcome])).toEqual([
+      ["attempt", undefined],
+      ["attempt", undefined],
+      ["outcome", "succeeded"],
+    ]);
+    const closing = kept.filter(
+      (r) => r.operationId === undos[0]?.operationId && r.action === "audit.outcome.recovery",
+    );
+    expect(closing).toEqual([
+      expect.objectContaining({
+        outcome: "failed",
+        reasonCode: "EFFECT_UNKNOWN",
+        attrs: expect.objectContaining({
+          originalAction: "objects.undo_agent",
+          intendedOutcome: "unknown",
+          effectResolution: "unknown",
+        }),
+      }),
+    ]);
   });
 });
