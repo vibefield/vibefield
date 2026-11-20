@@ -740,6 +740,14 @@ export const MADE_APP_LIMITS = {
   REACH_HOSTS: 16,
   INTENTS: 4096,
   NATIVE_ID_CHARS: 256,
+  /** Item 588 (2026-11-19): a made app's preview is drawn when it is published. The newest this many of the
+   * desktop's apps are owed a capture at publish; an older app is drawn at its next open, as before. */
+  PUBLISH_CAPTURES: 24,
+  /** Item 588: how long the capture's own serve may take to report its URL before it is removed, main never asked. */
+  CAPTURE_SERVE_WAIT_MS: 10_000,
+  /** Item 588: an open draws its app again at most once in this window after its page was last drawn (a page's look
+   * can change as it runs). A page whose drawing failed is drawn at its next open, never held by it. */
+  REDRAW_FLOOR_MS: 10 * 60_000,
 } as const;
 
 /** MA-1a (MA-L10, honest states) — `artifact.open`'s refusals, INDEX_TICKET's pattern: `UnavailableDetails.service`

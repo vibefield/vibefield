@@ -1235,6 +1235,15 @@ export const MADE_APP_AVAILABILITIES = [
 export const MadeAppAvailability = z.enum(MADE_APP_AVAILABILITIES).catch("unknown");
 export type MadeAppAvailability = (typeof MADE_APP_AVAILABILITIES)[number];
 
+/** Item 588 (2026-11-19): why a made app's row has no preview of its page yet, as its origin says it.
+ *  - owed: the origin will draw it the next time VibeField is open on that desktop.
+ *  - failed: its capture for this page failed; it is drawn again the next time the app opens there.
+ * An open vocabulary (`MADE_APP_AVAILABILITIES`' pattern): a word this build has not heard reads `unknown`, which a
+ * reader shows as it shows no state at all, and the row is never refused for it. */
+export const MADE_APP_PREVIEW_STATES = ["owed", "failed", "unknown"] as const;
+export const MadeAppPreviewState = z.enum(MADE_APP_PREVIEW_STATES).catch("unknown");
+export type MadeAppPreviewState = (typeof MADE_APP_PREVIEW_STATES)[number];
+
 /** A page's file name as its agent's tool named it: a basename and never a path, so no `/`, no `\`, no NUL, and never
  * `.` or `..`; at most 255 (a file name's bound). The producer drops a row whose name is not one. */
 export const MadeAppFilename = z
@@ -1279,6 +1288,9 @@ const NEVER_A_PATH = {
  *  - description, droppedFiles: rosetta 0.1.4's (RO-A2 is RO-33, RO-A3a is RO-34a; the lead's ruling on L19). Absent
  *    is unknown; `droppedFiles > 0` is a page served without its files ("page only").
  *  - preview: the app's face (MA-D10 (b); `MadeAppPreview`), which carries no URL.
+ *  - previewState: item 588's (2026-11-19), why the row has no preview of its page yet (`MadeAppPreviewState`).
+ *    Absent: drawn, or an app its origin does not owe a capture (an older app, or an older origin), which reads as
+ *    today's words.
  * What a reader cannot read: the identities (device, appId, presentationId, sessionId, timelineId, filename) and the
  * two joins whose absence says something (projectId absent is "no project", rootSessionId absent is "its own root")
  * are strict, so a bad one refuses the row. Every other optional fact (kind, provider, the two times, byteLen,
@@ -1307,6 +1319,7 @@ export const IndexCatalogApp = z
     description: z.string().max(MADE_APP_LIMITS.DESCRIPTION_CHARS).optional().catch(undefined),
     droppedFiles: z.number().int().nonnegative().optional().catch(undefined),
     preview: MadeAppPreview.optional().catch(undefined),
+    previewState: MadeAppPreviewState.optional(),
     ...NEVER_A_PATH,
   })
   .passthrough();

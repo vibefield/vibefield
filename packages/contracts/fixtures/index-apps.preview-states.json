@@ -1,0 +1,90 @@
+{
+  "//": "Item 588 (2026-11-19) — `index.apps.list` on this desktop's library, with each row's preview state as its origin says it: the first was published while VibeField could not draw on its desktop, so its preview is owed; the second's newest page could not be drawn, so it keeps its older page's preview and says failed; the third says a word this build has not heard, which a reader reads as unknown and shows as no state. A row's `preview`, never its state, decides whether a line is drawn.",
+  "rows": [
+    {
+      "appKey": "01J9ZK3M5Q8XR2V7N4B6C1D0EF:4b8c1f0e2d3a59687b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+      "foldKey": "app:01J9ZK3M5Q8XR2V7N4B6C1D0EF:4b8c1f0e2d3a59687b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "appId": "4b8c1f0e2d3a59687b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
+      "presentationId": "a1c3e5f70923b4d6e8f0a2c4e6f80a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f",
+      "title": "Release checklist",
+      "filename": "release-checklist.html",
+      "kind": "claude-code",
+      "provider": "claude",
+      "sessionId": "ses-3e7a1c55",
+      "timelineId": "artifact-message-4",
+      "versions": 1,
+      "publishedAt": 1793923200000,
+      "capturedAt": 1793923201000,
+      "availability": "captured",
+      "byteLen": 6210,
+      "digest": "e3b7a91c04d25f86a0c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b3d5f7",
+      "previewState": "owed",
+      "openable": true
+    },
+    {
+      "appKey": "01J9ZK3M5Q8XR2V7N4B6C1D0EF:cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+      "foldKey": "native:claude-code:review",
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
+      "presentationId": "0d2f4b6c8e0a1c3e5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f",
+      "title": "Checkout design review",
+      "filename": "checkout.html",
+      "kind": "claude-code",
+      "provider": "claude",
+      "sessionId": "ses-9b2f0c7d",
+      "timelineId": "artifact-message-9",
+      "versions": 3,
+      "publishedAt": 1793923500000,
+      "capturedAt": 1793923502000,
+      "availability": "captured",
+      "byteLen": 19004,
+      "digest": "5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c",
+      "hostedUrl": "https://claude.ai/code/artifact/review",
+      "nativeId": "review",
+      "preview": {
+        "id": "01JC4MA0PV0000000000000001",
+        "digest": "7c9d5a180100e785385597f03324ba6969664076be51cd52dd7798ed96aaa739",
+        "pageDigest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+        "capturedAt": 1793837000000
+      },
+      "previewState": "failed",
+      "openable": true
+    },
+    {
+      "appKey": "01J9ZK3M5Q8XR2V7N4B6C1D0EF:7e1d3c5b9a2f4e6d8c0b1a3f5e7d9c2b4a6f8e0d1c3b5a7f9e2d4c6b8a0f1e3d",
+      "foldKey": "app:01J9ZK3M5Q8XR2V7N4B6C1D0EF:7e1d3c5b9a2f4e6d8c0b1a3f5e7d9c2b4a6f8e0d1c3b5a7f9e2d4c6b8a0f1e3d",
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "appId": "7e1d3c5b9a2f4e6d8c0b1a3f5e7d9c2b4a6f8e0d1c3b5a7f9e2d4c6b8a0f1e3d",
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
+      "presentationId": "2b4d6f8a0c1e3b5d7f9a2c4e6b8d0f1a3c5e7b9d2f4a6c8e0b1d3f5a7c9e2b4d",
+      "title": "Sprint board",
+      "filename": "sprint-board.html",
+      "kind": "claude-code",
+      "provider": "claude",
+      "sessionId": "ses-5c9e2a71",
+      "timelineId": "artifact-message-6",
+      "versions": 1,
+      "publishedAt": 1793923100000,
+      "availability": "captured",
+      "byteLen": 7802,
+      "digest": "8f1b3d5a7c9e2f4b6d8a0c1e3f5b7d9a2c4e6f8b0d1a3c5e7f9b2d4a6c8e0f1b",
+      "previewState": "drawing",
+      "openable": true
+    }
+  ],
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "name": "studio",
+      "self": true,
+      "state": "live",
+      "asOf": "2026-11-19T08:00:00.000Z",
+      "rows": 3,
+      "libraryReady": true,
+      "previewsBase": "https://studio.tail1234.ts.net:14211/"
+    }
+  ]
+}

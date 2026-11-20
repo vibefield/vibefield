@@ -1,0 +1,28 @@
+{
+  "//": "Item 588 (2026-11-19) — a row whose newest page could not be drawn: it keeps the preview of the page before (its `pageDigest` is not the row's `digest`), and says why the newest has none (`previewState: failed`). It is drawn again the next time the app opens on its desktop.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "appId": "cdc9b5a0f9dddc659b00fa9702977bd55d1ed957ec08b4f0b446e468922d818c",
+  "presentationId": "0d2f4b6c8e0a1c3e5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f",
+  "title": "Checkout design review",
+  "filename": "checkout.html",
+  "kind": "claude-code",
+  "provider": "claude",
+  "projectId": "p-4f1c2a9e",
+  "sessionId": "ses-9b2f0c7d",
+  "timelineId": "artifact-message-9",
+  "versions": 3,
+  "publishedAt": 1793923500000,
+  "capturedAt": 1793923502000,
+  "availability": "captured",
+  "byteLen": 19004,
+  "digest": "5a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c",
+  "hostedUrl": "https://claude.ai/code/artifact/review",
+  "nativeId": "review",
+  "preview": {
+    "id": "01JC4MA0PV0000000000000001",
+    "digest": "7c9d5a180100e785385597f03324ba6969664076be51cd52dd7798ed96aaa739",
+    "pageDigest": "b021628460d2357f190d4ac60ede1802a460d7b3c4c3273f75524ada4a737b6e",
+    "capturedAt": 1793837000000
+  },
+  "previewState": "failed"
+}

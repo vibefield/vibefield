@@ -619,7 +619,10 @@ const MadeAppListenPort = z
  *  - network: MA-3f — those hosts by fetch directive, `MadeAppNetworkHosts`' shape (its strict reader is
  *    `madeAppServeHeaders`, at use: made-app-network.ts imports this file). `reach` is flat, so it cannot respell the
  *    serve's headers, and a restart must spell the same serve.
- *  - viewVersion: MA-3f — the MADE_APP_VIEW.VERSION the served folder was built at; another one rebuilds it. */
+ *  - viewVersion: MA-3f — the MADE_APP_VIEW.VERSION the served folder was built at; another one rebuilds it.
+ *  - captureFailed: item 588 (2026-11-19) — the last capture that failed, for the page it was of (`pageDigest`) and
+ *    when. It is not owed again for that page until the app opens. One this build cannot read costs that fact, never
+ *    the record: the capture is owed again. */
 export const MadeAppServeRecord = z
   .object({
     appId: MadeAppId,
@@ -635,6 +638,11 @@ export const MadeAppServeRecord = z
     reach: MadeAppReach.optional(),
     network: z.record(z.string(), z.array(MadeAppReachHost)).optional(),
     viewVersion: z.number().int().positive().optional(),
+    captureFailed: z
+      .object({ pageDigest: Blake3Hex, at: z.number().int().nonnegative() })
+      .passthrough()
+      .optional()
+      .catch(undefined),
     createdAt: z.number().int().nonnegative(),
     updatedAt: z.number().int().nonnegative(),
   })

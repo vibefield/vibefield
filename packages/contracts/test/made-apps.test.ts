@@ -217,6 +217,26 @@ describe("rosetta's availability words are open: a word it does not know reads u
   });
 });
 
+describe("item 588: why a row has no preview of its page yet, an open vocabulary", () => {
+  it("reads owed and failed, folds other words to unknown, leaves an absent one absent", () => {
+    const owed = IndexCatalogApp.parse(fixture("index-catalog-app.preview-owed"));
+    const failed = IndexCatalogApp.parse(fixture("index-catalog-app.preview-failed"));
+    expect(owed.previewState).toBe("owed");
+    expect(failed.previewState).toBe("failed");
+    expect(IndexCatalogApp.parse({ ...row(), previewState: "drawing" }).previewState).toBe(
+      "unknown",
+    );
+    expect(IndexCatalogApp.parse({ ...row(), previewState: 7 }).previewState).toBe("unknown");
+    // a row without it (drawn, an older app, an older origin) reads as today's words
+    expect(row().previewState).toBeUndefined();
+  });
+
+  it("never costs the row: a word it has not heard keeps every other fact", () => {
+    const read = IndexCatalogApp.parse({ ...row(), previewState: "drawing" });
+    expect({ ...read, previewState: undefined }).toEqual({ ...row(), previewState: undefined });
+  });
+});
+
 describe("the hosted link: https only, bounded, never fetched", () => {
   it("admits an https link with a host and refuses everything else", () => {
     expect(parses(MadeAppHostedUrl, "https://claude.ai/code/artifact/review")).toBe(true);
@@ -549,6 +569,19 @@ describe("the origin's private serve registry", () => {
     );
   });
 
+  it("item 588: keeps a failed capture of its page; an unreadable one costs only that", () => {
+    const kept = MadeAppRegistry.parse(fixture("made-app-registry.capture-failed")).apps[0]!;
+    expect(kept.captureFailed).toEqual({ pageDigest: kept.exportedDigest, at: 1793837004000 });
+    const record = MadeAppRegistry.parse(fixture("made-app-registry.valid")).apps[0]!;
+    // a record from before the field still reads, with no failure
+    expect(MadeAppServeRecord.parse(record).captureFailed).toBeUndefined();
+    for (const unreadable of [{ pageDigest: "x", at: 1 }, { pageDigest: HEX, at: -1 }, "failed"]) {
+      const read = MadeAppServeRecord.safeParse({ ...record, captureFailed: unreadable });
+      expect(read.success, JSON.stringify(unreadable)).toBe(true);
+      expect(read.success && read.data.captureFailed, JSON.stringify(unreadable)).toBeUndefined();
+    }
+  });
+
   it("names the port rule's two domains, apart from AH's", () => {
     expect(MADE_APP_PORT_DOMAIN).toBe("made-app-port-v1\0");
     expect(MADE_APP_PREVIEWS_PORT_DOMAIN).toBe("made-app-previews-v1\0");
@@ -580,6 +613,9 @@ describe("MADE_APP_LIMITS and MADE_APP_OPEN are pinned (a move is a deliberate e
       REACH_HOSTS: 16,
       INTENTS: 4096,
       NATIVE_ID_CHARS: 256,
+      PUBLISH_CAPTURES: 24,
+      CAPTURE_SERVE_WAIT_MS: 10_000,
+      REDRAW_FLOOR_MS: 600_000,
     });
   });
 

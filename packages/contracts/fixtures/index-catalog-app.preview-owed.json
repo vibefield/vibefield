@@ -1,0 +1,19 @@
+{
+  "//": "Item 588 (2026-11-19) — a row just published while its desktop's VibeField could not draw (no window open): no preview yet, and its origin owes one (`previewState: owed`), drawn the next time VibeField is open on that desktop. A reader shows the owed words, never the fallback's.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "appId": "4b8c1f0e2d3a59687b9c0d1e2f3a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c",
+  "presentationId": "a1c3e5f70923b4d6e8f0a2c4e6f80a1b3c5d7e9f1a3b5c7d9e1f3a5b7c9d1e3f",
+  "title": "Release checklist",
+  "filename": "release-checklist.html",
+  "kind": "claude-code",
+  "provider": "claude",
+  "sessionId": "ses-3e7a1c55",
+  "timelineId": "artifact-message-4",
+  "versions": 1,
+  "publishedAt": 1793923200000,
+  "capturedAt": 1793923201000,
+  "availability": "captured",
+  "byteLen": 6210,
+  "digest": "e3b7a91c04d25f86a0c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b3d5f7",
+  "previewState": "owed"
+}
