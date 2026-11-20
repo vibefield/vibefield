@@ -634,7 +634,8 @@ public final class HistoryProjects {
   /// Item 512 — the index's standing, logged when it moves: fieldd's words left the screen at item 505, and the
   /// device's log keeps them. A poll that finds the standing as it was says nothing.
   private func standIndex(_ next: FieldHistoryModel.IndexStanding?) {
-    index = next  // item 512 (red): logs nothing yet
+    if next != index { indexLog(next) }
+    index = next
   }
 
   /// While the index is not ready, read the ledger (and the index) again.

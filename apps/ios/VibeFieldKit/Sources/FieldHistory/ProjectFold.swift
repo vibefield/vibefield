@@ -122,7 +122,16 @@ extension FieldHistoryModel {
   /// in the open; fieldd's words can carry rosettad's stderr, a path among them, so `HistoryReads.logIndex` keeps
   /// them private.
   public static func indexLogLine(_ index: IndexStanding?) -> (phase: String, detail: String?) {
-    ("", nil)  // item 512 (red): says nothing yet
+    switch index {
+    case nil: ("not offered", nil)
+    case .ready?: ("ready", nil)
+    case .starting(let detail)?: ("starting", detail)
+    case .rebuilding(let detail)?: ("rebuilding", detail)
+    case .indexing(let percent, let done, let total)?: ("reading \(percent)% (\(done) of \(total))", nil)
+    case .failed(let reason)?: ("failed", reason)
+    case .unconfigured(let reason)?: ("unconfigured", reason)
+    case .stopped?: ("stopped", nil)
+    }
   }
 
   /// The index's sentence under the ledger's scope line (and a project's
