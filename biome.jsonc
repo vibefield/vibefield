@@ -193,6 +193,44 @@
   },
   "overrides": [
     {
+      // Item 620 (2026-11-20): these three packages declare react only as `catalog:`, which biome
+      // 2.5.4 reads as no version, so it never turns React's rules on for them by itself. Named
+      // here: the hook rule as an error, and two rules that wait for a fixing pass as warnings,
+      // each raised to an error area by area.
+      "includes": [
+        "packages/field-app/**",
+        "packages/electron-shell/**",
+        "apps/plugin-playground/**"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "warn",
+            "useHookAtTopLevel": "error"
+          },
+          "suspicious": {
+            "noArrayIndexKey": "warn"
+          }
+        }
+      }
+    },
+    {
+      // Item 620 (2026-11-20): the children rule on the same three packages' source alone; their
+      // tests hand typed createElement calls the `children` their components' props require.
+      "includes": [
+        "packages/field-app/src/**",
+        "packages/electron-shell/src/**",
+        "apps/plugin-playground/src/**"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noChildrenProp": "error"
+          }
+        }
+      }
+    },
+    {
       // Packaging icon sources are build inputs, never inline/document content.
       // Keep both imported vectors and Icon Composer's package serialization
       // exact; DOM formatting/accessibility rules do not apply to either.

@@ -215,7 +215,7 @@ import { thumbnailRows } from "./smoke-thumb";
 import { toolsInHandRows } from "./smoke-tools-in-hand";
 import { TRY_FLAG, TRY_SEARCH_KEY, TRY_TYPES_ENV, tryBoardRows, tryTypes } from "./smoke-try";
 import { NO_WEBGPU_FLAG, unavailableRows, withoutWebgpu } from "./smoke-unavailable";
-import { USE_FLAG, type UseRowsDriver, usePaneRows } from "./smoke-use-pane";
+import { inUsePaneRows, USE_FLAG, type UseRowsDriver } from "./smoke-use-pane";
 import {
   DRAWN_BUDGET_MS,
   hiddenDuring,
@@ -1439,7 +1439,7 @@ export async function runSmokeCanvas(opts: {
       } else if (process.argv.includes(USE_FLAG)) {
         // PT-3 — the page in use, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --use-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
-        problems.push(...(await useRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+        problems.push(...(await inUseRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
       } else if (process.argv.includes(DEVICE_FLAG)) {
         // PT-4 — the page as a device sees it, its rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --device-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
@@ -1633,7 +1633,7 @@ export async function runSmokeCanvas(opts: {
         // PT-3 (PORTALS): the page in use — a pane pointed at the fixture, picked up, clicked, double-clicked, wheeled, typed
         // in, composed in, hovered, its held tools pressed, put down and still (testing/smoke-use-pane.ts). After PT-2's (each
         // lays its own pane and deletes it) and before the refusal's
-        problems.push(...(await useRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+        problems.push(...(await inUseRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
         // PT-4 (PORTALS): the page as a device sees it — a pane pointed at the fixture and switched: its device (an iPhone's
         // agent, hints, fingers and view; a touch in hand; back to the laptop), the desk's theme and its own scheme, its
         // favicon and title, and a second pane's page reading the first's cookie (testing/smoke-device-pane.ts). After PT-3's
@@ -2298,7 +2298,7 @@ async function liveRows(
 /** PT-3's rows on the smoke's fixture page (testing/smoke-use-pane.ts): PT-2's driver, and the shell window's IME through CDP —
  * a composition on its focused editor, then the commit (the debugger shared if the harness holds it; detached only if attached
  * here). */
-async function useRows(
+async function inUseRows(
   win: BrowserWindow,
   shotDir: string | undefined,
   viteUrl: string,
@@ -2336,7 +2336,7 @@ async function useRows(
         cdp("Input.imeSetComposition", { text, selectionStart: caret, selectionEnd: caret }),
       commit: (text) => cdp("Input.insertText", { text }),
     };
-    return await usePaneRows(driver);
+    return await inUsePaneRows(driver);
   } catch (error) {
     return [`PT-3 USE: ${error instanceof Error ? error.message : String(error)}`];
   } finally {

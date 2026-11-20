@@ -345,7 +345,7 @@ const WHEEL_READ = `(() => {
 })()`;
 
 /** PT-3's rows (above). Returns the problems, each in words. */
-export async function usePaneRows(d: UseRowsDriver): Promise<string[]> {
+export async function inUsePaneRows(d: UseRowsDriver): Promise<string[]> {
   const { say, win } = d;
   const h = paneHands(d);
   const { js, until, press, move, key, undoKey, census, rows } = h;

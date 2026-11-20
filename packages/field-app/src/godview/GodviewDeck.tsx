@@ -2056,6 +2056,9 @@ export function GodviewDeck({
         // It tries again for a fact the frame is handed, never for the clock it
         // ticks on (`nowMs`, every second while an agent works).
         const { agent, color, fallbackCwd, pane, verbs, zoomed } = props;
+        // Item 620 (2026-11-20): GodviewPaneFrame is a component, made once by the memo above, and
+        // this is its top level, where a hook belongs
+        // biome-ignore lint/correctness/useHookAtTopLevel: a component's top level, as said above
         const retryKey = useMemo(
           () => ({ session, agent, color, fallbackCwd, pane, verbs, zoomed, remote }),
           [session, agent, color, fallbackCwd, pane, verbs, zoomed, remote],

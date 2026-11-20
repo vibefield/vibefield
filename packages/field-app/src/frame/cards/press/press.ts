@@ -159,6 +159,8 @@ async function press(
   const lose = (): void => gl.getExtension("WEBGL_lose_context")?.loseContext();
   try {
     const prog = program(gl);
+    // Item 620 (2026-11-20): WebGL's own `useProgram`, not a React hook
+    // biome-ignore lint/correctness/useHookAtTopLevel: WebGL's own call, not a hook
     gl.useProgram(prog);
     const quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);

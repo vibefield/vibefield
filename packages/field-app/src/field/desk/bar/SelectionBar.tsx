@@ -382,6 +382,8 @@ function SelectionBarOn({
   // object copied while it stays in hand
   const onHand = useCallback(
     (cell: HandCell): void => {
+      // Item 620 (2026-11-20): `useHeldTool` is the engine's op, not a React hook
+      // biome-ignore lint/correctness/useHookAtTopLevel: the engine's op, not a hook
       if (cell.kind === "tool") engine.ops.useHeldTool(cell.id);
       else if (cell.kind === "done") engine.ops.putDown();
       else if (cell.kind === "copy") copySelection(desk, "hand");
