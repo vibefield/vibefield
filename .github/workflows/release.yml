@@ -214,6 +214,15 @@ jobs:
           [ -n "${CARGO_INCREMENTAL+set}" ] || echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
           [ -n "${CARGO_TERM_COLOR+set}" ] || echo "CARGO_TERM_COLOR=always" >> "$GITHUB_ENV"
           rustc --version --verbose
+      # Item 641 (2026-11-20): the stamp runs BEFORE the install, so the install records the tree every later
+      # `pnpm run` sees. pnpm stores each workspace project's name and version with an install; a version moved after
+      # it made the package step's `pnpm run` stop where no one can answer ("The workspace structure has changed
+      # since last install"). The stamp needs no install: node's own modules alone.
+      - name: Stamp the prerelease's version (D6 as amended, item 266 — a nightly or a beta; this checkout only)
+        if: needs.plan.outputs.channel != 'stable'
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: node scripts/release-plan.mjs stamp --version "$VERSION"
       - name: Install (frozen)
         run: pnpm install --frozen-lockfile
       # Electron 43 has no postinstall, so the install leaves no binary; the stager copies Electron's licences out of its
@@ -225,11 +234,6 @@ jobs:
       # field-native's release build is NOT a step here: `package:stage` runs THE one entry, `build:native-release`
       # (apps/desktop/packaging/build-native-release.mjs: --locked; no C harfbuzz since ghosttea 0.13.5), on the signed path and the unsigned
       # path alike (BP-1b, 2026-10-26; a second site is the drift the host-links gate would catch).
-      - name: Stamp the prerelease's version (D6 as amended, item 266 — a nightly or a beta; this checkout only)
-        if: needs.plan.outputs.channel != 'stable'
-        env:
-          VERSION: ${{ needs.plan.outputs.version }}
-        run: node scripts/release-plan.mjs stamp --version "$VERSION"
       # GitHub's macOS network can drop stapler's HTTP/3 ticket lookup with NSURLError -1005.
       # Keep Apple's signing/notarization checks; force HTTPS over TCP on this ephemeral runner only (the one copy is the
       # composite; converge runs it too, before its own ticket lookups — LP-1's review).
