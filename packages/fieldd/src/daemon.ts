@@ -9847,7 +9847,9 @@ export async function bootstrap(
       plugins,
       tokens,
       controlPort: () => controlPort,
-      deviceId: () => devices.currentDeviceId(),
+      // item 603 (2026-11-19) — the persisted local id, which no link, unlink or relink moves: the roster's id moves
+      // when the mesh identity arrives, and a service keyed by it refused itself as superseded mid-activation
+      deviceId: () => devices.localDeviceId(),
       ...(config.serviceHarnessPath !== undefined
         ? { harnessPath: config.serviceHarnessPath }
         : {}),

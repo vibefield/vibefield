@@ -60,7 +60,9 @@ export interface ServiceHostConfig {
   tokens: TokenService;
   /** the bound product port (workers dial loopback with their lease) */
   controlPort: () => number;
-  /** exact service-instance key; production supplies the durable local device id */
+  /** exact service-instance key; production supplies the durable local device id. Read ONCE, when the host is
+   * built (item 603, 2026-11-19): a service runs on the desktop it started on, and a key that moved under an
+   * activation in flight made it refuse itself as superseded. */
   deviceId?: () => string;
   /** override for the bundled daemon (bin.cjs cannot use import.meta) */
   harnessPath?: string;
@@ -211,9 +213,12 @@ export class ServiceHost {
   private nextCredentialId = 1;
   private disposed = false;
   private readonly logger: Logger;
+  /** item 603 (2026-11-19) — the service-instance key, read once (`ServiceHostConfig.deviceId`) */
+  private readonly instanceDeviceId: string;
 
   constructor(private readonly cfg: ServiceHostConfig) {
     this.logger = cfg.logger ?? createNoopLogger();
+    this.instanceDeviceId = cfg.deviceId?.() ?? "local";
   }
 
   private entry(pluginId: string): Entry {
@@ -221,7 +226,7 @@ export class ServiceHost {
     if (e === undefined) {
       let created!: Entry;
       const controller = new RuntimeTargetController<ServiceRuntimeTarget, ServiceWorkerCandidate>(
-        `service:${pluginId}:${this.cfg.deviceId?.() ?? "local"}`,
+        `service:${pluginId}:${this.instanceDeviceId}`,
         {
           activate: (target, scope, signal) =>
             this.activateTarget(pluginId, created, target, scope, signal),
@@ -1263,7 +1268,7 @@ export class ServiceHost {
         installRevision: record.installRevision ?? `${record.version}:legacy`,
         manifestHash: record.manifestHash ?? `legacy:${record.id}:${record.version}`,
       },
-      instanceKey: { deviceId: this.cfg.deviceId?.() ?? "local" },
+      instanceKey: { deviceId: this.instanceDeviceId },
       authorityFingerprint: authority.fingerprint,
       observedGrantGeneration: record.grantGeneration ?? 0,
     };
