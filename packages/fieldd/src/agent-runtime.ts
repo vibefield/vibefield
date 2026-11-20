@@ -5,7 +5,6 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
-  statSync,
   writeFileSync,
 } from "node:fs";
 import { homedir } from "node:os";
@@ -149,6 +148,7 @@ import {
 import type { AccountUsageRuntime } from "./agent-usage";
 import type { AuditMutation, AuditMutationOutcome } from "./audit-service";
 import { RpcCallError, type StartedFor, type StartedForAnswer } from "./native-link";
+import { isDirectory, placeFolderOf } from "./place-folder";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
 import type { ProfileDraftsStore } from "./profile-drafts";
 import type { OwnPlace } from "./projects/project-groups";
@@ -785,14 +785,6 @@ function runningRowOf(
 ): TerminalInfo | undefined {
   const row = terminalId === undefined ? undefined : rows.get(terminalId);
   return row?.exited === true ? undefined : row;
-}
-
-function isDirectory(path: string): boolean {
-  try {
-    return statSync(path).isDirectory();
-  } catch {
-    return false;
-  }
 }
 
 /** The `agents.*`/`agent.*` doors' service, the runtime's owner and the fold.
@@ -1633,37 +1625,11 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * never the path (the caller sent none): another desktop's place is
    * `not-here` (a desktop launches only into its own; PJ-8 carries acts across
    * desktops), an id with no facts here `unknown-place`, a folder gone or
-   * unmounted today's `missing-cwd`. */
+   * unmounted today's `missing-cwd`. Item 587 (2026-11-19): the rule is
+   * place-folder.ts's, which terminal.create reads too; the refusals here
+   * carry the provider. */
   private placeFolder(provider: string, ref: PlaceRef): { path: string; placeId: string } {
-    const found = this.opts.place?.(ref) ?? { state: "unknown" as const };
-    const place = { device: ref.device, placeId: ref.placeId };
-    if (found.state === "not-here") {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        "that place is on another desktop; a desktop starts agents only in its own places",
-        false,
-        { provider, reason: "not-here", place },
-      );
-    }
-    if (found.state === "unknown") {
-      throw new RpcCallError("NOT_FOUND", "this desktop knows no place by that id", false, {
-        provider,
-        reason: "unknown-place",
-        place,
-      });
-    }
-    const { facts } = found;
-    if (!facts.exists || !facts.mounted || !isAbsolute(facts.path) || !isDirectory(facts.path)) {
-      throw new RpcCallError(
-        "PRECONDITION_FAILED",
-        facts.mounted
-          ? "the place's folder is gone from this device"
-          : "the place's folder is on a volume that is not mounted",
-        false,
-        { provider, reason: "missing-cwd", place },
-      );
-    }
-    return { path: facts.path, placeId: facts.placeId };
+    return placeFolderOf(this.opts.place, ref, { provider });
   }
 
   /** QL-D10 — a native resume continues only under a persona still signed

@@ -373,6 +373,7 @@ import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
 import { SparkStarts } from "./objects/spark-starts";
 import { ObjectsStore } from "./objects/store";
 import { PeerLink } from "./peer-link";
+import { placeFolderOf } from "./place-folder";
 import { PluginCatalogService } from "./plugin-catalog";
 import { CommunityHold, communityGate } from "./plugin-community-hold";
 import { CommunityStatementMark } from "./plugin-community-statement";
@@ -6448,6 +6449,11 @@ export async function bootstrap(
           attrs: {
             ...(parsed.data.shell !== undefined ? { shell: parsed.data.shell } : {}),
             ...(parsed.data.cwd !== undefined ? { cwd: parsed.data.cwd } : {}),
+            // Item 587 (2026-11-19) — a birth by place is ledgered by its ref,
+            // never a path (agent.spawn's PJ-7 form)
+            ...(parsed.data.place !== undefined
+              ? { place: { device: parsed.data.place.device, placeId: parsed.data.place.placeId } }
+              : {}),
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
             // TC-D6(c) — accepted + recorded; enforcement pends the upstream
             // scrollback option (terminal-service.ts says why, honestly).
@@ -6463,14 +6469,18 @@ export async function bootstrap(
           // SB-2 (EL7) — A BOUND BIRTH NEEDS SPAWN RIGHTS. A shell born under
           // a profile runs every agent it starts on that profile's accounts,
           // so the caller must hold `agent.spawn` as well as the door's own
-          // `terminal.attach` (the renderer holds both). Read off the principal
-          // as daemon.ts reads every in-handler scope: a principal with no
-          // `scopes` (a tailnet one — its grant is connection state) holds
-          // none here. Inside the effect, so a refused bound birth is a
-          // RECORDED attempt with a failed outcome, and nothing reached the floor.
+          // `terminal.attach` (the renderer holds both). Inside the effect, so a
+          // refused bound birth is a RECORDED attempt with a failed outcome, and
+          // nothing reached the floor. Item 587 (2026-11-19): read through the
+          // call's GRANT (`grantedScopesOf`, item 464's helper), which answers
+          // SB-2's deferral: a tailnet principal carries no `scopes` on the
+          // object, its grant is the hello's preset. So the self phone, which
+          // may already agent.spawn under a profile here, may open a shell
+          // under one; a guest holds nothing. A peer desktop never reaches
+          // this door: terminal.create is local (D36), refused at the product
+          // door, so a shell is born only on the desktop that is asked.
           if (parsed.data.profileSet !== undefined) {
-            const scopes = (ctx.principal as { scopes?: string[] }).scopes ?? [];
-            if (!scopes.includes("agent.spawn"))
+            if (!grantedScopesOf(ctx.principal).includes("agent.spawn"))
               throw new RpcCallError(
                 "FORBIDDEN_SCOPE",
                 "opening a terminal under a profile requires agent.spawn",
@@ -6478,7 +6488,20 @@ export async function bootstrap(
                 { required: "agent.spawn" },
               );
           }
-          return await terminals.withSuccession(succeeds, () => terminals.create(parsed.data));
+          // Item 587 (2026-11-19) — A BIRTH BY PLACE, by agent.spawn's one rule
+          // (place-folder.ts): this desktop's own place, a folder here now, or
+          // refused `not-here`, `unknown-place` or `missing-cwd` before the floor
+          // is asked. The floor gets the folder as `cwd`, never the ref. A shell
+          // at a place does NOT report to the place shelf (`onPlace`): the shelf
+          // means an agent was launched there, and the phone's WHERE reads it.
+          const { place, ...create } = parsed.data;
+          const at =
+            place === undefined
+              ? undefined
+              : placeFolderOf((ref) => projectGroups.ownPlace(ref), place);
+          return await terminals.withSuccession(succeeds, () =>
+            terminals.create(at === undefined ? create : { ...create, cwd: at.path }),
+          );
         },
         // no `ticketMinted` here any more: nothing has been minted yet, and an
         // attr claiming otherwise was true only because the nesting made it so.
