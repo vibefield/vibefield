@@ -4,10 +4,13 @@
  * docs/UI_SYSTEM.md), and the flow alone for what an agent's words may never become.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import type { CrewCard } from "../src/chat/crew-card";
+import type { CrewCard, CrewCardRow } from "../src/chat/crew-card";
 import { ThreadFlowView } from "../src/chat/ThreadFlowView";
 import { FLOW_WORDS } from "../src/chat/transcript-items";
 import { ChatPreview } from "../src/design-system/ChatPreview";
@@ -358,6 +361,70 @@ describe("a crew's card in the flow (SP-1e2's renderer half; DESIGN.md §8 'Chat
     expect($('[data-row="act"]')).not.toBeNull();
     expect($(".vf-crew-card")).toBeNull();
   });
+
+  it("stands Pause all and Stop all after Open in Godview only while a member is at work, each handing its card, and says a row's passing word in its state's place (SP-1e4)", async () => {
+    const pressed: string[] = [];
+    const still: CrewCard = {
+      ...CARD,
+      rows: CARD.rows.map(
+        (row): CrewCardRow =>
+          row.runtimeRunId === "run-22"
+            ? { ...row, passing: "still", label: "vibe-field·2, Opus 5.5, high, Still running" }
+            : row,
+      ),
+    };
+    await mount(
+      <ThreadFlowView
+        name="Vela"
+        face={{ seed: 1, status: "ready" }}
+        flow={crewFlow("cr-000001")}
+        crews={new Map([["cr-000001", still]])}
+        onPauseAll={(card) => pressed.push(`pause ${card.id}`)}
+        onStopAll={(card) => pressed.push(`stop ${card.id}`)}
+      />,
+    );
+    const foot = $$(".vf-crew-foot button");
+    expect(foot.map(words)).toEqual(["Open in Godview", "Pause all", "Stop all"]);
+    await act(async () => foot[1]?.click());
+    await act(async () => foot[2]?.click());
+    expect(pressed).toEqual(["pause cr-000001", "stop cr-000001"]);
+    // the passing word stands alone in its state's place, the row keeping its state; its name says it too
+    const held = $$(".vf-crew-row")[1];
+    expect([held?.dataset.state, held?.dataset.passing]).toEqual(["working", "still"]);
+    expect(words(held?.querySelector(".vf-crew-state"))).toBe("Still running");
+    expect(held?.querySelector(".vf-crew-breath")).toBeNull();
+    expect(held?.getAttribute("aria-label")).toBe("vibe-field·2, Opus 5.5, high, Still running");
+    // Still running in the attention ink, by the row's mark and the card's own CSS (tokens only)
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/chat/crew-card.css"),
+      "utf8",
+    );
+    expect(css).toMatch(
+      /\[data-passing="still"\] \.vf-crew-state \{\s*color: var\(--vf-ink-attention\);/u,
+    );
+    // no member at work: Open in Godview alone
+    const resting: CrewCard = { ...CARD, atWork: false, acts: { pause: [], stop: [] } };
+    await mount(
+      <ThreadFlowView
+        name="Vela"
+        face={{ seed: 1, status: "ready" }}
+        flow={crewFlow("cr-000001")}
+        crews={new Map([["cr-000001", resting]])}
+      />,
+    );
+    expect($$(".vf-crew-foot button").map(words)).toEqual(["Open in Godview"]);
+    // each act stands only while it has a member to take: one Starting member is Stop all's, not Pause all's
+    const starting: CrewCard = { ...CARD, acts: { pause: [], stop: ["run-22"] } };
+    await mount(
+      <ThreadFlowView
+        name="Vela"
+        face={{ seed: 1, status: "ready" }}
+        flow={crewFlow("cr-000001")}
+        crews={new Map([["cr-000001", starting]])}
+      />,
+    );
+    expect($$(".vf-crew-foot button").map(words)).toEqual(["Open in Godview", "Stop all"]);
+  });
 });
 
 describe("the crew card's plates (SP-1e2's renderer half; docs/UI_SYSTEM.md, SR-Q11)", () => {
@@ -419,6 +486,13 @@ describe("the crew card's plates (SP-1e2's renderer half; docs/UI_SYSTEM.md, SR-
       ],
       ["blind", "Agents", [], "VibeField can't read Vela's crews right now"],
       ["narrow", `${head} 1 of 4 done`, running, ""],
+      // SP-1e4's
+      [
+        "acts",
+        "5 agents · Opus 5.5 · high 0 of 5 done · 1 paused",
+        ["working", "paused", "working", "working", "working"],
+        "",
+      ],
     ];
     for (const [id, words, states, line] of table) {
       const card = cardIn(id);
@@ -442,5 +516,14 @@ describe("the crew card's plates (SP-1e2's renderer half; docs/UI_SYSTEM.md, SR-
       `${head} 1 of 4 done`,
       "1 agent · Opus 5.5 · high 0 of 1 done",
     ]);
+    // SP-1e4 — the crew's acts: a turn pausing, one paused, a stop fieldd takes no further, one stopping, and one at
+    // work that Pause all can take, so the foot stands both acts
+    const acts = cardIn("acts").plate;
+    const passing = [...(acts?.querySelectorAll<HTMLElement>(".vf-crew-row") ?? [])].map(
+      (row) => row.dataset.passing ?? null,
+    );
+    expect(passing).toEqual(["pausing", null, "still", "stopping", null]);
+    const foot = [...(acts?.querySelectorAll<HTMLElement>(".vf-crew-foot button") ?? [])];
+    expect(foot.map(words)).toEqual(["Open in Godview", "Pause all", "Stop all"]);
   });
 });

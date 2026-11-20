@@ -2,13 +2,19 @@
  * SP-1e2's renderer half — Chat's crew card, as data (`chat/crew-card.ts`; DESIGN.md §8 "Chat's crew card", §9 its
  * words): the spark's crews as the window read them, the board's rows and @'s handles, in; each crew's card out. The
  * frame is the contracts' own shape (EL9, the window's side); every word is DESIGN.md's.
+ * SP-1e4 (2026-11-19) — the crew's acts: a paused member, the words a row passes through, the members Pause all and
+ * Stop all take, and a press's refusal on the foot's line.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentFieldRow, CrewId, SparkCrew, SparkCrewMember } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   CREW_STATE_WORDS,
   CREW_WORDS,
+  type CrewActRefusal,
   type CrewCard,
   type CrewCardInputs,
   crewCardsOf,
@@ -265,5 +271,193 @@ describe("when the card cannot know (never a blank)", () => {
       asleep: false,
     });
     expect(reading.size).toBe(0);
+  });
+});
+
+describe("the crew's acts (SP-1e4; DESIGN.md §8 'Chat's crew card', 'The crew's acts')", () => {
+  /** fieldd's durable stop for a member's turn (`AgentStopState`, ST-D5): sent, heard, or one it takes no further */
+  const SENT = { sentAt: AT, stage: "sent" };
+  const HEARD = { sentAt: AT, stage: "heard", heardBy: "status" };
+  const UNHEARD = { sentAt: AT, stage: "resent", unheardAt: AT };
+  /** what the controller holds: the members a Stop all press sent to end, and the last press's refusal */
+  const held = (stopping: readonly string[] = [], refusal: CrewActRefusal | null = null) => ({
+    stopping: new Set(stopping),
+    refusal,
+  });
+  const NONE = { stop: [], pause: [] };
+
+  it("A1 · a member whose turn Pause all paused reads Paused, done not yet and at work no longer (S5)", () => {
+    const rows = [
+      row("run-21"),
+      row("run-22", { stop: HEARD }),
+      row("run-23"),
+      row("run-24", { status: "working" }),
+    ];
+    const card = cardOf({ rows });
+    expect(states(card)).toEqual(["done", "paused", "done", "working"]);
+    expect(card.rows[1]?.label).toBe("vibe-field·2, Opus 5.5, high, Paused");
+    expect(card.count).toEqual({ words: "2 of 4 done · 1 paused", ring: 0.75, check: false });
+    expect(card.label).toBe("4 agents · Opus 5.5 · high, 2 of 4 done · 1 paused");
+    // read before the waiting-tasks rule: a paused member with a task left in its input is Paused, never Working
+    const waiting = ready([crewOf(FOUR)], [{ runtimeRunId: "run-22", tasks: 1 }]);
+    expect(cardOf({ rows, reading: waiting }).rows[1]?.state).toBe("paused");
+    // a paused member is never done: the ring is full, and the count is no All done
+    const rest = [row("run-21"), row("run-22", { stop: HEARD }), row("run-23"), row("run-24")];
+    expect(cardOf({ rows: rest }).count).toEqual({
+      words: "3 of 4 done · 1 paused",
+      ring: 1,
+      check: false,
+    });
+  });
+
+  it("A2 · with a member ended too, the count's words come in their order, the ended before the paused", () => {
+    const ended = [
+      member("run-21", { endedAt: AT, name: "Claude Code in vibe-field" }),
+      ...FOUR.slice(1),
+    ];
+    const card = cardOf({
+      reading: ready([crewOf(ended)]),
+      rows: [row("run-22", { stop: HEARD }), row("run-23"), row("run-24", { status: "working" })],
+    });
+    expect(states(card)).toEqual(["ended", "paused", "done", "working"]);
+    expect(card.count).toEqual({
+      words: "1 of 4 done · 1 ended · 1 paused",
+      ring: 0.75,
+      check: false,
+    });
+  });
+
+  it("A3 · a turn whose stop fieldd sent and has not heard reads Pausing current turn… in its state's place, from fieldd's record, so a reload keeps it (S2)", () => {
+    const pausing = row("run-22", { status: "working", stop: SENT });
+    const card = cardOf({ rows: [row("run-21"), pausing, ...ROWS.slice(2)] });
+    expect(card.rows[1]).toMatchObject({
+      state: "working",
+      passing: "pausing",
+      label: "vibe-field·2, Opus 5.5, high, Pausing current turn…",
+    });
+    // fieldd's stages are open words: sent again, terminating, or one this build never heard, each still pausing
+    for (const stage of ["resent", "terminating", "queued"]) {
+      const again = { ...pausing, stop: { sentAt: AT, stage } };
+      expect(cardOf({ rows: [row("run-21"), again, ...ROWS.slice(2)] }).rows[1]?.passing).toBe(
+        "pausing",
+      );
+    }
+    // a stop on a member whose turn is not at work says nothing in its state's place
+    const idle = row("run-22", { stop: SENT });
+    expect(cardOf({ rows: [row("run-21"), idle, ...ROWS.slice(2)] }).rows[1]?.passing).toBeNull();
+  });
+
+  it("A4 · a stop fieldd takes no further reads Still running in its state's place (S6)", () => {
+    const still = row("run-22", { status: "working", stop: UNHEARD });
+    const card = cardOf({ rows: [row("run-21"), still, ...ROWS.slice(2)] });
+    expect(card.rows[1]).toMatchObject({
+      state: "working",
+      passing: "still",
+      label: "vibe-field·2, Opus 5.5, high, Still running",
+    });
+  });
+
+  it("A5 · a member a Stop all press sent to end reads Stopping agent… until it reads Ended (S1)", () => {
+    const stopping = held(["run-22", "run-24"]);
+    const still = row("run-22", { status: "working", stop: UNHEARD });
+    const card = cardOf({ acts: stopping, rows: [row("run-21"), still, ...ROWS.slice(2)] });
+    // the newer act's words win over a pause's, and a Starting member passes through them too
+    expect(card.rows.map((r) => r.passing)).toEqual([null, "stopping", null, "stopping"]);
+    expect(card.rows[1]?.label).toBe("vibe-field·2, Opus 5.5, high, Stopping agent…");
+    // ended: the state's own word again, under the name fieldd gave it at its end
+    const ended = [
+      member("run-21"),
+      member("run-22", { endedAt: AT, name: "Claude Code in vibe-field" }),
+      ...FOUR.slice(2),
+    ];
+    const after = cardOf({
+      acts: stopping,
+      reading: ready([crewOf(ended)]),
+      rows: [row("run-21"), ...ROWS.slice(2)],
+    });
+    expect(after.rows[1]).toMatchObject({
+      state: "ended",
+      passing: null,
+      label: "Claude Code in vibe-field, Opus 5.5, high, Ended",
+    });
+  });
+
+  it("A6 · Stop all takes each member Working or Starting, Pause all each Working member's turn; both pass over Needs you, Done, Paused and Ended, and never take the spark's own run", () => {
+    const own = row("run-vela", { status: "working", spark: VELA, origin: { by: "you" } });
+    const card = cardOf({ rows: [...ROWS, own] });
+    expect(card.acts).toEqual({ stop: ["run-22", "run-24"], pause: ["run-22"] });
+    // a member already passing: Stop all passes over one stopping, Pause all over one pausing, stopping or still
+    const passing = [
+      row("run-21", { status: "working", stop: SENT }),
+      row("run-22", { status: "working" }),
+      row("run-23", { stop: HEARD }),
+      row("run-24", { status: "working", stop: UNHEARD }),
+    ];
+    expect(cardOf({ rows: passing, acts: held(["run-22"]) }).acts).toEqual({
+      stop: ["run-21", "run-24"],
+      pause: [],
+    });
+    // idle between two tasks it was given: Working (SPE-Q32 (a)), so Stop all takes it, with no turn to pause
+    const between = cardOf({
+      reading: ready([crewOf(FOUR)], [{ runtimeRunId: "run-21", tasks: 1 }]),
+    });
+    expect(between.acts).toEqual({ stop: ["run-21", "run-22", "run-24"], pause: ["run-22"] });
+  });
+
+  it("A7 · the acts stand while a member is at work, and leave once none is (S7)", () => {
+    expect(cardOf().atWork).toBe(true);
+    const idle = FOUR.map((m) => row(m.runtimeRunId));
+    expect(cardOf({ rows: idle })).toMatchObject({ atWork: false, acts: NONE });
+    const paused = [row("run-21"), row("run-22", { stop: HEARD }), row("run-23"), row("run-24")];
+    expect(cardOf({ rows: paused })).toMatchObject({ atWork: false, acts: NONE });
+    // one that waits on you is at work, though both acts pass it over
+    const asks = row("run-23", {
+      status: "blocked",
+      blockers: [{ id: "q-1", kind: "question", since: AT }],
+    });
+    const waits = cardOf({ rows: [row("run-21"), row("run-22"), asks, row("run-24")] });
+    expect([waits.atWork, waits.acts]).toEqual([true, NONE]);
+    // the board unreadable: no state, so no act
+    expect(cardOf({ rows: "failed", handles: new Map() })).toMatchObject({
+      atWork: false,
+      acts: NONE,
+    });
+  });
+
+  it("A8 · a press's refusal is the foot's line, the first one alone, before every other line (S8)", () => {
+    const words = CREW_WORDS.couldntStop("vibe-field·2", CREW_WORDS.noTerminal);
+    expect(words).toBe("Couldn't stop vibe-field·2: it has no terminal on this desktop");
+    const stop = held([], { crew: CREW, words });
+    expect(cardOf({ asleep: true, acts: stop }).line).toBe(words);
+    expect(cardOf({ reading: { state: "unreadable" }, acts: stop }).line).toBe(words);
+    const pause = CREW_WORDS.couldntPause("vibe-field·2", "not-working");
+    expect(pause).toBe("Couldn't pause vibe-field·2's turn: not-working");
+    const failed = cardOf({
+      rows: "failed",
+      handles: new Map(),
+      acts: held([], { crew: CREW, words: pause }),
+    });
+    expect(failed.line).toBe(pause);
+    // another crew's refusal is that card's line, never this one's
+    const other = held([], { crew: LATER, words });
+    expect(cardOf({ asleep: true, acts: other }).line).toBe(
+      "Vela is asleep — it hears these when it wakes",
+    );
+  });
+
+  it("A9 · says, of the acts, exactly the words the canon records (§9 'Chat's words'; a guard, green before the acts)", () => {
+    // the doc wraps its lines; a sentence is the same sentence across a wrap
+    const here = dirname(fileURLToPath(import.meta.url));
+    const design = readFileSync(join(here, "../../../DESIGN.md"), "utf8").replace(/\s+/g, " ");
+    for (const said of [
+      `"${CREW_WORDS.pauseAll}" · "${CREW_WORDS.stopAll}"`,
+      `"${CREW_WORDS.pausing}" · "${CREW_WORDS.stopping}" · "${CREW_WORDS.stillRunning}"`,
+      `the state "${CREW_STATE_WORDS.paused}"`,
+      `the count "${CREW_WORDS.donePaused(2, 4, 0, 1)}"`,
+      `"${CREW_WORDS.couldntStop("vibe-field·2", "…")}"`,
+      `"${CREW_WORDS.couldntPause("vibe-field·2", "…")}"`,
+    ]) {
+      expect(design, said).toContain(said);
+    }
   });
 });

@@ -22,6 +22,7 @@ import {
   type ComposeSparksSayParams,
   type NeedsItem,
   type SparkSummary,
+  type TerminalTerminateResult,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { act, type ReactElement, useState } from "react";
@@ -949,6 +950,10 @@ function scripted(listed: SparkSummary[]) {
     paused: [] as string[],
     /** agent.pause's answer: accepted, unless the test says otherwise */
     pauseAnswer: Promise.resolve({ accepted: true }) as Promise<AgentInterruptResult>,
+    /** what a crew card's Stop all asked of terminal.terminate, by floor session (SP-1e4) */
+    terminated: [] as string[],
+    /** terminal.terminate's answer: the ladder fired, unless the test says otherwise */
+    terminateAnswer: Promise.resolve({ terminated: true }) as Promise<TerminalTerminateResult>,
   };
   const door: SparksPort = {
     list: async () => {
@@ -982,9 +987,9 @@ function scripted(listed: SparkSummary[]) {
       port.paused.push(runtimeRunId);
       return port.pauseAnswer;
     },
-    // a crew card's Stop all (SP-1e4) is not this test's
-    terminate: async () => {
-      throw new Error("nothing is stopped here");
+    terminate: async (sessionId) => {
+      port.terminated.push(sessionId);
+      return port.terminateAnswer;
     },
     onReconnected: () => () => undefined,
     open: async (id) => {
@@ -1165,6 +1170,103 @@ describe("Chat, live (the feed and its acts)", () => {
     expect(noted.at(-1)).toBe("Jumped to its pane");
     await act(async () => card?.querySelector<HTMLElement>(".vf-crew-foot button")?.click());
     expect(views.asked).toEqual(["godview"]);
+  });
+
+  it("stops and pauses a crew's members from its foot while one is at work: each once, a member's floor session from fieldd's runs at the press, the first refusal on the foot's line, and the acts gone once none is at work (SP-1e4)", async () => {
+    const { port, door, move } = scripted([VELA]);
+    const transcripts = scriptedTranscripts();
+    transcripts.keep(
+      "sp-vela0001",
+      [{ runtimeRunId: "run-Vela", startedAt: AT, fresh: true }],
+      new Map([
+        [
+          "run-Vela",
+          [
+            transcriptLine(1, "run", AT, { runtimeRunId: "run-Vela", fresh: true }),
+            transcriptLine(2, "act", "2026-10-31T05:20:00.000Z", {
+              what: "crew",
+              text: "Started 2 agents · Opus 5.5 · high",
+              crew: "cr-000001",
+            }),
+          ],
+        ],
+      ]),
+    );
+    const member = { at: AT, agent: "claude", folder: "Vela", model: "Opus 5.5", effort: "high" };
+    const frame = {
+      spark: "sp-vela0001",
+      crews: [
+        {
+          id: "cr-000001",
+          sparkRun: "run-Vela",
+          at: AT,
+          members: [
+            { runtimeRunId: "run-m1", ...member },
+            { runtimeRunId: "run-m2", ...member },
+          ],
+        },
+      ],
+      waiting: [],
+    };
+    const crews: CrewsDoor = {
+      watch: async (_spark, onFrame) => {
+        onFrame(frame);
+        return () => undefined;
+      },
+      onReconnected: () => () => undefined,
+    };
+    const working: Partial<AgentFieldRow> = {
+      status: "working",
+      turnedAt: AT,
+      origin: { by: "spark", spark: "sp-vela0001", crew: "cr-000001" },
+      model: { id: "claude-opus-5-5", displayName: "Opus 5.5" },
+      effort: { value: "high" },
+    };
+    const M1 = row({
+      runtimeRunId: "run-m1",
+      ...working,
+      terminal: { hosted: "local", runtimeSessionId: "pty-m1" },
+    });
+    // fieldd's runs put this one's terminal on no floor of this desktop
+    const M2 = row({ runtimeRunId: "run-m2", ...working, terminal: { hosted: "none" } });
+    stop = startSparksFeed(door);
+    mount(<Chat transcripts={transcripts.door} crews={crews} />);
+    await settle();
+    await act(async () => move([VELA_ASKS, M1, M2]));
+    await settle();
+    const card = () => $('.vf-chat-flow [data-row="act"] .vf-crew-card');
+    const all = (selector: string) => [...(card()?.querySelectorAll<HTMLElement>(selector) ?? [])];
+    const foot = () => all(".vf-crew-foot button").map(words);
+    const states = () => all(".vf-crew-state").map(words);
+    const line = () => words(card()?.querySelector<HTMLElement>(".vf-crew-line") ?? null);
+    const press = async (which: "pause-all" | "stop-all") => {
+      await act(async () => card()?.querySelector<HTMLElement>(`[data-act="${which}"]`)?.click());
+      await settle();
+      await settle();
+    };
+    const names = all(".vf-crew-name").map(words);
+    expect(foot()).toEqual(["Open in Godview", "Pause all", "Stop all"]);
+    // Stop all: the one end it can send, on the floor session fieldd's runs name at the press
+    await press("stop-all");
+    expect(port.terminated).toEqual(["pty-m1"]);
+    expect(states()).toEqual(["Stopping agent…", "Working"]);
+    expect(line()).toBe(`Couldn't stop ${names[1]}: it has no terminal on this desktop`);
+    // pressed again: the member stopping is never sent again
+    await press("stop-all");
+    expect(port.terminated).toEqual(["pty-m1"]);
+    // Pause all: the working member's turn, once for two presses; a press lets the last refusal go
+    await press("pause-all");
+    await press("pause-all");
+    expect(port.paused).toEqual(["run-m2"]);
+    expect(line()).toBe("");
+    // fieldd's record says what came of each: the pause sent, then heard, and the stopped member's end
+    await act(async () => move([{ ...M2, revision: 2, stop: { sentAt: AT, stage: "sent" } }]));
+    expect(states()).toEqual(["Stopping agent…", "Pausing current turn…"]);
+    const heard = { sentAt: AT, stage: "heard", heardBy: "status" };
+    await act(async () => move([{ ...M2, revision: 3, status: "idle", stop: heard }], ["run-m1"]));
+    expect(states()).toEqual(["Ended", "Paused"]);
+    // no member at work: the acts leave the foot
+    expect(foot()).toEqual(["Open in Godview"]);
   });
 
   it("reads a thread's record only while Chat is the view, and lets a bubble go once the record shows its send (TH-1)", async () => {
