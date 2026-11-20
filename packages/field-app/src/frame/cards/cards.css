@@ -253,12 +253,14 @@
   color: var(--vf-card-pass);
 }
 
+/* §2.4's floors on the stock, by night and turned from the lamp (§5; item 616): a mark, the prompt's `$`, at 55% of
+   the ink; words, the summary line, at 74% */
 .vf-card-prompt {
-  color: color-mix(in srgb, var(--card-ink) 36%, transparent);
+  color: color-mix(in srgb, var(--card-ink) 55%, transparent);
 }
 
 .vf-card-out [data-quiet] {
-  color: color-mix(in srgb, var(--card-ink) 50%, transparent);
+  color: color-mix(in srgb, var(--card-ink) 74%, transparent);
 }
 
 /* FILE — its first lines as a page, in mono at 4.3, 5.8 apart, no line numbers, the comment quieter than the code,
@@ -284,13 +286,13 @@
   color: color-mix(in srgb, var(--card-ink) 36%, transparent);
 }
 
-/* a file still on its way in from another app: that letting go shows it */
+/* a file still on its way in from another app: that letting go shows it, in words that are read (74%; item 616) */
 .vf-card-wait {
   display: grid;
   height: 100%;
   margin: 0;
   place-items: center;
-  color: var(--card-ink-3);
+  color: color-mix(in srgb, var(--card-ink) 74%, transparent);
   font-size: 7.4px;
 }
 
