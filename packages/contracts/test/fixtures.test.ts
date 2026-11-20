@@ -229,7 +229,11 @@ import {
   FreewayState,
   FreewayWelcome,
 } from "../src/freeway";
-import { LiveSurfaceIosSimulatorBindingV1 } from "../src/live-surfaces";
+import {
+  LiveSurfaceIosSimulatorBindingV1,
+  SimulatorsMadeRemoveResult,
+  SimulatorsMadeStatus,
+} from "../src/live-surfaces";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
 import { VibefieldAppManifest } from "../src/made-app-network";
 import { NativeTickNotification, SystemTickNotification } from "../src/methods";
@@ -711,6 +715,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // (live-surfaces.ts; TS-only, as all of Live Surfaces is) — the 17 Pro on iOS 26.1, and Apple's own spelling of the
   // 2nd-generation SE's id (its dashes kept).
   "ios-simulator-binding": LiveSurfaceIosSimulatorBindingV1,
+  // Item 568's C — Settings' Remove VibeField's simulators: the read (ready, size unknown,
+  // unavailable) and the remove (partial, unavailable); counts only. Its own rows:
+  // simulators-made.test.ts.
+  "simulators-made-status": SimulatorsMadeStatus,
+  "simulators-made-remove-result": SimulatorsMadeRemoveResult,
   "diagnostic-snapshot": DiagnosticLogSnapshotV1,
   "diagnostic-delta": DiagnosticLogDeltaV1,
   "diagnostic-lease": DiagnosticLeaseV1,

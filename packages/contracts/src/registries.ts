@@ -2988,6 +2988,14 @@ export const IPC_CHANNELS = {
   browserDataClear: "vibefield:browser:clear-data",
   simulatorSetupCheck: "vibefield:simulator:setup-check",
   simulatorSetupOpen: "vibefield:simulator:setup-open",
+  /** renderer → main invoke: {} → SimulatorsMadeStatus — Settings' "Remove VibeField's
+   * simulators" row: the count and the size of the simulated devices VibeField made (item
+   * 568's C, 2026-11-20; MADE_SIMULATOR_NAME's rule, Mac-wide). Counts only cross. */
+  simulatorsMadeRead: "vibefield:simulator:made-read",
+  /** renderer → main invoke: {} → SimulatorsMadeRemoveResult — the row's remove: main shuts
+   * down and deletes VibeField's devices that no pane holds and none runs elsewhere, and says
+   * what it removed and kept. The request names no device. */
+  simulatorsMadeRemove: "vibefield:simulator:made-remove",
   /** renderer → main invoke: ClipboardReadRequest → ClipboardReadResult — a paste
    * in the deck or the sign-in terminal (item 102; design-03 §5.1's
    * `shell.clipboard.*`, the product window's read half). Main reads the system

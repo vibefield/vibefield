@@ -1,0 +1,8 @@
+{
+  "//": "Item 568's C — the read when main could not read the devices' size within its bound: the count stands, the size is null. Synthetic values.",
+  "state": "ready",
+  "devices": 2,
+  "bytes": null,
+  "inUse": 0,
+  "elsewhere": 1
+}

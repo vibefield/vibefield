@@ -1,0 +1,8 @@
+{
+  "//": "Item 568's C — what the remove did: two of VibeField's devices removed, one kept because a pane on the desk holds it. Synthetic values.",
+  "state": "ready",
+  "removed": 2,
+  "freedBytes": 3221225472,
+  "kept": { "inUse": 1, "elsewhere": 0 },
+  "failed": 0
+}

@@ -1120,6 +1120,89 @@ export const SurfaceSimulatorDevicesResultV1 = z
   .passthrough();
 export type SurfaceSimulatorDevicesResultV1 = z.infer<typeof SurfaceSimulatorDevicesResultV1>;
 
+/** Item 568's C (2026-11-20) — the one rule by which a simulated device is VibeField's: the name VibeField gives a
+ * pane's own device when it creates it, `VibeField <T> [<tag>]`, where <T> is the first MADE_SIMULATOR_TYPE_CHARS
+ * characters of the name of that device's OWN type as simctl names it, and <tag> is 16 lowercase hex. The name is the
+ * record of creation: no other record says who made a device, and a device of another name, or of this shape but
+ * another type, is never VibeField's. The rule is Mac-wide, as simulators are: a device any VibeField made is
+ * VibeField's, so the app's own remove also takes, at rest, the devices a `pnpm dev` run or a smoke's profile made.
+ * A device the older attach made, for a binding without a pane's own instance, carries a plain name (`iPhone 17 Pro`,
+ * `iPhone 17 Pro (2)`): the rule never takes it, as it may be the person's own. */
+export const MADE_SIMULATOR_TYPE_CHARS = 88;
+export const MADE_SIMULATOR_NAME = /^VibeField (.+) \[([a-f0-9]{16})\]$/u;
+
+/** The name VibeField gives a pane's own device of a type (simctl's name of it) and a tag (16 lowercase hex). */
+export function madeSimulatorName(typeName: string, tag: string): string {
+  return `VibeField ${typeName.slice(0, MADE_SIMULATOR_TYPE_CHARS)} [${tag}]`;
+}
+
+/** Whether a device of this name is VibeField's, given simctl's name of the device's own type. */
+export function isMadeSimulator(name: string, typeName: string): boolean {
+  const match = MADE_SIMULATOR_NAME.exec(name);
+  return match !== null && match[1] === typeName.slice(0, MADE_SIMULATOR_TYPE_CHARS);
+}
+
+/** A count of VibeField's simulated devices, and their size on disk in bytes (null: main could not read it). */
+const SimulatorsMadeCount = z.number().int().min(0).max(4096);
+const SimulatorsMadeBytes = z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).nullable();
+
+/** Item 568's C (2026-11-20) — main → renderer: Settings' "Remove VibeField's simulators" row, its read
+ * (`IPC_CHANNELS.simulatorsMadeRead`; the request carries nothing). Counts only: no UDID, name or path crosses.
+ *  - ready: `devices`, VibeField's on this Mac (MADE_SIMULATOR_NAME's rule); `bytes`, their size on disk, null when
+ *    main could not read it within its bound; `inUse`, those a pane on the desk holds now; `elsewhere`, those running
+ *    that this shell did not boot (another VibeField, or Simulator.app), which a remove keeps.
+ *  - unavailable: main cannot look (no simctl on this Mac). A row says it cannot look, never "none".
+ * `readSimulatorsMadeStatus` reads a state this build has not heard, or an answer it cannot read, as unavailable. */
+export const SimulatorsMadeStatus = z.discriminatedUnion("state", [
+  z
+    .object({
+      state: z.literal("ready"),
+      devices: SimulatorsMadeCount,
+      bytes: SimulatorsMadeBytes,
+      inUse: SimulatorsMadeCount,
+      elsewhere: SimulatorsMadeCount,
+    })
+    .passthrough(),
+  z.object({ state: z.literal("unavailable") }).passthrough(),
+]);
+export type SimulatorsMadeStatus = z.infer<typeof SimulatorsMadeStatus>;
+
+/** Item 568's C (2026-11-20) — main → renderer: what the row's remove did (`IPC_CHANNELS.simulatorsMadeRemove`; the
+ * request carries nothing: which devices are VibeField's is main's to say). Partial and honest: main removes what it
+ * may and says what it kept. Counts only.
+ *  - ready: `removed`, VibeField's devices deleted, each shut down first when this shell had booted it and no pane held
+ *    it; `freedBytes`, their size, null when main could not read it; `kept.inUse`, held by a pane on the desk, never
+ *    shut down under the person's hand; `kept.elsewhere`, running and not booted by this shell, never shut down;
+ *    `failed`, simctl refused to delete it, and it stays.
+ *  - unavailable: main could not look, and removed nothing.
+ * `readSimulatorsMadeRemoveResult` reads an answer this build cannot read as unavailable: the row reads its status
+ * again either way. */
+export const SimulatorsMadeRemoveResult = z.discriminatedUnion("state", [
+  z
+    .object({
+      state: z.literal("ready"),
+      removed: SimulatorsMadeCount,
+      freedBytes: SimulatorsMadeBytes,
+      kept: z.object({ inUse: SimulatorsMadeCount, elsewhere: SimulatorsMadeCount }).passthrough(),
+      failed: SimulatorsMadeCount,
+    })
+    .passthrough(),
+  z.object({ state: z.literal("unavailable") }).passthrough(),
+]);
+export type SimulatorsMadeRemoveResult = z.infer<typeof SimulatorsMadeRemoveResult>;
+
+/** The row's read of `simulatorsMadeRead`'s answer: unavailable for anything it cannot read. */
+export function readSimulatorsMadeStatus(raw: unknown): SimulatorsMadeStatus {
+  const read = SimulatorsMadeStatus.safeParse(raw);
+  return read.success ? read.data : { state: "unavailable" };
+}
+
+/** The row's read of `simulatorsMadeRemove`'s answer: unavailable for anything it cannot read. */
+export function readSimulatorsMadeRemoveResult(raw: unknown): SimulatorsMadeRemoveResult {
+  const read = SimulatorsMadeRemoveResult.safeParse(raw);
+  return read.success ? read.data : { state: "unavailable" };
+}
+
 /** DT-1c — caller-scoped continuity key (typically the widget's durable entity
  * key). Custody in Electron main dedupes mints on {participant, kind, reuseKey},
  * so a renderer reload re-binds the SAME still-running runtime (the reason
