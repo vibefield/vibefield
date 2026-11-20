@@ -18,6 +18,10 @@ import type { Flow } from "./transcript-items";
 // card, so its line stands alone (SPE-Q28 (b): it left the record; SR-Q3: its frame has not come yet). While the crews
 // cannot be read the card stands on the board's rows alone, its live members found by their crew; while the board
 // cannot be read the rows keep their names and lose their states. Never a blank.
+// Since SP-1e4 (2026-11-19; DESIGN.md §8 "The crew's acts") it also says what Pause all and Stop all take: the members
+// at work each act would send to, a member Paused while fieldd holds its turn's stop heard, the words a row passes
+// through (fieldd's stop for its turn; the Stop all presses this window holds), and a press's refusal on the foot's
+// line. The acts themselves are the controller's (`ChatView`).
 
 /** A member's state on its row, in DESIGN.md's order (SP-1e4 added Paused). */
 export type CrewRowState = "starting" | "working" | "needs" | "done" | "paused" | "ended";
@@ -165,6 +169,9 @@ export interface CrewCardInputs {
 /** SP-1e4 — no member for either act. */
 const NO_ACTS: CrewActs = Object.freeze({ pause: [], stop: [] });
 
+/** SP-1e4 (S7) — the states of a member at work, as the ring counts them: the foot's acts stand while one holds. */
+const AT_WORK: ReadonlySet<CrewRowState | null> = new Set(["starting", "working", "needs"]);
+
 /** The crews the flow's act lines name, in their order: the cards it hangs (Chat's controller and the catalog's). */
 export function crewsOfFlow(flow: Flow): CrewId[] {
   return flow.state === "ready"
@@ -229,9 +236,11 @@ function cardOf(
       : [],
   );
   const facts = members.map(factsOf);
-  const rows = members.map((member, index) =>
-    rowOf(member, facts[index] ?? {}, stateOf(member, board, waiting, inputs.seen), inputs),
-  );
+  const rows = members.map((member, index) => {
+    const state = stateOf(member, board, waiting, inputs.seen);
+    const passing = passingOf(member, state, inputs.acts?.stopping);
+    return rowOf(member, facts[index] ?? {}, state, passing, inputs);
+  });
   const shared = rows.length === 0 ? null : crewSharedModelOf(facts);
   const title = rows.length === 0 ? CREW_WORDS.unnamed : CREW_WORDS.agents(rows.length);
   const dim =
@@ -241,14 +250,18 @@ function cardOf(
         ? ` · ${shared.model}`
         : ` · ${shared.model} · ${shared.effort}`;
   const count = countOf(rows, ready, board !== null);
+  // SP-1e4 (S8) — a press's refusal wins the one line, on its own crew's card
+  const refused = inputs.acts?.refusal ?? null;
   const line =
-    inputs.reading.state === "unreadable"
-      ? CREW_WORDS.crewsUnreadable(inputs.name)
-      : inputs.rows === "failed"
-        ? AT_WORDS.sessionsFailed
-        : inputs.asleep && rows.some((row) => row.state !== "ended")
-          ? CREW_WORDS.asleep(inputs.name)
-          : null;
+    refused !== null && refused.crew === id
+      ? refused.words
+      : inputs.reading.state === "unreadable"
+        ? CREW_WORDS.crewsUnreadable(inputs.name)
+        : inputs.rows === "failed"
+          ? AT_WORDS.sessionsFailed
+          : inputs.asleep && rows.some((row) => row.state !== "ended")
+            ? CREW_WORDS.asleep(inputs.name)
+            : null;
   const head = `${title}${dim}`;
   return {
     id,
@@ -258,9 +271,25 @@ function cardOf(
     rows,
     line,
     label: count.words === "" ? head : `${head}, ${count.words}`,
-    atWork: false,
-    acts: NO_ACTS,
+    atWork: rows.some((row) => AT_WORK.has(row.state)),
+    acts: actsOf(members, rows),
   };
+}
+
+/** SP-1e4 — the members each act takes, in the rows' order. Stop all: each Working or Starting, unless it is
+ * stopping already (S1). Pause all: each Working whose turn is at work (its board row says `working`: one idle between
+ * two tasks is Working with no turn to pause) and that passes through no word yet (S2). Neither takes a member that
+ * waits on you, nor one Done, Paused or Ended, and a crew's rows are its members alone, never the spark's own run. */
+function actsOf(members: readonly Member[], rows: readonly CrewCardRow[]): CrewActs {
+  const stop: string[] = [];
+  const pause: string[] = [];
+  for (const [index, row] of rows.entries()) {
+    const taken = row.state === "working" || row.state === "starting";
+    if (taken && row.passing !== "stopping") stop.push(row.runtimeRunId);
+    const turn = members[index]?.row?.status === "working";
+    if (row.state === "working" && turn && row.passing === null) pause.push(row.runtimeRunId);
+  }
+  return stop.length === 0 && pause.length === 0 ? NO_ACTS : { pause, stop };
 }
 
 /** A member's model and effort: its board row's, else as the record kept them. */
@@ -279,7 +308,8 @@ function factsOf(member: Member): { readonly model?: string; readonly effort?: s
 
 /** A member's state, in DESIGN.md's order: Ended by the record or the board; Starting until its first turn; Needs
  * you while it waits on you; Working, or idle with a task waiting (SPE-Q32 (a)); Done. Null while the board is not
- * read, or for a run not heard yet. */
+ * read, or for a run not heard yet. Since SP-1e4 (S5), an idle member whose turn's stop fieldd holds heard is Paused,
+ * read before the tasks waiting: fieldd keeps that stop until the member's next turn. */
 function stateOf(
   member: Member,
   board: readonly AgentFieldRow[] | null,
@@ -294,14 +324,34 @@ function stateOf(
   if (row.turnedAt === null) return "starting";
   if (row.status === "blocked" || row.blockers.length > 0) return "needs";
   if (row.status === "working") return "working";
-  if (row.status === "idle") return (waiting.get(row.runtimeRunId) ?? 0) > 0 ? "working" : "done";
-  return null;
+  if (row.status !== "idle") return null;
+  if (row.stop?.stage === "heard") return "paused";
+  return (waiting.get(row.runtimeRunId) ?? 0) > 0 ? "working" : "done";
+}
+
+/** SP-1e4 — the word a member's row passes through, in its state's place: "Stopping agent…" from a Stop all press
+ * until it reads Ended (this window's presses); else, while its turn is at work, fieldd's stop for that turn: "Still
+ * running" once fieldd takes it no further (`unheardAt`, S6), "Pausing current turn…" while it is not heard yet (S2;
+ * a stage this build does not know is still on its way, as `AgentStopState` reads it). Read from fieldd's record, a
+ * pause's words survive a reload. Null when none holds, and while the board is not read. */
+function passingOf(
+  member: Member,
+  state: CrewRowState | null,
+  stopping: ReadonlySet<string> | undefined,
+): CrewRowPassing | null {
+  if (state === null || state === "ended") return null;
+  if (stopping?.has(member.runtimeRunId) === true) return "stopping";
+  const stop = member.row?.stop;
+  if (stop === undefined || (state !== "working" && state !== "starting")) return null;
+  if (stop.unheardAt !== undefined) return "still";
+  return stop.stage !== "heard" && member.row?.status === "working" ? "pausing" : null;
 }
 
 function rowOf(
   member: Member,
   facts: { readonly model?: string; readonly effort?: string },
   state: CrewRowState | null,
+  passing: CrewRowPassing | null,
   inputs: CrewCardInputs,
 ): CrewCardRow {
   const agent = member.record?.agent ?? member.row?.kind ?? "";
@@ -320,12 +370,14 @@ function rowOf(
       : facts.effort === undefined
         ? facts.model
         : `${facts.model} · ${facts.effort}`;
-  const label = [
-    name,
-    facts.model,
-    facts.effort,
-    state === null ? undefined : CREW_STATE_WORDS[state],
-  ]
+  // SP-1e4 — a passing word stands in the state word's place in its name too
+  const word =
+    passing !== null
+      ? CREW_PASSING_WORDS[passing]
+      : state === null
+        ? undefined
+        : CREW_STATE_WORDS[state];
+  const label = [name, facts.model, facts.effort, word]
     .filter((part) => part !== undefined)
     .join(", ");
   return {
@@ -334,14 +386,15 @@ function rowOf(
     name,
     model,
     state,
-    passing: null,
+    passing,
     pressable: state !== "ended",
     label,
   };
 }
 
 /** The head's count (SPE-Q31 (a)): the members done, those ended, "All done", "All ended"; the bound while the
- * crews cannot be read; nothing while the board cannot (the line says why). */
+ * crews cannot be read; nothing while the board cannot (the line says why). Since SP-1e4 (S5) it says the paused
+ * apart, after the ended: at work no longer, the ring takes them, and done not yet, so no "All done" while one is. */
 function countOf(rows: readonly CrewCardRow[], ready: boolean, boardRead: boolean): CrewCount {
   if (!ready)
     return rows.length === 0
@@ -354,12 +407,15 @@ function countOf(rows: readonly CrewCardRow[], ready: boolean, boardRead: boolea
   const done = rows.filter((row) => row.state === "done").length;
   if (done > 0 && done + ended === rows.length)
     return { words: CREW_WORDS.allDone, ring: null, check: true };
+  const paused = rows.filter((row) => row.state === "paused").length;
   return {
     words:
-      ended > 0
-        ? CREW_WORDS.doneEnded(done, rows.length, ended)
-        : CREW_WORDS.done(done, rows.length),
-    ring: (done + ended) / rows.length,
+      paused > 0
+        ? CREW_WORDS.donePaused(done, rows.length, ended, paused)
+        : ended > 0
+          ? CREW_WORDS.doneEnded(done, rows.length, ended)
+          : CREW_WORDS.done(done, rows.length),
+    ring: (done + ended + paused) / rows.length,
     check: false,
   };
 }

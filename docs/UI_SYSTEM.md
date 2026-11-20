@@ -190,7 +190,10 @@ The catalog currently mounts these shipping views directly:
   others renumbered, after a reload, its crews unreadable (the bound), the board unreadable, Vela
   asleep with its line, and two crews in one thread at their times; *added 2026-11-05 (SP-1e2's
   renderer half, SR-Q11):* "1 of 4 done · 1 ended", "All ended", members that differ, a shared model
-  that names no effort, neither door readable, a narrow thread, and the plates by the Moon's light
+  that names no effort, neither door readable, a narrow thread, and the plates by the Moon's light;
+  *added 2026-11-20 (SP-1e4, DESIGN.md §8 "The crew's acts"):* its rows "Pausing current turn…",
+  "Paused", "Still running" and "Stopping agent…" beside one at work, with Pause all and Stop all at
+  its foot
   — and the card live, a fixture
   door stepping a crew from starting to "All done", as the needs-you card's live plate does. Its
   rows and its foot open nothing outside the plate

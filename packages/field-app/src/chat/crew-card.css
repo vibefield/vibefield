@@ -162,6 +162,16 @@ button.vf-crew-row[data-waiting] {
   color: var(--vf-ink-attention);
 }
 
+/* SP-1e4 — a passing word stands in its state's place in secondary ink ("Stopping agent…", "Pausing current turn…"),
+   and "Still running" in the attention ink, as Chat's head says it */
+.vf-crew-row[data-passing] .vf-crew-state {
+  color: var(--vf-text-secondary);
+}
+
+.vf-crew-row[data-passing="still"] .vf-crew-state {
+  color: var(--vf-ink-attention);
+}
+
 /* a Working row's mark: a whole ring 10 round of 1.5 in the word's ink, breathing its ink from 35% to all of it on the
    breath's timing (§6: 1.1s, alternate, ease-in-out) */
 .vf-crew-breath {
@@ -183,7 +193,8 @@ button.vf-crew-row[data-waiting] {
   }
 }
 
-/* the foot: Open in Godview, the kit's quiet button at the needs-you card's act size, then its one line */
+/* the foot: Open in Godview, the kit's quiet button at the needs-you card's act size, then its one line. SP-1e4:
+   while a member is at work Pause all and Stop all follow it, the same button, 6 apart */
 .vf-crew-foot {
   display: flex;
   align-items: center;
@@ -192,7 +203,15 @@ button.vf-crew-row[data-waiting] {
   padding: 6px 8px 8px;
 }
 
-.vf-crew-foot .vf-ui-button.vf-crew-open {
+.vf-crew-acts {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.vf-crew-foot .vf-ui-button.vf-crew-open,
+.vf-crew-foot .vf-ui-button.vf-crew-act {
   flex: none;
   display: inline-flex;
   align-items: center;

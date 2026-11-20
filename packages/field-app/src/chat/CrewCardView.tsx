@@ -2,7 +2,13 @@ import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { UiButton } from "@vibefield/design-kit/primitives";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import type { ReactElement } from "react";
-import { CREW_STATE_WORDS, CREW_WORDS, type CrewCard, type CrewCardRow } from "./crew-card";
+import {
+  CREW_PASSING_WORDS,
+  CREW_STATE_WORDS,
+  CREW_WORDS,
+  type CrewCard,
+  type CrewCardRow,
+} from "./crew-card";
 import "./crew-card.css";
 
 // CHAT'S CREW CARD, DRAWN (SP-1e2's renderer half; DESIGN.md §8 "Chat's crew card"; RU-18, the Sparks page's
@@ -11,6 +17,9 @@ import "./crew-card.css";
 // in the order they started, and the foot (Open in Godview, then its one line). A group named by its head; the rows
 // that take a press, then Open in Godview, are buttons in its order, and an Ended row is not one. What it says is
 // `crewCardsOf`'s (`crew-card.ts`).
+// Since SP-1e4 (2026-11-19; DESIGN.md §8 "The crew's acts") Pause all and Stop all follow Open in Godview, 6 apart,
+// while a member is at work, each handing the card as drawn to the controller; and a row's passing word ("Stopping
+// agent…", "Pausing current turn…", "Still running") stands alone in its state's place, the row marked with it.
 
 export interface CrewCardViewProps {
   card: CrewCard;
@@ -54,6 +63,14 @@ function Ring({ fill }: { fill: number }): ReactElement {
 }
 
 function RowBody({ row }: { row: CrewCardRow }): ReactElement {
+  // SP-1e4 — while a passing word holds it stands alone in the state's place: no breath, no check
+  const drawn = row.passing === null ? row.state : null;
+  const word =
+    row.passing !== null
+      ? CREW_PASSING_WORDS[row.passing]
+      : row.state === null
+        ? null
+        : CREW_STATE_WORDS[row.state];
   return (
     <>
       <span className="vf-crew-mark" aria-hidden="true">
@@ -62,9 +79,9 @@ function RowBody({ row }: { row: CrewCardRow }): ReactElement {
       <span className="vf-crew-name">{row.name}</span>
       <span className="vf-crew-model">{row.model ?? ""}</span>
       <span className="vf-crew-state">
-        {row.state === "working" ? <span className="vf-crew-breath" aria-hidden="true" /> : null}
-        {row.state === "done" ? <FieldGlyph name="check" size={12} /> : null}
-        {row.state === null ? null : <span>{CREW_STATE_WORDS[row.state]}</span>}
+        {drawn === "working" ? <span className="vf-crew-breath" aria-hidden="true" /> : null}
+        {drawn === "done" ? <FieldGlyph name="check" size={12} /> : null}
+        {word === null ? null : <span>{word}</span>}
       </span>
     </>
   );
@@ -74,6 +91,8 @@ export function CrewCardView({
   card,
   onRow,
   onOpenGodview,
+  onPauseAll,
+  onStopAll,
   revealing,
 }: CrewCardViewProps): ReactElement {
   const { count } = card;
@@ -96,11 +115,15 @@ export function CrewCardView({
       {card.rows.length === 0 ? null : (
         <div className="vf-crew-rows">
           {card.rows.map((row) => {
-            const state = row.state === null ? {} : { "data-state": row.state };
+            const marks = {
+              ...(row.state === null ? {} : { "data-state": row.state }),
+              // SP-1e4 — its passing word, by which "Still running" takes the attention ink
+              ...(row.passing === null ? {} : { "data-passing": row.passing }),
+            };
             // an Ended row takes no press: its words are read as they stand
             if (!row.pressable)
               return (
-                <div key={row.runtimeRunId} className="vf-crew-row" {...state}>
+                <div key={row.runtimeRunId} className="vf-crew-row" {...marks}>
                   <RowBody row={row} />
                 </div>
               );
@@ -110,7 +133,7 @@ export function CrewCardView({
                 key={row.runtimeRunId}
                 type="button"
                 className="vf-crew-row"
-                {...state}
+                {...marks}
                 aria-label={row.label}
                 {...(waiting ? { "aria-busy": true, "data-waiting": "" } : {})}
                 onClick={() => {
@@ -124,10 +147,34 @@ export function CrewCardView({
         </div>
       )}
       <div className="vf-crew-foot">
-        <UiButton className="vf-crew-open" variant="quiet" onClick={() => onOpenGodview?.()}>
-          <FieldGlyph name="panes" size={14} />
-          <span>{CREW_WORDS.openGodview}</span>
-        </UiButton>
+        <div className="vf-crew-acts">
+          <UiButton className="vf-crew-open" variant="quiet" onClick={() => onOpenGodview?.()}>
+            <FieldGlyph name="panes" size={14} />
+            <span>{CREW_WORDS.openGodview}</span>
+          </UiButton>
+          {/* SP-1e4 — each of the crew's acts stands while it has a member to take (S7): never a press that does
+              nothing, so a crew whose only member at work waits on you shows neither */}
+          {card.acts.pause.length === 0 ? null : (
+            <UiButton
+              className="vf-crew-act"
+              variant="quiet"
+              data-act="pause-all"
+              onClick={() => onPauseAll?.(card)}
+            >
+              {CREW_WORDS.pauseAll}
+            </UiButton>
+          )}
+          {card.acts.stop.length === 0 ? null : (
+            <UiButton
+              className="vf-crew-act"
+              variant="quiet"
+              data-act="stop-all"
+              onClick={() => onStopAll?.(card)}
+            >
+              {CREW_WORDS.stopAll}
+            </UiButton>
+          )}
+        </div>
         {card.line === null ? null : <p className="vf-crew-line">{card.line}</p>}
       </div>
     </div>

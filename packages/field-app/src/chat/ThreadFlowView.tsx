@@ -72,6 +72,8 @@ export function ThreadFlowView({
   crews,
   onCrewRow,
   onOpenGodview,
+  onPauseAll,
+  onStopAll,
   revealing,
 }: ThreadFlowViewProps): ReactElement {
   const scroller = useRef<HTMLDivElement>(null);
@@ -241,6 +243,8 @@ export function ThreadFlowView({
                 card={card}
                 onRow={onCrewRow}
                 onOpenGodview={onOpenGodview}
+                onPauseAll={onPauseAll}
+                onStopAll={onStopAll}
                 revealing={revealing}
               />
             </div>

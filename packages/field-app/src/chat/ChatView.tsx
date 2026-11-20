@@ -16,13 +16,21 @@ import { jumpNote, sayOnLine } from "../frame/line-door";
 import { sayStatus } from "../frame/status-line";
 import { requestView } from "../frame/view-state";
 import type { ViewKeys } from "../frame/views";
+import { floorRunOf, RUNS_UNREAD, readRunRows } from "../history/jump";
 import { handFileKept, stillKept } from "../host";
+import { getRendererLogger } from "../logging";
 import { NO_HANDLES, sessionHandlesOf } from "./at-rows";
 import { ChatComposer, type ComposerPort } from "./ChatComposer";
 import { ChatEmptyView } from "./ChatEmptyView";
 import { type ChatAct, ChatPanelView, shownOf } from "./ChatPanelView";
 import type { DraftMessage, DraftPart, SendCarried } from "./composer-draft";
-import { crewCardsOf, crewsOfFlow } from "./crew-card";
+import {
+  CREW_WORDS,
+  type CrewActRefusal,
+  type CrewCard,
+  crewCardsOf,
+  crewsOfFlow,
+} from "./crew-card";
 import { CREWS_READING, type CrewsDoor, type CrewsReading, useSparkCrews } from "./crews-port";
 import { NO_PAUSE, type PauseAct, pauseTurn, type SparkPauser, turnOf } from "./head-act";
 import { useNeedsCard } from "./needs-card-stand";
@@ -40,6 +48,7 @@ import {
   boardRowNow,
   type SparkOpener,
   type SparkSayer,
+  type SparkStopper,
   showThread,
   sparkEntryNow,
   takeFirstJob,
@@ -49,6 +58,7 @@ import {
   useSparkOpener,
   useSparkPauser,
   useSparkSayer,
+  useSparkStopper,
   useSparksReading,
   useThreadMarks,
   whenSparkEntry,
@@ -98,6 +108,8 @@ const HAND_RUN_WAIT_MS = 5_000;
 // create; Open Agents settings is the window's (`onOpenAgents`). ES-2: a first job is handed to the frame as the sheet
 // opens (`onFirstJob`, the frame's hold), and a hatched spark's job, handed back with its choice, is sent here once as
 // Send sends, as soon as its row is read.
+// Since SP-1e4 (2026-11-19) it runs a crew card's Stop all and Pause all through the feed (`terminal.terminate`,
+// `agent.pause`), with the Stop all presses it holds and a press's refusal handed to the card (`crewCardsOf`).
 // *Amended 2026-11-05 (TH-1, the pane leaves Chat):* it mounted the shown spark's own pane while it was awake
 // (`SparkPane`), stood the hello over it while the thread was quiet (`threadItemsOf`), and kept which threads' hello
 // had left. They are in git.
@@ -480,6 +492,74 @@ export function ChatView({
     () => (threadFlow === undefined ? [] : crewsOfFlow(threadFlow)),
     [threadFlow],
   );
+
+  // SP-1e4 — a crew card's Stop all and Pause all (DESIGN.md §8 "Chat's crew card", "The crew's acts"). Each sends
+  // once to each member it takes (`CrewCard.acts`, of the card as drawn at the press), never to the spark's own run.
+  // Stop all ends a member as a pane's Stop agent does, `terminal.terminate` on its floor session, which fieldd's runs
+  // name at the press (`agent.list`, read once, by Jump to's rule: item 187's road, since the board's terminal join is
+  // withheld while this desktop's terminal doors are off the tailnet). Its row says "Stopping agent…" from the press
+  // until it reads Ended, this window's alone; a member stopping is never sent again (the ref is the guard, the state
+  // draws it). Pause all pauses each Working member's turn by the head's own `pauseTurn`, once for the turn it was
+  // pressed in (the ref keeps that turn, read from the board at the press); what came of it is fieldd's record on the
+  // board's row. A refused member may be sent again by a later press. The first refusal of a press is its card's line,
+  // until the next press of either act.
+  const stopper = useSparkStopper();
+  const [stopping, setStopping] = useState<ReadonlySet<string>>(() => new Set());
+  const stoppingNow = useRef(new Set<string>());
+  const pausedTurns = useRef(new Map<string, string>());
+  const [crewRefusal, setCrewRefusal] = useState<CrewActRefusal | null>(null);
+  const crewPresses = useRef(0);
+  const stopAll = useCallback(
+    async (door: SparkStopper, card: CrewCard): Promise<void> => {
+      const press = ++crewPresses.current;
+      setCrewRefusal(null);
+      const members = card.acts.stop.filter((id) => !stoppingNow.current.has(id));
+      if (members.length === 0) return;
+      for (const id of members) stoppingNow.current.add(id);
+      setStopping(new Set(stoppingNow.current));
+      const listed = await readRunRows(runs);
+      const outcomes = await Promise.all(
+        members.map(async (id) => ({ id, why: await stopMember(door, listed, id) })),
+      );
+      const refused = outcomes.flatMap(({ id, why }) => (why === null ? [] : [{ id, why }]));
+      for (const { id } of refused) stoppingNow.current.delete(id);
+      if (refused.length > 0) setStopping(new Set(stoppingNow.current));
+      const first = refused[0];
+      if (first !== undefined && press === crewPresses.current) {
+        setCrewRefusal({
+          crew: card.id,
+          words: CREW_WORDS.couldntStop(nameIn(card, first.id), first.why),
+        });
+      }
+    },
+    [runs],
+  );
+  const pauseAll = useCallback(async (door: SparkPauser, card: CrewCard): Promise<void> => {
+    const press = ++crewPresses.current;
+    setCrewRefusal(null);
+    // each member's turn is read from the board at the press: one already sent for this turn is passed over
+    const members = card.acts.pause.flatMap((id) => {
+      const row = boardRowNow(id);
+      if (row === null || !row.alive || row.status !== "working") return [];
+      return pausedTurns.current.get(id) === row.statusSince ? [] : [{ id, turn: row.statusSince }];
+    });
+    for (const { id, turn } of members) pausedTurns.current.set(id, turn);
+    const outcomes = await Promise.all(
+      members.map(async ({ id }) => ({ id, outcome: await pauseTurn(door, id) })),
+    );
+    const refused = outcomes.flatMap(({ id, outcome }) =>
+      outcome.state === "refused" ? [{ id, why: outcome.reason }] : [],
+    );
+    for (const { id } of refused) pausedTurns.current.delete(id);
+    const first = refused[0];
+    if (first !== undefined && press === crewPresses.current) {
+      setCrewRefusal({
+        crew: card.id,
+        words: CREW_WORDS.couldntPause(nameIn(card, first.id), first.why),
+      });
+    }
+  }, []);
+
   const cards = useMemo(
     () =>
       crewCardsOf({
@@ -490,8 +570,9 @@ export function ChatView({
         name: shown?.spark.name ?? "",
         asleep: shown !== undefined && !shown.awake,
         seen: seenRuns.current,
+        acts: { stopping, refusal: crewRefusal },
       }),
-    [crewIds, crewsDrawn, rows, handles, shown],
+    [crewIds, crewsDrawn, rows, handles, shown, stopping, crewRefusal],
   );
   // a row pressed: that member's pane in Godview by the one reveal (TH-2), its board row read at the press; the note
   // says what came of it, as Jump to's does. While it runs the row waits: the ref is the guard, the state draws it.
@@ -529,6 +610,12 @@ export function ChatView({
         crews={cards}
         onCrewRow={(runtimeRunId) => void revealMember(runtimeRunId)}
         onOpenGodview={openGodview}
+        {...(pauser === null
+          ? {}
+          : { onPauseAll: (card: CrewCard) => void pauseAll(pauser, card) })}
+        {...(stopper === null
+          ? {}
+          : { onStopAll: (card: CrewCard) => void stopAll(stopper, card) })}
         revealing={revealing}
       />
     );
@@ -594,4 +681,34 @@ export function ChatView({
       {...(empty === undefined ? {} : { empty })}
     />
   );
+}
+
+/** SP-1e4 — end one crew member for Stop all: null when fieldd took it (`terminated: false` is a session already gone,
+ * the end Stop all asks for), else why not. Its floor session is the one fieldd's runs name (`runs`, `agent.list` as
+ * read at the press, null when fieldd could not answer), by the rule both Jump tos read (`floorRunOf`). A refusal is
+ * fieldd's words, or the error of a daemon that could not be reached. */
+async function stopMember(
+  stopper: SparkStopper,
+  runs: readonly unknown[] | null,
+  runtimeRunId: string,
+): Promise<string | null> {
+  if (runs === null) return RUNS_UNREAD;
+  const floor = floorRunOf(runs, runtimeRunId);
+  if (floor === null) return CREW_WORDS.noTerminal;
+  try {
+    await stopper(floor.floorSessionId);
+    return null;
+  } catch (cause) {
+    const log = getRendererLogger().child({ component: "chat" });
+    log.error("renderer.chat.stop_failed", "Stop all could not end a member", cause, {
+      runtimeRunId,
+      sessionId: floor.floorSessionId,
+    });
+    return cause instanceof Error ? cause.message : String(cause);
+  }
+}
+
+/** SP-1e4 — a member's name as `card` drew it, for a refusal's words. */
+function nameIn(card: CrewCard, runtimeRunId: string): string {
+  return card.rows.find((row) => row.runtimeRunId === runtimeRunId)?.name ?? runtimeRunId;
 }

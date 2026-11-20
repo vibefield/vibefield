@@ -182,6 +182,8 @@ interface PlateInputs {
   readonly items?: readonly NeedsItem[];
   readonly seen?: readonly string[];
   readonly narrow?: boolean;
+  /** SP-1e4 — the members a Stop all press sent to end, as Chat's controller holds them */
+  readonly stopping?: readonly string[];
 }
 
 /** A plate, by the product's own readings of its fixtures. */
@@ -203,6 +205,7 @@ function plate(id: string, label: string, inputs: PlateInputs): CrewPlate {
     name: spark.name,
     asleep: !entry.awake,
     seen: new Set(inputs.seen ?? []),
+    acts: { stopping: new Set(inputs.stopping ?? []), refusal: null },
   });
   const item = inputs.items?.[0];
   return {
@@ -242,7 +245,7 @@ const RUNNING = [
   memberRow(3, "working"),
 ];
 
-/** Every still plate, in DESIGN.md's order and then SR-Q11's. */
+/** Every still plate, in DESIGN.md's order and then SR-Q11's and SP-1e4's. */
 export const CREW_PLATES: readonly CrewPlate[] = [
   plate("starting", "Starting: no model named yet", {
     act: "Started 4 agents",
@@ -335,6 +338,19 @@ export const CREW_PLATES: readonly CrewPlate[] = [
     crews: ready([crewOf(FOUR)]),
     rows: RUNNING,
     narrow: true,
+  }),
+  // SP-1e4's: the crew's acts at the foot, and the words a row passes through
+  // a fifth member, plainly at work, is the one Pause all takes: each of the four passes through a word, or is paused
+  plate("acts", "Pausing, Paused, Still running, Stopping and Working: Pause all, Stop all", {
+    crews: ready([crewOf([...FOUR, member(4)])]),
+    rows: [
+      memberRow(0, "working", { stop: { sentAt: ago(1), stage: "sent" } }),
+      memberRow(1, "done", { stop: { sentAt: ago(2), stage: "heard", heardBy: "status" } }),
+      memberRow(2, "working", { stop: { sentAt: ago(3), stage: "resent", unheardAt: ago(1) } }),
+      memberRow(3, "working"),
+      memberRow(4, "working"),
+    ],
+    stopping: [MEMBERS[3]],
   }),
 ];
 
