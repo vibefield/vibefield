@@ -11,6 +11,7 @@ import {
   type RunProfileFacts,
   type SparkId,
   type SparkSummary,
+  TerminalTerminateResult,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { useSyncExternalStore } from "react";
@@ -66,6 +67,10 @@ export interface SparksPort {
   /** TH-2 — pause a run's current turn (`agent.pause`, Godview's pane's door): fieldd's answer, accepted when the
    * cancellation was delivered, never when the agent obeyed it; or its refusal thrown. */
   pause(runtimeRunId: string): Promise<AgentInterruptResult>;
+  /** SP-1e4 — end a run's terminal (`terminal.terminate` on its floor session, a pane's Stop agent's door): fieldd's
+   * answer, `terminated: false` when the session was already gone (the end it asks for holds); or its refusal thrown,
+   * UNAVAILABLE when the floor cannot be asked. */
+  terminate(sessionId: string): Promise<TerminalTerminateResult>;
 }
 
 const FIELD_ASK = { projection: "field" } as const;
@@ -86,6 +91,8 @@ export function sparksPortOver(client: FielddClient): SparksPort {
       ComposeSparksSayResult.parse(await client.request("compose.sparks.say", params)),
     pause: async (runtimeRunId) =>
       AgentInterruptResult.parse(await client.request("agent.pause", { runtimeRunId })),
+    terminate: async (sessionId) =>
+      TerminalTerminateResult.parse(await client.request("terminal.terminate", { sessionId })),
   };
 }
 
@@ -201,6 +208,8 @@ interface FeedState {
   readonly say: SparkSayer | null;
   /** TH-2 — the head's Pause, through the same feed; null while none runs, so nothing is paused */
   readonly pause: SparkPauser | null;
+  /** SP-1e4 — a crew card's Stop all, through the same feed; null while none runs, so nothing is ended */
+  readonly terminate: SparkStopper | null;
   /** the needs that stood when the board or the queue was first read, while they stand (CP-3): what a first reading
    * finds is no news, even one that comes only after a refusal the feed asked past */
   readonly noNews: ReadonlySet<string>;
@@ -225,6 +234,10 @@ export type NeedsAnswerer = (item: NeedsItemId, choice: number) => Promise<Needs
 /** Queue your words to a spark (`compose.sparks.say`, TH-1): its receipt, or its refusal thrown in fieldd's words. */
 export type SparkSayer = (params: ComposeSparksSayParams) => Promise<ComposeSparksSayResult>;
 
+/** End a run's terminal by its floor session (`terminal.terminate`, SP-1e4): fieldd's answer, or its refusal thrown in
+ * fieldd's words. A crew card's Stop all, which ends each member as a pane's Stop agent ends one. */
+export type SparkStopper = (sessionId: string) => Promise<TerminalTerminateResult>;
+
 const NO_MARKS: ReadonlyMap<SparkId, ThreadMark> = new Map();
 const NO_NEWS: ReadonlySet<string> = new Set();
 
@@ -237,6 +250,7 @@ const OPENING: FeedState = {
   answer: null,
   say: null,
   pause: null,
+  terminate: null,
   noNews: NO_NEWS,
   marks: NO_MARKS,
   cell: null,
@@ -367,6 +381,9 @@ class RunningFeed {
   /** The feed's pause (TH-2): the board's row says what came of it (its `stop`), for every window. */
   readonly pause: SparkPauser = (runtimeRunId) => this.port.pause(runtimeRunId);
 
+  /** The feed's terminate (SP-1e4): the board's row says what came of it (it leaves, or is no longer alive). */
+  readonly terminate: SparkStopper = (sessionId) => this.port.terminate(sessionId);
+
   /** The feed's wake: the record the door answered, and the list asked again whether it woke or not, since the record
    * says what the door did. The list's answer lands later, so whatever needs the woken run reads it here (item 293). */
   readonly open: SparkOpener = async (spark) => {
@@ -495,6 +512,7 @@ class RunningFeed {
         answer: this.answer,
         say: this.say,
         pause: this.pause,
+        terminate: this.terminate,
         noNews: this.#noNews,
         marks: NO_MARKS,
         cell: null,
@@ -521,6 +539,7 @@ class RunningFeed {
       answer: this.answer,
       say: this.say,
       pause: this.pause,
+      terminate: this.terminate,
       noNews: this.#noNews,
       ...this.#marked(),
     });
@@ -599,6 +618,12 @@ export function useSparkSayer(): SparkSayer | null {
  * pressed. */
 export function useSparkPauser(): SparkPauser | null {
   return useSyncExternalStore(subscribe, () => state.pause);
+}
+
+/** A crew card's Stop all, through the feed that published the reading (SP-1e4): null while no feed runs, so nothing
+ * is ended. */
+export function useSparkStopper(): SparkStopper | null {
+  return useSyncExternalStore(subscribe, () => state.terminate);
 }
 
 /** Answer the queue's items through the feed that reads them (CP-3): null while no feed runs, when no reading is ready

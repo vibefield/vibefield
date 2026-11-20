@@ -655,6 +655,10 @@ describe('a spark that needs you, and a thread unread, from another view (CH-D4,
       pause: async () => {
         throw new Error("nothing is paused here");
       },
+      // a crew card's Stop all (SP-1e4) is not this test's
+      terminate: async () => {
+        throw new Error("nothing is stopped here");
+      },
       onReconnected: () => () => undefined,
       open: async () => vela,
     };
@@ -821,6 +825,10 @@ describe('a spark that needs you, and a thread unread, from another view (CH-D4,
       // the head's Pause (TH-2) is not this test's
       pause: async () => {
         throw new Error("nothing is paused here");
+      },
+      // a crew card's Stop all (SP-1e4) is not this test's
+      terminate: async () => {
+        throw new Error("nothing is stopped here");
       },
       onReconnected: (listener) => {
         reconnected.add(listener);

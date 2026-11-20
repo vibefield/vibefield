@@ -19,8 +19,13 @@ import type { Flow } from "./transcript-items";
 // cannot be read the card stands on the board's rows alone, its live members found by their crew; while the board
 // cannot be read the rows keep their names and lose their states. Never a blank.
 
-/** A member's state on its row, in DESIGN.md's order. */
-export type CrewRowState = "starting" | "working" | "needs" | "done" | "ended";
+/** A member's state on its row, in DESIGN.md's order (SP-1e4 added Paused). */
+export type CrewRowState = "starting" | "working" | "needs" | "done" | "paused" | "ended";
+
+/** SP-1e4 — the words a row passes through, said in its state's place while they hold: "Stopping agent…" from a Stop
+ * all press until it reads Ended, "Pausing current turn…" while fieldd's stop for its turn is not heard yet, and "Still
+ * running" once fieldd marks that stop unheard. */
+export type CrewRowPassing = "stopping" | "pausing" | "still";
 
 /** One member's row. */
 export interface CrewCardRow {
@@ -33,6 +38,8 @@ export interface CrewCardRow {
   readonly model: string | null;
   /** its state; null while the board cannot be read (the rows keep their names and lose their states) */
   readonly state: CrewRowState | null;
+  /** SP-1e4 — the word it passes through, said in its state's place; null when none holds */
+  readonly passing: CrewRowPassing | null;
   /** it takes a press: every row but an Ended one */
   readonly pressable: boolean;
   /** its accessible name, "vibe-field·2, Opus 5.5, high, Working" */
@@ -48,6 +55,14 @@ export interface CrewCount {
   readonly check: boolean;
 }
 
+/** SP-1e4 — the members each of the foot's acts takes, by run id, in the rows' order. */
+export interface CrewActs {
+  /** Pause all: each member whose turn is at work, and not already pausing, stopping or still running */
+  readonly pause: readonly string[];
+  /** Stop all: each member Working or Starting, and not already stopping */
+  readonly stop: readonly string[];
+}
+
 /** A crew's card. */
 export interface CrewCard {
   readonly id: CrewId;
@@ -61,6 +76,10 @@ export interface CrewCard {
   readonly line: string | null;
   /** the group's name, "4 agents · Opus 5.5 · high, 2 of 4 done" */
   readonly label: string;
+  /** SP-1e4 — a member is at work (Starting, Working or Needs you): Pause all and Stop all stand at the foot */
+  readonly atWork: boolean;
+  /** SP-1e4 — the members Pause all and Stop all take */
+  readonly acts: CrewActs;
 }
 
 /** DESIGN.md §9 "Chat's words", the crew card's. */
@@ -76,6 +95,19 @@ export const CREW_WORDS = {
   crewsUnreadable: (name: string) => `VibeField can't read ${name}'s crews right now`,
   asleep: (name: string) => `${name} is asleep — it hears these when it wakes`,
   openGodview: "Open in Godview",
+  // SP-1e4 — the crew's acts, a row's passing words, the count with paused members, and a press's refusal
+  pauseAll: "Pause all",
+  stopAll: "Stop all",
+  stopping: "Stopping agent…",
+  pausing: "Pausing current turn…",
+  stillRunning: "Still running",
+  /** the count once a member is paused, the ended before the paused: "1 of 4 done · 1 ended · 1 paused" */
+  donePaused: (done: number, total: number, ended: number, paused: number) =>
+    `${done} of ${total} done${ended > 0 ? ` · ${ended} ended` : ""} · ${paused} paused`,
+  couldntStop: (name: string, why: string) => `Couldn't stop ${name}: ${why}`,
+  couldntPause: (name: string, why: string) => `Couldn't pause ${name}'s turn: ${why}`,
+  /** why Stop all could not end a member: fieldd's runs (`agent.list`) put none of its terminals on this floor */
+  noTerminal: "it has no terminal on this desktop",
 } as const;
 
 /** Each state's word, as its row says it. */
@@ -84,8 +116,31 @@ export const CREW_STATE_WORDS: Readonly<Record<CrewRowState, string>> = Object.f
   working: "Working",
   needs: "Needs you",
   done: "Done",
+  paused: "Paused",
   ended: "Ended",
 });
+
+/** SP-1e4 — each passing word, as its row says it in its state's place. */
+export const CREW_PASSING_WORDS: Readonly<Record<CrewRowPassing, string>> = Object.freeze({
+  stopping: CREW_WORDS.stopping,
+  pausing: CREW_WORDS.pausing,
+  still: CREW_WORDS.stillRunning,
+});
+
+/** SP-1e4 — a press's refusal, the first of it alone: the foot's line on its crew's card until the next press of
+ * either act. */
+export interface CrewActRefusal {
+  readonly crew: CrewId;
+  readonly words: string;
+}
+
+/** SP-1e4 — what the controller holds of the crew's acts, for this window alone. */
+export interface CrewActsHeld {
+  /** the members a Stop all press sent to end: each reads "Stopping agent…" until it reads Ended */
+  readonly stopping: ReadonlySet<string>;
+  /** the last press's refusal, or null */
+  readonly refusal: CrewActRefusal | null;
+}
 
 export interface CrewCardInputs {
   /** the crews the flow's act lines name, in their order */
@@ -103,7 +158,12 @@ export interface CrewCardInputs {
   /** the runs this window has seen on the board: a member the board, read, no longer holds is Ended, one it has not
    * held yet is Starting (absent: none seen) */
   readonly seen?: ReadonlySet<string> | undefined;
+  /** SP-1e4 — the crew's acts as this window holds them (absent: none pressed, as in the catalog) */
+  readonly acts?: CrewActsHeld | undefined;
 }
+
+/** SP-1e4 — no member for either act. */
+const NO_ACTS: CrewActs = Object.freeze({ pause: [], stop: [] });
 
 /** The crews the flow's act lines name, in their order: the cards it hangs (Chat's controller and the catalog's). */
 export function crewsOfFlow(flow: Flow): CrewId[] {
@@ -198,6 +258,8 @@ function cardOf(
     rows,
     line,
     label: count.words === "" ? head : `${head}, ${count.words}`,
+    atWork: false,
+    acts: NO_ACTS,
   };
 }
 
@@ -272,6 +334,7 @@ function rowOf(
     name,
     model,
     state,
+    passing: null,
     pressable: state !== "ended",
     label,
   };

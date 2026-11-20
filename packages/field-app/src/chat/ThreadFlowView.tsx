@@ -45,6 +45,10 @@ export interface ThreadFlowViewProps {
   onCrewRow?: ((runtimeRunId: string) => void) | undefined;
   /** a crew card's Open in Godview pressed (absent: the catalog) */
   onOpenGodview?: (() => void) | undefined;
+  /** SP-1e4 — a crew card's Pause all pressed, with that card (absent: the catalog) */
+  onPauseAll?: ((card: CrewCard) => void) | undefined;
+  /** SP-1e4 — a crew card's Stop all pressed, with that card (absent: the catalog) */
+  onStopAll?: ((card: CrewCard) => void) | undefined;
   /** the members whose reveal runs now */
   revealing?: ReadonlySet<string> | undefined;
 }

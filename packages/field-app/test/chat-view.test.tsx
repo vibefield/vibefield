@@ -982,6 +982,10 @@ function scripted(listed: SparkSummary[]) {
       port.paused.push(runtimeRunId);
       return port.pauseAnswer;
     },
+    // a crew card's Stop all (SP-1e4) is not this test's
+    terminate: async () => {
+      throw new Error("nothing is stopped here");
+    },
     onReconnected: () => () => undefined,
     open: async (id) => {
       port.woke.push(id);

@@ -197,6 +197,10 @@ function feed(sparks: SparkSummary[] = [VELA], rows: AgentFieldRow[] = ROWS): Sp
     pause: async () => {
       throw new Error("nothing is paused here");
     },
+    // a crew card's Stop all (SP-1e4) is not this test's
+    terminate: async () => {
+      throw new Error("nothing is stopped here");
+    },
     onReconnected: () => () => undefined,
     open: async () => VELA,
     // Send's road is scripted above (`road`): nothing reaches the say here

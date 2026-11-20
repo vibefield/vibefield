@@ -118,6 +118,7 @@ describe('the crew card (SP-1e2; DESIGN.md §8 "Chat\'s crew card")', () => {
       "Working",
       "Needs you",
       "Done",
+      "Paused",
       "Ended",
     ]);
   });

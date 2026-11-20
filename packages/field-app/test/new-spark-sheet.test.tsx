@@ -331,6 +331,10 @@ describe("the New spark sheet", () => {
       pause: async () => {
         throw new Error("nothing is paused here");
       },
+      // a crew card's Stop all (SP-1e4) is not this test's
+      terminate: async () => {
+        throw new Error("nothing is stopped here");
+      },
       onReconnected: () => () => undefined,
       open: async () => {
         throw new Error("nothing is woken here");

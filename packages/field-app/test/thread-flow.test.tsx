@@ -261,6 +261,7 @@ describe("a crew's card in the flow (SP-1e2's renderer half; DESIGN.md §8 'Chat
         name: "vibe-field",
         model: "Opus 5.5 · high",
         state: "done",
+        passing: null,
         pressable: true,
         label: "vibe-field, Opus 5.5, high, Done",
       },
@@ -270,6 +271,7 @@ describe("a crew's card in the flow (SP-1e2's renderer half; DESIGN.md §8 'Chat
         name: "vibe-field·2",
         model: "Opus 5.5 · high",
         state: "working",
+        passing: null,
         pressable: true,
         label: "vibe-field·2, Opus 5.5, high, Working",
       },
@@ -279,12 +281,16 @@ describe("a crew's card in the flow (SP-1e2's renderer half; DESIGN.md §8 'Chat
         name: "Claude Code in vibe-field",
         model: "Opus 5.5 · high",
         state: "ended",
+        passing: null,
         pressable: false,
         label: "Claude Code in vibe-field, Opus 5.5, high, Ended",
       },
     ],
     line: null,
     label: "2 agents · Opus 5.5 · high, 1 of 2 done",
+    // SP-1e4 — its working member is at work: Pause all and Stop all would each take it
+    atWork: true,
+    acts: { pause: ["run-22"], stop: ["run-22"] },
   };
   const crewFlow = (crew: string) =>
     ({

@@ -18,6 +18,10 @@ export interface CrewCardViewProps {
   onRow?: ((runtimeRunId: string) => void) | undefined;
   /** Open in Godview pressed (absent: the catalog) */
   onOpenGodview?: (() => void) | undefined;
+  /** SP-1e4 — Pause all pressed, with the card as drawn (absent: the catalog) */
+  onPauseAll?: ((card: CrewCard) => void) | undefined;
+  /** SP-1e4 — Stop all pressed, with the card as drawn (absent: the catalog) */
+  onStopAll?: ((card: CrewCard) => void) | undefined;
   /** the rows whose reveal runs now: each waits, and a second press does nothing */
   revealing?: ReadonlySet<string> | undefined;
 }
