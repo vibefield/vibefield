@@ -9076,9 +9076,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   desktop asleep. Success or warning at the birth; success puts the sheet away. A refusal is said over the buttons in
   secondary ink, in fieldd's own words, and a lost reply as `The desktop did not confirm the launch. Check the field
   before trying again.`, never retried. **Terminal** stands beside Start, `prompt` and the word in the well's fill and
-  hairline: a shell in the chosen folder under the header's profile. It waits on the desktop's door (item 587: today
-  a phone's shell under a profile is refused, and `terminal.create` cannot name a place), and until that lands Start
-  has the row to itself.
+  hairline: a shell in the chosen folder under the header's profile (item 587). It asks the desktop the place's ref
+  names, by that ref (Browse's folder by its path), and never another desktop: `terminal.create` is local to its
+  device. It always names the profile, so a desktop older than the place door refuses the shell rather than open it
+  in a folder the phone did not choose; it is Off until the profile is read, with no folder, or with the desktop
+  asleep. Opening, `prompt` turns to a spinner and the word to `Opening…`, so the pill keeps its look with its hits
+  off (§7). While either button's press runs, the other is Off: Start while Terminal opens, Terminal while Start
+  starts. Success or warning as at Start's birth, and success puts the sheet away. Its refusals are said where
+  Start's are, each saying what to do next: a lost reply in Start's sentence, never retried; another desktop's place
+  as `That folder is on another desktop. Choose a folder on studio.` (fieldd's shared sentence speaks of agents); a
+  desktop older than the door as `studio needs an update before this phone can open a terminal there.`; the rest in
+  fieldd's own words. A screen reader hears `Open a terminal in vibe-field`, then `Opening a terminal in vibe-field`.
   **No Model, no Effort**: the spawn sends no model selection, and each agent runs its own. A project's recipe still
   chooses the place, the agent and the profile.
   **Browse is the same sheet, risen**, never a sheet over it. A 40 pt back circle (the chevron turned) and, inside a
@@ -9104,6 +9112,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   says the desktop and the profile, and the redesign asks only where and who. Kept from it: the sheet presented by its
   model; a part that says what it waits on; the folder filled with the recipe's place, else the newest on the
   desktop; a place launched by its ref, and only Browse sending a path, until PJ-8.
+  *Amended 2026-11-19 (item 587):* Terminal waited on the desktop's door, and Start had the row to itself: a phone's
+  shell under a profile was refused, and `terminal.create` could not name a place.
   **New agent** on a project screen stands in the stepper's slot: the 48 pt glass capsule 10 above the bar, the
   `start` glyph and "New agent", then the usual place's desktop mark and name (`asleep` when it cannot be asked).
 - **The phone's session card attaches in words, and never waits forever** (fix8, 2026-10-15 —
