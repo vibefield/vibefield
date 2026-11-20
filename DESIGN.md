@@ -1001,10 +1001,12 @@ line `--vf-card-pass` (`#2b8a4f`, round 5's green), and `--vf-card-photo` (`#cfd
 *Added 2026-11-20 (item 616):* **what a card prints holds §2.4's floors**, by night (0.86) and turned from the lamp
 (its floor, 0.72): on the paper stock its words at 74% of its ink or more and its marks (a prompt's `$`, the faces
 along its foot) at 55% or more, on the plate and on the paper's foot; on the agent's dark stock its words at 70% of
-its white or more (its state, item 613). Three stand under it until item 617 decides their look: the pass ink, 3.42:1
-by day on the plate; a file's comment at 36%, 2.21:1; and the dark card's project at white 40%, 3.79:1, whose token
-its state's dot also wears (2.49:1 turned). Toward the lamp, at the worst turn, the window's words and these marks are
-under it until item 619 decides the sheen (§5 "The lamp, live").
+its white or more (its state, item 613). Two stand under it until item 617 decides their look: the pass ink, 3.42:1 by
+day on the plate, and a file's comment at 36%, 2.21:1. The dark card's project stands under it too, at white 40%,
+3.79:1, with its state's dot on the same token (2.49:1 turned), until the dark card itself leaves (item 633).
+*Corrected 2026-11-20:* this said three stood until item 617; the dark card's project left 617 the same day, since the
+dark card is to leave. Toward the lamp, at the worst turn, the window's words and these marks are under it until item
+619 decides the sheen (§5 "The lamp, live").
 **The agent's card** is the one dark stock
 (`--vf-card-dark-stock` `#1c1c1e`, `--vf-card-dark-edge` `#050506`, its cut `--vf-card-dark-cut`, white at 9%; its inks
 `--vf-card-dark-ink`, `-2`, `-3`, white at 92 / 70 / 40%; `-2` was 62% until item 613), the
