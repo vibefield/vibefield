@@ -9,7 +9,7 @@ import type {
 } from "@vibefield/contracts";
 import { IntentUndoValue, OBJECT_ROOM } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
-import { DeskIntents, type DeskIntentsOptions } from "./intents";
+import { DeskIntents, type DeskIntentsOptions, isNoAnswer } from "./intents";
 import { type DeskKind, deskKinds } from "./kinds";
 import { type AtWorkAgent, type AtWorkFacts, ObjectPresenceBoard } from "./presence";
 import { ObjectsRegistry } from "./registry";
@@ -473,6 +473,9 @@ export class DeskObjects {
       return { undone: true, changed: change.label };
     } catch (err) {
       if (!(err instanceof RpcCallError)) throw err;
+      // item 559, 2026-11-18: an inverse the window was sent and never answered may have been applied; the door records
+      // it as an unknown effect and answers the window, and the change stays on offer
+      if (isNoAnswer(err)) throw err;
       const fact = (err.details as { fact?: unknown } | undefined)?.fact;
       if (fact === "conflict" || fact === "gone") {
         this.undo.forget(record.docId, change);

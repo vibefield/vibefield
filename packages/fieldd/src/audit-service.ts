@@ -80,6 +80,16 @@ export interface AuditMutationOutcome {
   attrs?: Readonly<Record<string, unknown>>;
 }
 
+/** Item 559, 2026-11-18 — how an act that threw resolves in the trail, as its caller says (LOG-45): `failed`, or
+ * `effect-unknown` when the act was handed to an executor fieldd does not own (a window) and no answer came. The act
+ * then has no outcome record of its own: one `audit.outcome.recovery` record (`EFFECT_UNKNOWN`) closes its attempt.
+ * The caller decides; this service learns no caller's error types. */
+export type AuditFailureResolution = "failed" | "effect-unknown";
+
+/** Why a recovery record closes an act's attempt (logging §16.3): its outcome could not be written, or its effect is
+ * unknown (item 559, 2026-11-18). */
+type RecoveryReason = "OUTCOME_DURABILITY_UNCONFIRMED" | "EFFECT_UNKNOWN";
+
 interface RecoveryMarker {
   action: string;
   originalLedger: AuditLedger;
@@ -88,6 +98,8 @@ interface RecoveryMarker {
   intendedOutcome: string;
   effectResolution: "unknown" | "effect-threw" | "applied" | "rolled-back" | "rollback-failed";
   failedAt: number;
+  /** absent: `OUTCOME_DURABILITY_UNCONFIRMED` */
+  reasonCode?: RecoveryReason;
 }
 
 export class AuditUnavailableError extends RpcCallError {
@@ -195,6 +207,31 @@ function failureReason(error: unknown): string {
   return "ACTION_FAILED";
 }
 
+const RECOVERY_AUTHORITY: { actor: AuditPrincipalV1; transportProvenance: string } = {
+  actor: { kind: "system", id: "fieldd" },
+  transportProvenance: "in-process",
+};
+
+/** A recovery record (logging §16.3): its own `outcome` is always `failed`, the audit's own word that it could not
+ * record the act's outcome as known, never the act's; what is known of the act rides its attributes. */
+function recoveryRecord(marker: RecoveryMarker): AuditAppendV1 {
+  return {
+    action: "audit.outcome.recovery",
+    target: targetForAudit(marker.target),
+    phase: "outcome",
+    outcome: "failed",
+    reasonCode: marker.reasonCode ?? "OUTCOME_DURABILITY_UNCONFIRMED",
+    operationId: marker.operationId,
+    attrs: {
+      originalAction: marker.action,
+      originalLedger: marker.originalLedger,
+      intendedOutcome: marker.intendedOutcome,
+      effectResolution: marker.effectResolution,
+      failedAt: marker.failedAt,
+    },
+  };
+}
+
 export class AuditService extends EventEmitter {
   readonly root: string;
   private readonly writer: AuditLedgerWriter;
@@ -274,14 +311,24 @@ export class AuditService extends EventEmitter {
     return this.appendAs(ctx, input);
   }
 
+  /** `resolveFailure` (item 559, 2026-11-18): how a throw from `effect` resolves in the trail; absent, `failed`. */
   async required<T>(
     ctx: CallerContext,
     mutation: AuditMutation,
     effect: () => Promise<T> | T,
     describeOutcome?: (value: T) => AuditMutationOutcome,
     rollbackOnOutcomeFailure?: (value: T) => Promise<void> | void,
+    resolveFailure?: (error: unknown) => AuditFailureResolution,
   ): Promise<T> {
-    return await this.requiredAs(ctx, mutation, effect, describeOutcome, rollbackOnOutcomeFailure);
+    return await this.requiredAs(
+      ctx,
+      mutation,
+      effect,
+      describeOutcome,
+      rollbackOnOutcomeFailure,
+      undefined,
+      resolveFailure,
+    );
   }
 
   async requiredSystem<T>(
@@ -399,6 +446,7 @@ export class AuditService extends EventEmitter {
     describeOutcome?: (value: T) => AuditMutationOutcome,
     rollbackOnOutcomeFailure?: (value: T) => Promise<void> | void,
     authority?: { actor: AuditPrincipalV1; transportProvenance: string },
+    resolveFailure?: (error: unknown) => AuditFailureResolution,
   ): Promise<T> {
     const operationId = `op_${randomBytes(12).toString("base64url")}`;
     const target = targetForAudit(mutation.target);
@@ -423,6 +471,21 @@ export class AuditService extends EventEmitter {
     try {
       value = await effect();
     } catch (error) {
+      if (resolveFailure?.(error) === "effect-unknown") {
+        // item 559, 2026-11-18 (LOG-45): the act left for an executor and no answer came, so whether it happened is
+        // unknown. It is never written `failed`: one recovery record says so, and the act's own error stays primary.
+        await this.writeRecovery({
+          action: mutation.action,
+          originalLedger: auditLedgerForAction(mutation.action),
+          operationId,
+          target,
+          intendedOutcome: "unknown",
+          effectResolution: "unknown",
+          failedAt: this.now(),
+          reasonCode: "EFFECT_UNKNOWN",
+        });
+        throw error;
+      }
       try {
         await this.appendAs(
           ctx,
@@ -582,38 +645,33 @@ export class AuditService extends EventEmitter {
 
     while (this.recovery.length > 0) {
       const marker = this.recovery[0]!;
-      const ctx: CallerContext = {
-        principal: { kind: "local-token", tokenId: "fieldd-recovery", scopes: [] },
-        transport: "uds",
-        receivedAt: this.now(),
-      };
-      await this.appendNow(
-        ctx,
-        {
-          action: "audit.outcome.recovery",
-          target: targetForAudit(marker.target),
-          phase: "outcome",
-          outcome: "failed",
-          reasonCode: "OUTCOME_DURABILITY_UNCONFIRMED",
-          operationId: marker.operationId,
-          attrs: {
-            originalAction: marker.action,
-            originalLedger: marker.originalLedger,
-            intendedOutcome: marker.intendedOutcome,
-            effectResolution: marker.effectResolution,
-            failedAt: marker.failedAt,
-          },
-        },
-        {
-          actor: { kind: "system", id: "fieldd" },
-          transportProvenance: "in-process",
-        },
-      );
+      await this.appendNow(this.recoveryCtx(), recoveryRecord(marker), RECOVERY_AUTHORITY);
       this.recovery.shift();
     }
     // Every marker was durably flushed, so recovery is now evidenced rather
     // than inferred from an empty queue.
     this.markHealthy();
+  }
+
+  /** Item 559, 2026-11-18 — a recovery record written now, after any queued before it. When the writer refuses it, it
+   * is queued as any marker is, its reason kept, and written once the writer takes a line again. */
+  private async writeRecovery(marker: RecoveryMarker): Promise<void> {
+    try {
+      await this.serial(async () => {
+        await this.flushRecoveryMarkers();
+        await this.appendNow(this.recoveryCtx(), recoveryRecord(marker), RECOVERY_AUTHORITY);
+      });
+    } catch {
+      this.queueRecovery(marker);
+    }
+  }
+
+  private recoveryCtx(): CallerContext {
+    return {
+      principal: { kind: "local-token", tokenId: "fieldd-recovery", scopes: [] },
+      transport: "uds",
+      receivedAt: this.now(),
+    };
   }
 
   private queueRecovery(marker: RecoveryMarker): void {
@@ -626,6 +684,7 @@ export class AuditService extends EventEmitter {
       existing.target = marker.target;
       existing.intendedOutcome = marker.intendedOutcome;
       existing.effectResolution = marker.effectResolution;
+      if (marker.reasonCode !== undefined) existing.reasonCode = marker.reasonCode;
       this.emit("health");
       return;
     }

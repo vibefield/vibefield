@@ -13,6 +13,7 @@ import { RpcCallError } from "../native-link";
 import { wholeValueDoor } from "../projection";
 import type { ToolPlaneAudit } from "../tool-plane";
 import type { DeskObjects } from "./desk-objects";
+import { isNoAnswer } from "./intents";
 
 // OB-3, OB-4 (thinking-objects-at-work.md §5.5) — the window's door to the desk's state, the ten `objects.*` rows.
 // Every one is held to a window's own token: `objects.window` is minted only into window tokens, and this holds it
@@ -147,12 +148,21 @@ export function registerObjectDoors(api: ObjectDoorsApi, deps: ObjectDoorsDeps):
     const parsed = ObjectsRunParams.safeParse(params);
     if (!parsed.success) throw bad("{ ref, run }");
     const { ref, run } = parsed.data;
-    return audit.required(
-      ctx,
-      { action: "objects.undo_agent", target: target(ref), attrs: { run } },
-      () => objects.undoAgent(ref, run),
-      (value) => ({ outcome: value.undone ? "succeeded" : "denied" }),
-    );
+    return audit
+      .required(
+        ctx,
+        { action: "objects.undo_agent", target: target(ref), attrs: { run } },
+        () => objects.undoAgent(ref, run),
+        (value) => ({ outcome: value.undone ? "succeeded" : "denied" }),
+        undefined,
+        (error) => (isNoAnswer(error) ? "effect-unknown" : "failed"),
+      )
+      .catch((error: unknown) => {
+        // item 559, 2026-11-18: the inverse left and no answer came. The trail says its effect is unknown (LOG-45),
+        // never `denied`; the window hears an undo not done, in words that say it may have happened
+        if (isNoAnswer(error)) return { undone: false as const, reason: (error as Error).message };
+        throw error;
+      });
   });
 
   api.register("objects.takeBack", (ctx, params) => {

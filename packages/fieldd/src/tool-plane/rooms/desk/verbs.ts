@@ -17,6 +17,7 @@ import {
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
 import type { DeskObjects } from "../../../objects/desk-objects";
+import { isNoAnswer } from "../../../objects/intents";
 import { cutBytes, type DeskKind, type DeskKindTool } from "../../../objects/kinds";
 import type { AtWorkAgent } from "../../../objects/presence";
 import { checkToolInput } from "./check";
@@ -52,6 +53,14 @@ export type DeskVerbName =
   | "object_release";
 
 export const isDeskVerb = (name: string): name is DeskVerbName => DESK_VERBS.has(name);
+
+/** Item 559, 2026-11-18 — the verbs whose act leaves for a window and changes the desk. */
+const DESK_EFFECTS = new Set(["canvas_place", "canvas_remove", "object_act"]);
+
+/** Item 559, 2026-11-18 — how a desk verb's failure resolves in the trail (LOG-45): an act a window was asked and never
+ * answered has an unknown effect, never `failed`; a read that was never answered changed nothing, and stays `failed`. */
+export const deskFailure = (name: string, error: unknown): "failed" | "effect-unknown" =>
+  DESK_EFFECTS.has(name) && isNoAnswer(error) ? "effect-unknown" : "failed";
 
 /** Who a desk verb answers: a spark or a settled plain run, by its run. */
 export interface DeskCaller {

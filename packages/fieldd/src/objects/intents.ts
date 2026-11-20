@@ -10,8 +10,10 @@ import { RpcCallError } from "../native-link";
 // OB-3b (CP-D13; thinking-objects-at-work.md §5.5) — fieldd asks the one window holding a board to read or change an
 // object, and waits for its answer: only the window knows a board's meaning and whether the person's hand is on an
 // object. The window subscribes per board (a shell provider cannot serve this: it lands in main, which has no desk). A
-// board nobody is holding answers UNAVAILABLE {service: "desk", state: "no-window"} at once, and a subscription that
-// closes rejects what was pending on it the same way: honest, never a queue that acts later.
+// board nobody is holding answers UNAVAILABLE {service: "desk", state: "no-window"} at once: honest, never a queue that
+// acts later. Item 559, 2026-11-18: an intent that left and was never answered (its window closed or was replaced with
+// it pending, or the deadline passed) is `no-answer` instead, because whether it happened is unknown; only an intent
+// that never left is `no-window` (§5.5 steps 6 and 7).
 
 export const noWindow = (): RpcCallError =>
   new RpcCallError(
@@ -24,10 +26,18 @@ export const noWindow = (): RpcCallError =>
 const noAnswer = (): RpcCallError =>
   new RpcCallError(
     "UNAVAILABLE",
-    "The window did not answer in time, so VibeField cannot tell whether this happened. Look before you try again.",
+    "The window did not answer, so VibeField cannot tell whether this happened. Look before you try again.",
     true,
     { service: "desk", state: "no-answer" },
   );
+
+/** Item 559, 2026-11-18 — an intent that reached a window and was never answered: its effect is unknown, so the trail
+ * closes it `EFFECT_UNKNOWN` (LOG-45), never `failed`. */
+export function isNoAnswer(error: unknown): boolean {
+  if (!(error instanceof RpcCallError) || error.kind !== "UNAVAILABLE") return false;
+  const details = error.details as { service?: unknown; state?: unknown } | undefined;
+  return details?.service === "desk" && details.state === "no-answer";
+}
 
 /** One thing asked, by its op and its fields; the table gives it its id. */
 export type IntentAsk = { readonly op: ObjectIntent["op"] } & Readonly<Record<string, unknown>>;
@@ -85,7 +95,8 @@ export class DeskIntents {
   }
 
   /** A window takes a board's intents. A second subscription to a board replaces the first, whose pending intents are
-   * refused: it will never answer them. Disposing is idempotent, and an old subscription's cannot touch its successor. */
+   * answered `no-answer`: it will never answer them, and they may have happened. Disposing is idempotent, and an old
+   * subscription's cannot touch its successor. */
   subscribe(docId: string, tokenId: string, send: (intent: ObjectIntent) => void): () => void {
     const previous = this.#subscriptions.get(docId);
     if (previous !== undefined) this.#close(previous);
@@ -160,7 +171,8 @@ export class DeskIntents {
     for (const [id, pending] of [...this.#pending]) {
       if (pending.subscription !== subscription) continue;
       this.#settle(id);
-      pending.reject(noWindow());
+      // item 559, 2026-11-18: these left for the window, which may have applied them before it went
+      pending.reject(noAnswer());
     }
   }
 

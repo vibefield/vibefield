@@ -10,6 +10,7 @@ import {
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import { AuditService, verifyAuditSegment } from "../src/audit-service";
+import { RpcCallError } from "../src/native-link";
 
 const roots: string[] = [];
 
@@ -741,6 +742,142 @@ describe("DS-D15 — the actor names the node and the client behind a forwarded 
           clientDeviceId: "dev-phone",
         },
       })),
+    );
+  });
+});
+
+describe("an act whose effect is unknown (item 559, LOG-45)", () => {
+  const ACT = { action: "tools.object_act", target: { kind: "object", id: "vf:obj/7hk2qx4m" } };
+  /** what a window that was asked and never answered throws (objects/intents.ts) */
+  const unanswered = () =>
+    new RpcCallError("UNAVAILABLE", "The window did not answer.", true, {
+      service: "desk",
+      state: "no-answer",
+    });
+
+  it("closes the act with one recovery record, EFFECT_UNKNOWN, and never writes it failed", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-effect-unknown" });
+    await service.start();
+    const thrown = unanswered();
+    await expect(
+      service.required(
+        shellContext(),
+        ACT,
+        () => {
+          throw thrown;
+        },
+        undefined,
+        undefined,
+        () => "effect-unknown",
+      ),
+    ).rejects.toBe(thrown);
+    // an unknown effect is not a writer's failure: the audit stays healthy and owes nothing
+    expect(service.health()).toMatchObject({
+      state: "healthy",
+      records: 2,
+      pendingRecoveryMarkers: 0,
+    });
+    await service.close();
+    const kept = await records(service.root);
+    const attempt = kept.find((r) => r.action === "tools.object_act" && r.phase === "attempt");
+    const closing = kept.filter((r) => r.operationId === attempt?.operationId);
+    expect(closing.map((r) => [r.action, r.phase])).toEqual([
+      ["tools.object_act", "attempt"],
+      ["audit.outcome.recovery", "outcome"],
+    ]);
+    // the recovery record's own `failed` is the audit's word, never the act's (logging §16.3)
+    expect(closing[1]).toMatchObject({
+      outcome: "failed",
+      reasonCode: "EFFECT_UNKNOWN",
+      actor: { kind: "system", id: "fieldd" },
+      attrs: {
+        originalAction: "tools.object_act",
+        intendedOutcome: "unknown",
+        effectResolution: "unknown",
+      },
+    });
+  });
+
+  it("writes the act failed when its caller says so, or says nothing", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-effect-failed" });
+    await service.start();
+    for (const resolve of [() => "failed" as const, undefined]) {
+      await expect(
+        service.required(
+          shellContext(),
+          ACT,
+          () => {
+            throw unanswered();
+          },
+          undefined,
+          undefined,
+          resolve,
+        ),
+      ).rejects.toMatchObject({ kind: "UNAVAILABLE" });
+    }
+    await service.close();
+    const kept = await records(service.root);
+    expect(kept.filter((r) => r.action === "audit.outcome.recovery")).toEqual([]);
+    expect(kept.filter((r) => r.phase === "outcome").map((r) => [r.outcome, r.reasonCode])).toEqual(
+      [
+        ["failed", "UNAVAILABLE"],
+        ["failed", "UNAVAILABLE"],
+      ],
+    );
+  });
+
+  it("owes an unknown effect's record when the writer refuses it, and writes it with its reason when it returns", async () => {
+    const dataDir = await root();
+    let writes = 0;
+    const fail = { now: false };
+    const service = new AuditService({
+      dataDir,
+      bootId: "fieldd-effect-owed",
+      hooks: {
+        beforeWrite: () => {
+          writes += 1;
+          if (fail.now) throw Object.assign(new Error("disk full"), { code: "ENOSPC" });
+        },
+      },
+    });
+    await service.start();
+    await expect(
+      service.required(
+        shellContext(),
+        ACT,
+        () => {
+          // the attempt is written; the writer refuses what follows it
+          fail.now = true;
+          throw unanswered();
+        },
+        undefined,
+        undefined,
+        () => "effect-unknown",
+      ),
+    ).rejects.toMatchObject({ kind: "UNAVAILABLE" });
+    expect(writes).toBeGreaterThan(1);
+    expect(service.health()).toMatchObject({ state: "degraded", pendingRecoveryMarkers: 1 });
+    fail.now = false;
+    await service.appendFromCaller(shellContext(), {
+      action: "support.bundle.export",
+      target: { kind: "support-bundle", id: "bundle_after_unknown" },
+      phase: "attempt",
+      operationId: "op_after_unknown",
+    });
+    expect(service.health()).toMatchObject({ state: "healthy", pendingRecoveryMarkers: 0 });
+    await service.close();
+    expect(await records(service.root)).toContainEqual(
+      expect.objectContaining({
+        action: "audit.outcome.recovery",
+        reasonCode: "EFFECT_UNKNOWN",
+        attrs: expect.objectContaining({
+          originalAction: "tools.object_act",
+          intendedOutcome: "unknown",
+          effectResolution: "unknown",
+        }),
+      }),
     );
   });
 });

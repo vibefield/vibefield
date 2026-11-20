@@ -32,6 +32,7 @@ import {
   type DeskDeps,
   type DeskVerbName,
   type DeskVerbs,
+  deskFailure,
   isDeskVerb,
   runDesk,
 } from "./rooms/desk/verbs";
@@ -78,6 +79,9 @@ export interface ToolPlaneAudit {
       outcome?: "succeeded" | "failed" | "denied";
       attrs?: Record<string, string | number | boolean>;
     },
+    rollbackOnOutcomeFailure?: undefined,
+    /** item 559, 2026-11-18: how a throw resolves in the trail (LOG-45); absent, `failed` */
+    resolveFailure?: (error: unknown) => "failed" | "effect-unknown",
   ): Promise<T>;
 }
 
@@ -473,6 +477,9 @@ export class ToolPlaneService {
           const item = itemOf(value);
           return { outcome: "succeeded", ...(item !== undefined ? { attrs: { item } } : {}) };
         },
+        undefined,
+        // item 559, 2026-11-18: a desk act its window never answered is an unknown effect, never a failure
+        (error) => (isDeskVerb(name) ? deskFailure(name, error) : "failed"),
       );
       return { structured: out, text: JSON.stringify(out) };
     } catch (err) {
