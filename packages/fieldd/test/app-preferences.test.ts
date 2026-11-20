@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_APP_PREFERENCES,
   effectiveAppPreferences,
+  readDeskLight,
   resolveSyncIntent,
 } from "../src/app-preferences";
 
@@ -45,6 +46,33 @@ describe("app preferences", () => {
     expect(effectiveAppPreferences({}).sounds).toBe(true);
     expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SOUNDS]: false }).sounds).toBe(false);
     expect(effectiveAppPreferences({ [APP_PREFERENCE_KEYS.SOUNDS]: "off" }).sounds).toBe(true);
+  });
+
+  it("carries the desk's light only as the rows the person set, read row by row (583)", () => {
+    const read = (value: unknown) =>
+      effectiveAppPreferences({ [APP_PREFERENCE_KEYS.DESK_LIGHT]: value });
+    // nothing set, cleared, or not the light's shape: the key is absent, and the desk wears every row at its rest
+    for (const none of [undefined, null, true, 3, "monstera", [], {}, { plant: "oak" }]) {
+      expect("deskLight" in read(none), JSON.stringify(none)).toBe(false);
+    }
+    expect(read({ plant: "fan-palm", mirror: true, softness: 1.5 }).deskLight).toEqual({
+      plant: "fan-palm",
+      mirror: true,
+      softness: 1.5,
+    });
+    // a row this build cannot read is dropped and the others stand; a number past its range is held to the end
+    expect(
+      readDeskLight({
+        plant: "oak",
+        mirror: "yes",
+        softness: 9,
+        shade: 0.1,
+        tint: "blue",
+        wind: 0,
+        later: 1,
+      }),
+    ).toEqual({ softness: 2, shade: 0.55, wind: 0 });
+    expect(readDeskLight({ size: Number.NaN, wind: Number.POSITIVE_INFINITY })).toBeUndefined();
   });
 
   it("is quiet only until a moment it was given, and a cleared or unreadable Quiet is no Quiet (SD-D22)", () => {

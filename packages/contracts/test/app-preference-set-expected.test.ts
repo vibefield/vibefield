@@ -46,6 +46,12 @@ describe("the preferences setter's refusal (item 436)", () => {
       } else if (kind === MeshSyncPosture.options.join("|")) {
         for (const posture of MeshSyncPosture.options) expect(takes(key, posture)).toBe(true);
         expect(takes(key, true)).toBe(false);
+      } else if (kind === "the light's rows or null") {
+        expect([takes(key, { mirror: true }), takes(key, null), takes(key, true)]).toEqual([
+          true,
+          true,
+          false,
+        ]);
       } else {
         expect(kind).toBe("epoch ms or null");
         expect([takes(key, 0), takes(key, null), takes(key, true)]).toEqual([true, true, false]);

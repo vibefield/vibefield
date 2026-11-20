@@ -323,7 +323,7 @@ describe("the rim — the cover's tint over the mat's ground (plan addendum (69)
     );
     const night = "color(srgb 0.109804 0.109804 0.109804 / 0.72)";
     const nightRing = `${COVERS.ground.dark} 0px 0px 0px 22px`;
-    const nightMat = over([28, 28, 28], 0.72, [49, 60, 64]);
+    const nightMat = over([28, 28, 28], 0.72, [52, 69, 72]);
     expect(judgeRim({ ring: nightRing, pixel: nightMat, tint: night }, "dark")).toEqual([]);
     expect(
       judgeRim(

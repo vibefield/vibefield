@@ -13,9 +13,9 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { DESK_FACE_URLS, deskPlates, deskText, samplePrint } from "../src/field/desk/desk-assets";
+import { DESK_FACE_URLS, deskPlate, deskText, samplePrint } from "../src/field/desk/desk-assets";
 import { DESK_FACE_FILES, DESK_FACES_FOLDER } from "../src/field/desk/desk-faces";
-import { PLATE_BYTES, PLATE_SHA256 } from "../src/field/desk/desk-plates";
+import { type DeskPlant, PLANT_PLATES, PLATE_BYTES } from "../src/field/desk/desk-plates";
 
 const sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
   [...new Uint8Array(await crypto.subtle.digest("SHA-256", bytes))]
@@ -76,12 +76,31 @@ afterAll(() => {
 });
 
 describe("the desk's assets under a policy that forbids connect-src", () => {
-  it("inflates the generated plates from their bundled module — ICE's bytes, no request", async () => {
-    const plates = await deskPlates();
-    expect(plates.c.length).toBe(PLATE_BYTES);
-    expect(plates.b.length).toBe(PLATE_BYTES);
-    expect(await sha256(plates.c)).toBe(PLATE_SHA256.c);
-    expect(await sha256(plates.b)).toBe(PLATE_SHA256.b);
+  it("inflates every plant's plate from its own bundled module — the pinned bytes, no request", async () => {
+    const plants = Object.keys(PLANT_PLATES) as DeskPlant[];
+    expect(plants).toEqual([
+      "monstera",
+      "climbing-monstera",
+      "fan-palm",
+      "coconut-palm",
+      "under-the-palm",
+      "palm",
+      "canopy",
+    ]);
+    for (const plant of plants) {
+      const bytes = await deskPlate(plant);
+      expect(bytes.length, plant).toBe(PLATE_BYTES);
+      expect(await sha256(bytes), plant).toBe(PLANT_PLATES[plant].sha256);
+    }
+    // the two grown plates are ICE's generated ones still: the sums the desk shipped with (DK-3)
+    expect(PLANT_PLATES.palm.sha256).toBe(
+      "d61fdb9f49009c32d008ddd01e34d3317dd2883d1fd723401cf6cb1c938320c5",
+    );
+    expect(PLANT_PLATES.canopy.sha256).toBe(
+      "4e4f5563646845fddaad3d62f595bdf8fccc4eb4d13abccbeb430bf4daaae482",
+    );
+    // a plant asked for twice is one load: the same bytes, inflated once
+    expect(await deskPlate("palm")).toBe(await deskPlate("palm"));
     expect(refused).toEqual([]);
   });
 

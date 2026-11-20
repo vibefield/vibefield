@@ -624,8 +624,9 @@ describe("UI system ownership boundaries", () => {
     expect(block).toContain(
       `--vf-history-fade-glass: color-mix(in srgb, var(--vf-chrome-solid) ${cover}%, var(--vf-mat-ground));`,
     );
-    // And that colour is the glass DESIGN.md measured under History, each channel within one:
-    // (201, 209, 198) by day and (33, 37, 39) by night (§8 "The covers over the desk", the rim).
+    // And that colour is the glass DESIGN.md states under History (§8 "The covers over the
+    // desk", the rim): by day measured, (201, 209, 198), each channel within one; by night, since
+    // item 583's ground (2026-11-20), the (35, 39, 42) the tokens compute, not yet measured.
     const tokens = readFileSync(join(PACKAGE_ROOT, "../design-kit/src/tokens.css"), "utf8");
     const share = Number(cover) / 100;
     const glassOverMat = (theme: ":root" | ".dark"): number[] => {
@@ -635,7 +636,7 @@ describe("UI system ownership boundaries", () => {
       return [mix(0), mix(1), mix(2)];
     };
     expect(glassOverMat(":root")).toEqual([201, 209, 197]);
-    expect(glassOverMat(".dark")).toEqual([34, 37, 40]);
+    expect(glassOverMat(".dark")).toEqual([35, 39, 42]);
 
     // Its strength, head to foot: [percent of that colour, px under the head's hairline].
     const stop =

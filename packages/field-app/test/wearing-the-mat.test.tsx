@@ -66,8 +66,8 @@ const FAILED: BootView = {
 
 describe("the mat in CSS — the kit's tokens", () => {
   it("lights its lattice in the mat's own cream: the Sun's by day, the Moon's by night (MAT.md §4)", () => {
-    expect(declared("--vf-mat-ground")).toEqual(["#3d5a30", "#313c40"]);
-    expect(declared("--vf-mat-line")).toEqual(["#ceb783", "#4c5254"]);
+    expect(declared("--vf-mat-ground")).toEqual(["#3d5a30", "#344548"]);
+    expect(declared("--vf-mat-line")).toEqual(["#ceb783", "#7c7e76"]);
   });
 
   it("draws the lattice at the line law's presences — thick 21 % every 100 px, thin 7 % every 25", () => {
@@ -92,7 +92,7 @@ describe("the mat in CSS — the kit's tokens", () => {
     const over = (ground: number[]): number[] => ground.map((g) => 255 * 0.6 + g * 0.4);
     for (const ground of [
       [61, 90, 48],
-      [49, 60, 64],
+      [52, 69, 72],
     ]) {
       const ratio = (lum(over(ground)) + 0.05) / (lum(ground) + 0.05);
       expect(ratio).toBeGreaterThanOrEqual(3.94);

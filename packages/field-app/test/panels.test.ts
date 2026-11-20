@@ -130,7 +130,17 @@ describe("widgetlab panels", () => {
     expect(container?.querySelector('fieldset[aria-label="Magnet glyph"]')).toBeNull();
     expect(container?.textContent).not.toContain("All card opacity");
     expect(container?.textContent).toContain("Zoom range");
-    expect(container?.textContent).toContain("Card behavior");
+    // item 583: the desk's light leads the page,
+    // and the section that called objects cards is "Objects"
+    expect(container?.textContent).toContain("Reset light");
+    expect(container?.textContent).toContain("Snap objects");
+    expect(container?.textContent).not.toContain("Card behavior");
+    // the page's own line under its title names its three sections,
+    // and nothing on the page calls an object a card
+    expect(container?.textContent).toContain(
+      "The desk's light, navigation, and how objects line up.",
+    );
+    expect(container?.textContent?.toLowerCase()).not.toContain("card behavior");
     expect(container?.textContent).toContain("Snap range");
     const numberInputs = container?.querySelectorAll('input[type="number"]');
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);

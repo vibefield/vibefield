@@ -1,0 +1,17 @@
+{
+  "showTray": true,
+  "backgroundShell": true,
+  "screenshotHotkey": true,
+  "syncPosture": "automatic",
+  "confirmQuit": true,
+  "connectAsks": true,
+  "keepRunningOnQuit": false,
+  "sounds": true,
+  "communityPlugins": false,
+  "deskLight": {
+    "plant": "fan-palm",
+    "mirror": true,
+    "softness": 1.5,
+    "wind": 0
+  }
+}

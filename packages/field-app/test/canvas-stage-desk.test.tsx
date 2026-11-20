@@ -6,7 +6,8 @@
  * it is handed and calls `onReady`, undoing it at unmount; the layer's handle has a status the test
  * moves — and holds what the STAGE does with them:
  *   the THEME BRIDGE — the layer made in the owner's theme (the first frame painted in it, no
- *     flash) and re-dressed by `setTheme(deskTheme, deskPalette)` on every change, only a change;
+ *     flash) and re-dressed by `setTheme` with `deskLook`'s theme and palette on every
+ *     change, only a change (item 583, 2026-11-20: the dark look carries the gentler night);
  *   DESK_READY — said once the layer is ready AND its first frame presented, after CANVAS_READY;
  *   `failed` — the unavailable card in ICE's words, Reload a REMOUNT (a new layer on this engine),
  *     none where reloading won't help; `degraded` — the status line's banner and its Reload;
@@ -18,7 +19,6 @@
  * The real `<Desk>` with no GPU at all is `smoke:canvas --disable-gpu`'s (the card, nothing crashed).
  */
 import type { DeskLayerOptions, DeskLayerStatus } from "@vibecook/ice/desk";
-import { deskPalette, deskTheme } from "@vibecook/ice/desk/objects";
 import { act, createElement, type ReactElement, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -78,6 +78,7 @@ function fakeHandle(opts: DeskLayerOptions): FakeHandle & Record<string, unknown
     setGlyphs: vi.fn(),
     setPlate: vi.fn(),
     setAmbient: vi.fn(),
+    configureMat: vi.fn(),
     gpuMemory: () => undefined,
     pick: () => null,
     capture: async () => undefined,
@@ -143,6 +144,7 @@ const { getStatusNotice, resetStatusLineForTest, STATUS_STAND_MS, statusLineSaid
 );
 const { resetAppThemeForTest, setAppTheme } = await import("../src/theme");
 const { BEFORE_THE_DESK, DEGRADED_SENTENCE } = await import("../src/field/desk/desk-words");
+const { deskLook } = await import("../src/field/desk/desk-layer");
 const { DEVICE_RETRY_MS, HEAL_DELAYS_MS, REFUSE_DEVICE, REFUSE_FIRST_DEVICE } = await import(
   "../src/field/desk/desk-gpu"
 );
@@ -253,12 +255,13 @@ describe("the Canvas stage mounts the desk", () => {
     await act(async () => setAppTheme("light"));
     await mountStage();
     expect(layers).toHaveLength(1);
-    expect(current().opts.theme).toEqual(deskTheme("light"));
-    expect(current().opts.palette).toEqual(deskPalette("light"));
+    expect(current().opts.theme).toEqual(deskLook("light").theme);
+    expect(current().opts.palette).toEqual(deskLook("light").palette);
     expect(current().setTheme).not.toHaveBeenCalled(); // the first frame is already in it
     await act(async () => setAppTheme("dark"));
     expect(current().setTheme).toHaveBeenCalledTimes(1);
-    expect(current().setTheme).toHaveBeenLastCalledWith(deskTheme("dark"), deskPalette("dark"));
+    const dark = deskLook("dark");
+    expect(current().setTheme).toHaveBeenLastCalledWith(dark.theme, dark.palette);
     await act(async () => setAppTheme("dark"));
     expect(current().setTheme).toHaveBeenCalledTimes(1);
     expect((globalThis as { __vfDesk?: { theme(): string } }).__vfDesk?.theme()).toBe("dark");
@@ -267,8 +270,8 @@ describe("the Canvas stage mounts the desk", () => {
   it("paints the first frame in the owner's state whatever it is — a dark owner, a dark layer", async () => {
     await act(async () => setAppTheme("dark"));
     await mountStage();
-    expect(current().opts.theme).toEqual(deskTheme("dark"));
-    expect(current().opts.palette).toEqual(deskPalette("dark"));
+    expect(current().opts.theme).toEqual(deskLook("dark").theme);
+    expect(current().opts.palette).toEqual(deskLook("dark").palette);
     expect(current().setTheme).not.toHaveBeenCalled();
   });
 
