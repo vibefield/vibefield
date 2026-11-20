@@ -1,4 +1,5 @@
 import type {
+  ObjectAtWorkProject,
   ObjectGrant,
   ObjectGrantRow,
   ObjectIntent,
@@ -10,7 +11,7 @@ import { IntentUndoValue, OBJECT_ROOM } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
 import { DeskIntents, type DeskIntentsOptions } from "./intents";
 import { type DeskKind, deskKinds } from "./kinds";
-import { type AtWorkAgent, ObjectPresenceBoard } from "./presence";
+import { type AtWorkAgent, type AtWorkFacts, ObjectPresenceBoard } from "./presence";
 import { ObjectsRegistry } from "./registry";
 import type { ObjectsStore } from "./store";
 import { AgentUndoShelf, type KeptChange } from "./undo";
@@ -62,6 +63,12 @@ export interface DeskObjectsOptions {
   sparkName(id: string): string | undefined;
   /** the agent a run is, by its catalog id */
   agentOf(run: string): string;
+  /** Item 550 (2026-11-18) — the project the run works in, by the ids this desktop deals it; undefined while none is
+   * known */
+  projectOf?(run: string): ObjectAtWorkProject | undefined;
+  /** Item 550 (2026-11-18) — the spark this fieldd started the run for, from its own memory of that spawn and never
+   * from a record; undefined for a run it did not start so, or started before it restarted */
+  startedByOf?(run: string): string | undefined;
   /** the kinds table (OB-2); the one seam */
   readonly kinds?: () => readonly DeskKind[];
   readonly intents?: DeskIntentsOptions;
@@ -112,6 +119,7 @@ export class DeskObjects {
     });
     this.intents = new DeskIntents(opts.intents);
     this.presence = new ObjectPresenceBoard({
+      facts: (run) => this.facts(run),
       keyOf: (run) => this.holder(run),
       locate: (ref) => {
         const record = this.registry.get(ref);
@@ -140,6 +148,21 @@ export class DeskObjects {
 
   who(run: string): AtWorkAgent {
     return { run, handle: this.opts.label(run), agent: this.opts.agentOf(run) };
+  }
+
+  /** Item 550 (2026-11-18) — how the desk shows a run now. Its spark is what THIS fieldd launched it as (`bornFor`),
+   * never its record's word: a record an agent can rewrite must not dress its run as a spark's. */
+  facts(run: string): AtWorkFacts {
+    const project = this.opts.projectOf?.(run);
+    const spark = this.opts.bornFor(run)?.spark;
+    const startedBy = this.opts.startedByOf?.(run);
+    return {
+      handle: this.opts.label(run),
+      agent: this.opts.agentOf(run),
+      ...(project !== undefined ? { project } : {}),
+      ...(spark !== undefined ? { spark } : {}),
+      ...(startedBy !== undefined ? { startedBy } : {}),
+    };
   }
 
   /** A window takes a board's intents. When it stops, nobody's hand can be on that board any more. */
@@ -397,7 +420,7 @@ export class DeskObjects {
     for (const ref of ended?.on ?? []) {
       this.presence.forget(ref, old);
       if (this.grantOf(ref, next) === undefined) continue;
-      this.presence.opened(ref, this.who(next));
+      this.presence.opened(ref, next);
       this.offerOn(ref, next);
     }
   }

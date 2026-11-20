@@ -2,6 +2,9 @@
 // OB-3c (§5.5, CP-D13) — the window's applier, on a real engine and a real document with no device. It proves the world's
 // half of the frozen-desk answer: under a held freeze a place commits, projects and answers real, with no frame stepped.
 // What a real window must still prove is the desk's half (see the head of applier.ts).
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { Entity } from "@vibecook/ice";
 import {
   Camera,
@@ -622,6 +625,33 @@ describe("following the desk: the door", () => {
       { docId: "doc-1", key, held: true },
       { docId: "doc-1", key, held: false },
     ]);
+    stop();
+    unpublish();
+  });
+
+  it("reads the feed as fieldd's fixture carries it, a run's ids and all (item 550): the hand is reported on its object", async () => {
+    const { desk, ce, place } = mount();
+    const { key, entity } = place();
+    const unpublish = publishDesk(desk);
+    const wire = door();
+    const stop = followDeskAgent(wire.value, { handOn: (e) => e === entity });
+    await settle();
+    const fixture = JSON.parse(
+      readFileSync(
+        join(
+          dirname(fileURLToPath(import.meta.url)),
+          "../../contracts/fixtures/objects-presence.valid.json",
+        ),
+        "utf8",
+      ),
+    ) as { objects: Record<string, unknown>[] };
+    wire.presence({
+      objects: fixture.objects.map((object) => ({ ...object, docId: "doc-1", key })),
+    });
+    ce.step(20);
+    ce.step(36);
+    ce.step(52);
+    expect(wire.held).toEqual([{ docId: "doc-1", key, held: true }]);
     stop();
     unpublish();
   });

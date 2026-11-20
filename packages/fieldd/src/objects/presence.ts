@@ -1,6 +1,7 @@
 import type {
   AtWorkState,
   ObjectAtWork,
+  ObjectAtWorkProject,
   ObjectPresence,
   ObjectRef,
   ObjectsPresenceSnapshot,
@@ -12,15 +13,34 @@ import { OBJECT_ROOM } from "@vibefield/contracts";
 // flight when its answer arrives. The person's hand wins (OB-L5): while an object is held, every agent on it reads
 // `paused`, and it comes back as whatever it really is when the hand lifts. A `one` kind has a holder and waiters
 // (OB-D9): the holder is the run acting on it, and a holder's lease ends with its release, its grant or its run.
+//
+// Item 550 (2026-11-18) — what the desk shows of a run (its name, its agent, its project's ids, its spark, the spark
+// that started it) is the run's NOW, never what it was when it first came onto the object: it is read at each act and
+// at every `refresh`, and the feed hears of it only when something it carries changed.
 
-/** The run an act is by, as the desk shows it. */
+/** The run an act is by, as the desk names it. */
 export interface AtWorkAgent {
   readonly run: string;
   readonly handle: string;
   readonly agent: string;
 }
 
-interface Row extends AtWorkAgent {
+/** Item 550 (2026-11-18) — what the desk shows of a run: ids and words, never a look. */
+export interface AtWorkFacts {
+  readonly handle: string;
+  /** the agent's catalog id */
+  readonly agent: string;
+  readonly project?: ObjectAtWorkProject;
+  /** the run is this spark's own session */
+  readonly spark?: string;
+  /** a spark started this run */
+  readonly startedBy?: string;
+}
+
+interface Row {
+  readonly run: string;
+  /** what the desk shows of the run, as last read: a released row keeps its words while it is seen leaving */
+  facts: AtWorkFacts;
   /** what the agent is really doing, beneath a hold */
   real: AtWorkState;
   state: AtWorkState;
@@ -40,6 +60,8 @@ interface Board {
 export interface PresenceOptions {
   /** where an object stands, for the frame */
   locate(ref: ObjectRef): { docId: string; key: string } | undefined;
+  /** how the desk shows a run now (item 550, 2026-11-18) */
+  facts(run: string): AtWorkFacts;
   /** who a run's lease belongs to: a spark's stays the spark's across its runs */
   keyOf?(run: string): string;
   readonly now?: () => number;
@@ -83,12 +105,36 @@ export class ObjectPresenceBoard {
     return { objects };
   }
 
-  /** Who a caller sees on an object: everyone not yet gone. */
+  /** Who a caller sees on an object: everyone not yet gone, by handle and state and nothing more (an agent is never
+   * told a run's project, its spark or who started it). */
   agentsOn(ref: ObjectRef): { handle: string; state: AtWorkState }[] {
     const rows = this.#boards.get(ref)?.rows.values() ?? [];
     return [...rows]
       .filter((row) => row.real !== "released")
-      .map(({ handle, state }) => ({ handle, state }));
+      .map(({ facts, state }) => ({ handle: facts.handle, state }));
+  }
+
+  /** Item 550 (2026-11-18) — something the desk shows of a run may have moved (its title, its project's ids, who
+   * started it): each run on the board is read again, and the feed is told only when something it carries changed. A
+   * released row keeps its words. */
+  refresh(): void {
+    if (this.#boards.size === 0) return;
+    const read = new Map<string, AtWorkFacts>();
+    let moved = false;
+    for (const board of this.#boards.values()) {
+      for (const row of board.rows.values()) {
+        if (row.real === "released") continue;
+        let facts = read.get(row.run);
+        if (facts === undefined) {
+          facts = this.opts.facts(row.run);
+          read.set(row.run, facts);
+        }
+        if (sameFacts(row.facts, facts)) continue;
+        row.facts = facts;
+        moved = true;
+      }
+    }
+    if (moved) this.#changed();
   }
 
   /** The objects a run is on now and has not released. */
@@ -118,20 +164,20 @@ export class ObjectPresenceBoard {
   }
 
   /** The agent now has the object open, or is otherwise on it. */
-  opened(ref: ObjectRef, agent: AtWorkAgent): void {
-    this.#set(ref, agent, "open");
+  opened(ref: ObjectRef, run: string): void {
+    this.#set(ref, run, "open");
   }
 
   /** An operation starts: `reading` or `acting`, until its answer arrives. */
-  begin(ref: ObjectRef, agent: AtWorkAgent, state: "reading" | "acting"): void {
-    this.#set(ref, agent, state);
+  begin(ref: ObjectRef, run: string, state: "reading" | "acting"): void {
+    this.#set(ref, run, state);
   }
 
   /** An operation's answer arrived. A row that has left since it began stays left: a late answer revives nothing. */
-  settle(ref: ObjectRef, agent: AtWorkAgent, state: "open" | "failed" | "needs-you"): void {
-    const row = this.#boards.get(ref)?.rows.get(agent.run);
+  settle(ref: ObjectRef, run: string, state: "open" | "failed" | "needs-you"): void {
+    const row = this.#boards.get(ref)?.rows.get(run);
     if (row === undefined || row.real === "released") return;
-    this.#set(ref, agent, state);
+    this.#set(ref, run, state);
   }
 
   /** The agent stopped working on the object, or was stopped: it stays visible long enough to be seen leaving. */
@@ -242,18 +288,21 @@ export class ObjectPresenceBoard {
     for (const ref of [...this.#boards.keys()]) this.released(ref, run);
   }
 
-  #set(ref: ObjectRef, agent: AtWorkAgent, state: AtWorkState): void {
+  #set(ref: ObjectRef, run: string, state: AtWorkState): void {
     const board = this.#board(ref);
     const shown: AtWorkState = board.held ? "paused" : state;
-    const row = board.rows.get(agent.run);
+    const row = board.rows.get(run);
+    const facts = this.opts.facts(run);
     if (row === undefined) {
-      board.rows.set(agent.run, { ...agent, real: state, state: shown, since: this.#now() });
+      board.rows.set(run, { run, facts, real: state, state: shown, since: this.#now() });
     } else {
       if (row.leaving !== undefined) {
         clearTimeout(row.leaving);
         delete row.leaving;
       }
-      if (row.real === state && row.state === shown) return;
+      const moved = !sameFacts(row.facts, facts);
+      if (moved) row.facts = facts;
+      if (row.real === state && row.state === shown && !moved) return;
       row.real = state;
       if (row.state !== shown) row.since = this.#now();
       row.state = shown;
@@ -304,11 +353,23 @@ const removeFrom = (list: string[], value: string): void => {
   if (at >= 0) list.splice(at, 1);
 };
 
-const atWork = (row: Row): ObjectAtWork => ({
-  run: row.run,
-  handle: row.handle,
-  agent: row.agent,
-  state: row.state,
-  since: row.since,
-  ...(row.lastChange !== undefined ? { lastChange: { label: row.lastChange } } : {}),
+const sameFacts = (a: AtWorkFacts, b: AtWorkFacts): boolean =>
+  a.handle === b.handle &&
+  a.agent === b.agent &&
+  a.spark === b.spark &&
+  a.startedBy === b.startedBy &&
+  a.project?.name === b.project?.name &&
+  a.project?.seq === b.project?.seq &&
+  a.project?.ink === b.project?.ink;
+
+const atWork = ({ run, facts, state, since, lastChange }: Row): ObjectAtWork => ({
+  run,
+  handle: facts.handle,
+  agent: facts.agent,
+  state,
+  since,
+  ...(lastChange !== undefined ? { lastChange: { label: lastChange } } : {}),
+  ...(facts.project !== undefined ? { project: { ...facts.project } } : {}),
+  ...(facts.spark !== undefined ? { spark: facts.spark } : {}),
+  ...(facts.startedBy !== undefined ? { startedBy: facts.startedBy } : {}),
 });

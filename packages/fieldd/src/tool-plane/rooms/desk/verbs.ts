@@ -261,20 +261,20 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
     state: "reading" | "acting",
     work: () => Promise<T>,
   ): Promise<T> => {
-    presence.begin(ref, agent, state);
+    presence.begin(ref, agent.run, state);
     objects.offerOn(ref, agent.run);
     try {
       const out = await work();
-      presence.settle(ref, agent, "open");
+      presence.settle(ref, agent.run, "open");
       return out;
     } catch (err) {
       const fact =
         err instanceof RpcCallError ? (err.details as { fact?: unknown })?.fact : undefined;
       if (fact === "gone") presence.drop(ref);
-      else if (fact === "needs-you") presence.settle(ref, agent, "needs-you");
+      else if (fact === "needs-you") presence.settle(ref, agent.run, "needs-you");
       else if (fact === "held" || (err as RpcCallError).kind === "UNAVAILABLE")
-        presence.settle(ref, agent, "open");
-      else presence.settle(ref, agent, "failed");
+        presence.settle(ref, agent.run, "open");
+      else presence.settle(ref, agent.run, "failed");
       throw err;
     }
   };
@@ -373,7 +373,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
         });
       const ref = registry.refFor(docId, value.key, input.kind);
       objects.grant(ref, run, "placed");
-      if (objects.runLive(run)) presence.opened(ref, agent);
+      if (objects.runLive(run)) presence.opened(ref, agent.run);
       if (answered.inverse !== undefined)
         objects.keepChange(docId, {
           op: "place",
@@ -442,7 +442,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       // the person may have taken it back while the window answered: what it holds is not this agent's now
       if (objects.grantOf(input.ref, run) === undefined) throw notHanded(input.ref);
       if (objects.runLive(run)) {
-        presence.opened(input.ref, agent);
+        presence.opened(input.ref, agent.run);
         objects.offerOn(input.ref, run);
       }
       return manualOf({

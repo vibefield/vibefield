@@ -67,6 +67,7 @@ import {
   LAYOUT,
   NeedsAnswerResult,
   NeedsListResult,
+  ObjectsPresenceSnapshot,
   type PlaceFacts,
   RECORD_STORES,
   SOCKETS,
@@ -7673,6 +7674,20 @@ describe("OB custody §8.1 — launch memory, and the floor is told what each te
     expect(listed.grants).toHaveLength(2);
     expect(holderOf(forPlain)).toBe(plainRun);
     expect(holderOf(forSpark)).toBe(`spark:${s.spark.id}`);
+
+    // item 550, 2026-11-18 — what the window's feed shows of each run is daemon.ts's own read: the agent's catalog id
+    // from the run's row (`kind`; this read `provider`, which no row has, so every run said "agent"), and a spark from
+    // what this fieldd launched the run as
+    box.daemon.desk.presence.opened(forPlain, plainRun);
+    box.daemon.desk.presence.opened(forSpark, s.runId);
+    const shown = ObjectsPresenceSnapshot.parse(
+      box.daemon.desk.presence.snapshot(),
+    ).objects.flatMap((object) => object.agents);
+    const plainShown = shown.find((agent) => agent.run === plainRun);
+    const sparkShown = shown.find((agent) => agent.run === s.runId);
+    expect([plainShown?.agent, sparkShown?.agent]).toEqual(["scripted", "scripted"]);
+    expect(plainShown?.spark).toBeUndefined();
+    expect(sparkShown?.spark).toBe(s.spark.id);
 
     // nothing vouches for a run this process never launched: it is handed nothing, in words VibeField already had
     const nobody = { ref: forPlain, run: "run-nobody-launched" };

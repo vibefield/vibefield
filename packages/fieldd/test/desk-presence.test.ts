@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { ObjectIntent } from "@vibefield/contracts";
 import { OBJECT_LIMITS, ObjectsPresenceSnapshot } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -357,5 +360,158 @@ describe("the feed (`objects.presence.subscribe`)", () => {
     expect(ObjectsPresenceSnapshot.safeParse(snap).success).toBe(true);
     expect(snap.objects[0]).toMatchObject({ ref, docId: DOC, key: "k1" });
     off();
+  });
+});
+
+// Item 550 (2026-11-18) — what the desk shows of a run is the run's NOW: its name, its agent's catalog id, its
+// project's ids, its spark and the spark that started it, read at each act and at every refresh. The window's feed
+// carries them; an agent is told only a handle and a state.
+describe("what the desk shows of a run (item 550)", () => {
+  const SPARK = "sp-7k2m9q4x";
+
+  it("reads a run's name and project again at a refresh, and tells the feed only of a change", async () => {
+    const h = world();
+    const { verbs } = room(h);
+    const ref = handed(h);
+    await verbs.object_open(A, { ref });
+    expect(statesOn(h, ref)?.[0]?.project).toBeUndefined();
+    let frames = 0;
+    const off = h.desk.presence.onChange(() => {
+      frames += 1;
+    });
+    h.desk.presence.refresh();
+    expect(frames).toBe(0);
+    // the deal reaches the run after it came onto the object: the next refresh carries it
+    h.projects.set("run-a", { name: "vibe-field", seq: 2 });
+    h.desk.presence.refresh();
+    expect(frames).toBe(1);
+    expect(statesOn(h, ref)?.[0]).toMatchObject({ project: { name: "vibe-field", seq: 2 } });
+    // the run's title lands: its handle follows, where it used to keep the name it first came with
+    h.labels.set("run-a", "Q3 plan");
+    h.desk.presence.refresh();
+    expect(frames).toBe(2);
+    expect(statesOn(h, ref)?.[0]?.handle).toBe("Q3 plan");
+    h.desk.presence.refresh();
+    expect(frames).toBe(2);
+    off();
+  });
+
+  it("reads them again at each act, as well", async () => {
+    const h = world();
+    const { verbs } = room(h);
+    const ref = handed(h);
+    await verbs.object_open(A, { ref });
+    h.projects.set("run-a", { ink: 5 });
+    await verbs.object_read(A, { ref, tool: "read_text" });
+    expect(statesOn(h, ref)?.[0]).toMatchObject({ state: "open", project: { ink: 5 } });
+  });
+
+  it("keeps a released run's words, as a refresh last read them, while it is seen leaving", async () => {
+    vi.useFakeTimers();
+    const h = world({ releasedShownMs: 1_000 });
+    const { verbs } = room(h);
+    const ref = handed(h);
+    await verbs.object_open(A, { ref });
+    h.labels.set("run-a", "Q3 plan");
+    h.desk.presence.refresh();
+    await verbs.object_release(A, { ref });
+    h.labels.set("run-a", "Something later");
+    h.desk.presence.refresh();
+    expect(statesOn(h, ref)?.[0]).toMatchObject({ state: "released", handle: "Q3 plan" });
+  });
+
+  it("names a spark's own run's spark from what fieldd launched it as, never from its record", async () => {
+    const h = world();
+    h.runs.set("run-s", "live");
+    h.sparkRuns.set("run-s", SPARK);
+    const { verbs } = room(h);
+    const ref = handed(h, "k1", ["run-s", "run-b"]);
+    // a plain run's record rewritten to say it is the spark's: it verifies, and the desk reads none of it
+    expect("body" in h.forgeRecord("run-b", SPARK)).toBe(true);
+    await verbs.object_open({ runtimeRunId: "run-s" }, { ref });
+    await verbs.object_open(B, { ref });
+    const [own, plain] = statesOn(h, ref) ?? [];
+    expect(own).toMatchObject({ run: "run-s", spark: SPARK });
+    expect(plain?.run).toBe("run-b");
+    expect(plain?.spark).toBeUndefined();
+    expect(plain?.startedBy).toBeUndefined();
+  });
+
+  it("says which spark started a run as fieldd started it, and so of the run a resume continues it in", async () => {
+    vi.useFakeTimers();
+    const h = world({ releasedShownMs: 1_000 });
+    const { verbs } = room(h);
+    const ref = handed(h, "k1", ["run-b"]);
+    h.starts.started("run-b", SPARK);
+    await verbs.object_open(B, { ref });
+    expect(statesOn(h, ref)?.[0]).toMatchObject({ run: "run-b", startedBy: SPARK });
+    expect(statesOn(h, ref)?.[0]?.spark).toBeUndefined();
+    // the resume, in daemon.ts's order: the memory is handed on, then the desk shows the successor
+    h.runs.set("run-b", "ended");
+    h.desk.runEnded("run-b");
+    h.runs.set("run-c", "live");
+    h.starts.replaced("run-b", "run-c");
+    h.desk.runReplaced("run-b", "run-c");
+    expect(statesOn(h, ref)?.find((row) => row.run === "run-c")).toMatchObject({
+      startedBy: SPARK,
+    });
+    // a run this fieldd did not start for a spark is said to be started by none
+    expect(h.starts.of("run-a")).toBeUndefined();
+  });
+
+  it("tells an agent who is on an object by handle and state alone, whatever the window is shown", async () => {
+    const h = world();
+    h.runs.set("run-s", "live");
+    h.sparkRuns.set("run-s", SPARK);
+    h.starts.started("run-b", SPARK);
+    h.projects.set("run-s", { name: "vibe-field", seq: 2, ink: 5 });
+    h.projects.set("run-b", { name: "vibe-field" });
+    const { verbs } = room(h);
+    const ref = handed(h, "k1", ["run-s", "run-b"]);
+    await verbs.object_open({ runtimeRunId: "run-s" }, { ref });
+    const manual = (await verbs.object_open(B, { ref })) as {
+      object: { agents: Record<string, unknown>[] };
+    };
+    expect(manual.object.agents).toEqual([
+      { handle: "claude·s", state: "open" },
+      { handle: "claude·b", state: "open" },
+    ]);
+    const listed = (await verbs.canvas_list(B, {})) as { objects: { agents: object[] }[] };
+    for (const agent of listed.objects.flatMap((object) => object.agents))
+      expect(Object.keys(agent).sort()).toEqual(["handle", "state"]);
+    // and the window's feed carries what the agent is not told
+    expect(statesOn(h, ref)?.[0]).toMatchObject({ spark: SPARK, project: { ink: 5 } });
+  });
+
+  it("carries the contract's fixture, field for field", () => {
+    const fixture = JSON.parse(
+      readFileSync(
+        join(
+          dirname(fileURLToPath(import.meta.url)),
+          "../../contracts/fixtures/objects-presence.valid.json",
+        ),
+        "utf8",
+      ),
+    ) as { objects: { ref: string; agents: { run: string; since: number }[] }[] };
+    const [own, crew] = fixture.objects[0]?.agents ?? [];
+    if (own === undefined || crew === undefined) throw new Error("the fixture's two agents");
+    let t = own.since;
+    const h = world({ now: () => t });
+    for (const run of [own.run, crew.run]) h.runs.set(run, "live");
+    h.sparkRuns.set(own.run, SPARK);
+    h.starts.started(crew.run, SPARK);
+    h.labels.set(own.run, "Claude Code in vibe-field");
+    h.labels.set(crew.run, "Codex in vibe-field");
+    h.agentIds.set(crew.run, "codex");
+    h.projects.set(own.run, { name: "vibe-field", seq: 2, ink: 5 });
+    h.projects.set(crew.run, { name: "vibe-field" });
+    const ref = handed(h, "k1", [own.run, crew.run]);
+    h.desk.presence.begin(ref, own.run, "acting");
+    h.desk.presence.setLastChange(ref, own.run, "Added three ideas");
+    t = crew.since;
+    h.desk.presence.begin(ref, crew.run, "reading");
+    const snapshot = ObjectsPresenceSnapshot.parse(h.desk.presence.snapshot());
+    const mine = snapshot.objects.map((object) => ({ ...object, ref: fixture.objects[0]?.ref }));
+    expect({ objects: mine }).toEqual(fixture);
   });
 });

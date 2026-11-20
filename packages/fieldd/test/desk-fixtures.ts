@@ -1,10 +1,16 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ObjectIntent, ObjectIntentAnswer, ObjectRef } from "@vibefield/contracts";
+import type {
+  ObjectAtWorkProject,
+  ObjectIntent,
+  ObjectIntentAnswer,
+  ObjectRef,
+} from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { DeskObjects, type DeskObjectsOptions, type RunState } from "../src/objects/desk-objects";
 import type { DeskKind } from "../src/objects/kinds";
+import { SparkStarts } from "../src/objects/spark-starts";
 import { ObjectsStore } from "../src/objects/store";
 import { RecordSigner, type SignedRead } from "../src/signed-record";
 
@@ -165,6 +171,15 @@ export interface DeskWorld {
   readonly sparks: Map<string, string>;
   /** runs this fieldd did not launch, beside those a `reopen` found already there */
   readonly reattached: Set<string>;
+  /** item 550, 2026-11-18 — what the desk names a run, where a row gives one (else `claude·` and the run's last
+   * letter) */
+  readonly labels: Map<string, string>;
+  /** item 550, 2026-11-18 — the agent a run is, by its catalog id, where a row gives one (else `claude`) */
+  readonly agentIds: Map<string, string>;
+  /** item 550, 2026-11-18 — the project a run works in, by the ids the desktop deals it */
+  readonly projects: Map<string, ObjectAtWorkProject>;
+  /** item 550, 2026-11-18 — which spark fieldd started a run for: daemon.ts's own memory of the talk room's spawn */
+  readonly starts: SparkStarts;
   /** Rewrite a run's session record to say it is `spark`'s, as an agent that reads the sessions' key can (a 0600 file
    * of the same uid): signed with that key, so it verifies. Answers what whoever reads the record back is told. */
   forgeRecord(run: string, spark: string): SignedRead;
@@ -209,6 +224,10 @@ export function world(
   const sparkRuns = new Map<string, string>();
   const sparks = new Map<string, string>();
   const reattached = new Set<string>();
+  const labels = new Map<string, string>();
+  const agentIds = new Map<string, string>();
+  const projects = new Map<string, ObjectAtWorkProject>();
+  const starts = new SparkStarts();
   // The sessions' records, as far as a row needs them: a file per run, signed with a key that is a file too.
   const sessions = () =>
     new RecordSigner({ keyPath: join(root, "sessions.key"), keyEncoding: "base64" });
@@ -240,8 +259,10 @@ export function world(
         ...(opts.noteMs !== undefined ? { noteMs: opts.noteMs } : {}),
       }),
       runState: (run) => runs.get(run) ?? "unknown",
-      label: (run) => `claude·${run.slice(-1)}`,
-      agentOf: () => "claude",
+      label: (run) => labels.get(run) ?? `claude·${run.slice(-1)}`,
+      agentOf: (run) => agentIds.get(run) ?? "claude",
+      projectOf: (run) => projects.get(run),
+      startedByOf: (run) => starts.of(run),
       bornFor: (run) => {
         if (before.has(run) || reattached.has(run)) return undefined;
         const spark = sparkRuns.get(run);
@@ -269,6 +290,10 @@ export function world(
     sparkRuns,
     sparks,
     reattached,
+    labels,
+    agentIds,
+    projects,
+    starts,
     forgeRecord,
     reopen: (over = {}) => make(over),
     refOf: (key, kind) => desk.registry.refFor(DOC, key, kind),

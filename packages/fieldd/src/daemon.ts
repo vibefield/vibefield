@@ -369,6 +369,7 @@ import {
 import { DeskObjects } from "./objects/desk-objects";
 import { boardKnownIn, registerObjectDoors } from "./objects/doors";
 import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
+import { SparkStarts } from "./objects/spark-starts";
 import { ObjectsStore } from "./objects/store";
 import { PeerLink } from "./peer-link";
 import { PluginCatalogService } from "./plugin-catalog";
@@ -908,6 +909,9 @@ export interface FielddDaemon {
   agentScreens: AgentScreens;
   /** PG-3b — the monitor backend beside the runtime, null until it is built; tests read its ledger (`seenAt`). */
   agentMonitor: () => AgentMonitorService | null;
+  /** OB-4, item 550, 2026-11-18 — the desk's state in fieldd; tests read what its presence shows of a run the runtime
+   * launched. */
+  desk: DeskObjects;
   /** C6-6 — the artifact hub (registry over the mesh serve facade). */
   artifacts: ArtifactService;
   plugins: PluginRegistryService;
@@ -3563,15 +3567,15 @@ export async function bootstrap(
      * catalog's, AC-D4) in its folder, the one @ and the board name (folderNameOf its observed cwd), else that label,
      * else its id; one line, cut at NEEDS_NAME_MAX (critique 8: the one place a run's name is bounded, words.ts's
      * sessionName). */
-    const runLabel = (runtimeRunId: string): string => {
-      const row = runRow(runtimeRunId);
-      return sessionName({
+    const nameOfRow = (row: ReturnType<typeof runRow>, runtimeRunId: string): string =>
+      sessionName({
         title: row?.title,
         label: row?.label,
         folder: folderNameOf(row?.monitor?.environment?.cwd),
         id: runtimeRunId,
       });
-    };
+    const runLabel = (runtimeRunId: string): string =>
+      nameOfRow(runRow(runtimeRunId), runtimeRunId);
     const inputs = new AgentInputQueues({
       dir: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_DIR),
       keyPath: join(config.dataDir, ...LAYOUT.AGENT_INPUTS_KEY_FILE),
@@ -3665,11 +3669,16 @@ export async function bootstrap(
     });
     const crewWaiting = (runtimeRunId: string): number | undefined =>
       agents.isLive(runtimeRunId) ? inputs.pending(runtimeRunId).length : undefined;
+    // item 550, 2026-11-18 — which spark this fieldd started each run for, as the spawn below remembers it and never a
+    // record: the printed star on the run's mark on the desk. Not launch memory (`bornFor`): nothing is granted by it,
+    // the floor is never told it, and a restart forgets it.
+    const sparkStarts = new SparkStarts();
     // the one spawn a spark's agents start by (tool-plane/rooms/talk/spawn.ts), on the runtime
     const talkSpawn = sparkSpawn({
       spawn: async (launch, origin) =>
         // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
         (await agents.spawn(launch, { kind: "mcp-agent" }, undefined, { origin })).session,
+      starts: sparkStarts,
       crews,
     });
     // TU-1 (Q3) — the one placement rule's persona map, from the monitor's latest Agent Profiles frame (the one
@@ -3842,6 +3851,58 @@ export async function bootstrap(
     plugins.on("changed", () => {
       pluginKinds = undefined;
     });
+    /** PJ-L7 — a project's ink by its key, from the grouping this desktop answers with (made once per grouping): the
+     * apps' project join and the desk's marks read the one table. */
+    let projectInks: { of: object; byKey: Map<string, number> } | null = null;
+    const projectInkOf = (projectKey: string): number | undefined => {
+      const grouping = projectGroups.current();
+      if (grouping === null) return undefined;
+      if (projectInks?.of !== grouping)
+        projectInks = {
+          of: grouping,
+          byKey: new Map(grouping.result.projects.map((project) => [project.key, project.ink])),
+        };
+      return projectInks.byKey.get(projectKey);
+    };
+    // item 550, 2026-11-18 — what the desk shows of a run is read again whenever it may have moved, for every run on
+    // the board at once: one read of the fold serves them all (the one a publish just made, else one made for
+    // that read), and outside such a read each run's row is read as `runRow` reads it
+    let deskScope: { rows: ReturnType<typeof agents.list> | undefined } | null = null;
+    const deskRow = (runtimeRunId: string) => {
+      let rows = deskScope?.rows;
+      if (rows === undefined) {
+        rows = agents.list();
+        if (deskScope !== null) deskScope.rows = rows;
+      }
+      return rows.sessions.find((row) => row.runtimeRunId === runtimeRunId);
+    };
+    const refreshDesk = (rows?: ReturnType<typeof agents.list>): void => {
+      deskScope = { rows };
+      try {
+        deskObjects.presence.refresh();
+      } finally {
+        deskScope = null;
+      }
+    };
+    // item 550, 2026-11-18 — a run's project as this desktop deals it: Godview's colour sequence and the folder's name
+    // from the monitor's row (none before the monitor is made, below), PJ's ink from the grouping by the run's observed
+    // folder
+    const deskProjectOf = (runtimeRunId: string) => {
+      const dealt = monitor?.rowForRun(runtimeRunId)?.project;
+      const name = dealt?.name === "" ? undefined : dealt?.name;
+      const seq = dealt?.seq;
+      const key = projectDoors.keyOf(
+        devices.currentDeviceId(),
+        deskRow(runtimeRunId)?.monitor?.environment?.cwd,
+      );
+      const ink = key === undefined ? undefined : projectInkOf(key);
+      if (name === undefined && seq === undefined && ink === undefined) return undefined;
+      return {
+        ...(name !== undefined ? { name } : {}),
+        ...(seq !== undefined ? { seq } : {}),
+        ...(ink !== undefined ? { ink } : {}),
+      };
+    };
     const deskObjects = new DeskObjects({
       store: new ObjectsStore({
         dir: join(config.dataDir, ...LAYOUT.OBJECTS_DIR),
@@ -3856,8 +3917,12 @@ export async function bootstrap(
         if (row === undefined) return "unknown";
         return row.continuation?.exited === true ? "ended" : "live";
       },
-      label: runLabel,
-      agentOf: (runtimeRunId) => String(runRow(runtimeRunId)?.provider ?? "agent"),
+      label: (runtimeRunId) => nameOfRow(deskRow(runtimeRunId), runtimeRunId),
+      // a row's provider id is its `kind` (item 550, 2026-11-18: this read `provider`, which no row has, so every run
+      // said "agent")
+      agentOf: (runtimeRunId) => deskRow(runtimeRunId)?.kind ?? "agent",
+      projectOf: deskProjectOf,
+      startedByOf: (runtimeRunId) => sparkStarts.of(runtimeRunId),
       bornFor: (runtimeRunId) => agents.bornFor(runtimeRunId),
       sparkName: (id) => sparks.get(id)?.name,
       kinds: () => {
@@ -3867,7 +3932,15 @@ export async function bootstrap(
     });
     deskObjects.boot();
     agents.onRunEnded((runtimeRunId) => deskObjects.runEnded(runtimeRunId));
-    agents.onRunReplaced((old, next) => deskObjects.runReplaced(old, next));
+    agents.onRunReplaced((old, next) => {
+      // the spark that started a run started its successor: handed on before the desk shows the successor
+      sparkStarts.replaced(old, next);
+      deskObjects.runReplaced(old, next);
+    });
+    // item 550, 2026-11-18 — a run's title and folder move with the fold, Godview's deal with the monitor (its hook is
+    // where the monitor is made, below) and PJ's ink with the grouping
+    agents.subscribe((rows) => refreshDesk(rows));
+    projectGroups.onChange(() => refreshDesk());
     // what ended while fieldd was down holds nothing now, judged once the re-attach has settled
     needs.joinSettle("objects", () => deskObjects.reconcile());
     toolPlane = new ToolPlaneService({
@@ -4170,7 +4243,6 @@ export async function bootstrap(
     // built) and the inks once per grouping, so a page of 500 rows joins each
     // in constant time rather than scanning every peer's sessions per row.
     let peerSessionCwds: Map<string, Map<string, string | undefined>> | null = null;
-    let projectInks: { of: object; byKey: Map<string, number> } | null = null;
     const indexPeerSessionCwds = (): Map<string, Map<string, string | undefined>> => {
       const indexed = new Map<string, Map<string, string | undefined>>();
       for (const peer of indexMesh?.peerRows() ?? [])
@@ -4187,14 +4259,7 @@ export async function bootstrap(
       }
       const [joined] = projectDoors.keyed([{ device, cwd }]);
       if (joined?.projectKey === undefined) return undefined;
-      const grouping = projectGroups.current();
-      if (grouping !== null && projectInks?.of !== grouping) {
-        projectInks = {
-          of: grouping,
-          byKey: new Map(grouping.result.projects.map((project) => [project.key, project.ink])),
-        };
-      }
-      const ink = grouping === null ? undefined : projectInks?.byKey.get(joined.projectKey);
+      const ink = projectInkOf(joined.projectKey);
       return {
         projectKey: joined.projectKey,
         ...(joined.place !== undefined ? { place: joined.place } : {}),
@@ -6080,6 +6145,9 @@ export async function bootstrap(
         : {}),
       logger,
     });
+    // item 550, 2026-11-18 — Godview's deal (a project's colour sequence, its folder's name) moves with the monitor's
+    // model
+    monitor.subscribe(() => refreshDesk());
     // LR (James, 2026-10-15) — the board's picture, kept beside the backend it
     // pictures: read before this boot writes anything, then taken as the board
     // moves while the floor is up. What the last run left is held until a
@@ -10301,6 +10369,7 @@ export async function bootstrap(
       meshBoard: board,
       agentScreens: screens,
       agentMonitor: () => monitor,
+      desk: deskObjects,
       artifacts,
       plugins,
       services,
