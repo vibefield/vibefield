@@ -223,6 +223,28 @@ import Testing
     #expect(params.json["cwd"] == nil, "never beside a cwd")
   }
 
+  // Item 587 — the launch sheet's Terminal: a place by its ref or Browse's folder by its path, never both, and the
+  // profile always.
+  @Test func aShellByPlaceSendsTheRefAndNoPath() throws {
+    let place = PlaceRef(device: "dev-a", placeId: "pl_1")
+    let params = TerminalCreateParams(.place(place), profileSet: "native")
+    #expect(params.json == .object(["place": place.json, "profileSet": .string("native")]))
+    #expect(
+      TerminalCreateParams(.cwd("/a"), profileSet: "native").json
+        == .object(["cwd": .string("/a"), "profileSet": .string("native")]))
+  }
+
+  @Test func thePhonesShellByPlaceMatchesItsGolden() throws {
+    let golden = try Fixture.json("terminal-create-params.place")
+    let params = TerminalCreateParams(
+      .place(try PlaceRef(json: try #require(golden["place"]))), profileSet: "work-7f3a")
+    var expected = try #require(golden.objectValue)
+    expected["//"] = nil
+    #expect(params.json == .object(expected))
+    #expect(params.json["cwd"] == nil, "never beside a cwd")
+    #expect(params.json["provider"] == nil, "a shell names no agent")
+  }
+
   @Test func theFieldRowCarriesItsConversationsIdOnlyWhenTheAgentSaidIt() throws {
     let board = try AgentFieldSnapshot(json: try Fixture.json("agent-field-snapshot.native-session"))
     #expect(board.rows.map(\.nativeSessionId) == ["4f9c2d1e-7a3b-4c8d-9e0f-1a2b3c4d5e6f", nil])

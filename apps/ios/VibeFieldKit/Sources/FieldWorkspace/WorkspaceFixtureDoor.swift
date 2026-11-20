@@ -35,6 +35,14 @@ public enum WorkspaceFixtureDoor {
           try await Task.sleep(for: .seconds(60))
         }
         throw FieldProductError(kind: "UNAVAILABLE", message: "Fixture: no agent is launched")
+      // item 587 — Terminal: one opening holds; else the refusal of a desktop older than the place door
+      case "terminal.create":
+        if LaunchArguments.current.contains("-vf-demo-workspace=shell-opening") {
+          try await Task.sleep(for: .seconds(60))
+        }
+        throw FieldProductError(
+          kind: "FORBIDDEN_SCOPE", message: "opening a terminal under a profile requires agent.spawn",
+          details: .object(["required": .string("agent.spawn")]))
       default: throw FieldProductError(kind: "NOT_FOUND", message: "Fixture has no such door")
       }
     }

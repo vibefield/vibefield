@@ -8,7 +8,8 @@ import Observation
 /// on the sheet's desktop) or a folder by its path (Browse's, until PJ-8); WHO, an agent of the desktop's catalog that
 /// the sheet's profile can run; and the Agent Profile, the bloom's (else the recipe's, else one that runs the agent),
 /// which the sheet says and never offers. No model selection is sent: each agent runs its own (PJ-7's Model and Effort
-/// rows left with the redesign). Every ask goes to the chosen desktop's own door.
+/// rows left with the redesign). Every ask goes to the chosen desktop's own door. Item 587 (2026-11-19) — Terminal asks
+/// that same door for a shell in the chosen folder under the profile, never another desktop's.
 @MainActor
 @Observable
 public final class WorkspaceLaunch {
@@ -35,6 +36,8 @@ public final class WorkspaceLaunch {
   public private(set) var profilesRead = false
   public private(set) var profileSet: String?
   public private(set) var spawning = false
+  /// Item 587 — Terminal's ask, while it is out
+  public private(set) var opening = false
   public private(set) var message: String?
   /// Item 586 — the agent this phone last started, which a sheet comes chosen with next (kept while the app runs)
   public private(set) var lastProvider: String?
@@ -53,9 +56,17 @@ public final class WorkspaceLaunch {
   public var agent: AgentCatalogRow? { agents.first { $0.id == provider } }
   /// Item 586 — whether the sheet's profile can run an agent: a bud it holds no sign-in for is never chosen
   public func runs(_ agent: AgentCatalogRow) -> Bool { LaunchModel.signedIn(agent.id, under: profile) }
+  /// Item 587 — one ask at a time: while Start or Terminal asks, the other is off and the sheet's choices hold.
+  public var busy: Bool { spawning || opening }
   public var canSpawn: Bool {
-    !spawning && desktop?.online == true && (place?.desktop == selected || folder?.device == selected)
+    !busy && desktop?.online == true && (place?.desktop == selected || folder?.device == selected)
       && agent.map { $0.canSpawn && runs($0) } == true
+  }
+  /// Item 587 (2026-11-19) — Terminal can ask: the chosen folder on the sheet's desktop, which answers (a place on the
+  /// desktop its ref names), under a profile already read. A shell never goes without its profile.
+  public var canOpenShell: Bool {
+    !busy && desktop?.online == true && profilesRead && profileSet != nil
+      && (place.map { $0.ref.device == selected } ?? (folder?.device == selected))
   }
   /// Nowhere to start yet: Browse opens by itself (PJ-D12 (a)).
   public var needsFolder: Bool { place == nil && folder == nil }
@@ -113,6 +124,8 @@ public final class WorkspaceLaunch {
   public var startSentence: String {
     LaunchModel.startSentence(agent: agent?.label, folder: chosen?.name, starting: spawning)
   }
+  /// Item 587 — Terminal as a screen reader says it
+  public var shellSentence: String { LaunchModel.shellSentence(folder: chosen?.name, opening: opening) }
 
   private var online: Set<String> { Set(desktops.filter(\.online).map(\.id)) }
 
@@ -127,7 +140,7 @@ public final class WorkspaceLaunch {
   /// (synchronously, so the sheet knows at once whether Browse opens by
   /// itself). `select` reads the rest.
   public func prepare(_ context: LaunchContext) {
-    guard !spawning else { return }
+    guard !busy else { return }
     self.context = context
     folder = nil; picked = nil; message = nil; provider = ""
     let desk = context.desktop ?? home ?? selected ?? ""
@@ -141,7 +154,7 @@ public final class WorkspaceLaunch {
   }
 
   public func select(_ device: String, keeping kept: String? = nil) async {
-    guard !spawning, let desktop = desktops.first(where: { $0.id == device }) else { return }
+    guard !busy, let desktop = desktops.first(where: { $0.id == device }) else { return }
     epoch += 1; let ticket = epoch
     let previous = provider
     if selected != device { folder = nil; picked = nil }
@@ -196,7 +209,7 @@ public final class WorkspaceLaunch {
   /// Q7 — a place chosen in WHERE; one on another desktop brings its desktop, and the profile and the agent stay
   /// when that desktop has them.
   public func choose(_ place: LaunchPlace) async {
-    guard !spawning, place.reason == nil, online.contains(place.desktop) else { return }
+    guard !busy, place.reason == nil, online.contains(place.desktop) else { return }
     if place.desktop != selected {
       let kept = profileSet
       self.place = place
@@ -211,21 +224,21 @@ public final class WorkspaceLaunch {
     switch choice {
     case .place(let place): await choose(place)
     case .folder(let folder):
-      guard !spawning, folder.device == selected, folder == picked else { return }
+      guard !busy, folder.device == selected, folder == picked else { return }
       self.folder = folder; place = nil; message = nil
     }
   }
 
   /// Browse's Use: the folder Browse is in becomes the chosen one, and leads WHERE.
   public func chooseCurrentFolder() -> Bool {
-    guard !spawning, let choice = reader?.choice, choice.device == selected else { return false }
+    guard !busy, let choice = reader?.choice, choice.device == selected else { return false }
     folder = choice; picked = choice; place = nil; message = nil
     return true
   }
 
   /// Item 586 — a bud chosen: an agent the desktop offers and the sheet's profile can run.
   public func chooseAgent(_ id: String) {
-    guard !spawning, let row = agents.first(where: { $0.id == id }), runs(row) else { return }
+    guard !busy, let row = agents.first(where: { $0.id == id }), runs(row) else { return }
     provider = id; message = nil
   }
 
@@ -251,8 +264,37 @@ public final class WorkspaceLaunch {
       return true
     } catch {
       if let refusal = error as? FieldProductError, ["UNAVAILABLE", "TIMEOUT"].contains(refusal.kind) {
-        message = "The desktop did not confirm the launch. Check the field before trying again."
+        message = LaunchModel.unconfirmed
       } else { message = (error as? FieldProductError)?.message ?? String(describing: error) }
+      return false
+    }
+  }
+
+  /// Item 587 (2026-11-19) — Terminal: a shell in the chosen folder under the sheet's profile, asked of the desktop the
+  /// place's ref names (`terminal.create` is local to its device, D36). Non-idempotent, as Start: one tap, one ask, a
+  /// lost reply never retried here. A refusal is said in the sheet's words (`LaunchModel.shellRefusal`).
+  public func openTerminal() async -> Bool {
+    guard canOpenShell, let device = place?.ref.device ?? selected, let profileSet else { return false }
+    let at: TerminalCreateParams.Folder
+    if let place {
+      at = .place(place.ref)
+    } else if let path = folder?.path {
+      at = .cwd(path)
+    } else {
+      return false
+    }
+    opening = true; message = nil
+    defer { opening = false }
+    do {
+      let result = try await request(device, "terminal.create", TerminalCreateParams(at, profileSet: profileSet).json)
+      guard result["sessionId"]?.stringValue != nil else {
+        throw WireDecodeError(shape: "terminal.create", reason: "missing session id")
+      }
+      return true
+    } catch {
+      message =
+        (error as? FieldProductError).map { LaunchModel.shellRefusal($0, desktop: desktop?.name) }
+        ?? String(describing: error)
       return false
     }
   }

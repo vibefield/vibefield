@@ -441,6 +441,35 @@ public struct AgentSpawnParams: Codable, Sendable, Equatable {
   }
 }
 
+/// Item 587 (2026-11-19) — `terminal.create` as the launch sheet's Terminal asks it: a shell in a place named by its
+/// ref (P1: never its path) or in Browse's folder by its path (until PJ-8), under the sheet's Agent Profile. A place
+/// or a cwd, never both, as the contract refines it. The profile is never left out: a desktop older than the place
+/// door then refuses the shell (a profile there needs a grant it cannot read) rather than drop the place unread and
+/// open it in a folder the phone did not choose. Asked only of the desktop the place's ref names: `terminal.create`
+/// is local to its device (D36) and never federates.
+public struct TerminalCreateParams: Sendable, Equatable {
+  public enum Folder: Sendable, Equatable {
+    case place(PlaceRef)
+    case cwd(String)
+  }
+  public let folder: Folder
+  public let profileSet: String
+
+  public init(_ folder: Folder, profileSet: String) {
+    self.folder = folder
+    self.profileSet = profileSet
+  }
+
+  public var json: JSONValue {
+    var fields: [String: JSONValue] = ["profileSet": .string(profileSet)]
+    switch folder {
+    case .place(let place): fields["place"] = place.json
+    case .cwd(let path): fields["cwd"] = .string(path)
+    }
+    return .object(fields)
+  }
+}
+
 /// `agent.resume`'s native form as History's Resume asks it (PJ-D10 (a)): the
 /// conversation by the agent's own id, on its OWN desktop's door, with no path
 /// — that desktop fills the folder from its own index (PJ-7 Q3).

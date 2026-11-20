@@ -63,6 +63,8 @@ private final class Desk {
     case "agent.catalog": return try workspaceFixture("agent-catalog.valid")
     case "agents.profileSets.list": return try workspaceFixture("agents-profile-sets.valid")
     case "agent.spawn": return spawnReply
+    // item 587 — the shell's receipt, as TerminalCreateResult leads it
+    case "terminal.create": return .object(["sessionId": .string("term-1")])
     default: throw FieldProductError(kind: "NOT_FOUND", message: method)
     }
   }
@@ -276,6 +278,39 @@ struct LaunchDecisionTests {
     #expect(LaunchModel.browseTag(path, chosen: nil, places: [vibeField]) == "2H")
     #expect(LaunchModel.browseTag("/Users/ada/Projects/other", chosen: nil, places: [vibeField]) == nil)
   }
+
+  @Test("item 587 — Terminal's words: elsewhere and older in the sheet's own, a lost reply as Start's, the rest fieldd's")
+  func shellWords() {
+    let notHere = FieldProductError(
+      kind: "PRECONDITION_FAILED",
+      message: "that place is on another desktop; a desktop starts agents only in its own places",
+      details: .object(["reason": .string("not-here"), "place": vibeField.ref.json]))
+    #expect(
+      LaunchModel.shellRefusal(notHere, desktop: "studio")
+        == "That folder is on another desktop. Choose a folder on studio.")
+    #expect(
+      LaunchModel.shellRefusal(notHere, desktop: nil)
+        == "That folder is on another desktop. Choose a folder on this desktop.", "the stand-in, inside a sentence")
+    let older = FieldProductError(
+      kind: "FORBIDDEN_SCOPE", message: "opening a terminal under a profile requires agent.spawn",
+      details: .object(["required": .string("agent.spawn")]))
+    #expect(
+      LaunchModel.shellRefusal(older, desktop: "studio")
+        == "studio needs an update before this phone can open a terminal there.")
+    #expect(
+      LaunchModel.shellRefusal(older, desktop: nil)
+        == "This desktop needs an update before this phone can open a terminal there.")
+    let lost = FieldProductError(
+      kind: "TIMEOUT", message: "studio did not answer terminal.create within 20 s", retryable: true)
+    #expect(LaunchModel.shellRefusal(lost, desktop: "studio") == LaunchModel.unconfirmed)
+    let gone = FieldProductError(
+      kind: "PRECONDITION_FAILED", message: "the place's folder is gone from this device",
+      details: .object(["reason": .string("missing-cwd"), "place": vibeField.ref.json]))
+    #expect(LaunchModel.shellRefusal(gone, desktop: "studio") == "the place's folder is gone from this device")
+    #expect(LaunchModel.shellSentence(folder: "vibe-field", opening: false) == "Open a terminal in vibe-field")
+    #expect(LaunchModel.shellSentence(folder: "vibe-field", opening: true) == "Opening a terminal in vibe-field")
+    #expect(LaunchModel.shellSentence(folder: nil, opening: false) == "Choose a folder first")
+  }
 }
 
 @MainActor
@@ -475,5 +510,125 @@ struct LaunchSheetTests {
     model.update(model.desktops.map { .init(id: $0.id, name: $0.name, platform: $0.platform, online: false) })
     #expect(model.whoWords == "studio is asleep")
     #expect(!model.canSpawn)
+    #expect(!model.canOpenShell)
+  }
+
+  // Item 587 — Terminal beside Start: a shell in the chosen folder under the sheet's profile, asked of the desktop
+  // the place's ref names (terminal.create is local to its device and never federates).
+
+  @Test("Terminal: a shell at the chosen place by its ref under the sheet's profile; no agent, no path")
+  func shellAtAPlace() async throws {
+    let desk = Desk()
+    let model = desk.launch()
+    await model.begin(.init(projectName: "vibe-field", places: [vibeField, docs, older], recipe: try recipe()))
+    #expect(model.canOpenShell)
+    #expect(model.shellSentence == "Open a terminal in vibe-field")
+    #expect(await model.openTerminal())
+    let shell = try #require(desk.last("terminal.create"))
+    #expect(shell.device == studio)
+    #expect(shell.params == JSONValue.object(["place": vibeField.ref.json, "profileSet": .string("native")]))
+    #expect(desk.last("agent.spawn") == nil, "Terminal starts no agent")
+    #expect(model.lastProvider == nil, "nor counts as the agent last started")
+  }
+
+  @Test("Terminal at another desktop's place asks that desktop, the one its ref names")
+  func shellOnThePlacesDesktop() async throws {
+    let desk = Desk()
+    let model = desk.launch()
+    await model.begin(.init(projectName: "vibe-field", places: [vibeField, docs, older], recipe: try recipe()))
+    await model.choose(docs)
+    #expect(model.selected == laptop)
+    #expect(await model.openTerminal())
+    let shell = try #require(desk.last("terminal.create"))
+    #expect(shell.device == laptop)
+    #expect(shell.params?["place"] == docs.ref.json)
+    let asked = desk.asked.filter { $0.method == "terminal.create" }.map { $0.device }
+    #expect(asked == [laptop], "one ask, never studio's")
+  }
+
+  @Test("Terminal from Browse's folder sends its path under the sheet's profile, never a place")
+  func shellFromBrowse() async throws {
+    let desk = Desk()
+    let model = desk.launch()
+    await model.begin(.init())
+    #expect(!model.canOpenShell, "no folder yet")
+    let reader = try #require(model.reader)
+    let home = try #require(reader.roots.first { $0.browse == "home" })
+    await reader.open(home, path: "Projects/workbench")
+    #expect(model.chooseCurrentFolder())
+    let profile = try #require(model.profileSet)
+    #expect(await model.openTerminal())
+    let shell = try #require(desk.last("terminal.create")?.params)
+    #expect(shell["cwd"] == (try workspaceFixture("workspace-list.valid"))["path"])
+    #expect(shell["place"] == nil)
+    #expect(shell["profileSet"] == .string(profile))
+  }
+
+  @Test("Terminal never asks without the sheet's profile; unreadable profiles leave Start alone", .timeLimit(.minutes(1)))
+  func shellWaitsForTheProfile() async throws {
+    let desk = Desk()
+    desk.stalled = ["agents.profileSets.list"]
+    let model = desk.launch()
+    let begun = Task { await model.begin(.init(usual: [vibeField])) }
+    await settle("the agents read before the profiles") { model.agentsRead }
+    #expect(!model.canOpenShell)
+    #expect(await model.openTerminal() == false)
+    #expect(desk.last("terminal.create") == nil)
+    desk.release()
+    await begun.value
+    #expect(model.canOpenShell)
+
+    let unread = Desk()
+    unread.refused["agents.profileSets.list"] = FieldProductError(kind: "UNAVAILABLE", message: "profiles unread")
+    let fallback = unread.launch()
+    await fallback.begin(.init(usual: [vibeField]))
+    #expect(fallback.canSpawn, "the desktop's default starts the agent")
+    #expect(!fallback.canOpenShell, "a shell never goes without its profile")
+  }
+
+  @Test("a refused shell is said in the sheet's words; one tap, one ask, a lost reply never asked again")
+  func shellRefused() async throws {
+    let desk = Desk()
+    desk.refused["terminal.create"] = FieldProductError(
+      kind: "FORBIDDEN_SCOPE", message: "opening a terminal under a profile requires agent.spawn",
+      details: .object(["required": .string("agent.spawn")]))
+    let model = desk.launch()
+    await model.begin(.init(usual: [vibeField]))
+    #expect(await model.openTerminal() == false)
+    #expect(model.message == "studio needs an update before this phone can open a terminal there.")
+    desk.refused["terminal.create"] = FieldProductError(
+      kind: "TIMEOUT", message: "studio did not answer terminal.create within 20 s", retryable: true)
+    #expect(await model.openTerminal() == false)
+    #expect(model.message == "The desktop did not confirm the launch. Check the field before trying again.")
+    #expect(desk.asked.filter { $0.method == "terminal.create" }.count == 2, "one ask per tap")
+    #expect(!model.opening && model.canOpenShell)
+  }
+
+  @Test("one ask at a time: while either button asks, the other is off (§7) and the choices hold", .timeLimit(.minutes(1)))
+  func oneAskAtATime() async throws {
+    let desk = Desk()
+    desk.stalled = ["terminal.create"]
+    let model = desk.launch()
+    await model.begin(.init(projectName: "vibe-field", places: [vibeField, docs, older], recipe: try recipe()))
+    let opening = Task { await model.openTerminal() }
+    await settle("Terminal asking") { model.opening }
+    #expect(model.busy)
+    #expect(!model.canSpawn, "Start is off while Terminal opens")
+    #expect(await model.spawn() == false)
+    await model.choose(older)
+    #expect(model.place == vibeField, "the choice holds")
+    desk.release()
+    #expect(await opening.value)
+    #expect(!model.busy && model.canSpawn)
+    #expect(desk.last("agent.spawn") == nil)
+
+    desk.stalled = ["agent.spawn"]
+    let starting = Task { await model.spawn() }
+    await settle("Start asking") { model.spawning }
+    #expect(!model.canOpenShell, "Terminal is off while Start starts")
+    #expect(await model.openTerminal() == false)
+    desk.release()
+    #expect(await starting.value)
+    #expect(desk.asked.filter { $0.method == "terminal.create" }.count == 1)
   }
 }

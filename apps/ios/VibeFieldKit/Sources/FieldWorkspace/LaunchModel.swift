@@ -211,6 +211,34 @@ public enum LaunchModel {
     return "\(starting ? "Starting" : "Start") \(agent) in \(folder)"
   }
 
+  /// Item 586 — a lost reply: the desktop may have done it, so the sheet never asks again by itself.
+  public static let unconfirmed = "The desktop did not confirm the launch. Check the field before trying again."
+
+  /// Item 587 (2026-11-19) — Terminal as a screen reader says it.
+  public static func shellSentence(folder: String?, opening: Bool) -> String {
+    guard let folder else { return "Choose a folder first" }
+    return "\(opening ? "Opening" : "Open") a terminal in \(folder)"
+  }
+
+  /// Item 587 (2026-11-19) — a refused terminal in the sheet's words, each saying what to do next (§9). fieldd reads a
+  /// place by agent.spawn's one rule, whose `not-here` sentence speaks of agents, so the sheet says its own by the
+  /// refusal's `reason`. A desktop older than the place door refuses every shell under a profile, as a scope the
+  /// phone's grant holds but that desktop does not read, so the sheet says the desktop needs an update. On a newer
+  /// desktop the same refusal would mean a grant without `agent.spawn` (a guest's), which never asks: the profile list
+  /// is read under that same scope, so such a sheet holds no profile and its Terminal stays off. A lost reply is
+  /// Start's sentence. The rest is fieldd's own words. With no name, the desktop's stand-in is lower-case inside a
+  /// sentence.
+  public static func shellRefusal(_ refusal: FieldProductError, desktop: String?) -> String {
+    if ["UNAVAILABLE", "TIMEOUT"].contains(refusal.kind) { return unconfirmed }
+    if refusal.details?["reason"]?.stringValue == "not-here" {
+      return "That folder is on another desktop. Choose a folder on \(desktop ?? "this desktop")."
+    }
+    if refusal.kind == "FORBIDDEN_SCOPE", refusal.details?["required"]?.stringValue == "agent.spawn" {
+      return "\(desktop ?? "This desktop") needs an update before this phone can open a terminal there."
+    }
+    return refusal.message
+  }
+
   // MARK: Paths, as the sheet draws them
 
   /// Item 586 — a desktop's absolute path as the sheet draws it: under the desktop's home, `~` and the rest.

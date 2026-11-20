@@ -30,7 +30,7 @@ public struct CreateSessionSheet: View {
       }
     }
     .tint(ChromePalette.ink)
-    .interactiveDismissDisabled(model.spawning)
+    .interactiveDismissDisabled(model.busy)
     .presentationDetents(browsing ? [.large] : [.height(menuHeight)])
     .presentationDragIndicator(.visible)
     .presentationCornerRadius(40)
@@ -85,7 +85,7 @@ public struct CreateSessionSheet: View {
           .fixedSize(horizontal: false, vertical: true)
           .padding(.top, 14)
       }
-      start.padding(.top, 22)
+      actions.padding(.top, 22)
     }
     .padding(.horizontal, 20)
     .padding(.top, 24)
@@ -138,7 +138,7 @@ public struct CreateSessionSheet: View {
           .contentShape(Circle())
       }
       .buttonStyle(.plain)
-      .disabled(model.spawning)
+      .disabled(model.busy)
       .accessibilityLabel("Cancel")
     }
   }
@@ -189,7 +189,7 @@ public struct CreateSessionSheet: View {
       .contentShape(Capsule())
     }
     .buttonStyle(.plain)
-    .disabled(model.spawning)
+    .disabled(model.busy)
     .accessibilityLabel(pillWords(choice, elsewhere: elsewhere?.name))
     .accessibilityAddTraits(on ? .isSelected : [])
   }
@@ -224,7 +224,7 @@ public struct CreateSessionSheet: View {
       .contentShape(Capsule())
     }
     .buttonStyle(.plain)
-    .disabled(model.spawning || model.reader == nil)
+    .disabled(model.busy || model.reader == nil)
   }
 
   /// WHO: the desktop's agents as the bloom's buds, sideways past five; what the row waits on is said in its place.
@@ -255,14 +255,14 @@ public struct CreateSessionSheet: View {
       .scrollClipDisabled()
       .padding(.horizontal, -20)
       .frame(height: LaunchBud.height)
-      .disabled(model.spawning)
+      .disabled(model.busy)
     }
   }
 
   /// Start, the agent's ticket. "Starting…" keeps its look while it runs (item 241): enabled, its hits off.
   private var start: some View {
     Button {
-      guard !model.spawning else { return }
+      guard !model.busy else { return }
       Task {
         // DESIGN.md §8: success or warning at the birth
         let born = await model.spawn()
@@ -281,15 +281,62 @@ public struct CreateSessionSheet: View {
     .accessibilityLabel(model.startSentence)
   }
 
+  /// Item 587 — the row under WHO: Start, the agent's ticket, and Terminal beside it.
+  private var actions: some View {
+    HStack(spacing: 8) {
+      start
+      terminal
+    }
+  }
+
+  /// Item 587 (2026-11-19) — Terminal: `prompt` and the word in the well's fill and hairline, a shell in the chosen
+  /// folder under the header's profile. Opening, the glyph turns to a spinner and the word to `Opening…`, so the pill
+  /// keeps its look with its hits off (§7, item 241); Off until the profile is read, with no folder, with the desktop
+  /// asleep, or while Start starts, as Start is while it opens.
+  private var terminal: some View {
+    Button {
+      guard !model.busy else { return }
+      Task {
+        let opened = await model.openTerminal()
+        UINotificationFeedbackGenerator().notificationOccurred(opened ? .success : .warning)
+        if opened { dismiss() }
+      }
+    } label: {
+      HStack(spacing: 6) {
+        if model.opening {
+          ProgressView().controlSize(.small)
+        } else {
+          FieldGlyph(.prompt, size: 18)
+        }
+        Text(model.opening ? "Opening…" : "Terminal")
+          .font(ChromeType.sans(15, .medium))
+          .lineLimit(1)
+      }
+      .padding(.horizontal, 16)
+      .frame(minHeight: ChromePillStyle.wideHeight, maxHeight: ChromePillStyle.wideHeight)
+      .fixedSize(horizontal: true, vertical: false)
+    }
+    .buttonStyle(
+      ChromeCapsuleStyle(
+        live: ChromePillLook(
+          fill: ChromePalette.wellFill, ink: ChromePalette.ink, hairline: ChromePalette.wellHairline),
+        off: .quiet))
+    .disabled(!model.canOpenShell && !model.opening)
+    .allowsHitTesting(model.canOpenShell)
+    .accessibilityLabel(model.shellSentence)
+  }
+
   #if DEBUG
     /// The demo door's scenes (`-vf-demo-workspace=…`, DEBUG only): Browse in a folder, the menu with it chosen, a
-    /// refused start or one running, the desktop's places, the desktop asleep.
+    /// refused start or one running, a shell refused by a desktop older than its door or one opening (item 587), the
+    /// desktop's places, the desktop asleep.
     private func stageDemo() async {
       guard
         let scene = LaunchArguments.current.first(where: { $0.hasPrefix("-vf-demo-workspace=") })?
           .split(separator: "=").last.map(String.init)
       else { return }
-      if ["folder", "launch", "refused", "spawning"].contains(scene), let reader = model.reader,
+      let menuScenes = ["folder", "launch", "refused", "spawning", "shell-older", "shell-opening"]
+      if menuScenes.contains(scene), let reader = model.reader,
         let home = reader.roots.first(where: { $0.browse == "home" })
       {
         await reader.open(home, path: "Projects/workbench")
@@ -302,6 +349,8 @@ public struct CreateSessionSheet: View {
       browsing = ["roots", "folder", "offline"].contains(scene)
       if scene == "refused" { _ = await model.spawn() }
       if scene == "spawning" { Task { _ = await model.spawn() } }
+      if scene == "shell-older" { _ = await model.openTerminal() }
+      if scene == "shell-opening" { Task { _ = await model.openTerminal() } }
     }
   #endif
 }

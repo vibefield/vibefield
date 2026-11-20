@@ -273,6 +273,8 @@ const launchFixtures = [
   "agent-models-params.valid.json",
   "agent-spawn-params.model-selection.json",
   "agent-spawn-params.place.json",
+  // item 587 — the launch sheet's Terminal: a shell by its place's ref under a profile (LaunchShapeTests)
+  "terminal-create-params.place.json",
   "agents-profile-sets.valid.json",
   "agent-field-snapshot.native-session.json",
   "agent-field-snapshot.stop.json",
