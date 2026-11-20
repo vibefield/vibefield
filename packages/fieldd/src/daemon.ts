@@ -3662,6 +3662,8 @@ export async function bootstrap(
       },
       sparkSession: sparkSessionOf,
       label: runLabel,
+      // SP-1e4 (S4) — a turn the person paused wakes as paused by the user, never as finished
+      pausedTurn: (runtimeRunId) => agents.pausedTurn(runtimeRunId),
       logger: logger.child({ component: "waker" }),
     });
     // SP-1e2 — each spark's crews: minted by the talk room, kept in the spark's kept record (tool-plane/crews.ts), and

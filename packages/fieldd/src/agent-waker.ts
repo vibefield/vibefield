@@ -8,6 +8,7 @@ import type { AgentInputQueues } from "./agent-input-queue";
 // (CP-L5: "fieldd wakes them with facts, never with another agent's words"): finished, asking you, failed, ended. The
 // spark reads the words itself with agent_read. A wake joins the spark's own input queue like any input, and wakes that
 // wait there join into one line (AgentInputQueues.wake). A spark with no live session keeps its wakes until one opens.
+// SP-1e4 (S4, 2026-11-19) — a turn the person's Pause ended is said as paused by the user, never as finished.
 
 /** A run's state as the monitor says it, in the four words a wake can carry. */
 export type RunState = "working" | "idle" | "asking" | "failed";
@@ -47,6 +48,9 @@ export interface WakerOptions {
   sparkSession(spark: string): string | undefined;
   /** how a run is named in a wake: its title, else its agent in its folder, else its agent (daemon's runLabel) */
   label(runtimeRunId: string): string;
+  /** SP-1e4 (S4) — the run's current turn was ended by the person's Pause (the runtime's own record, never a mark a
+   * door sets): its idle is told as paused by the user. Absent: no turn is told paused. */
+  pausedTurn?(runtimeRunId: string): boolean;
   readonly logger?: Logger;
 }
 
@@ -80,7 +84,9 @@ export class AgentWaker {
     const label = this.opts.label(runtimeRunId);
     const fact =
       next === "idle" && prev === "working"
-        ? `${label} finished`
+        ? this.opts.pausedTurn?.(runtimeRunId) === true
+          ? `${label} was paused by the user`
+          : `${label} finished`
         : next === "asking"
           ? `${label} is asking you`
           : next === "failed"

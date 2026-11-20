@@ -2493,6 +2493,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return this.replacingRuns.has(runtimeRunId);
   }
 
+  /** SP-1e4 (S4) — the run's current turn was ended by the person's Pause: from the press (the request is installed
+   * before its delivery, so a turn that ends before the floor answers is still paused) until its next turn lets the
+   * held Stop go (`applyMonitor`). The waker reads it, so a paused turn is never told as finished. */
+  pausedTurn(runtimeRunId: string): boolean {
+    const entry = this.managed.get(runtimeRunId);
+    if (entry === undefined) return false;
+    return (
+      entry.pauseRequest !== undefined || (entry.stop !== undefined && entry.stopKeepOpen === true)
+    );
+  }
+
   /** CP-2 — every change of a live run's monitor row, once fieldd has folded it. */
   onRunMonitor(
     listener: (runtimeRunId: string, mirror: AgentMonitorMirror | undefined) => void,

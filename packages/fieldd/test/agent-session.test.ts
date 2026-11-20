@@ -5083,13 +5083,25 @@ describe("ST — a durable Stop (the real floor)", () => {
     expect(turnStops).toEqual([]);
     scriptedEvent(box, paneId, { type: "turn:started" });
     await rowWhere(win, runId, (row) => row.status === "working", "a new turn working");
+    expect(daemon.agents.pausedTurn(runId)).toBe(false);
     expect(await win.call("agent.pause", params)).toEqual({ accepted: true });
     scriptedEvent(box, paneId, { type: "turn:completed" });
     await rowWhere(win, runId, (row) => row.stop?.stage === "heard", "Pause heard by status");
+    // SP-1e4 (S4) — the turn the Pause ended is paused, as the waker reads it
+    expect(daemon.agents.pausedTurn(runId)).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 1_200));
     expect(turnStops).toEqual([paneId]);
     expect(escalations(dataDir, runId)).toEqual([]);
     expect((await rowOf(win, runId))?.continuation?.exited).not.toBe(true);
+    // the next turn lets the held Pause go: its end is a finish again
+    scriptedEvent(box, paneId, { type: "turn:started" });
+    await rowWhere(
+      win,
+      runId,
+      (row) => row.status === "working" && row.stop === undefined,
+      "the next turn lets the Pause go",
+    );
+    expect(daemon.agents.pausedTurn(runId)).toBe(false);
   }, 120_000);
 
   it("hears a Stop by a readable status leaving working: no second send, the pane lives, and the next turn lets it go", async () => {
