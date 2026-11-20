@@ -685,6 +685,19 @@ const RULES = [
       return false;
     },
   },
+  {
+    id: "R35",
+    // Item 600 (2026-11-19): field-app's source imports nothing from fieldd, a type import included. fieldd is its
+    // TEST-ONLY dependency, and fieldd's package exports are its source, so one type import in field-app's source
+    // puts fieldd's whole source into every program that compiles that source (electron-shell's renderer program
+    // among them). What crosses between them is a contracts shape (system.health's is SystemHealthV1).
+    // `@vibefield/fieldd-client` is another package and passes.
+    enforce: true,
+    description: "no @vibefield/fieldd import (type-only included) under packages/field-app/src",
+    applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/field-app/src"),
+    importTest: (s) =>
+      importsModule(s, "@vibefield/fieldd") || /(?:^|\/)fieldd\/src(?:\/|$)/.test(s),
+  },
 ];
 
 // P2 (R26) — the Peek's watch-only pane, by its directory or its module names.
@@ -1533,8 +1546,24 @@ function runSelfTest() {
     // Item 252: the planted body (IGNORED, below), at a path git does not ignore, trips both walls.
     { id: "R22", file: "apps/ios/VibeFieldKit/Sources/planted-twin.ts", body: PLANTED },
     { id: "R24", file: "apps/ios/VibeFieldKit/Sources/planted-twin.ts", body: PLANTED },
+    // Item 600 (R35): field-app's source takes nothing of fieldd's, neither a type from its package nor a file by path.
+    {
+      id: "R35",
+      file: "packages/field-app/src/panels/uses-fieldd-type.ts",
+      body: 'import type { FielddHealth } from "@vibefield/fieldd";\nexport type H = FielddHealth;\n',
+    },
+    {
+      id: "R35",
+      file: "packages/field-app/src/reaches-fieldd-src.ts",
+      body: 'import { projectDeskRow } from "../../fieldd/src/agent-field";\nexport const p = projectDeskRow;\n',
+    },
   ];
   const cleans = [
+    // Item 600: the health crosses as contracts' shape, and fieldd-client is another package, so R35 does not overfire.
+    {
+      file: "packages/field-app/src/clean-health.ts",
+      body: 'import type { SystemHealthV1 } from "@vibefield/contracts";\nimport { useFielddClient } from "@vibefield/fieldd-client/react";\nexport type H = SystemHealthV1;\nexport const u = useFielddClient;\n',
+    },
     // CP-4a1: the static read takes acorn in the flow folder, the host's child takes ses there, and both take
     // contracts, node: built-ins and their own files, so R32 does not overfire on the folder it guards.
     {

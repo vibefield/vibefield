@@ -6,6 +6,9 @@
  * clock as the freshness claim, and — just as load-bearing — no rows at all
  * when sync has nothing to say.
  */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { DocSyncStatus } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
@@ -16,6 +19,20 @@ import { resetDocSyncStatuses, setDocSyncStatuses } from "../src/doc-sync-store"
 import { MeshSection } from "../src/panels/MeshSection";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+// Item 600 (2026-11-19): the health stream answers a whole answer, contracts' golden, with this
+// file's node and serves; the sections read it through SystemHealthV1, so a partial answer would
+// read as unavailable.
+const healthGolden = (): Record<string, unknown> =>
+  JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../contracts/fixtures/system-health.valid.json",
+      ),
+      "utf8",
+    ),
+  ) as Record<string, unknown>;
 
 const device = (over: Record<string, unknown>) => ({
   deviceId: "dev",
@@ -43,7 +60,8 @@ function fakeClient(): FielddClient {
         return {
           subId: "health",
           snapshot: {
-            native: { units: [{ unit: "mesh-gateway", state: "up" }] },
+            ...healthGolden(),
+            native: { state: "up", units: [{ unit: "mesh-gateway", state: "up" }] },
             mesh: { serves: [] },
           },
           unsubscribe: (): undefined => undefined,

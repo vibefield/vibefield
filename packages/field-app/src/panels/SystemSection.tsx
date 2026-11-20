@@ -1,9 +1,10 @@
+import { SYSTEM_HEALTH_NATIVE_UNREADABLE } from "@vibefield/contracts";
 import { StatusDot } from "@vibefield/design-kit";
-import type { FielddHealth } from "@vibefield/fieldd";
-import { useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
+import { useFielddStatus } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useSyncExternalStore } from "react";
 import { getBoardStatus, subscribeBoardStatus } from "../board-status";
 import { labelCls, SettingsSection } from "./settings-ui";
+import { useSystemHealth } from "./system-health";
 
 // System diagnostics — a Settings SECTION, not a page (James, 2026-07-21:
 // dev-facing diagnostics live inside the Settings panel; the Track A health
@@ -13,14 +14,23 @@ import { labelCls, SettingsSection } from "./settings-ui";
 
 function Dot({ state }: { state: string }): ReactElement {
   const tone =
-    state === "up" || state === "ready"
-      ? "healthy"
-      : state === "degraded" || state === "crashed" || state === "failed" || state === "closed"
-        ? "error"
-        : state === "disabled"
-          ? "muted"
-          : "attention"; // starting / auth-required / connecting / reconnecting
+    state === "unavailable"
+      ? "attention" // item 600: named, so a state this section never read cannot drift to green
+      : state === "up" || state === "ready"
+        ? "healthy"
+        : state === "degraded" || state === "crashed" || state === "failed" || state === "closed"
+          ? "error"
+          : state === "disabled"
+            ? "muted"
+            : "attention"; // starting / auth-required / connecting / reconnecting
   return <StatusDot tone={tone} />;
+}
+
+/** Item 600 (2026-11-19): the floor's state as this section says it. A floor block this build
+ * cannot read comes as contracts' wire value; a diagnostics line never shows a state it
+ * did not read, so the section says "unavailable". */
+function floorState(state: string): string {
+  return state === SYSTEM_HEALTH_NATIVE_UNREADABLE ? "unavailable" : state;
 }
 
 /** DESIGN.md §2.5 hue mapping for the board-persistence states. */
@@ -35,8 +45,7 @@ const BOARD_DOT: Record<string, string> = {
 
 export function SystemSection(): ReactElement {
   const conn = useFielddStatus();
-  const sub = useSubscription<FielddHealth>("system.health.subscribe");
-  const h = sub.data;
+  const { health: h, unreadable, error } = useSystemHealth();
   const board = useSyncExternalStore(subscribeBoardStatus, getBoardStatus);
   return (
     <SettingsSection
@@ -72,8 +81,8 @@ export function SystemSection(): ReactElement {
             <div className="flex items-center justify-between">
               <span className={labelCls}>native</span>
               <span className="flex items-center gap-1.5">
-                <Dot state={h.nativeConnected ? (h.native?.state ?? "up") : "closed"} />
-                {h.nativeConnected ? (h.native?.state ?? "up") : "disconnected"}
+                <Dot state={h.nativeConnected ? floorState(h.native?.state ?? "up") : "closed"} />
+                {h.nativeConnected ? floorState(h.native?.state ?? "up") : "disconnected"}
               </span>
             </div>
             <div className="flex items-center justify-between">
@@ -104,7 +113,9 @@ export function SystemSection(): ReactElement {
             ))}
           </>
         )}
-        {sub.error !== null && <div className={labelCls}>health stream unavailable</div>}
+        {(error !== null || unreadable) && (
+          <div className={labelCls}>health stream unavailable</div>
+        )}
       </div>
     </SettingsSection>
   );

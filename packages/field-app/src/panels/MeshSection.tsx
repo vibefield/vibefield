@@ -1,11 +1,11 @@
 import type { DeviceInfo, DocSyncDocState } from "@vibefield/contracts";
 import { StatusDot } from "@vibefield/design-kit";
-import type { FielddHealth } from "@vibefield/fieldd";
 import { useFielddClient, useFielddStatus, useSubscription } from "@vibefield/fieldd-client/react";
 import type { ReactElement } from "react";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { getRendererLogger } from "../logging";
 import { labelCls, SettingsSection } from "./settings-ui";
+import { useSystemHealth } from "./system-health";
 
 // Mesh diagnostics — a Settings SECTION, sibling to SystemSection (C3; the
 // 2026-07-21 law: dev-facing diagnostics live inside the Settings panel, never
@@ -64,8 +64,7 @@ function fmtClock(ms: number): string {
 export function MeshSection(): ReactElement {
   const client = useFielddClient();
   const conn = useFielddStatus();
-  const sub = useSubscription<FielddHealth>("system.health.subscribe");
-  const h = sub.data;
+  const { health: h, unreadable, error } = useSystemHealth();
   // C4 (D31): the device roster — snapshot and every delta are the DeviceInfo[]
   // roster (self ⋈ peers), so `data` is the current roster wholesale.
   const devicesSub = useSubscription<DeviceInfo[]>("device.subscribe");
@@ -101,9 +100,10 @@ export function MeshSection(): ReactElement {
   const serves = h?.mesh?.serves ?? [];
 
   // Node state: the mesh unit when present; else honest — native up but no mesh
-  // unit means the gateway is unavailable (disabled / not surfaced); no health
-  // at all falls back to the connection status.
-  const nodeState = meshUnit ? meshUnit.state : h ? "unavailable" : conn;
+  // unit means the gateway is unavailable (disabled / not surfaced); an answer
+  // this build cannot read is unavailable too (item 600); no health at all
+  // falls back to the connection status.
+  const nodeState = meshUnit ? meshUnit.state : h !== null || unreadable ? "unavailable" : conn;
 
   return (
     <SettingsSection
@@ -285,7 +285,9 @@ export function MeshSection(): ReactElement {
           </div>
         )}
 
-        {sub.error !== null && <div className={labelCls}>health stream unavailable</div>}
+        {(error !== null || unreadable) && (
+          <div className={labelCls}>health stream unavailable</div>
+        )}
       </div>
     </SettingsSection>
   );

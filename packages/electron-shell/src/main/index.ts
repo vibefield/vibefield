@@ -25,6 +25,7 @@ import {
   type ShellCommand,
   ShellCommandRequest,
   type ShellExitRecord,
+  SystemHealthV1,
   SystemShellAttachResult,
   type UpdateView,
   type UserRecord,
@@ -3444,13 +3445,19 @@ if (!hasInstanceLock) {
       // WP12 L2a — what the RUNNING pair says it is (an app update may leave an older pair adopted until replaced)
       daemonBuilds: async () => {
         const handle = await ensureFieldd();
-        const health = (await handle.client.request("system.health", {}).catch(() => null)) as {
-          nativeBuild?: unknown;
-        } | null;
+        const answer: unknown = await handle.client.request("system.health", {}).catch(() => null);
+        // Item 600 (2026-11-19): main reads one field of the answer, parsed by the contract's own
+        // field, so a field main never reads cannot hide a good build; anything else reads
+        // "unknown", as before
+        const field =
+          typeof answer === "object" && answer !== null && "nativeBuild" in answer
+            ? answer.nativeBuild
+            : undefined;
+        const build = SystemHealthV1.shape.nativeBuild.safeParse(field);
         return {
           fielddBuild: handle.info.buildId ?? "unrecorded",
           fieldNativeBuild:
-            typeof health?.nativeBuild === "string" ? health.nativeBuild : "unknown",
+            build.success && typeof build.data === "string" ? build.data : "unknown",
         };
       },
       versions: {
