@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { LAYOUT, SOCKETS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -14,6 +15,16 @@ import { helloAs, until, WsRpc } from "./ws-rpc";
 // subscriber hears the change, the answer is on disk under the user's root, a
 // malformed answer is refused in words, and only a trusted desktop caller gets
 // in — the app preferences' posture (app-preferences.integration.test.ts).
+
+// EL9 — the door's params golden, as contracts' fixtures test parses it (SH-1)
+const PARAMS_GOLDEN = join(
+  dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "contracts",
+  "fixtures",
+  "setup-tutorial-params.valid.json",
+);
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -112,6 +123,27 @@ describe("the setup ledger's doors (AO-2)", () => {
     });
     const malformed = await window.callErr("setup.moment", { moment: "Limit", state: "retired" });
     expect(malformed.data?.kind).toBe("PRECONDITION_FAILED");
+
+    // SH-1 — a tutorial chapter's record, beside the moments, in the same file
+    const started = await window.call("setup.tutorial", {
+      chapter: "your-desk",
+      state: "started",
+      step: 0,
+      steps: 4,
+    });
+    expect(started).toMatchObject({ tutorials: { "your-desk": { state: "started", step: 0 } } });
+    expect(JSON.parse(readFileSync(file, "utf8")).tutorials).toMatchObject({
+      "your-desk": { state: "started", step: 0, steps: 4 },
+    });
+    // EL9 for the door: contracts' params golden, read from disk, is an answer fieldd takes
+    const params = JSON.parse(readFileSync(PARAMS_GOLDEN, "utf8")) as Record<string, unknown>;
+    expect(await window.call("setup.tutorial", params)).toMatchObject({
+      tutorials: { [String(params.chapter)]: { state: params.state, step: params.step } },
+    });
+    // an answer that is not a chapter's is refused in words
+    const half = await window.callErr("setup.tutorial", { chapter: "your-desk", state: "started" });
+    expect(half.data?.kind).toBe("PRECONDITION_FAILED");
+    expect(half.message).toContain("step and steps with started alone");
   });
 
   it("requires both the local scope and a trusted desktop client kind", async () => {
@@ -125,6 +157,9 @@ describe("the setup ledger's doors (AO-2)", () => {
     const plugin = await connect(daemon, pluginGrant.token, "renderer");
     expect(
       (await plugin.callErr("setup.answer", { step: "history", state: "answered" })).data?.kind,
+    ).toBe("FORBIDDEN_SCOPE");
+    expect(
+      (await plugin.callErr("setup.tutorial", { chapter: "godview", state: "offered" })).data?.kind,
     ).toBe("FORBIDDEN_SCOPE");
   });
 });

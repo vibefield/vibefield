@@ -9,6 +9,10 @@ import {
   type SetupStepState,
   setupMomentState,
   setupStepState,
+  setupTutorialRecord,
+  setupTutorialsUnread,
+  type TutorialChapter,
+  type TutorialState,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 
@@ -18,6 +22,18 @@ import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/log
 // lists what was put off. fieldd's truth, one file per user
 // (`LAYOUT.SETUP_LEDGER_FILE`), loaded once and written atomically on change —
 // the enrollment record's discipline (agent-index.ts), for a smaller record.
+
+/** SH-1 (track SH; DESIGN.md §8 "Tutorials", "Kept") — what a tutorial answer may replace, by the
+ * state it finds (the row) and the answer (the column): `write`, or `keep` (the row stands and
+ * nothing is written). Every cell is said. RED: every cell writes. */
+export const TUTORIAL_REPLACE: Readonly<
+  Record<TutorialState, Readonly<Record<TutorialState, "write" | "keep">>>
+> = {
+  offered: { offered: "write", declined: "write", started: "write", finished: "write" },
+  declined: { offered: "write", declined: "write", started: "write", finished: "write" },
+  started: { offered: "write", declined: "write", started: "write", finished: "write" },
+  finished: { offered: "write", declined: "write", started: "write", finished: "write" },
+};
 
 export interface SetupLedgerStoreOptions {
   /** the ledger's absolute path (LAYOUT.SETUP_LEDGER_FILE under the user root) */
@@ -36,6 +52,14 @@ export class SetupLedgerStore {
     this.logger = opts.logger ?? createNoopLogger();
     this.now = opts.now ?? (() => new Date());
     this.ledger = this.load();
+    const unread = setupTutorialsUnread(this.ledger);
+    if (unread.length > 0) {
+      this.logger.warn(
+        "fieldd.setup.tutorials_unread",
+        "The setup ledger holds tutorial rows this build cannot read; they are carried, never read",
+        { chapters: unread },
+      );
+    }
   }
 
   /** a deep copy — callers never hold the live ledger */
@@ -80,6 +104,24 @@ export class SetupLedgerStore {
     this.ledger.moments = {
       ...(this.ledger.moments ?? {}),
       [moment]: { state: "owed", at: this.now().toISOString() },
+    };
+    this.commit();
+    return true;
+  }
+
+  /** SH-1 — record one tutorial chapter's answer, beside the moments, by TUTORIAL_REPLACE.
+   * Declarative: a started row at the same step of the same count is not written again. With no
+   * row, any answer is written. Returns whether the ledger changed. */
+  tutorial(chapter: TutorialChapter, state: TutorialState, step?: number, steps?: number): boolean {
+    const held = setupTutorialRecord(this.ledger, chapter);
+    if (held !== undefined) {
+      if (TUTORIAL_REPLACE[held.state][state] === "keep") return false;
+      if (held.state === state && held.step === step && held.steps === steps) return false;
+    }
+    const at = this.now().toISOString();
+    this.ledger.tutorials = {
+      ...(this.ledger.tutorials ?? {}),
+      [chapter]: state === "started" ? { state, at, step, steps } : { state, at },
     };
     this.commit();
     return true;

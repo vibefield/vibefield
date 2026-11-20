@@ -183,6 +183,7 @@ import {
   SetupAnswerParams,
   SetupHideParams,
   SetupMomentParams,
+  SetupTutorialParams,
   ShellDialogPickFolderParams,
   type ShellDialogPickFolderResult,
   ShellLinkUrl,
@@ -8328,6 +8329,20 @@ export async function bootstrap(
         );
       }
       setupLedger.moment(parsed.data.moment, parsed.data.state);
+      return setupLedger.snapshot();
+    });
+    api.register("setup.tutorial", (ctx, params) => {
+      requireDesktopCaller(ctx);
+      const parsed = SetupTutorialParams.safeParse(params);
+      if (!parsed.success) {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { chapter, state: offered|declined|started|finished, step and steps with started alone }",
+          false,
+        );
+      }
+      const { chapter, state, step, steps } = parsed.data;
+      setupLedger.tutorial(chapter, state, step, steps);
       return setupLedger.snapshot();
     });
     api.register("setup.hide", (ctx, params) => {

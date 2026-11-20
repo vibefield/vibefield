@@ -3,7 +3,10 @@ import {
   type SetupMomentKey,
   type SetupStep,
   type SetupStepState,
+  type SetupTutorialRecord,
   setupStepState,
+  setupTutorialRecord,
+  type TutorialChapter,
 } from "@vibefield/contracts/setup";
 import type { GlyphName } from "@vibefield/design-kit/glyphs";
 import type { FielddClient } from "@vibefield/fieldd-client";
@@ -44,6 +47,50 @@ export async function retireSetupMoment(
   moment: SetupMomentKey,
 ): Promise<void> {
   await client.request("setup.moment", { moment, state: "retired" });
+}
+
+/** SH-1 (track SH; DESIGN.md §8 "Tutorials", "Kept") — a chapter's record; undefined while the
+ * ledger has none it can read, or while the ledger itself is not read yet. */
+export function tutorialRecord(
+  ledger: SetupLedger | null,
+  chapter: TutorialChapter,
+): SetupTutorialRecord | undefined {
+  return ledger === null ? undefined : setupTutorialRecord(ledger, chapter);
+}
+
+/** SH-1 — record one chapter's answer; fieldd's table decides what it replaces (an offer never
+ * lands on a chapter begun, declined or done). A refused write is the ledger's loss, never the
+ * person's: the chapter still waits in Settings → Tutorials. */
+export async function recordTutorial(
+  client: FielddClient,
+  chapter: TutorialChapter,
+  answer:
+    | { readonly state: "offered" | "declined" | "finished" }
+    | { readonly state: "started"; readonly step: number; readonly steps: number },
+): Promise<void> {
+  await client.request("setup.tutorial", { chapter, ...answer });
+}
+
+/** SH-1 — what a window shows of a chapter. "paused" and "left" are never written: a started row
+ * is "running" or "paused" while this window runs that chapter, and "left" while none does, so a
+ * stale "paused" can never stand behind a crash. */
+export type TutorialShown =
+  | "none"
+  | "offered"
+  | "declined"
+  | "running"
+  | "paused"
+  | "left"
+  | "finished";
+
+export function tutorialShown(
+  record: SetupTutorialRecord | undefined,
+  running: { readonly paused: boolean } | null,
+): TutorialShown {
+  if (record === undefined) return "none";
+  if (record.state !== "started") return record.state;
+  if (running === null) return "left";
+  return running.paused ? "paused" : "running";
 }
 
 /** The steps Finish setting up can list, and its sheet ask again: each joins

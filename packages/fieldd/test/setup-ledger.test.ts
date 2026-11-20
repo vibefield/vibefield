@@ -11,10 +11,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { SetupLedger, setupStepState } from "@vibefield/contracts";
+import { SetupLedger, setupStepState, type TutorialState } from "@vibefield/contracts";
 import { createNoopLogger } from "@vibefield/logging";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { SetupLedgerStore } from "../src/setup-ledger";
+import { SetupLedgerStore, TUTORIAL_REPLACE } from "../src/setup-ledger";
 
 // AO-2 — the Setup Assistant's ledger on disk (design-03 §4.3's `setup.*`): a
 // person's answers survive a restart, the same answer is written once, a newer
@@ -237,6 +237,107 @@ describe("TS-6 — a moment fieldd owes (TS-D13)", () => {
       limit: { state: "retired", at: "2026-10-28T16:10:00.000Z" },
       "connect-ask:away": { state: "asked", at: "2026-10-28T22:40:05.000Z" },
       "sync-question": { state: "retired", at: "2026-10-29T08:05:00.000Z" },
+    });
+  });
+});
+
+const TUTORIALS_GOLDEN = join(dirname(CONNECT_ASK_GOLDEN), "setup-ledger-tutorials.valid.json");
+
+describe("SH-1 — a tutorial chapter's record, beside the moments", () => {
+  // the sixteen cells, each said: the row it finds × the answer → written or kept
+  const CELLS: ReadonlyArray<readonly [TutorialState, TutorialState, "write" | "keep"]> = [
+    ["offered", "offered", "keep"],
+    ["offered", "declined", "write"],
+    ["offered", "started", "write"],
+    ["offered", "finished", "keep"],
+    ["declined", "offered", "keep"],
+    ["declined", "declined", "keep"],
+    ["declined", "started", "write"],
+    ["declined", "finished", "keep"],
+    ["started", "offered", "keep"],
+    ["started", "declined", "keep"],
+    ["started", "started", "write"],
+    ["started", "finished", "write"],
+    ["finished", "offered", "keep"],
+    ["finished", "declined", "keep"],
+    ["finished", "started", "write"],
+    ["finished", "finished", "keep"],
+  ];
+  const first = (s: TutorialState): [number?, number?] => (s === "started" ? [0, 3] : []);
+
+  it("says all sixteen cells, and the table is exactly them", () => {
+    expect(CELLS).toHaveLength(16);
+    for (const [held, answer, want] of CELLS)
+      expect(TUTORIAL_REPLACE[held][answer], `${held} × ${answer}`).toBe(want);
+  });
+
+  it.each(CELLS)("over a %s row, %s is kept or written (%s)", (held, answer, want) => {
+    const path = ledgerPath();
+    let now = "2026-11-19T10:00:00.000Z";
+    const store = new SetupLedgerStore({ path, now: () => new Date(now) });
+    expect(store.tutorial("godview", held, ...first(held))).toBe(true);
+    now = "2026-11-19T11:00:00.000Z";
+    // started over started moves a step here; the same step is the declarative row below
+    const [step, steps] = held === "started" && answer === "started" ? [1, 3] : first(answer);
+    expect(store.tutorial("godview", answer, step, steps)).toBe(want === "write");
+    const tutorials = new SetupLedgerStore({ path }).snapshot().tutorials;
+    const row = tutorials?.godview as Record<string, unknown>;
+    expect(row.state).toBe(want === "write" ? answer : held);
+    expect(row.at).toBe(want === "write" ? "2026-11-19T11:00:00.000Z" : "2026-11-19T10:00:00.000Z");
+  });
+
+  it("writes a started row at the same step of the same count once, and Back lowers it", () => {
+    const store = new SetupLedgerStore({ path: ledgerPath() });
+    expect(store.tutorial("your-desk", "started", 2, 4)).toBe(true);
+    expect(store.tutorial("your-desk", "started", 2, 4)).toBe(false);
+    expect(store.tutorial("your-desk", "started", 1, 4)).toBe(true);
+    expect(store.snapshot().tutorials?.["your-desk"]).toMatchObject({ step: 1, steps: 4 });
+  });
+
+  it("over a row a newer build wrote, writes the person's own acts and never an offer", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const newer = { state: "replayed", at: "2026-11-30T00:00:00.000Z" };
+    writeFileSync(
+      path,
+      JSON.stringify({ format: 1, steps: {}, hidden: false, tutorials: { search: newer } }),
+    );
+    const store = new SetupLedgerStore({ path });
+    expect(store.tutorial("search", "offered")).toBe(false);
+    expect(store.snapshot().tutorials?.search).toEqual(newer);
+    expect(store.tutorial("search", "started", 0, 2)).toBe(true);
+    expect(store.snapshot().tutorials?.search).toMatchObject({ state: "started", step: 0 });
+  });
+
+  it("logs the rows it cannot read when it loads, and never throws", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, readFileSync(TUTORIALS_GOLDEN, "utf8"));
+    const warn = vi.fn();
+    new SetupLedgerStore({ path, logger: { ...createNoopLogger(), warn } });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toBe("fieldd.setup.tutorials_unread");
+    expect(warn.mock.calls[0]?.[2]).toEqual({ chapters: ["your-hand"] });
+  });
+
+  it("keeps the golden ledger's unread row through its writes, read from disk (EL9)", () => {
+    const path = ledgerPath();
+    mkdirSync(dirname(path), { recursive: true });
+    const golden = readFileSync(TUTORIALS_GOLDEN, "utf8");
+    writeFileSync(path, golden);
+    const store = new SetupLedgerStore({ path, now: at("2026-11-19T12:00:00.000Z") });
+    expect(store.snapshot()).toEqual(JSON.parse(golden));
+    expect(store.tutorial("godview", "finished")).toBe(true);
+    expect(store.moment("connect-ask:away", "asked")).toBe(true);
+    const written = JSON.parse(readFileSync(path, "utf8")) as {
+      tutorials: Record<string, unknown>;
+    };
+    const was = (JSON.parse(golden) as { tutorials: Record<string, unknown> }).tutorials;
+    expect(written.tutorials["your-hand"]).toEqual(was["your-hand"]);
+    expect(written.tutorials["your-desk"]).toEqual(was["your-desk"]);
+    expect(written.tutorials.godview).toEqual({
+      state: "finished",
+      at: "2026-11-19T12:00:00.000Z",
     });
   });
 });
