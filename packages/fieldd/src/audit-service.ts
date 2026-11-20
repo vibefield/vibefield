@@ -42,6 +42,12 @@ export {
 } from "@vibefield/audit";
 
 const MAX_RECOVERY_MARKERS = 64;
+/** Item 558, 2026-11-18 — attempts kept open for close() to name; past it the oldest is forgotten, and goes unnamed.
+ * close() writes at most this many records and as many owed markers, each one append, inside the stop's deadline. */
+const MAX_OPEN_ATTEMPTS = 64;
+/** Item 558, 2026-11-18 — attempts closed in a later boot by design, never in flight at a stop: an update's apply is
+ * written before the daemons stop for it, and its outcome at the next launch. */
+const CLOSED_IN_A_LATER_BOOT = new Set<string>([UPDATES_AUDIT_ACTIONS.APPLY]);
 const SHELL_ACTIONS = new Set<string>([
   "approval.decision",
   "crash.artifact.export",
@@ -86,9 +92,15 @@ export interface AuditMutationOutcome {
  * The caller decides; this service learns no caller's error types. */
 export type AuditFailureResolution = "failed" | "effect-unknown";
 
-/** Why a recovery record closes an act's attempt (logging §16.3): its outcome could not be written, or its effect is
- * unknown (item 559, 2026-11-18). */
-type RecoveryReason = "OUTCOME_DURABILITY_UNCONFIRMED" | "EFFECT_UNKNOWN";
+/** Why a recovery record closes an act's attempt (logging §16.3): its outcome could not be written, its effect is
+ * unknown (item 559, 2026-11-18), or fieldd closed its writer with the act still in flight (item 558, 2026-11-18). */
+type RecoveryReason = "OUTCOME_DURABILITY_UNCONFIRMED" | "EFFECT_UNKNOWN" | "INTERRUPTED_BY_STOP";
+
+/** Item 558, 2026-11-18 — an attempt written and not yet closed: no outcome and no recovery record for it yet. */
+interface OpenAttempt {
+  action: string;
+  target: AuditTargetV1;
+}
 
 interface RecoveryMarker {
   action: string;
@@ -238,6 +250,8 @@ export class AuditService extends EventEmitter {
   private readonly now: () => number;
   private operation: Promise<void> = Promise.resolve();
   private recovery: RecoveryMarker[] = [];
+  /** item 558, 2026-11-18: by operationId; a marker owed for one takes it over, and close() closes the rest (LOG-46) */
+  private readonly open = new Map<string, OpenAttempt>();
   private state: AuditHealthV1["state"] = "healthy";
   private records = 0;
   private bytes = 0;
@@ -415,6 +429,10 @@ export class AuditService extends EventEmitter {
   close(): Promise<void> {
     return this.serial(async () => {
       if (this.closed) return;
+      // item 558, 2026-11-18 (LOG-46): before the writer closes, what is owed is written, then one record for every
+      // attempt still open. An outcome that arrives after is refused (appendNow), and that record already says what is
+      // known: the act was in flight when fieldd stopped, and its effect is unknown.
+      await this.closeOpen();
       this.closed = true;
       try {
         await this.writer.close();
@@ -607,6 +625,13 @@ export class AuditService extends EventEmitter {
       this.bytes += written.bytes;
       this.syncs += 1;
       this.lastSuccessAt = time;
+      // item 558, 2026-11-18: an attempt is open until a record closes it (its outcome, or a recovery record)
+      if (input.phase === "attempt") {
+        if (!CLOSED_IN_A_LATER_BOOT.has(input.action))
+          this.open.set(input.operationId, { action: input.action, target });
+        if (this.open.size > MAX_OPEN_ATTEMPTS)
+          this.open.delete(this.open.keys().next().value as string);
+      } else this.open.delete(input.operationId);
       this.markHealthy();
       return AuditAppendResultSchemaV1.parse({
         v: 1,
@@ -674,7 +699,39 @@ export class AuditService extends EventEmitter {
     };
   }
 
+  /** Item 558, 2026-11-18 — what close() writes before its writer closes: the owed markers, then INTERRUPTED_BY_STOP
+   * for every attempt still open. A refusal here leaves nothing more to try: health has already said it. */
+  private async closeOpen(): Promise<void> {
+    try {
+      await this.flushRecoveryMarkers();
+    } catch {
+      // the writer refuses: what is owed stays owed, as health says; the open attempts are tried all the same
+    }
+    for (const [operationId, open] of [...this.open]) {
+      try {
+        await this.appendNow(
+          this.recoveryCtx(),
+          recoveryRecord({
+            action: open.action,
+            originalLedger: auditLedgerForAction(open.action),
+            operationId,
+            target: open.target,
+            intendedOutcome: "unknown",
+            effectResolution: "unknown",
+            failedAt: this.now(),
+            reasonCode: "INTERRUPTED_BY_STOP",
+          }),
+          RECOVERY_AUTHORITY,
+        );
+      } catch {
+        // as above: nothing more can be written for it
+      }
+    }
+  }
+
   private queueRecovery(marker: RecoveryMarker): void {
+    // item 558, 2026-11-18: the marker owed for this act now closes it, so it is no longer open
+    this.open.delete(marker.operationId);
     const existing = this.recovery.find(
       (candidate) =>
         candidate.operationId === marker.operationId && candidate.action === marker.action,
