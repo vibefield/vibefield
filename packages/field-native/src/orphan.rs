@@ -308,6 +308,11 @@ impl ManagerPresence {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Verdict {
     Wait,
+    /// Item 615 (2026-11-20) — the vacancy's first counted read that is not zero: that many sessions hold the floor.
+    /// Said once per vacancy, so a floor waiting on a session is never silent.
+    Held(u64),
+    /// Item 615 — a held vacancy's count first read zero again: its span begins now. Said once per vacancy.
+    Released,
     /// a whole span with no client and a counted zero: confirm, then stop
     Stop,
 }
@@ -319,6 +324,9 @@ pub struct OrphanBound {
     vacancy: Option<Instant>,
     /// since when the slot has been empty AND the count a counted zero
     idle_since: Option<Instant>,
+    /// item 615 — this vacancy has said its hold (`Held`), and the start of its span after one (`Released`)
+    said_held: bool,
+    said_released: bool,
 }
 
 impl OrphanBound {
@@ -327,6 +335,8 @@ impl OrphanBound {
             span,
             vacancy: None,
             idle_since: None,
+            said_held: false,
+            said_released: false,
         }
     }
 
@@ -344,16 +354,26 @@ impl OrphanBound {
         if self.vacancy != Some(vacant) {
             self.vacancy = Some(vacant);
             self.idle_since = None;
+            self.said_held = false;
+            self.said_released = false;
         }
         if census != Some(0) {
             // a session, or a count that cannot be read: never idle on a guess
             self.idle_since = None;
+            if let Some(sessions) = census.filter(|_| !self.said_held) {
+                self.said_held = true;
+                return Verdict::Held(sessions);
+            }
             return Verdict::Wait;
         }
         // counted from the first read of a zero in this vacancy: zero is only known from when it was read
+        let begins = self.idle_since.is_none();
         let since = *self.idle_since.get_or_insert(now);
         if now.duration_since(since) >= self.span {
             Verdict::Stop
+        } else if begins && self.said_held && !self.said_released {
+            self.said_released = true;
+            Verdict::Released
         } else {
             Verdict::Wait
         }
@@ -401,8 +421,28 @@ pub fn spawn(
                 state.manager.vacant_since(),
                 state.manager.census(None).counted(),
             );
-            if verdict == Verdict::Wait {
-                continue;
+            match verdict {
+                Verdict::Wait => continue,
+                // item 615 (2026-11-20) — a held vacancy is said, never left blank: the count, and nothing of a session
+                Verdict::Held(sessions) => {
+                    tracing::info!(
+                        event = "field_native.lifecycle.orphan_held",
+                        component = "lifecycle",
+                        sessions,
+                        "the orphan bound is armed and held: sessions run on this floor with no management client"
+                    );
+                    continue;
+                }
+                Verdict::Released => {
+                    tracing::info!(
+                        event = "field_native.lifecycle.orphan_released",
+                        component = "lifecycle",
+                        span_ms = span.as_millis() as u64,
+                        "the sessions that held this floor have ended with no management client: its span begins"
+                    );
+                    continue;
+                }
+                Verdict::Stop => {}
             }
             // the confirming read: a count asked for and read from reconciles begun after the decision, so a session
             // born since a cell's last reconcile is in it; one not fresh in time is a whole new wait, never a stop
