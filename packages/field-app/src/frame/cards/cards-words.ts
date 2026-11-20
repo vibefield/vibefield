@@ -134,7 +134,7 @@ export const OUTCOME_WORDS = {
   added: (name: string) => `Added to your message to ${name}`,
   placedNote: "Placed as a note",
   placedPrint: "Placed as a print",
-  placedPage: "Opened a browser pane at it",
+  placedPage: "Opened it in a browser",
   already: "Already in your hand",
   /** the pane's input did not open in time (a spring-loaded drop), or closed */
   notTaking: (name: string) => `Not pasted — ${name}'s pane is not taking input`,

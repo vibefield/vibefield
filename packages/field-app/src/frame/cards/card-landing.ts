@@ -66,7 +66,7 @@ export const LANDING_WORDS = {
   /** a link on a desk that holds no browser pane */
   deskNoPage: "The desk can't open a page yet",
   open: "Open",
-  aPane: "a browser pane at it",
+  aPane: "it in a browser",
   goTo: "Go to",
   it: "it",
   hand: "Hand over",
