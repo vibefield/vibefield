@@ -93,10 +93,12 @@ function source(
 function resolverSetup(
   viewport: (ownerPid: number, frame: MacosCaptureSource["frame"]) => MacosSimulatorViewportResult,
   windows = new FakeWindows(),
+  framebuffer = false,
 ) {
   const viewportSpy = vi.fn(viewport);
   const resolver = new IosSimulatorSourceResolver({
     devices: new FakeDevices(),
+    framebuffer,
     windows,
     viewport: { resolveSimulatorViewport: viewportSpy },
   });
@@ -143,17 +145,15 @@ afterEach(() => {
 
 describe("Simulator resolution", () => {
   it("resolves a headless simulator without enumerating windows or querying Accessibility", async () => {
-    vi.stubEnv("VF_SIMULATOR_FRAMEBUFFER", "1");
     const windows = new FakeWindows([]);
-    const { resolver, viewportSpy } = resolverSetup(() => viewportResolved(), windows);
+    const { resolver, viewportSpy } = resolverSetup(() => viewportResolved(), windows, true);
     expect((await resolver.resolve(source())).framebufferDevice).toBe(UDID);
     expect(windows.calls).toEqual([]);
     expect(viewportSpy).not.toHaveBeenCalled();
   });
 
   it("uses the native framebuffer only for the default device viewport on the opt-in path", async () => {
-    vi.stubEnv("VF_SIMULATOR_FRAMEBUFFER", "1");
-    const { resolver, viewportSpy } = resolverSetup(() => viewportResolved());
+    const { resolver, viewportSpy } = resolverSetup(() => viewportResolved(), undefined, true);
     expect(await resolver.resolve(source())).toMatchObject({
       framebufferDevice: UDID,
       fingerprint: `framebuffer:${UDID}`,
@@ -287,6 +287,7 @@ describe("Simulator resolution", () => {
   it("rejects shutdown devices, stale hints, and out-of-window explicit crops", async () => {
     const empty = new IosSimulatorSourceResolver({
       devices: new FakeDevices([]),
+      framebuffer: false,
       windows: new FakeWindows(),
       viewport: { resolveSimulatorViewport: () => viewportResolved() },
     });
@@ -310,6 +311,7 @@ describe("Simulator resolution", () => {
   it("PT-S2: types each refusal's reason, so the bound simulator's conditions never read a message", async () => {
     const empty = new IosSimulatorSourceResolver({
       devices: new FakeDevices([]),
+      framebuffer: false,
       windows: new FakeWindows(),
       viewport: { resolveSimulatorViewport: () => viewportResolved() },
     });
@@ -353,6 +355,7 @@ describe("Simulator resolution", () => {
           throw new Error("simctl failed");
         },
       },
+      framebuffer: false,
       windows: new FakeWindows(),
       viewport: { resolveSimulatorViewport: () => viewportResolved() },
     });

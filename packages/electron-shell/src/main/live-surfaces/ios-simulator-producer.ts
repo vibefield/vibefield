@@ -185,7 +185,9 @@ export interface IosSimulatorResolutionProvider {
 
 export interface IosSimulatorSourceResolverOptions {
   readonly devices: SimulatorDeviceCatalog;
-  readonly framebuffer?: boolean;
+  /** Item 567 (S4b, 2026-11-19): whether a device's picture comes from its framebuffer. Every caller says it: the
+   * class reads no environment, whose default here was the opposite of the product's. */
+  readonly framebuffer: boolean;
   readonly windows: SimulatorWindowCatalog;
   readonly viewport: MacosSimulatorViewportQuery;
 }
@@ -264,7 +266,7 @@ export class IosSimulatorSourceResolver implements IosSimulatorResolutionProvide
 
   constructor(options: IosSimulatorSourceResolverOptions) {
     this.#devices = options.devices;
-    this.#framebuffer = options.framebuffer ?? process.env["VF_SIMULATOR_FRAMEBUFFER"] === "1";
+    this.#framebuffer = options.framebuffer;
     this.#windows = options.windows;
     this.#viewport = options.viewport;
   }
