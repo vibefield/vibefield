@@ -881,3 +881,175 @@ describe("an act whose effect is unknown (item 559, LOG-45)", () => {
     );
   });
 });
+
+describe("close writes what is owed and what is still open (item 558, LOG-46)", () => {
+  const ACT = { action: "tools.object_act", target: { kind: "object", id: "vf:obj/7hk2qx4m" } };
+
+  /** Waits for `happened`, by a deadline and never by a count of turns: the real writer's sync takes what it takes. */
+  async function until(happened: () => boolean, what: string): Promise<void> {
+    const deadline = Date.now() + 10_000;
+    while (!happened()) {
+      if (Date.now() > deadline) throw new Error(`${what} did not happen within 10 s`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
+  }
+
+  it("closes an act in flight INTERRUPTED_BY_STOP before its writer closes, and refuses the outcome that comes after", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-close-in-flight" });
+    await service.start();
+    let release = (): void => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let entered = false;
+    const settled = service
+      .required(shellContext(), ACT, async () => {
+        entered = true;
+        await held;
+        return { done: true };
+      })
+      .then(
+        () => "answered",
+        (error: unknown) => error,
+      );
+    // the attempt is written before the act runs
+    await until(() => entered, "the act starting");
+    await service.close();
+    release();
+    expect(await settled).toMatchObject({
+      kind: "AUDIT_UNAVAILABLE",
+      details: { operation: "write", code: "CLOSED" },
+    });
+    const kept = await records(service.root);
+    const attempt = kept.find((r) => r.action === "tools.object_act" && r.phase === "attempt");
+    const closing = kept.filter((r) => r.operationId === attempt?.operationId);
+    expect(closing.map((r) => [r.action, r.phase, r.reasonCode])).toEqual([
+      ["tools.object_act", "attempt", undefined],
+      ["audit.outcome.recovery", "outcome", "INTERRUPTED_BY_STOP"],
+    ]);
+    expect(closing[1]).toMatchObject({
+      outcome: "failed",
+      actor: { kind: "system", id: "fieldd" },
+      attrs: {
+        originalAction: "tools.object_act",
+        intendedOutcome: "unknown",
+        effectResolution: "unknown",
+      },
+    });
+  });
+
+  it("writes the markers it owes before its writer closes, each with its own reason", async () => {
+    const dataDir = await root();
+    let syncs = 0;
+    let failOutcome = true;
+    const service = new AuditService({
+      dataDir,
+      bootId: "fieldd-close-owed",
+      hooks: {
+        beforeSync: () => {
+          syncs += 1;
+          if (failOutcome && syncs === 2) {
+            throw Object.assign(new Error("read-only filesystem"), { code: "EROFS" });
+          }
+        },
+      },
+    });
+    await service.start();
+    await expect(
+      service.required(
+        shellContext(),
+        { action: "plugin.disable", target: { kind: "plugin", id: "vibefield.example" } },
+        () => ({ revoked: 3 }),
+      ),
+    ).rejects.toMatchObject({ kind: "AUDIT_UNAVAILABLE" });
+    expect(service.health()).toMatchObject({ pendingRecoveryMarkers: 1 });
+    failOutcome = false;
+    // nothing else is written before the close: the close alone writes what is owed
+    await service.close();
+    const recovered = (await records(service.root)).filter(
+      (r) => r.action === "audit.outcome.recovery",
+    );
+    expect(recovered).toEqual([
+      expect.objectContaining({
+        reasonCode: "OUTCOME_DURABILITY_UNCONFIRMED",
+        attrs: expect.objectContaining({
+          originalAction: "plugin.disable",
+          intendedOutcome: "succeeded",
+          effectResolution: "applied",
+        }),
+      }),
+    ]);
+  });
+
+  it("closes an attempt the shell appended and never closed, as fieldd stops", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-close-shell-open" });
+    await service.start();
+    await service.appendFromCaller(shellContext(), {
+      action: "support.bundle.export",
+      target: { kind: "support-bundle", id: "bundle_open_at_close" },
+      phase: "attempt",
+      operationId: "op_open_at_close",
+    });
+    await service.close();
+    expect(
+      (await records(service.root))
+        .filter((r) => r.operationId === "op_open_at_close")
+        .map((r) => [r.action, r.phase, r.reasonCode]),
+    ).toEqual([
+      ["support.bundle.export", "attempt", undefined],
+      ["audit.outcome.recovery", "outcome", "INTERRUPTED_BY_STOP"],
+    ]);
+  });
+
+  it("names at most 64 open attempts as it closes, and the oldest past the bound goes unnamed", async () => {
+    // the close's cost at its bound: 64 appends, each with its own sync (this row's duration is 65 attempts and them)
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-close-bound" });
+    await service.start();
+    const ids = Array.from({ length: 65 }, (_, i) => `op_open_${String(i).padStart(2, "0")}`);
+    for (const operationId of ids) {
+      await service.appendFromCaller(shellContext(), {
+        action: "support.bundle.export",
+        target: { kind: "support-bundle", id: "bundle_bound" },
+        phase: "attempt",
+        operationId,
+      });
+    }
+    await service.close();
+    const interrupted = (await records(service.root)).filter(
+      (r) => r.reasonCode === "INTERRUPTED_BY_STOP",
+    );
+    expect(interrupted).toHaveLength(64);
+    expect(interrupted.map((r) => r.operationId)).toEqual(ids.slice(1));
+  });
+
+  it("names no update's apply: its outcome is written at the next launch, by design", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-close-update-apply" });
+    await service.start();
+    await service.appendFromCaller(shellContext(), {
+      action: "app.update.apply",
+      target: { kind: "app-update", id: "stable" },
+      phase: "attempt",
+      operationId: "op_apply_across_the_stop",
+    });
+    await service.close();
+    expect((await records(service.root)).map((r) => [r.action, r.phase])).toEqual([
+      ["app.update.apply", "attempt"],
+    ]);
+  });
+
+  it("writes nothing more for an act that closed before it", async () => {
+    const dataDir = await root();
+    const service = new AuditService({ dataDir, bootId: "fieldd-close-nothing-open" });
+    await service.start();
+    await service.required(shellContext(), ACT, () => ({ done: true }));
+    await service.close();
+    expect((await records(service.root)).map((r) => [r.action, r.phase])).toEqual([
+      ["tools.object_act", "attempt"],
+      ["tools.object_act", "outcome"],
+    ]);
+  });
+});
