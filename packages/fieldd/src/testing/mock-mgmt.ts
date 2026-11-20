@@ -223,6 +223,12 @@ export class MockMgmtServer {
    * registry pass that asked it, so a row can count the passes asked behind it. */
   peersListGate: (() => "hold" | undefined) | null = null;
   private readonly heldPeersLists: Array<() => void> = [];
+  /** Item 622 (2026-11-20) — decides each `native.mesh.serve.add` before it is ANSWERED: "hold" keeps the answer
+   * until `releaseServeAdds()`. The add is recorded (`meshAddCalls`, `meshAddParams`) at receipt either way, so a
+   * row's `productAt` turns true while the reconcile that asked it is still parked at the add, before any event it
+   * emits after it. Null by default; no shipped path sets it. */
+  serveAddGate: ((spec: Record<string, unknown>) => "hold" | undefined) | null = null;
+  private readonly heldServeAdds: Array<() => void> = [];
   /** DS-1 — the floor's EGRESS, answered ahead of every mesh gate (as the real
    * floor's `mgmt/mesh_egress.rs` is). `"unsupported"` — the default — refuses
    * every verb `egress-unsupported`; `"mesh-down"` refuses the acts that need a
@@ -1112,7 +1118,11 @@ export class MockMgmtServer {
           ...(p["previewDir"] !== undefined ? { previewDir: p["previewDir"] } : {}),
         };
         this.meshServes.set(serveId, entry);
-        reply({ result: { ...p, serveId, listenPort, url: entry.url } });
+        const answer = (): void => {
+          reply({ result: { ...p, serveId, listenPort, url: entry.url } });
+        };
+        if (this.serveAddGate?.({ ...p }) === "hold") this.heldServeAdds.push(answer);
+        else answer();
         return;
       }
       case "native.mesh.serve.remove": {
@@ -1934,6 +1944,16 @@ export class MockMgmtServer {
   /** Item 430 — answers what `peersListGate` held, each with the list as it stands now. */
   releasePeersLists(): void {
     for (const answer of this.heldPeersLists.splice(0)) answer();
+  }
+
+  /** Item 622 (2026-11-20) — how many serve adds `serveAddGate` holds now. */
+  get heldServeAddCount(): number {
+    return this.heldServeAdds.length;
+  }
+
+  /** Item 622 (2026-11-20) — answers what `serveAddGate` held. */
+  releaseServeAdds(): void {
+    for (const answer of this.heldServeAdds.splice(0)) answer();
   }
 
   async stop(): Promise<void> {

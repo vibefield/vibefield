@@ -133,6 +133,35 @@ async function boot(dataDir: string): Promise<FielddDaemon> {
   return daemon;
 }
 
+/** Item 622 (2026-11-20) — `dataDir` booted with the door's product serve held at the floor's ADD (the mock records
+ * it at receipt and keeps its answer): `productAt` is true while the reconcile that placed it is parked there, before
+ * any event it emits after it and before the declares queued behind it, so a count taken now comes before every pass
+ * the boot still owes. `release` answers the add and resolves with the booted daemon. The port is the row's own
+ * (item 423's form): `bootstrap` cannot resolve while the add is held. */
+async function bootHeld(
+  dataDir: string,
+  mock: MockMgmtServer,
+): Promise<{ port: number; release: () => Promise<FielddDaemon> }> {
+  const port = await freePort();
+  mock.serveAddGate = (spec) => (spec["name"] === "product" ? "hold" : undefined);
+  const booting = bootstrap({ dataDir, controlPort: port, dataPort: 0 });
+  void booting.catch(() => undefined);
+  cleanup.push(async () => {
+    mock.serveAddGate = null;
+    mock.releaseServeAdds();
+    await (await booting.catch(() => null))?.stop();
+  });
+  await until(() => productAt(mock, port), 15_000, "the door's product serve, held at its add");
+  return {
+    port,
+    release: async () => {
+      mock.serveAddGate = null;
+      mock.releaseServeAdds();
+      return await booting;
+    },
+  };
+}
+
 /** The product door the way the SIDECAR delivers a caller from `node`, whose hello says `kind`. */
 async function fromNode(
   daemon: FielddDaemon,
@@ -893,8 +922,7 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     const before = new SettingsDocService({ dataDir });
     await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
     await before.dispose();
-    const daemon = await boot(dataDir);
-    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    const held = await bootHeld(dataDir, mock);
     mock.meshPeers = [
       ...mock.meshPeers,
       registryPeer({
@@ -905,6 +933,7 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
       }),
     ];
     const asked = peerLists(mock);
+    const daemon = await held.release();
     const first = await firstHello(daemon.controlPort, mock, "node-new");
     expect(peerLists(mock), "a pass before the answer").toBeGreaterThan(asked);
     expect(first).toBe("admitted");
@@ -953,8 +982,7 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     const before = new SettingsDocService({ dataDir });
     await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
     await before.dispose();
-    const daemon = await boot(dataDir);
-    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    const held = await bootHeld(dataDir, mock);
     mock.meshPeers = [
       ...mock.meshPeers,
       registryPeer({
@@ -965,6 +993,7 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
       }),
     ];
     const asked = peerLists(mock);
+    const daemon = await held.release();
     mock.peersListGate = () => "hold";
     const hellos = [firstHello(daemon.controlPort, mock, "node-new")];
     await until(() => mock.heldPeersListCount > 0, 15_000, "the first pass, held at the list");
@@ -981,8 +1010,7 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
 
   it("430 — with no phone removed, an unseen node is admitted with no pass asked", async () => {
     const { dataDir, mock } = await phoneWorld();
-    const daemon = await boot(dataDir);
-    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    const held = await bootHeld(dataDir, mock);
     mock.meshPeers = [
       ...mock.meshPeers,
       registryPeer({
@@ -993,8 +1021,12 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
       }),
     ];
     const asked = peerLists(mock);
+    const daemon = await held.release();
     expect(await firstHello(daemon.controlPort, mock, "node-new")).toBe("admitted");
-    expect(peerLists(mock)).toBe(asked);
+    // Item 622 (2026-11-20) — one pass of the row's own, after the hello: every pass queued before it
+    // has asked by then, so the count says what the hello asked
+    await daemon.devices.sync();
+    expect(peerLists(mock), "the passes besides the row's own").toBe(asked + 1);
   }, 60_000);
 
   it("430 — while a phone is removed, a guest is answered as today, with no pass asked", async () => {
@@ -1002,11 +1034,14 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     const before = new SettingsDocService({ dataDir });
     await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
     await before.dispose();
-    const daemon = await boot(dataDir);
-    await until(() => productAt(mock, daemon.controlPort), 15_000, "the door's product serve");
+    const held = await bootHeld(dataDir, mock);
     const asked = peerLists(mock);
+    const daemon = await held.release();
     const first = await firstHello(daemon.controlPort, mock, "node-guest", "guest@example.com");
     expect(first).toBe("admitted");
-    expect(peerLists(mock)).toBe(asked);
+    // Item 622 (2026-11-20) — one pass of the row's own, after the hello: every pass queued before it
+    // has asked by then, so the count says what the hello asked
+    await daemon.devices.sync();
+    expect(peerLists(mock), "the passes besides the row's own").toBe(asked + 1);
   }, 60_000);
 });
