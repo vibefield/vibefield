@@ -191,6 +191,7 @@ import {
   SOCKETS,
   SparkSummary,
   STORES,
+  type SystemHealthV1,
   SystemNativeRestartParams,
   type SystemNativeRestartResult,
   type SystemShellAttachResult,
@@ -2268,60 +2269,64 @@ export async function bootstrap(
     const healthListeners = new Set<(h: FielddHealth) => void>();
     // WP12 L2b — set by the consented stop below, the moment before the floor is asked to go
     let restartScheduled: RestartScheduled | null = null;
-    const health = (): FielddHealth => ({
-      fieldd: {
-        state: "up",
-        bootId,
-        contractsVersion: CONTRACTS_VERSION,
-        startedAt,
-        pid: process.pid,
-        fdSoftLimit,
-      },
-      nativeConnected: native.connected,
-      nativeLink: supervisor.health(),
-      nativePid: supervisor.currentPid ?? null,
-      nativeBuild: native.nativeBuild ?? null,
-      nativeLastExit: native.lastExit ?? null,
-      restartScheduled,
-      native: latestHealth,
-      rosettad: rosettad?.health() ?? ROSETTAD_UNCONFIGURED, // the projection, never state()
-      workspace: workspace.supervisor.health(),
-      docs: docs.health(),
-      plugins: plugins.health(),
-      logging: logging?.health() ?? null,
-      pluginLogging: pluginLogging?.health() ?? null,
-      pluginRuntime: {
-        serviceHost: serviceHost?.census() ?? null,
-        serviceRegistry: services.state(),
-        diagnostics: runtimeDiagnostics?.state() ?? null,
-      },
-      audit: audit.health(),
-      artifacts: artifactsRef?.health() ?? {
-        count: 0,
-        storage: "ready",
-        sources: { ready: 0, unavailable: 0, pending: 0 },
-        retiring: 0,
-      },
-      apps: {
-        ready: indexApps.ready,
-        rows: indexApps.table.size,
-        serves: madeAppsRef?.health() ?? { apps: 0, open: 0, retiring: 0, storage: "ready" },
-      },
-      mesh: {
-        // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
-        serves: mesh.serves().map((s) => {
-          // The provenance secret belongs only to the product serve. Artifact
-          // URLs are exact Truffle results with a root route.
-          const url = s.name === "product" ? capabilityUrl(s.url) : s.url;
-          return {
-            name: s.name,
-            status: s.status,
-            ...(url !== undefined ? { url } : {}),
-            ...(s.error !== undefined ? { error: s.error } : {}),
-          };
-        }),
-      },
-    });
+    // Item 600 (2026-11-19): a product client reads this answer as contracts' SystemHealthV1, so the
+    // literal is held to it as well as to FielddHealth: both, because the contract alone would widen the
+    // literal states FielddHealth names ("up", "ready") to string.
+    const health = (): FielddHealth =>
+      ({
+        fieldd: {
+          state: "up",
+          bootId,
+          contractsVersion: CONTRACTS_VERSION,
+          startedAt,
+          pid: process.pid,
+          fdSoftLimit,
+        },
+        nativeConnected: native.connected,
+        nativeLink: supervisor.health(),
+        nativePid: supervisor.currentPid ?? null,
+        nativeBuild: native.nativeBuild ?? null,
+        nativeLastExit: native.lastExit ?? null,
+        restartScheduled,
+        native: latestHealth,
+        rosettad: rosettad?.health() ?? ROSETTAD_UNCONFIGURED, // the projection, never state()
+        workspace: workspace.supervisor.health(),
+        docs: docs.health(),
+        plugins: plugins.health(),
+        logging: logging?.health() ?? null,
+        pluginLogging: pluginLogging?.health() ?? null,
+        pluginRuntime: {
+          serviceHost: serviceHost?.census() ?? null,
+          serviceRegistry: services.state(),
+          diagnostics: runtimeDiagnostics?.state() ?? null,
+        },
+        audit: audit.health(),
+        artifacts: artifactsRef?.health() ?? {
+          count: 0,
+          storage: "ready",
+          sources: { ready: 0, unavailable: 0, pending: 0 },
+          retiring: 0,
+        },
+        apps: {
+          ready: indexApps.ready,
+          rows: indexApps.table.size,
+          serves: madeAppsRef?.health() ?? { apps: 0, open: 0, retiring: 0, storage: "ready" },
+        },
+        mesh: {
+          // serves() is the FUSED view (reconcile ∘ runtime — mesh-client C3)
+          serves: mesh.serves().map((s) => {
+            // The provenance secret belongs only to the product serve. Artifact
+            // URLs are exact Truffle results with a root route.
+            const url = s.name === "product" ? capabilityUrl(s.url) : s.url;
+            return {
+              name: s.name,
+              status: s.status,
+              ...(url !== undefined ? { url } : {}),
+              ...(s.error !== undefined ? { error: s.error } : {}),
+            };
+          }),
+        },
+      }) satisfies FielddHealth & SystemHealthV1;
     const emitHealth = () => {
       const h = health();
       for (const fn of healthListeners) fn(h);

@@ -296,10 +296,13 @@ export type TicketRedemption =
   | { ok: false; reason: "invalid" }
   | { ok: false; reason: "writer-busy"; docId: string };
 
-export interface DocServiceHealth {
+/** Item 600 (2026-11-19): a type, not an interface, so the system.health answer can be held to
+ * contracts' SystemHealthV1: an interface gets no implicit index signature, and the contract's
+ * objects are passthrough. */
+export type DocServiceHealth = {
   state: "ready" | "failed";
   docCount: number;
-}
+};
 
 interface TicketRecord {
   docId: string;

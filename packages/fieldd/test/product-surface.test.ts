@@ -12,7 +12,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SOCKETS } from "@vibefield/contracts";
+import { SOCKETS, SystemHealthV1 } from "@vibefield/contracts";
 import {
   currentWindowsAccount,
   MULTI_USER_PRINCIPALS,
@@ -35,12 +35,16 @@ afterEach(async () => {
   cleanup = [];
 });
 
-async function setup(): Promise<{ dataDir: string; mock: MockMgmtServer; daemon: FielddDaemon }> {
+/** `nativeHealth`: the floor's health the mock answers (the generic `{n: 0}` when unset). */
+async function setup(
+  opts: { nativeHealth?: unknown } = {},
+): Promise<{ dataDir: string; mock: MockMgmtServer; daemon: FielddDaemon }> {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-prod-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+  if (opts.nativeHealth !== undefined) mock.healthSnapshot = opts.nativeHealth;
   await mock.start();
   cleanup.push(() => mock.stop());
   const daemon = await bootstrap({ dataDir, controlPort: 0 });
@@ -316,6 +320,28 @@ describe("system.health.subscribe (aggregated stream)", () => {
       removed: boolean;
     };
     expect(again.removed).toBe(false);
+  });
+});
+
+describe("system.health as a product client reads it (item 600)", () => {
+  it("answers contracts' SystemHealthV1, by the request and in the stream's snapshot", async () => {
+    // a floor whose health is NativeHealth, as field-native's is (the generic `{n: 0}` is not one)
+    const nativeHealth = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../contracts/fixtures/native-health.valid.json"),
+        "utf8",
+      ),
+    ) as unknown;
+    const { daemon } = await setup({ nativeHealth });
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+
+    const read = SystemHealthV1.safeParse(await rpc.call("system.health", {}));
+    expect(read.success, JSON.stringify(read.error?.issues)).toBe(true);
+    expect(read.data?.native).toEqual(nativeHealth);
+
+    const sub = (await rpc.call("system.health.subscribe", {})) as { snapshot: unknown };
+    expect(SystemHealthV1.safeParse(sub.snapshot).success).toBe(true);
   });
 });
 
