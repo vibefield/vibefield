@@ -63644,3 +63644,119 @@ rules in field-app at the parent and all four, each once at its level, at the gr
   `error` (prod-builder, each area's set read by its lane).
 - The test Mac's B-row helper reds any warning over a row's paths: a row cut on a tree with this commit takes the
   known-red form for the files above (qa-01's).
+
+> **Read after the push (2026-11-20):** GitHub's `verify` at the pushed head `686f8fa90` passed at its first attempt:
+> run 44702073893, created 08:22:55Z, completed 09:12:24Z, about 49 minutes; `audit` passed.
+
+## CP-4a2b's M-r2 — the flow's own engine, carried onto main: 203 commits, one prepared file, one kit mend (M468)
+
+(2026-11-20; 204 commits, 63 paths, +20,702 −752: `aeef1c76f` "CP-4a2b: docs — §9 says what a Run says when it can't
+start, and what a …" through `5dc301f99` "CP-4a2b (M-r2's carry): the kit's needs-card words count follows its golden,
+20 cases". The first 203 were written 2026-11-05 to 2026-11-10 on `50e88fc9b` and carried onto main `686f8fa90a7c` on
+2026-11-20 one commit at a time, each through the repository's own pre-commit hook; the 204th, the kit's mend (below),
+was made on the carried top `18197ceff85f` the same day. Landed by a fast-forward of main to the 204th.)
+
+**What it is.** M-r1's entry named it: "the flow's own engine (13a's slices 7–15, its daemon wiring cut last)", the
+third of Q-A0 (a)'s four mints. As its commits' own subjects name the parts:
+- **The runs:** a run starts from the bytes fieldd kept, or asks first; a step's agent starts by the one spawn road;
+  a run's steps take its `LIVE_STEPS_MAX` slots; a step's answer is its turn's end, heard once and bounded whole; a
+  run's folder is held at its start; a changed flow's start is kept on its item and begun at the act.
+- **Slices 9 to 14 and J1:** the form check (D12); a run that waits has no process, parked and woken (10a); the
+  journal's answers released in journal order (10b); a gate holds its run on the person (11); the call cap taken out
+  whole (12); Stop ends a run in D4's order through the one end every end takes (13); `restore()` and `settled()`
+  bring every live run back, a lost step raised and resumed (14); a journal past 32 MiB ends its run (J1).
+- **Contracts:** `FLOW_LIMITS` gains `STEP_LINES_MAX` (16), `FOLDER_CHARS` (4,096), `RUN_AGENTS_MAX` (16,
+  provisional), `JOURNAL_MAX_BYTES` (32 MiB) and `RESTORE_READ_MAX_BYTES` (12 MiB, provisional);
+  `FlowJournalHead.folder` and `FlowRunRecord.agents` are optional fields with their EL9 fixtures. `CALLS_MAX`,
+  `CALLS_MORE`, `allowMore`, `flow-cap` and `FlowRunRecord.allowed` come out, with every sentence that said a cap
+  exists. A bound a stored field is held to is only ever raised; lowering one is a migration.
+- **The re-cut's tail, 17 commits:** `flow-cap` out everywhere (main's IOS-12d readers of it included); Q17, a Stop
+  reaches a run this boot holds pending; Q29 (i), `replacing(id)` keeps a replacement's span; items 306 and 312, a
+  Stop of a held run stands against the idle poll and G5's attach retry; item 310, an idle replacement the audit
+  refuses restores the held run; item 302, below.
+
+**What a person sees.** What DESIGN.md §9 says a run does. This adds §9's Proposed entries for a run whose Agent
+Profiles leave none, a run that can't start for its input's folder, a step refused when its run keeps as many agents
+as a run may, a version the static read refuses, a run set aside when its script goes quiet, a gate's one rule and
+its eight words, "An ask refused", what a run tells the spark that started it, and a lost step's words (W1–W4). Item
+302 marks four of §9's flow sentences as not built at this tip, each with what the code does today. This entry reads
+no app; the whole verify below is the proof of record.
+
+**How it was carried.** The stack was replayed onto main by a carry script in a scratch repository that reads the
+store through its alternates, every git call under a profile that denies writes to the checkout. Each commit is a
+`cherry-pick --no-commit`, then `commit -C` with its author and date. A conflict with no prepared file stops the
+run. One met: step 188 (Q17's seam) in `packages/fieldd/src/agent-runtime.ts`, resolved PAST its conflict's hunks by
+a prepared file (item 537's allow-list: `typedEndDeps` takes the runtime's one table read, never the bare
+`readProcesses`). Its pick's two sides were held to the blobs the file was made on. With it, the extra file
+`packages/fieldd/test/typed-end-deps.test.ts` (that test had asserted the open fallback). Step 188's message carries
+a dated sentence saying so. The other 202 picked clean.
+
+**Merged anew.** Six of the stack's 62 paths were moved by main since the green rehearsal's base `87e71631c083`
+and merged in the carry: DESIGN.md, `packages/contracts/src/methods.ts`, `registries.ts`,
+`packages/contracts/test/fixtures.test.ts`, `packages/fieldd/src/daemon.ts` and
+`packages/fieldd/test/agent-session.test.ts`. The rehearsal's verify at
+`fa6a7240d0df` does not cover them; this top's own whole verify is what proves them. The other 56 sit at the
+rehearsal top's blobs, held path by path.
+
+**The kit's mend.** `pnpm verify` does not run the iOS kit. The first kit at the carried top `18197ceff85f` (row
+kit-carry-mr2) read red on one row of 3,151: FieldProductTests' "each item's card: its facts and its words, field by
+field", where `NeedsCardGoldenTests.swift:22` expected 21 cases and the golden held 20. The re-cut's `flow-cap` removal
+(`133bcc0a3`) took that case out of the golden and left the count, which sat in the stack's own base; no kit row had run
+at a stack, rehearsal or trial top. The 204th commit sets the count to the golden's own: one line of one file, a path
+outside the stack's 62. The kit at it (row kit-carry-mr2k) is green.
+
+**The tree** `cb611f2588f4`, in this order and no stronger:
+- PREDICTED before the trials: main's tree with each stack path set to the earlier trial top's blob, or to its content
+  re-make where assembly 16 moved it. The same build on the earlier main gave that trial's tree exactly.
+- TRIAL-EQUALLED: the trial's top `fd7c0e1535e3` had that tree, and five held files at their predicted blobs.
+- REAL-HELD: the real replay held its top's tree to it before the branch was written.
+- VERIFIED: the whole `pnpm verify` at the real top `18197ceff85f` on the test Mac, green (below).
+
+The landed tree `64af9cbbc6b4` is that tree plus the kit's one line: VERIFIED whole by row v-carry-mr2k, green (below).
+
+**Proved before the land, on the development Mac.**
+- The three files assembly 16 moved under the stack (`fixtures.test.ts`, `daemon.ts`, `agent-session.test.ts`) were
+  re-made by content onto the landed text. Each file's change from the landed text equals the stack's from the base,
+  and its change from the stack's top equals main's. Twelve must-fail controls each failed. The re-made blobs equal
+  the ones made before assembly 16 landed, on its pieces' own tips.
+- Item 620's lint, under its biome.jsonc: the stack's one changed `.ts` under field-app reads no diagnostic at the
+  carried text nor main's, while a control (a hook called in an `if`) errors on useHookAtTopLevel.
+- `trial mr2`, 08:08:57Z → 08:10:45Z: 203 commits, 0 merges, the hook on every commit. `real mr2`, 08:15:17Z →
+  08:17:06Z: the same, then the objects fetched into the store by a fetch that names no ref, and one branch written
+  create-only, `refs/heads/cp4a2b/m-r2-on-686f8fa90a7c` = `18197ceff85f`. The refs before and after differ by that
+  line alone.
+- Earlier passes, each green: the rehearsal on `87e71631c083` (2026-11-19) and trials on `846ea63c714a` and
+  `906328374319`.
+
+**On the test Mac.** Row v-carry-mr2: `pnpm verify` whole at the real top `18197ceff85f`, its tree `cb611f2588f4` and
+a clean status held before it, 2026-11-20 08:25:14Z → 08:36:01Z: **GREEN**, exit 0 in 646 s, after the lock's own
+offline install changed nothing. Every stage of the chain ran, preflight to gen:check, with one preflight warning
+(R23's candidate line on `acp`) and no failure. Lint read 3,956 files: 188 warnings and 57 infos, main's own counts.
+Typecheck and test each ran for 28 projects; 27 vitest suites, none failed (the largest 374 files, 5,466 tests); Rust
+696 passed, 0 failed, 15 ignored, over 43 suites. The commit came to the test Mac from the branch itself; the bundle
+made for it (`8b4357663add`) was read at its sum and not needed.
+
+Row kit-carry-mr2, the iOS kit whole (every test target) at `18197ceff85f`, 09:01:30Z → 09:04:10Z: **RED**, exit 65,
+1 of 3,151 rows failed, the needs-card words row (above). Row kit-carry-mr2k, the kit whole at the 204th
+`5dc301f99047`, 09:14:47Z → 09:17:03Z: **GREEN**, exit 0, 3,151 rows over 17 targets, 3,148 passed and 3 skipped, row
+for row as main's own kit at `686f8fa90a7c`. Row v-carry-mr2k, `pnpm verify` whole at `5dc301f99047`, detached and
+clean before it, 09:19:26Z → 09:29:51Z: **GREEN**, exit 0 in 624 s, after the offline install changed nothing. Every
+stage ran, with the same one preflight warning and no failure, and every count is v-carry-mr2's: lint (3,956 files, 188
+warnings, 57 infos), typecheck and test for 28 projects, 27 vitest suites none failed (the largest 374 files, 5,466
+tests), Rust 696 passed, 0 failed, 15 ignored, over 43 suites.
+
+**The landing's own proof.** The land is a fast-forward of main to `5dc301f99047`, the very commit rows kit-carry-mr2k
+and v-carry-mr2k ran at, so the kit and the whole verify above are the landing's own. The push's verify and kit run at
+the records commit over it and are read after the push.
+
+**Owed.**
+- The landing-only gates (`pnpm gate:landing`: `pnpm still` and every smoke, on this Mac's GPU).
+- SP-1e4 was carried onto `18197ceff85f` (its branch cut, its tree the predicted one); its own whole verify read red on
+  one field-app test (`thread-flow.test.tsx`, the crew card's plates: the card's foot drew no Pause all). It has not
+  landed, and no number is given it here.
+- M-d, the last of Q-A0 (a)'s four mints (M-r1's entry: CP4-S18's refusal, the doors, the verbs and the kill matrix).
+- Item 636: eleven lines the stack carries under packages/ name a board card by its id (ten comments and one test's
+  title: `co-journal-byte-bound` nine times, `co-j1-flood-words` and `co-flow-asks-fan-out` once each), and DESIGN.md
+  names `co-j1-flood-words` twice. Main has none. They were written 2026-11-07 and 2026-11-08, before the rule that
+  a product comment says the item and the day, and they land as carried, since this is the tree the verify proves.
+  One sweep commit after the carry re-says each by its item and day, with that tree's own verify.
