@@ -96,6 +96,18 @@ const HELD: ReadonlyArray<{ readonly what: string; readonly ink: Rgb; readonly g
   { what: "a terminal's bold", ink: inkOf(".vf-card-out b", PLATE), ground: PLATE },
   { what: "the dark card's name", ink: inkOf(".vf-card-name", DARK, "dark"), ground: DARK },
   { what: "the dark card's state", ink: inkOf(".vf-card-state", DARK, "dark"), ground: DARK },
+  // a terminal's summary line is words too, and reads as its output does (item 616)
+  {
+    what: "a terminal's summary line",
+    ink: inkOf(".vf-card-out [data-quiet]", PLATE),
+    ground: PLATE,
+  },
+];
+
+/** The stock's marks, which §2.4 holds to 3:1: a prompt's `$`, and the other faces along the foot (item 616). */
+const MARKS: ReadonlyArray<{ readonly what: string; readonly ink: Rgb; readonly ground: Rgb }> = [
+  { what: "a prompt's $", ink: inkOf(".vf-card-prompt", PLATE), ground: PLATE },
+  { what: "the other faces", ink: inkOf(".vf-card-faces", FOOT), ground: FOOT },
 ];
 const OUTPUT = HELD[5] ?? { what: "", ink: BLACK, ground: BLACK };
 const STATE = HELD[8] ?? { what: "", ink: BLACK, ground: BLACK };
@@ -141,12 +153,21 @@ describe("the floor under a card's light (DESIGN.md §5 'The lamp, live'; item 6
   });
 
   it("keeps every word it is for at 4.5:1 or more at every turn, by day and by night", () => {
-    expect(HELD).toHaveLength(9);
+    expect(HELD).toHaveLength(10);
     for (const { what, ink, ground } of HELD) {
       // each of them keeps it held flat, or the floor is not for it
       expect(contrast(ground, ink, 1), `${what}, flat`).toBeGreaterThanOrEqual(4.5);
       expect(least(ground, ink, false, FLOOR), `${what}, by day`).toBeGreaterThanOrEqual(4.5);
       expect(least(ground, ink, true, FLOOR), `${what}, by night`).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+
+  it("keeps the stock's marks at 3:1 or more at every turn, by day and by night (item 616)", () => {
+    expect(MARKS).toHaveLength(2);
+    for (const { what, ink, ground } of MARKS) {
+      expect(contrast(ground, ink, 1), `${what}, flat`).toBeGreaterThanOrEqual(3);
+      expect(least(ground, ink, false, FLOOR), `${what}, by day`).toBeGreaterThanOrEqual(3);
+      expect(least(ground, ink, true, FLOOR), `${what}, by night`).toBeGreaterThanOrEqual(3);
     }
   });
 

@@ -459,6 +459,21 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
     expect(rule(".vf-card-stock::after")).toContain("background-image: var(--vf-card-grain);");
   });
 
+  it("prints its quiet words at 74% of the stock's ink and its marks at 55%: §2.4's floors by night and turned (item 616)", () => {
+    // words that are read: a terminal's summary line, and what a card on its way in says
+    const words = "color: color-mix(in srgb, var(--card-ink) 74%, transparent);";
+    expect(rule(".vf-card-out [data-quiet]")).toContain(words);
+    expect(rule(".vf-card-wait")).toContain(words);
+    // marks: a prompt's `$` here, and the other faces along the foot by their token (the row below)
+    expect(rule(".vf-card-prompt")).toContain(
+      "color: color-mix(in srgb, var(--card-ink) 55%, transparent);",
+    );
+    // a file's comment keeps its 36% until its own look is decided (item 617)
+    expect(rule(".vf-card-lines [data-quiet]")).toContain(
+      "color: color-mix(in srgb, var(--card-ink) 36%, transparent);",
+    );
+  });
+
   it("defines one paper for both themes, the press's own, but for the night's reading light", () => {
     const root = TOKENS.slice(TOKENS.indexOf(":root {"), TOKENS.indexOf("\n}\n"));
     const dark = TOKENS.slice(TOKENS.indexOf(".dark {"));
@@ -472,7 +487,7 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
       "--vf-card-stock-ink-3: rgb(28 22 17 / 42%);",
       "--vf-card-type-ink: rgb(28 22 17 / 86%);",
       "--vf-card-face-ink: rgb(28 22 17 / 78%);",
-      "--vf-card-face-ink-2: rgb(28 22 17 / 34%);",
+      "--vf-card-face-ink-2: rgb(28 22 17 / 55%);",
       "--vf-card-frame: rgb(28 22 17 / 12%);",
       "--vf-card-plate: #ebe4d7;",
       "--vf-card-cut: rgb(58 46 22 / 15%);",
