@@ -162,6 +162,14 @@ async function bootHeld(
   };
 }
 
+/** Item 622 (2026-11-20) — the boot's own passes, done: every declare the boot queued has reconciled, and every
+ * device sync their events queued has asked its list (this helper's own reconcile wakes and pass included). Only
+ * after it does a row's count belong to the row. */
+async function settled(daemon: FielddDaemon): Promise<void> {
+  await daemon.mesh.reconcile();
+  await daemon.devices.sync();
+}
+
 /** The product door the way the SIDECAR delivers a caller from `node`, whose hello says `kind`. */
 async function fromNode(
   daemon: FielddDaemon,
@@ -923,6 +931,8 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
     await before.dispose();
     const held = await bootHeld(dataDir, mock);
+    const daemon = await held.release();
+    await settled(daemon);
     mock.meshPeers = [
       ...mock.meshPeers,
       registryPeer({
@@ -933,7 +943,6 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
       }),
     ];
     const asked = peerLists(mock);
-    const daemon = await held.release();
     const first = await firstHello(daemon.controlPort, mock, "node-new");
     expect(peerLists(mock), "a pass before the answer").toBeGreaterThan(asked);
     expect(first).toBe("admitted");
@@ -983,6 +992,8 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
     await before.dispose();
     const held = await bootHeld(dataDir, mock);
+    const daemon = await held.release();
+    await settled(daemon);
     mock.meshPeers = [
       ...mock.meshPeers,
       registryPeer({
@@ -993,7 +1004,6 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
       }),
     ];
     const asked = peerLists(mock);
-    const daemon = await held.release();
     mock.peersListGate = () => "hold";
     const hellos = [firstHello(daemon.controlPort, mock, "node-new")];
     await until(() => mock.heldPeersListCount > 0, 15_000, "the first pass, held at the list");
@@ -1011,6 +1021,8 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
   it("430 — with no phone removed, an unseen node is admitted with no pass asked", async () => {
     const { dataDir, mock } = await phoneWorld();
     const held = await bootHeld(dataDir, mock);
+    const daemon = await held.release();
+    await settled(daemon);
     mock.meshPeers = [
       ...mock.meshPeers,
       registryPeer({
@@ -1021,7 +1033,6 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
       }),
     ];
     const asked = peerLists(mock);
-    const daemon = await held.release();
     expect(await firstHello(daemon.controlPort, mock, "node-new")).toBe("admitted");
     // Item 622 (2026-11-20) — one pass of the row's own, after the hello: every pass queued before it
     // has asked by then, so the count says what the hello asked
@@ -1035,8 +1046,9 @@ describe("406 — Remove for a phone, on a booted daemon", () => {
     await before.refuseDevice("remove", "dev-phone", ["node-phone"], "dev-desk-b");
     await before.dispose();
     const held = await bootHeld(dataDir, mock);
-    const asked = peerLists(mock);
     const daemon = await held.release();
+    await settled(daemon);
+    const asked = peerLists(mock);
     const first = await firstHello(daemon.controlPort, mock, "node-guest", "guest@example.com");
     expect(first).toBe("admitted");
     // Item 622 (2026-11-20) — one pass of the row's own, after the hello: every pass queued before it
