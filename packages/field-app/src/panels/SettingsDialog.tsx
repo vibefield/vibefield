@@ -65,7 +65,7 @@ const PAGES: readonly PageMeta[] = [
   {
     id: "appearance",
     label: "Appearance",
-    description: "The color mode used by app chrome and cards.",
+    description: "Light or dark, for the app and your desk.",
     icon: "sun",
   },
   {
