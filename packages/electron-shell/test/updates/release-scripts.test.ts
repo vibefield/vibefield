@@ -1806,6 +1806,19 @@ describe("release.yml's shape — the permissions table, as a test", () => {
     expect(yml).toMatch(/\n# {3}attest {5}— {18}contents: read, id-token: write, {5}/);
   });
 
+  // Item 641 (2026-11-20): pnpm stores each workspace project's name and version with an install, and a
+  // `pnpm run` on a tree whose project moved after it stops where no one can answer. The prerelease's stamp
+  // moves apps/desktop's version, so it runs before the install, which then records the tree every later
+  // step runs on.
+  it("stamps the prerelease's version before the install, so every later pnpm run meets the tree it recorded", () => {
+    const names = stepsOf("build").map((step) => step.name);
+    const stamp = names.findIndex((name) => name.startsWith("Stamp the prerelease's version"));
+    const install = names.indexOf("Install (frozen)");
+    expect(stamp).toBeGreaterThan(-1);
+    expect(install).toBeGreaterThan(-1);
+    expect(stamp).toBeLessThan(install);
+  });
+
   // LP-1: the DMG is signed, notarized and stapled INSIDE package:mac:release (the step that holds the Apple
   // credentials), so every later reader — the copy into the build artifact, the feed's sha512 the sign job signs,
   // release-verify, SHA256SUMS and the attestation — reads the final bytes.
