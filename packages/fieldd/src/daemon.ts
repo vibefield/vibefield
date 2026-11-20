@@ -459,6 +459,7 @@ import {
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
 import { crewFactsOf, SparkCrews } from "./tool-plane/crews";
+import { sparkSpawn } from "./tool-plane/rooms/talk/spawn";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
 import { NeedsQueue, type NeedsRun } from "./tool-plane/rooms/you/queue";
 import { NeedsStore } from "./tool-plane/rooms/you/store";
@@ -3664,32 +3665,13 @@ export async function bootstrap(
     });
     const crewWaiting = (runtimeRunId: string): number | undefined =>
       agents.isLive(runtimeRunId) ? inputs.pending(runtimeRunId).length : undefined;
-    // the one spawn a spark's agents start by: the talk room's, and the needs-you queue's Allow one more; the crew it
-    // joins rides its origin (the card's rows find it there) and the crew's kept record takes the member (SP-1e2)
-    const talkSpawn: TalkDeps["spawn"] = async (launch, spark, crew) => {
-      const result = await agents.spawn(
-        {
-          provider: launch.agent,
-          cwd: launch.cwd,
-          profileSet: launch.profileSet,
-          ...(launch.model !== undefined ? { modelSelection: launch.model } : {}),
-        },
+    // the one spawn a spark's agents start by (tool-plane/rooms/talk/spawn.ts), on the runtime
+    const talkSpawn = sparkSpawn({
+      spawn: async (launch, origin) =>
         // the spark's own door principal: a run's ticket rights follow it (read only), never the person's
-        { kind: "mcp-agent" },
-        undefined,
-        { origin: { by: "spark", spark, ...(crew !== undefined ? { crew: crew.id } : {}) } },
-      );
-      const runtimeRunId = result.session.runtimeRunId;
-      if (crew !== undefined) {
-        const folder = folderNameOf(launch.cwd);
-        crews.started(spark, crew, {
-          runtimeRunId,
-          agent: launch.agent,
-          ...(folder !== undefined ? { folder } : {}),
-        });
-      }
-      return { runtimeRunId };
-    };
+        (await agents.spawn(launch, { kind: "mcp-agent" }, undefined, { origin })).session,
+      crews,
+    });
     // TU-1 (Q3) — the one placement rule's persona map, from the monitor's latest Agent Profiles frame (the one
     // Godview's rows are placed by), read at each use; null until the monitor holds a frame, so a persona's run filed
     // under none is in no profile for those first moments. The talk room, the Allow, the compose room and the door read
