@@ -203,9 +203,8 @@ James's pick of 2026-11-13: "As is, with the notice, for build 6"). A build uplo
 never be used for external testing or the App Store, so a build meant for App
 Review is uploaded with `store` from the start; neither export publishes a
 release by itself (submitting for review is done in App Store Connect).
-`MARKETING_VERSION` is `0.9.0`. *Corrected 2026-11-06:* this said it "stays
-`0.1` until the beta cut moves it"; it moved ahead of build 6's archive, on
-James's ruling that every 0.9 launch date lands by Nov 9.
+The first public iOS release uses `MARKETING_VERSION = 1.0`, matching its
+App Store Connect version record. The build number is set separately when archiving.
 
 The helper selects `/Applications/Xcode.app/Contents/Developer` without changing
 the machine's global `xcode-select`. Override `DEVELOPER_DIR` if necessary. It
