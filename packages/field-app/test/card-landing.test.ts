@@ -35,6 +35,7 @@ import {
   sessionCardOf,
   textCardOf,
 } from "../src/frame/cards/cards-model";
+import { OUTCOME_WORDS } from "../src/frame/cards/cards-words";
 
 const BASE: CardStub = { id: "c", at: 0, origin: { view: "canvas", how: "copy" } };
 
@@ -125,7 +126,7 @@ describe("landing: §4.4's table", () => {
       lands: false,
       reason: "Copilot can't work on desk objects yet",
     });
-    const page: RefFace = { ...LIVE, label: "Live page", kindName: "Browser pane" };
+    const page: RefFace = { ...LIVE, label: "Live page", kindName: "Browser" };
     expect(landing(page, AGENT)).toEqual({ lands: true, verb: "Hand over", noun: "the live page" });
   });
 
@@ -158,7 +159,7 @@ describe("landing: §4.4's table", () => {
     expect(landing(ADDRESS, { at: "desk", browser: true })).toEqual({
       lands: true,
       verb: "Open",
-      noun: "a browser pane at it",
+      noun: "it in a browser",
     });
   });
 
@@ -210,6 +211,13 @@ describe("bloomOf and dragLabelOf (the drop's model)", () => {
     const model = bloomOf(card(LIVE, OPML), DESK);
     expect(model.onlyFit).toBe("ref");
     expect(dragLabelOf(model, "The desk")).toEqual({ ok: true, label: "Go to it" });
+  });
+
+  it("opens an address on a desk that holds a browser, and says so in the act's own words", () => {
+    const model = bloomOf(card(ADDRESS, OPML), { at: "desk", browser: true });
+    expect(model.onlyFit).toBe("address");
+    expect(dragLabelOf(model, "The desk")).toEqual({ ok: true, label: "Open it in a browser" });
+    expect(OUTCOME_WORDS.placedPage).toBe("Opened it in a browser");
   });
 
   it("refuses with the first reason when nothing fits: no ring, no bloom", () => {
