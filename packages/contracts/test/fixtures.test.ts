@@ -282,6 +282,7 @@ import {
   ServeEntry,
   ServeRoute,
   StoreSnapshot,
+  SystemHealthV1,
   SystemNativeRestartParams,
   SystemNativeRestartResult,
   TerminalRoutesStreamPayload,
@@ -524,6 +525,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "shell-surfaces-control-params": ShellSurfacesControlParams,
   "shell-surfaces-control-result": ShellSurfacesControlResult,
   "native-health": NativeHealth,
+  // Item 600 — fieldd's `system.health` as a product client reads it; fieldd's own blocks ride through unread.
+  // Its own rows: system-health.test.ts.
+  "system-health": SystemHealthV1,
   "desired-state": DesiredState,
   // IL-D4 (draft/thinking-inventory-latency.md §4.1) — three floors on purpose: a judging floor
   // with every cell fresh (`observed-state.fresh`: `inventoryBoundMs` alone), one with a stale

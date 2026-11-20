@@ -1,0 +1,37 @@
+{
+  "//": "Item 600 — fieldd's system.health answer as the Settings panels and the shell read it: fieldd's identity, the floor and its units, the floor's build, the docs and the serves. The rest of fieldd's answer (here its plugins' counts and the floor's last exit) rides through unread. Synthetic values.",
+  "fieldd": {
+    "state": "up",
+    "bootId": "boot-01J9ZK3M5Q",
+    "contractsVersion": "0.1.0",
+    "startedAt": 1763560000000,
+    "pid": 48211,
+    "fdSoftLimit": 10240
+  },
+  "nativeConnected": true,
+  "nativeBuild": "field-native 0.1.0 (a1b2c3d)",
+  "nativeLastExit": null,
+  "restartScheduled": null,
+  "native": {
+    "state": "up",
+    "bootId": "native-01J9ZK3M5R",
+    "units": [
+      { "unit": "mgmt", "state": "up" },
+      { "unit": "terminal", "state": "up" },
+      {
+        "unit": "mesh-gateway",
+        "state": "degraded",
+        "detail": "signing in",
+        "authUrl": "https://login.example.test/a/1f2e3d"
+      }
+    ]
+  },
+  "docs": { "state": "up", "docCount": 3 },
+  "plugins": { "count": 4, "enabled": 3, "invalid": 0 },
+  "mesh": {
+    "serves": [
+      { "name": "product", "status": "serving", "url": "https://desk.example.test/c/9a8b7c" },
+      { "name": "artifacts", "status": "failed", "error": "the gateway is not signed in" }
+    ]
+  }
+}

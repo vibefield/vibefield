@@ -538,6 +538,72 @@ export const NativeLinkHealth = z
   .passthrough();
 export type NativeLinkHealth = z.infer<typeof NativeLinkHealth>;
 
+/** Item 600 (2026-11-19) — the state SystemHealthV1 reads a floor block it cannot read as: a wire value no person
+ * reads. A reader maps it to its own word (the Settings panel says "unavailable"), never shows it as it is. */
+export const SYSTEM_HEALTH_NATIVE_UNREADABLE = "unreadable";
+
+/** Item 600 (2026-11-19) — fieldd's `system.health` answer (and `system.health.subscribe`'s snapshot and deltas) as a
+ * PRODUCT client reads it: the Settings panels (fieldd's identity, the floor and its units, the docs, the serves) and
+ * the shell (the floor's build). Every object is .passthrough() and every state an open word, so a newer fieldd's
+ * state reads as itself and fieldd's own blocks (the index daemon, the files host, the services, the census, the
+ * native link) ride through unread: they stay fieldd's projection, never this contract. fieldd's answer is held to
+ * it at compile time, by a `satisfies` on health()'s literal. Local to its device (D36): no phone or peer reads it.
+ * A field arrived later is optional, as an adopted older fieldd may not say it. */
+export const SystemHealthV1 = z
+  .object({
+    fieldd: z
+      .object({
+        bootId: z.string(),
+        contractsVersion: z.string(),
+        pid: z.number().int(),
+      })
+      .passthrough(),
+    nativeConnected: z.boolean(),
+    /** the floor's own health as far as a reader reads it; null when fieldd has none. A floor block this build cannot
+     * read (the two planes' versions apart) reads as state SYSTEM_HEALTH_NATIVE_UNREADABLE with no units: never as
+     * null (which says fieldd has none), never as a miss of the whole answer, so fieldd's own facts still show. */
+    native: z
+      .object({
+        state: z.string(),
+        units: z.array(
+          z
+            .object({
+              unit: z.string(),
+              state: z.string(),
+              /** the unit's own sentence for its state, shown beside it (the mesh node's "signing in") */
+              detail: z.string().optional(),
+              /** the mesh gateway's sign-in page, while it asks for one */
+              authUrl: z.string().optional(),
+            })
+            .passthrough(),
+        ),
+      })
+      .passthrough()
+      .nullable()
+      .catch({ state: SYSTEM_HEALTH_NATIVE_UNREADABLE, units: [] }),
+    /** GT-2d — the build label the paired floor gave; null when it did not say */
+    nativeBuild: z.string().nullable().optional(),
+    docs: z.object({ state: z.string(), docCount: z.number().int().nonnegative() }).passthrough(),
+    /** C3 — the declared serves with their state; `url` is a capability URL, read where it is shown and never logged */
+    mesh: z
+      .object({
+        serves: z.array(
+          z
+            .object({
+              name: z.string(),
+              status: z.string(),
+              url: z.string().optional(),
+              error: z.string().optional(),
+            })
+            .passthrough(),
+        ),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type SystemHealthV1 = z.infer<typeof SystemHealthV1>;
+
 /** `system.native.restart` (methods.ts, local only) — WG-D5: the person's
  * restart of a floor held `unresponsive` past the bound (or `gone`), in the
  * consent shape of `system.shutdown {native}` (design-00 EL1's consented
