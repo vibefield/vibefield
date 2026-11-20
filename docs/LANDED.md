@@ -62872,3 +62872,775 @@ failed; Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the sa
 - A print whose picture another device holds offers no row on this one until the picture arrives. Whether such a
   print should offer a row that waits, and say why, was not asked.
 - No DECISIONS row: the design is DESIGN.md §8's six lines, dated and named there.
+
+> **Read after the push (2026-11-20):** GitHub's `verify` at the pushed head `906328374` (run 44665963707) failed at its
+> first attempt, 03:53:11Z, on one row of fieldd's 4,690 ("expected 15 to be 14", the 430 rows' count: item 622's,
+> mended by M463); its second attempt passed, 04:44:05Z.
+
+## Item 554 — pnpm asks a person before it installs, and stops where no one can answer (M461)
+
+(2026-11-20; three commits, 3 paths: `a532eb1ce` (doc, "554 (doc): the decision index records pnpm asking a person
+before it installs, ruled at the lean"), `1ba4ad86c` (red, "554 (red): a guard holds pnpm-workspace.yaml to the two
+settings that make pnpm ask first") and `8fdb77584` (green, "554 (green): pnpm asks a person before it installs, and
+stops where no one can answer"). Cut by the terminal-look lane on main `906328374`.)
+
+**A finding, first.** `pnpm siblings use NAME` spawns its install with stdin ignored (`scripts/siblings.mjs:1179-1184`),
+so it can never be asked, even at a terminal: an overlay install that would take a version younger than the
+release-age window and not on `minimumReleaseAgeExclude` now fails, closed, and names the version. Its remedy is the
+reviewed row; no item follows.
+
+**What was wrong.** On 2026-11-18 a version bump moved the ghosttea rows in pnpm-workspace.yaml from 0.15.0 to 0.16.0
+before its install. The next command was a check that writes nothing, started through pnpm. pnpm saw the tree out of
+step with its lock and, at its default `verifyDepsBeforeRun: install`, installed online by itself (7 downloads, 4
+packages swapped). The four new versions were under a day old, so at its default of non-strict release age it wrote
+them into `minimumReleaseAgeExclude` itself, and its writer dropped two hand-written notes there. The bump's next step
+no longer found its text and stopped; nothing was committed.
+
+**What changes.**
+- `pnpm-workspace.yaml` +9: `verifyDepsBeforeRun: prompt` and `minimumReleaseAgeStrict: true`, before the exclusion
+  list, under a dated note.
+- `tooling/dev-runner/test/pnpm-asks.test.mjs` +23, new: two rows hold the file to both lines, since pnpm's own
+  writer rewrites the file whenever it adds an exclusion.
+- `docs/DECISIONS.md` +1: item 554's row.
+
+**What pnpm does now**, read in pnpm 11.13.1's own bundle (`dist/pnpm.mjs`, the version `packageManager` pins):
+- `pnpm run` and `pnpm exec` on a tree out of step with its lock ask at a terminal (Enter installs), and stop with
+  "Run \"pnpm install\" before running scripts" when stdin is no terminal (:250014-250046). An environment's
+  `pnpm_config_verify_deps_before_run` still overrides the file (:149588-149590).
+- An install that would resolve a version younger than the 1,440-minute window and not on the list asks at a terminal,
+  where the default is no, and fails with `NO_MATURE_MATCHING_VERSION`, naming each version, with no terminal or in CI
+  (:196652-196726). pnpm no longer writes the list itself.
+- A frozen install resolves nothing (:179088-179095, :191255), so CI's installs are unchanged.
+
+**What a person sees.** ONCE, right after this lands: every tree installed before it reads as out of step at its
+first `pnpm run` or `pnpm exec`, because `minimumReleaseAgeStrict` is one of the settings pnpm stores with an install
+and compares before a run (`dist/pnpm.mjs:195744-195781`). At a terminal pnpm asks, and Enter installs; a hook or a
+headless shell stops with "The value of the minimumReleaseAgeStrict setting has changed" until one `pnpm install`
+in that tree; `pnpm install --frozen-lockfile --offline` settles it, nothing fetched and the lock unchanged (row
+554's T7). That includes the first push after the pull: its pre-push `pnpm verify` stops until then. CI installs
+afresh and does not see it. After that, a pull that moves a pin makes a script ask before installing instead of
+installing silently.
+The pre-push hook's `pnpm verify` on a stale tree stops instead of installing inside the push. `pnpm dev` asks or stops
+at its start; a rebuild's pnpm child on a tree that went stale mid-session asks in the same terminal.
+`pnpm siblings use NAME` cannot answer the release-age question (its install ignores stdin), so a young unlisted
+version fails it, named.
+
+**Read before the cut.** The callers, each with today's and the ruled behaviour, are in the lane's `READING-554.md`.
+Order-free, proved on main `906328374319`'s text: item 554's nine lines against the EL8 to ICE 0.19.0's three
+workspace edits (MK) and the EL8 to puppeteer 0.4.6's three (4a), each tool read by `ast` and never run, and item
+554's decision row against 590-A1's terminal-look row. MK and 4a each confirmed by their own read that their one
+install resolves only versions their typed phase lists before it.
+
+**Proved before the cut, on the development Mac.** biome 2.5.4 format (by stdin: unchanged) and check (warnings
+failing: exit 0) on the guard. `git apply` and `patch -p1 --fuzz=0`, in order on copies, reproduced the green tree.
+The own check (`check-554.sh` `c5ba3e72`, its log `ff989c90`) ran once, 02:35:30Z to 02:35:40Z, on a `git archive`
+of `906328374319` with the three patches applied in order:
+- the six commands of `check:walls` exit 0 at the base, the red and the green, each import wall at 0 at all three;
+- the guard by `node --test`: at the red both rows fail by assertion, at the green both pass;
+- the green file parses (yaml 2.9.0) as the base plus exactly the two settings; on the red file that hold fails;
+- a planted `import "electron";` under field-app's src failed wall R1, which named it.
+
+**On the test Mac.** Row `554` (`ROW-554.md` `5e70fba3`): AS WANTED in every series. It ran on two refs that never
+land, made on `906328374319` for it; the cut held its red and green commits' trees to theirs (`ceeb403520e0`,
+`ed0a9483967b`).
+- RED: dev-runner's `node --test`, 515 tests, 513 pass, 2 fail: the two new rows, by assertion. (The first red
+  run's judge misread node's spec-form summary; its re-run is the record.)
+- GREEN: 515 pass, 0 fail. `pnpm verify` exits 0, typecheck and test for 28 projects with Nx's cache skipped, biome
+  over 3930 files.
+- T5, T5b: on a clone of the installed green tree with ICE's override moved, `pnpm exec node -e 0` stops with
+  `ERR_PNPM_VERIFY_DEPS_BEFORE_RUN`, "The value of the overrides setting has changed" and the cannot-prompt hint;
+  under the environment's `error`, without the hint. Nothing fetched.
+- T6, T6b: `pnpm install --ignore-scripts` refuses `@vibecook/ice@0.19.0`, published 2026-11-19T19:20:29.703Z and
+  inside the window, with `ERR_PNPM_NO_MATURE_MATCHING_VERSION`, pnpm-workspace.yaml byte-same; with its exclusion
+  row it installs ("Packages: +1 -1"), the file still byte-same.
+- T7: a tree installed at `906328374319`, given the green pnpm-workspace.yaml, stops at `pnpm exec node -e 0` with
+  "The value of the minimumReleaseAgeStrict setting has changed"; `pnpm install --frozen-lockfile --offline` exits
+  0 with the lock byte-same and nothing fetched, rewriting only the workspace-state file, and the command then exits
+  0.
+
+**The landing's own proof** is the assembly's V at the landed tree: v-asm16, `pnpm verify` whole at the land's top
+`3b3c4d7ea` on the test Mac, 2026-11-20 07:15:28Z → 07:25:21Z: **GREEN**, exit 0 in 593 s; typecheck and test each ran
+for 28 projects; 27 vitest suites, none failed; Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the
+same commit ran three times. kit-asm16, 07:26:30Z → 07:28:56Z: xcodebuild exit 65, 3,150 of 3,151 rows passed or
+skipped; its one red row, FieldWebTests' "a dial that outlasts its own deadline", took 1.61 s where under 700 ms is
+wanted, in a file the landing does not change. That suite alone, kit-asm16-web, 07:30:35Z → 07:31:12Z: 19 of 19, the row
+0.825 s. kit-asm16-r2, the kit of record, 07:34:53Z → 07:36:59Z: xcodebuild exit 0 in 126 s; 3,151 rows, Passed 3,148,
+Skipped 3, Failed 0.
+
+**Found on the way.** The finding above.
+
+**Owed.** Nothing of this item.
+
+## Item 600 — Settings read fieldd's health through contracts; field-app's source takes nothing from fieldd (M462)
+
+(2026-11-20; four commits: `df704b0d2` DR's, "600 (c1): contracts read fieldd's system.health as a product client reads
+it"; `b09b7343c` "600: fieldd's system.health answer is
+held to contracts' SystemHealthV1 when it compiles"; `b04ee3d1c` "600 (red): Settings render a system.health answer they
+cannot read, and call an unread floor "up""; `ff1da79aa` "600: Settings read system.health through contracts;
+field-app's source takes nothing from fieldd". The fixer made them inside its assembly from the sets
+made on main `846ea63c714a` (DR's landed-c1; prod-builder's made-on-846ea63c714a/{c2,c3,c4}); c4's range texts were
+made by its tool's range phase at the landing tree.)
+
+**What a person sees.** Settings' System status and Mesh network sections, when fieldd's health answer is one this
+build cannot read: "health stream unavailable" and a mesh node "unavailable", where they used to render the answer as
+it came. A floor whose own health block cannot be read reads "native · unavailable". Where the block's units could not
+be read, the section threw as it drew, and opening Diagnostics put "Settings could not open" in the dialog's place;
+where only its state could not be read, it read "native · up".
+Everything else in the two sections is unchanged.
+
+**What opened it.** Item 599's reading (field-app's typecheck out of heap on CI) found field-app's PRODUCT source
+importing `type FielddHealth` from `@vibefield/fieldd`, its test-only dependency, in MeshSection.tsx and
+SystemSection.tsx. fieldd's package exports are its source, so that import put fieldd's whole source into every
+program compiling field-app's source. And `system.health`'s payload was a TS interface in fieldd's daemon.ts with no
+contract: the renderer read it with no schema and no tolerant reader.
+
+**The seam.**
+- **c1 (DR):** contracts' `SystemHealthV1` in mgmt.ts, exactly what a product client reads: fieldd's identity, the
+  floor link, the floor's state and units (with `authUrl` and `detail`), its build label, the docs, the serves. Every
+  object passthrough and every state an open word. A floor block the schema cannot read reads as
+  `{ state: SYSTEM_HEALTH_NATIVE_UNREADABLE, units: [] }` (exported, "unreadable", a wire value no person reads), never
+  as a miss of the whole answer. The golden `system-health.valid.json`, its sweep row and its own rows.
+- **c2:** fieldd's health() literal `satisfies FielddHealth & SystemHealthV1`, with its `(): FielddHealth` annotation
+  kept. The contract alone would widen FielddHealth's literal states to string; the intersection keeps them and still
+  refuses a misspelled key (a probe, typescript 5.9.3). fieldd's `DocServiceHealth` becomes a type alias of the same two
+  members: an interface gets no implicit index signature, so `docs: docs.health()` could not satisfy the contract's
+  passthrough `docs`. A product-surface row parses fieldd's REAL answer, by the
+  request and by the stream's snapshot.
+- **c3:** six rows for the two sections, each mounted under a boundary that catches a section's throw: four red by
+  assertion (the floor block with no units throws today, caught and asserted absent) and two controls green.
+- **c4:** `useSystemHealth()`, one shared reader: `SystemHealthV1.safeParse`, `unreadable` on a miss, one warn per turn
+  with the issues' paths and codes only. SystemSection maps the exported value to "unavailable" and names
+  "unavailable" first in its Dot, as attention. Electron main's daemonBuilds parses its one field by the contract's
+  own field; the cast is gone. mesh-section.test's snapshot is the golden. Wall R35 (enforce:true): no
+  `@vibefield/fieldd` import, type-only included, and no reach into `fieldd/src`, under packages/field-app/src.
+- **The word** is "unavailable", the sections' existing one (ow-design; no DESIGN.md line).
+
+**The wall's range.** R1–R32 and R35, in desk-gates row 2 and
+DECISIONS' two lines, each with a dated clause. A wall another line holds and has not landed is left out of the range
+and said in the clause, in the past tense.
+
+**Proved before the cut, on the development Mac** (check-600-7.out ccc37794aba9e0e8, 03:53:12Z–03:53:53Z, under the
+light lock, in one
+private copy of main `846ea63c714a` made once and laid back after):
+- Two must-fail controls first: one SystemSection.tsx line pushed right fails biome check by format (exit 1); c4's walls
+  script alone over c3's tree fails --enforce by R35 at exactly SystemSection and MeshSection (exit 1, 2 lines).
+- At the base and each of the four trees: biome over the whole copy exit 0, "Found 73 warnings. Found 57 infos." every
+  time; the item's own files carry no diagnostic beyond the base's own (doc-service.ts noUnusedImports).
+- At c4's tree: the walls' self-test passes R35's lines; the range stands once in desk-gates row 2 and twice in
+  DECISIONS; no file under field-app's source names `@vibefield/fieldd`.
+- The whole tree's 73 warnings under --error-on-warnings stood at the base; this item adds none (counts equal at every
+  tree), and its own files add no warning: doc-service.ts's one, an unused `renameSync` import, stood at the base. Three
+  of the 73 are that private copy's own, not the repo's text: biome's `internalError/fs` on the kit's three `.window`
+  overlay links, which dangle in a copy with no sibling folders beside it (item 602's table), so a checkout whose
+  siblings stand reads fewer.
+
+**On the test Mac** (ROW-600 r4, qa-01's runs `i600-a3b`, `i600-a4b`, `i600-b3b` and `i600-b4b` at the re-cut c3
+`6257d8f593c0` and c4 `d6c2fda65c3e`, on c2 `e2b22a60`, after the earlier `i600-a1` and `i600-a2` (Part A at c1
+`eda53e58f81d` and at c2), `i600-b2` (c2's rows) and `i600-m0` (M0 at `21929a8c488e`)): Part A, the whole typecheck
+stage (`nx run-many -t typecheck --skip-nx-cache`), exit 0 at all four trees, 28 projects, no TS error. At c2:
+product-surface 12 of 12, and T2c, the control (one required key added to the contract), fails fieldd's typecheck
+exactly once, TS1360 at src/daemon.ts:2329, within health()'s literal, and was put back. T3 at c3: 4 failed and 2 passed
+of 6, each failure an AssertionError; the wrong-shape floor's row fails at `expect(renderError).toBeNull()` on main's
+own TypeError, caught by the test's boundary; no unhandled error. At c4: the four field-app files 68 of 68
+(system-health-panels 6 of 6), product-surface 12 of 12. M0 → M4: electron-shell's renderer program 2507 → 1745 files
+(−30.4%), memory used 1821482K → 1424095K (−21.8%); field-app's program 3572 → 3574 files, memory used −1.0%.
+
+**Follow-ups, named and not done** (owners in brackets):
+- fieldd's declaration build, so field-app's TESTS stop carrying fieldd's source in field-app's program
+  (item 604, prod-builder).
+- The twelve `../fieldd/src` reaches in field-app's tests and perf, as a declared fieldd subpath (item 605,
+  prod-builder).
+- MeshSection's Dot naming "unavailable" explicitly, as SystemSection's does (item 606, ow-design's words, then
+  prod-builder).
+- Item 602: the base's 70 biome warnings in the repo's own text, each mended by its area's owner (TABLE-602; VF-PM
+  assigns the areas); the copy's 3 `internalError/fs` need none.
+
+## Item 622 — the 430 rows let the boot's own passes finish before they count (M463)
+
+(2026-11-20; two commits of its own in the fixer's assembly: `e2ec43f15` "622 (red): with the door's add
+held, the 430 rows count passes the boot still owes", `c5f02a947` "622 (green): each 430 row lets the
+boot's own passes finish before it counts". Cut on main `906328374319` as c2/i622-red-on-906328374319 `11dd6e0b520b`
+and c2/i622-green-on-906328374319 `14296725790c`, never to land; the patch-ids are held at the replay.)
+
+**What a person sees.** Nothing in VibeField: no product file changes. At GitHub, a person saw one push's verify (main
+`906328374319`, run 44665963707, attempt 1) go red on ONE row of fieldd's 4,690, in freeway-daemon.test.ts: "430 —
+while a phone is removed, a guest is answered as today, with no pass asked", "expected 15 to be 14". The test Mac's
+whole verify of the same commit was green, and GitHub's attempt 2 of the same run, on the same commit with nothing
+changed, was green (2026-11-20 04:44:05Z). Until this lands, any push's verify can go red the same way, on that row or
+its three siblings.
+
+**Why it was red.** The row counted the floor's peer-list asks too early. It took its count the moment the mock
+recorded the door's product serve, but the boot's own reconcile that placed it is not awaited, and it still owed
+passes: its "reconciled" and "serves-changed" events, then the artifacts' and the made apps' declares queued behind
+it, each wake a device sync that asks the list once. On a fast machine those finish inside the row's 25 ms poll. On a
+slow runner one landed during the guest's hello, and the row counted it as the guest's. **The product was right**: a
+guest's hello asks no pass, since the door's confirm pass sits behind `state.tailnetLogin === getLinkedLogin()`
+(product-api.ts:1082). Three sibling rows shared the same early count; one of them ("an honest new phone is admitted
+only after a pass has listed it") could pass for the wrong reason.
+
+**Its record**, read at main `906328374319` through the git store (nothing ran for them):
+- lanes/c2/i622/READING-622.md `630bbd0d`: the one asker of the peer list, every trigger of a pass, why it is not the
+  door;
+- DESIGN-622.md `3e82d7bf`: the settle, what can still ask after it, and the gate that reproduces the slow order;
+- TRACE-622.md `d9fa9498`: the exact count the boot owes under the gate (k = 8 + 2r, plus the j it cannot hold), why
+  one row cannot fail today, and why the parked add neither times out nor retries.
+
+**What changed.**
+- mock-mgmt.ts (fieldd's test support): `serveAddGate`, `heldServeAddCount` and `releaseServeAdds()`. An add is
+  recorded at receipt as before and its ANSWER is held. Null by default; no shipped path sets it, and no package's src
+  outside testing/ imports the mock.
+- freeway-daemon.test.ts:
+  - `bootHeld` boots on a known port (item 423's form) with the product add held, so a row's count can be taken
+    before every pass the boot still owes;
+  - `settled(daemon)` (`await daemon.mesh.reconcile(); await daemon.devices.sync();`) lets those passes finish;
+  - each of the four rows releases the add and settles BEFORE it changes the peer list or takes its count;
+  - the guest row and "with no phone removed" end with one pass of their own and hold `toBe(asked + 1)`, so a confirm
+    pass the hello wrongly queued would be counted too.
+- "an honest new phone is admitted only after a pass has listed it" could not fail before (a boot pass could list the
+  node first); after the settle, the one pass that admits it is the hello's.
+
+**Proved.**
+- **The traces** (TRACE-622.md, read at `906328374319`): under the gate the boot owes k = 8 + 2r passes after the
+  count, plus j the gate cannot hold. The parked add is a 10 s request held for one 25 ms tick, with no retry and no
+  floor-up transition.
+- **The pre-cut check** (check-622.sh, 2026-11-20 05:07Z): biome format by stdin unchanged for all three files; a
+  file-based `biome check --error-on-warnings` exit 0 at red and at green; a `debugger;` control fails it. The cut's
+  own biome found 13 infos, all main's own `useTemplate` lines in the mock.
+- **The test Mac, at the cut's own commits** (qa-01's rows, 2026-11-20):
+  - **Red, at `11dd6e0b520b`**, AS WANTED: fieldd's typecheck exit 0. The file's 21 rows: exactly three failing, each
+    by an AssertionError, and 18 passing, with no unhandled error:
+    - "the passes the ten hellos asked: expected 13 to be less than or equal to 3";
+    - "the passes besides the row's own: expected 18 to be 6", in the guest row and in "with no phone removed".
+    - The boot owed 12 passes past the count: 8 + 2r + j, over the trace's floor of 8. The ten hellos' 13 is those
+      12 plus the ONE confirm pass all ten shared, so their own law held under the load.
+  - **Green, at `14296725790c`**, AS WANTED: fieldd's typecheck exit 0. The file 21 of 21, three times back to back
+    (5.56 s, 5.54 s, 5.55 s), with no unhandled error. fieldd's whole vitest: 324 files passed, 5 skipped (329);
+    4,675 tests passed, 15 skipped (4,690), 0 failed.
+- **The landing's own proof** is the assembly's V at the landed tree: v-asm16, `pnpm verify` whole at the land's top
+  `3b3c4d7ea` on the test Mac, 2026-11-20 07:15:28Z → 07:25:21Z: **GREEN**, exit 0 in 593 s; typecheck and test each ran
+  for 28 projects; 27 vitest suites, none failed; Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the
+  same commit ran three times. kit-asm16, 07:26:30Z → 07:28:56Z: xcodebuild exit 65, 3,150 of 3,151 rows passed or
+  skipped; its one red row, FieldWebTests' "a dial that outlasts its own deadline", took 1.61 s where under 700 ms is
+  wanted, in a file the landing does not change. That suite alone, kit-asm16-web, 07:30:35Z → 07:31:12Z: 19 of 19, the
+  row 0.825 s. kit-asm16-r2, the kit of record, 07:34:53Z → 07:36:59Z: xcodebuild exit 0 in 126 s; 3,151 rows, Passed
+  3,148, Skipped 3, Failed 0..
+
+**Owed.**
+- The artifacts' maintenance re-reconcile (about 9-11 s after start; the daemon passes no `maintenanceMs`) is the one
+  boot-driven pass the settle cannot hold off. A row that stalled about 9 s could still meet it. Said, not mended.
+  - A candidate mend, for whoever meets it next, not work now: let the test's boot hand the artifacts a maintenance
+    interval that cannot fire inside a row. ArtifactService already takes `maintenanceMs` (a number, or `false` for
+    none; artifact-service.ts:324, and `#scheduleMaintenance` returns at `false`), but bootstrap passes it nothing, so
+    the mend is one config field carried through as `unseenNodePassMs` is (daemon.ts:547, :5995). The 430 rows' boot
+    then sets it to `false`.
+
+## Item 550a — the desk's at-work feed carries each run's agent, project, spark and starter as ids (M464)
+
+(2026-11-20; three commits, in order: `5886a5093` "550 (contracts): an agent at work on an object carries its run's
+project, spark and starter as ids", `5d3b82057` "550 (move): a spark's spawn moves out of daemon.ts into the talk room's
+folder, as it was", `055d65cfc` "550: the desk's at-work feed names each run's agent, project, spark and starter as
+fieldd knows them". Cut on main `906328374319` as `2cc11f4e5fbe`, `55d47c3af1be` and `6d7a5bfc18a5` (branch
+`ob/item550a-on-906328374`), 2026-11-20 03:17:58Z to 03:18:12Z; their `git patch-id --stable`: `5886a5093`
+`848ccf2fac426951`, `5d3b82057` `52315d6e1639c897`, `055d65cfc` `609a646973b4213a`. A red that never lands sits on the
+cut's c3: `ob/item550a-red-on-906328374` = `fd668ed4d8b4`. Four earlier cuts never landed: the first of 2026-11-18 on
+main `a8be46dd208c` (`ob/item550a-on-a8be46dd2` = `2f92c861ea79`); a first re-make the next day
+(`ob/item550a-on-846ea63c7` = `2a787c34d0f0`, red `240fbda1a75d`), whose c1 still named the pinned puppeteer-core as
+0.4.2, as the first cut had, after the pin had moved to 0.4.4; and a second (`ob/item550a-on-846ea63c7-b` =
+`804a8c656f8e`, red `bf88c3d5f8c5`), whose c1, like the two before it, added the fixture with no `SCHEMA_BY_PREFIX`
+entry, so contracts' `test/fixtures.test.ts` failed two rows in a candidate's whole verify; and a third, on
+`846ea63c714a` (`ob/item550a-on-846ea63c7-c` = `96fcac72f77b`, red `2b1f0b92821e`), with these same patch-ids and
+messages, cut again on main's tip because items 559 and 558, cut on it, meet two paths item 578 changed there (fieldd's
+`audit-service.ts` and its test). Of the first cut's 15 paths, 12 carry as they were. `tool-plane/rooms/desk/verbs.ts`
+is the only one whose base moved (item 581), and its seven lines are re-made on 581's version. contracts' `objects.ts`
+and `objects.test.ts` change for the tolerant ids and the pin's wording, and c1 gains a 16th path,
+`test/fixtures.test.ts` (below). c2 and c3 carry the first cut's patch-ids unchanged; c1's differs. Files: `5886a5093`
+`packages/contracts/fixtures/objects-presence.valid.json` +30, `packages/contracts/src/objects.ts` +30 −3,
+`packages/contracts/test/fixtures.test.ts` +4 −1, `packages/contracts/test/objects.test.ts` +68; `5d3b82057`
+`packages/fieldd/src/daemon.ts` +7 −25, `packages/fieldd/src/tool-plane/rooms/talk/spawn.ts` +49; `055d65cfc` twelve
+files, +571 −50. The renderer that draws the mark is item 550b.)
+
+**What was wrong.**
+- The feed (`objects.presence.subscribe`) named every run's agent "agent". daemon.ts read the run row's `provider`,
+  which no row carries (its provider id is `kind`). Nothing a person sees read the field, so nobody saw it.
+- The feed carried no project, no spark and no starter, which the at-work mark needs (OB-D14's ground; OB-D14 is
+  reserved on the presence page, not ruled, DECISIONS "OB-D14…D16").
+- What the desk showed of a run was kept from the moment the run first came onto the object.
+- `doorCanName`'s comment gave its string's reason as the installed puppeteer-core enum not having `run-helper` yet.
+  The pinned puppeteer-core lists it since 0.4.2 (item 528's eighth stale text).
+
+**What moved.**
+- In `5886a5093`, the shape: `ObjectAtWork` gains `project` ({name?, seq?, ink?}), `spark` and `startedBy`, ids and
+  never a colour. Each is `.optional().catch(undefined)`, as are the project's three fields: a malformed id is no id at
+  every reader, and the row that carries it stays (the tolerant reader's form, as agent-index's `kind`). The fixture
+  `objects-presence.valid.json`, and its row in contracts' `test/fixtures.test.ts`: `SCHEMA_BY_PREFIX` maps
+  `objects-presence` to `ObjectsPresenceSnapshot`, so the golden fixtures' own suite parses it whole. `doorCanName`'s
+  comment is corrected, dated: the string stays because contracts imports no sibling (wall R22). No generated output
+  carries `ObjectAtWork` or its fields (gen-tools reaches objects.ts only through the tool shapes in tools.ts, none of
+  which holds it), and nothing under `packages/contracts/gen` changes.
+- In `5d3b82057`, a move with no change of behaviour: talkSpawn's body leaves daemon.ts for
+  `tool-plane/rooms/talk/spawn.ts` (`sparkSpawn`).
+- In `055d65cfc`:
+  - the mend: the agent is the row's `kind`, its catalog id;
+  - each value's source: the project's name and colour sequence from the monitor's row, its ink from the project
+    grouping by the run's observed folder; the spark from launch memory (`bornFor`), never a record; the starter from
+    `SparkStarts`, which the spark's spawn fills and a resume hands on;
+  - what the desk shows of a run is read at each act and by `presence.refresh()`, on the fold's publish, the monitor's
+    change and the grouping's change; the feed hears only of a change;
+  - presence's calls in the desk room's verbs take the run (`agent.run`), seven lines;
+  - what an agent is told: `agentsOn` keeps its shape, {handle, state}, held by a row; but the handle is now read at
+    each act and by `refresh()`, so an agent is told the run's current title where it used to get the first name;
+  - the apps' project join and the desk's marks read one ink table: the inline ink lookup becomes the shared
+    `projectInkOf`, with the same behaviour by reading;
+  - `desk` on the daemon's handle, for the real-daemon row.
+
+**What a person sees.**
+- Nothing yet: no window draws these fields until item 550b.
+- When 550b draws the mark: after a fieldd restart, the feed carries no starter for a run a spark started (fieldd's own
+  memory, which a restart forgets), so the desk will show no printed star for it.
+
+**Untouched.**
+- Custody's launch memory and the floor's `TerminalStartedFor`: the starter is not in either.
+- `holder` and `waiters`.
+
+**Proved before the cut, on the development Mac, nothing of record.** check-t.sh (c071bf6a) in a scratch worktree,
+2026-11-20 03:11:19Z to 03:12:23Z, at the re-cut's trees on main `906328374319`, console `0d0dc90d`. First its control
+that must fail: item 550a's red tree on the tip, biome at warning level, warnings failing, over `spark-starts.ts`,
+exited non-zero on its own fixed line ("spark-starts.ts:13:32 lint/correctness/noUnusedPrivateClassMembers"), as wanted.
+Then the tip's own tree (`d03ed9c46ec9`), item 550a's c3 (`a8fb9b0d9c3e`), item 559's red and green (`1b5e17a8e3e1`,
+`d64c899b406e`) and item 558's (`67f95bb8706c`, `fa9524d7d77e`): biome at warning level, warnings failing, over the
+three items' paths present; `biome check .`, no error and 73 warnings and 57 infos at each, the tip's own counts
+(counts compared, not each diagnostic); check:walls's six runs (three walls, each with its self-test);
+check-retired-names; check-ios-fixtures; and check-web-markers with its self-test. Every run exits 0. No typecheck,
+vitest or generator ran in it. Before it, at the
+-c cut's trees, which differ from this cut's by the tip's own paths, none of them 550a's: check-550a-c.sh in a scratch
+worktree, 2026-11-19 23:16:56Z to 23:17:47Z, at four trees: main's own then (`f1b4391577de`), the control that must
+pass; the -b re-make's c1 (`a3caacb67171`), the control that must FAIL; the -c cut's c1 (`4dae2926b181`); and that
+stack's top, item 558's green restacked on the -c cut (`a3a9e730611f`). Contracts' whole vitest ran at all four, capped
+at four workers: main's tree "Test Files 75 passed (75)", "Tests 2207 passed (2207)"; the failing control "Test Files 1
+failed | 74 passed (75)", "Tests 2 failed | 2210 passed (2212)", as wanted, its two failing rows those of the unmapped
+fixture: "covers every fixture with a schema" on "no schema mapped for fixture objects-presence.valid.json", and "parses
+objects-presence.valid.json" on a TypeError reading `safeParse` of the missing schema; the -c c1 and the top "Tests 2212
+passed (2212)", `fixtures.test.ts` 787 rows (786 at main's tree). Four generators (gen-jsonschema,
+gen-catalog, gen-tools and gen-registries-rs) ran at main's tree, the -c c1 and the top, and left
+`packages/contracts/gen` and `packages/field-native/src/registries.rs` unchanged each time. The catalog fixture
+gen-catalog also writes is outside that diff: the next tree's clean check held it after main's tree and after the -c c1,
+and nothing read it after the top. `cargo typify` did not run here; it reads `bundle.json`, which is under the unchanged
+gen folder. At the -c c1 and the top: biome at warning level, warnings failing, over the three items' paths; `biome
+check .`; check:walls's six runs (three walls, each with its self-test); check-retired-names; check-ios-fixtures; and
+check-web-markers with its self-test. Every run exits 0. `biome check .` has no error at either, and 73 warnings and 57
+infos at both, the same counts as the earlier check found at c1, c2 and c3 (biome did not run at main's tree in either
+check). Before that, check-550a.sh (17:50:00Z to 17:50:34Z, trees made on `adc620f1f128`, whose difference from the -c
+cut's base is docs/LANDED.md and docs/ROADMAP.md alone) ran the same kinds of biome, walls and retired-names runs, biome
+at warning level over 550a's paths alone, at c1, c2, c3 and the red. Each of those trees differs from the -c cut's by
+those two docs, the one comment line in objects.ts and the `fixtures.test.ts` row. There the red's biome at warning
+level fails on exactly one warning, `spark-starts.ts:13` noUnusedPrivateClassMembers: in the red, `SparkStarts`' private
+bound `max` (SPARK_STARTS_MAX) is never read, since `started` keeps nothing; at the red `biome check .` counts 74
+warnings, one more. No typecheck ran here: the typechecks of record are the test Mac's.
+
+**The red.** `fd668ed4d8b4` on the cut's c3 is the green tree less the behavioural lines its new rows hold, in six
+files: contracts' objects.ts with its ids read strictly again, agentOf reading `provider`, `refresh()` doing nothing, a
+run's facts its handle and agent alone, `agentsOn` spreading the facts, the spark's spawn remembering no starter, and
+`SparkStarts.started` keeping nothing. Its whole diff is in the cut's log.
+
+**Proved, on the test Mac.** ROWS-550a's fifteen arms, each from its run file, 2026-11-20 05:01:03Z to 06:06:50Z,
+every one as wanted, at the cut's own commits:
+- At `5886a5093` `2cc11f4e5fbe`, `5d3b82057` `55d47c3af1be` and `055d65cfc` `6d7a5bfc18a5`, the typechecks of record:
+  `tsc --noEmit` in contracts, fieldd and field-app, exit 0 with no error line each, nine runs; `pnpm gen:check`, exit 0
+  with no path moved, three runs.
+- Contracts' whole suite at `5886a5093`: "Test Files 76 passed (76)", "Tests 2220 passed (2220)". `fixtures.test.ts`
+  passes 787 of 787, its rows "covers every fixture with a schema" and "parses objects-presence.valid.json" among them.
+- The whole suites at `055d65cfc`: contracts as at `5886a5093`; fieldd "Test Files 326 passed | 5 skipped (331)", "Tests
+  4687 passed
+  | 15 skipped (4702)"; field-app "Test Files 373 passed (373)", "Tests 5460 passed (5460)".
+- The red arms at `fd668ed4d8b4`, every failure an AssertionError and no other kind:
+  - objects "Tests 1 failed | 18 passed (19)": "reads a malformed id as no id, and keeps the row", on
+    `{"project":{"seq":"amber"}}`;
+  - applier "Tests 43 passed (43)", green by design;
+  - session "Tests 1 failed | 107 passed | 2 skipped (110)": the sealed real-daemon row, "expected [ 'agent', 'agent' ]
+    to deeply equal [ 'scripted', 'scripted' ]";
+  - presence "Tests 7 failed | 21 passed (28)": the seven rows 550a adds;
+  - spark-starts "Tests 3 failed (3)" and talk-spawn "Tests 2 failed (2)": each on a spark expected and undefined.
+- The green arms at `055d65cfc`: objects 19 of 19, applier 43 of 43, session "Tests 108 passed | 2 skipped (110)",
+  presence 28 of 28, spark-starts 3 of 3, talk-spawn 2 of 2.
+- The session file's two skipped rows are its `describe.skipIf(!REAL_AGENT)` block, there before 550a, which runs only
+  with `FIELDD_TEST_REAL_AGENT=1`. ROWS-550a first counted them as passing; its words are corrected under them.
+
+**The joined verify.** v-asm16, `pnpm verify` whole at the land's top `3b3c4d7ea` on the test Mac, 2026-11-20 07:15:28Z
+→ 07:25:21Z: **GREEN**, exit 0 in 593 s; typecheck and test each ran for 28 projects; 27 vitest suites, none failed;
+Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the same commit ran three times. kit-asm16, 07:26:30Z
+→ 07:28:56Z: xcodebuild exit 65, 3,150 of 3,151 rows passed or skipped; its one red row, FieldWebTests' "a dial that
+outlasts its own deadline", took 1.61 s where under 700 ms is wanted, in a file the landing does not change. That suite
+alone, kit-asm16-web, 07:30:35Z → 07:31:12Z: 19 of 19, the row 0.825 s. kit-asm16-r2, the kit of record, 07:34:53Z →
+07:36:59Z: xcodebuild exit 0 in 126 s; 3,151 rows, Passed 3,148, Skipped 3, Failed 0..
+
+**Not covered.**
+- No window draws the fields yet (550b).
+- The line in daemon.ts that hands the runtime's spawn to `sparkSpawn` is held by no row. It makes the call main's
+  inline `talkSpawn` made (`agents.spawn` as `mcp-agent`), which `5d3b82057` moves and `055d65cfc` leaves as it is, and
+  a real-daemon row mirrors that call.
+- No real-daemon row holds the rest of daemon.ts's new wiring: `deskProjectOf` and `projectInkOf`, the three refresh
+  triggers, `startedByOf`, `onRunReplaced`'s order (`sparkStarts.replaced` before `deskObjects.runReplaced`) and the
+  label by `nameOfRow`. The real-daemon row holds `agent` and `spark` alone; the project, refresh, starter and title
+  rows run on the desk fixtures' harness, whose maps a row sets by hand.
+- A dropped id is dropped silently: no reader logs it. Owed as its own small item: the window's applier drops a WHOLE
+  presence snapshot silently on a failed parse (`packages/field-app/src/field/desk/agent/applier.ts:678-679` at
+  the cut's base `906328374319`), a degraded state nothing logs.
+- macOS only.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## Item 559 — a desk act a window was sent and never answered is an unknown effect, never a failure (M465)
+
+(2026-11-20; two commits that both land, in order: `7a7219ab2` "559 (red): an act its window never answered is written
+failed, and its agent told nothing was done", `fac73e381` "559 (green): an act a window was sent and never answered is
+an unknown effect, never a failure". Cut on item 550a's c3 `6d7a5bfc18a5` (`ob/item550a-on-906328374`, on main
+`906328374319`) as `b75607dda6ad` and `44700e3042cb` (branch `ob/item559-on-6d7a5bfc1`; the red also stands as
+`ob/item559-red-on-6d7a5bfc1`), 2026-11-20 03:25:44Z to 03:25:58Z; their `git patch-id --stable`: `7a7219ab2`
+`a475b3f4b17760f6`, `fac73e381` `5678b2b12f39dbf9`. It is a re-make of the first cut of 2026-11-18 on main
+`a8be46dd208c` (`ob/item559-red-on-a8be46dd2` = `9b063d13cf69`, `ob/item559-on-a8be46dd2` = `84c0df2fe5b3`), which never
+landed, nor did a re-make on item 550a's second re-make the next day (`ob/item559-red-on-804a8c656` = `9a58a372eaa7`,
+`ob/item559-on-804a8c656` = `5ec2b82c04d4`), which left with it, nor did a third on item 550a's -c c3
+(`ob/item559-red-on-96fcac72f` = `d8dd22a230dd`, `ob/item559-on-96fcac72f` = `2cf404a5f0ba`), with these same patch-ids
+and messages: it is cut again on main's tip, where item 578 moved two of its paths. Seven of its ten paths carried whole
+to the -c cut. Three moved since the first cut: `desk-room.test.ts` (item 581, on main), the desk room's `verbs.ts`
+(item 581 on main, then item 550a's c3) and `objects/desk-objects.ts` (item 550a's c3 alone). Their hunks are laid on
+the moved versions by content anchors, each proved to make the same change. The two 578 moved, fieldd's
+`audit-service.ts` and its test, carried whole until then; they are re-made on 578's versions, each hunk placed by the
+line map between the -c commit's parent and 578's version, and proved both ways: the change laid equals the -c commit's,
+and 578's lines are all kept. `7a7219ab2`'s patch-id is the first cut's; `fac73e381`'s differs only because
+desk-objects.ts's import hunk now has item 550a's `type AtWorkFacts` in its context. Files, all under `packages/fieldd`:
+`7a7219ab2` `test/desk-room.test.ts` +30 −3, `test/objects-doors.test.ts` +80 −4, `test/tool-plane-desk-unknown.test.ts`
++199 (new); `fac73e381` `src/audit-service.ts` +87 −28, `src/objects/desk-objects.ts` +4 −1, `src/objects/doors.ts` +16
+−6, `src/objects/intents.ts` +17 −5, `src/tool-plane/index.ts` +7, `src/tool-plane/rooms/desk/verbs.ts` +9,
+`test/audit-service.test.ts` +137.)
+
+**What was wrong.**
+- A desk call that left for its window, whose window then closed or was replaced, was told it was not done. When the
+  window's subscription closed with the call pending (the window closed, its feed ended, or fieldd stopped), or a newer
+  subscription replaced it (a reload, or a second window on the board), the call was rejected `no-window`: "That desk
+  is not open in a VibeField window, so nothing was done. Ask the user to open it." The window applies what it receives
+  and then answers, so it may have applied it.
+- The trail wrote such an act `failed` (UNAVAILABLE), the same record as for a call that never left. A call that ran
+  out its deadline was told the truth in words ("cannot tell whether this happened"), but its record said `failed` too.
+- The window's undo of an agent's change, sent and never answered, was recorded `denied`.
+- None of these paths wrote an `effectResolution` of `unknown`. Only when the `failed` outcome itself was refused did
+  they owe a recovery record, and it said `effect-threw`.
+
+**What moved,** in `fac73e381`:
+- `objects/intents.ts`: a subscription that closes or is replaced answers what was pending on it `no-answer`, the
+  deadline's state, in the same words for all three: "The window did not answer, so VibeField cannot tell whether this
+  happened. Look before you try again." ("in time" is gone.) Only an intent that never left (no window holds the board,
+  or its send threw) stays `no-window`, "nothing was done". `isNoAnswer` names the state for callers.
+- `audit-service.ts`: `required` takes `resolveFailure`, the caller's word on how a throw resolves, `failed` when
+  absent. On `effect-unknown` the act gets no outcome of its own: one `audit.outcome.recovery` record closes its
+  attempt, reasonCode EFFECT_UNKNOWN, with intendedOutcome and effectResolution `unknown`, and the act's own error
+  stays the one thrown. That record's own `outcome` is `failed`, the audit's word as on every recovery record, never
+  the act's. When the writer refuses it, it is owed as any marker is, its reason kept, and written once the writer
+  takes a line again. The owed markers' flush and this write share one record builder. It clears the audit's health
+  no more than the `failed` outcome it replaces would. The audit service learns no caller's error types.
+- The desk room's `deskFailure` (`verbs.ts`) names the verbs that leave for a window and change the desk:
+  `canvas_place`, `canvas_remove` and `object_act`. One of those unanswered is `effect-unknown`; a read
+  (`canvas_list`, `object_open`, `object_read`) unanswered stays `failed`, since it changed nothing.
+- The tool plane (`tool-plane/index.ts`) passes `resolveFailure` to the `required` that serves every verb (`:459`): the
+  desk room's through `deskFailure`, and `failed` for every other room's. Its two other `required` calls, a door's
+  plain line and a refusal, have effects that cannot throw.
+- The window's undo door: `desk-objects.ts` lets an unanswered inverse's error through, where it used to answer
+  `{undone: false, reason}` in the error's own words ("…so nothing was done" for a closed or replaced window).
+  `doors.ts` resolves it `effect-unknown` and answers the window `{undone: false, reason}` in the words above. The
+  change stays on offer.
+- `fac73e381` also adds three rows to `audit-service.test.ts` for the new argument (the recovery record with the audit
+  still healthy; `failed` when the caller says so or says nothing; a refused record owed with its reason and written
+  when the writer returns). They come with the fix and have no red.
+
+**What a person sees.** Nothing in the window changes. No field-app path is in either commit, and no window calls the
+undo door yet, so no window reads its `reason`; what the window does with an unanswered undo, or with a second click
+on the same change, is item 559b. What changes is what an agent is told, `unavailable (desk: no-answer)` with the words
+above, where a closed or replaced window used to say "nothing was done", and what the trail says.
+
+**Untouched.**
+- A call that never left (no window holds the board, or its send threw) is `no-window`, "nothing was done", as before.
+- An act whose window answered: its outcome as before.
+- Every caller of `required` outside the tool plane and the undo door passes no `resolveFailure`. With the tool
+  plane's `failed` outside the desk room and for a desk read, every one of those calls writes `failed` as before.
+
+**Proved before the cut, on the development Mac, nothing of record.** check-t.sh (c071bf6a) in a scratch worktree,
+2026-11-20 03:11:19Z to 03:12:23Z, at the re-cut's trees on main `906328374319`, console `0d0dc90d`. First its control
+that must fail: item 550a's red tree on the tip, biome at warning level, warnings failing, over `spark-starts.ts`,
+exited non-zero on its own fixed line ("spark-starts.ts:13:32 lint/correctness/noUnusedPrivateClassMembers"), as wanted.
+Then the tip's own tree (`d03ed9c46ec9`), item 550a's c3 (`a8fb9b0d9c3e`), item 559's red and green (`1b5e17a8e3e1`,
+`d64c899b406e`) and item 558's (`67f95bb8706c`, `fa9524d7d77e`): biome at warning level, warnings failing, over the
+three items' paths present; `biome check .`, no error and 73 warnings and 57 infos at each, the tip's own counts
+(counts compared, not each diagnostic); check:walls's six runs (three walls, each with its self-test);
+check-retired-names; check-ios-fixtures; and check-web-markers with its self-test. Every run exits 0. No typecheck,
+vitest or generator ran in it. Before it, at the
+earlier cuts' trees: check-559-558.sh in a scratch worktree, 2026-11-19 19:01:13Z to 19:02:40Z, at the four trees of the
+re-make on item 550a's second re-make, each of which differs from the -c cut's by contracts' `test/fixtures.test.ts`
+alone (item 550a's c1): biome with warnings failing over the two items' ten paths, `biome check .`, check:walls's six
+runs (three walls, each with its self-test), check-retired-names, check-ios-fixtures and check-web-markers (its
+self-test and its run). Every run exits 0. The ten paths carry no warning (biome at warn level, warnings failing), and
+none of the diagnostics `biome check .` prints names one of them. `biome check .` has no error and the same counts at
+all four trees, 73 warnings and 57 infos, as at item 550a's checked trees. Then check-550a-c.sh (23:16:56Z to 23:17:47Z)
+ran the same runs at the -c stack's own top (item 558's green then, tree `a3a9e730611f`), all exit 0, with contracts'
+whole vitest ("Tests 2212 passed (2212)") and the generators' lane half (no change). The -c cut's own trees were
+`a1802f696c55` and `57cd87cec238` (its trees file); no check ran at them. This cut's are `7a7219ab2` `1b5e17a8e3e1` and
+`fac73e381` `d64c899b406e`, equal to those check-t.sh checked. No typecheck and no fieldd vitest ran here: the
+typechecks and rows of record are the test Mac's.
+
+**The red.** `7a7219ab2` adds the rows alone; nothing under `packages/fieldd/src` changes in it. At it, each new or
+changed row but one reads red by value. Today a close and a replacement reject `no-window`, the deadline's words say "in
+time", an act whose window was closed or replaced before it answered is told `no-window`, and the undo is `denied`. The
+act and undo rows fail first on their words or reason, before their trail: their trail expectations (the act's attempt
+closed by one `EFFECT_UNKNOWN` recovery record, never `failed`) are held at the green alone, and no run shows them red
+at the base. By reading, an act's trail there is its attempt then `failed` (UNAVAILABLE). The read row ("keeps a read
+its window never answered failed") is red by its words alone; by reading, its trail already holds at the base (no run
+shows it: the row stops at `:186` first). One new row, "says nothing was done only of an intent that never left", is
+green there by design.
+
+**Proved, on the test Mac.** ROWS-559-558-t's arms for 559, each from its run file, 2026-11-20 06:20:46Z to 06:34:36Z
+(the suites at the stack's top after, below), every one as wanted, at the cut's own commits:
+- The typechecks of record: `tsc --noEmit` in fieldd at `7a7219ab2` `b75607dda6ad` and `fac73e381` `44700e3042cb`, and
+  in field-app at `fac73e381`, exit 0 with no error line each.
+- The red arms at `7a7219ab2`, every failure an AssertionError and no other kind:
+  - desk-room "Tests 3 failed | 27 passed (30)", the three rows: the closed subscription, the deadline and the board
+    taken again. Each already receives an UNAVAILABLE and fails on today's words for it. The closed subscription and
+    the board taken again receive `state` `no-window` where `no-answer` is wanted ("That desk is not open in a …");
+    the deadline receives `no-answer` and fails on its message alone ("The window did not answer i…").
+  - objects-doors "Tests 1 failed | 20 passed (21)": the undo's answer, `{ undone: false, … }` with today's reason.
+  - tool-plane-desk-unknown "Tests 2 failed (2)": both rows at their first text expectation, "expected 'unavailable
+    (desk: no-window): That d…' to be 'unavailable (desk: no-answer): The wi…'" (`:153` and `:186`).
+  - What the base shows red, and what the green alone holds: each red row stops at the expectation named above, the
+    refusal's words or the undo's reason. What a row expects after it is held at the green alone, and no run shows it
+    red at the base. That includes the act's and the undo's trail (the attempt closed by one `EFFECT_UNKNOWN`
+    recovery record, never `failed`).
+- The green arms at `fac73e381`: desk-room 30 of 30, objects-doors 21 of 21, tool-plane-desk-unknown 2 of 2,
+  audit-service 16 of 16 (item 578's row among them).
+- The whole suites at the stack's top, item 558's green `f066d3312edc` (06:43:16Z to 07:02:21Z): fieldd "Test Files 327
+  passed | 5 skipped (332)", "Tests 4700 passed | 15 skipped (4715)"; contracts "Test Files 76 passed (76)", "Tests
+  2220 passed (2220)"; field-app "Test Files 373 passed (373)", "Tests 5460 passed (5460)".
+
+**The joined verify.** v-asm16, `pnpm verify` whole at the land's top `3b3c4d7ea` on the test Mac, 2026-11-20 07:15:28Z
+→ 07:25:21Z: **GREEN**, exit 0 in 593 s; typecheck and test each ran for 28 projects; 27 vitest suites, none failed;
+Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the same commit ran three times. kit-asm16, 07:26:30Z
+→ 07:28:56Z: xcodebuild exit 65, 3,150 of 3,151 rows passed or skipped; its one red row, FieldWebTests' "a dial that
+outlasts its own deadline", took 1.61 s where under 700 ms is wanted, in a file the landing does not change. That suite
+alone, kit-asm16-web, 07:30:35Z → 07:31:12Z: 19 of 19, the row 0.825 s. kit-asm16-r2, the kit of record, 07:34:53Z →
+07:36:59Z: xcodebuild exit 0 in 126 s; 3,151 rows, Passed 3,148, Skipped 3, Failed 0..
+
+**Not covered.**
+- An act still running when the audit's writer closes at fieldd's stop: item 558, the next entry. A desk act whose
+  window's feed ends with the stop is this item's close.
+- An act whose window closed, or whose deadline passed: its EFFECT_UNKNOWN trail is held by no row. The trail rows use
+  a reload; for the close and the deadline only the error is held.
+- The window's side of an undo whose effect is unknown, and a second click sending the same inverse again: item 559b.
+- An answer from another token (a stale reload) is not taken, and the call runs out its deadline: `no-answer` as any
+  deadline. Each half is held by an existing row, the two together by none.
+- macOS only.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## Item 558 — before the audit's writer closes, it writes what it owes and closes each open attempt (M466)
+
+(2026-11-20; two commits that both land, in order: `96aec71d0` "558 (red): an act in flight at the audit's close leaves
+its attempt unclosed; an owed marker dies", `07a447eff` "558 (green): before the audit's writer closes, it writes what
+it owes and closes each open attempt". Cut on item 559's green `44700e3042cb` (`ob/item559-on-6d7a5bfc1`, on item 550a's
+cut, on main `906328374319`) as `21bb56b27b46` and `f066d3312edc` (branch `ob/item558-on-item559-44700e30`; the red also
+stands as `ob/item558-red-on-item559-44700e30`), 2026-11-20 03:27:06Z to 03:27:19Z; their `git patch-id --stable`:
+`96aec71d0` `a98aa30713bc687f`, `07a447eff` `20496feabf36ed3d`, both the first cut's. It is a re-make of the first cut
+of 2026-11-18 on item 559's first cut (`ob/item558-red-on-item559-84c0df2f` = `74af4adeddc9`,
+`ob/item558-on-item559-84c0df2f` = `182bb03a7cac`), which never landed, nor did a re-make on item 559's second green the
+next day (`ob/item558-red-on-item559-5ec2b82c` = `fed72d8d7b68`, `ob/item558-on-item559-5ec2b82c` = `f195961665c5`),
+which left with item 550a's second re-make, nor did a third on item 559's -c green (`ob/item558-red-on-item559-2cf404a5`
+= `3aadf818d662`, `ob/item558-on-item559-2cf404a5` = `309f1c9a386e`). The -b and -c cuts carry these same patch-ids and
+messages; the first carries these patch-ids under its own, earlier words. Its two
+paths, which carried whole until then, are re-made on item 578's versions on main's tip, each hunk placed by the line
+map and proved both ways: the change laid equals the -c commit's, and 578's lines are all kept. Files, under
+`packages/fieldd`: `96aec71d0` `test/audit-service.test.ts` +172; `07a447eff` `src/audit-service.ts` +60 −3.)
+
+**What was wrong.**
+- The audit's `close()` wrote nothing before it closed its writer. An act whose attempt was written and whose effect was
+  still running at fieldd's stop kept only its attempt: no record said it was in flight or that its effect was unknown,
+  and the outcome that came after the close was refused.
+- A marker owed for an outcome the writer had refused lived only in memory, so a close with nothing written between
+  dropped it.
+- An attempt the shell appended and never closed stayed unclosed the same way.
+
+**What moved,** in `07a447eff`, `audit-service.ts`:
+- The service keeps the attempts that are open: an attempt written is open until a record closes it (its outcome, or a
+  recovery record), and a marker owed for one takes it over.
+- `close()` writes, before its writer closes, the markers it owes, then one `audit.outcome.recovery` record for each
+  attempt still open: reasonCode INTERRUPTED_BY_STOP, with intendedOutcome and effectResolution `unknown` and failedAt
+  the time of its own append during the close, built by the same record builder as every recovery record. Its own
+  outcome is `failed`, the audit's
+  word as on every recovery record, and its actor is fieldd's system. Only then does it close the writer.
+- An outcome that arrives after the close is refused as before (AUDIT_UNAVAILABLE, CLOSED); the record already says the
+  act was in flight when fieldd stopped and that its effect is unknown.
+- A refusal while closing is not retried. The first owed marker refused ends the markers' flush: it and those after it
+  stay owed, counted in health's `pendingRecoveryMarkers`. Each open attempt is still tried once; a refused one goes
+  unnamed, with health's `lastFailure` saying the refusal. The writer closes all the same.
+- Attempts the shell appended reach the same map through `audit.append` and are closed the same way, all but an
+  update's apply (below).
+- At most 64 open attempts are kept (`MAX_OPEN_ATTEMPTS`), beside the owed markers' own 64. Past it the oldest goes
+  unnamed, so a close writes at most 128 records.
+- An update's apply is never kept open, by name (`CLOSED_IN_A_LATER_BOOT`): its attempt is written before the daemons
+  stop for it, and the next launch writes its outcome under the same operation.
+
+**What a person sees.** Nothing on screen. After a stop with an act in flight, the audit trail names that act as
+interrupted by the stop with its effect unknown, where it used to hold an attempt and nothing after it.
+
+**Untouched.**
+- The refusal of an outcome after the close.
+- An act that closed before the close: nothing more is written for it.
+- The tool plane's stop: it still does not wait for calls in flight.
+
+**Proved before the cut, on the development Mac, nothing of record.** check-t.sh (c071bf6a) in a scratch worktree,
+2026-11-20 03:11:19Z to 03:12:23Z, at the re-cut's trees on main `906328374319`, console `0d0dc90d`. First its control
+that must fail: item 550a's red tree on the tip, biome at warning level, warnings failing, over `spark-starts.ts`,
+exited non-zero on its own fixed line ("spark-starts.ts:13:32 lint/correctness/noUnusedPrivateClassMembers"), as wanted.
+Then the tip's own tree (`d03ed9c46ec9`), item 550a's c3 (`a8fb9b0d9c3e`), item 559's red and green (`1b5e17a8e3e1`,
+`d64c899b406e`) and item 558's (`67f95bb8706c`, `fa9524d7d77e`): biome at warning level, warnings failing, over the
+three items' paths present; `biome check .`, no error and 73 warnings and 57 infos at each, the tip's own counts
+(counts compared, not each diagnostic); check:walls's six runs (three walls, each with its self-test);
+check-retired-names; check-ios-fixtures; and
+check-web-markers with its self-test. Every run exits 0. No typecheck, vitest or generator ran in it. Before it, at the
+earlier cuts' trees: check-559-558.sh, 2026-11-19 19:01:13Z to 19:02:40Z, at the trees of the re-make on item 559's
+second green, each of which differs from the -c cut's by contracts' `test/fixtures.test.ts` alone: the runs and words of
+item 559's entry above. Every run exits 0; `biome check .` has no error and the base's own counts at each tree, 73
+warnings and 57 infos, the same as at item 550a's checked trees (counts compared). Then check-550a-c.sh (23:16:56Z to
+23:17:47Z)
+ran them at the -c cut's green tree, `a3a9e730611f`, that stack's top, with contracts' whole vitest and the generators'
+lane half, all as wanted. The -c cut's red tree was `e17d5c0d6541`; this cut's are `96aec71d0` `67f95bb8706c` and
+`07a447eff` `fa9524d7d77e`, equal to those check-t.sh checked. No typecheck and no fieldd vitest ran here.
+
+**The red.** `96aec71d0` adds six rows to `audit-service.test.ts` alone. At it, four are red by value, `close()` writing
+no record: the act in flight, the owed marker, the shell's attempt and the bound of 64. Two are green there by design:
+an update's apply is named by no record at the close, and an act that closed before it gets nothing more.
+
+**Proved, on the test Mac.** ROWS-559-558-t's arms for 558, each from its run file, 2026-11-20 06:36:43Z to 07:02:21Z,
+every one as wanted, at the cut's own commits:
+- The typechecks of record: `tsc --noEmit` in fieldd at `96aec71d0` `21bb56b27b46` and `07a447eff` `f066d3312edc`, and
+  in field-app at `07a447eff`, exit 0 with no error line each.
+- The red arm at `96aec71d0`: audit-service "Tests 4 failed | 18 passed (22)", the four rows, each an AssertionError and
+  no other kind, each by `close()` writing no record:
+  - the act in flight: its trail ends at the attempt, where an INTERRUPTED_BY_STOP record is wanted after it;
+  - the owed marker: no record, where one is wanted;
+  - the shell's attempt: the trail holds `support.bundle.export`'s attempt alone, where its closing record is wanted;
+  - the bound: "expected [] to have a length of 64 but got +0".
+  The file's 22 rows are item 578's row and this item's six among them. The two green by design pass.
+- The green arm at `07a447eff`: audit-service 22 of 22. As the stack's top, item 559's files once more: desk-room 30 of
+  30, objects-doors 21 of 21, tool-plane-desk-unknown 2 of 2.
+- The whole suites at `07a447eff`: fieldd "Test Files 327 passed | 5 skipped (332)", "Tests 4700 passed | 15 skipped
+  (4715)"; contracts "Test Files 76 passed (76)", "Tests 2220 passed (2220)"; field-app "Test Files 373 passed (373)",
+  "Tests 5460 passed (5460)".
+
+**The joined verify.** v-asm16, `pnpm verify` whole at the land's top `3b3c4d7ea` on the test Mac, 2026-11-20 07:15:28Z
+→ 07:25:21Z: **GREEN**, exit 0 in 593 s; typecheck and test each ran for 28 projects; 27 vitest suites, none failed;
+Rust 696 passed, 0 failed, 15 ignored. The kit of every target at the same commit ran three times. kit-asm16, 07:26:30Z
+→ 07:28:56Z: xcodebuild exit 65, 3,150 of 3,151 rows passed or skipped; its one red row, FieldWebTests' "a dial that
+outlasts its own deadline", took 1.61 s where under 700 ms is wanted, in a file the landing does not change. That suite
+alone, kit-asm16-web, 07:30:35Z → 07:31:12Z: 19 of 19, the row 0.825 s. kit-asm16-r2, the kit of record, 07:34:53Z →
+07:36:59Z: xcodebuild exit 0 in 126 s; 3,151 rows, Passed 3,148, Skipped 3, Failed 0..
+
+**Not covered.**
+- The stop's allowance: each record is one append with its own sync, and the audit is the stop's last step. In the
+  smokes and labs (the stop-owned modes), Electron main gives the supervisor 7 s from its SIGTERM before SIGKILL
+  (`PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS + 2_000`; the supervisor's own default is 2 s). A person's quit stops the pair
+  through the consented `system.shutdown` and kills nothing. How long the syncs take is not measured here. `07a447eff`'s
+  message says "The supervisor kills an owned fieldd 7 s after its signal": that is the narrow sentence, true in the
+  stop-owned modes alone; these words are the exact ones.
+- A crash writes nothing more: its segment has no close checkpoint, its open attempts stay unnamed, and the next boot
+  does not look back.
+- The tool plane's stop still does not wait for calls in flight.
+- macOS only.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## Item 620 — React's hook rules run on field-app, electron-shell and the plugin playground (M467)
+
+(2026-11-20; two commits on `07a447eff`: the red `f69309fe4` "620 (red): three packages run none of biome's React rules,
+and no test holds them named" and the green `3b3c4d7ea` "620 (green): React's hook rules run on field-app,
+electron-shell and the plugin playground". The fixer cut them on main at `906328374319` (red `4a19f6cc6871`, green
+`c8b97196d487`) from prod-builder's sets made there, and picked them into assembly 16 as its sixth piece. Decided
+2026-11-20: the hook rule as an error with its six fixed in the same commit, the children rule as an error on source
+alone, the other two as warnings, fixed area by area. The policy: each warned rule becomes an error when its count
+reaches zero, by items 623 and 624.)
+
+**What a person sees.** Nothing in the app. For anyone writing code in packages/field-app, packages/electron-shell or
+apps/plugin-playground: `pnpm lint` now reports a React hook called out of order as an error, and a `children` prop in
+their source as an error; it warns on an effect's dependency list (useExhaustiveDependencies, 92 today) and on a list
+keyed by its index (noArrayIndexKey, 27 today). `pnpm verify` stays green: `pnpm lint` does not fail on a warning.
+- **For lane authors:** the pre-naming lint (every changed file gets a file-based lint with `--error-on-warnings`) takes
+  the KNOWN-RED FORM for the files that carry these warnings: a set that touches one of them holds that file's
+  diagnostics EQUAL to the base's own by file, place and rule (no new one); any other file keeps the plain form. The
+  files are listed from the tree itself by the command below (pre-cut it listed 45: 44 in field-app's source, one
+  test). The list shrinks as items 623 and 624 land.
+
+```sh
+pnpm exec biome lint --colors=off --max-diagnostics=none \
+  --only=correctness/useExhaustiveDependencies --only=suspicious/noArrayIndexKey \
+  packages/field-app packages/electron-shell apps/plugin-playground 2>&1 \
+  | grep -oE '^[^ ]+:[0-9]+:[0-9]+ lint/' | cut -d: -f1 | sort -u
+```
+
+**What opened it.** Item 583's check met it (2026-11-19): in a laid tree with no manifest, the hook rules were silently
+off. Item 620's reading, from biome 2.5.4's own source at its tag: a domain's rules turn on when the file's NEAREST
+package.json declares the domain's package at a satisfying version (React: `react` >= 16.0.0, in dependencies,
+devDependencies or peerDependencies); a `catalog:` version resolves only through biome's experimental pnpm-catalog
+reader, off here, and otherwise reads as a literal that satisfies no range. field-app, electron-shell and the
+playground declare `react` only as `catalog:`; design-kit, plugin-sdk, plugin-runtime and fieldd-client also declare
+it `^19.0.0`, so the rules ran there and nowhere in the three. The repository showed it: fieldd-client's one
+suppression of the dependency rule was used; field-app's three in made-apps.ts were "unused".
+
+**The seam.**
+- **The guard (the red):** tooling/dev-runner/test/react-lint-coverage.test.mjs reads every workspace package from
+  pnpm-workspace.yaml's own globs, finds each whose `react` is `catalog:` alone, and holds that biome.jsonc names it in
+  an override that sets useHookAtTopLevel; it reads biome.jsonc with a small JSONC reader of its own. At the red it
+  fails by assertion naming the three; at the green it passes. A fourth package declared the same way fails it, rather
+  than going silent as these three did.
+- **biome.jsonc:** two `overrides` entries, first in the array, each with an "Item 620 (2026-11-20)" comment. Over the
+  three packages: useHookAtTopLevel `error`, useExhaustiveDependencies `warn`, noArrayIndexKey `warn`. Over their
+  `src/**` alone: noChildrenProp `error` (their tests hand typed createElement calls the `children` their components'
+  props require, the type-correct form there).
+- **The six the hook rule found**, none a hook called out of order: the smoke helpers `useRows` and `usePaneRows`
+  renamed `inUseRows` and `inUsePaneRows`; written exceptions for the engine's `useHeldTool` op (SelectionBar.tsx),
+  WebGL's `useProgram` (press.ts), and GodviewPaneFrame's top level, a component made once inside a memo
+  (GodviewDeck.tsx).
+
+**Proved before the cut, on the development Mac** (check-620o-1.out `9aaf7b563baa040f`, 04:08:23Z–04:08:33Z, under the
+light lock, in a private archive copy of `906328374319`): the whole tree's lint, 73 warnings and 57 infos before and 189
+warnings (73 + 119 − 3) and 57 infos after, no error either side; the added are exactly useExhaustiveDependencies 92 and
+noArrayIndexKey 27, all warnings, all in field-app; the removed are exactly made-apps.ts's three suppressions/unused.
+One planted file (a conditional hook, a missing dependency, an index key, a children prop) shows all four rules in each
+package's source, three of them (not noChildrenProp) in field-app's tests, and none in fieldd.
+
+**Then** (check-620c-1.out `36bb5651c4a97b16`, 05:05:29Z–05:05:31Z, in the same copy): the guard at the red fails by
+assertion, 2 of 3 passing, with "biome runs no React rule on: apps/plugin-playground, packages/electron-shell,
+packages/field-app", and passes 3 of 3 with the green laid; `biome check --error-on-warnings` finds nothing in it; the
+list command above gives exactly 92 + 27 warnings in exactly the 45 files; and item 600's six files in the three
+packages take no diagnostic under this item's rules, nor before it.
+
+**The two machines' counts, side by side.** The rules' own warnings are the same on both: 70 at the parent and 186 at
+the green. The rest is biome's `internalError/fs` on the iOS kit's `.window` overlay links (ghosttea, rosetta and
+truffle, each to a sibling folder beside the checkout), which a tree reports for each link whose folder is absent. The
+development Mac's archive copy has no sibling folders, so all three dangle: 73 and 189. The test Mac's run reads two: 72
+and 188. Its log keeps counts by rule, not their paths, so which link resolves there is not read here.
+
+**On the test Mac** (ROW-620b, qa-01's runs `i620b-p`, `i620b-r` and `i620b-g`, at the parent `906328374319`, the red
+`4a19f6cc6871` and the green `c8b97196d487`): `pnpm lint` exited 0 at all three, its counts equal to the uncapped run's
+and to count-620's by severity. The parent and the red read 72 warnings and 57 infos with nothing added or gone; the
+green read 188 (72 + 119 − 3) and 57, its added exactly useExhaustiveDependencies 92 and noArrayIndexKey 27, all 119
+warnings and all in field-app, and its removed exactly made-apps.ts's three suppressions/unused, no line moved.
+field-app's and electron-shell's typecheck passed at the parent and the green. The guard at the red failed by assertion,
+2 of 3 passing, naming exactly the three packages; at the green it passed 3 of 3. dev-runner's whole test read 515 of
+516 at the red (the guard's row alone failing) and 516 of 516 at the green. The planted file showed none of the four
+rules in field-app at the parent and all four, each once at its level, at the green; in fieldd none at either.
+
+**Follow-ups, named and not done:**
+- Item 623: the 27 index keys in 17 files, each a stable key or a written reason; then noArrayIndexKey to `error`
+  (prod-builder).
+- Item 624: the 92 effect dependencies in 31 files, a reading first, by area; then useExhaustiveDependencies to
+  `error` (prod-builder, each area's set read by its lane).
+- The test Mac's B-row helper reds any warning over a row's paths: a row cut on a tree with this commit takes the
+  known-red form for the files above (qa-01's).
