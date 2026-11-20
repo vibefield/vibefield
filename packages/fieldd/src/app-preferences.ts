@@ -1,6 +1,10 @@
 import {
   APP_PREFERENCE_KEYS,
   type AppPreferences,
+  DESK_LIGHT,
+  DESK_LIGHT_SLIDERS,
+  type DeskLight,
+  DeskLightPlant,
   type DocSyncIntent,
   MeshSyncPosture,
 } from "@vibefield/contracts";
@@ -51,6 +55,7 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
   const sounds = values[APP_PREFERENCE_KEYS.SOUNDS];
   const quietUntil = values[APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL];
   const communityPlugins = values[APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS];
+  const deskLight = readDeskLight(values[APP_PREFERENCE_KEYS.DESK_LIGHT]);
   return {
     showTray: typeof showTray === "boolean" ? showTray : DEFAULT_APP_PREFERENCES.showTray,
     backgroundShell:
@@ -77,7 +82,29 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
     // SD-2 (SD-D22) — Turn sounds back on writes null; the doc keeps the key and the snapshot drops it. Anything that
     // is not a moment (a newer build's word, a corrupted value) is no Quiet: sounds are never held back by a guess.
     ...(isQuietMoment(quietUntil) ? { soundsQuietUntil: quietUntil } : {}),
+    // Item 583 — the desk's light, only the rows the person set and this build understands; with none, the key is
+    // absent and the desk wears every row at its rest (`deskLightValues`).
+    ...(deskLight !== undefined ? { deskLight } : {}),
   };
+}
+
+/** Item 583 — the desk's light as the tolerant settings document holds it, read ROW BY ROW: a plant this build does
+ * not have and a row that is not its kind are dropped; a number outside its row's range is held to the nearest end (a
+ * newer build's wider range is drawn as far as this one can). Nothing understood, or a cleared key (null), is no
+ * value at all. */
+export function readDeskLight(stored: unknown): DeskLight | undefined {
+  if (typeof stored !== "object" || stored === null || Array.isArray(stored)) return undefined;
+  const from = stored as Readonly<Record<string, unknown>>;
+  const light: DeskLight = {};
+  const plant = DeskLightPlant.safeParse(from.plant);
+  if (plant.success) light.plant = plant.data;
+  if (typeof from.mirror === "boolean") light.mirror = from.mirror;
+  for (const row of DESK_LIGHT_SLIDERS) {
+    const value = from[row];
+    if (typeof value !== "number" || !Number.isFinite(value)) continue;
+    light[row] = Math.min(DESK_LIGHT[row].max, Math.max(DESK_LIGHT[row].min, value));
+  }
+  return Object.keys(light).length === 0 ? undefined : light;
 }
 
 function isQuietMoment(value: unknown): value is number {

@@ -622,6 +622,10 @@ export const APP_PREFERENCE_KEYS = {
    * as his page names it, in its store at 2026-11-11T23:03:22.544Z; built on VF-PM's ruling, 2026-11-14 04:33Z). The
    * mark is `CommunityStatement` below: this desktop's alone, never synced, and never a key of this map.* */
   COMMUNITY_PLUGINS: "plugins.community",
+  /** Item 583 (DESIGN.md §8 "Settings → Canvas") — the desk's light: the plant whose shadow falls on the desk, its
+   * mirror and its five sliders, as ONE value (`DeskLightSet`), so a slider let go is one write and one undo step.
+   * The person's: it rides the settings doc, so a desk looks the same on each of their desktops. null clears it. */
+  DESK_LIGHT: "desk.light",
 } as const;
 
 /** MK-1 (MK-E3): the preferences no undo may ever change. This is a LIST: fieldd reads it and commits these outside
@@ -642,6 +646,7 @@ export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.SOUNDS,
   APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL,
   APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS,
+  APP_PREFERENCE_KEYS.DESK_LIGHT,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
 
@@ -651,6 +656,120 @@ export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
  * converges across the user's devices (D29′), unlike per-doc intent. */
 export const MeshSyncPosture = z.enum(["automatic", "opt-in"]);
 export type MeshSyncPosture = z.infer<typeof MeshSyncPosture>;
+
+/** Item 583 (DESIGN.md §8 "Settings → Canvas", §2.1) — the plants whose shadow can fall on the desk. `none` is the
+ * bare mat, in open light. An id is stored in the person's settings doc, so one is never renamed and never reused. */
+export const DeskLightPlant = z.enum([
+  "none",
+  "monstera",
+  "climbing-monstera",
+  "fan-palm",
+  "coconut-palm",
+  "under-the-palm",
+  "palm",
+  "canopy",
+]);
+export type DeskLightPlant = z.infer<typeof DeskLightPlant>;
+
+/** The desk light's sliders, in the page's order. */
+export const DESK_LIGHT_SLIDERS = ["softness", "shade", "tint", "size", "wind"] as const;
+export type DeskLightSlider = (typeof DESK_LIGHT_SLIDERS)[number];
+
+/** The desk light's rows (DESIGN.md §8 "Settings → Canvas"): the plant and the mirror a desk wears until the person
+ * chooses, and each slider's range with the value it rests at.
+ * - `softness`: × the shadow's blur (Sharp … Soft).
+ * - `shade`: the deepest shade as a share of the lit mat, so LOWER is deeper (Lighter … Deeper runs max … min).
+ * - `tint`: how far the shade is pulled toward the sky's blue (Neutral … Cool).
+ * - `size`: × the plant's size on the desk (Smaller … Larger).
+ * - `wind`: × the wind's strength (Still … Breezy); 0 is still. */
+export const DESK_LIGHT = {
+  plant: "monstera",
+  mirror: false,
+  softness: { min: 0.5, max: 2, rest: 1 },
+  shade: { min: 0.55, max: 0.9, rest: 0.7 },
+  tint: { min: 0, max: 1, rest: 0.2 },
+  size: { min: 0.8, max: 1.6, rest: 1 },
+  wind: { min: 0, max: 1.5, rest: 1 },
+} as const satisfies { plant: DeskLightPlant; mirror: boolean } & Record<
+  DeskLightSlider,
+  { min: number; max: number; rest: number }
+>;
+
+const deskLightNumber = (row: DeskLightSlider) =>
+  z.number().min(DESK_LIGHT[row].min).max(DESK_LIGHT[row].max);
+
+/** What the person has SET of the desk's light: only the rows they moved off their rest. Sparse, so a later build can
+ * move a rest without rewriting anyone's settings. The setter's value for `desk.light`: it refuses a row it does not
+ * know and a number outside its row's range. */
+export const DeskLightSet = z
+  .object({
+    plant: DeskLightPlant.optional(),
+    mirror: z.boolean().optional(),
+    softness: deskLightNumber("softness").optional(),
+    shade: deskLightNumber("shade").optional(),
+    tint: deskLightNumber("tint").optional(),
+    size: deskLightNumber("size").optional(),
+    wind: deskLightNumber("wind").optional(),
+  })
+  .strict();
+export type DeskLightSet = z.infer<typeof DeskLightSet>;
+
+/** `DeskLightSet` as a snapshot carries it, read tolerantly, row by row: a row this build does not understand (a newer
+ * build's plant, a number it cannot hold) is dropped, and the others stand. */
+export const DeskLight = z
+  .object({
+    plant: DeskLightPlant.optional().catch(undefined),
+    mirror: z.boolean().optional().catch(undefined),
+    softness: deskLightNumber("softness").optional().catch(undefined),
+    shade: deskLightNumber("shade").optional().catch(undefined),
+    tint: deskLightNumber("tint").optional().catch(undefined),
+    size: deskLightNumber("size").optional().catch(undefined),
+    wind: deskLightNumber("wind").optional().catch(undefined),
+  })
+  .passthrough();
+export type DeskLight = z.infer<typeof DeskLight>;
+
+/** Every row of the desk's light, as a desk wears it. */
+export interface DeskLightValues {
+  plant: DeskLightPlant;
+  mirror: boolean;
+  softness: number;
+  shade: number;
+  tint: number;
+  size: number;
+  wind: number;
+}
+
+/** The desk's light as it is worn: what the person set, and every other row at its rest. One reading, so the desk and
+ * Settings can never fill a row two ways. */
+export function deskLightValues(set: DeskLight | undefined): DeskLightValues {
+  const values: DeskLightValues = {
+    plant: set?.plant ?? DESK_LIGHT.plant,
+    mirror: set?.mirror ?? DESK_LIGHT.mirror,
+    softness: DESK_LIGHT.softness.rest,
+    shade: DESK_LIGHT.shade.rest,
+    tint: DESK_LIGHT.tint.rest,
+    size: DESK_LIGHT.size.rest,
+    wind: DESK_LIGHT.wind.rest,
+  };
+  for (const row of DESK_LIGHT_SLIDERS) {
+    const value = set?.[row];
+    if (value !== undefined) values[row] = value;
+  }
+  return values;
+}
+
+/** What to store for a desk worn as `values`: the rows off their rest, or null when every row rests (the key is
+ * cleared, as Reset light asks). */
+export function deskLightToSet(values: DeskLightValues): DeskLightSet | null {
+  const set: DeskLightSet = {};
+  if (values.plant !== DESK_LIGHT.plant) set.plant = values.plant;
+  if (values.mirror !== DESK_LIGHT.mirror) set.mirror = values.mirror;
+  for (const row of DESK_LIGHT_SLIDERS) {
+    if (values[row] !== DESK_LIGHT[row].rest) set[row] = values[row];
+  }
+  return Object.keys(set).length === 0 ? null : set;
+}
 
 export const AppPreferences = z
   .object({
@@ -672,6 +791,9 @@ export const AppPreferences = z
     soundsQuietUntil: z.number().int().nonnegative().optional(),
     // MK-1 (MK-D6, MK-E3): OPTIONAL, never required — absent is off, as an older daemon's snapshot says.
     communityPlugins: z.boolean().optional(),
+    // Item 583: OPTIONAL, never required — absent is every row at its rest (`deskLightValues`), as an older daemon's
+    // snapshot says and as a person who never opened Settings → Canvas has it.
+    deskLight: DeskLight.optional(),
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;
@@ -680,9 +802,15 @@ export const AppPreferenceSetParams = z
   .object({
     key: AppPreferenceKey,
     // Not every preference is a switch any more (UA-6): the posture is a word,
-    // and Quiet (SD-2) a moment, or null to end it.
+    // Quiet (SD-2) a moment, or null to end it, and the desk's light (583) its rows, or null to clear them.
     // A union rather than `z.any()` — the setter still refuses what no key can hold.
-    value: z.union([z.boolean(), MeshSyncPosture, z.number().int().nonnegative(), z.null()]),
+    value: z.union([
+      z.boolean(),
+      MeshSyncPosture,
+      z.number().int().nonnegative(),
+      z.null(),
+      DeskLightSet,
+    ]),
   })
   .passthrough()
   .refine(
@@ -691,7 +819,9 @@ export const AppPreferenceSetParams = z
         ? typeof value === "string"
         : key === APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL
           ? typeof value === "number" || value === null
-          : typeof value === "boolean",
+          : key === APP_PREFERENCE_KEYS.DESK_LIGHT
+            ? typeof value === "object"
+            : typeof value === "boolean",
     "preference value does not match its key",
   );
 
@@ -701,6 +831,7 @@ export const AppPreferenceSetParams = z
 const APP_PREFERENCE_VALUE_WORDS: Partial<Record<AppPreferenceKey, string>> = {
   [APP_PREFERENCE_KEYS.MESH_SYNC_POSTURE]: MeshSyncPosture.options.join("|"),
   [APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL]: "epoch ms or null",
+  [APP_PREFERENCE_KEYS.DESK_LIGHT]: "the light's rows or null",
 };
 const APP_PREFERENCE_SWITCHES = AppPreferenceKey.options.filter(
   (key) => APP_PREFERENCE_VALUE_WORDS[key] === undefined,

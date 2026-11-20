@@ -44,6 +44,8 @@ import {
   type DevicesFixtureState,
   devicesFixture,
 } from "../devices-settings-fixtures";
+import { LightSettingsPreview } from "../LightSettingsPreview";
+import { LIGHT_FIXTURE_STATES, type LightFixtureState } from "../light-settings-fixtures";
 import { ProfilesSettingsPreview, profilesPreviewHead } from "../ProfilesSettingsPreview";
 import {
   FIXTURE_PROFILE_SETS,
@@ -122,6 +124,9 @@ export function SurfacesSection(): ReactElement {
             ) : settingsPage === "sound" ? (
               // SD-2 — Settings → Sound, the shipping view on a fixture model (Play sounds on).
               <SoundSettingsPreview key={settingsVisit} state="on" />
+            ) : settingsPage === "canvas" ? (
+              // Item 583 — Settings → Canvas's Light section, the shipping view on a fixture (every row at its rest).
+              <LightSettingsPreview key={settingsVisit} state="rest" />
             ) : settingsPage === "agents" ? (
               <AgentsSettingsPreview
                 key={settingsVisit}
@@ -157,6 +162,14 @@ export function SurfacesSection(): ReactElement {
             )}
           </SettingsDialog>
         </div>
+      </Specimen>
+
+      <Specimen
+        title="Settings → Canvas — Light, in each state a person meets it in"
+        source="panels/canvas/LightSettings.tsx"
+        bleed
+      >
+        <LightSettingsSpecimen />
       </Specimen>
 
       <Specimen title="Agents settings" source="panels/agents/AgentsSection.tsx" bleed>
@@ -411,6 +424,42 @@ function TerminalSettingsSpecimen(): ReactElement {
 /** Settings → Updates in the shipping dialog (WP12d L3c-ii, §13 C5; AU-3): `UpdatesSectionView` over the projections
  * and answers main gives, every production state, never a replica; the Updates nav row wears its mark while an install
  * waits, and Your devices stands under the page over the fixture roster. */
+/** Item 583 — Settings → Canvas's Light section over each of its fixtures: at rest, a plant chosen, open light, under
+ * the Moon, under Reduce motion, and while the preferences cannot be written. */
+function LightSettingsSpecimen(): ReactElement {
+  const [state, setState] = useState<LightFixtureState>("rest");
+  return (
+    <div className="vf-ds-settings-stage vf-ds-agents-stage" data-light-settings-catalog="">
+      <div className="vf-ds-production-statebar">
+        <span>Production state</span>
+        <UiSegmentedControl
+          options={LIGHT_FIXTURE_STATES}
+          value={state}
+          onChange={setState}
+          label="Light section state"
+        />
+      </div>
+      <SettingsDialog
+        className="vf-ds-settings-dialog"
+        activePage="canvas"
+        onSelectPage={() => undefined}
+        onClose={() => undefined}
+        onUndo={() => undefined}
+        onRedo={() => undefined}
+        historyBusy={false}
+        undoAvailable={false}
+        redoAvailable={false}
+        account={{ me: FIXTURE_ME, others: FIXTURE_OTHERS_WAITING, onSwitch: () => undefined }}
+        subpage={null}
+      >
+        <div className="space-y-4">
+          <LightSettingsPreview key={state} state={state} />
+        </div>
+      </SettingsDialog>
+    </div>
+  );
+}
+
 function UpdatesSettingsSpecimen({
   states,
   label,

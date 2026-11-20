@@ -31,6 +31,7 @@ import { type ProfilesRoute, ProfilesSection } from "./agents/ProfilesSection";
 import { ProfileMark } from "./agents/ProfilesView";
 import { profileNavItems } from "./agents/profiles-model";
 import { BrowserDataSection, hasBrowserPane } from "./BrowserDataSection";
+import { LightSection } from "./canvas/LightSection";
 import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
 import { DevicesSection } from "./DevicesSection";
@@ -526,6 +527,8 @@ export function SettingsPanel({
   } else if (activePage === "canvas") {
     pageContent = (
       <div className="space-y-4">
+        {/* Item 583 (DESIGN.md §8 "Settings → Canvas"): the desk's light, above Navigation and Objects */}
+        <LightSection />
         <SettingsSection
           title="Navigation"
           description="Set the camera range and quickly reframe the current canvas."
@@ -555,7 +558,7 @@ export function SettingsPanel({
           </SettingsRow>
           <SettingsRow
             title="Current view"
-            description="Frame all cards, or return from the current nested layer."
+            description="Frame every object, or return from the current nested layer."
             divider={false}
           >
             <div className="flex items-center gap-2">
@@ -574,16 +577,13 @@ export function SettingsPanel({
           </SettingsRow>
         </SettingsSection>
 
-        <SettingsSection
-          title="Card behavior"
-          description="Live controls for card alignment on the open document."
-        >
+        <SettingsSection title="Objects" description="How objects line up on this desk.">
           <SettingsRow
-            title="Snap cards"
-            description="Show alignment guides and settle nearby card edges into place."
+            title="Snap objects"
+            description="Show alignment guides and settle nearby object edges into place."
           >
             <SettingsSwitch
-              label="Snap cards"
+              label="Snap objects"
               checked={snapEnabled}
               onChange={(enabled) => applySnap(enabled, snapThreshold)}
             />

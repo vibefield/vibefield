@@ -78,7 +78,7 @@ const PAGES: readonly PageMeta[] = [
   {
     id: "canvas",
     label: "Canvas",
-    description: "Navigation, snapping, and live card behavior.",
+    description: "The desk's light, navigation, and how objects line up.",
     icon: "canvas",
   },
   {

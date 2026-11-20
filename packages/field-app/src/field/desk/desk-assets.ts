@@ -2,7 +2,7 @@ import { type InkRaster, inkRaster, penFaces } from "@vibecook/ice/desk";
 import caveat500 from "./assets/fonts/Caveat-500.ttf?url";
 import caveat600 from "./assets/fonts/Caveat-600.ttf?url";
 import kalam400 from "./assets/fonts/Kalam-400.ttf?url";
-import type { DeskPlates } from "./desk-plates";
+import type { DeskPlant } from "./desk-plates";
 
 // WHAT THE DESK IS FED (DK-3; the orchestrator's ruling 8 — the packaged CSP is NOT widened; r6 §3):
 //
@@ -11,7 +11,7 @@ import type { DeskPlates } from "./desk-plates";
 //   `new FontFace(family, "url(…)")` — the font loader, governed by `font-src`, which the packaged
 //   policy leaves to `default-src 'self'`; the files are the renderer's own assets. One raster per
 //   page; a face loads once, the first time a note asks for it.
-// - THE PLATES: a lazy module (desk-plates.ts) — never a `fetch`, which `connect-src
+// - THE PLATES: lazy modules, one per plant (desk-plates.ts) — never a `fetch`, which `connect-src
 //   ws://127.0.0.1:*` refuses packaged.
 // - THE SEED'S PRINT: a lazy module too (desk-sample-print.ts).
 
@@ -30,12 +30,9 @@ export function deskText(): InkRaster {
   return raster;
 }
 
-let plates: Promise<DeskPlates> | null = null;
-
-/** The generated gobo plates — loaded once, from their lazy module. */
-export function deskPlates(): Promise<DeskPlates> {
-  plates ??= import("./desk-plates").then((m) => m.loadPlates());
-  return plates;
+/** One plant's gobo plate — loaded once, from its own lazy module (item 583: a desk loads the plant it wears). */
+export function deskPlate(plant: DeskPlant): Promise<Uint8Array<ArrayBuffer>> {
+  return import("./desk-plates").then((m) => m.loadPlate(plant));
 }
 
 /** The seed's print: its bytes and what the store will name them. */

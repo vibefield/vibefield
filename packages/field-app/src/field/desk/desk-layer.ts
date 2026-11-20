@@ -9,6 +9,7 @@ import {
 } from "@vibecook/ice/desk";
 import { LIVE, type LiveSources, service } from "@vibecook/ice/desk/kit";
 import { deskPalette, deskTheme } from "@vibecook/ice/desk/objects";
+import { type DeskLightValues, deskLightValues } from "@vibefield/contracts";
 import {
   BROWSER_NAVIGATION,
   type BrowserNavigation,
@@ -17,6 +18,7 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
+import { deskLightLook, deskNightTheme } from "./desk-light";
 import { PEERS } from "./peers/peers-model";
 
 // THE DESK'S LAYER, as VibeField mounts it (DK-3; ICE `docs/api-reference.md` "@ice/desk", the worked
@@ -59,19 +61,27 @@ export const DESK_GRID: GridConfig = {
   fadeIn: GRID.fadeIn,
   mat: {
     ...DEFAULT_MAT_CONFIG,
-    // The room's light stays over the viewport while the desk moves underneath it.
-    gobo: { ...DEFAULT_MAT_CONFIG.gobo, space: "viewport" },
+    // The light of a desk nobody dressed (item 583; `desk-light.ts`): soft light with every row at its rest. The
+    // room's light stays over the viewport while the desk moves underneath it.
+    gobo: deskLightLook(deskLightValues(undefined)).gobo,
     ruler: { ...DEFAULT_MAT_CONFIG.ruler, on: true, margin: 0 },
   },
 };
 
+/** The grid of a desk under a person's light (item 583; DESIGN.md §8 "Settings → Canvas"): `DESK_GRID` with the
+ * gobo their rows ask for. */
+export function deskGrid(light: DeskLightValues): GridConfig {
+  return { ...DESK_GRID, mat: { ...DESK_GRID.mat, gobo: deskLightLook(light).gobo } };
+}
+
 /** The desk dressed for one of the app's two themes: ICE's shipped theme and palette (D7), the
- * palette carrying VibeField's own tokens (`--vf-canvas-bg`, `--vf-select`, the note's paper). */
+ * palette carrying VibeField's own tokens (`--vf-canvas-bg`, `--vf-select`, the note's paper). Since item 583 the
+ * dark theme's mat is under the gentler night (DESIGN.md §2.1; `deskNightTheme`). */
 export function deskLook(name: ThemeName): {
   readonly theme: ReturnType<typeof deskTheme>;
   readonly palette: ReturnType<typeof deskPalette>;
 } {
-  return { theme: deskTheme(name), palette: deskPalette(name) };
+  return { theme: deskNightTheme(deskTheme(name)), palette: deskPalette(name) };
 }
 
 export interface FieldDeskLayerOptions {
@@ -80,6 +90,9 @@ export interface FieldDeskLayerOptions {
   readonly theme: ThemeName;
   /** The desk's remount within its engine generation (Reload): the layer's name in the roster says it. */
   readonly mount?: number;
+  /** Item 583 — the light the first frame is drawn under: the person's rows when they are known at the mount; absent,
+   * every row at its rest. The mounted desk follows them after that through its feed (`desk-feed.ts`). */
+  readonly light?: DeskLightValues;
   /** The device's live GPU memory by label from the boot on (dev builds — Settings → Advanced). */
   readonly gpuLedger?: boolean;
   /** Where the layer acquires its device — `navigator.gpu` unless given (desk-gpu.ts's forced
@@ -108,6 +121,7 @@ export interface FieldDeskLayerOptions {
  * the desk's children draw each peer by face (`peers/PeersOnTheMat.tsx`), and their observers arm the world.
  */
 export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
+  const light = opts.light ?? deskLightValues(undefined);
   return deskLayer({
     ...deskLook(opts.theme),
     objects: [],
@@ -115,10 +129,12 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     text: deskText(),
     docs: opts.engine.docs,
     blobs: deskBlobs(),
-    grid: DESK_GRID,
+    grid: deskGrid(light),
     hold: DESK_HOLD,
     tray: DESK_TRAY,
     ambientIdleMs: DESK_WIND_IDLE_MS,
+    // Wind at Still (item 583): the desk's ambient never blows. Any other wind keeps ICE's `idle` policy unasked.
+    ...(deskLightLook(light).ambient === "still" ? { ambient: "still" as const } : {}),
     cursors: false,
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),

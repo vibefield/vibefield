@@ -42,9 +42,10 @@ import { getSurfacePool, surfaceGraceMs } from "../surfaces/pool";
 import { useAppTheme } from "../theme";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { deskCensus, installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
-import { feedDesk } from "./desk/desk-feed";
+import { type DeskFeed, feedDesk } from "./desk/desk-feed";
 import { deskGpu, HEAL_DELAYS_MS, type HealKind, healDelay, healKind } from "./desk/desk-gpu";
 import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
+import { useDeskLight } from "./desk/desk-light-live";
 import { announceMissing } from "./desk/desk-notices";
 import { objectWords, stagedTitles } from "./desk/desk-object-words";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
@@ -125,6 +126,12 @@ export function CanvasStage({
   const themeRef = useRef(theme);
   /** The theme the mounted layer wears — made in it, or last re-dressed to it. */
   const wornRef = useRef(theme);
+  // Item 583 — the light the desk wears: the person's rows (a row of Settings → Canvas in hand included), `null`
+  // until they have been read once. A ref for the mount and the feed, so a change of light never remounts the desk.
+  const light = useDeskLight();
+  const lightRef = useRef(light);
+  lightRef.current = light;
+  const feedRef = useRef<DeskFeed | null>(null);
   const handleRef = useRef<DeskLayerHandle | null>(null);
   /** The types the mounted layer was made WITHOUT (DK-9's off set, as read at its mount — DK-11's words). */
   const mountedOffRef = useRef<ReadonlySet<string>>(new Set());
@@ -252,6 +259,7 @@ export function CanvasStage({
       engine: ce,
       theme: dressed,
       mount,
+      ...(lightRef.current === null ? {} : { light: lightRef.current }),
       gpuLedger: import.meta.env.DEV,
       ...(gpu === undefined ? {} : { gpu }),
       onDevice: (device) => {
@@ -299,6 +307,12 @@ export function CanvasStage({
   }, [live, ce]);
   // PT-S2 — the devices' looks run with the mount (a discarded memo's twin never starts one)
   useEffect(() => devices?.watch(), [devices]);
+
+  // THE LIGHT BRIDGE (item 583): every change of the person's light re-dresses the live desk through its feed — the
+  // mat's gobo and the wind as config, the plate when the plant changed. Nothing is remounted.
+  useEffect(() => {
+    if (light !== null) feedRef.current?.setLight(light);
+  }, [light]);
 
   // THE THEME BRIDGE (ruling 2; r4 §4): every change of the owner's answer re-dresses the live desk
   // — and only a change: the layer was MADE in the theme it wears (`wornRef`).
@@ -355,8 +369,9 @@ export function CanvasStage({
     };
     deskRef.current = desk;
     const unpublish = publishDesk(desk);
-    // the plates and the rulers' atlas, the moment the mat is here
-    const feed = feedDesk(handle, ce);
+    // the light, its plant's plate and the rulers' atlas, the moment the mat is here
+    const feed = feedDesk(handle, ce, lightRef.current);
+    feedRef.current = feed;
     const undoDoor = installDeskDoor(desk, feed.platesSet);
     const haptics = peekHost()?.haptics;
     const undoZoomFeedback =
@@ -458,6 +473,7 @@ export function CanvasStage({
       if (retryTimer !== null) clearTimeout(retryTimer);
       offStatus();
       feed.dispose();
+      if (feedRef.current === feed) feedRef.current = null;
       withdrawStatus("desk-degraded");
       undoDoor();
       undoZoomFeedback();

@@ -132,10 +132,10 @@ export function ControlsSection(): ReactElement {
           <div className="vf-ds-selection-stack">
             <div className="vf-ds-demo-setting">
               <div>
-                <strong>Snap cards</strong>
+                <strong>Snap objects</strong>
                 <span>Settle nearby edges into place.</span>
               </div>
-              <SettingsSwitch checked={enabled} onChange={setEnabled} label="Snap cards" />
+              <SettingsSwitch checked={enabled} onChange={setEnabled} label="Snap objects" />
             </div>
             <UiSegmentedControl
               options={["Select", "Pan", "Wire"]}

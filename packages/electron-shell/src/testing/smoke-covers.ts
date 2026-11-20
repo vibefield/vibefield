@@ -21,7 +21,7 @@
 //     BACK    — to the canvas: THAW FIRST, the live canvas shown at once under the lowering cover, the still dropped; the
 //               desk drawing again;
 //   LOST    — the cover's capture answering nothing (the witnesses' switch, as a lost device answers): the mat's ground
-//             (`--vf-mat-ground` — #3D5A30 by day, #313C40 by night), "The desk lost its graphics device" said ONCE, a
+//             (`--vf-mat-ground` — #3D5A30 by day, #344548 by night), "The desk lost its graphics device" said ONCE, a
 //             theme change under it taken again and said no more; the counters still; dk-15-lost-device.png. The words
 //             are read AT THEIR SAYING (DK-18, plan (81)): the door's said log, which the line writes as it takes the
 //             notice, and a page recorder of the line's text armed before the rise — never one late read of a notice
@@ -55,7 +55,7 @@ export const COVERS = {
   holdMs: 3_200,
   lostWords: "The desk lost its graphics device",
   /** the mat's ground as the theme lights it (DESIGN.md §2.1) */
-  ground: { light: "rgb(61, 90, 48)", dark: "rgb(49, 60, 64)" },
+  ground: { light: "rgb(61, 90, 48)", dark: "rgb(52, 69, 72)" },
 } as const;
 
 /** One pass of a stand, as the door records it (field-app `cover-still.ts`). */

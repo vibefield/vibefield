@@ -23,6 +23,7 @@ import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { CoverStill } from "./field/desk/CoverStill";
+import { useDeskLightBridge } from "./field/desk/desk-light-bridge";
 import { BEFORE_THE_DESK } from "./field/desk/desk-words";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FrameSurface } from "./frame/frame-surface";
@@ -104,6 +105,8 @@ export function FieldView({
   // pill's package and the covered views' circle read it; no dot = every
   // source is there).
   useArtifactCatalogFeed();
+  // Item 583: the person's light (Settings → Canvas), from fieldd to this window's desks (`desk-light-live.ts`)
+  useDeskLightBridge();
   // PLUG-P3b: hand the plugin-client module its backend — plugin-bound leases
   // dial the same daemon this window reached (cleared on unmount, honestly).
   const fielddClient = useFielddClient();

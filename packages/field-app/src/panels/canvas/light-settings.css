@@ -1,0 +1,159 @@
+/* Item 583 — Settings → Canvas, LIGHT (DESIGN.md §8 "Settings → Canvas"; the mat in CSS is §2.1's): the still of the
+   mat with the chosen plant's shadow, the eight plant tiles, the sliders' end words and the foot. Colours are the
+   tokens' alone; the shade's colour arrives as --vf-light-shade, the engine's number. */
+
+/* THE PREVIEW: 16 : 9, corners 12, the mat's lattice at half. It is its own container, so the shadows' sizes and
+   blurs are shares of its width (cqw) and the still is the desk's picture at any width. */
+.vf-light-preview {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 16px;
+  border-radius: 12px;
+  container-type: inline-size;
+  /* the shadows multiply this mat and nothing behind it */
+  isolation: isolate;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size:
+    50px 50px,
+    50px 50px,
+    12.5px 12.5px,
+    12.5px 12.5px;
+}
+
+.vf-light-shadows {
+  position: absolute;
+  inset: 0;
+}
+
+/* Mirror: the light comes from the other side, so the whole frame of shadows flips left to right. */
+.vf-light-shadows[data-mirror="true"] {
+  transform: scaleX(-1);
+}
+
+/* One layer of the plate: a square about its own centre, turned, blurred as its disc blurs it. The blur is on this
+   box and the leaf's mask on its child: a filter is applied before a mask, so one box cannot do both. */
+.vf-light-shadow {
+  position: absolute;
+  aspect-ratio: 1;
+  filter: blur(var(--vf-light-blur));
+  mix-blend-mode: multiply;
+  transform: translate(-50%, -50%) rotate(var(--vf-light-turn));
+}
+
+.vf-light-leaf,
+.vf-light-tile-leaf {
+  position: absolute;
+  inset: 0;
+  background-color: var(--vf-light-shade);
+  mask-repeat: no-repeat;
+  mask-size: 100% 100%;
+}
+
+/* THE PLANTS: eight tiles, four to a row, 3 : 2, corners 10, each a small mat (the lattice at a quarter) with its
+   plant, and its name under it. */
+.vf-light-plants {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.vf-light-plant {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font-family: var(--vf-font-sans);
+  text-align: left;
+}
+
+.vf-light-plant:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.vf-light-tile {
+  position: relative;
+  display: block;
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  border-radius: 10px;
+  isolation: isolate;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size:
+    25px 25px,
+    25px 25px,
+    6.25px 6.25px,
+    6.25px 6.25px;
+}
+
+/* the plate is square: it lies across the tile's width, about its centre */
+.vf-light-tile-shadow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 100%;
+  aspect-ratio: 1;
+  filter: blur(1.5px);
+  mix-blend-mode: multiply;
+  transform: translate(-50%, -50%);
+}
+
+/* the chosen plant wears the selection ring (§7; 1.5px is the ring's width, §2) */
+.vf-light-plant[aria-checked="true"] .vf-light-tile {
+  box-shadow: 0 0 0 1.5px var(--vf-select);
+}
+
+.vf-light-plant:focus-visible {
+  outline: none;
+}
+
+.vf-light-plant:focus-visible .vf-light-tile {
+  box-shadow:
+    0 0 0 1.5px var(--vf-select),
+    0 0 0 4px color-mix(in srgb, var(--vf-select) 30%, transparent);
+}
+
+.vf-light-plant-name {
+  overflow: hidden;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A SLIDER: Settings' own range, with the words of its two ends under it (a readable tier, §2.4). */
+.vf-light-slider {
+  display: flex;
+  width: min(280px, 40vw);
+  flex-direction: column;
+  gap: 4px;
+}
+
+.vf-light-ends {
+  display: flex;
+  justify-content: space-between;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.vf-light-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 12px;
+}
+
+@media (max-width: 720px) {
+  .vf-light-plants {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
