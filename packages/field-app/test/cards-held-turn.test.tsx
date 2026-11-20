@@ -264,7 +264,9 @@ describe("the turn and the lamp in the hand's stylesheet (DESIGN.md §8; §5 'Th
   });
 
   it("brightens and darkens each side by the lamp's light on it, times the night's dim", () => {
-    const lit = "filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));";
+    // …and never under the floor that keeps its words read turned from the lamp (item 613)
+    const lit =
+      "filter: brightness(max(var(--vf-card-light-floor), var(--vf-card-dim) * var(--vf-cards-lamp, 1)));";
     expect(rule(".vf-card")).toContain(lit);
     expect(rule(".vf-card-back")).toContain(lit);
   });

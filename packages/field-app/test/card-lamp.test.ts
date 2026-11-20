@@ -124,6 +124,22 @@ describe("the lamp lights one small surface over the side that is up (DESIGN.md 
     expect(uniform(made[0], "uNight")).toEqual([1]);
   });
 
+  it("knowing the floor under the card's light, as the least of the lamp's light that the card's brightness carries", () => {
+    const { canvas, deps, made } = bench();
+    lightLamp(canvas, FRONT, deps);
+    // by day the card's brightness is the lamp's light itself, so the floor is the token's own number (item 613)
+    expect(uniform(made[0], "uFloor")).toEqual([0.72]);
+    // by night it is the lamp's light times the night's dim, so of the lamp's light alone the floor is that much more
+    const dim = /\s--vf-card-dim:\s*([^;]+);/.exec(block(".dark"))?.[1]?.trim() ?? "";
+    const night = bench(true, (name) => (name === "--vf-card-dim" ? dim : tokenOf(name)));
+    lightLamp(night.canvas, { ...FRONT, night: true }, night.deps);
+    expect(uniform(night.made[0], "uFloor")?.[0]).toBeCloseTo(0.72 / 0.86, 9);
+    // a floor that is not read holds nothing up: the lamp is lit, and gives back over the flat light as it did
+    const none = bench(true, (name) => (name === "--vf-card-light-floor" ? "" : tokenOf(name)));
+    expect(lightLamp(none.canvas, FRONT, none.deps)).not.toBeNull();
+    expect(uniform(none.made[0], "uFloor")).toEqual([0]);
+  });
+
   it("seen from the turn's own eye, knowing where the face's window is and what it holds", () => {
     const { canvas, deps, made } = bench();
     lightLamp(canvas, { ...FRONT, photo: true }, deps);
@@ -219,5 +235,17 @@ describe("the lamp's light is the press's (DESIGN.md §5: one piece of shader co
   it("draws nothing head on and flat: there the light now is the light the print holds and the brightness carries", () => {
     expect(LAMP_FS).toContain("float ratio = nowDiff / (flatDiff * restDiff);");
     expect(LAMP_FS).toContain("float shade = clamp(1.0 - ratio, 0.0, 1.0);");
+  });
+
+  it("gives back over the light the card is shown at, which the floor holds up, and shades from the flat light", () => {
+    expect(LAMP_FS).toContain("uniform float uFloor;");
+    expect(LAMP_FS).toContain("float carried = max(flatDiff, uFloor);");
+    // the sheen, and the back's three lights: what the card's brightness takes is the light it carries (item 613)
+    expect(LAMP_FS).toContain("nowSpec / carried - restSpec");
+    expect(LAMP_FS).toContain("max(1.0 / carried - min(ratio, 1.0), 0.0)");
+    expect(LAMP_FS).not.toContain("/ flatDiff -");
+    // where the floor does not bind, the light carried IS the flat light: nothing there moves, and the shade and the
+    // lift are of the flat card everywhere
+    expect(LAMP_FS).toContain("float ratio = nowDiff / (flatDiff * restDiff);");
   });
 });

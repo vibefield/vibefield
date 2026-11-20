@@ -449,9 +449,10 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
     expect(card).toContain("--card-stock: var(--vf-card-stock);");
     expect(card).toContain("--card-ink: var(--vf-card-stock-ink);");
     expect(card).toContain("--card-cut: var(--vf-card-cut);");
-    // …times the lamp's light on a card picked up as it turns (§5 "The lamp, live"; 1 everywhere else)
+    // …times the lamp's light on a card picked up as it turns (§5 "The lamp, live"; 1 everywhere else), and never
+    // under the floor (item 613)
     expect(card).toContain(
-      "filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));",
+      "filter: brightness(max(var(--vf-card-light-floor), var(--vf-card-dim) * var(--vf-cards-lamp, 1)));",
     );
     expect(card).toContain("var(--vf-card-shade)");
     expect(CARDS_CSS).not.toMatch(/--card-ix|vf-card-ix|vf-card-index/u);
@@ -480,6 +481,7 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
       "--vf-card-dark-stock: #1c1c1e;",
       "--vf-card-dark-edge: #050506;",
       "--vf-card-dim: 1;",
+      "--vf-card-light-floor: 0.72;",
       "--vf-card-shade: 1;",
     ]) {
       expect(root).toContain(token);
@@ -489,9 +491,9 @@ describe("the stock's rules (DESIGN.md §5 \"The hand's cards are paper\")", () 
     expect(root).toMatch(/--vf-card-grain: url\("data:image\/svg\+xml,/u);
     expect(dark).toContain("--vf-card-dim: 0.86;");
     expect(dark).toContain("--vf-card-shade: 1.7;");
-    // the same paper by night: nothing else of the stock is redefined
+    // the same paper by night: nothing else of the stock is redefined, nor the floor under its light (item 613)
     expect(dark).not.toMatch(
-      /--vf-card-(?:stock|edge|cut|pass|photo|grain|dark|type|face|frame|plate|press)/u,
+      /--vf-card-(?:stock|edge|cut|pass|photo|grain|dark|type|face|frame|plate|press|light)/u,
     );
     // §2.2's dark surface keeps its white ink — Settings → Terminal's miniature reads it
     expect(root).toContain("--vf-card-ink: #ffffff;");

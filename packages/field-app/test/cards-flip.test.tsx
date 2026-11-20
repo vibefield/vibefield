@@ -174,9 +174,10 @@ describe("the turn and the back it shows (DESIGN.md §8; §5 'the press')", () =
     expect(back).toContain("box-shadow:");
     expect(back).toContain("var(--vf-card-shade)");
     expect(back).toContain("var(--vf-card-edge)");
-    // the night's dim, times the lamp's light on a card picked up as it turns (§5 "The lamp, live")
+    // the night's dim, times the lamp's light on a card picked up as it turns (§5 "The lamp, live"), and never under
+    // the floor (item 613)
     expect(back).toContain(
-      "filter: brightness(calc(var(--vf-card-dim) * var(--vf-cards-lamp, 1)));",
+      "filter: brightness(max(var(--vf-card-light-floor), var(--vf-card-dim) * var(--vf-cards-lamp, 1)));",
     );
     expect(back).toContain("border-radius: 6px;");
   });
