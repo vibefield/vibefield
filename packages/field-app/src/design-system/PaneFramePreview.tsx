@@ -351,7 +351,14 @@ export function PaneFrameDeck({ theme }: { theme: "light" | "dark" }): ReactElem
   return (
     <div
       className="vf-deck-framed vf-ds-pane-deck"
-      style={{ "--vf-godview-terminal-ink": ground.ink } as CSSProperties}
+      style={
+        {
+          "--vf-godview-terminal-ink": ground.ink,
+          // PF-2: the mode's two badge values, said here too so the deck reads them wherever it is mounted
+          "--vf-pane-badge-ink": `var(--vf-godview-${theme}-pane-badge-ink)`,
+          "--vf-pane-badge-shade": `var(--vf-godview-${theme}-pane-badge-shade)`,
+        } as CSSProperties
+      }
     >
       {DECK_PANES.map((id, index) => {
         const specimen = SPECIMENS.find((entry) => entry.id === id);
@@ -385,7 +392,15 @@ export function PaneFramePreview(): ReactElement {
         <div
           key={theme.id}
           className="vf-deck-framed vf-ds-pane-frame-deck"
-          style={{ "--vf-godview-terminal-ink": theme.ground.ink } as CSSProperties}
+          style={
+            {
+              "--vf-godview-terminal-ink": theme.ground.ink,
+              // PF-2 (DESIGN.md §2.7 "The pane frame's capsules"): the two values a Godview mode hands the frame's
+              // selected badge, as the deck's own theme block hands them
+              "--vf-pane-badge-ink": `var(--vf-godview-${theme.id}-pane-badge-ink)`,
+              "--vf-pane-badge-shade": `var(--vf-godview-${theme.id}-pane-badge-shade)`,
+            } as CSSProperties
+          }
         >
           {SPECIMENS.map((specimen) => (
             <PaneSpecimen key={specimen.id} specimen={specimen} ground={theme.ground} />

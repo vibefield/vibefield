@@ -374,6 +374,9 @@ export function PaneLauncherPreview(): ReactElement {
             {
               "--vf-godview-terminal-ink": theme.ground.ink,
               "--vf-pane-launcher-ground": theme.ground.background,
+              // PF-2: the mode's two badge values, as the deck's own theme block hands them
+              "--vf-pane-badge-ink": `var(--vf-godview-${theme.id}-pane-badge-ink)`,
+              "--vf-pane-badge-shade": `var(--vf-godview-${theme.id}-pane-badge-shade)`,
             } as CSSProperties
           }
         >
