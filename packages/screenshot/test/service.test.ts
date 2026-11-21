@@ -48,8 +48,15 @@ describe("a prewarmed, host-owned screenshot helper", () => {
     expect(tool.busy).toBe(false);
     expect(tool.retainedStills).toEqual([]);
     expect(lifecycle("screenshot.capture.finished")).toHaveLength(0);
-    expect(events.some((e) => e.kind === "diagnostic" && e.line.includes('["--service"]'))).toBe(
-      true,
+    // idle rides stdout and the helper's argv line rides stderr, a second pipe with no order to the
+    // first, and the helper stays alive, so there is no exit to wait for: wait for the line itself,
+    // never for a time (item 655, 2026-11-21; item 188's race)
+    await vi.waitFor(
+      () =>
+        expect(
+          events.some((e) => e.kind === "diagnostic" && e.line.includes('["--service"]')),
+        ).toBe(true),
+      { timeout: 3_000 },
     );
     const first = await tool.capture();
     await vi.waitFor(() => expect(tool.busy).toBe(false));
