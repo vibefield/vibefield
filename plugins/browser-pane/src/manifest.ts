@@ -29,9 +29,11 @@ export const browserPaneManifest: PluginManifestV1 = {
   manifestVersion: 1,
   id: BROWSER_PANE_TYPE,
   version: "0.1.0",
-  title: "Browser pane",
+  // decided 2026-11-19: one name, "Browser", as its kind's title and its pegboard label
+  title: "Browser",
+  // decided 2026-11-19: what a person gets, in their words, last that it asks for no account
   description:
-    "A browser on the desk: a pane of clear glass cut to its page at its device's density, its chrome engraved in its head — its page live through the desk's LIVE service, its own sample a still",
+    "Live web pages on your desk: browse them, sign in, and choose the device they're shown at. No account needed.",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
   activation: [`onObject:${BROWSER_PANE_TYPE}`],
