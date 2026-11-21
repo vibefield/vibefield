@@ -392,6 +392,13 @@
      as the deck's shadow is. */
   --vf-godview-light-deck-frame-ink: 11%;
   --vf-godview-dark-deck-frame-ink: 9%;
+  /* §2.7 "The pane frame's capsules" (PF-2, 2026-11-21): the selected badge's label and how far its fill is
+     shaded from the pane colour, per GODVIEW mode. A tint is dealt at one lightness per mode, and the label is
+     held to 4.5:1 on it: white on the day fill shaded 12%, the night terminal's ground on the night tint. */
+  --vf-godview-light-pane-badge-ink: #ffffff;
+  --vf-godview-dark-pane-badge-ink: var(--vf-godview-dark-terminal-bg);
+  --vf-godview-light-pane-badge-shade: 12%;
+  --vf-godview-dark-pane-badge-shade: 0%;
   --vf-godview-light-well-edge: rgb(0 0 0 / 17%);
   --vf-godview-dark-well-edge: rgb(0 0 0 / 42%);
   --vf-godview-light-well-rim: rgb(255 255 255 / 60%);

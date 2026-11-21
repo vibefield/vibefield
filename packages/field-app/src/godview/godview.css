@@ -33,6 +33,9 @@
   --deck-shadow: var(--vf-godview-light-deck-shadow);
   --deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-light-terminal-bg));
   --deck-frame-ink: var(--vf-godview-light-deck-frame-ink);
+  /* §2.7 "The pane frame's capsules" (PF-2): the two values the frame's selected badge reads */
+  --vf-pane-badge-ink: var(--vf-godview-light-pane-badge-ink);
+  --vf-pane-badge-shade: var(--vf-godview-light-pane-badge-shade);
   --deck-well-edge: var(--vf-godview-light-well-edge);
   --deck-well-rim: var(--vf-godview-light-well-rim);
   --deck-well-shade: var(--vf-godview-light-well-shade);
@@ -71,6 +74,8 @@
   --deck-shadow: var(--vf-godview-dark-deck-shadow);
   --deck-ground: var(--vf-godview-terminal-bg, var(--vf-godview-dark-terminal-bg));
   --deck-frame-ink: var(--vf-godview-dark-deck-frame-ink);
+  --vf-pane-badge-ink: var(--vf-godview-dark-pane-badge-ink);
+  --vf-pane-badge-shade: var(--vf-godview-dark-pane-badge-shade);
   --deck-well-edge: var(--vf-godview-dark-well-edge);
   --deck-well-rim: var(--vf-godview-dark-well-rim);
   --deck-well-shade: var(--vf-godview-dark-well-shade);
@@ -1585,20 +1590,26 @@
    `describePane` says what became of a dead pane — "exited", "exited with an error", "ended" —
    through the one vocabulary ghosttea gives an embedder, its pane badge; the
    record has no field for it, and the frame's own badge now owns the top-right
-   corner that badge sits in. So the host's badge moves to the bottom-left, over
-   the meter's track and opposite the context figure, and takes the frame's type
-   rather than this deck's old uppercase chip. A pane that is alive carries no
+   corner that badge sits in. So the host's badge moves to the bottom-left,
+   opposite the context meter, and takes the frame's type rather than this
+   deck's old uppercase chip. Since PF-2 (2026-11-21; DESIGN.md §2.7 "The pane
+   frame's capsules") it is a capsule as the frame's own are: 4 in from the
+   pane's edges, 18 tall, corners of 5. A pane that is alive carries no
    label at all (`pane-faces.ts`: quiet IS the honesty), so nothing is drawn here
    until a session ends. NAMED for James's eye: the record does not draw this,
    because the reference has no exit face to draw. */
 .vf-deck-framed .ghostty-pane-badge {
   top: auto;
   right: auto;
-  bottom: 11px;
-  left: 0;
+  bottom: 4px;
+  left: 4px;
+  box-sizing: border-box;
+  height: 18px;
   max-width: 50%;
-  padding: 2px 8px 2px 11px;
-  border-radius: 0 4px 4px 0;
+  padding: 0 8px;
+  border-radius: 5px;
+  /* the capsule's own height, so one line of the label stands on its axis and still ends in an ellipsis */
+  line-height: 18px;
   color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 62%, transparent);
   background: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 8%, transparent);
   font-size: 10px;
