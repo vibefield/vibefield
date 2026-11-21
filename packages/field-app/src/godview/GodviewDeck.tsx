@@ -523,10 +523,11 @@ export function GodviewDeck({
     theme: terminalTheme,
     effects: terminalEffects,
     ground: paneGround,
+    palette: terminalPalette,
   } = useDeckPaneLook(godviewTheme);
   // TL-4a — what the programs in every local session are told their terminal
   // looks like is this deck's look, said to fieldd (deck-scheme.ts).
-  useSayDeckScheme(fieldd, terminalTheme);
+  useSayDeckScheme(fieldd, terminalTheme, terminalPalette);
   const activeThemeName = deckThemeNameForMode(appearance, godviewTheme);
   /** Stable by construction: `sidebar` is a component TYPE, and a fresh arrow
    * on every render would remount the probe — and re-run its publish — forever. */

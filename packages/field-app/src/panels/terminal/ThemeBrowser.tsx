@@ -28,6 +28,20 @@ export function themeBrowserTitle(target: ThemeBrowserTarget): string {
     : `${target.mode === "dark" ? "Dark" : "Light"} mode theme`;
 }
 
+/** The line under the browser's stage: what the theme shown brings to the sixteen. PURE. */
+export function themeBrowserLine(
+  _forPalette: boolean,
+  shown: Pick<PreviewTheme, "catalogName" | "palette">,
+  onThisMac: boolean,
+): string {
+  if (shown.palette === null) {
+    return "Godview's themes don't bring program colors, so they show this Mac's.";
+  }
+  return onThisMac
+    ? "This Mac already uses these colors, so the preview is the whole theme."
+    : "The preview shows this Mac's program colors: a window's theme can't carry its own yet. Copy them to see the whole theme, in every window.";
+}
+
 export function ThemeBrowser({
   model,
   target,
@@ -253,13 +267,7 @@ export function ThemeBrowser({
                 {macHas(shown) ? "Used on this Mac" : "Copy to this Mac"}
               </UiButton>
             )}
-            <p className={labelCls}>
-              {ownPalette === null
-                ? "Godview's themes don't bring program colors, so they show this Mac's."
-                : macHas(shown)
-                  ? "This Mac already uses these colors, so the preview is the whole theme."
-                  : "The preview shows this Mac's program colors: a window's theme can't carry its own yet. Copy them to see the whole theme, in every window."}
-            </p>
+            <p className={labelCls}>{themeBrowserLine(forPalette, shown, macHas(shown))}</p>
           </div>
         </aside>
       </div>

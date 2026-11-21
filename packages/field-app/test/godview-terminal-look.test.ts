@@ -2,17 +2,22 @@
 /**
  * The terminal's own colours (TL-4c, 2026-11-19; DESIGN.md §2.7 "The terminal's own colours").
  *
- * Three things are held here. The twin in code is the tokens, value for value. Each colour the
- * tokens name clears the floor DESIGN.md writes beside it, on its own ground. And Godview's own
- * ground stands wherever the deck draws it: a pane's theme, the block cursor's text, and Settings'
- * built-in preview.
+ * Three things are held here. The twin in code is the tokens, value for value, so the sixteen the
+ * deck tells fieldd are the ones the stylesheet names. Each colour the tokens name clears the floor
+ * DESIGN.md writes beside it, on its own ground. And Godview's own look stands on that ground
+ * wherever it is drawn: a pane's theme, the block cursor's text, Settings' built-in preview, and
+ * the sixteen a session is told, which a picked catalog theme replaces whole.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_DECK_APPEARANCE } from "../src/godview/deck-appearance";
-import { godviewTerminalTheme } from "../src/godview/deck-theme";
+import {
+  findDeckColorTheme,
+  godviewTerminalPalette,
+  godviewTerminalTheme,
+} from "../src/godview/deck-theme";
 import { GODVIEW_TERMINAL_LOOK, type TerminalLookMode } from "../src/godview/terminal-look";
 import { BUILTIN_THEMES } from "../src/panels/terminal/theme-view";
 
@@ -115,6 +120,26 @@ describe("Godview's own look stands on the deck's own ground (TL-4c)", () => {
   it("shows Settings' built-in preview on the same ground", () => {
     for (const mode of MODES) {
       expect(BUILTIN_THEMES[mode].background, mode).toBe(GODVIEW_TERMINAL_LOOK[mode].ground);
+    }
+  });
+
+  it("tells a session the deck's own sixteen, or a picked catalog theme's whole", () => {
+    for (const mode of MODES) {
+      expect(godviewTerminalPalette(DEFAULT_DECK_APPEARANCE, mode), mode).toEqual(
+        GODVIEW_TERMINAL_LOOK[mode].palette,
+      );
+    }
+    const picked = {
+      ...DEFAULT_DECK_APPEARANCE,
+      lightThemeName: "iTerm2 Solarized Light",
+      darkThemeName: "iTerm2 Solarized Dark",
+    };
+    for (const mode of MODES) {
+      const chosen = findDeckColorTheme(
+        mode === "dark" ? picked.darkThemeName : picked.lightThemeName,
+      );
+      expect(chosen, `${mode}: the catalog name resolves`).toBeDefined();
+      expect(godviewTerminalPalette(picked, mode), mode).toEqual(chosen?.palette);
     }
   });
 });

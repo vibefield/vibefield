@@ -36,6 +36,7 @@ function hexOf(color: readonly [number, number, number, number]): string {
  * is empty until the terminal can be told one. */
 export function deckTerminalScheme(
   theme: Pick<TerminalTheme, "foreground" | "background" | "cursor">,
+  _palette: readonly string[],
 ): TerminalScheme {
   return {
     foreground: hexOf(theme.foreground),
@@ -57,8 +58,12 @@ export interface DeckSchemeDoor {
  * but it is not invisible: it is logged (`sayScheme`). The deck says the
  * scheme again at its next change or mount, not when a lost connection
  * returns. */
-export function useSayDeckScheme(door: DeckSchemeDoor, theme: TerminalTheme): void {
-  const { foreground, background, cursor } = deckTerminalScheme(theme);
+export function useSayDeckScheme(
+  door: DeckSchemeDoor,
+  theme: TerminalTheme,
+  _palette: readonly string[],
+): void {
+  const { foreground, background, cursor } = deckTerminalScheme(theme, []);
   useEffect(() => {
     const timer = setTimeout(() => {
       void sayScheme(door, { foreground, background, cursor, palette: [] });

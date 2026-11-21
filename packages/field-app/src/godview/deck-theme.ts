@@ -135,6 +135,15 @@ export function godviewTerminalTheme(
   };
 }
 
+/** The sixteen colours a session is told for this look (TL-4c, 2026-11-19; DESIGN.md §2.7 "The
+ * terminal's own colours"). None yet: the deck tells a session no palette. PURE. */
+export function godviewTerminalPalette(
+  _appearance: DeckAppearance,
+  _godviewTheme: GodviewTheme = "light",
+): readonly string[] {
+  return [];
+}
+
 /** The viewer's shader, as the `effects` prop — or `undefined`, which means the
  * prop is not passed at all (GT-3f / petition G11).
  *
@@ -215,6 +224,9 @@ export interface DeckPaneLook {
    * translucent (the appearance's opacity, premultiplied by the renderer), and over a ground of
    * the same colour it composites to it exactly, as the deck's panes do over its sheet */
   readonly ground: TerminalGroundStyle;
+  /** the sixteen colours a session is told for this look (`godviewTerminalPalette`); the pane draws
+   * what its session was told, so they reach the pane through fieldd, never through `theme` */
+  readonly palette: readonly string[];
 }
 
 /** THE ONE AUTHORITY for how a pane of the deck looks: the viewer's appearance (GT-D12) under
@@ -234,5 +246,9 @@ export function useDeckPaneLook(godviewTheme: GodviewTheme): DeckPaneLook {
   );
   const effects = useMemo(() => godviewTerminalEffects(appearance), [appearance]);
   const ground = useMemo(() => terminalGroundStyle(theme), [theme]);
-  return useMemo(() => ({ theme, effects, ground }), [theme, effects, ground]);
+  const palette = useMemo(
+    () => godviewTerminalPalette(appearance, godviewTheme),
+    [appearance, godviewTheme],
+  );
+  return useMemo(() => ({ theme, effects, ground, palette }), [theme, effects, ground, palette]);
 }

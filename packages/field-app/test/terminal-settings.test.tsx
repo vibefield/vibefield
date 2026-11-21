@@ -20,7 +20,13 @@ import {
   FIXTURE_SAVED_SNAPSHOT,
   FIXTURE_SAVED_TEXT,
 } from "../src/design-system/terminal-settings-fixtures";
-import { getDeckAppearance, resetDeckAppearanceForTest } from "../src/godview/deck-appearance";
+import {
+  DEFAULT_DECK_APPEARANCE,
+  getDeckAppearance,
+  resetDeckAppearanceForTest,
+  setDeckAppearance,
+} from "../src/godview/deck-appearance";
+import { GODVIEW_TERMINAL_LOOK } from "../src/godview/terminal-look";
 import type { SettingsSubpage } from "../src/panels/SettingsDialog";
 import {
   MANAGED_BLOCK_START,
@@ -82,6 +88,9 @@ afterEach(() => {
   host?.remove();
   root = null;
   host = null;
+  // item 590 (2026-11-20): a row that sets the deck's appearance never leaves it to the next one,
+  // whether it passes or fails
+  resetDeckAppearanceForTest();
 });
 
 async function settle(ms = 0): Promise<void> {
@@ -409,6 +418,48 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
     // chips of six inline-styled swatches: 222–254 ms alone (the browser 148–226 ms, 2026-10-27),
     // 984 ms and 6952 ms under CI's full suite (verify 40530144594) — the 5s default flakes.
   }, 30_000);
+
+  /** Program colors' sixteen swatches, each titled "index · colour · where it comes from". */
+  function swatches(): string[] {
+    return [...(host?.querySelectorAll<HTMLElement>(".vf-ts-palette-cell") ?? [])].map(
+      (cell) => cell.title,
+    );
+  }
+
+  it("shows Godview's look in every slot no Ghostty file sets, and the person's where one does (item 590)", async () => {
+    // DESIGN.md §2.7 "The terminal's own colours": a slot a person set in a Ghostty file stays
+    // theirs; every other slot is Godview's look, the sixteen the device tells its sessions for
+    // Godview's mode.
+    setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, modeOverride: "light" });
+    await mount();
+    const look = GODVIEW_TERMINAL_LOOK.light.palette;
+    expect(swatches()).toEqual(
+      look.map((colour, index) =>
+        index === 1
+          ? "1 · #e06c75 · from your Ghostty file"
+          : index === 2
+            ? "2 · #98c379 · from your Ghostty file"
+            : `${index} · ${colour} · Godview's look`,
+      ),
+    );
+    expect(host?.textContent).toContain(
+      "The sixteen colors programs paint with. Godview's look sets them for every session on this Mac; a color you set here or in your Ghostty file wins over it.",
+    );
+  });
+
+  it("offers Godview's colors back when no Ghostty file of theirs sets one (item 590)", async () => {
+    handlers["terminal.config.read"] = () =>
+      Promise.resolve({ ...SAVED, config: { ...FIXTURE_SAVED_SNAPSHOT, palette: [] } });
+    setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, modeOverride: "dark" });
+    await mount();
+    expect(swatches()).toEqual(
+      GODVIEW_TERMINAL_LOOK.dark.palette.map(
+        (colour, index) => `${index} · ${colour} · Godview's look`,
+      ),
+    );
+    expect(button("Use Godview's colors")).toBeDefined();
+    expect(() => button("Use Ghostty's defaults")).toThrow();
+  });
 });
 
 /** The Behavior tab's Links section, and its switch when there is one. */

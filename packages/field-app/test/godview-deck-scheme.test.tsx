@@ -27,49 +27,92 @@ import {
   resetDeckSchemeForTests,
   useSayDeckScheme,
 } from "../src/godview/deck-scheme";
-import { godviewTerminalTheme, type TerminalTheme } from "../src/godview/deck-theme";
+import {
+  godviewTerminalPalette,
+  godviewTerminalTheme,
+  type TerminalTheme,
+} from "../src/godview/deck-theme";
+import { GODVIEW_TERMINAL_LOOK } from "../src/godview/terminal-look";
 import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const SRC = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
 
-const light = godviewTerminalTheme(DEFAULT_DECK_APPEARANCE, "light");
-const dark = godviewTerminalTheme(DEFAULT_DECK_APPEARANCE, "dark");
+/** A deck pane's look as the deck holds it: the theme its panes are handed, and the sixteen its
+ * sessions are told (TL-4c). */
+interface Look {
+  readonly theme: TerminalTheme;
+  readonly palette: readonly string[];
+}
 
-function Probe({ door, theme }: { door: DeckSchemeDoor; theme: TerminalTheme }): null {
-  useSayDeckScheme(door, theme);
+function lookOf(mode: "light" | "dark", appearance = DEFAULT_DECK_APPEARANCE): Look {
+  return {
+    theme: godviewTerminalTheme(appearance, mode),
+    palette: godviewTerminalPalette(appearance, mode),
+  };
+}
+
+const light = lookOf("light");
+const dark = lookOf("dark");
+const schemeOf = (look: Look) => deckTerminalScheme(look.theme, look.palette);
+
+function Probe({ door, look }: { door: DeckSchemeDoor; look: Look }): null {
+  useSayDeckScheme(door, look.theme, look.palette);
   return null;
 }
 
-describe("the scheme a pane theme stands for (TL-4a)", () => {
-  it("is the theme's ground, ink and cursor as #rrggbb, in the contract's form", () => {
-    for (const theme of [light, dark]) {
-      const scheme = deckTerminalScheme(theme);
+describe("the scheme a pane look stands for (TL-4a, TL-4c)", () => {
+  it("is the theme's ground, ink and cursor as #rrggbb with the look's sixteen by index, in the contract's form", () => {
+    for (const [mode, look] of [
+      ["light", light],
+      ["dark", dark],
+    ] as const) {
+      const scheme = schemeOf(look);
       expect(TerminalScheme.parse(scheme)).toEqual(scheme);
-      expect(scheme.palette).toEqual([]);
+      expect(scheme.palette, mode).toEqual(
+        GODVIEW_TERMINAL_LOOK[mode].palette.map((color, index) => ({ index, color })),
+      );
     }
-    expect(deckTerminalScheme(light).background).not.toBe(deckTerminalScheme(dark).background);
+    expect(schemeOf(light).background).not.toBe(schemeOf(dark).background);
   });
 
   it("drops the pane's alpha: a glassier pane stands for the same scheme", () => {
-    const glassy = godviewTerminalTheme({ ...DEFAULT_DECK_APPEARANCE, opacity: 0.4 }, "light");
-    expect(glassy.background[3]).toBe(0.4);
-    expect(deckTerminalScheme(glassy)).toEqual(deckTerminalScheme(light));
+    const glassy = lookOf("light", { ...DEFAULT_DECK_APPEARANCE, opacity: 0.4 });
+    expect(glassy.theme.background[3]).toBe(0.4);
+    expect(schemeOf(glassy)).toEqual(schemeOf(light));
   });
 
   it("rounds each channel to a byte and keeps it in range", () => {
-    const scheme = deckTerminalScheme({
-      foreground: [0, 0.5, 1, 1],
-      background: [-0.2, 1.7, 0.999, 0.3],
-      cursor: [1 / 255, 254 / 255, 0.25, 1],
-    });
+    const scheme = deckTerminalScheme(
+      {
+        foreground: [0, 0.5, 1, 1],
+        background: [-0.2, 1.7, 0.999, 0.3],
+        cursor: [1 / 255, 254 / 255, 0.25, 1],
+      },
+      [],
+    );
     expect(scheme).toEqual({
       foreground: "#0080ff",
       background: "#00ffff",
       cursor: "#01fe40",
       palette: [],
     });
+  });
+
+  it("keeps a palette colour only as #rrggbb, lowercase, at its own index: a slot it cannot read follows the configuration", () => {
+    const scheme = deckTerminalScheme(light.theme, [
+      "#ABCDEF",
+      "nope",
+      " #123456 ",
+      "#1234567",
+      "#abc",
+    ]);
+    expect(scheme.palette).toEqual([
+      { index: 0, color: "#abcdef" },
+      { index: 2, color: "#123456" },
+    ]);
+    expect(TerminalScheme.parse(scheme)).toEqual(scheme);
   });
 });
 
@@ -117,8 +160,8 @@ describe("the deck says its scheme to fieldd (TL-4a)", () => {
     setRendererLogger(previousLogger);
   });
 
-  const draw = async (theme: TerminalTheme, through: DeckSchemeDoor = door): Promise<void> => {
-    await act(async () => root.render(<Probe door={through} theme={theme} />));
+  const draw = async (look: Look, through: DeckSchemeDoor = door): Promise<void> => {
+    await act(async () => root.render(<Probe door={through} look={look} />));
   };
   const wait = async (ms: number): Promise<void> => {
     await act(async () => {
@@ -131,7 +174,7 @@ describe("the deck says its scheme to fieldd (TL-4a)", () => {
     await wait(DECK_SCHEME_SETTLE_MS - 1);
     expect(said).toEqual([]);
     await wait(1);
-    expect(said).toEqual([["terminal.scheme.set", { scheme: deckTerminalScheme(light) }]]);
+    expect(said).toEqual([["terminal.scheme.set", { scheme: schemeOf(light) }]]);
   });
 
   it("says a look that was dragged once, where it came to rest", async () => {
@@ -144,20 +187,40 @@ describe("the deck says its scheme to fieldd (TL-4a)", () => {
     await draw(dark);
     expect(said).toEqual([]);
     await wait(DECK_SCHEME_SETTLE_MS);
-    expect(said).toEqual([["terminal.scheme.set", { scheme: deckTerminalScheme(dark) }]]);
+    expect(said).toEqual([["terminal.scheme.set", { scheme: schemeOf(dark) }]]);
   });
 
   it("says a change of mode, and says nothing for a change that is only the pane's alpha", async () => {
     await draw(light);
     await wait(DECK_SCHEME_SETTLE_MS);
-    await draw(godviewTerminalTheme({ ...DEFAULT_DECK_APPEARANCE, opacity: 0.4 }, "light"));
+    await draw(lookOf("light", { ...DEFAULT_DECK_APPEARANCE, opacity: 0.4 }));
     await wait(DECK_SCHEME_SETTLE_MS * 2);
     expect(said).toHaveLength(1);
     await draw(dark);
     await wait(DECK_SCHEME_SETTLE_MS);
     expect(said.map(([, params]) => params)).toEqual([
-      { scheme: deckTerminalScheme(light) },
-      { scheme: deckTerminalScheme(dark) },
+      { scheme: schemeOf(light) },
+      { scheme: schemeOf(dark) },
+    ]);
+  });
+
+  it("says a change of the palette alone, and nothing for a new list that names the same colours (TL-4c)", async () => {
+    await draw(light);
+    await wait(DECK_SCHEME_SETTLE_MS);
+    await draw({ theme: light.theme, palette: [...light.palette] });
+    await wait(DECK_SCHEME_SETTLE_MS * 2);
+    expect(said).toHaveLength(1);
+    const picked = lookOf("light", {
+      ...DEFAULT_DECK_APPEARANCE,
+      lightThemeName: "iTerm2 Solarized Light",
+    });
+    const repainted: Look = { theme: light.theme, palette: picked.palette };
+    expect(repainted.palette).not.toEqual(light.palette);
+    await draw(repainted);
+    await wait(DECK_SCHEME_SETTLE_MS);
+    expect(said.map(([, params]) => params)).toEqual([
+      { scheme: schemeOf(light) },
+      { scheme: schemeOf(repainted) },
     ]);
   });
 

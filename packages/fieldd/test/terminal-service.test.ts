@@ -261,7 +261,12 @@ const fakeRevision = (prefix: string, contents: string): string =>
  * TL-4b (2026-11-18): the session `colorsRefused` names is one the floor does
  * not hold, so from that refusal on no list names it; `colorsRefusedLive`
  * names a session that refuses and goes on being listed. `holdCreate` keeps
- * every create-session unanswered until `releaseCreates()`. */
+ * every create-session unanswered until `releaseCreates()`.
+ * Item 590 (2026-11-19): `configPalette` is the palette this floor's loaded
+ * configuration sets (by default slot 1, as `fakeConfig` always said), moved
+ * by `setConfigPalette` for the next snapshot and the next `reload()`;
+ * `configUnreadable` answers get-config with an error until
+ * `setConfigReadable(true)`. */
 async function startFakeFloor(
   opts: {
     ids?: readonly string[];
@@ -282,6 +287,8 @@ async function startFakeFloor(
     colorsRefusedLive?: string;
     colorsSilent?: boolean;
     holdCreate?: boolean;
+    configPalette?: readonly FakePaletteEntry[];
+    configUnreadable?: boolean;
   } = {},
 ): Promise<{
   endpoints: TerminalEndpoints;
@@ -305,6 +312,10 @@ async function startFakeFloor(
   reload: () => void;
   /** TL-4b — answer every create-session `holdCreate` kept, and hold no more */
   releaseCreates: () => void;
+  /** item 590 — the palette the loaded configuration sets from now on */
+  setConfigPalette: (palette: readonly FakePaletteEntry[]) => void;
+  /** item 590 — whether get-config answers */
+  setConfigReadable: (readable: boolean) => void;
 }> {
   // The root is the harness's (short on unix for the sun_path budget, tmpdir()
   // on win32 where no /tmp exists), and the fake binds the endpoint the real
@@ -340,6 +351,9 @@ async function startFakeFloor(
   const gone = new Set<string>();
   /** TL-4b — the create-session answers `holdCreate` is keeping */
   let heldCreates: Array<() => void> | undefined = opts.holdCreate === true ? [] : undefined;
+  /** item 590 — the palette the loaded configuration sets, and whether it can be read */
+  let configPalette: readonly FakePaletteEntry[] = opts.configPalette ?? FAKE_CONFIG_PALETTE;
+  let configReadable = opts.configUnreadable !== true;
   /** the sessions THIS floor created — what its terminate recognizes */
   const born = new Set<string>();
   let births = 0;
@@ -449,8 +463,14 @@ async function startFakeFloor(
           // reads here exactly as it does against a real cell
           if (born.has(String(msg.sessionId))) reply({ type: "ok" });
           else reply({ type: "error", message: "unknown session" });
+        } else if (msg.type === "get-config" && !configReadable) {
+          // item 590 — a loaded configuration this floor cannot report
+          reply({ type: "error", message: "the configuration could not be read" });
         } else if (msg.type === "get-config") {
-          reply({ type: "config", config: fakeConfig(configRevision, effectiveDiagnostics) });
+          reply({
+            type: "config",
+            config: fakeConfig(configRevision, effectiveDiagnostics, configPalette),
+          });
         } else if (msg.type === "get-config-document") {
           if (opts.noOverlay === true) reply({ type: "error", message: NO_OVERLAY_MESSAGE });
           else reply({ type: "config-document", document: { schemaVersion: 1, ...document } });
@@ -467,6 +487,7 @@ async function startFakeFloor(
                   ? configRevision
                   : fakeRevision("config", msg.contents),
                 loader(msg.contents, document.path),
+                configPalette,
               ),
             });
         } else if (msg.type === "replace-config-document") {
@@ -499,7 +520,7 @@ async function startFakeFloor(
             reply({
               type: "config-document-updated",
               document: { schemaVersion: 1, ...document },
-              config: fakeConfig(configRevision, effectiveDiagnostics),
+              config: fakeConfig(configRevision, effectiveDiagnostics, configPalette),
             });
           }
         }
@@ -548,7 +569,7 @@ async function startFakeFloor(
       const event = {
         requestId: 0,
         type: "config-changed",
-        config: fakeConfig(configRevision, effectiveDiagnostics),
+        config: fakeConfig(configRevision, effectiveDiagnostics, configPalette),
       };
       for (const sock of live) sock.write(packet(Buffer.from(JSON.stringify(event))));
     },
@@ -557,8 +578,23 @@ async function startFakeFloor(
       heldCreates = undefined;
       for (const answer of held) answer();
     },
+    setConfigPalette: (palette: readonly FakePaletteEntry[]): void => {
+      configPalette = palette;
+    },
+    setConfigReadable: (readable: boolean): void => {
+      configReadable = readable;
+    },
   };
 }
+
+/** Item 590 — one palette slot as a loaded configuration reports it. */
+interface FakePaletteEntry {
+  readonly index: number;
+  readonly color: readonly [number, number, number];
+}
+
+/** The palette `fakeConfig` has always reported: slot 1, a person's own red. */
+const FAKE_CONFIG_PALETTE: readonly FakePaletteEntry[] = [{ index: 1, color: [215, 0, 0] }];
 
 /** The service's refusal when nothing pointed it at an overlay, verbatim from
  * the pinned crate (`ConfigDocumentError::Unavailable`). Copied deliberately:
@@ -579,10 +615,12 @@ const NO_OVERLAY_MESSAGE = "configuration document is unavailable without an exp
  * unknown key earns a diagnostic and NOT a refusal in Ghostty syntax, which is
  * the case the panel has to show. Since GT-7 the diagnostics are the fake
  * LOADER's (`FakeLoader`), and they decide which saves are refused too. The
- * palette sits in both of its homes, as 0.11.1 sends it. */
+ * palette sits in both of its homes, as 0.11.1 sends it; item 590 lets a floor
+ * say another (`configPalette`). */
 const fakeConfig = (
   revision: string,
   diagnostics: FakeDiagnostic[] = [],
+  palette: readonly FakePaletteEntry[] = FAKE_CONFIG_PALETTE,
 ): Record<string, unknown> => ({
   schemaVersion: 1,
   revision,
@@ -595,7 +633,7 @@ const fakeConfig = (
     foreground: [255, 255, 255],
     background: [0, 0, 0],
     cursor: [255, 255, 255],
-    palette: [{ index: 1, color: [215, 0, 0] }],
+    palette: [...palette],
   },
   renderer: {
     foreground: [255, 255, 255],
@@ -603,7 +641,7 @@ const fakeConfig = (
     cursor: [255, 255, 255],
     selectionBackground: [255, 255, 255],
     selectionForeground: [0, 0, 0],
-    palette: [{ index: 1, color: [215, 0, 0] }],
+    palette: [...palette],
     fontSize: 13,
     fontFamilies: [],
     paddingX: [2, 2],
@@ -5166,13 +5204,16 @@ describe("item 59 — a termination fieldd asked for is marked until its exit (t
 // when the cell announces a reload. The pure rows and the store are
 // terminal-scheme.test.ts's.
 
-/** TL-4a — a light scheme and a dark one, and the bytes each tells a session. */
+/** TL-4a — a light scheme and a dark one, and the bytes each tells a session.
+ * Item 590 (2026-11-19): the light scheme names slots 2 and 4 (slot 1 until
+ * then), two the fake floor's configuration leaves alone, so what these rows
+ * hold is the tell and not a person's own colour (`FAKE_CONFIG_PALETTE`). */
 const LIGHT_SCHEME: TerminalScheme = {
   foreground: "#1e2227",
   background: "#ece8dc",
   cursor: "#2b6aa6",
   palette: [
-    { index: 1, color: "#a34d49" },
+    { index: 2, color: "#a34d49" },
     { index: 4, color: "#2b6aa6" },
   ],
 };
@@ -5325,7 +5366,7 @@ describe("the terminal scheme (TL-4a)", () => {
       background: "#ECE8DC",
       cursor: "#2B6AA6",
       palette: [
-        { index: 1, color: "#A34D49" },
+        { index: 2, color: "#A34D49" },
         { index: 4, color: "#2B6AA6" },
       ],
     };
@@ -5779,7 +5820,7 @@ const COLORS_FLOOR = 20;
 const LIGHT_TOLD = {
   ...LIGHT_BYTES,
   palette: [
-    [1, [163, 77, 73]],
+    [2, [163, 77, 73]],
     [4, [43, 106, 166]],
   ],
 };
@@ -6010,6 +6051,134 @@ describe("the terminal scheme on a floor that reads a session's colours (TL-4b)"
     // the session is asked again when its cell is next reached; the deck is not
     const kept = TerminalSchemeFile.parse(JSON.parse(readFileSync(box.schemeFile, "utf8")));
     expect(kept.scheme).toEqual(LIGHT_SCHEME);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Item 590 (2026-11-19) — a colour a person set in a Ghostty file stays
+// theirs. The scheme names every slot it has; fieldd tells a session the
+// slots its own cell's configuration leaves alone, read from that cell at
+// every tell and held for its births.
+
+/** Item 590 — a scheme naming slots 1 to 4, and the bytes each slot tells. */
+const FOUR_SLOTS: TerminalScheme = {
+  ...LIGHT_SCHEME,
+  palette: [
+    { index: 1, color: "#a9524d" },
+    { index: 2, color: "#38793c" },
+    { index: 3, color: "#976004" },
+    { index: 4, color: "#306fac" },
+  ],
+};
+const SLOT_BYTES: Readonly<Record<number, readonly [number, number, number]>> = {
+  1: [169, 82, 77],
+  2: [56, 121, 60],
+  3: [151, 96, 4],
+  4: [48, 111, 172],
+};
+
+/** Item 590 — the palette a session is told of FOUR_SLOTS when `theirs` are
+ * the slots its configuration sets. */
+function toldOf(...theirs: number[]): Array<[number, readonly [number, number, number]]> {
+  return [1, 2, 3, 4]
+    .filter((slot) => !theirs.includes(slot))
+    .map((slot): [number, readonly [number, number, number]] => [
+      slot,
+      SLOT_BYTES[slot] ?? [0, 0, 0],
+    ]);
+}
+
+/** Item 590 — each set-colors a floor took, as its session and its palette. */
+function palettesTold(floor: { colors: () => FakeColors[] }): Array<[string, unknown]> {
+  return floor.colors().map((told) => [told.sessionId, told.palette]);
+}
+
+/** Item 590 — how many times a fake floor was asked for its loaded configuration. */
+function configReads(floor: { commands: () => string[] }): number {
+  return floor.commands().filter((command) => command === "get-config").length;
+}
+
+describe("a colour a person set in a Ghostty file stays theirs (item 590)", () => {
+  it("a slot the cell's configuration sets is never told: not at a change, and not in a birth's colours", async () => {
+    // the fake's configuration sets slot 1, as a person's `palette = 1=…` does
+    const floor = await startFakeFloor({
+      listed: [fakeSession("pane-1")],
+      ids: ["born-1"],
+      protocolMinor: COLORS_FLOOR,
+    });
+    const service = fakeFloorService(floor);
+    expect(await service.setScheme(FOUR_SLOTS)).toEqual({
+      changed: true,
+      cells: [{ state: "told", sessions: 1 }],
+    });
+    expect(palettesTold(floor)).toStrictEqual([["pane-1", toldOf(1)]]);
+    await service.create({});
+    const born = floor.createOptions()?.["colors"] as { palette?: unknown } | undefined;
+    expect(born?.palette).toStrictEqual(toldOf(1));
+    expect(floor.colors(), "the birth was told nothing behind its create").toHaveLength(1);
+  });
+
+  it("an edit to the configuration re-tells at once: a slot newly set leaves, a slot no longer set comes back, and births hold to the new file without reading it again", async () => {
+    const floor = await startFakeFloor({
+      listed: [fakeSession("pane-1")],
+      ids: ["born-1"],
+      protocolMinor: COLORS_FLOOR,
+    });
+    const service = fakeFloorService(floor);
+    await service.setScheme(FOUR_SLOTS);
+    // the person sets slot 3 and clears slot 1; the floor reloads and says so
+    floor.setConfigPalette([{ index: 3, color: [1, 2, 3] }]);
+    floor.reload();
+    await until(() => floor.colors().length === 2, 4000, "the reloaded cell told again");
+    expect(palettesTold(floor)).toStrictEqual([
+      ["pane-1", toldOf(1)],
+      ["pane-1", toldOf(3)],
+    ]);
+    const reads = configReads(floor);
+    await service.create({});
+    const born = floor.createOptions()?.["colors"] as { palette?: unknown } | undefined;
+    expect(born?.palette).toStrictEqual(toldOf(3));
+    expect(configReads(floor), "the birth used what the reload said").toBe(reads);
+  });
+
+  it("two cells whose configurations differ are each told by their own", async () => {
+    const interactive = await startFakeFloor({
+      listed: [fakeSession("pane-1")],
+      protocolMinor: COLORS_FLOOR,
+      configPalette: [{ index: 1, color: [215, 0, 0] }],
+    });
+    const agent = await startFakeFloor({
+      listed: [fakeSession("agent-1")],
+      protocolMinor: COLORS_FLOOR,
+      configPalette: [{ index: 4, color: [0, 0, 215] }],
+    });
+    const routed = routedLink(schemeRoutes(interactive.endpoints, agent.endpoints));
+    const service = new TerminalService({ link: routed.link, logger: captureLogger([]) });
+    cleanup.push(() => service.dispose());
+    await service.setScheme(FOUR_SLOTS);
+    expect(palettesTold(interactive)).toStrictEqual([["pane-1", toldOf(1)]]);
+    expect(palettesTold(agent)).toStrictEqual([["agent-1", toldOf(4)]]);
+  });
+
+  it("a configuration that cannot be read leaves its cell unavailable and behind, told nothing; it is told when the floor next names it", async () => {
+    const { interactive, agent, service, readAgain } = await coloursCells({
+      listed: [fakeSession("pane-1")],
+      configUnreadable: true,
+    });
+    expect(await service.setScheme(FOUR_SLOTS)).toEqual({
+      changed: true,
+      cells: [
+        { cellBootId: "cell-i", workloadClass: "interactive", state: "unavailable", sessions: 0 },
+        { cellBootId: "cell-a", workloadClass: "agent", state: "told", sessions: 1 },
+      ],
+    });
+    expect(interactive.colors(), "no palette told without the file").toEqual([]);
+    expect(palettesTold(agent)).toStrictEqual([["agent-1", toldOf(1)]]);
+    interactive.setConfigReadable(true);
+    readAgain();
+    await until(() => interactive.colors().length === 1, 4000, "the cell told when next reached");
+    expect(palettesTold(interactive)).toStrictEqual([["pane-1", toldOf(1)]]);
+    expect(agent.colors(), "the told cell is not told again").toHaveLength(1);
   });
 });
 
