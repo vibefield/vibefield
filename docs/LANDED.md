@@ -66126,6 +66126,9 @@ capture step on the test Mac, and James's eye on its captures.
 
 **Owed.** Whether the desk reads well through a pane is James's eye on the row's captures.
 
+> **Read after the push (2026-11-21):** GitHub's `verify` at the pushed head `3126a2ea1` passed: run 44890426816,
+> ended 10:23:37Z; `audit` passed, run 44890426757.
+
 ## CLAUDE.md — mille is released, and plugin-sdk has two design-kit doors (M501)
 
 (2026-11-21; one docs commit `d5e0c337b`, CLAUDE.md alone (+26 −20), on James's word typed in the fixer's session that
@@ -66200,3 +66203,108 @@ and 3 skipped, push 154's three; none of push 154's 3,175 rows lost or moved, an
 
 **What it does not prove.** That the red does not come back. If it does, its reasons now say whether the lock or the
 file system refused, and that decides the product mend.
+
+## 644 — the godview smoke finds the profiles column where it stands, in the chrome layer (M503)
+
+(2026-11-21; item 644; one test-only commit, 2 paths: `0e1c06e36` ("644: the godview smoke finds the profiles column
+where it stands, in the chrome layer"), on main `fdf3a29f8777`. Cut by the terminal-look lane on branch
+`tl/644-on-fdf3a29f8777` (as cut: `92eb66a2f185`, tree `c8c5f8f608e5`). It rides assembly 21 with item 645. The carry is
+the fixer's line.)
+
+**What was wrong.** `pnpm gate:landing` at main `fdf3a29f` went red on row 9, `smoke:godview`, exit 2 in 19 s: "the
+profiles column is not on the stage (marker: 1 circles, DOM: false)". The marker counted one circle, so the column was
+mounted. Only the smoke's DOM query failed: it asked for `.vf-godview-monitor-stage .vf-profiles-column`, the column
+inside the stage.
+
+**Why.** Since `699aea8b1` (2026-11-16, "the meters are chrome") the column stands in the chrome layer,
+`.vf-monitor-chrome-layer`, the stage's sibling, so the CRT layers do not cover it. The query was written on 2026-11-05
+(`4a9927064`), when the column stood in the stage. Where the chrome slot falls against the stage's section in
+`GodviewMonitor.tsx`: inside at `699aea8b1`'s parent, outside at `699aea8b1`, at `49bf268fcbbb` and at `fdf3a29f`. No
+`smoke:godview` green is recorded between the two dates, so this was its first full run since the move.
+
+Not assembly 19's: its commits change none of `GodviewMonitor.tsx`, `profiles-column/` and `smoke.ts`. Not the GPU:
+the run had no WebGPU adapter, which the smoke's own step before this one accepts with the stage saying so, and that
+step passed.
+
+**What changes.** Tests alone, no product change (numstat, git's own):
+- `packages/electron-shell/src/testing/smoke.ts` +4 −1: the query asks for `.vf-monitor-chrome-layer
+  .vf-profiles-column`, under a dated comment naming the item. It is the only query in the smoke that looks for
+  chrome-layer content under the stage (all three of its `.vf-godview-monitor-stage` queries read).
+- `packages/field-app/test/godview-monitor.test.tsx` +6: the row that stands the column and the claims strip in the
+  chrome layer, which mounts the real monitor, now holds the smoke's two queries. The stage-scoped one finds nothing,
+  and the chrome layer's finds the column. It goes red if the column moves again without the smoke.
+
+**Proved before the cut, on the development Mac.** Biome 2.5.4 with main's biome.jsonc, on both files at main and with
+the change: format by stdin unchanged, and `check --error-on-warnings` exit 0 with no diagnostics. A planted mis-format
+in a copy was changed by format, as it must be. The patch, tried on main's blobs, gives the committed files byte for
+byte. The unit row and the smoke were not run there.
+
+**The cut.** `lanes/tl/item-644/cut-644.sh` (`e8814a0d`), once, on VF-PM's word, END 2026-11-21 10:44:49Z: one ref
+created, the two paths at their sums, the message the file's, the commit hook passing; the lane's other branch and main
+unmoved.
+
+**In the verify.** `pnpm verify` whole at `eb0863097` (assembly 21's top) on the test Mac, run `v-a21close` (exit 0:
+every stage, `census:assert` OK with no drift, item 644's godview-monitor row passing, the Rust tests 698 passed, 0
+failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a21close` (`xcodebuild` exit 0, 3,175 rows:
+3,172 passed and 3 skipped, push 155's three; none of push 155's 3,175 rows lost or moved, and none new)
+
+**At the gate.** smoke:godview at the land's head `eb0863097`, alone at a load of 4.62: the profiles column step passed,
+and the row went red later, at "the shell's pane focused again for 11h" (item 648); smoke:godview:no-record passed whole
+(114 s) (`smoke:godview` rerun at the assembly's top: this change's proof.)
+
+## Item 645 — smoke:canvas's MORE names the part whose board wait ran out, and keeps what came before (M504)
+
+(2026-11-21; item 645; one commit, one path, +137 −106 (+34 −3 with whitespace ignored). Cut on main `fdf3a29f8777`
+as `b1d440427dbd` (tree `b0271c9472d8`) on branch `mk/645r2-on-fdf3a29f8777`. On main it is `eb0863097` "645:
+smoke:canvas's MORE names the part whose board wait ran out, and keeps what came before". A FIRST CUT,
+`5490420af0aa` on branch `mk/645-on-fdf3a29f8777`, same tree, does NOT land: its message said the typecheck was unrun
+because the lane had no install of its own, which was false (the lane has one; it was not looked for). Every other id
+here is a run's.)
+
+**The red it comes from.** `pnpm gate:landing` at main `fdf3a29f8777` (it covers assemblies 17–20): row 3,
+smoke:canvas, exit 2 after 839 s, its one problem "MK-6 MORE: the board out did not happen within 5000ms". Every
+SMOKE_CANVAS_* line before it printed.
+- MORE's PLACE had passed: SMOKE_CANVAS_MORE_PLACE, with the pill shown at the board's foot and the drawer whole
+  (p 1). So the wait that ran out was one of the three later board openings in `moreRows`: TAB (B raises the board),
+  PRESS or IN HAND (the line's create, each after Plugins folds).
+- The line could not say which. `until`'s throw left `moreRows`, and the part's name and every problem it had already
+  pushed went with it; smoke.ts kept the message alone.
+- The wait reads the tray's `anchor.open`, which the ask sets at once (the slide is the second wait). No flip in 5 s,
+  polled every 80 ms, reads as an open that never happened rather than a slow one; the run's log does not exclude a
+  renderer stalled past 5 s.
+- What touched the path: nothing in assemblies 17–20. `smoke-more.ts` last moved at item 433 (2026-11-17); the line's
+  create and B in `Composer.tsx` at 282-7 (2026-11-10); `field-app/src/field/desk/pegboard` has no commit in the range.
+  TL-3's one notice call in `cover-still.ts` runs in rows after MORE.
+- No green MORE is on record. MK-6's entry (2026-11-14) deferred `gate:landing`, and this ledger records no green
+  smoke:canvas after it. Since then item 433 changed the popup's door from the board (2026-11-17), and ICE's tray moved
+  with 0.20.0 (item 638), with no smoke:canvas run between.
+
+**What landed.** In `packages/electron-shell/src/testing/smoke-more.ts`, the MORE rows' driver alone:
+- Each board wait says its part: "the board out (TAB)", "the board's slide done (PRESS)".
+- A board wait that runs out adds the board's facts, read once at the throw (`BOARD_FACTS`): the tray's open, held and
+  slide, whether the Plugins popup stands, and the focused element by its tag and first class. Facts of the chrome
+  only, never an object's text.
+- The parts run inside one try, so a part's throw is pushed as "MORE (<part>): ..." after the problems the parts before
+  it found, and `moreRows` returns them.
+- It NAMES the part; it does not mend the red. No product source changes. smoke:market's rows do not move: what it
+  imports from this file (`BOARD_SETTLED` and the hands) is unchanged.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 with main's `biome.jsonc` over the one file, format by stdin equal to the file and
+  `check --error-on-warnings` exit 0, as main's own file at `fdf3a29f8777` is (the control). The first check found one
+  line the re-indent pushed past 100 columns; the cut's file takes biome's own wrapping. The patch applied to
+  `fdf3a29f8777` in a scratch index first.
+- The cut (10:53:32Z → 10:53:35Z): the patch laid by `git apply` in a standing lane, detached at main; the one path
+  held to the mended file's sum as laid and as committed; its added lines swept (0); through the pre-commit hook (the
+  committed rows are the lock's); then one create-only ref. Read again at source: parent `fdf3a29f8777`, the one path,
+  the file's sum and the message's. The first cut (10:47Z) ran the same way to the same tree.
+- The train's verify and kit: `pnpm verify` whole at `eb0863097` (assembly 21's top) on the test Mac, run `v-a21close`
+  (exit 0: every stage, `census:assert` OK with no drift, item 644's godview-monitor row passing, the Rust tests 698
+  passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a21close` (`xcodebuild` exit 0,
+  3,175 rows: 3,172 passed and 3 skipped, push 155's three; none of push 155's 3,175 rows lost or moved, and none new).
+
+**Not covered, and owed.**
+- Not run: a typecheck, electron-shell's tests and smoke:canvas itself; the assembly's verify runs the first two, and
+  smoke:canvas reads the change at its next run. The MORE red stands until a run names its part and its cause is read.
+
+**Not done, and not claimed:** no push of its own.
