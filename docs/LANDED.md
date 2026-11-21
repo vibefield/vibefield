@@ -66868,4 +66868,21 @@ phone A.
 - No window offers the switch: the desktop's pane frame has no control for it.
 - A peer desktop's run lists its models under that desktop's default profile, which may not be the run's.
 
+*Corrected 2026-11-21, later the same day: "Nothing was looked at" stopped being true, and the look found two faults.
+Three commits followed on local main: `5b0afbeca` PF-1 (doc), `a996abbc0` PF-1, PF-3 (green), `44467c9aa` PF-2 (green).*
+- **Seen.** The desktop app's deck with three live shell panes, by night (`pnpm smoke:godview`, exit 0, its still kept
+  through `VF_SMOKE_SHOT`). The catalog's pane frame specimen, day and night, in an offscreen Electron page. The phone
+  app on the iPhone 17 simulator over `-vf-demo-field-slice -vf-auto-open-card`: the live card's band by day and by
+  night, and the switch list through a new DEBUG fixture, `-vf-demo-model-switch[=refused]`.
+- **Fault 1, mended.** Before the terminal's first frame (the card connecting, or an attach refused) its view paints
+  nothing, so PF-1's band was a dark block over the bare sheet, a black bar on white by day. The card now stands on the
+  terminal's ground whole until the attachment's phase is `live`.
+- **Fault 2, mended.** The catalog's pane frame specimens stood outside Godview's theme blocks, so they drew the night
+  badge's label white while the app drew it dark. They now hand the frame the mode's two values.
+- **Proved with them:** the kit's `LiveCardBandTests` 11, `FieldMeshTests` 341 in 60 suites and `FieldProductTests`
+  378 in 59 suites passed; field-app's design-system, boundary and pane preview files, 83 tests passed.
+- **Still not seen:** a terminal's rows under the phone's band (no simulator here is on the tailnet), a real switch on a
+  running agent, the desktop app by day, a real agent pane with its meter, the exit chip on a dead pane, and the
+  capsule's asked word.
+
 **Not done, and not claimed:** no push of its own.
