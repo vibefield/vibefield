@@ -11263,6 +11263,10 @@ export async function runSmokeGodview(opts: {
         const shell = atDeck.activeSessionId;
         if (shell === undefined)
           throw new Error("the deck names no active pane to split before Jump to");
+        // item 648 (2026-11-21): which session 11h focuses again, and the panes before the split,
+        // so a red at 11h can say whether that session stood in more than one pane.
+        const shellLine = { shell, panes: atDeck.panes, sessionIds: atDeck.sessionIds };
+        console.log(`SMOKE_GODVIEW_11H_SHELL ${JSON.stringify(shellLine)}`);
         await focusPane(win, shell);
         pressChord(win, SPLIT_CHORD.key, SPLIT_CHORD.shift);
         const split = await deck.until(
@@ -11326,11 +11330,37 @@ export async function runSmokeGodview(opts: {
         console.log(chatSendEvidenceLine(evidence, null));
         // the shell's pane focused again for 11h, which types into a shell; nothing focused in Chat
         await focusPane(win, shell);
-        await deck.until(
-          (facts) => facts.active && facts.activeSessionId === shell,
-          "the shell's pane focused again for 11h",
-          10_000,
-        );
+        try {
+          await deck.until(
+            (facts) => facts.active && facts.activeSessionId === shell,
+            "the shell's pane focused again for 11h",
+            10_000,
+          );
+        } catch (error) {
+          // item 648 (2026-11-21): where the keyboard focus stands against the deck's panes, said
+          // before the red. The next run decides between a session shown in two panes and a deck
+          // that does not take a focused pane as its active one.
+          const focusLine = (await win.webContents.executeJavaScript(
+            `(() => {
+              const deck = ".vf-godview-terminal-deck .ghostty-pane";
+              const panes = [...document.querySelectorAll(deck)];
+              const shows = panes.map((pane) =>
+                pane.querySelector("[data-vf-pane-frame]")?.getAttribute("data-vf-pane-frame") ?? null);
+              const focus = document.activeElement;
+              const shell = ${JSON.stringify(shell)};
+              return {
+                shell,
+                shows,
+                shellIndices: shows.flatMap((id, index) => (id === shell ? [index] : [])),
+                focusedIndex: panes.findIndex((pane) => pane.contains(focus)),
+                activeIndex: panes.findIndex((pane) => pane.classList.contains("is-active")),
+                focus: focus ? focus.tagName.toLowerCase() + "." + [...focus.classList].join(".") : null,
+              };
+            })()`,
+          )) as Record<string, unknown>;
+          console.log(`SMOKE_GODVIEW_11H_FOCUS ${JSON.stringify(focusLine)}`);
+          throw error;
+        }
       } catch (error) {
         console.log(chatSendEvidenceLine(evidence, error));
         throw error;
