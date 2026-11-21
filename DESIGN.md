@@ -363,10 +363,15 @@ moment's number, §8).
 Look Design*: paper for the light ground, and both sets as drawn). What the deck draws its panes in
 when no catalog theme is picked for Godview's mode, and what the device tells every session it runs
 (its terminal scheme, which the deck says to fieldd, TL-4): a program that asks its terminal for a
-colour is answered in these, and every viewer of the session draws them. *(2026-11-19, item 590:
-the ground and these sixteen as tokens land first; the deck tells them to sessions when its second
-part lands, and this mark goes then.)* A catalog theme picked for a mode (Settings → Terminal →
-Look → Theme) replaces them whole for that mode, its own sixteen included.
+colour is answered in these, and every viewer of the session draws them. A catalog theme picked for
+a mode (Settings → Terminal → Look → Theme) replaces them whole for that mode, its own sixteen
+included. A slot a person set in a Ghostty file stays theirs over either (item 590): a session is
+told every other slot, held to its own device's configuration as it stands. Settings → Terminal →
+Look → Program colors shows the sixteen every session on the device draws, each slot set there or in
+the person's own Ghostty file marked as theirs and every other as Godview's look. Its line says "The
+sixteen colors programs paint with. Godview's look sets them for every session on this Mac; a color
+you set here or in your Ghostty file wins over it.", and its button, when no Ghostty file of theirs
+sets a colour, "Use Godview's colors".
 The ground is the row above; the ink is `#1E2227` by day (14.0:1 on the paper) and `#FFFFFF` by
 night; the cursor and the selection are the reference's, and a block cursor's text is the ground.
 
