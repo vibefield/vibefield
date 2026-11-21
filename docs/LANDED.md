@@ -65847,3 +65847,281 @@ desktop gives (item 588a's `previewState`):
 **Not covered.**
 - The same mid-sentence capital on the phone's other screens (the app's runs-on line, "Opening on ‹desktop›…", "Can't
   reach ‹desktop›") is item 598, which builds on `MadeAppFacts.desktopInSentence`.
+
+> **Read after the push (2026-11-21):** GitHub's `verify` at the pushed head `49bf268fc` passed: run 44874597638,
+> ended 07:10:24Z; `audit` passed, run 44874598014.
+
+## TL-4b — a session is born with the terminal scheme and told its palette; a live refusal is said (item 529) (M497)
+
+(2026-11-21; two commits, 8 paths: `11ffa47d9` (red, "TL-4b (red): a session is born without the scheme's colours; a
+live refusal reads as told") and `9eb22ff5d` (green, "TL-4b (green): a session is born with the terminal scheme and told
+its palette; a refusal is said"), on main `49bf268fcbbb` (assembly 18). Cut by the terminal-look lane on branch
+`tl/tl4b-r2-on-49bf268fcbbb` (as cut: `c1d2d27798cb`, `6c93b8907a9e`). The first set of the terminal-look stack: 590-A1,
+-A2 and -B stand on it in that order. The carry is the fixer's line.)
+
+**What was wrong.** ghosttea 0.16.0's floor (control protocol 1.20) reads a session's colours in create-session's
+options and a palette on set-colors, and fieldd still told such a floor as it told 0.15: the three colours alone, one
+command behind the create, so a program whose first act is to ask its terminal for the ground was answered from the
+configuration, one step early. And item 529: when the floor refused a tell for a session that still lives, the cell's
+row said `told`, logged at debug.
+
+**What changes.**
+- `packages/fieldd/src/terminal-service.ts` +145 −43: with a scheme kept and a floor that reads them, a birth's create
+  carries `colors` and nothing is told behind it; the tell behind a create stays for a floor before 1.20 and for a
+  scheme that changed while the create was in flight. `tellSession` tells the palette through the client's own
+  `setColors`. A refused tell lists the cell's sessions once more: a refused session that still lives makes the row
+  `refused`, logged at warn (`fieldd.terminal.scheme_session_refused`), and the cell stays behind the kept scheme, told
+  again when next reached; a session that ended between the list and the tell is no refusal. A correction at its source,
+  dated: TL-4a's comment on the `config-changed` handler said the re-say retires with a later ghosttea; it does not, and
+  the comment now says why. A client that connects inside a running tell (`schemeTelling`) is that tell's own and queues
+  no catch-up behind it; a later connect still catches a behind cell up.
+- `packages/fieldd/src/terminal-scheme.ts` +22 −7: `schemeColors` answers ghosttea's `SessionColors`, the palette slot
+  by slot in index order, an EMPTY palette for a scheme that names none; `schemeColorsWithoutPalette` for an older
+  floor.
+- `packages/fieldd/src/daemon.ts` +6 −2: `terminal.scheme.set`'s audit outcome counts `{changed, told, unavailable,
+  refused}`, `unavailable` meaning what it always meant.
+- `packages/contracts/src/terminal.ts` +6 −3: `TerminalSchemeCell`'s comment names `refused`; no schema changes.
+- Tests: fieldd `terminal-service.test.ts` +296 −8 (the fake floor's four new powers; eight new rows, seven at minor 20
+  and one guard at 19; two TL-4a rows gain `refused: 0`), fieldd `terminal-scheme.test.ts` +40 −1 then +10, contracts
+  `terminal-scheme.test.ts` +7.
+
+**What a person sees.** On a floor at ghosttea protocol 1.20 a new session holds the deck's ground, ink and cursor from
+its first instant. Nothing in the sixteen colours changes yet: the palette now reaches the floor, and the deck says an
+empty one until item 590's second part.
+
+**Made on main by content.** The set read on `a22f710b9a76` and re-made on `906328374319` (item 589's move) was carried
+onto `49bf268fcbbb` step by step (`look/N49/tools/make-N.py` `b41ae253`). Main had moved three of its seven files:
+contracts' `terminal.ts` (item 587a), fieldd's `daemon.ts` (items 550, 587, 588a, 600, 603, CP-4a2b, SH-1, SP-1e4) and
+`terminal-service.test.ts` (item 587's three rows). Each change was laid by `patch --fuzz=0`, reverses to main's text
+byte for byte, and main's move is equal on both sides of it; per file every count equals the set read. Read at source
+for item 587: TL-4b adds `colors` only while a scheme is kept and never touches a create's `environment`, and 587's rows
+keep no scheme, so their exact `environment` holds are guards.
+
+**Proved before the cut, on the development Mac** (`look/N49r2/check-r2.sh` `f0f78415`, PASS 2026-11-21 06:57:26Z, on a
+`git archive` of `49bf268fcbbb` with the stack's steps laid in order): the six commands of `check:walls` exit 0 at the
+base and at every red and green with the base's 32 rule counts; biome 2.5.4 with main's biome.jsonc checks the set's
+seven files with exit 0 and no (file, rule) count above main's; format by stdin unchanged but on fieldd's
+`terminal-service.test.ts`, whose byte-order-mark literal is main's own. Two must-fail controls failed as they must. No
+typecheck or test ran there.
+
+**On the test Mac.** Row `tl4b` (`look/N49r2/ROW-TL4B-C.md` `1c99d3de`), on the cut's commits: AS WANTED at both commits
+(series tl-a19-r3). At the red `c1d2d277`: contracts' and fieldd's typecheck exit 0; contracts' terminal-scheme.test.ts
+7 passed; fieldd's terminal-scheme.test.ts and terminal-service.test.ts 11 failed | 155 passed (166), exactly the eleven
+named, item 587's and item 589's rows passing. At the green `6c93b890`: both typechecks exit 0; contracts 7 passed;
+fieldd's two files 167 passed (167), the two item 529 rows passing with the mend. The stack's verify at its top is the
+landing's own (below). The first cut's green `c33d68d4` had read 2 failed | 165 passed (167) on those two rows (series
+tl-a19).
+
+**Found by its first row.** The first cut of this set (`tl/tl4b-on-49bf268fcbbb`, its green `c33d68d40695`) failed two
+of its own rows on the test Mac, both item 529's refusal: the 529 row's wait for exactly four tells timed out, and the
+daemon row saw pane-1 told twice. One cause, in the green: the first tell after a change opens the cell's client, and
+TL-4a's connect hook queued a catch-up tell behind it. While a refusal counted as told that catch-up did nothing; a
+refused cell now stays behind, so it asked again before the floor next named the cell. The green is mended (+13 −2) and
+the stack re-cut as `-r2` on it; the first cut's refs stand and do not land.
+
+**The landing's own proof** is the stack's verify and kit at its top: `pnpm verify` whole at `0787d2430` (assembly 19's
+top) on the test Mac, twice: run `v-a19r3close` was red on ONE row outside this assembly, tooling/dev-runner's "elects
+exactly one owner when two runners reclaim the same stale lock" ("iteration 18 acquired 0 locks"; item 643), and run
+`v-a19r3close-2` passed (exit 0: every stage, `census:assert` OK with no drift, that row passing, the Rust tests 698
+passed, 0 failed, 15 ignored, the gen check clean); and the kit ALL there, run `kit-a19r3close` (`xcodebuild` exit 0,
+3,175 rows: 3,172 passed and 3 skipped, push 153's three; none of push 153's 3,174 rows lost or moved, and 1 new,
+passed).
+
+**Owed.** A look at a real pane: that a program hears the scheme's ground as its first answer, and that re-saying an
+unchanged ground at a reload sends it no change notice. A `refused` cell is asked again only when it is next reached.
+
+## TL-4c — Godview's terminal is paper by day, and its sixteen colours are solved per ground (M498)
+
+(2026-11-21; item 590's first part; three commits, 12 paths: `0c39e2395` (doc, "TL-4c (doc): the terminal is paper by
+day, its sixteen colours solved per ground — DESIGN.md first"), `4a3647797` (red) and `6d9fe833a` (green), on TL-4b's
+green. Cut by the terminal-look lane on branch `tl/590a1-r2-on-49bf268fcbbb` over main `49bf268fcbbb` (as cut:
+`b8b04961e1f8`, `8c77357aa181`, `440dd44a8459`). The carry is the fixer's line.)
+
+**What was wrong.** Godview's terminal stood on parchment by day (`#ECE8DC`), a ground that read yellow: OKLCH chroma
+0.017 at hue 92, about four times any other light surface in Godview. Programs in a pane had no colours of the deck's
+own: the reference sixteen are drawn for a dark ground, and a light desk's panes leaned on the contrast nets alone. The
+phone drew a session's text with no floor at all, so since TL-4a a session told a light ground's inks drew them on the
+phone's dark ground unlifted.
+
+**What changes.** DESIGN.md first:
+- **§2.7:** by day the terminal's ground and divider are `#F1F0EE` / `#D6D5D3` (the row dates parchment until now); a
+  new block, "The terminal's own colours", gives each mode's sixteen with the floor each holds on its own ground, how
+  they were solved (by day in OKLCH on the paper; by night ghostty's set, its three inks under 4.5:1 lifted), their
+  tokens and their twin in code, and the phone. A dated mark says the sixteen land as tokens first and the deck tells
+  them to sessions from item 590's second part, when the mark goes. *At least* is WCAG 2's ratio, unrounded.
+- **§1.1** names the terminal's own colours among the exceptions to the reference palette; "paper or graphite deck".
+- **§8** "What a pane's text is held to": the phone holds a session's text to the same 3:1 floor.
+- **§2.5**'s tutorial figures on Godview's light ground move with it: the keyline 4.3:1 on Godview's paper, the dim
+  3.7:1 on Godview by day.
+- **docs/DECISIONS.md:** the terminal look's row, TL-D1…TL-D7, and the `TL-D` namespace note made three.
+
+Then the code (numstat, git's own):
+- `packages/design-kit/src/tokens.css` +39 −2: the day ground and divider; the 32 tokens
+  `--vf-godview-{light,dark}-terminal-ansi-0…15`.
+- `packages/field-app/src/godview/terminal-look.ts` +60, new: the twin, the ground and the sixteen of each mode.
+- `packages/field-app/src/godview/deck-theme.ts` +10 −11: the built-in pane theme draws the twin's ground; a block
+  cursor's text is the ground.
+- `packages/field-app/src/panels/terminal/theme-view.ts` +3 −1 and `design-system/sections/GodviewSection.tsx` +1 −1:
+  Settings' built-in preview on the same ground; the catalog's word "paper".
+- `apps/ios/VibeFieldKit/Sources/FieldDesign/FieldPalette.swift` +5 −3: the card tint and divider are the paper by day.
+  `Sources/FieldTerminal/TerminalPresentation.swift` +16 −5: `minimumContrast` 3, named in the revision digest.
+- Tests: `packages/field-app/test/godview-terminal-look.test.ts` +120, new (five rows); the kit's
+  `TerminalPresentationTests.swift` +15 (one row, and the helper carries the floor through) and
+  `TerminalGroundTests.swift` +3 −2 (the light-ramp example is the paper).
+
+**What a person sees.** Daylight is paper on the desktop and in Settings; the phone's card tint is paper by day; the
+phone's terminal keeps a light desk's inks readable on Matte Black. Programs still get the dark sixteen until item 590's
+second part; the 3:1 nets keep them readable meanwhile.
+
+**The least margins** over DESIGN.md's floors, WCAG 2's ratio unrounded: bright black by day 6.503:1 against 6.5, red by
+night 4.505:1 against 4.5; the ink on the paper 14.040:1.
+
+**Read before the cut.** ow-design and VF-PM accepted the DESIGN.md text (590-D, 2026-11-19); ow-design said yes to the
+WCAG sentence as written (2026-11-19, 11:47:59Z and 23:29:16Z; messages, not files). The red is the set read at
+`a22f710b9a76` byte for byte. Carried onto `49bf268fcbbb` step by step (`look/N49/tools/make-N.py` `b41ae253`): main had
+moved three of A1's ten base files (DESIGN.md, docs/DECISIONS.md, and tokens.css by items 583, 613 and 616); each change
+was laid by `patch --fuzz=0`, reverses to main's text byte for byte, and main's move is equal on both sides of it. Per
+file every count equals the set read.
+
+**Proved before the cut, on the development Mac** (`look/N49r2/check-r2.sh` `f0f78415`, PASS 2026-11-21 06:57:26Z): the
+six walls exit 0 at the red and the green with the base's 32 rule counts; biome 2.5.4 with main's biome.jsonc checks the
+set's six TS and CSS files with exit 0 and no diagnostic; format by stdin unchanged on each. No typecheck or test ran
+there.
+
+**On the test Mac.** Row `a1` (`look/N49r2/ROW-A1-C.md` `3d48b324`), on the cut's commits: AS WANTED (series tl-a19-r3,
+and the kit's red after it). At the red `8c77357a`: field-app's typecheck and the walls exit 0;
+godview-terminal-look.test.ts 5 failed (5), the five named; the phone kit's FieldTerminalTests: exactly
+holdsTextToTheDesktopsContrastFloor() failed, the other 184 passed. At the green `440dd44a`: the typecheck and the walls
+exit 0; godview-terminal-look.test.ts 5 passed; field-app whole 5588 passed (5588). The kit at the green is the
+landing's own kit run at the stack's top.
+
+**Found on the way.**
+- The contrast threshold: WCAG 2's text names 0.03928, sRGB's own is 0.04045; no 8-bit channel value falls between them,
+  so the ratios are the same either way.
+- `TL-D` was already two namespaces in the decision index (the timeline's, the Sparks page's); the terminal look's makes
+  three, and the note says so.
+
+**Owed.** Nothing of this part: item 590's second part (A2) and the glass (B) stand on it in the same assembly.
+
+## TL-4c — every session is told Godview's sixteen, and a colour a person set stays theirs (M499)
+
+(2026-11-21; item 590's second part; three commits, 18 paths: `c1bdee01e` (doc, "TL-4c (doc): a colour a person set
+stays theirs; Godview's look fills the rest — DESIGN.md first"), `0fa0dad2b` (red) and `b669b8c52` (green), on A1's
+green. Cut by the terminal-look lane on branch `tl/590a2-r2-on-49bf268fcbbb` over main `49bf268fcbbb` (as cut:
+`bf39e6031f66`, `25680a9b7501`, `f26805c44d22`). The carry is the fixer's line.)
+
+**What was wrong.** Since item 590's first part the terminal's own sixteen stood as tokens and a twin in code, but the
+deck told sessions none of them: a program in a pane painted with the floor's configuration, whatever Godview's mode or
+picked theme. Settings → Program colors called every slot nobody set "Ghostty's default".
+
+**The decision.** TL-D4, decided 2026-11-19 at its lean: a colour the person has set, in Settings or in their own
+Ghostty file, stays theirs; Godview's look sets only the colours left unset (DECISIONS' terminal-look row).
+
+**What changes.** DESIGN.md first: §2.7's dated mark goes; a slot a person set in a Ghostty file stays theirs over the
+deck's sixteen and a picked theme's; Settings → Program colors shows the sixteen every session draws, theirs marked.
+Then the code (numstat, git's own):
+- `packages/field-app/src/godview/deck-theme.ts` +17 −1 (red) +7 −4 (green): `godviewTerminalPalette`, and the pane look
+  carries it.
+- `packages/field-app/src/godview/deck-scheme.ts` +7 −2, +28 −16: the scheme carries the palette by index, `#rrggbb`
+  only; the say waits on the scheme's text. `GodviewDeck.tsx` +2 −1, +2 −1: the deck hands its palette on.
+- `packages/fieldd/src/terminal-scheme.ts` +24 −2 (`schemeColors(scheme, theirs)`, `configuredSlots`) and
+  `terminal-service.ts` +74 −10: per cell, the slots its configuration sets, read at every tell, held for births,
+  replaced at a reload before the re-tell; an unreadable configuration leaves the cell unavailable and behind.
+- Settings: `TerminalSettings.tsx` +11 −3, `LookTab.tsx` +7 −6, `ThemeBrowser.tsx` +15 −7 then +47 −13, `theme-view.ts`
+  +3 −2, `design-system/TerminalSettingsPreview.tsx` +4 −1.
+- `tokens.css` +4 −4 and `terminal-look.ts` +6 −6: comments only.
+- Tests: `godview-terminal-look.test.ts` +30 −5, `godview-deck-scheme.test.tsx` +89 −26, `terminal-settings.test.tsx`
+  +52 −1 (its `afterEach` resets the deck's appearance after every row, so a failing row leaves nothing to the next; the
+  two item 590 rows lose their own end-of-row resets), `theme-browser-lines.test.tsx` +45 (new), fieldd
+  `terminal-service.test.ts` +180 −11 (the TL-4a and TL-4b rows' light scheme names slots 2 and 4, so none is a slot the
+  fake's configuration sets).
+
+**What a person sees.** A program in any pane paints with Godview's sixteen for the deck's mode, or a picked catalog
+theme's whole; a colour they set in Settings or their Ghostty file stays theirs in every session. Program colors marks
+each slot as theirs or Godview's look, and its button says "Use Godview's colors".
+
+**Read before the cut.** ow-design closed the option (A) words (DESIGN.md's text and the Settings and browser lines) on
+2026-11-19 at 11:29:51Z. The `afterEach` reset is VF-PM's ruled change (2026-11-20 02:36:13Z). Carried onto
+`49bf268fcbbb` step by step (`look/N49/tools/make-N.py` `b41ae253`): main had moved four of the files under A2
+(DESIGN.md; tokens.css; `GodviewDeck.tsx`, item 620's written exception to React's hook rule at GodviewPaneFrame's top
+level; fieldd's `terminal-service.test.ts`, item 587's rows). Each change was laid by `patch --fuzz=0` and reverses to
+main's text byte for byte, main's move equal on both sides; the red's test-file change is the R step's line for line and
+in order (difflib pairs one repeated line differently, so its blocks read apart). Per file every count equals the set.
+
+**Proved before the cut, on the development Mac** (`look/N49r2/check-r2.sh` `f0f78415`, PASS 2026-11-21 06:57:26Z): the
+six walls exit 0 at the red and the green with the base's 32 rule counts; biome 2.5.4 with main's biome.jsonc checks the
+set's 17 TS, TSX and CSS files with exit 0, and no (file, rule) count rises above main's (13 diagnostics there, every
+one main's own: useExhaustiveDependencies and noArrayIndexKey, which item 620 made warnings); format by stdin unchanged
+but on fieldd's `terminal-service.test.ts`, main's own. No typecheck or test ran there.
+
+**On the test Mac.** Row `a2` (`look/N49r2/ROW-A2-C.md` `10db2a85`), on the cut's commits: AS WANTED at both commits
+(series tl-a19-r3). At the red `25680a9b`: field-app's and fieldd's typecheck exit 0, the walls exit 0; field-app's four
+files 8 failed | 33 passed (41) and fieldd's terminal-service.test.ts 4 failed | 151 passed (155), exactly the rows
+named. At the green `f26805c4`: field-app's four files 41 passed, field-app whole 5595 passed; fieldd's two files 171
+passed, fieldd whole 5103 passed | 15 skipped; contracts 7 passed; the typechecks and the walls exit 0.
+
+**Owed.** Item 595, the phone following the session's ground (its own assembly).
+
+## TL-3 — Godview's panes are glass over your desk, and program backgrounds take the glass (M500)
+
+(2026-11-21; item 590's third part; three commits, 16 paths: `42f351a83` (doc, "TL-3 (doc): the glass is the desk: the
+panes stand on the desk's own still — DESIGN.md first"), `2d313ae56` (red) and `0787d2430` (green), on A2's green, the
+top of the terminal-look stack. Cut by the terminal-look lane on branch `tl/590b-r3-on-49bf268fcbbb` over main
+`49bf268fcbbb` (as cut: `4dcdfd4cec33`, `d32ff2c1bd96`, `c749e902685e`). The carry is the fixer's line.)
+
+**What was wrong.** The deck's well had no ground of its own: behind a pane at the default 82% stood the frame's tone,
+so the desk was 1.4% of a pane's ground and "glass" read as a tint. Program backgrounds were drawn solid by default,
+under a stored choice nobody had made.
+
+**What changes.** DESIGN.md first (§8): the deck's well stands on the desk, the old text kept and dated; a new block,
+"The glass is the desk" (the still in the well under the panes, drawn once per capture at a quarter of its size, moved
+with the deck's own shift, never a backdrop filter; the mat's ground where the cover stands on it; program backgrounds
+take the glass by default, the stored field renamed); and Settings → Terminal → Look → Glass's words. Under Reduce
+transparency, or with the panes Solid, the well has no picture and the panes stand on the frame's tone.
+
+Then the code (numstat, git's own):
+- `packages/field-app/src/godview/desk-glass.tsx` +85 (red, the surface with today's behaviour), then +307 −26: the
+  glass's lifecycle, the picture drawn once per still at a quarter size as an object URL in the renderer alone, revoked
+  at every end, and its place from the still's resting box and the well's layout box.
+- `packages/field-app/src/field/desk/desk-still.ts` +50, new: the still's notice. `cover-still.ts` +7 −1: the still's
+  surface says each face it shows.
+- `GodviewStage.tsx` +3, then +5 −2 (the well's ground); `GodviewOverlay.tsx` +7; `godview.css` +22 −2 (the layer);
+  `deck-appearance.ts` +25 −5 (`dimProgramBackgrounds`, the old `opacityCells` key never read).
+- Settings: `GodviewMiniature.tsx` +26 −2, `LookTab.tsx` +9 −9, `terminal-settings.css` +19.
+- Tests: `godview-desk-glass.test.tsx` +366, new (fourteen rows, three of them guards); `cover-still.test.ts` +24;
+  `godview-appearance.test.ts` +44 −2; `godview-tuning.test.tsx` +2 −1; `terminal-settings.test.tsx` +27 −1.
+
+**What a person sees.** Through a pane, the desk's own picture, blurred, lined up with the still around the deck; at the
+default 82% the desk is 18% of a pane's ground. Program backgrounds take the glass. A person who had "Dim program
+backgrounds too" off finds it on, on purpose: that off was the old default, which nobody chose; a choice made now stays.
+
+**Read before the cut.** ow-design said yes to B's look and words, and VF-PM took the set (2026-11-19). B's red and
+green are the set read byte for byte; of its 13 base files main moved only DESIGN.md, and the doc's change was laid on
+main's text by `patch --fuzz=0` (`look/N49/tools/make-N.py` `b41ae253`), reversing to it byte for byte, main's move
+equal on both sides.
+
+**Proved before the cut, on the development Mac** (`look/N49r3/check-r3.sh` `830e2a63`, PASS 2026-11-21 07:29:17Z): the
+six walls exit 0 at the red and the green with the base's 32 rule counts; biome 2.5.4 with main's biome.jsonc checks the
+set's 15 TS, TSX and CSS files with exit 0, and no (file, rule) count rises above main's (5 diagnostics there, every one
+main's own, item 620's warnings); format by stdin unchanged on each. No typecheck or test ran there.
+
+**The cut.** The stack's first cut (`tl/*-on-49bf268fcbbb`) stopped once at B's green on its own hold, which named the
+set's new paths untracked at every step (B's green modifies `desk-glass.tsx`, which B's red created), and was finished
+by a one-commit mend. Its TL-4b green then failed two of its own rows, so the stack was re-cut as `-r2` on the mended
+green (2026-11-21). Each `-r2` cut ended as wanted; its step hold reads a path's newness from the parent commit's tree.
+The first cut's refs stand and do not land. B's first green on the test Mac (`tl/590b-on-49bf268fcbbb`, `fce8fcd6a3d2`)
+then failed one row of its own: "stands the glass first in the well, under the panes, and says what it stands on", a
+TypeError in the layout walk. The row's still is a canvas never attached, and under the test DOM its `offsetParent` is
+undefined where a browser gives null, so the walk, which stopped only on null, read past the chain's end. The walk now
+stops on either (+6 −4, a dated comment), and B alone was re-cut as `-r3` on A2's `-r2` green; B's `-r2` refs stand and
+do not land.
+
+**On the test Mac.** Row `b` (`look/N49r3/ROW-B-C.md` `14293ad9`), on the cut's commits: AS WANTED at both commits
+(series tl-a19-r4). At the red `d32ff2c1`: field-app's typecheck exit 0; the five files 19 failed | 77 passed (96),
+exactly the nineteen named, the three guards passing. At the green `c749e902`: the five files 96 passed (96), field-app
+whole 5614 passed (5614), the desk-glass row passing with the mend. The first green `fce8fcd6` and its `-r2` twin
+`1ebdfce9` had read 1 failed (that row) in the five files and in field-app whole. The capture (step 8): NOT RUN in this
+assembly: owed, by ruling. That a picture drawn from the still's own canvas shows the desk through a pane is for the
+capture step on the test Mac, and James's eye on its captures.
+
+**Owed.** Whether the desk reads well through a pane is James's eye on the row's captures.
