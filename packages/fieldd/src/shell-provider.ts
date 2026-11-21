@@ -195,6 +195,8 @@ export class ShellProviderBroker {
   private readonly pending = new Map<string, PendingCall>();
   /** Item 517 — the last of fieldd's preview captures, or null while none is in flight. */
   private captureTail: Promise<void> | null = null;
+  /** Item 588 — told when a provider newly registers. */
+  private readonly registeredListeners = new Set<() => void>();
 
   /** In-process capability fact only; this never exposes provider identity or
    * grants a caller access to the internal capture method. */
@@ -204,8 +206,11 @@ export class ShellProviderBroker {
 
   /** Item 588 (2026-11-19): told once each time a provider newly registers (a repeat on the same transport is not
    * new), so a capture owed while no shell could draw is drawn when one can. Answers its own stop. */
-  onRegistered(_listener: () => void): () => void {
-    return () => undefined;
+  onRegistered(listener: () => void): () => void {
+    this.registeredListeners.add(listener);
+    return () => {
+      this.registeredListeners.delete(listener);
+    };
   }
 
   register(
@@ -242,6 +247,14 @@ export class ShellProviderBroker {
     // provider-loss rejection.
     if (current !== null) return { registered: [...SHELL_PROVIDER_METHODS] };
     this.provider = { transport, methods: proposed };
+    // item 588: a listener's fault never refuses the shell, nor silences the others
+    for (const listener of [...this.registeredListeners]) {
+      try {
+        listener();
+      } catch {
+        // the listener's own failure is its own
+      }
+    }
     return { registered: [...SHELL_PROVIDER_METHODS] };
   }
 

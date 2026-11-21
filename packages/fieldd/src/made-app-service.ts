@@ -493,6 +493,7 @@ export class MadeAppService {
   readonly #now: () => number;
   readonly #timers: MadeAppTimers;
   readonly #openWaitMs: number;
+  readonly #captureServeWaitMs: number;
   readonly #writeRegistry: (path: string, body: string) => void;
   readonly #registryPath: string;
   readonly #madeRoot: string;
@@ -521,6 +522,16 @@ export class MadeAppService {
   readonly #capturing = new Set<string>();
   readonly #waiters = new Set<() => void>();
   readonly #previewListeners = new Set<(appIds: string[]) => void>();
+  /** Item 588 (2026-11-19): the apps owed a capture at publish, newest first (this desktop's newest
+   * MADE_APP_LIMITS.PUBLISH_CAPTURES that a capture can serve), read once per reconsider. */
+  #owed: readonly string[] = [];
+  /** Item 588: the one capture serve declared for a capture alone (never an open's), until its capture ends. In memory
+   * only: a crash leaves nothing wanted of it, so the next start's sweep removes it. */
+  #transient: { readonly appId: string; readonly serveId: string } | null = null;
+  /** Item 588: a page whose capture failed before its app had a record (its export failed), by its digest. In memory:
+   * a record would reserve a port for life for an app that never served. A restart owes it again. Never trimmed:
+   * it holds only the apps whose export failed before any record. */
+  readonly #failedUnminted = new Map<string, string>();
   #chain: Promise<void> = Promise.resolve();
   #previewChain: Promise<void> = Promise.resolve();
   #timer: unknown = null;
@@ -549,6 +560,7 @@ export class MadeAppService {
     this.#now = options.now ?? Date.now;
     this.#timers = options.timers ?? DEFAULT_TIMERS;
     this.#openWaitMs = options.openWaitMs ?? MADE_APP_LIMITS.OPEN_WAIT_MS;
+    this.#captureServeWaitMs = options.captureServeWaitMs ?? MADE_APP_LIMITS.CAPTURE_SERVE_WAIT_MS;
     this.#writeRegistry = options.writeRegistry ?? atomicWritePrivate;
     this.#registryPath = join(options.dataDir, ...LAYOUT.REGISTRIES_DIR, MADE_APP_REGISTRY_FILE);
     this.#madeRoot = join(options.dataDir, ...LAYOUT.ARTIFACT_MADE_DIR);
@@ -638,7 +650,12 @@ export class MadeAppService {
   /** Slice 3a's `AppIntentStamps.of`: what this desktop stamps on its own row of `appId`. */
   of(appId: string): MadeAppStamp | undefined {
     const preview = this.#registry.apps.get(appId)?.preview;
-    return preview === undefined ? undefined : { preview };
+    const previewState = this.#previewStateOf(appId);
+    if (preview === undefined && previewState === undefined) return undefined;
+    return {
+      ...(preview !== undefined ? { preview } : {}),
+      ...(previewState !== undefined ? { previewState } : {}),
+    };
   }
 
   /** `previews-changed`: the apps whose stamp moved, for 3a to restamp. */
@@ -892,7 +909,7 @@ export class MadeAppService {
     const reach = this.#registry.apps.get(appId)?.reach;
     const reachPart = reach === undefined ? {} : { reach: [...reach] };
     if (url !== undefined) {
-      this.#maybeCapture(appId);
+      this.#maybeCapture(appId, true);
       return { state: "serving", url, ...reachPart };
     }
     // the floor refused the serve (its add failed, or its proxy errored): MADE_APP_OPEN's failed declare
@@ -935,7 +952,10 @@ export class MadeAppService {
   #evictionsFor(existing: MadeAppServeRecord | undefined): MadeAppServeRecord[] {
     if (existing?.state === "open") return [];
     const open = [...this.#registry.apps.values()].filter((record) => record.state === "open");
-    const over = open.length + this.#otherLiveObjects() + 1 - ARTIFACT_LIMITS.LOCAL_OBJECTS;
+    // item 588: the capture's own serve holds a place too, for its seconds
+    const capturing = this.#transient !== null && this.#transient.appId !== existing?.appId ? 1 : 0;
+    const over =
+      open.length + capturing + this.#otherLiveObjects() + 1 - ARTIFACT_LIMITS.LOCAL_OBJECTS;
     if (over <= 0) return [];
     const closable: MadeAppServeRecord[] = [];
     let kept = 0;
@@ -1019,7 +1039,8 @@ export class MadeAppService {
     const declared = new Map<string, string>();
     if (login !== null) {
       for (const record of this.#registry.apps.values()) {
-        if (record.state !== "open" || record.retiringServeIds.length > 0) continue;
+        const serving = record.state === "open" || record.appId === this.#transient?.appId;
+        if (!serving || record.retiringServeIds.length > 0) continue;
         const input = this.#appInput(record, login);
         if (input === undefined) continue;
         try {
@@ -1237,6 +1258,8 @@ export class MadeAppService {
       const input = this.#appInput(record, login);
       if (input !== undefined) wanted.add(madeAppServeId(input));
     }
+    // item 588: the capture's serve while its capture runs; never after (a crash leaves nothing wanted of it)
+    if (this.#transient !== null) wanted.add(this.#transient.serveId);
     const port = this.#registry.previewsListenPort;
     if (port !== undefined) {
       wanted.add(
@@ -1255,7 +1278,9 @@ export class MadeAppService {
   async #reconsider(): Promise<void> {
     if (this.#disposed || !this.#started) return;
     if (this.#applyIntents()) await this.#reconcile();
+    this.#readOwed();
     this.#armTimer();
+    this.#drawOwed();
   }
 
   /** Open, unkept and past its idle close: it closes. A record whose intent cannot be read yet is left as it was.
@@ -1395,8 +1420,11 @@ export class MadeAppService {
   // ---- previews and the capture -------------------------------------------
 
   /** The capture runs when one is owed (no preview yet, or one of another page), the shell can draw and the app's
-   * listener answers a valid URL: one at a time, beside the mutation chain. */
-  #maybeCapture(appId: string): void {
+   * listener answers a valid URL: one at a time, beside the mutation chain. An OPEN also draws its app again once the
+   * page's preview is MADE_APP_LIMITS.REDRAW_FLOOR_MS old (item 588, 2026-11-19): a fresh load in the shell's own
+   * capture window, never the person's. The floor counts from the last drawing that succeeded, so a page whose
+   * drawing failed is drawn at its next open. */
+  #maybeCapture(appId: string, opened = false): void {
     const capture = this.#capturePreview;
     if (capture === undefined || this.#disposed || this.#capturing.has(appId)) return;
     if (!this.#capturePreviewAvailable()) return;
@@ -1404,7 +1432,10 @@ export class MadeAppService {
     const previewId = record?.previewId;
     const pageDigest = record?.exportedDigest;
     if (record === undefined || previewId === undefined || pageDigest === undefined) return;
-    if (record.preview?.pageDigest === pageDigest) return;
+    const drawn = record.preview;
+    if (drawn !== undefined && drawn.pageDigest === pageDigest) {
+      if (!opened || this.#now() - drawn.capturedAt < MADE_APP_LIMITS.REDRAW_FLOOR_MS) return;
+    }
     const url = this.#servingUrl(appId);
     if (url === undefined) return;
     const params = ShellWebContentsCaptureArtifactPreviewParams.safeParse({
@@ -1462,17 +1493,309 @@ export class MadeAppService {
     }
     const now = this.#now();
     const preview = MadeAppPreview.parse({ id: previewId, digest, pageDigest, capturedAt: now });
-    const next = MadeAppServeRecord.parse({ ...record, preview, updatedAt: now });
+    // item 588: a preview of the page clears a capture that failed for it
+    const { captureFailed: _failed, ...kept } = record;
+    const next = MadeAppServeRecord.parse({ ...kept, preview, updatedAt: now });
     if (!this.#tryCommit(this.#withRecord(next), "preview checkpoint")) return;
+    this.#announce([appId]);
+  }
+
+  /** `previews-changed`: these apps' stamps moved. */
+  #announce(appIds: string[]): void {
     for (const cb of [...this.#previewListeners]) {
       try {
-        cb([appId]);
+        cb([...appIds]);
       } catch (error) {
         this.#logger.info("fieldd.made_apps.listener_failed", "A previews listener threw", {
           error: errorName(error),
         });
       }
     }
+  }
+
+  // ---- item 588 (2026-11-19): the capture at publish ---------------------------------------------
+
+  /** Why an app has no preview of its page: `failed` when its capture of this page failed, `owed` while it is one of
+   * the newest a capture at publish owes; nothing when drawn, or for an app not owed. */
+  #previewStateOf(appId: string): MadeAppPreviewState | undefined {
+    const digest = this.#rows.get(appId)?.digest;
+    if (digest === undefined) return undefined;
+    const record = this.#registry.apps.get(appId);
+    if (record?.preview?.pageDigest === digest) return undefined;
+    if (record?.captureFailed?.pageDigest === digest) return "failed";
+    if (record === undefined && this.#failedUnminted.get(appId) === digest) return "failed";
+    return this.#owed.includes(appId) ? "owed" : undefined;
+  }
+
+  /** A row a capture at publish can serve: this desktop's, a page its library keeps, by rosetta's digest. */
+  #publishable(row: IndexCatalogApp): boolean {
+    return (
+      row.device === this.#deviceId &&
+      availabilityRefusal(row.availability) === undefined &&
+      row.digest !== undefined &&
+      Blake3Hex.safeParse(row.digest).success
+    );
+  }
+
+  /** The owed window, read once (the newest PUBLISH_CAPTURES rows, while the table speaks); each app whose stamp moved
+   * is announced, so its row is stamped again. A rows reader with no `newest` owes nothing. */
+  #readOwed(): void {
+    const newest = this.#rows.newest;
+    if (newest === undefined || !this.#rows.speaks()) return;
+    const next = newest
+      .call(this.#rows, MADE_APP_LIMITS.PUBLISH_CAPTURES)
+      .slice(0, MADE_APP_LIMITS.PUBLISH_CAPTURES)
+      .filter((row) => this.#publishable(row))
+      .map((row) => row.appId);
+    const touched = [...new Set([...this.#owed, ...next])];
+    const before = new Map(touched.map((appId) => [appId, this.#previewStateOf(appId)]));
+    this.#owed = next;
+    const moved = touched.filter((appId) => before.get(appId) !== this.#previewStateOf(appId));
+    if (moved.length > 0) this.#announce(moved);
+  }
+
+  /** Room for the capture's serve under the shared ceiling, never its last place: that is an open's. */
+  #roomForCapture(): boolean {
+    let open = 0;
+    for (const record of this.#registry.apps.values()) if (record.state === "open") open += 1;
+    return open + this.#otherLiveObjects() + 1 < ARTIFACT_LIMITS.LOCAL_OBJECTS;
+  }
+
+  /** The next owed app, newest first, when a capture can run: the shell can draw, a login can carry a serve, there is
+   * room, and no capture serve stands. An owed app that is open is drawn by its own serve. One at a time. */
+  #drawOwed(): void {
+    if (this.#disposed || this.#transient !== null || this.#capturePreview === undefined) return;
+    if (!this.#capturePreviewAvailable() || this.#linkedLogin() === null) return;
+    for (const appId of this.#owed) {
+      if (this.#previewStateOf(appId) !== "owed" || this.#capturing.has(appId)) continue;
+      if (this.#registry.apps.get(appId)?.state === "open") {
+        this.#maybeCapture(appId);
+        continue;
+      }
+      // at the registry's cap an app with no record has no place to take: passed over, never a stall for the rest
+      if (!this.#registry.apps.has(appId) && this.#registry.apps.size >= MADE_APP_LIMITS.INTENTS)
+        continue;
+      if (!this.#roomForCapture()) return;
+      this.#background("publish capture", () => this.#captureAtPublish(appId));
+      return;
+    }
+  }
+
+  /** Inside the mutation chain: the app's folder exported, its record kept `closed` (its port and preview id minted
+   * for life, never `lastOpenedAt`), and its own serve declared for the capture alone. The capture runs beside the
+   * chain; every way it ends removes the serve. */
+  async #captureAtPublish(appId: string): Promise<void> {
+    if (this.#disposed || this.#transient !== null) return;
+    const row = this.#rows.get(appId);
+    const login = this.#linkedLogin();
+    if (row === undefined || row.digest === undefined || this.#previewStateOf(appId) !== "owed")
+      return;
+    if (login === null || !this.#capturePreviewAvailable() || !this.#roomForCapture()) return;
+    const existing = this.#registry.apps.get(appId);
+    if (existing?.state === "open") {
+      this.#maybeCapture(appId);
+      return;
+    }
+    if (existing === undefined && this.#registry.apps.size >= MADE_APP_LIMITS.INTENTS) return;
+    const digest = row.digest;
+    const folder = this.#folder(appId, digest);
+    let exported: { reach: string[]; network: Record<string, string[]> };
+    try {
+      exported =
+        existing?.exportedDigest === digest &&
+        existing.viewVersion === MADE_APP_VIEW.VERSION &&
+        existing.network !== undefined &&
+        isDirectory(folder)
+          ? { reach: existing.reach ?? [], network: existing.network }
+          : await this.#export(
+              {
+                presentationId: row.presentationId,
+                sessionId: row.sessionId,
+                digest,
+                availability: row.availability,
+              },
+              digest,
+              appId,
+              folder,
+            );
+    } catch (error) {
+      this.#logger.info(
+        "fieldd.made_apps.publish_export_failed",
+        "A published app could not be exported for its capture",
+        {
+          appId,
+          error: errorName(error),
+        },
+      );
+      this.#failed(appId, digest);
+      return;
+    }
+    const now = this.#now();
+    const listenPort = existing?.listenPort ?? (await this.#allocatePort(appId));
+    let record: MadeAppServeRecord;
+    try {
+      record = MadeAppServeRecord.parse({
+        ...(existing ?? {}),
+        appId,
+        listenPort,
+        previewId: existing?.previewId ?? ulid(now),
+        exportedPresentationId: row.presentationId,
+        exportedDigest: digest,
+        state: "closed",
+        retiringServeIds: existing?.retiringServeIds ?? [],
+        reach: exported.reach,
+        network: exported.network,
+        viewVersion: MADE_APP_VIEW.VERSION,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      });
+      if (!this.#tryCommit(this.#withRecord(record), "publish capture checkpoint")) return;
+    } finally {
+      this.#claimedPorts.delete(listenPort);
+    }
+    if (existing?.exportedDigest !== undefined && existing.exportedDigest !== digest) {
+      this.#prune.add(appId);
+    }
+    const input = this.#appInput(record, login);
+    const previewId = record.previewId;
+    if (input === undefined || previewId === undefined) {
+      this.#failed(appId, digest);
+      return;
+    }
+    const serveId = madeAppServeId(input);
+    this.#transient = { appId, serveId };
+    this.#capturing.add(appId);
+    const carried = await this.#reconcile();
+    if (!carried || this.#serveFailed(appId)) {
+      this.#capturing.delete(appId);
+      await this.#endCapture(appId, serveId, digest);
+      return;
+    }
+    void this.#enqueuePreview(() =>
+      this.#publishCapture(appId, serveId, previewId, digest, record.reach ?? []),
+    );
+  }
+
+  /** Beside the chain: main is asked only once the capture's serve reports its valid URL, within
+   * CAPTURE_SERVE_WAIT_MS (else it is never asked); its own deadline is the broker's. Every way out ends the capture. */
+  async #publishCapture(
+    appId: string,
+    serveId: string,
+    previewId: string,
+    pageDigest: string,
+    reach: string[],
+  ): Promise<void> {
+    try {
+      const capture = this.#capturePreview;
+      const url = await this.#awaitServeUrl(appId, this.#captureServeWaitMs);
+      if (capture === undefined || url === undefined || this.#disposed) return;
+      const params = ShellWebContentsCaptureArtifactPreviewParams.safeParse({
+        artifactId: previewId,
+        url,
+        allowHosts: reach,
+      });
+      if (!params.success) return;
+      const result = await capture(params.data);
+      const digest = result.digest;
+      if (digest === undefined) return;
+      await this.#enqueue(async () => this.#stamp(appId, previewId, digest, pageDigest));
+    } catch (error) {
+      this.#logger.info("fieldd.made_apps.capture_failed", "A made app's capture failed", {
+        appId,
+        error: errorName(error),
+      });
+    } finally {
+      this.#capturing.delete(appId);
+      await this.#enqueue(async () => await this.#endCapture(appId, serveId, pageDigest));
+    }
+  }
+
+  /** The capture's serve goes, on every way out: drawn, failed, the bound, a declare that failed, fieldd's stop. An
+   * app opened meanwhile owns the serve, so it stays. A page not drawn is marked failed for that page. */
+  async #endCapture(appId: string, serveId: string, pageDigest: string): Promise<void> {
+    if (this.#transient?.appId !== appId) return;
+    this.#transient = null;
+    const record = this.#registry.apps.get(appId);
+    const drawn = record?.preview?.pageDigest === pageDigest;
+    // a capture the stop cut short has not failed: the next start owes it again
+    if (!drawn && !this.#disposed) this.#failed(appId, pageDigest);
+    const latest = this.#registry.apps.get(appId);
+    if (latest !== undefined && latest.state !== "open") {
+      if (this.#disposed) {
+        // the stop: nothing reconciles now, so the serve is removed here; a removal that fails is the sweep's
+        try {
+          await this.#bridge.remove(serveId);
+        } catch (error) {
+          this.#logger.info(
+            "fieldd.made_apps.remove_deferred",
+            "A made app's listener removal will be retried",
+            {
+              appId,
+              error: errorName(error),
+            },
+          );
+        }
+        return;
+      }
+      try {
+        const next = this.#retiring(latest, serveId, this.#now());
+        if (!this.#tryCommit(this.#withRecord(next), "capture serve checkpoint"))
+          this.#sweepOwed = true;
+      } catch {
+        this.#sweepOwed = true;
+      }
+      await this.#reconcile();
+    } else if (latest?.state === "open" && !drawn) {
+      this.#maybeCapture(appId);
+    }
+    if (this.#disposed) return;
+    this.#armTimer();
+    this.#drawOwed();
+  }
+
+  /** A capture of this page failed: kept on the record, so it is not owed again until an open draws it. */
+  #failed(appId: string, pageDigest: string): void {
+    const record = this.#registry.apps.get(appId);
+    if (record === undefined) {
+      // nothing was minted (the export failed before its record): kept in memory, never a reservation
+      if (this.#failedUnminted.get(appId) === pageDigest) return;
+      this.#failedUnminted.set(appId, pageDigest);
+      this.#announce([appId]);
+      return;
+    }
+    if (record.captureFailed?.pageDigest === pageDigest) return;
+    const now = this.#now();
+    const next = MadeAppServeRecord.parse({
+      ...record,
+      captureFailed: { pageDigest, at: now },
+      updatedAt: now,
+    });
+    if (this.#tryCommit(this.#withRecord(next), "capture failure checkpoint"))
+      this.#announce([appId]);
+  }
+
+  /** The capture's serve's URL, within `ms`, or undefined (the bound, a failed serve, the stop). */
+  #awaitServeUrl(appId: string, ms: number): Promise<string | undefined> {
+    const now = this.#servingUrl(appId);
+    if (now !== undefined || ms <= 0 || this.#disposed) return Promise.resolve(now);
+    return new Promise((resolve) => {
+      let timer: NodeJS.Timeout | undefined;
+      const finish = (url: string | undefined) => {
+        if (timer !== undefined) clearTimeout(timer);
+        this.#waiters.delete(check);
+        resolve(url);
+      };
+      const check = () => {
+        if (this.#disposed) {
+          finish(undefined);
+          return;
+        }
+        const url = this.#servingUrl(appId);
+        if (url !== undefined || this.#serveFailed(appId)) finish(url);
+      };
+      this.#waiters.add(check);
+      timer = setTimeout(() => finish(undefined), ms);
+    });
   }
 
   /** Hard-link the capture's JPEG into `made-previews/<previewId>/` (L12): `fs.link` to a dot-temp, then a rename, so
@@ -1515,7 +1838,7 @@ export class MadeAppService {
     for (const appId of [...this.#captureOnUrl]) {
       if (this.#servingUrl(appId) === undefined) continue;
       this.#captureOnUrl.delete(appId);
-      this.#maybeCapture(appId);
+      this.#maybeCapture(appId, true);
     }
   }
 

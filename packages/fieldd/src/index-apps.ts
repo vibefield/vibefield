@@ -19,7 +19,7 @@ import {
   MadeAppAvailability,
   MadeAppHostedUrl,
   MadeAppPreview,
-  type MadeAppPreviewState,
+  MadeAppPreviewState,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { IndexArtifactsRead } from "./agent-index";
@@ -222,8 +222,9 @@ function sortKeyOf(row: IndexCatalogApp): number {
   return row.publishedAt ?? row.capturedAt ?? 0;
 }
 
-/** Newest first; a tie is broken by the key, so the cap cuts the same rows however they arrived. */
-function newestFirst(a: IndexCatalogApp, b: IndexCatalogApp): number {
+/** Newest first; a tie is broken by the key, so the cap cuts the same rows however they arrived. The daemon's made-app
+ * adapter reads its newest rows in this order (item 588). */
+export function newestFirst(a: IndexCatalogApp, b: IndexCatalogApp): number {
   return sortKeyOf(b) - sortKeyOf(a) || (a.appId < b.appId ? -1 : a.appId > b.appId ? 1 : 0);
 }
 
@@ -233,6 +234,14 @@ function clip(text: string, chars: number): string {
   const cut = text.slice(0, chars);
   const last = cut.charCodeAt(cut.length - 1);
   return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
+}
+
+/** Item 588 (2026-11-19): the preview state a stamp offers, when it is a word the origin can mean (owed, failed);
+ * `unknown` is a reader's word, never an origin's, so it never rides. */
+function previewStateOf(stamp: AppIntentStamp | undefined): "owed" | "failed" | undefined {
+  const offered = stamp?.previewState;
+  const read = MadeAppPreviewState.parse(offered);
+  return read === offered && read !== "unknown" ? read : undefined;
 }
 
 /** The preview a stamp offers, by projection, when the contract reads it (validate or strip, the lead's C16). */
@@ -247,10 +256,10 @@ function previewOf(stamp: AppIntentStamp | undefined): MadeAppPreview | undefine
   };
 }
 
-/** Item 588 (2026-11-19): the newest `limit` rows of a table, newest first, never moving the table's own order. Inert
- * until its green. */
-export function newestOf(_table: { rows(): IndexCatalogApp[] }, _limit: number): IndexCatalogApp[] {
-  return [];
+/** Item 588 (2026-11-19): the newest `limit` rows of a table, newest first. It sorts a copy, so the table's own
+ * order never moves, whatever `rows()` hands back. */
+export function newestOf(table: { rows(): IndexCatalogApp[] }, limit: number): IndexCatalogApp[] {
+  return [...table.rows()].sort(newestFirst).slice(0, limit);
 }
 
 export class IndexApps extends EventEmitter {
@@ -824,9 +833,15 @@ export class IndexApps extends EventEmitter {
 
   /** The row with the origin's preview as its stamp says it now (and nothing else of the stamp: RULINGS L8). */
   #stamped(row: IndexCatalogApp): IndexCatalogApp {
-    const { preview: _held, ...facts } = row;
-    const preview = previewOf(this.#opts.stamps?.of(row.appId));
-    return (preview !== undefined ? { ...facts, preview } : facts) as IndexCatalogApp;
+    const { preview: _held, previewState: _state, ...facts } = row;
+    const stamp = this.#opts.stamps?.of(row.appId);
+    const preview = previewOf(stamp);
+    const previewState = previewStateOf(stamp);
+    return {
+      ...facts,
+      ...(preview !== undefined ? { preview } : {}),
+      ...(previewState !== undefined ? { previewState } : {}),
+    } as IndexCatalogApp;
   }
 
   /** A page this build cannot make a row of, said once per member (its name, never its value: EL7). */

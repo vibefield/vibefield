@@ -320,7 +320,7 @@ import {
 } from "./freeway";
 import { grantedScopesOf } from "./granted-scopes";
 import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
-import { IndexApps } from "./index-apps";
+import { IndexApps, newestOf } from "./index-apps";
 import { type AppProjectJoin, AppsMesh } from "./index-apps-mesh";
 import { IndexCatalog } from "./index-catalog";
 import { IndexTicketForwarding } from "./index-forward";
@@ -9351,6 +9351,8 @@ export async function bootstrap(
           // made-app-service's `MadeAppRows.speaks` doc: the first walk landed
           // AND rosetta's library has finished its first reading
           speaks: () => indexApps.ready && indexApps.libraryReady === true,
+          // item 588: the newest rows, newest first, for the capture at publish (the table's order never moves)
+          newest: (limit) => newestOf(indexApps.table, limit),
           presentation: async (appId, presentationId) => {
             let cursor: string | undefined;
             do {
@@ -9410,6 +9412,8 @@ export async function bootstrap(
     // (so its intent) is read from its row, so keep, hide and the idle close are
     // applied again (made-app-service's `reconsider`, load-bearing for L8)
     indexApps.on("changed", () => void madeAppsRef?.reconsider());
+    // item 588: a shell that can draw registers: a capture owed while none could is drawn now
+    api.onShellRegistered(() => void madeAppsRef?.reconsider());
     // a link, an unlink, another account: every made serve is re-gated
     links.on("changed", () => void madeAppsRef?.relink());
     // the previews serve's URL may have moved: every peer subscriber hears the

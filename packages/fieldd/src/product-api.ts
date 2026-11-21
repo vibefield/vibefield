@@ -577,6 +577,12 @@ export class ProductApi extends EventEmitter {
     return this.shellProvider.provides("shell.webcontents.captureArtifactPreview");
   }
 
+  /** Item 588 (2026-11-19): told when a shell newly registers, so a capture owed while none could draw is drawn.
+   * Internal, like the capture door; answers its own stop. */
+  onShellRegistered(listener: () => void): () => void {
+    return this.shellProvider.onRegistered(listener);
+  }
+
   /** Show a path in the OS file manager — internal, like the capture door:
    * only fieldd's own services enter (the agent distribution service for a
    * path its inventory holds; GT-7's terminal service for the overlay path the
