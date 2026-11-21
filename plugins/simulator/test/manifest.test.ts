@@ -53,11 +53,16 @@ describe("vibefield.simulator", () => {
     expect(row?.title).toBe("iOS Simulator");
     expect(row?.tray?.label).toBe("iOS Simulator");
     expect(simulatorManifest.description).toBe(
-      "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
+      "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them. No account needed.",
     );
     expect(row?.description).toBe(
       "Double-click to choose an iPhone and an iOS version, then use it on your desk.",
     );
+  });
+
+  it("asks for no account, and says so last in its own description; the object's row does not (decided 2026-11-19)", () => {
+    expect(simulatorManifest.description).toMatch(/ No account needed\.$/);
+    expect(row?.description).not.toContain("account");
   });
 
   it("lies on the desk by the SDK's key — and goes into no mini mat yet (it has no chip)", () => {
