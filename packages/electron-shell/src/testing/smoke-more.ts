@@ -401,6 +401,17 @@ export async function moreRows(d: MoreRowsDriver): Promise<string[]> {
       seen = await js<PopupBrief>(POPUP_BRIEF);
     } catch (error) {
       problems.push(`MORE: ${error instanceof Error ? error.message : String(error)}`);
+      // a popup that never opened leaves the board out, and the next part's create press would fold
+      // it: the popup (were it late) and the board are shut first, so the next part starts where it
+      // would have (item 649, 2026-11-21)
+      if (await js<boolean>(POPUP_OPEN)) {
+        await key("Escape");
+        await until("the popup folded", 5_000, POPUP_SHUT);
+      }
+      if (!(await js<boolean>(BOARD_SHUT))) {
+        await key("Escape");
+        await until("the board shut", 5_000, BOARD_SHUT);
+      }
       return seen;
     }
     if (seen.tab !== "Discover")
@@ -457,7 +468,13 @@ export async function moreRows(d: MoreRowsDriver): Promise<string[]> {
     await key("Tab");
     const tabbed = await pill();
     if (tabbed?.focused !== true) problems.push("MORE: Tab from the board did not reach the pill");
-    await key("Return");
+    // ↵ as a person's Enter reaches a focused button: its key down, its character and its key up. A
+    // key down alone is no press to a button (the browser clicks one on the character), so the pill
+    // took none and Plugins never opened (item 649, 2026-11-21)
+    d.win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Return" });
+    d.win.webContents.sendInputEvent({ type: "char", keyCode: "\r" });
+    d.win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Return" });
+    await sleep(80);
     const keyed = await opened("↵");
 
     // ── PRESS from a chosen category: the board on Surfaces, the pill pressed ───────────────────
