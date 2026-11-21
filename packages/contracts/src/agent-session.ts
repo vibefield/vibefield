@@ -233,6 +233,20 @@ export const AgentStopState = z
   .passthrough();
 export type AgentStopState = z.infer<typeof AgentStopState>;
 
+/** PF-3 (2026-11-21) — what a RUNNING run's model switch can change, in puppeteer's words (its
+ * `AgentModelSwitchOffer`, the run's adapter's own): whether the model itself, which control ROLES (`effort` today,
+ * OPEN), and how far the agent keeps a change: `session` = this run alone, `default` = the agent also saves it as its
+ * own default for the sessions it starts later (OPEN). Absent on a row: the run's adapter names no switch, and none
+ * is offered for it (never a guessed command, AR-L1). */
+export const AgentModelSwitchOffer = z
+  .object({
+    model: z.boolean(),
+    controls: z.array(z.string().min(1).max(32)).max(16),
+    persistence: z.string().min(1).max(32),
+  })
+  .passthrough();
+export type AgentModelSwitchOffer = z.infer<typeof AgentModelSwitchOffer>;
+
 /** SessionSummary v2 — the fold's row (design-01 §6.2 as amended by AR-D4).
  * `sessionId` is the provider-native session id, THE spine every repo joins
  * on (puppeteer `nativeSession.id`, rosetta `native_session_id`); before an
@@ -308,6 +322,10 @@ export const AgentSessionSummary = z
      * none. Absent: the stop presses no key (the agent's own control stops the
      * turn), or a daemon from before Q08. */
     stopKey: z.string().min(1).max(32).optional(),
+    /** PF-3 (2026-11-21) — what `agent.switchModel` can change on this run, in puppeteer's words (its
+     * `AgentModelSwitchOffer`): the model, the control roles, and how far the agent keeps a change (OPEN). Absent:
+     * the run's adapter names no switch, or a daemon from before PF-3. */
+    modelSwitch: AgentModelSwitchOffer.optional(),
     /** CP-D15 — who started the run (`AgentSessionOrigin`; absent reads `you`), as its record says. Godview's rim
      * and History's "Lyra's" are joins over it (EW-D1). */
     origin: AgentSessionOrigin.optional(),

@@ -28,10 +28,13 @@ import {
   AgentRemoteSnapshot,
   AgentReportShownParams,
   AgentSubscribeParams,
+  AgentSwitchModelParams,
+  AgentSwitchModelResult,
   MONITOR_AUDIENCE,
   MonitorAgentRow,
   SCREEN_BOARDS,
 } from "../src/agent-field";
+import { AgentModelSwitchOffer } from "../src/agent-session";
 import { ForwardEnvelope, KEYED_FORWARD_METHODS, OnBehalfOf } from "../src/forwarding";
 import { AGENT_FIELD } from "../src/registries";
 
@@ -490,6 +493,65 @@ describe("AR-6-0 — the interrupt's answer", () => {
     expect(
       AgentInterruptResult.parse({ accepted: false, reason: "no-terminal-host" }),
     ).toMatchObject({ accepted: false, reason: "no-terminal-host" });
+  });
+});
+
+describe("PF-3 — the switch: one change to a running run's model or one of its controls", () => {
+  it("takes a run and exactly one change, a model or one control's value", () => {
+    expect(
+      AgentSwitchModelParams.parse({
+        runtimeRunId: "run-1",
+        change: { kind: "model", modelId: "sonnet[1m]" },
+      }).change,
+    ).toEqual({ kind: "model", modelId: "sonnet[1m]" });
+    expect(
+      AgentSwitchModelParams.safeParse({
+        runtimeRunId: "run-1",
+        change: { kind: "control", controlId: "effort", value: "high" },
+      }).success,
+    ).toBe(true);
+    // a run with no change, a change of no kind, a control with no value
+    expect(AgentSwitchModelParams.safeParse({ runtimeRunId: "run-1" }).success).toBe(false);
+    expect(
+      AgentSwitchModelParams.safeParse({ runtimeRunId: "run-1", change: { modelId: "opus" } })
+        .success,
+    ).toBe(false);
+    expect(
+      AgentSwitchModelParams.safeParse({
+        runtimeRunId: "run-1",
+        change: { kind: "control", controlId: "effort" },
+      }).success,
+    ).toBe(false);
+    expect(
+      AgentSwitchModelParams.safeParse({ change: { kind: "model", modelId: "opus" } }).success,
+    ).toBe(false);
+  });
+
+  it("answers sent or rejected, and a refusal must say why", () => {
+    expect(AgentSwitchModelResult.parse({ status: "sent" })).toEqual({ status: "sent" });
+    expect(AgentSwitchModelResult.safeParse({ status: "rejected" }).success).toBe(false);
+    expect(AgentSwitchModelResult.parse({ status: "rejected", reason: "working" })).toMatchObject({
+      status: "rejected",
+      reason: "working",
+    });
+    expect(
+      AgentSwitchModelResult.parse({ status: "rejected", reason: "x", retryable: false }),
+    ).toMatchObject({ retryable: false });
+    // an answer this build predates is refused, never read as sent
+    expect(AgentSwitchModelResult.safeParse({ status: "confirmed" }).success).toBe(false);
+  });
+
+  it("reads an offer whose words it does not know (OPEN), and keeps what it was not told about", () => {
+    const offer = AgentModelSwitchOffer.parse({
+      model: true,
+      controls: ["effort", "a-newer-role"],
+      persistence: "a-newer-word",
+      later: 1,
+    });
+    expect(offer.controls).toEqual(["effort", "a-newer-role"]);
+    expect(offer.persistence).toBe("a-newer-word");
+    expect((offer as Record<string, unknown>).later).toBe(1);
+    expect(AgentModelSwitchOffer.safeParse({ model: true, controls: [] }).success).toBe(false);
   });
 });
 

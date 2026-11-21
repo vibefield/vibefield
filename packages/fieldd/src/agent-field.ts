@@ -873,6 +873,17 @@ export function projectRemoteRow(
     ...(summary.stop !== undefined ? { stop: stopOf(summary.stop) } : {}),
     ...(summary.spark !== undefined ? { spark: summary.spark } : {}),
     ...(summary.origin !== undefined ? { origin: originOf(summary.origin) } : {}),
+    // PF-3 — what the run's own model switch can change, so a phone's card offers it only where the adapter names
+    // one. REBUILT from its named fields, as the origin is, so nothing riding its passthrough travels
+    ...(summary.modelSwitch !== undefined
+      ? {
+          modelSwitch: {
+            model: summary.modelSwitch.model,
+            controls: [...summary.modelSwitch.controls],
+            persistence: summary.modelSwitch.persistence,
+          },
+        }
+      : {}),
     monitorRow: peerMonitorRow(monitorRow, chars),
   };
 }

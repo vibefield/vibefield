@@ -1,0 +1,4 @@
+{
+  "runtimeRunId": "run-switch",
+  "change": { "kind": "model", "modelId": "sonnet[1m]" }
+}

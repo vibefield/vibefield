@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentProfileId, AgentProfileSetId, AgentProviderId } from "./agent-index";
 import {
+  AgentModelSwitchOffer,
   AgentSessionOrigin,
   AgentSessionTerminal,
   AgentStatus,
@@ -826,6 +827,11 @@ export const AgentRemoteRow = z
      * rebuilt from its named fields and never spread. Chat reads a spark's
      * agents by it. Absent reads `you`, as on the field row. */
     origin: AgentSessionOrigin.optional(),
+    /** PF-3 (2026-11-21) — what `agent.switchModel` can change on this run (the fold's `modelSwitch`), so a
+     * phone's card offers the switch only where the run's adapter names one. Content-free: a flag, role words and
+     * one word for how far the agent keeps a change. Absent: none is offered, a bare terminal's row, or a daemon
+     * before PF-3. */
+    modelSwitch: AgentModelSwitchOffer.optional(),
     /** the model's row, cut for a peer: no `project.seq`, texts bounded, and a
      * bare terminal's `detail` its folder, never its path */
     monitorRow: MonitorAgentRow,
@@ -1201,6 +1207,45 @@ export const AgentInterruptResult = z.discriminatedUnion("accepted", [
   z.object({ accepted: z.literal(false), reason: z.string() }),
 ]);
 export type AgentInterruptResult = z.infer<typeof AgentInterruptResult>;
+
+/** PF-3 — ONE change to a running run: its model, or one control of the model that serves it. Every id is the
+ * agent's own, as `agent.models` lists it (the choice's `id`, the control's `id`, one of its values' `id`), opaque
+ * here (AR-L1). One change per call: an agent may answer a change with a dialog of its own, and a second one typed
+ * behind the first would land in it. */
+export const AgentSwitchModelChange = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("model"), modelId: z.string().min(1).max(1024) }).passthrough(),
+  z
+    .object({
+      kind: z.literal("control"),
+      controlId: z.string().min(1).max(1024),
+      value: z.string().min(1).max(1024),
+    })
+    .passthrough(),
+]);
+export type AgentSwitchModelChange = z.infer<typeof AgentSwitchModelChange>;
+
+/** `agent.switchModel`'s params: a run id, never a terminal id (fieldd reaches the run through its record), and the
+ * one change asked of it. */
+export const AgentSwitchModelParams = z
+  .object({ runtimeRunId: z.string().min(1), change: AgentSwitchModelChange })
+  .passthrough();
+export type AgentSwitchModelParams = z.infer<typeof AgentSwitchModelParams>;
+
+/** `sent` = the run's terminal took the request, never that the agent switched: it may refuse, ask its person to
+ * confirm, or resolve the asked model to another, and what it serves next is its row's own model and effort. A
+ * refusal carries puppeteer's own word (`working`, `blocked`, the adapter's reason) or fieldd's (`no-such-run`,
+ * `exited`), never a sentence composed here; `retryable: false` says no later attempt can land. */
+export const AgentSwitchModelResult = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("sent") }).passthrough(),
+  z
+    .object({
+      status: z.literal("rejected"),
+      reason: z.string(),
+      retryable: z.boolean().optional(),
+    })
+    .passthrough(),
+]);
+export type AgentSwitchModelResult = z.infer<typeof AgentSwitchModelResult>;
 
 // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
 // `TerminalMirrorWriteGrantParams` and `TerminalMirrorWriteGrantResult

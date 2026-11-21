@@ -1564,6 +1564,14 @@
                   An unheard cancellation remains reported and repeated presses are coalesced until the
                   turn changes. Pane Stop uses <code>terminal.terminate</code> and ends the process.
                   The existing <code>agent.interrupt</code> durable-stop API keeps its own policy.</p>
+                <p><em>Added 2026-11-21 (PF-3):</em> the <code>agent.switchModel</code> door asks a running
+                  run for one change, its model or one control of it, through the model switch its adapter
+                  names (puppeteer's <code>Agent.switchModel</code>, 0.4.8). The adapter owns the agent's
+                  command; fieldd hands it the ids <code>agent.models</code> listed and repeats its answer.
+                  A run offers a switch only where its adapter names one, and the offer rides the row
+                  (<code>modelSwitch</code>). The door confirms nothing: the agent's own model and effort
+                  evidence moves the row. Today one adapter names a switch, and it keeps a change as the
+                  agent's default for the sessions it starts later, which the offer says.</p>
                 <p>This source change spans VibeField, Puppeteer and Ghosttea (lifecycle protocol 1.18).
                   The sibling overlay validates them together; coordinated releases and pinned dependency
                   updates are required before distribution. The canvas and physics allocation are unchanged.</p>

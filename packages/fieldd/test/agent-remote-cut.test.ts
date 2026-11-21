@@ -175,6 +175,31 @@ describe("PG-2 — the remote cut, as its owner cuts it", () => {
     monitor.service.dispose();
   });
 
+  it("PF-3 — a run's model switch offer rides the remote row, its named fields and no more; a run with none says nothing", async () => {
+    const offered: AgentSessionSummary = {
+      ...working,
+      modelSwitch: {
+        model: true,
+        controls: ["effort"],
+        persistence: "default",
+        // a field riding the summary's passthrough is not the wire's
+        ...({ typed: "/model" } as object),
+      },
+    };
+    const monitor = await testMonitor({ summaries: [offered] });
+    const row = AgentRemoteRow.parse({
+      ...projectRemoteRow(offered, monitor.row("run-working")),
+      revision: 1,
+    });
+    expect(row.modelSwitch).toEqual({ model: true, controls: ["effort"], persistence: "default" });
+    const bare = AgentRemoteRow.parse({
+      ...projectRemoteRow(working, monitor.row("run-working")),
+      revision: 1,
+    });
+    expect(bare).not.toHaveProperty("modelSwitch");
+    monitor.service.dispose();
+  });
+
   it("SP-1e2 — a spark's agent's crew rides the remote row's origin, so the phone's card finds its live members", async () => {
     const crewed: AgentSessionSummary = {
       ...working,

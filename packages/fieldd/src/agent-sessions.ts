@@ -19,6 +19,7 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import type {
+  AgentModelSwitchOffer,
   AgentMonitorState,
   AgentTurnStop,
   MonitorActivityKind,
@@ -416,6 +417,8 @@ export interface SummarizeInput {
   spawnedBy?: string | undefined;
   /** Q08 — the key `agent.interrupt` presses for this run (`stopKeyOf`) */
   stopKey?: string | undefined;
+  /** PF-3 — what `agent.switchModel` can change on this run, as its adapter says (puppeteer's `Agent.modelSwitch`) */
+  modelSwitch?: AgentSessionSummary["modelSwitch"];
   /** CP-D15 — who started the run, as its record says */
   origin?: AgentSessionOrigin | undefined;
   /** CP-1c — the spark this run is the own session of */
@@ -440,6 +443,16 @@ export const FLOOR_INTERRUPT_KEY: TerminalKey = "ctrl-c";
 export function stopKeyOf(stop: AgentTurnStop | undefined): string | undefined {
   if (stop === undefined) return FLOOR_INTERRUPT_KEY;
   return stop.kind === "key" ? stop.key : undefined;
+}
+
+/** PF-3 — what a run's model switch can change, from the offer its adapter names (puppeteer's `Agent.modelSwitch`):
+ * repeated as it is said, and none while the adapter names no switch. Pure, and blind to which agent it is (AR-L1). */
+export function modelSwitchOf(
+  agent: { readonly modelSwitch?: AgentModelSwitchOffer | undefined } | undefined,
+): AgentSessionSummary["modelSwitch"] {
+  const offer = agent?.modelSwitch;
+  if (offer === undefined) return undefined;
+  return { model: offer.model, controls: [...offer.controls], persistence: offer.persistence };
 }
 
 /** SessionSummary v2 for a managed run — pure. */
@@ -478,6 +491,7 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     continuation: input.record,
     ...(input.spawnedBy !== undefined ? { spawnedBy: input.spawnedBy } : {}),
     ...(input.stopKey !== undefined ? { stopKey: input.stopKey } : {}),
+    ...(input.modelSwitch !== undefined ? { modelSwitch: input.modelSwitch } : {}),
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
     ...(input.spark !== undefined ? { spark: input.spark } : {}),
     ...(input.door !== undefined ? { door: input.door } : {}),

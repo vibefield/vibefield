@@ -3093,6 +3093,20 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "federate",
   }),
+  // PF-3 (2026-11-21) — `agent.switchModel`: one change to a RUNNING run's model, or to one control of the model
+  // that serves it (its effort). `agent.control`, as the stop is: it steers a run that already exists, it births
+  // none and reads no fold. NOT idempotent: a second ask is a second command in the agent's own input. `federate`
+  // like `agent.interrupt`: the params name a RUN, and only the device that owns it reaches its adapter. fieldd
+  // types nothing itself and knows no agent's command (AR-L1): the change is the adapter's, through puppeteer's
+  // `Agent.switchModel`, and a run whose adapter names no switch is refused. fieldd refuses a PLUGIN at the door:
+  // a plugin's `agent.control` was consented as "Pause or stop what your agents are doing", which this is not.
+  defineMethod({
+    surface: "product",
+    method: "agent.switchModel",
+    scope: "agent.control",
+    idempotent: false,
+    locality: "federate",
+  }),
   defineMethod({
     surface: "product",
     method: "agent.list",

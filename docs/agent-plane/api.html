@@ -1205,6 +1205,9 @@
                   and MA-1a's four <code>index.*</code> doors add two that federate (<code>index.apps.list</code>,
                   <code>index.artifacts</code>) and two that stream (<code>index.apps.subscribe</code>,
                   <code>index.apps.catalog.subscribe</code>).
+                  <em>Added 2026-11-21 (PF-3, recounted from <code>METHODS</code>):</em> of the 70 there now,
+                  43 are local, 20 federate and 7 stream. <code>agent.switchModel</code> is the 70th, and it
+                  federates.
                 </p>
               </div>
             </div>
@@ -1684,6 +1687,22 @@
                       No fallback key, retry, or termination. Concurrent presses and an unheard request on the same
                       turn coalesce. Older daemons refuse the unknown method instead of ignoring a safety flag.</p></td>
                     <td><span class="badge tone-built">Built</span></td><td><p><code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">agent.switchModel</span></td>
+                    <td><p><code>AgentSwitchModelParams</code> (a run and one change: a model, or one control's value) → <code>AgentSwitchModelResult</code> (a discriminated union on <code>status</code>)</p></td>
+                    <td><p><code>agent.control</code></p></td><td><p>no</p></td>
+                    <td><p>Added 2026-11-21 (PF-3). The run's <code>Agent.switchModel()</code>, the model switch its adapter names
+                      (puppeteer 0.4.8). fieldd types nothing and knows no agent's command (AR-L1). Puppeteer sends a change
+                      only to an agent it has seen idle; a working or blocked run, and a run whose adapter names no switch,
+                      are refused in puppeteer's own word. <code>sent</code> means the run's terminal took the request, never
+                      that the agent switched: what it serves next is its row's own model and effort. What a run offers rides
+                      the fold's row and the remote cut's (<code>modelSwitch</code>: the model, the control roles, and whether
+                      the agent keeps a change as its own default). Audited as <code>agent.session.switch_model</code>, with
+                      the part asked for and never its value. A plugin is refused at the door: its <code>agent.control</code> was
+                      consented as pausing or stopping, not as changing a model. Older daemons refuse the unknown method.</p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-session.test.ts</code>, <code>agent-remote-cut.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.list</span></td>

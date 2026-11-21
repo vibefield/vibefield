@@ -88,6 +88,8 @@ import {
   type AgentHost,
   AgentLaunchRefusedError,
   type AgentModelService,
+  type AgentModelSwitchRequest,
+  type AgentModelSwitchService,
   type AgentProfile,
   type AgentRunBriefing,
   type AgentTurnStopService,
@@ -267,7 +269,20 @@ function scriptedBinding(
   sessionId: string,
   turnStops?: string[],
   observed?: ScriptedCandidates,
+  modelSwitches?: AgentModelSwitchRequest[],
 ): AgentAdapterBinding {
+  // PF-3: the binding names a model switch (the model and an `effort` control, kept as the agent's default) and
+  // records each request it is handed; absent, it names none
+  const modelSwitch: AgentModelSwitchService | undefined =
+    modelSwitches === undefined
+      ? undefined
+      : {
+          offer: { model: true, controls: ["effort"], persistence: "default" },
+          async submit(request) {
+            modelSwitches.push(request);
+            return { status: "sent" };
+          },
+        };
   const turnStop: AgentTurnStopService | undefined =
     turnStops === undefined
       ? undefined
@@ -311,6 +326,7 @@ function scriptedBinding(
         },
       },
       turnStop,
+      modelSwitch,
     },
     async dispose() {},
   };
@@ -481,6 +497,8 @@ function scriptedProvider(
     turnStops?: string[];
     /** ST — each binding witnesses its turns, its listener kept here (absent: terminal-only) */
     observed?: ScriptedCandidates;
+    /** PF-3 — each binding names a model switch, and each request lands here (absent: none named) */
+    modelSwitches?: AgentModelSwitchRequest[];
     /** the re-attach study's Step 1 — a continuation codec (every launch
      * captures `SCRIPTED_STATE`) and an attach record, reported before the
      * launch (`endpoint-<n>`) and again by each attach (`<handed>-attached`) */
@@ -616,6 +634,7 @@ function scriptedProvider(
         sessionId,
         extra.turnStops,
         extra.observed,
+        extra.modelSwitches,
       );
     },
     // AR-4 — an adapter that can re-attach to its running process: it records
@@ -647,6 +666,7 @@ function scriptedProvider(
               options.sessionId,
               extra.turnStops,
               extra.observed,
+              extra.modelSwitches,
             );
           },
         }),
@@ -683,6 +703,8 @@ interface Box {
   turnStops: string[];
   /** ST — each observed binding's candidate listener, by terminal (`observed: true`) */
   observed: ScriptedCandidates;
+  /** PF-3 — each request handed to the scripted model switch, in order (`modelSwitch: true`) */
+  modelSwitches: AgentModelSwitchRequest[];
 }
 
 /** One tools/call the door's client makes (test/fixtures/spark-mcp-client.mjs). */
@@ -741,6 +763,8 @@ interface SetupConfig {
   turnStop?: boolean;
   /** ST — the scripted adapter witnesses its turns, `native-hooks` (default: terminal-only, unreadable) */
   observed?: boolean;
+  /** PF-3 — the scripted adapter names a model switch (default: it names none) */
+  modelSwitch?: boolean;
   /** ST — how long a sent Stop waits to be heard (default: `AGENT_STOP.HEARD_WITHIN_MS`) */
   stopHeardWithinMs?: number;
   /** item 121 — the route snapshot THIS boot's class placement reads (default: the snapshot itself) */
@@ -823,6 +847,7 @@ async function setup(config: SetupConfig): Promise<Box> {
   const attached: ScriptedAttach[] = restart?.attached ?? [];
   const turnStops: string[] = restart?.turnStops ?? [];
   const observed: ScriptedCandidates = restart?.observed ?? new Map();
+  const modelSwitches: AgentModelSwitchRequest[] = restart?.modelSwitches ?? [];
   const models: ScriptedModels = restart?.models ?? {
     fail: false,
     reads: 0,
@@ -883,6 +908,7 @@ async function setup(config: SetupConfig): Promise<Box> {
             ...(config.program !== undefined ? { program: config.program } : {}),
             ...(config.turnStop === true ? { turnStops } : {}),
             ...(config.observed === true ? { observed } : {}),
+            ...(config.modelSwitch === true ? { modelSwitches } : {}),
             ...(config.facts === true ? { facts: true } : {}),
             ...(config.launchRefusal !== undefined ? { launchRefusal: config.launchRefusal } : {}),
           },
@@ -953,6 +979,7 @@ async function setup(config: SetupConfig): Promise<Box> {
     models,
     turnStops,
     observed,
+    modelSwitches,
   };
 }
 
@@ -5142,6 +5169,117 @@ describe("ST — a durable Stop (the real floor)", () => {
       "the Stop let go",
     );
   }, 120_000);
+
+  // PF-3 stands in this block for its helpers: a run born on the real floor, and its row read until it says a status.
+  describe("PF-3 — the switch (agent.switchModel)", () => {
+    it("hands one change to the run's own adapter while it is idle, refuses a working run in puppeteer's word, and lands in the ledger", async () => {
+      const box = await setup({ floor: "real", observed: true, modelSwitch: true });
+      const { daemon, dataDir, modelSwitches } = box;
+      // the fold's reader is not, by that fact, allowed to change what it is watching
+      const watcher = await window(daemon, DECK, "switch-watcher");
+      const win = await window(daemon, [...DECK, "agent.control"], "switch");
+      const spawned = await bornRun(box, win);
+      const runId = spawned.session.runtimeRunId;
+      const paneId = spawned.terminal.sessionId;
+      const change = { kind: "model", modelId: "sonnet[1m]" };
+
+      expect(
+        (await watcher.callErr("agent.switchModel", { runtimeRunId: runId, change })).data?.kind,
+      ).toBe("FORBIDDEN_SCOPE");
+      expect(
+        (await win.callErr("agent.switchModel", { runtimeRunId: "run-none", change })).data?.kind,
+      ).toBe("NOT_FOUND");
+      // a run with no change, and a change of no kind
+      expect((await win.callErr("agent.switchModel", { runtimeRunId: runId })).data?.kind).toBe(
+        "PRECONDITION_FAILED",
+      );
+      expect(
+        (
+          await win.callErr("agent.switchModel", {
+            runtimeRunId: runId,
+            change: { modelId: "opus" },
+          })
+        ).data?.kind,
+      ).toBe("PRECONDITION_FAILED");
+
+      // the row says what the run's adapter offers, as the adapter said it
+      scriptedEvent(box, paneId, { type: "turn:started" });
+      const working = await rowWhere(win, runId, (row) => row.status === "working", "working");
+      expect(working.modelSwitch).toEqual({
+        model: true,
+        controls: ["effort"],
+        persistence: "default",
+      });
+      // mid-turn: puppeteer refuses in its own word, and the adapter is handed nothing
+      expect(await win.call("agent.switchModel", { runtimeRunId: runId, change })).toEqual({
+        status: "rejected",
+        reason: "working",
+      });
+      expect(modelSwitches).toEqual([]);
+
+      scriptedEvent(box, paneId, { type: "turn:completed" });
+      await rowWhere(win, runId, (row) => row.status === "idle", "idle");
+      expect(await win.call("agent.switchModel", { runtimeRunId: runId, change })).toEqual({
+        status: "sent",
+      });
+      expect(
+        await win.call("agent.switchModel", {
+          runtimeRunId: runId,
+          change: { kind: "control", controlId: "effort", value: "high" },
+        }),
+      ).toEqual({ status: "sent" });
+      // each change reaches the adapter whole and in order; fieldd typed nothing of its own
+      expect(modelSwitches).toEqual([
+        { kind: "model", modelId: "sonnet[1m]" },
+        { kind: "control", controlId: "effort", value: "high" },
+      ]);
+
+      // the ledger: the attempt before the effect, the run on the target, the part asked for and never its value
+      const sent = await auditAct(
+        dataDir,
+        (entry) =>
+          entry.action === "agent.session.switch_model" &&
+          entry.target.id === runId &&
+          entry.attrs?.["change"] === "control",
+      );
+      expect(sent.attempt.attrs).toEqual({ runtimeRunId: runId, change: "control" });
+      expect(sent.outcome.outcome).toBe("succeeded");
+      expect(JSON.stringify(sent)).not.toContain("high");
+      // the first model change asked of this run was the mid-turn one: denied, in puppeteer's word
+      const refused = await auditAct(
+        dataDir,
+        (entry) =>
+          entry.action === "agent.session.switch_model" &&
+          entry.target.id === runId &&
+          entry.attrs?.["change"] === "model",
+      );
+      expect(refused.outcome.outcome).toBe("denied");
+      expect(refused.outcome.attrs).toMatchObject({ status: "rejected", reason: "working" });
+    }, 60_000);
+
+    it("offers no switch for a run whose adapter names none, and refuses one asked for anyway", async () => {
+      const box = await setup({ floor: "real", observed: true });
+      const win = await window(box.daemon, [...DECK, "agent.control"], "switch-none");
+      const spawned = await bornRun(box, win);
+      const runId = spawned.session.runtimeRunId;
+      const paneId = spawned.terminal.sessionId;
+      scriptedEvent(box, paneId, { type: "turn:started" });
+      scriptedEvent(box, paneId, { type: "turn:completed" });
+      const idle = await rowWhere(win, runId, (row) => row.status === "idle", "idle");
+      expect(idle.modelSwitch).toBeUndefined();
+      expect(
+        await win.call("agent.switchModel", {
+          runtimeRunId: runId,
+          change: { kind: "control", controlId: "effort", value: "high" },
+        }),
+      ).toEqual({
+        status: "rejected",
+        reason: "the adapter names no model switch",
+        retryable: false,
+      });
+      expect(box.modelSwitches).toEqual([]);
+    }, 60_000);
+  });
 });
 
 // TU-1 — fieldd keeps whether a run has worked (`turnedAt`, ruled in `turnfact-read.md`): the first turn it sees is

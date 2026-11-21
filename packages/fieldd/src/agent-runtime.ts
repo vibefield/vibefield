@@ -43,6 +43,8 @@ import {
   type AgentSpawnResult,
   type AgentStopState,
   type AgentSurface,
+  type AgentSwitchModelParams,
+  type AgentSwitchModelResult,
   type AgentsProfilesListResult,
   type AgentsProfilesLoginParams,
   type AgentsProfilesLoginResult,
@@ -117,6 +119,7 @@ import {
   foldStatus,
   mirrorOf,
   mirrorShowsTurn,
+  modelSwitchOf,
   recordForRun,
   SessionRecordStore,
   stopKeyOf,
@@ -2179,6 +2182,57 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    *    it. */
   async interrupt(params: AgentInterruptParams): Promise<AgentInterruptResult> {
     return this.requestStop(params, false);
+  }
+
+  /**
+   * PF-3 — `agent.switchModel`: ONE change to a running run's model, or to one control of the model that serves it.
+   * fieldd types nothing and knows no agent's command (AR-L1): the change is the run's adapter's, asked through
+   * puppeteer's `Agent.switchModel`, which sends it only to an agent it has seen idle and refuses a run whose adapter
+   * names no switch. The answer is puppeteer's, word for word: `sent` means the run's terminal took the request,
+   * never that the agent switched, and what it serves next reaches the row as its own model and effort.
+   *
+   * The run is always the RECORD'S OWN, as the stop's is: the params name a run, never a terminal. An unknown run is
+   * NOT_FOUND; one that is gone or pending is PRECONDITION_FAILED `{state: "not-alive"}`.
+   */
+  async switchModel(params: AgentSwitchModelParams): Promise<AgentSwitchModelResult> {
+    const entry = this.managed.get(params.runtimeRunId);
+    if (entry === undefined || entry.exiting) {
+      const known =
+        entry !== undefined ||
+        this.pending.has(params.runtimeRunId) ||
+        this.records.read(params.runtimeRunId) !== undefined;
+      if (!known) {
+        throw new RpcCallError("NOT_FOUND", `no managed session ${params.runtimeRunId}`, false, {
+          runtimeRunId: params.runtimeRunId,
+        });
+      }
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "the session is not running under this daemon; a model switch is for a live, observed run",
+        false,
+        { runtimeRunId: params.runtimeRunId, state: "not-alive" },
+      );
+    }
+    const change = params.change;
+    const receipt = await entry.agent.switchModel(
+      change.kind === "model"
+        ? { kind: "model", modelId: change.modelId }
+        : { kind: "control", controlId: change.controlId, value: change.value },
+    );
+    this.logger.info("fieldd.agents.model_switch", "A model switch was asked of an agent run", {
+      runtimeRunId: params.runtimeRunId,
+      sessionId: entry.info.terminalSessionId,
+      // which part was asked for, never the value: an id is the agent's own word
+      change: change.kind,
+      status: receipt.status,
+      ...(receipt.status === "rejected" ? { reason: receipt.reason } : {}),
+    });
+    if (receipt.status === "sent") return { status: "sent" };
+    return {
+      status: "rejected",
+      reason: receipt.reason,
+      ...(receipt.retryable !== undefined ? { retryable: receipt.retryable } : {}),
+    };
   }
 
   async pause(params: AgentInterruptParams): Promise<AgentInterruptResult> {
@@ -6011,6 +6065,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         spark: entry.spark,
         door: entry.door,
         stopKey: stopKeyOf(entry.agent.turnStop),
+        modelSwitch: modelSwitchOf(entry.agent),
         stop: entry.stop,
         turnedAt: entry.turnedAt,
         createdAt: entry.createdAt,

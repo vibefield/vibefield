@@ -15,6 +15,7 @@ import {
   AgentResumeParams,
   AgentSpawnParams,
   AgentSubscribeParams,
+  AgentSwitchModelParams,
   AgentsExtensionsActParams,
   AgentsExtensionsAddParams,
   AgentsExtensionsAddSkillParams,
@@ -5313,6 +5314,45 @@ export async function bootstrap(
                 reasonCode: "REFUSED",
                 // the floor's own word, never a sentence composed here
                 attrs: { accepted: false, reason: result.reason },
+              },
+      );
+    });
+    // PF-3 — one change to a running run's model or one of its controls. Audited as the stop is: the attempt before
+    // the effect, the run on the target, and which part was asked for, never the value. A refusal is not an error:
+    // an agent that is working, or one whose adapter names no switch, is a state, and the caller is told so.
+    api.register("agent.switchModel", async (ctx, params) => {
+      // A plugin's `agent.control` was consented in the words "Pause or stop what your agents are doing"
+      // (plugin-words.ts). Changing an agent's model is not in them, so no plugin reaches this door until the
+      // words a person is shown say so.
+      if (ctx.principal.kind === "plugin")
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "agent.switchModel is not offered to plugins",
+          false,
+        );
+      const parsed = AgentSwitchModelParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { runtimeRunId, change: { kind: 'model', modelId } | { kind: 'control', controlId, value } }",
+          false,
+        );
+      return await audit.required(
+        ctx,
+        {
+          action: "agent.session.switch_model",
+          target: { kind: "agent-session", id: parsed.data.runtimeRunId },
+          attrs: { runtimeRunId: parsed.data.runtimeRunId, change: parsed.data.change.kind },
+        },
+        () => agents.switchModel(parsed.data),
+        (result) =>
+          result.status === "sent"
+            ? { outcome: "succeeded", attrs: { status: "sent" } }
+            : {
+                outcome: "denied",
+                reasonCode: "REFUSED",
+                // puppeteer's own word, never a sentence composed here
+                attrs: { status: "rejected", reason: result.reason },
               },
       );
     });

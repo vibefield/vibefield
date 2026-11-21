@@ -40,6 +40,8 @@ import {
   AgentRemoteRow,
   AgentReportShownParams,
   AgentSubscribeParams,
+  AgentSwitchModelParams,
+  AgentSwitchModelResult,
   MonitorAgentRow,
 } from "../src/agent-field";
 import {
@@ -1018,6 +1020,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-interrupt": AgentInterruptResult,
   "agent-interrupt-params": AgentInterruptParams,
   "agent-pause-params": AgentPauseParams,
+  // PF-3 — the switch: both kinds of change, and the answer's two arms (a refusal carries puppeteer's own word)
+  "agent-switch-model-params": AgentSwitchModelParams,
+  "agent-switch-model": AgentSwitchModelResult,
   // TPv3 (terminal-pipeline.ts; spec §20 item 1) — every wire shape has a pinned fixture.
   "tp-transport-grant": CellTransportGrant,
   "tp-attach-grant": SessionAttachGrant,

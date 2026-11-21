@@ -1,0 +1,4 @@
+{
+  "runtimeRunId": "run-switch",
+  "change": { "kind": "control", "controlId": "effort", "value": "high" }
+}
