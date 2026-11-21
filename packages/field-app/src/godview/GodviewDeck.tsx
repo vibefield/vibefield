@@ -526,7 +526,8 @@ export function GodviewDeck({
     palette: terminalPalette,
   } = useDeckPaneLook(godviewTheme);
   // TL-4a — what the programs in every local session are told their terminal
-  // looks like is this deck's look, said to fieldd (deck-scheme.ts).
+  // looks like is this deck's look, said to fieldd (deck-scheme.ts); since
+  // TL-4c (2026-11-19) its sixteen colours with it.
   useSayDeckScheme(fieldd, terminalTheme, terminalPalette);
   const activeThemeName = deckThemeNameForMode(appearance, godviewTheme);
   /** Stable by construction: `sidebar` is a component TYPE, and a fresh arrow

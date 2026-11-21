@@ -1,9 +1,9 @@
-// THE TERMINAL'S OWN COLOURS (DESIGN.md §2.7 "The terminal's own colours"; TL-4c, 2026-11-19): the ground the deck
-// draws its panes on when no catalog theme is picked for Godview's mode, and the sixteen the device is to tell every
-// session it runs (item 590's second part tells them; until then they are data). The tokens are the authority
-// (`--vf-godview-{light,dark}-terminal-bg` and `-terminal-ansi-0…15`); this is their twin in code, held to tokens.css
-// by a row, because the deck's theme leaves the renderer as data and is never read back from a stylesheet. The ink,
-// the cursor and the selection are the reference's (ghosttea's own Daylight and Midnight), as DESIGN.md says.
+// THE TERMINAL'S OWN COLOURS (DESIGN.md §2.7 "The terminal's own colours"; TL-4c, 2026-11-19): the ground and the
+// sixteen the deck draws its panes in when no catalog theme is picked for Godview's mode, and the sixteen the device
+// tells every session it runs. The tokens are the authority (`--vf-godview-{light,dark}-terminal-bg` and
+// `-terminal-ansi-0…15`); this is their twin in code, held to tokens.css by a row, because the scheme leaves the
+// renderer as data for fieldd and is never read back from a stylesheet. The ink, the cursor and the selection are
+// the reference's (ghosttea's own Daylight and Midnight), as DESIGN.md says.
 
 export type TerminalLookMode = "light" | "dark";
 

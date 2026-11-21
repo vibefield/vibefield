@@ -302,10 +302,10 @@
   --vf-godview-dark-working-border: #ffffff;
   --vf-godview-dark-terminal-bg: #282c34;
   --vf-godview-dark-terminal-divider: #414650;
-  /* §2.7 "The terminal's own colours" (TL-4c, 2026-11-19): the sixteen the device is to tell every session when no
-     catalog theme is picked for Godview's mode (item 590's second part tells them; data until then). By day each is
-     solved for its contrast on the paper; by night ghostty's set with its three inks under 4.5:1 lifted. Their twin
-     in code is godview/terminal-look.ts, held to these by a row. */
+  /* §2.7 "The terminal's own colours" (TL-4c, 2026-11-19): the sixteen the deck draws and the device tells every
+     session when no catalog theme is picked for Godview's mode. By day each is solved for its contrast on the paper;
+     by night ghostty's set with its three inks under 4.5:1 lifted. Their twin in code is godview/terminal-look.ts,
+     held to these by a row. */
   --vf-godview-light-terminal-ansi-0: #1e2227;
   --vf-godview-light-terminal-ansi-1: #a9524d;
   --vf-godview-light-terminal-ansi-2: #38793c;

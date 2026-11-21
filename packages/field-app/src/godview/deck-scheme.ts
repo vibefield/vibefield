@@ -9,7 +9,9 @@ import type { TerminalTheme } from "./deck-theme";
 // program inside the pane does not see it; it asks its terminal what the ground
 // is and picks its dark or its light design from the answer. That answer is the
 // session's, so it is fieldd's to give, and the deck is what tells fieldd: the
-// ground, ink and cursor of the look it draws its panes in.
+// ground, ink and cursor of the look it draws its panes in, and since TL-4c
+// (2026-11-19) its sixteen colours (DESIGN.md §2.7 "The terminal's own
+// colours"), which a pane draws because its session was told them.
 //
 // THE ONE CALLER. This module is the only place in the renderer that names
 // `terminal.scheme.set`, and the real deck is its only user. A preview of a
@@ -31,18 +33,26 @@ function hexOf(color: readonly [number, number, number, number]): string {
   return `#${channel(color[0])}${channel(color[1])}${channel(color[2])}`;
 }
 
-/** The scheme a pane theme stands for: its ground, ink and cursor as opaque
- * colours (a pane's alpha is the viewer's, never the session's). The palette
- * is empty until the terminal can be told one. */
+/** A palette colour as the scheme takes it: `#rrggbb`, lowercase. */
+const SCHEME_COLOR = /^#[0-9a-f]{6}$/;
+
+/** The scheme a pane look stands for: its theme's ground, ink and cursor as
+ * opaque colours (a pane's alpha is the viewer's, never the session's), and
+ * its palette (`godviewTerminalPalette`) by index. A palette colour that is
+ * not `#rrggbb` is left out, so that slot follows the terminal's
+ * configuration; at most the 256 slots a terminal has. PURE. */
 export function deckTerminalScheme(
   theme: Pick<TerminalTheme, "foreground" | "background" | "cursor">,
-  _palette: readonly string[],
+  palette: readonly string[],
 ): TerminalScheme {
   return {
     foreground: hexOf(theme.foreground),
     background: hexOf(theme.background),
     cursor: hexOf(theme.cursor),
-    palette: [],
+    palette: palette.slice(0, 256).flatMap((spelled, index) => {
+      const color = spelled.trim().toLowerCase();
+      return SCHEME_COLOR.test(color) ? [{ index, color }] : [];
+    }),
   };
 }
 
@@ -52,24 +62,26 @@ export interface DeckSchemeDoor {
 }
 
 /** Say the deck's scheme to fieldd: once the look has stood still for
- * `DECK_SCHEME_SETTLE_MS`, at mount and at every change of its ground, ink or
- * cursor. fieldd answers an unchanged scheme by telling nobody, so a re-mount
- * is silent. A refusal is fieldd's honest state and no sentence to a person,
- * but it is not invisible: it is logged (`sayScheme`). The deck says the
- * scheme again at its next change or mount, not when a lost connection
- * returns. */
+ * `DECK_SCHEME_SETTLE_MS`, at mount and at every change of its ground, ink,
+ * cursor or palette. The wait is on the scheme's TEXT, so a new theme or
+ * palette that stands for the same scheme (only the pane's alpha moved) is no
+ * change and says nothing. fieldd answers an unchanged scheme by telling
+ * nobody, so a re-mount is silent. A refusal is fieldd's honest state and no
+ * sentence to a person, but it is not invisible: it is logged (`sayScheme`).
+ * The deck says the scheme again at its next change or mount, not when a lost
+ * connection returns. */
 export function useSayDeckScheme(
   door: DeckSchemeDoor,
   theme: TerminalTheme,
-  _palette: readonly string[],
+  palette: readonly string[],
 ): void {
-  const { foreground, background, cursor } = deckTerminalScheme(theme, []);
+  const said = JSON.stringify(deckTerminalScheme(theme, palette));
   useEffect(() => {
     const timer = setTimeout(() => {
-      void sayScheme(door, { foreground, background, cursor, palette: [] });
+      void sayScheme(door, JSON.parse(said) as TerminalScheme);
     }, DECK_SCHEME_SETTLE_MS);
     return () => clearTimeout(timer);
-  }, [door, foreground, background, cursor]);
+  }, [door, said]);
 }
 
 /** The code of the refusal last logged, until a say succeeds. One deck to a

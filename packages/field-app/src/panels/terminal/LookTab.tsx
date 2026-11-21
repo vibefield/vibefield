@@ -344,7 +344,7 @@ export function LookTab({
         title="Program colors"
         scope="mac"
         when="after-save"
-        description="The sixteen colours programs paint with. The terminal service applies them to every session on this Mac, so every window shows the same ones — a window's theme can't carry them yet."
+        description="The sixteen colors programs paint with. Godview's look sets them for every session on this Mac; a color you set here or in your Ghostty file wins over it."
         action={
           device.kind === "ready" ? (
             <UiButton onClick={() => model.openThemes({ kind: "palette" })}>
@@ -361,7 +361,7 @@ export function LookTab({
                   ? "set in config.ghostty"
                   : model.paletteElsewhere.has(index)
                     ? "from your Ghostty file"
-                    : "Ghostty's default";
+                    : "Godview's look";
                 return (
                   <span
                     key={index}
@@ -371,7 +371,7 @@ export function LookTab({
                     <i style={{ background: color }} />
                     <span>
                       {index}
-                      {from !== "Ghostty's default" && <b title={from}>•</b>}
+                      {from !== "Godview's look" && <b title={from}>•</b>}
                     </span>
                   </span>
                 );
@@ -387,15 +387,16 @@ export function LookTab({
                   : ""}
               </span>
               {/* Dropping this Mac's lines leaves your Ghostty file's colours in
-                  force — the button says Ghostty's defaults only when that's
-                  what the click leaves. */}
+                  force — the button says Godview's colours only when that's
+                  what the click leaves (item 590, 2026-11-19: a slot nobody
+                  set is Godview's look, no longer Ghostty's default). */}
               <UiButton
                 disabled={model.managed.palette === null}
                 onClick={() => model.setManaged({ ...model.managed, palette: null })}
               >
                 {model.paletteElsewhere.size > 0
                   ? "Clear this Mac's colors"
-                  : "Use Ghostty's defaults"}
+                  : "Use Godview's colors"}
               </UiButton>
             </div>
           </>

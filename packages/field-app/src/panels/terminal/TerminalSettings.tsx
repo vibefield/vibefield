@@ -26,6 +26,7 @@ import {
   setDeckAppearance,
   useDeckAppearance,
 } from "../../godview/deck-appearance";
+import { godviewTerminalPalette } from "../../godview/deck-theme";
 import { useGodviewTheme } from "../../godview/godview-theme";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { labelCls } from "../settings-ui";
@@ -630,8 +631,11 @@ function unavailableFrom(error: unknown): DeviceState {
   };
 }
 
-function paletteFrom(snapshot: TerminalConfigSnapshot | null): string[] {
-  const palette = [...GHOSTTY_DEFAULT_PALETTE];
+/** The sixteen every session on this Mac draws (item 590, 2026-11-19): a slot a
+ * Ghostty file sets is the person's, and every other is Godview's look, the
+ * sixteen the deck tells for its mode now (`godviewTerminalPalette`). */
+function paletteFrom(snapshot: TerminalConfigSnapshot | null, look: readonly string[]): string[] {
+  const palette = GHOSTTY_DEFAULT_PALETTE.map((ghostty, index) => look[index] ?? ghostty);
   for (const entry of snapshot?.palette ?? []) {
     if (entry.index < 16) palette[entry.index] = entry.color;
   }
@@ -742,7 +746,11 @@ export function TerminalSettings({
     [saved, draft],
   );
   const shownSnapshot = device.kind === "ready" ? device.snapshot : null;
-  const palette = useMemo(() => paletteFrom(shownSnapshot), [shownSnapshot]);
+  const look = useMemo(
+    () => godviewTerminalPalette(appearance, godviewTheme),
+    [appearance, godviewTheme],
+  );
+  const palette = useMemo(() => paletteFrom(shownSnapshot, look), [shownSnapshot, look]);
   const paletteHere = useMemo(() => paletteIndicesSet(draft), [draft]);
   const paletteElsewhere = useMemo(() => {
     const set = new Set<number>();

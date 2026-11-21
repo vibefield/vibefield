@@ -136,12 +136,15 @@ export function godviewTerminalTheme(
 }
 
 /** The sixteen colours a session is told for this look (TL-4c, 2026-11-19; DESIGN.md §2.7 "The
- * terminal's own colours"). None yet: the deck tells a session no palette. PURE. */
+ * terminal's own colours"): a picked catalog theme's own, whole, or the deck's own for Godview's
+ * mode. By index, as each theme spells them; the scheme keeps only `#rrggbb`
+ * (`deckTerminalScheme`). PURE. */
 export function godviewTerminalPalette(
-  _appearance: DeckAppearance,
-  _godviewTheme: GodviewTheme = "light",
+  appearance: DeckAppearance,
+  godviewTheme: GodviewTheme = "light",
 ): readonly string[] {
-  return [];
+  const chosen = findDeckColorTheme(deckThemeNameForMode(appearance, godviewTheme));
+  return chosen !== undefined ? chosen.palette : GODVIEW_TERMINAL_LOOK[godviewTheme].palette;
 }
 
 /** The viewer's shader, as the `effects` prop — or `undefined`, which means the

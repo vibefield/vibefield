@@ -30,18 +30,40 @@ function rgbOf(color: string): SchemeRgb {
   return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
 }
 
+/** No slot a person set: what a caller with no configuration to hold to passes. */
+const NO_SLOTS: ReadonlySet<number> = new Set();
+
 /** The scheme as a session is told it: the three colours, and the palette slot
  * by slot in index order, so two schemes that tell the same thing tell the
  * same bytes. A scheme that names no slot says an EMPTY palette, never none:
  * on the floor that leaves every slot to the configuration, and it takes back
- * the slots an earlier scheme named. */
-export function schemeColors(scheme: TerminalScheme): SchemeColors {
+ * the slots an earlier scheme named.
+ *
+ * Item 590 (2026-11-19): `theirs` are the slots the session's own
+ * configuration sets (a `palette =` line in a Ghostty file). They are left
+ * out, so a colour a person set stays theirs and the scheme fills the rest. */
+export function schemeColors(
+  scheme: TerminalScheme,
+  theirs: ReadonlySet<number> = NO_SLOTS,
+): SchemeColors {
   return {
     ...schemeColorsWithoutPalette(scheme),
     palette: [...scheme.palette]
+      .filter((entry) => !theirs.has(entry.index))
       .sort((left, right) => left.index - right.index)
       .map((entry): [number, SchemeRgb] => [entry.index, rgbOf(entry.color)]),
   };
+}
+
+/** The slots a configuration sets, from the snapshot a cell reports: the
+ * renderer's palette, or the terminal's where an older floor sends only that,
+ * as `projectConfigSnapshot` reads them. Item 590 (2026-11-19). */
+export function configuredSlots(snapshot: {
+  readonly renderer: { readonly palette?: readonly { readonly index: number }[] };
+  readonly terminal: { readonly palette?: readonly { readonly index: number }[] };
+}): ReadonlySet<number> {
+  const palette = snapshot.renderer.palette ?? snapshot.terminal.palette ?? [];
+  return new Set(palette.map((entry) => entry.index));
 }
 
 /** The three colours and no palette: all a floor before ghosttea protocol 1.20

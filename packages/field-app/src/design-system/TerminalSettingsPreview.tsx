@@ -1,5 +1,6 @@
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { DEFAULT_DECK_APPEARANCE, type DeckAppearance } from "../godview/deck-appearance";
+import { godviewTerminalPalette } from "../godview/deck-theme";
 import type { SettingsSubpage } from "../panels/SettingsDialog";
 import {
   GHOSTTY_DEFAULT_PALETTE,
@@ -96,7 +97,9 @@ export function TerminalSettingsPreview({
           blockMalformed: managedBlockState(draft) === "malformed",
         };
   const snapshot = device.kind === "ready" ? device.snapshot : null;
-  const palette = [...GHOSTTY_DEFAULT_PALETTE];
+  // as the page fills them (item 590): a slot nobody set is Godview's look for the mode shown
+  const look = godviewTerminalPalette(appearance, previewMode);
+  const palette = GHOSTTY_DEFAULT_PALETTE.map((ghostty, index) => look[index] ?? ghostty);
   for (const entry of snapshot?.palette ?? [])
     if (entry.index < 16) palette[entry.index] = entry.color;
   const paletteHere = paletteIndicesSet(draft);

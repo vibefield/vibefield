@@ -22,24 +22,43 @@ import {
 type Tone = "All" | "Dark" | "Light";
 const TONES: readonly Tone[] = ["All", "Dark", "Light"];
 
+/** Whether a slot is one the person set, in config.ghostty or their own Ghostty file. */
+function setByThem(model: TerminalPageModel, index: number): boolean {
+  return model.paletteHere.has(index) || model.paletteElsewhere.has(index);
+}
+
+/** A theme's sixteen as every session on this Mac draws them (item 590, 2026-11-19): the theme's,
+ * but for a slot the person set, which is theirs (`model.palette` holds their colour there).
+ * PURE. */
+function withTheirs(palette: readonly string[], model: TerminalPageModel): string[] {
+  return palette.map((color, index) =>
+    setByThem(model, index) ? (model.palette[index] ?? color) : color,
+  );
+}
+
 export function themeBrowserTitle(target: ThemeBrowserTarget): string {
   return target.kind === "palette"
     ? "Program colors"
     : `${target.mode === "dark" ? "Dark" : "Light"} mode theme`;
 }
 
-/** The line under the browser's stage: what the theme shown brings to the sixteen. PURE. */
+/** The line under the browser's stage (item 590, 2026-11-19; DESIGN.md §2.7 "The terminal's own
+ * colours"): what the theme shown brings to the sixteen, and what copying does. PURE. */
 export function themeBrowserLine(
-  _forPalette: boolean,
+  forPalette: boolean,
   shown: Pick<PreviewTheme, "catalogName" | "palette">,
   onThisMac: boolean,
 ): string {
+  if (forPalette) return "Copying sets all sixteen on this Mac, in both modes.";
+  if (shown.catalogName === null) {
+    return "Godview's own colors for this mode. A color you set in Program colors or your Ghostty file wins over them.";
+  }
   if (shown.palette === null) {
-    return "Godview's themes don't bring program colors, so they show this Mac's.";
+    return "This theme doesn't bring all sixteen program colors, so it can't be copied.";
   }
   return onThisMac
-    ? "This Mac already uses these colors, so the preview is the whole theme."
-    : "The preview shows this Mac's program colors: a window's theme can't carry its own yet. Copy them to see the whole theme, in every window.";
+    ? "This Mac already uses these colors, in both modes."
+    : "Its sixteen colors come with it while Godview is in this mode; a color you set in Program colors or your Ghostty file still wins. Copy them to use them in both modes.";
 }
 
 export function ThemeBrowser({
@@ -76,9 +95,12 @@ export function ThemeBrowser({
   ];
   const shown =
     rows.find((theme) => theme.name === hover) ?? (forPalette ? rows[0] : chosen) ?? chosen;
-  const macPalette = model.palette.join(",");
+  // This Mac's Ghostty files set all sixteen, and to this theme's: since item 590 a slot nobody
+  // set is Godview's look, so `model.palette` alone is not what the files hold.
   const macHas = (theme: PreviewTheme): boolean =>
-    theme.palette !== null && theme.palette.join(",") === macPalette;
+    theme.palette?.every(
+      (color, index) => setByThem(model, index) && model.palette[index] === color,
+    ) === true;
   const isChosen = (theme: PreviewTheme): boolean =>
     forPalette ? macHas(theme) : theme.name === chosen.name;
 
@@ -205,9 +227,14 @@ export function ThemeBrowser({
                     style={{ background: theme.background }}
                     aria-hidden="true"
                   >
-                    {(theme.palette ?? model.palette).slice(1, 7).map((color, index) => (
-                      <i key={index} style={{ background: color }} />
-                    ))}
+                    {(forPalette
+                      ? (theme.palette ?? model.palette)
+                      : withTheirs(theme.palette ?? model.palette, model)
+                    )
+                      .slice(1, 7)
+                      .map((color, index) => (
+                        <i key={index} style={{ background: color }} />
+                      ))}
                   </span>
                   <span className="vf-ts-theme-name">{theme.name}</span>
                   {isChosen(theme) && <span className="vf-ts-theme-check" aria-hidden="true" />}
@@ -227,7 +254,11 @@ export function ThemeBrowser({
             variant="deck"
             mode={mode}
             theme={forPalette ? chosen : shown}
-            palette={forPalette && ownPalette !== null ? ownPalette : model.palette}
+            palette={
+              forPalette && ownPalette !== null
+                ? ownPalette
+                : withTheirs(ownPalette ?? model.palette, model)
+            }
             appearance={model.appearance}
           />
           <div className="vf-ts-browser-meta">
@@ -250,11 +281,14 @@ export function ThemeBrowser({
               {ownPalette === null ? "Program colors · this Mac's" : "Its program colors"}
             </div>
             <div className="vf-ts-browser-swatches">
-              {(ownPalette ?? model.palette).map((color, index) => (
+              {(forPalette && ownPalette !== null
+                ? ownPalette
+                : withTheirs(ownPalette ?? model.palette, model)
+              ).map((color, index) => (
                 <i key={index} title={`${index} · ${color}`} style={{ background: color }} />
               ))}
             </div>
-            {!forPalette && ownPalette !== null && (
+            {!forPalette && ownPalette !== null && shown.catalogName !== null && (
               <UiButton
                 disabled={macHas(shown)}
                 onClick={() =>

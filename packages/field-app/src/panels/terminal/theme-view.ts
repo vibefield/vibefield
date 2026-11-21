@@ -25,7 +25,8 @@ export interface PreviewTheme {
   readonly selection: string;
   readonly selectionAlpha: number;
   readonly selectionForeground: string;
-  /** the theme's own sixteen, or null for Godview's (which bring none) */
+  /** the theme's own sixteen, Godview's own for its built-ins (item 590, 2026-11-19), or null for a
+   * catalog theme that brings fewer */
   readonly palette: readonly string[] | null;
 }
 
@@ -68,7 +69,7 @@ function builtin(mode: PreviewMode): PreviewTheme {
     selection: hexOf(theme.selection),
     selectionAlpha: theme.selection[3],
     selectionForeground: hexOf(theme.selectionForeground),
-    palette: null,
+    palette: GODVIEW_TERMINAL_LOOK[mode].palette,
   };
 }
 

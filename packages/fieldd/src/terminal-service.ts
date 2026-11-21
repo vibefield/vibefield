@@ -94,6 +94,7 @@ import {
   TerminalGrantMinter,
 } from "./terminal-grants";
 import {
+  configuredSlots,
   sameScheme,
   schemeColors,
   schemeColorsWithoutPalette,
@@ -697,6 +698,9 @@ export class TerminalService {
   private readonly schemeToldAt = new Map<string, number>();
   /** TL-4a — per cell, the tell in flight; the next one waits for it. */
   private readonly schemeTells = new Map<string, Promise<unknown>>();
+  /** Item 590 (2026-11-19) — per cell, the palette slots its own loaded
+   * configuration sets, as its births read them (`slotsFor`). */
+  private readonly cellSlots = new Map<string, Promise<ReadonlySet<number>>>();
   private readonly releases: TerminalReleases;
   private readonly creation = new AsyncLocalStorage<string>();
   private readonly bornCreationIds = new Map<string, string>();
@@ -1963,11 +1967,17 @@ export class TerminalService {
       // whose first act is to ask can be answered from the configuration one
       // step before. That tell is SENT and never waited for: a floor that
       // takes it and does not answer costs the birth nothing.
+      // Item 590 (2026-11-19) — and never a slot the cell's own configuration
+      // sets: those are read first (once per cell; `slotsFor`), and a cell
+      // whose configuration cannot be read gives its birth no colours at the
+      // create, so it is told behind it like an older floor's.
+      const reads = this.scheme.get() !== null && floorReadsSessionColors(client);
+      const theirs = reads ? await this.slotsFor(cell.key, client).catch(() => null) : null;
       const scheme = this.scheme.get();
-      const bornWith = scheme !== null && floorReadsSessionColors(client) ? scheme : null;
+      const bornWith = scheme !== null && theirs !== null ? scheme : null;
       const summary = await client.createSession({
         ...withSchemeHint(options, scheme),
-        ...(bornWith === null ? {} : { colors: schemeColors(bornWith) }),
+        ...(bornWith === null || theirs === null ? {} : { colors: schemeColors(bornWith, theirs) }),
         ...(creationId === undefined ? {} : { creationId }),
       });
       if (cell.key !== LEGACY_CELL_KEY) this.bornIn.set(summary.id, cell.key);
@@ -1976,7 +1986,7 @@ export class TerminalService {
       // scheme is kept only when it differs from the one before it
       // (`applyScheme`), and the store then holds the new object: one kept
       // while the create was in flight is seen here.
-      if (this.scheme.get() !== bornWith) void this.tellBorn(client, summary.id);
+      if (this.scheme.get() !== bornWith) void this.tellBorn(client, summary.id, cell.key);
       // The routed renderer needs the engine's real decimal handle before it
       // can mount. Carry the summary from the birth that already has it;
       // waiting for observed inventory here would recreate GT-1's race.
@@ -2333,6 +2343,14 @@ export class TerminalService {
     try {
       const client = dialed ?? (await this.connectedClient(cell));
       const live = (await client.listSessions()).filter((session) => !session.exited);
+      // item 590 (2026-11-19) — the slots this cell's own configuration sets,
+      // read now, as the scheme is: no tell names one, and a configuration
+      // that cannot be read is the cell's failure (`unavailable`, behind),
+      // never a palette told without it
+      const theirs =
+        live.length > 0 && floorReadsSessionColors(client)
+          ? await this.readSlots(cell.key, client)
+          : NO_CONFIGURED_SLOTS;
       // read at the moment of sending, never before the list: whatever was
       // kept while this waited is what goes out
       const scheme = this.scheme.get();
@@ -2342,7 +2360,7 @@ export class TerminalService {
       const told = await Promise.all(
         live.map(async (session) => {
           try {
-            await this.tellSession(client, session.id, scheme);
+            await this.tellSession(client, session.id, scheme, theirs);
             return true;
           } catch (error) {
             // the floor's own answer about this ONE session; a tell nothing
@@ -2412,15 +2430,19 @@ export class TerminalService {
    * own at the create, in `birth`), through the ghosttea client's `setColors`:
    * the scheme whole to a floor that reads a palette, the three colours alone
    * to one that does not (TL-4b, 2026-11-18). The bytes come from the parsed
-   * scheme. */
+   * scheme. Item 590 (2026-11-19): never a slot in `theirs`, the slots the
+   * session's own configuration sets. */
   private async tellSession(
     client: GhostteaAutomationClient,
     sessionId: string,
     scheme: TerminalScheme,
+    theirs: ReadonlySet<number>,
   ): Promise<void> {
     await client.setColors(
       sessionId,
-      floorReadsSessionColors(client) ? schemeColors(scheme) : schemeColorsWithoutPalette(scheme),
+      floorReadsSessionColors(client)
+        ? schemeColors(scheme, theirs)
+        : schemeColorsWithoutPalette(scheme),
     );
   }
 
@@ -2429,13 +2451,21 @@ export class TerminalService {
    * create was in flight (`birth`). Its birth stands whatever happens here and
    * does not wait for it (`birth` calls this unawaited): a session that could
    * not be told is a logged fact, never a failed or a late create. Never
-   * rejects. The request is sent before the first await, so it rides the
+   * rejects. The request is sent as soon as the cell's configured slots are
+   * known, which its birth has already read (`slotsFor`), so it rides the
    * cell's connection right behind the create. */
-  private async tellBorn(client: GhostteaAutomationClient, sessionId: string): Promise<void> {
+  private async tellBorn(
+    client: GhostteaAutomationClient,
+    sessionId: string,
+    key: string,
+  ): Promise<void> {
     const scheme = this.scheme.get();
     if (scheme === null) return;
     try {
-      await this.tellSession(client, sessionId, scheme);
+      const theirs = floorReadsSessionColors(client)
+        ? await this.slotsFor(key, client)
+        : NO_CONFIGURED_SLOTS;
+      await this.tellSession(client, sessionId, this.scheme.get() ?? scheme, theirs);
     } catch (error) {
       this.logger.warn(
         "fieldd.terminal.scheme_birth_untold",
@@ -2443,6 +2473,27 @@ export class TerminalService {
         { sessionId, error: errorMessage(error) },
       );
     }
+  }
+
+  /** Item 590 (2026-11-19) — the palette slots a cell's own loaded
+   * configuration sets, as its births use them: read once per cell and held,
+   * replaced by every reload the cell announces and by every tell's own read
+   * (`readSlots`). Each cell answers for itself, because each keeps the
+   * configuration it loaded (`readConfig`'s S3 debt: a write reloads one
+   * cell). */
+  private slotsFor(key: string, client: GhostteaAutomationClient): Promise<ReadonlySet<number>> {
+    return this.cellSlots.get(key) ?? this.readSlots(key, client);
+  }
+
+  /** Read a cell's configured slots now, and hold the answer for its births.
+   * A read that fails is not held, so the next birth reads again. */
+  private readSlots(key: string, client: GhostteaAutomationClient): Promise<ReadonlySet<number>> {
+    const read = client.getConfig().then(configuredSlots);
+    this.cellSlots.set(key, read);
+    read.catch(() => {
+      if (this.cellSlots.get(key) === read) this.cellSlots.delete(key);
+    });
+    return read;
   }
 
   /** GT-3: read the app-owned `config.ghostty` overlay.
@@ -3403,7 +3454,14 @@ export class TerminalService {
     // moved them, until the cell is told again; the contract's "a slot it
     // does not name follows the terminal's configuration" holds because of
     // this handler.
-    client.on("config-changed", () => {
+    //
+    // Item 590 (2026-11-19) — the announcement carries the reloaded
+    // configuration whole; the slots it sets are held for this cell's births
+    // BEFORE the re-tell, which reads them again as it sends: a slot a person
+    // has just set leaves what the cell's sessions are told, and one they
+    // cleared comes back.
+    client.on("config-changed", (event: { readonly config: GhostteaConfigSnapshot }) => {
+      this.cellSlots.set(key, Promise.resolve(configuredSlots(event.config)));
       void this.tellCell(cell, client);
     });
     this.clients.set(key, { client, token: endpoints.authToken });
@@ -3420,6 +3478,8 @@ export class TerminalService {
     if (entry === undefined) return;
     entry.client.dispose();
     this.clients.delete(key);
+    // item 590 — a cell reached again may have loaded another configuration
+    this.cellSlots.delete(key);
   }
 
   /** GT-5b per cell (TC-S3). A control client is worth exactly as long as the
@@ -3671,6 +3731,10 @@ interface SchemeRefusal {
 function floorReadsSessionColors(client: GhostteaAutomationClient): boolean {
   return (client.serverProtocolMinor ?? 0) >= SESSION_COLORS_PROTOCOL_MINOR;
 }
+
+/** Item 590 (2026-11-19) — no slot to hold to: a floor that takes no palette,
+ * or a cell with no session to tell. */
+const NO_CONFIGURED_SLOTS: ReadonlySet<number> = new Set();
 
 /** The floor's OWN spawn refusal, anchored (GT-5b). The message is byte-
  * identical across the G17 landing (`ghosttea-0.10.0 session.rs:1281` keeps
