@@ -543,6 +543,24 @@ export interface MarketDriver {
 const POPUP = '.vf-plugins-pop[role="dialog"]';
 const POPUP_OPEN = `document.querySelector('${POPUP}') !== null`;
 const POPUP_SHUT = `document.querySelector('${POPUP}') === null`;
+const PALETTE_OPEN = `document.querySelector(".vf-palette-layer[data-visible]") !== null`;
+const ME_OPEN = `document.querySelector(".vf-me[data-open]") !== null`;
+/** Item 646 (2026-11-21): what the window was when a row threw, read once in its catch: the desk's mount and
+ * status, which of the popup, the palette and the Me menu stand, and the focused element by its tag and first
+ * class. Facts of the chrome only, never an object's text. */
+const WINDOW_FACTS = `(() => {
+  const d = globalThis.__vfDesk;
+  const a = document.activeElement;
+  const first = a === null ? "" : String(a.className ?? "").split(" ")[0];
+  return JSON.stringify({
+    mount: d?.mount ?? null,
+    desk: d?.status?.().state ?? null,
+    popup: ${POPUP_OPEN},
+    palette: ${PALETTE_OPEN},
+    me: ${ME_OPEN},
+    focus: a === null ? null : a.tagName + (first === "" ? "" : "." + first),
+  });
+})()`;
 /** "Reading the plugin list…" (§9), the foot while a read runs */
 const READING = "Reading the plugin list…";
 /** The read on open done: the foot says it no more. */
@@ -719,7 +737,7 @@ export async function marketRunRows(
   const mount = (): Promise<number> => js("globalThis.__vfDesk?.mount ?? -1");
   const remounted = (label: string, from: number): Promise<void> =>
     until(
-      label,
+      `${label} (the mount from ${from})`,
       30_000,
       `(globalThis.__vfDesk?.mount ?? -1) > ${from} && globalThis.__vfDesk.status().state === "ready"`,
     );
@@ -1077,6 +1095,37 @@ export async function marketRunRows(
     },
   };
 
+  /** Item 646 (2026-11-21) — after a row threw: the popup folded (its Esc answers the nearest first, so up to
+   * three), the palette and the Me menu shut, and after the listed run's DOOR the clock it installed taken away
+   * (DOOR throws before its own uninstall, so INSTALL found "Installed"). What it did, in words. */
+  const tidy = async (name: string): Promise<string[]> => {
+    const did: string[] = [];
+    for (let i = 0; i < 3 && !(await js<boolean>(POPUP_SHUT)); i += 1) {
+      await key("Escape");
+      did.push("the popup: Esc");
+    }
+    if (await js<boolean>(PALETTE_OPEN)) {
+      await key("Escape");
+      did.push("the palette: Esc");
+    }
+    if (await js<boolean>(ME_OPEN)) {
+      await key("Escape");
+      did.push("the Me menu: Esc");
+    }
+    if (name === "DOOR" && fixture.run === "listed") {
+      if ((await plugins()).plugins.some((r) => r.id === installed.id)) {
+        await d.request("plugins.uninstall", { id: installed.id });
+        const gone = await goneUntil(installed.id);
+        did.push(
+          gone.plugins.some((r) => r.id === installed.id)
+            ? `${installed.id} still listed after its uninstall`
+            : `${installed.id} uninstalled`,
+        );
+      }
+    }
+    return did;
+  };
+
   for (const row of d.rows) {
     const run = rows[row.name];
     const before = problems.length;
@@ -1086,9 +1135,20 @@ export async function marketRunRows(
     } catch (error) {
       const why = error instanceof Error ? error.message : String(error);
       const waits = row.needs !== null ? ` (it waits on ${row.needs})` : "";
-      problems.push(`${row.name}: ${why}${waits}`);
-      // a red row must not leave the popup over the next row's start
-      if (!(await js<boolean>(POPUP_SHUT).catch(() => true))) await key("Escape");
+      const seen = await js<string>(WINDOW_FACTS).catch(() => "unread");
+      const listed = await plugins()
+        .then((s) =>
+          JSON.stringify(s.plugins.map((r) => `${r.id}@${r.version}${r.enabled ? "" : " off"}`)),
+        )
+        .catch(() => "unread");
+      problems.push(`${row.name}: ${why}${waits} (window ${seen}; fieldd lists ${listed})`);
+      // item 646 (2026-11-21): a red row runs its own tidy, so the next row starts where it would have and a
+      // knock-on never reads as a second red; what the tidy did is said, never counted
+      const did = await tidy(row.name).catch((e: unknown) => [
+        `the tidy failed: ${e instanceof Error ? e.message : String(e)}`,
+      ]);
+      if (did.length > 0)
+        d.say(`SMOKE_MARKET_TIDY ${fixture.run} ${row.name} ${JSON.stringify(did)}`);
     }
     const said = { ok: problems.length === before, problems: problems.slice(before) };
     d.say(
