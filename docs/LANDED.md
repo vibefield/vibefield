@@ -66544,3 +66544,275 @@ James's own Xcode's alike. The landing's kit run on the kit lane's standing Deri
 exit 65 with 0 rows: `TailscaleKitBackend.swift:62` "extra argument 'clientLogUpload'" and `:362` "no member
 'clientLogUpload'". Its log says why: `TailscaleKit.h` "has been modified since the module file … was built" (8,297 →
 9,520 B), so it compiled against a stale explicit precompiled module. Row K on a new DerivedData was green.
+
+## Item 650 — smoke:canvas's MORE judges Discover's words once the popup's read has answered (M509)
+
+(2026-11-21; item 650; one commit, one path, +8 −0. Cut on main `c57d31318a75` as `63d80567b1bd` (tree `8461f2f4a46c`)
+on branch `mk/650-on-c57d31318a75`. On main it is `a49ba92bf` "650: smoke:canvas's MORE judges Discover's words once the
+popup's read has answered". Every other id here is a run's.)
+
+**The red it comes from.** smoke:canvas at `d070b7449f89` (assembly 22): "MORE: with no plugin list Discover said
+"Reading the plugin list…"". It came from PRESS's opening of Plugins, the first in the window. It is new: before item
+649 the row never reached the body's words.
+
+**The cause.** Each opening's first read starts as asking (`Plugins.tsx`), and Discover's body says "Reading the plugin
+list…" until fieldd answers (`plugins-model.ts`, `shelfState`). `opened()` read the body once, on the first frame the
+popup stood. The product is right; the smoke read too soon.
+
+**What landed.** In `packages/electron-shell/src/testing/smoke-more.ts`: `opened()` waits up to 10 s for Discover's
+body to leave "Reading the plugin list…", then reads and judges it. A read that never answers is its own named red,
+and the popup and the board are shut behind it as before. No product source changes.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the one file: format by
+  stdin equal to the file and `check --error-on-warnings` exit 0, as main's own file at `d070b7449f89` is (the
+  control). The patch applied to `d070b7449f89` in a scratch index first.
+- The cut (17:11:12Z → 17:11:15Z): the patch laid by `git apply` in a standing lane, detached at main; the one path held
+  to the mended file's sum as laid and as committed; its added lines swept (0); through the pre-commit hook (the
+  committed rows are the lock's); then one create-only ref. Read again at source: parent `c57d31318a75`, the one path,
+  the file's sum and the message's.
+- The train's verify and kit: `pnpm verify` whole at `bbf9e6f42` (assembly 23's top) on the test Mac, run `v-a23close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  `@vibefield/screenshot` 41 of 41), and the kit ALL there, run `kit-a23close` (`xcodebuild` exit 0, 3,175 rows: 3,172
+  passed and 3 skipped; none of push 157's 3,175 rows lost or moved, and none new).
+
+**Not covered, and owed.**
+- Not run: a typecheck, electron-shell's tests and smoke:canvas itself; the assembly's verify runs the first two, and
+  smoke:canvas reads the change at its next run.
+- MORE's TAB part stays red until the pill takes ↵ (item 653, held, or the class fix chosen in its place).
+
+**At the gate (2026-11-21).** smoke:canvas at the land's head `bbf9e6f42`, alone at load 3.7, 836 s: RED on the ↵
+alone, "MORE: Plugins open from the pill's ↵ did not happen within 5000ms". The click opened Plugins, and Discover's
+words were read once the list had answered ("Nothing to discover yet…"), so this item's wait holds and its own red is
+gone. The ↵ red stands, owed to item 653.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 651 — smoke:market reads a remount by the desk's generation and mount, and SETUP waits for it (M510)
+
+(2026-11-21; item 651; one commit, one path, +27 −7. Cut on main `c57d31318a75` as `4625c8719648` (tree `248850f26455`)
+on branch `mk/651-on-c57d31318a75`. On main it is `074c1cf5c` "651: smoke:market reads a remount by the desk's
+generation and mount, and SETUP waits for it". Every other id here is a run's.)
+
+**The reds it comes from.** smoke:market at `d070b7449f89` (assembly 22), with item 646's facts.
+- The listed run's DOOR: "the desk remounted with the clock's kind (the mount from 0) did not happen within 30000ms",
+  the window's desk at mount 0 and ready, fieldd listing the clock. Red in every run since the gate that found it.
+- The update run's COUNT: "Plugins open did not happen within 5000ms", the palette open, the focus on the body.
+
+**The causes.**
+- DOOR, read and borne out by the run: a plugin new to the window's realm reopens the board on a new engine (DK-9's
+  GENERATION move, `window-kinds.ts`), and the new stage's desk counts its mounts from 0 again (`desk-door.ts`: the
+  door's `mount` is the remounts within one generation; `CanvasStage.tsx`). The wait asked for a mount above 0, which
+  never came. The run's mounts fit only this: 0 after DOOR, 1 after the tidy's uninstall (a layer remount), 2 after
+  INSTALL (RISE read 2), 3 after REMOVE (COMMUNITY read 3). INSTALL's own remount wait passed.
+- COUNT, likely: SETUP installs the clock through fieldd's doors, the same GENERATION move, and waited for nothing, so
+  COUNT's press on the palette's row came while the board reopened. UPDATE presses the same row later and passes.
+
+**What landed.** In `packages/electron-shell/src/testing/smoke-market.ts`:
+- A remount is the door's generation or its mount moved from what was read first, with the desk ready. The wait's
+  words name both, and the window's facts at a throw add the generation.
+- SETUP reads the desk before its install and waits for the remount after it, so COUNT starts on a desk that stands.
+- No product source changes, and no row's judge moves but the remount's.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the one file: format by
+  stdin equal to the file and `check --error-on-warnings` exit 0, as main's own file at `d070b7449f89` is (the
+  control). The patch applied to `d070b7449f89` in a scratch index first.
+- The cut (17:11:30Z → 17:11:32Z): the patch laid by `git apply` in a standing lane, detached at main; the one path held
+  to the mended file's sum as laid and as committed; its added lines swept (0); through the pre-commit hook (the
+  committed rows are the lock's); then one create-only ref. Read again at source: parent `c57d31318a75`, the one path,
+  the file's sum and the message's.
+- The train's verify and kit: `pnpm verify` whole at `bbf9e6f42` (assembly 23's top) on the test Mac, run `v-a23close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  `@vibefield/screenshot` 41 of 41), and the kit ALL there, run `kit-a23close` (`xcodebuild` exit 0, 3,175 rows: 3,172
+  passed and 3 skipped; none of push 157's 3,175 rows lost or moved, and none new).
+
+**Not covered, and owed.**
+- Not run: a typecheck, electron-shell's tests and smoke:market itself; the assembly's verify runs the first two, and
+  smoke:market reads the change at its next run. COUNT's cause is likely, not proved, until that run.
+- Unread: a renderer replace (DK-9's RENDERER move) could boot a door whose generation and mount equal the old one's.
+  No market row's remount wait is that move today; UPDATE reads its own document's replacement.
+
+**At the gate (2026-11-21).** smoke:market at the land's head `bbf9e6f42`, alone at load 3.4: GREEN, exit 0 in 49 s.
+Every run (listed, tampered, forged, offline and update) had 0 problems, so DOOR and COUNT, red in assembly 22's run,
+passed.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 652 — smoke:market's RISE and COMMUNITY say more of what they met when they go red (M511)
+
+(2026-11-21; item 652; one commit, one path, +40 −1. Cut on item 651's commit `4625c8719648` as `17f7cbb63903` (tree
+`4f61a0133649`) on branch `mk/652-on-4625c8719648`. On main it is `2884f9329` "652: smoke:market's RISE and COMMUNITY
+say more of what they met when they go red". Every other id here is a run's.)
+
+**The reds it comes from.** smoke:market at `d070b7449f89` (assembly 22), the listed run.
+- RISE: "Desk clock's row in Installed did not happen within 10000ms", the popup standing, the focus on a switch
+  segment (a class-less button, as the segments are drawn). Green in the first gate run at the same code, red in the
+  rerun and now: intermittent. Leads: the window's snapshot without the reinstalled clock, or a remount racing the list.
+- COMMUNITY: "Turn on community plugins? did not happen within 5000ms", the focus on the tile's switch. Green in both
+  earlier runs, before INSTALL ran its popup install. Leads: a switch that took no press (not read, fieldd away, a
+  request out), or one turned on without asking (the statement read as shown here). The clock is not a community set,
+  so its install marks nothing.
+
+**What landed.** In `packages/electron-shell/src/testing/smoke-market.ts`, the rows' runner's catch alone:
+- A red RISE adds the popup's checked tab, whether a page stands, and the plugins Installed lists, by their titles.
+- A red COMMUNITY adds the switch's state (`aria-checked`, and whether it takes a press) and fieldd's answer to
+  `plugins.community.statement.get` (whether this desktop has shown the statement), "unread" where it does not answer.
+- It says, and mends nothing. No product source changes, and no row's judge moves.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the one file: format by
+  stdin equal to the file and `check --error-on-warnings` exit 0, as the file it is laid on (item 651's)
+  is. The patch applied over item 651's patch on `d070b7449f89` in a scratch index first.
+- The cut (17:11:53Z → 17:11:56Z): the patch laid by `git apply` in a standing lane, detached at item 651's commit; the
+  one path held to the mended file's sum as laid and as committed; its added lines swept (0); through the pre-commit
+  hook (the committed rows are the lock's); then one create-only ref. Read again at source: parent `4625c8719648`, the
+  one path, the file's sum and the message's.
+- The train's verify and kit: `pnpm verify` whole at `bbf9e6f42` (assembly 23's top) on the test Mac, run `v-a23close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  `@vibefield/screenshot` 41 of 41), and the kit ALL there, run `kit-a23close` (`xcodebuild` exit 0, 3,175 rows: 3,172
+  passed and 3 skipped; none of push 157's 3,175 rows lost or moved, and none new).
+
+**Not covered, and owed.**
+- Not run: a typecheck, electron-shell's tests and smoke:market itself; the assembly's verify runs the first two, and
+  smoke:market reads the change at its next run. RISE's and COMMUNITY's reds stand until that run's facts are read.
+
+**At the gate (2026-11-21).** The same smoke:market run was green: RISE and COMMUNITY threw nothing, so the facts this
+item adds were not printed. They are still unread on a red.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 654 — the stderr row waits for the helper's exit before it reads the diagnostics, as item 188's did (M512)
+
+(2026-11-21; item 654; one commit, one path, +6 −0. Cut on main `c57d31318a75` as `53a0c14d4e6b` (tree `913c38859040`)
+on branch `mk/654-on-c57d31318a75`. On main it is `b8f586147` "654: the stderr row waits for the helper's exit before it
+reads the diagnostics, as item 188's did". Every other id here is a run's.)
+
+**The red it comes from.** GitHub's verify for main `ca6745156b5f` (push 156, run 44902766492): one test of 39,
+`@vibefield/screenshot` `test/tool.test.ts:117`, "forwards stderr as diagnostics, one line each, never as protocol":
+"expected [] to include 'monitor 1 DISPLAY1 1920x1080'". Nothing in assemblies 20–22 touches `packages/screenshot`.
+
+**The cause.** Item 188's race (`48a63a7f1`, `e04c2d83e`), in a row its mend did not reach.
+- The fake helper's `stderr-then-cancel` (`test/helpers.ts`) writes two stderr lines, then ready and cancel on stdout,
+  then exits. Those are two pipes, and the parent is promised no order between them.
+- `capture()` resolves inside `settle`, on stdout's verdict (`src/tool.ts`, the cancel case). The row read `events`
+  at once, before stderr's `data` had been heard: no diagnostic at all, hence `[]` and not a partial list.
+- The product drops nothing. Its stderr handler makes every non-empty line a diagnostic, and it reports
+  `screenshot.helper.exited` from the child's `'close'`. Node fires that only once the process has ended and its stdio
+  streams have closed, so every diagnostic comes before it. The tool owes no other order: a capture is answered by its
+  verdict and must not wait on stderr (item 188's ruling, in `e04c2d83e`'s message).
+
+**What landed.** In `packages/screenshot/test/tool.test.ts`, the one row: it waits for the `screenshot.helper.exited`
+lifecycle event (`vi.waitFor`, bounded at 3 s), as item 188's happy path does, before it reads the diagnostics. An
+ordering, not a sleep. Every assertion is unchanged. No product source changes.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the one file: format by
+  stdin equal to the file and `check --error-on-warnings` exit 0, as main's own file at `c57d31318a75` is (the
+  control). The patch applied to `c57d31318a75` in a scratch index first.
+- The cut (17:18:28Z → 17:18:31Z): the patch laid by `git apply` in a standing lane, detached at main; the one path held
+  to the mended file's sum as laid and as committed; its added lines swept (0); through the pre-commit hook (the
+  committed rows are the lock's); then one create-only ref. Read again at source: parent `c57d31318a75`, the one path,
+  the file's sum and the message's.
+- The train's verify and kit: `pnpm verify` whole at `bbf9e6f42` (assembly 23's top) on the test Mac, run `v-a23close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  `@vibefield/screenshot` 41 of 41), and the kit ALL there, run `kit-a23close` (`xcodebuild` exit 0, 3,175 rows: 3,172
+  passed and 3 skipped; none of push 157's 3,175 rows lost or moved, and none new).
+
+**Not covered, and owed.**
+- Not run: the package's tests and its typecheck; the assembly's verify runs both. The race is CI's alone so far: it
+  was not made red here (item 188's red commit forced its order with a late-stderr fake mode; this row has none).
+- The same class, unmended: `test/service.test.ts:51` reads the `["--service"]` argv diagnostic after the stdout `idle`
+  verdict, across the same two pipes. That helper stays alive, so there is no exit to wait on; a `vi.waitFor` on the
+  diagnostic itself would be its form. Not red so far.
+- A product finding, not mended: the stderr handler splits each `data` chunk on its own, so a line that arrives in two
+  chunks becomes two diagnostics. It drops nothing, but "one line each" is not held across a chunk boundary.
+
+**In the same assembly (2026-11-21).** Both owed rows above are mended in it: the service row by item 655 (M513), and
+the stderr chunk split by item 656 (M514). The verify ran `@vibefield/screenshot` 41 of 41 with all three.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 655 — the service row waits for the helper's argv line itself, as item 188's race asks (M513)
+
+(2026-11-21; item 655; one commit, one path, +9 −2. Cut on main `c57d31318a75` as `7f8a9587b7d2` (tree `876284ec73b4`)
+on branch `mk/655-on-c57d31318a75`. On main it is `b32d79b5e` "655: the service row waits for the helper's argv line
+itself, as item 188's race asks". Every other id here is a run's.)
+
+**Where it comes from.** Read while finding item 654's cause, not from a red of its own. `test/service.test.ts`'s first
+row ("boots without a capture and reuses the same process for fresh requests") holds the `["--service"]` argv
+diagnostic straight after the stdout `idle` verdict. The fake helper (`test/helpers.ts`) writes that line to stderr
+and `idle` to stdout: two pipes, with no order promised between them. That is item 188's race (`e04c2d83e`), as in
+item 654's row. It has not gone red so far.
+
+**What landed.** In `packages/screenshot/test/service.test.ts`, the one assertion: the service helper stays alive after
+`idle`, so there is no exit to wait on, as items 188 and 654 do. The row waits for the line itself (`vi.waitFor`,
+bounded at 3 s), an ordering on the event it holds and never a sleep. The assertion is unchanged. No product source
+changes.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the one file: format by
+  stdin equal to the file and `check --error-on-warnings` exit 0, as main's own file at `c57d31318a75` is (the
+  control). The patch applied to `c57d31318a75` in a scratch index first.
+- The cut (17:27:57Z → 17:28:00Z): the patch laid by `git apply` in a standing lane, detached at main; the one path held
+  to the mended file's sum as laid and as committed; its added lines swept (0); through the pre-commit hook (the
+  committed rows are the lock's); then one create-only ref. Read again at source: parent `c57d31318a75`, the one path,
+  the file's sum and the message's.
+- The train's verify and kit: `pnpm verify` whole at `bbf9e6f42` (assembly 23's top) on the test Mac, run `v-a23close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  `@vibefield/screenshot` 41 of 41), and the kit ALL there, run `kit-a23close` (`xcodebuild` exit 0, 3,175 rows: 3,172
+  passed and 3 skipped; none of push 157's 3,175 rows lost or moved, and none new).
+
+**Not covered, and owed.**
+- Not run: the package's tests and its typecheck; the assembly's verify runs both. The race was not made red here.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 656 — the screenshot tool says a stderr line once, whole, when it arrives in pieces or unended (M514)
+
+(2026-11-21; item 656; one commit, three paths, +49 −6. Cut on item 654's commit `53a0c14d4e6b` as `cbe94f5e620f` (tree
+`11d285e8cbdf`) on branch `mk/656-on-53a0c14d4e6b`. On main it is `bbf9e6f42` "656: the screenshot tool says a stderr
+line once, whole, when it arrives in pieces or unended". Every other id here is a run's.)
+
+**Where it comes from.** Read while finding item 654's cause. `src/tool.ts`'s stderr handler split each `data` chunk
+on its own, so a line that reached the parent in two chunks became two diagnostics. Nothing was dropped, but "one line
+each" (the tool's own promise, `test/tool.test.ts`) did not hold across a chunk boundary.
+
+**What landed.**
+- `packages/screenshot/src/tool.ts`: what stderr sends after its last newline is held on the helper (`stderrTail`,
+  bounded at a diagnostic line's own 4,096 characters) and joined to the next chunk, so a line is said once its newline
+  comes. At the helper's end (`onExit`, from `'close'`, after stdio has closed) a held line with no newline is said
+  before the end is judged, so `helper-exited` still quotes it as the last stderr line. A CRLF split between two chunks
+  joins the same way. One `diagnose` step makes each line a diagnostic, trimmed and bounded as before.
+- `packages/screenshot/test/helpers.ts`: two fake modes, `stderr-split` (one line in three writes, 30 ms apart, its
+  CRLF split) and `stderr-unended` (a last line with no newline, then exit 3 with no result).
+- `packages/screenshot/test/tool.test.ts`: two rows. The split row: the line said once, whole, never its pieces. The
+  unended row: the error quotes "last stderr: boom: half a line", and the line is a diagnostic.
+- The tool owes stdout no wait on stderr, as before (item 188's ruling).
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Red first: the package at main `c57d31318a75` (`git archive`, with contracts at the same commit) carrying this item's
+  tests and modes over main's `src/tool.ts`. The split row is red ("expected [ 'monitor 1 DIS', 'PLAY1 1920x1080' ]
+  to deeply equal [ 'monitor 1 DISPLAY1 1920x1080' ]"), every other row green. The unended row passes there too: that
+  line came in a chunk of its own, and the row holds the end's flush, not the split.
+- Green: with this item's `src/tool.ts`, the package's `vitest run` is 3 files, 41 passed (41), three times of three;
+  `tsc --noEmit` exit 0 (and on the red tree too). vitest 3.2.7 and typescript 5.9.3, main's lock, from the lane's own
+  install, at 4 workers, each under the light lock, the temp directory inside the proof's own folder. The files run are
+  byte-equal to the committed ones.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the three files: format by
+  stdin equal to each file and `check --error-on-warnings` exit 0, as the files at item 654's commit are (the
+  control). The patch applied over item 654's commit in a scratch index first.
+- The cut (17:28:16Z → 17:28:19Z): the patch laid by `git apply` in a standing lane, detached at item 654's commit; each
+  of the three paths held to its mended file's sum as laid and as committed, and the commit's paths to the three by
+  name; their added lines swept (0); through the pre-commit hook (the committed rows are the lock's); then one
+  create-only ref. Read again at source: parent `53a0c14d4e6b`, the three paths, each file's sum and the message's.
+- The train's verify and kit: `pnpm verify` whole at `bbf9e6f42` (assembly 23's top) on the test Mac, run `v-a23close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  `@vibefield/screenshot` 41 of 41), and the kit ALL there, run `kit-a23close` (`xcodebuild` exit 0, 3,175 rows: 3,172
+  passed and 3 skipped; none of push 157's 3,175 rows lost or moved, and none new).
+
+**Not covered, and owed.**
+- A chunk boundary inside a multi-byte UTF-8 character is not mended: `String(chunk)` decodes each chunk alone. Not
+  seen red. Unread: whether the native helpers ever print non-ASCII on stderr (a display's name could).
+
+**Not done, and not claimed:** no push of its own.
