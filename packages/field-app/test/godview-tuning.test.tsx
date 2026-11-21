@@ -147,8 +147,9 @@ describe("the temporary Godview surface lab", () => {
     act(() => setControlValue(paneOpacity, "45"));
     expect(getDeckAppearance().opacity).toBeCloseTo(0.45);
 
+    // on by default since TL-3 (program backgrounds take the glass), so the click turns it off
     act(() => opacityCells.click());
-    expect(getDeckAppearance().opacityCells).toBe(true);
+    expect(getDeckAppearance().opacityCells).toBe(false);
     // It is NOT the panel's own state: nothing about a pane went through the
     // stage patch channel.
     expect(onChange).not.toHaveBeenCalled();

@@ -383,7 +383,33 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
     expect(host?.querySelector("#vf-ts-backdrop")).toBeNull();
     expect(host?.querySelector("#vf-ts-blur")).toBeNull();
     expect(text).toContain("Two layers, top to bottom");
-    expect(text).toContain("a still of your desk under Godview's cover");
+  });
+
+  it("says the glass is your desk, and lets program backgrounds take it by default (TL-3)", async () => {
+    // DESIGN.md §8, the terminal preview's amendment of 2026-11-19: a pane's glass is one layer, the pane's
+    // opacity over your desk; Godview's cover stands round the deck, never under a pane.
+    resetDeckAppearanceForTest();
+    await mount();
+    const text = host?.textContent ?? "";
+    expect(text).toContain(
+      "Two layers, top to bottom: each terminal's ground, then your desk. Thin the ground to see your desk through it.",
+    );
+    expect(text).toContain("Your desk shows through each pane.");
+    expect(text).toContain(
+      "Let the backgrounds a program paints show your desk too, so a program that fills its screen keeps the glass.",
+    );
+    expect(text).toContain("a blurred picture of your desk, under the panes");
+    for (const gone of [
+      "Godview's cover shows through",
+      "a still of your desk under Godview's cover",
+    ]) {
+      expect(text).not.toContain(gone);
+    }
+    const cells = host?.querySelector('[role="switch"][aria-label="Dim program backgrounds too"]');
+    expect(
+      cells?.getAttribute("aria-checked"),
+      "Dim program backgrounds too is on by default",
+    ).toBe("true");
   });
 
   it("keeps Godview's one override — As the app, or a mode of its own (FC-D7)", async () => {

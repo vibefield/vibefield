@@ -39,7 +39,8 @@ describe("the deck appearance store", () => {
           lightThemeName: "Solarized Light",
           darkThemeName: "Solarized Dark",
           opacity: 0.5,
-          opacityCells: true,
+          // stored under its new name since TL-3
+          dimProgramBackgrounds: true,
           shaderEffects: ["ghosttea:vhs", "ghosttea:crt"],
           shaderAnimate: true,
           modeOverride: "light",
@@ -142,7 +143,8 @@ describe("the deck appearance store", () => {
       lightThemeName: null,
       darkThemeName: null,
       opacity: 0.4,
-      opacityCells: false,
+      // TL-3: program backgrounds take the glass unless a viewer said otherwise
+      opacityCells: true,
       shaderEffects: [],
       shaderAnimate: false,
       // one from before FR-4 follows the app's theme (FC-D7)
@@ -210,6 +212,46 @@ describe("the deck appearance store", () => {
     expect(DEFAULT_DECK_APPEARANCE.lightThemeName).toBeNull();
     expect(DEFAULT_DECK_APPEARANCE.darkThemeName).toBeNull();
     expect(DEFAULT_DECK_APPEARANCE.shaderEffects).toEqual([]);
+  });
+});
+
+/**
+ * Program backgrounds take the glass (TL-3, 2026-11-19; DESIGN.md §8 "The glass is the desk"). On by default now;
+ * every record saved before carried the old default, off, which nobody chose, so the stored field was renamed: the
+ * old name is never read, and a choice saved under the new one stands.
+ */
+describe("program backgrounds take the glass (TL-3)", () => {
+  it("takes the glass by default, a record saved before the rename included", () => {
+    expect(DEFAULT_DECK_APPEARANCE.opacityCells).toBe(true);
+    expect(parseDeckAppearance(JSON.stringify({ opacity: 0.6 })).opacityCells).toBe(true);
+    // the old name is never read: an old off was the old default, not a choice
+    expect(parseDeckAppearance(JSON.stringify({ opacityCells: false })).opacityCells).toBe(true);
+    expect(parseDeckAppearance(JSON.stringify({ opacityCells: true })).opacityCells).toBe(true);
+  });
+
+  it("keeps a choice saved under the new name: off stays off", () => {
+    expect(parseDeckAppearance(JSON.stringify({ dimProgramBackgrounds: false })).opacityCells).toBe(
+      false,
+    );
+    // beside an old name that says otherwise, the new one alone is read
+    expect(
+      parseDeckAppearance(JSON.stringify({ dimProgramBackgrounds: false, opacityCells: true }))
+        .opacityCells,
+    ).toBe(false);
+    // a value that is not a choice is the default
+    expect(parseDeckAppearance(JSON.stringify({ dimProgramBackgrounds: "no" })).opacityCells).toBe(
+      true,
+    );
+  });
+
+  it("writes the new name and never the old, so an off a viewer saves reads back off", () => {
+    setDeckAppearance({ ...DEFAULT_DECK_APPEARANCE, opacityCells: false });
+    const stored = JSON.parse(localStorage.getItem("vf-godview-appearance-v1") ?? "{}");
+    expect(stored).toHaveProperty("dimProgramBackgrounds", false);
+    expect(stored).not.toHaveProperty("opacityCells");
+    expect(parseDeckAppearance(localStorage.getItem("vf-godview-appearance-v1")).opacityCells).toBe(
+      false,
+    );
   });
 });
 

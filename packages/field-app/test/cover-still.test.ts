@@ -26,6 +26,12 @@ import {
   type StillFace,
   stillCanvasSurface,
 } from "../src/field/desk/cover-still";
+import {
+  type DeskStill,
+  deskStill,
+  resetDeskStillForTest,
+  subscribeDeskStill,
+} from "../src/field/desk/desk-still";
 
 beforeEach(() => resetCoverRecordsForTest());
 afterEach(() => vi.restoreAllMocks());
@@ -603,6 +609,24 @@ describe("stillCanvasSurface — the still handed over whole, the recede started
     surface.show({ kind: "none" });
     expect(el.dataset.still).toBe("none");
     expect(transfers.at(-1)).toBeNull();
+  });
+
+  it("says each face to the still's notice: a still with its canvas and its own size, then the ground, then none (TL-3)", () => {
+    resetDeskStillForTest();
+    const { el } = element();
+    const surface = stillCanvasSurface(el);
+    const heard: DeskStill[] = [];
+    const stop = subscribeDeskStill(() => heard.push(deskStill()));
+    surface.show({ kind: "still", bitmap: bitmap(2400, 1600) });
+    surface.show({ kind: "ground" });
+    surface.show({ kind: "none" });
+    stop();
+    expect(heard).toEqual([
+      { face: "still", generation: 1, canvas: el, width: 2400, height: 1600 },
+      { face: "ground", generation: 2, canvas: null, width: 0, height: 0 },
+      { face: "none", generation: 3, canvas: null, width: 0, height: 0 },
+    ]);
+    resetDeskStillForTest();
   });
 });
 
