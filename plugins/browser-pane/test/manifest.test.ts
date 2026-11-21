@@ -46,6 +46,17 @@ describe("vibefield.browser-pane", () => {
     expect(isObjectKind(kind) ? kind.name : undefined).toBe(row?.type);
   });
 
+  // decided 2026-11-19: the browser has one name everywhere a person reads it, and its listing
+  // says what a person gets, in their words
+  it("is called Browser everywhere and describes itself in a person's words", () => {
+    expect(browserPaneManifest.title).toBe("Browser");
+    expect(browserPaneManifest.description).toBe(
+      "Live web pages on your desk: browse them, sign in, and choose the device they're shown at. No account needed.",
+    );
+    expect(row?.title).toBe("Browser");
+    expect(row?.tray?.label).toBe("Browser");
+  });
+
   it("lies on the desk by the SDK's key — and goes into no mini mat yet (it has no chip)", () => {
     expect(row?.provides).toEqual([BROWSER_PANE_TYPE, DESK_OBJECT]);
   });
