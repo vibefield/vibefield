@@ -567,6 +567,30 @@ interface DeskAt {
   readonly generation: number;
   readonly mount: number;
 }
+/** Item 652 (2026-11-21): what RISE's popup showed when it threw: its checked tab, whether a page
+ * stands, and the plugins Installed lists, by their titles (the window's own snapshot, as drawn). */
+const INSTALLED_FACTS = `(() => {
+  const pop = document.querySelector('${POPUP}');
+  if (pop === null) return JSON.stringify(null);
+  const checked = pop.querySelector('.vf-plugins-seg [role="radio"][aria-checked="true"]');
+  return JSON.stringify({
+    tab: checked?.childNodes[0]?.textContent?.trim() ?? null,
+    page: pop.querySelector(".vf-plugins-page") !== null,
+    installed: [...pop.querySelectorAll(".vf-plugins-list .vf-plugins-title")].map(
+      (t) => t.textContent ?? "",
+    ),
+  });
+})()`;
+/** Item 652 (2026-11-21): the community tile's switch when COMMUNITY threw: on, and whether it takes
+ * a press. */
+const SWITCH_FACTS = `(() => {
+  const s = document.querySelector('${POPUP} [data-community-tile] [role="switch"]');
+  if (s === null) return JSON.stringify(null);
+  return JSON.stringify({
+    checked: s.getAttribute("aria-checked"),
+    disabled: s.disabled === true || s.getAttribute("aria-disabled") === "true",
+  });
+})()`;
 /** "Reading the plugin list…" (§9), the foot while a read runs */
 const READING = "Reading the plugin list…";
 /** The read on open done: the foot says it no more. */
@@ -1146,6 +1170,18 @@ export async function marketRunRows(
     return did;
   };
 
+  // Item 652 (2026-11-21): the two rows whose reds the window's facts could not split say more of what
+  // they met, read once at the throw; they say, and mend nothing
+  const rowFacts = async (name: string): Promise<string | null> => {
+    if (name === "RISE") return `the popup ${await js<string>(INSTALLED_FACTS)}`;
+    if (name !== "COMMUNITY") return null;
+    const shown = await d.request("plugins.community.statement.get", {}).then(
+      (answer) => JSON.stringify((answer as { shownHere?: unknown }).shownHere ?? null),
+      () => "unread",
+    );
+    return `the switch ${await js<string>(SWITCH_FACTS)}; the statement shown here ${shown}`;
+  };
+
   for (const row of d.rows) {
     const run = rows[row.name];
     const before = problems.length;
@@ -1161,7 +1197,10 @@ export async function marketRunRows(
           JSON.stringify(s.plugins.map((r) => `${r.id}@${r.version}${r.enabled ? "" : " off"}`)),
         )
         .catch(() => "unread");
-      problems.push(`${row.name}: ${why}${waits} (window ${seen}; fieldd lists ${listed})`);
+      const more = await rowFacts(row.name).catch(() => "its facts unread");
+      problems.push(
+        `${row.name}: ${why}${waits} (window ${seen}; fieldd lists ${listed}${more === null ? "" : `; ${more}`})`,
+      );
       // item 646 (2026-11-21): a red row runs its own tidy, so the next row starts where it would have and a
       // knock-on never reads as a second red; what the tidy did is said, never counted
       const did = await tidy(row.name).catch((e: unknown) => [
