@@ -89,6 +89,36 @@ struct MadeAppShapesTests {
     #expect(source.previewsBase == nil)
   }
 
+  @Test("item 588: each row's preview state reads as its origin says it; a word not heard is unknown; the row stands")
+  func previewStates() throws {
+    let page = try IndexAppsResult(json: try Fixture.json("index-apps.preview-states"))
+    try #require(page.rows.count == 3)
+    #expect(page.droppedRows.isEmpty)
+    let owed = try #require(page.rows.first)
+    #expect(owed.previewState == .owed)
+    #expect(owed.preview == nil)
+    #expect(owed.unknownFields.isEmpty)
+    let failed = page.rows[1]
+    let failedPreview = failed.preview
+    #expect(failed.previewState == .failed)
+    #expect(failedPreview != nil)
+    #expect(failed.unknownFields.isEmpty)
+    let unheard = try #require(page.rows.last)
+    #expect(unheard.previewState == .unknown)
+    #expect(unheard.unknownFields.isEmpty)
+  }
+
+  @Test("item 588: no preview state reads none, and so does one that is not a word; neither reads unknown")
+  func previewStateAbsent() throws {
+    let valid = try IndexAppsResult(json: try Fixture.json("index-apps.valid"))
+    let first = try #require(valid.rows.first)
+    #expect(first.previewState == nil)
+    let page = try IndexAppsResult(json: try Self.page(row: ["previewState": .int(7)]))
+    let row = try #require(page.rows.first)
+    #expect(row.previewState == nil)
+    #expect(row.unknownFields.isEmpty)
+  }
+
   @Test("the apps refusals read; another service's does not")
   func refusals() throws {
     let unbuilt = MadeAppRefusal(details: try Fixture.json("error-data.apps-export-unbuilt")["details"])
