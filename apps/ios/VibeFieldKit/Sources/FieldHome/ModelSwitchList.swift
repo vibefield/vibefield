@@ -8,13 +8,75 @@ import SwiftUI
 /// command and no vendor's list: the list is the agent's own, as that desktop reads it, and the change is made by the
 /// run's adapter there.
 struct ModelSwitchDoor {
+  /// What the run's row offers (`AgentFacet.modelSwitch`): a door exists only for a run that offers a switch.
+  let offer: AgentModelSwitch
   /// The agent's own picker on the run's desktop (`agent.models`).
   let models: () async throws -> AgentModelsResult
   /// One change asked of the run (`agent.switchModel`).
   let ask: (AgentSwitchModelChange) async throws -> AgentSwitchModelResult
   /// The desktop's name, for the line that says it could not be reached.
   let desktop: String
+  /// DEBUG's `-vf-demo-model-switch`: the list opens by itself two seconds in, since a screenshot cannot touch the
+  /// capsule. false on every real door.
+  var opensByItself = false
+  /// DEBUG's `-vf-demo-model-switch=refused`: the owner's word the list stands on as its first refusal. nil on every
+  /// real door.
+  var standingRefusal: String? = nil
 }
+
+#if DEBUG
+  /// `-vf-demo-model-switch[=refused]` (PF-3) — a FIXTURE door for the open card's capsule, for looking at the switch
+  /// list's own pixels with no desktop: an offer no row made, three invented models and their effort values, and an
+  /// ask that answers `sent` after a beat. With `=refused` the list stands on the owner's `working`. It reaches no
+  /// daemon and changes no agent, and it cannot run in a build that reads no launch arguments.
+  enum ModelSwitchDemo {
+    static let argument = "-vf-demo-model-switch"
+
+    static func door(_ arguments: [String]) -> ModelSwitchDoor? {
+      guard let named = arguments.first(where: { $0 == argument || $0.hasPrefix(argument + "=") }) else { return nil }
+      return ModelSwitchDoor(
+        offer: AgentModelSwitch(model: true, controls: ["effort"], persistence: "default"),
+        models: {
+          try await Task.sleep(for: .milliseconds(300))
+          return try AgentModelsResult(json: catalog)
+        },
+        ask: { _ in
+          try await Task.sleep(for: .milliseconds(400))
+          return try AgentSwitchModelResult(json: .object(["status": .string("sent")]))
+        },
+        desktop: "Studio", opensByItself: true,
+        standingRefusal: named.hasSuffix("=refused") ? "working" : nil)
+    }
+
+    private static func effort(_ values: [String]) -> JSONValue {
+      .object([
+        "id": .string("effort"), "label": .string("Effort"), "role": .string("effort"),
+        "values": .array(values.map { .object(["id": .string($0), "label": .string($0.capitalized)]) }),
+      ])
+    }
+
+    private static func model(_ id: String, _ label: String, _ efforts: [String]) -> JSONValue {
+      .object([
+        "id": .string(id), "label": .string(label),
+        "controls": .array(efforts.isEmpty ? [] : [effort(efforts)]),
+      ])
+    }
+
+    private static let catalog: JSONValue = .object([
+      "provider": .string("claude"), "refreshing": .bool(false),
+      "catalog": .object([
+        "provider": .string("claude"), "cwd": .string(""), "observedAt": .string("2026-11-21T00:00:00.000Z"),
+        "source": .object(["kind": .string("fixture"), "freshness": .string("fresh")]),
+        "completeness": .string("complete"), "customModels": .bool(false),
+        "models": .array([
+          model("opus", "Opus 5.5", ["low", "medium", "high", "max"]),
+          model("sonnet", "Sonnet 5.5", ["low", "medium", "high"]),
+          model("haiku", "Haiku 5.5", []),
+        ]),
+      ]),
+    ])
+  }
+#endif
 
 /// PF-3 — what the switch list reads and says, kept pure so its rows are tested without a view.
 enum ModelSwitch {
@@ -77,7 +139,6 @@ enum ModelSwitch {
 /// values, a refusal as its foot line, and whether the agent keeps a change as its default.
 struct ModelSwitchList: View {
   let door: ModelSwitchDoor
-  let offer: AgentModelSwitch
   let readout: FieldHomeModel.LiveCardReadout
   let agentName: String
   let onSent: (ModelSwitch.Asked) -> Void
@@ -97,6 +158,7 @@ struct ModelSwitchList: View {
     return []
   }
   private var serving: AgentModelChoice? { ModelSwitch.serving(models, model: readout.model) }
+  private var offer: AgentModelSwitch { door.offer }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -134,6 +196,7 @@ struct ModelSwitchList: View {
     .frame(width: 280, alignment: .leading)
     .disabled(asking)
     .task {
+      if let standing = door.standingRefusal { refusal = ModelSwitch.refusal(standing) }
       do {
         let result = try await door.models()
         if let catalog = result.catalog, !catalog.models.isEmpty {

@@ -3372,6 +3372,8 @@ public struct HomeScreen: View {
       // the live card's readout, centered over its held veil.
       seatReadout: cardSeatReadout,
       inputIsOpen: inputCardFace == .shown && inputCard.keyboardOwner != .none,
+      // PF-1: until the terminal presents a frame the card stands on its ground whole.
+      terminalPainted: attachment?.phase == .live,
       // PF-3: the band's capsule is the switch where the run's row offers one.
       modelSwitch: cardModelSwitch,
       onOtherDriverAppeared: { inputCard.dismissKeyboard() }
@@ -4159,14 +4161,21 @@ public struct HomeScreen: View {
 
   /// PF-3 (DESIGN.md §8, "The capsule is the switch") — the open card's road to its run's model switch: the agent's
   /// own list and one change, each asked of the HOME's door for the desktop that owns the run (`FieldLink`). nil where
-  /// the card's subject is no run on a desktop (the mock, a bare terminal), and then the capsule is a readout.
+  /// the run's row offers no switch, or the card's subject is no run on a desktop (the mock, a bare terminal), and
+  /// then the capsule is a readout.
   private var cardModelSwitch: ModelSwitchDoor? {
-    guard let bubble = cardBubble, let agent = bubble.agent, let join = agent.join, let run = bubble.runKey, let link
+    #if DEBUG
+      // `-vf-demo-model-switch`: the fixture door, on any agent's card, so the list can be photographed with no desktop
+      if cardBubble?.agent != nil, let demo = ModelSwitchDemo.door(LaunchArguments.current) { return demo }
+    #endif
+    guard let bubble = cardBubble, let agent = bubble.agent, let offer = agent.modelSwitch, let join = agent.join,
+      let run = bubble.runKey, let link
     else { return nil }
     let device = join.deviceID
     let provider = agent.provider.rawValue
     let profileSet = bubble.profileSet
     return ModelSwitchDoor(
+      offer: offer,
       models: {
         try AgentModelsResult(
           json: try await link.runModels(on: device, provider: provider, profileSet: profileSet))

@@ -95,8 +95,12 @@ struct SessionCardView<Terminal: View>: View {
   /// The open input card reserves space below the terminal. Its custom safe
   /// area must stay in effect while the card holds the keyboard.
   var inputIsOpen: Bool = false
-  /// PF-3 — the card's road to its run's model switch (the two asks of the desktop that owns the run). nil: the band's
-  /// capsule is a readout and takes no touch, as it is for a run whose row offers no switch.
+  /// PF-1 — the terminal has presented a frame, so its own ground is painted under its rows. false while the card
+  /// connects and while an attach is refused: the terminal's view paints nothing then, and the card stands on the
+  /// terminal's ground whole, never a band over the bare sheet.
+  var terminalPainted: Bool = true
+  /// PF-3 — the card's road to its run's model switch (its row's offer and the two asks of the desktop that owns the
+  /// run). nil: the band's capsule is a readout and takes no touch, as it is for a run whose row offers no switch.
   var modelSwitch: ModelSwitchDoor? = nil
   /// PF-3 — the switch list is open under the capsule.
   @State private var switchOpen = false
@@ -156,13 +160,18 @@ struct SessionCardView<Terminal: View>: View {
     ZStack(alignment: .top) {
       // The band's ground: the terminal's own, at its opacity, under the band
       // alone. A cooled terminal's veil covers it too, so the two never part.
+      // Until the terminal presents its first frame its view paints nothing, so
+      // the same ground stands under the whole card: one ground from the moment
+      // the card rises, by day too (seen 2026-11-21 on the simulator, a refused
+      // attach by day: a dark band over the bare white sheet).
       ground.color
         .overlay {
           ground.color.opacity(cooled ? FieldHomeModel.liveCardCooledVeil : 0)
         }
         .animation(FieldMotion.ease(0.24), value: cooled)
-        .frame(height: FieldHomeModel.liveCardBand)
-        .frame(maxWidth: .infinity)
+        .frame(height: terminalPainted ? FieldHomeModel.liveCardBand : nil)
+        .frame(maxWidth: .infinity, maxHeight: terminalPainted ? nil : .infinity)
+        .ignoresSafeArea(.container, edges: terminalPainted ? [] : .bottom)
         .allowsHitTesting(false)
         .accessibilityHidden(true)
 
@@ -305,7 +314,7 @@ struct SessionCardView<Terminal: View>: View {
       if let readout = FieldHomeModel.liveCardReadout(bubble) {
         let said = [readout.model, readout.effort].compactMap { $0 }.joined(
           separator: FieldHomeModel.LiveCardReadout.separator)
-        if let door = modelSwitch, let offer = bubble.agent?.modelSwitch {
+        if let door = modelSwitch {
           // PF-3 — the capsule is the switch: the row's word is the only confirmation, so a sent change is drawn as
           // asked only until the readout moves.
           let pending = asked.flatMap { $0.settled(by: readout) ? nil : $0 }
@@ -320,13 +329,19 @@ struct SessionCardView<Terminal: View>: View {
           .accessibilityHint("Changes the model or the effort")
           .popover(isPresented: $switchOpen) {
             ModelSwitchList(
-              door: door, offer: offer, readout: readout, agentName: bubble.agent?.providerName ?? "",
+              door: door, readout: readout, agentName: bubble.agent?.providerName ?? "",
               onSent: { sent in
                 asked = sent
                 switchOpen = false
               }
             )
             .presentationCompactAdaptation(.popover)
+          }
+          .task {
+            // DEBUG's fixture door alone opens the list by itself; no real door does.
+            guard door.opensByItself else { return }
+            try? await Task.sleep(for: .seconds(2))
+            if !Task.isCancelled { switchOpen = true }
           }
           .task(id: asked) {
             guard asked != nil else { return }
