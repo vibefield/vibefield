@@ -113,6 +113,12 @@ describe("the happy path", () => {
 
   it("forwards stderr as diagnostics, one line each, never as protocol", async () => {
     expect(await tool("stderr-then-cancel").capture()).toEqual({ status: "cancel" });
+    // The capture settles on stdout's verdict, and stderr is a second pipe: its lines are whole
+    // only once the helper's pipes close, which the tool reports as its exit. Wait for that, never
+    // for a time (item 654, 2026-11-21; item 188's wait)
+    await vi.waitFor(() => expect(lifecycle()).toContain("screenshot.helper.exited"), {
+      timeout: 3_000,
+    });
     const lines = events.flatMap((e) => (e.kind === "diagnostic" ? [e.line] : []));
     expect(lines).toContain("monitor 1 DISPLAY1 1920x1080");
     expect(lines).toContain("using wgc");
