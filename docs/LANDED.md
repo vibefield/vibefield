@@ -65685,3 +65685,165 @@ shelf, the phone and every other desktop show it at once.
   draws the page.
 - The kept-in-memory failures of apps whose export failed before any record (`#failedUnminted`) are never trimmed:
   they hold only those apps.
+
+> **Read after the push (2026-11-21):** GitHub's `verify` at the pushed head `0066de2ea` passed: run 44854927510,
+> ended 03:12:44Z; `audit` passed, run 44854927552.
+
+## EL8 — rosetta 0.1.8: Antigravity 1.4.12's writer read; the npm rows, the lock and rosettad's pin move together (M495)
+
+(2026-11-21; one commit, 4 paths +39 −35. Cut by DR on main `0066de2ea37e` as `3010bf41bad6` (tree `6f3e391c28cf`) on
+branch `dr/el8-rosetta018-on-0066de2ea37e`, the EL8 car of assembly 18, with ma-6's 588b. On main it is
+`6383c825e` "EL8 (rosetta 0.1.8): the npm rows, the lock and rosetta's pin move together; the kit stays 0.1.6".
+Every other id here is a run's or a sibling's.)
+
+**What landed.**
+- rosetta `v0.1.8` = `bf5b526de65e`, "Release 0.1.8 (#59)", the squash commit on rosetta main. Tags `v0.1.8` and
+  `npm-v0.1.8` are annotated and unsigned. Over 0.1.7's `1bc7f45ef` it carries:
+  - #58: the temp-directory paths left in the Antigravity 1.1.20 and Codex 0.149.1 ground-truth stores, redacted;
+  - #42: Antigravity 1.4.12's writer, its ground truth and replay;
+  - #59: the release.
+- The two packages VibeField pins, read back by anonymous GETs of the registry, each `latest`, with npm provenance
+  naming `refs/tags/npm-v0.1.8` at `bf5b526de65e`:
+  - `@vibefield/rosetta-protocol@0.1.8`, published 2026-11-20 at 21:28:29.383Z;
+  - `@vibefield/rosetta-room@0.1.8`, published 21:31:14.708Z. Its dependencies differ from 0.1.7's in one range
+    alone (`@vibefield/rosetta-protocol` `^0.1.7` → `^0.1.8`).
+- One EL8 event:
+  - siblings.lock.json, by exact text edits and `pnpm siblings:pin rosetta`: rosetta's `sha` `1bc7f45ef` →
+    `bf5b526de`, `release` {npm 0.1.8, swift 0.1.6}, the header's history and its Today sentence. The pin writes the
+    file by `JSON.stringify`, which re-expands four inline arrays, so biome formats it back; only the `sha` line moves.
+  - pnpm-workspace.yaml: the two override rows 0.1.7 → 0.1.8 (rendered from the lock by `siblings render --prod`),
+    the rosetta block's dated history, and the two `minimumReleaseAgeExclude` rows at @0.1.8. The two rows at @0.1.7
+    were kept for the one install that rewrote the lock, then cut.
+  - preflight's `PIN_EXPECTATIONS`: the two npm rows 0.1.7 → 0.1.8. The Swift row stays 0.1.6, with its comment.
+  - pnpm-lock.yaml is pnpm's: the two packages swap 0.1.7 → 0.1.8 in its overrides, both importers, their
+    resolutions (the published integrities) and their snapshots (+15 −15). No package is gained or lost.
+- What 0.1.8 asks of this repository: nothing on the wire. Neither #58 nor #42 touches rosetta's `clients/` or
+  `crates/protocol`, so fieldd's `PROTOCOL_VERSION` and the contracts' fixtures stay, and the two packages' content
+  is 0.1.7's at version 0.1.8. Every file declaring a `*SCHEMA_VERSION` constant in rosetta's crates is the same blob
+  at both revisions, so no projection or ledger meta moves and the supervisor triggers no rebuild.
+- ONE replay per root: the Antigravity adapter's `normalizer_version` moves 8 → 10. By rosetta's adapter contract a
+  mismatch expires the cursor and starts a source-generation replay, so a root that 0.1.7 indexed replays its
+  Antigravity sources once on 0.1.8's first start. Nothing is one-way: a 0.1.7 rosettad started later replays them
+  back.
+- The kit stays on Swift 0.1.6: neither 0.1.7 nor 0.1.8 changes a path under `clients/swift`, `Package.swift` or
+  `Package.resolved`. No `pnpm gen` generator reads a rosetta package, and the catalog's wall R23 reads the
+  `antigravity` kind and its data root, both unchanged.
+- This repo still builds rosettad from `../rosetta-pin` (RD-D7), now at `bf5b526de`.
+- What a person sees, by reading, not a live run: an Antigravity 1.4.12 session (the CLI's newer journal) is read the
+  way 1.4.12 writes it, so History shows its steps and tool calls as rosetta's 1.4.12 goldens hold them. Older
+  Antigravity sessions are read again once after the update. What 0.1.7 made of the same files is A's OLD reading,
+  kept whole, not a claim made here.
+
+**What was proved.** On 2026-11-21.
+- A, on the test Mac in a new clone detached at main `0066de2ea37e`, by STEPS r6 (`71f3bdc5634a`), the edits made by
+  the cut's tool (`el8-rosetta018-edits.py`, `90530c1055eb`) with `--release bf5b526de65ecfc7b529733d47070f7c5640487c
+  --pr 59 --day 2026-11-21`. Two runs, the second resuming the first's state:
+  - el8r-a18b (04:46:57Z → 04:49:20Z; run.log `23ec8fec544cf8b1`) STOPPED at S8 on its own hold. The pin writes the
+    lock by `JSON.stringify`, which re-expanded four inline arrays, so the lock's change was more than the `sha` line.
+    By value, only the `sha` had moved.
+  - el8r-b18 (04:55:44Z → 04:59:46Z; run.log `027a90e0e1d382b1`), "EL8R B GREEN": biome formats the lock (S8f),
+    then S8b to S10.
+- What the two runs read:
+  - The read-backs: both packages at 0.1.8 with the held integrities; `v0.1.8` and `npm-v0.1.8` peel to REL.
+  - S0, the untouched base: preflight 0; the lock at the two @0.1.7 alone; rosetta's `sha` `1bc7f45ef8ce`, `release`
+    {npm 0.1.7, swift 0.1.6}. The tool's `--check`: lock 3 edits, typed 5.
+  - S1 to S3: the lock phase wrote siblings.lock.json alone; `render --prod` moved the two rows alone; the typed phase
+    wrote 5 edits in 2 files; `render --prod --check` agreed.
+  - S4, the one install, through the @0.1.8 exclude rows: the two rosetta keys 0.1.7 out and 0.1.8 in, their
+    integrities the published ones; pnpm's supply-chain check run whole, passing, 668 entries.
+  - S5 to S7: drop-old-age left the @0.1.8 rows alone; the frozen install under the commit's yaml left the lock
+    unmoved, the check whole again (668); `render --prod --check` agreed.
+  - S8, the pin: the lane's own anonymous rosetta-pin clone detached at REL; one "pinned rosetta @" line; rosettad
+    built at it (`28864e80c9d5`); wall R23 with `--require-rosetta` passing, 10 catalog rows with one warning (`acp`
+    could offer `spawn`); the consumers' typecheck and `gen:check` inside the pin. S8f, after biome's format: by value
+    the lock differs from S7's in rosetta's `sha` alone, its text change is the `sha` line alone, and `biome check`
+    exits 0.
+  - S8b, THE WHOLE `pnpm gen`: no path beyond the EL8's four moved (the named set is EMPTY); `pnpm gen:check` exit 0,
+    its second generation moving nothing.
+  - S9: preflight, check:deps and check:ios-fixtures, each 0. fieldd's nine rosetta-facing files against the S8 build:
+    "Test Files 8 passed | 1 skipped (9)", "Tests 283 passed | 4 skipped (287)". `packaged-history` (2 tests) was
+    skipped by its gate and did not run; `agent-session` skipped 2 of its 111. field-app's `history-witness`: 3 of 3.
+  - S10, rosettad alone, each call in its own temp HOME and db:
+    - R-a, rosetta's 1.4.12 basic-chat ground truth: 0.1.8's ingest exit 0, its stream event of agent `antigravity`
+      with 5 records, 0 hard errors and 1 session indexed. 0.1.7's ingest of the same files is kept whole as a
+      reading.
+    - R-b, the 1.1.20 basic-chat ground truth: 0.1.7's ingest (7 records, 1 session indexed), then 0.1.8's into the
+      same db, each exit 0. 0.1.8's counts there are a reading: 7 records, 3 messages inserted, 0 sessions newly
+      indexed. The two versions' `meta`, each on fresh paths over that HOME: "EQUAL old 1 new 1".
+  - Its 4 paths are its patch (`fa96674d74d04278`, 191 lines, `git diff --binary` over the base, +39 −35), each at
+    the sum its record names. The new rosettad's cargo target is 614 MiB of the test Mac's disk.
+- The cut, on the development Mac, 05:07:21Z → 05:07:23Z (cut log `4c056c4faf71e072`; `cut-el8-rosetta018.sh`
+  `cc88b5431696`, from 4a's puppeteer EL8 cut by its literals alone), after a load read of 7.04:
+  - A's own patch laid on main by `git apply` in a standing lane, detached;
+  - each of the 4 paths held to A's sum as laid and again as committed;
+  - the added lines swept (none but the lock's note, which keeps the base's own words);
+  - through the pre-commit hook (`siblings.mjs render --prod --check --staged`), then `render --prod --check` again;
+  - then one create-only ref.
+- On the development Mac before the cut, A's patch applied to a scratch copy of the base's four files and left each
+  at A's sum, and the cut's sweep read 0 there (the lock's note 1 line, keeping the base's two words).
+- On the development Mac before the stage, at main `0066de2ea37e` from git objects: the tool's `--check` GREEN (lock 3
+  edits, typed 5, every OLD once); the three hand-edited files byte-equal to those on puppeteer's car `3beab2ad`,
+  where a dry walk of all three phases had run.
+- The assembly's whole verify and kit, at its top on the test Mac: `pnpm verify` whole at `56644c12e` (assembly 18's
+  top) on the test Mac, run `v-a18close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698
+  passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a18close` (`xcodebuild` exit 0,
+  3,174 rows: 3,171 passed and 3 skipped, push 152's three; none of push 152's 3,167 rows lost or moved, and 7 new, each
+  passed)
+
+**Not covered, and owed.**
+- rosettad's FIRST START UNDER fieldd on a root with Antigravity history: the supervisor's `serve` path on a root that
+  0.1.7 indexed, and what History shows during the replay. A is rosettad alone, by `ingest`; nothing here has read the
+  serve path.
+- `pnpm gate:landing` (`pnpm still` and the desk smokes): not run.
+- The follow-up that drops the two `@vibefield/rosetta-*@0.1.8` rows and their comment lines from
+  `minimumReleaseAgeExclude`, no earlier than 2026-11-21 21:31:15Z (the room's publish + 1,440 minutes): one file, the
+  lock unmoved, proved by a frozen install under the strict policy without them. If the next rosetta EL8 comes first,
+  its own drop-old-age drops them instead.
+- After the land, rosettad is built in James's checkout: `../rosetta-pin` moved to `bf5b526de`, then
+  `pnpm siblings:build`. Until the checkout moves, preflight there fails on a revision that is not the pin.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 588b — the phone's About says why a made app has no preview yet (M496)
+
+(2026-11-21; three commits on main, made 2026-11-19, cut 2026-11-20 and re-cut 2026-11-21: the kit `d05e5325d`, the red
+`77e497110` and the green `56644c12e`, on item 588a. James answered the item's card on 2026-11-19: "Both as proposed".)
+As cut, on main 0066de2ea37e (588a landed on it): `ma/i588b-on-0066de2ea37e`: C1 e70b549f1960, C2 b5a5d06e64e1, C3
+81b6160cb75c. DESIGN.md and check-ios-fixtures.mjs were re-made by content on 0066de2e, since other landings had
+moved them. Each commit has the first cut's patch-id. The earlier cuts' ids do not land.
+
+**What landed.** When a made app has no picture of its page yet, the phone's About now says why, by the state its
+desktop gives (item 588a's `previewState`):
+- Owed: "No preview yet — it's drawn the next time VibeField is open on ‹desktop›".
+- Failed: "No preview — it couldn't be drawn. It's drawn again the next time the app opens on ‹desktop›".
+- No state, or a word this build has not heard: today's line, "No preview yet — it's drawn the first time the app
+  opens". A row with a preview says none, whatever its state.
+- Inside a sentence the desktop's stand-in word is lower-case ("your desktop", "another desktop"), and a named desktop
+  keeps its name. About's own existing line, "on ‹desktop›", reads the same way: an existing line's capital, found
+  while adding the two new ones.
+- DESIGN.md §9 About carries the new lines, and §9 "The phone's own words" says the stand-ins are capitalised only
+  where they stand alone.
+- The kit holds a mirror of contracts' index-apps.preview-states.json, byte-equal, and check-ios-fixtures compares it.
+
+**What was proved.**
+- The set was made on main 599f4eda, then re-made by content on main d18929aa and again on main 0066de2e. Each time,
+  DESIGN.md (−4 +10) and scripts/check-ios-fixtures.mjs (+2) were PROVED equal-change, and the other six paths are
+  main's own copies.
+- The format by stdin and a file-based lint with warnings failing ran on its code files (check-0066, AS WANTED).
+- The cut (cut-588b-r3.sh, 2026-11-21 04:40:24Z to 04:40:36Z) made the three commits through the repo's hook, each
+  tree pre-checked by biome, the six walls and check-ios-fixtures. Every committed file was held by its prepared
+  bytes. Contracts' fixture stood below C1 as the mirror's bytes.
+- On the test Mac, at each commit: at C1, runs `kit-588b3-c1` and `fix588b-c1-r3`: the two suites alone, 13 rows, every
+  one passed, and `check-ios-fixtures` with 468 copies identical; at C2, runs `kit-588b3-c2` and `fix588b-c2-r3`:
+  MadeAppShapesTests failed exactly 2 (previewStates, previewStateAbsent) and AppsOpenTests exactly 4 (aboutOwed,
+  aboutFailed, aboutLinesDesktopWords, aboutDesktopLineWords), each named, the guard passing and every other row passed,
+  and `check-ios-fixtures` with 468 copies identical; at C3, its kit and fixtures check ran inside the assembly's
+  closing verify and kit ALL below, where the seven new rows each passed
+- The landing's own proof is the assembly's V at the landed tree: `pnpm verify` whole at `56644c12e` (assembly 18's top)
+  on the test Mac, run `v-a18close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0
+  failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a18close` (`xcodebuild` exit 0, 3,174 rows:
+  3,171 passed and 3 skipped, push 152's three; none of push 152's 3,167 rows lost or moved, and 7 new, each passed)
+
+**Not covered.**
+- The same mid-sentence capital on the phone's other screens (the app's runs-on line, "Opening on ‹desktop›…", "Can't
+  reach ‹desktop›") is item 598, which builds on `MadeAppFacts.desktopInSentence`.
