@@ -86,6 +86,10 @@ if (mode.startsWith("service")) {
   case "linger": out(JSON.stringify({ v: 1, status: "ready" })); out(okLine()); setInterval(() => {}, 1e6); break;
   case "ready-twice": out(JSON.stringify({ v: 1, status: "ready" })); out(JSON.stringify({ v: 1, status: "ready" })); out(JSON.stringify({ v: 1, status: "cancel" })); process.exit(0);
   case "stderr-then-cancel": process.stderr.write("monitor 1 DISPLAY1 1920x1080\\nusing wgc\\n"); out(JSON.stringify({ v: 1, status: "ready" })); out(JSON.stringify({ v: 1, status: "cancel" })); process.exit(0);
+  // item 656: one line in three writes, its CRLF split between two of them, each its own chunk to the parent
+  case "stderr-split": process.stderr.write("monitor 1 DIS"); await sleep(30); process.stderr.write("PLAY1 1920x1080\\r"); await sleep(30); process.stderr.write("\\nusing wgc\\n"); out(JSON.stringify({ v: 1, status: "ready" })); out(JSON.stringify({ v: 1, status: "cancel" })); process.exit(0);
+  // item 656: the last stderr line has no newline, and the helper ends without a result
+  case "stderr-unended": process.stderr.write("using wgc\\n"); await sleep(30); process.stderr.write("boom: half a line"); await sleep(10); process.exit(3);
   default: process.stderr.write("unknown mode " + mode + "\\n"); process.exit(9);
 }
 `;

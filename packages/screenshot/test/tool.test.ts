@@ -124,6 +124,30 @@ describe("the happy path", () => {
     expect(lines).toContain("using wgc");
   });
 
+  it("says a stderr line that arrives in pieces once, whole (item 656)", async () => {
+    expect(await tool("stderr-split").capture()).toEqual({ status: "cancel" });
+    await vi.waitFor(() => expect(lifecycle()).toContain("screenshot.helper.exited"), {
+      timeout: 3_000,
+    });
+    const lines = events.flatMap((e) => (e.kind === "diagnostic" ? [e.line] : []));
+    // one line, never its pieces ("monitor 1 DIS", "PLAY1 1920x1080")
+    expect(lines.filter((l) => l.includes("DIS") || l.includes("PLAY1"))).toEqual([
+      "monitor 1 DISPLAY1 1920x1080",
+    ]);
+    expect(lines).toContain("using wgc");
+  });
+
+  it("says a last stderr line with no newline at the helper's end, and quotes it (item 656)", async () => {
+    // the capture settles from the helper's end, which says the held line first
+    const result = await tool("stderr-unended").capture();
+    expect(result).toMatchObject({ status: "error", code: "helper-exited" });
+    if (result.status !== "error") throw new Error("unreachable");
+    expect(result.message).toContain("last stderr: boom: half a line");
+    const lines = events.flatMap((e) => (e.kind === "diagnostic" ? [e.line] : []));
+    expect(lines).toContain("using wgc");
+    expect(lines).toContain("boom: half a line");
+  });
+
   it("is idle again once the helper has exited", async () => {
     const t = tool("ok");
     const first = t.capture();

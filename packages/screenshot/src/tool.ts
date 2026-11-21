@@ -96,6 +96,9 @@ interface LiveHelper {
   capture: LiveCapture | null;
   failure: ScreenshotCaptureError | null;
   lastDiagnostic: string | null;
+  /** What stderr sent after its last newline: a line not yet whole, said once its newline comes or
+   * the helper ends (item 656, 2026-11-21). At most a line's own bound. */
+  stderrTail: string;
   bootTimer: Timer | null;
   exitTimer: Timer | null;
   killTimer: Timer | null;
@@ -292,6 +295,7 @@ export class ScreenshotTool {
       capture: null,
       failure: null,
       lastDiagnostic: null,
+      stderrTail: "",
       bootTimer: null,
       exitTimer: null,
       killTimer: null,
@@ -323,13 +327,12 @@ export class ScreenshotTool {
         this.onHelperEvent(helper, verdict.event);
       }
     });
+    // a line can arrive in two chunks: what follows the last newline waits for the next chunk, and
+    // is said at its newline, or at the helper's end if none comes (item 656, 2026-11-21)
     child.stderr.on("data", (chunk: Buffer | string) => {
-      for (const line of String(chunk).split(/\r?\n/)) {
-        const trimmed = line.trim().slice(0, MAX_DIAGNOSTIC_LINE_CHARS);
-        if (trimmed.length === 0) continue;
-        helper.lastDiagnostic = trimmed;
-        this.emit({ kind: "diagnostic", line: trimmed });
-      }
+      const lines = (helper.stderrTail + String(chunk)).split(/\r?\n/);
+      helper.stderrTail = (lines.pop() ?? "").slice(0, MAX_DIAGNOSTIC_LINE_CHARS);
+      for (const line of lines) this.diagnose(helper, line);
     });
     child.stdin?.on("error", (cause: Error) => {
       this.fail(
@@ -437,6 +440,14 @@ export class ScreenshotTool {
     this.kill(helper, result.code);
   }
 
+  /** One stderr line as a diagnostic: trimmed, cut to its bound, nothing said for a blank one. */
+  private diagnose(helper: LiveHelper, line: string): void {
+    const trimmed = line.trim().slice(0, MAX_DIAGNOSTIC_LINE_CHARS);
+    if (trimmed.length === 0) return;
+    helper.lastDiagnostic = trimmed;
+    this.emit({ kind: "diagnostic", line: trimmed });
+  }
+
   private onExit(
     helper: LiveHelper,
     code: number | null,
@@ -449,6 +460,10 @@ export class ScreenshotTool {
       if (timer !== null) clearTimeout(timer);
     }
     if (this.#helper === helper) this.#helper = null;
+    // 'close' comes after stdio has closed: a last line with no newline is whole now
+    const tail = helper.stderrTail;
+    helper.stderrTail = "";
+    this.diagnose(helper, tail);
     const how = signal !== null ? `signal ${signal}` : `exit code ${code ?? "unknown"}`;
     const detail = helper.lastDiagnostic === null ? "" : ` — last stderr: ${helper.lastDiagnostic}`;
     const result =
