@@ -537,6 +537,43 @@ no ground of its own: a pane paints its own ground over the frame's.
 minimize and restore, 8 in, after a hairline. **The grip's hit in the maximized title bar** is
 `--vf-godview-deck-grip-hit` wide, the bar's full height.
 
+**The pane frame's capsules** (track PF; PF-2, 2026-11-21; James, of the options on the page
+"Godview terminal pane": "I like desktop A and mobile A"; his reason for the pass: "the top and
+bottom notch is not looking good with our newly refined terminal look"). A pane's badge and its
+context meter are **capsules inside the pane**, never slabs grown from its edge. The frame is
+puppeteer-views' (`PaneFrame`, `deck-frame.css`, from 0.4.8); VibeField hands it two values per
+Godview mode and draws one chip of its own.
+
+| Role | Light | Dark |
+|---|---|---|
+| the selected badge's label | `--vf-godview-light-pane-badge-ink` `#ffffff` | `--vf-godview-dark-pane-badge-ink` the night terminal's ground, `--vf-godview-dark-terminal-bg` |
+| how far the selected badge's fill is taken from the pane colour toward black, in oklab | `--vf-godview-light-pane-badge-shade` 12% | `--vf-godview-dark-pane-badge-shade` 0% |
+
+- **The bands keep their heights**, 24 at the top and 30 at the foot, so no row of a terminal
+  moves. Each capsule is 18 tall with corners of 5, and stands 4 from the pane's edges: the badge
+  at the top right, the meter and its figure in one capsule at the foot's right.
+- **A resting badge** is the terminal's ink at 80% on that ink at 7%, with a 1px inner line at
+  9%, and a 6px dot in the pane colour before its name. **The selected pane's badge** is filled
+  with the pane colour and loses the dot and the line.
+- **The label on a filled badge is read, so it is held to 4.5:1.** A project tint is dealt at one
+  lightness per Godview mode (§2.7's tints: 0.6 by day, 0.74 by night). White on the day tint is
+  3.45:1 at its least (hue 191), so the day fill is shaded 12%, and white on it is 4.70:1 at its
+  least. White on the night tint is 2.10:1 at its least, so by night the label is the night
+  terminal's ground, 5.65:1 at its least (hue 352). Every whole hue was computed, with a channel
+  outside sRGB clipped; none was measured on a display.
+- **The readout** in the top band is the terminal's ink at 70% (it was 50%, which is 3.08:1 on
+  the day ground; 70% is 5.56:1), on the capsules' axis, 11 from the pane's left.
+- **The meter** is a 44 × 4 track in the ink at 14%, its fill at 46% and at 86% from the hot
+  share, with the figure beside it at 72% (the full ink and bold when hot). Under 220 wide a pane
+  drops the readout and the meter's track, and keeps the badge and the figure.
+- **The exit chip** (GT-6: what became of a dead pane, the host's own) takes the same capsule at
+  the foot's left, 4 in and 18 tall with corners of 5, opposite the meter. Its type and colours
+  are unchanged.
+
+*Until PF-2 (puppeteer-views 0.4.7 and before) the badge was a tab grown down from the pane's top
+edge with square upper corners, the meter a track along the whole foot, and the exit chip a tab
+at the foot's left edge; the selected badge's label was white in both modes.*
+
 ### 2.8 Identity — the face
 
 **A user is known by form, never by hue (UA-D17, ratified 2026-09-22).** One emoji per user,
@@ -9287,8 +9324,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   figure semibold), and at the right **the badge** (OS mark · agent mark · name, filled in text
   main), inset clear of the 40pt corner. Where the three do not fit, the capsule gives way first, its
   model word cut short; the ring and the badge keep their width. *(PF-1, 2026-11-21; James, of the
-  options on the page "Godview terminal pane": "I like desktop A and mobile A". Until then the readout was one line of type, model · effort · context, at half the
-  band's ink, and since 2026-11-02 the share was drawn a second time as a 6pt bar in the home
+  options on the page "Godview terminal pane": "I like desktop A and mobile A". Until then the
+  readout was one line of type, model · effort · context, at half the band's ink, and since
+  2026-11-02 the share was drawn a second time as a 6pt bar in the home
   indicator's zone, right above the indicator: two bars stacked. The bar is retired. The ring is the
   one place the phone draws the share.)* The band's ink, the line's and
   the glow's follow the ground's lightness, not the app's theme: a ground that white reads better on
@@ -9298,7 +9336,28 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   content of terminal, we need add safe margin to terminal at top to avoid it"): the terminal's view
   begins at the band's foot, so the grid's first row is under no chrome, and the band stands on the
   terminal's own ground, at its opacity, with no blur and no fade. A cooled terminal's veil covers
-  the band's ground too. **The grid runs from the band's foot to the top of the home indicator's
+  the band's ground too. **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
+  easy for mobile user to switch models and effort, so maybe design some button for it"). Where the
+  run's row offers a model switch (its adapter's own offer, said by the desktop that owns it), the
+  capsule takes a touch and wears a 7pt up-down chevron after its last word, at 60%. A press opens
+  **the switch list** in a popover under the capsule, 280pt wide, on the sheet's glass:
+  - **Model**, a caption at 50%, then the agent's own models as that desktop lists them, one row
+    each (15pt, 44pt tall), the serving one with a check at its right. **Effort** under it, the
+    serving model's effort values as a row of capsules, the serving one filled. Where the serving
+    model is not in the list, no row is checked, and Effort is drawn only when every listed model
+    offers the same values.
+  - **One touch asks for one change** and closes the list. Until the row says a new model or
+    effort, and for 30 seconds at most, the capsule draws the asked word in italic at 60%: asked,
+    not confirmed. The row's own word is the only confirmation.
+  - **A refusal stays in the list**, as its foot line in the attention ink: "It's mid-turn. Ask
+    again when it's idle." · "It's waiting on an answer. Ask again after." · "It couldn't take
+    that: ‹the owner's word›." · "Couldn't reach ‹desktop›." While the list is read: "Reading
+    its models…". A read that found none says the agent's own sentence, else "Couldn't read its
+    models."
+  - Where the agent keeps a change as its own default, the list's last line says so, at 50%:
+    "‹Agent› keeps this for its new sessions too."
+  - A run whose row offers no switch keeps the capsule as a readout: no chevron, no touch.
+  **The grid runs from the band's foot to the top of the home indicator's
   safe area** (34pt); the text's margins are the renderer's own padding, 10pt each
   side, 2pt above and 8pt below. **The closed input row is no longer a band**: its keyboard key and
   its reply chips float over the last rows, each on a local clearing of the ground. The open input
