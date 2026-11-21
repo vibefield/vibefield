@@ -9279,14 +9279,27 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   no paper, no rounded inset, no divider and no header block. **The card wears Godview's pane
   frame**: a 1px line and the inner glow in text main follow the sheet's corners, 40pt at the top
   and the display's own at the foot (62pt on James's iPhone) so the display never cuts the line, and
-  a 44pt band across its top holds, at the left, **the readout** (model · effort · context,
-  lowercase, as a desktop pane's), and at the right **···** and **the badge** (OS mark · agent
-  mark · name, filled in text main), inset clear of the 40pt corner. The band's ink, the line's and
+  a 44pt band across its top holds, at the left, **the readout capsule** (model | effort,
+  lowercase, mono 11.5 semibold in text main at 92%, on a 10% tint of text main with a 16% hairline,
+  28pt tall, a 14pt hairline between its two words; the effort italic while it is only the launch's
+  intent) and beside it **the context ring** (12pt across, 2.5 wide: its track text main at 18%, its
+  arc at 72%, and the share in mono 11 medium at 66%; from 80% the arc and the figure take 90% and the
+  figure semibold), and at the right **the badge** (OS mark · agent mark · name, filled in text
+  main), inset clear of the 40pt corner. Where the three do not fit, the capsule gives way first, its
+  model word cut short; the ring and the badge keep their width. *(PF-1, 2026-11-21; James, of the
+  options on the page "Godview terminal pane": "I like desktop A and mobile A". Until then the readout was one line of type, model · effort · context, at half the
+  band's ink, and since 2026-11-02 the share was drawn a second time as a 6pt bar in the home
+  indicator's zone, right above the indicator: two bars stacked. The bar is retired. The ring is the
+  one place the phone draws the share.)* The band's ink, the line's and
   the glow's follow the ground's lightness, not the app's theme: a ground that white reads better on
   takes §2.4's dark ramp by day too, and a light ground takes the light ramp. The band takes its
   own touches, so a touch there never reaches the terminal under it (that touch would take the seat,
-  DS-D5). **The grid starts under the band and runs to the top of the home indicator's safe area**
-  (34pt), so no row hides under chrome; the text's margins are the renderer's own padding, 10pt each
+  DS-D5). **The band is reserved** (PF-1, 2026-11-21; James: "the top is obscuring the top area
+  content of terminal, we need add safe margin to terminal at top to avoid it"): the terminal's view
+  begins at the band's foot, so the grid's first row is under no chrome, and the band stands on the
+  terminal's own ground, at its opacity, with no blur and no fade. A cooled terminal's veil covers
+  the band's ground too. **The grid runs from the band's foot to the top of the home indicator's
+  safe area** (34pt); the text's margins are the renderer's own padding, 10pt each
   side, 2pt above and 8pt below. **The closed input row is no longer a band**: its keyboard key and
   its reply chips float over the last rows, each on a local clearing of the ground. The open input
   card is as it was. The attachment's words ride over the grid 10pt below the band. A cooled
@@ -9304,6 +9317,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   under it: "at 13pt the grid gains about five rows, three or four of them under the header, so a
   full-screen program's first lines are hidden on the phone". James's pick of T1 and F1 retires both
   the fade and that cost: the band holds no rows.)*
+  > **Errata (2026-11-21, PF-1):** from 2026-10-19 this said "The grid starts under the band and runs
+  > to the top of the home indicator's safe area (34pt), so no row hides under chrome", and that the
+  > band "holds no rows". From 2026-11-02 (`0c4590d7a`) until PF-1 that was false as built: the band
+  > floated over the grid on a blur that faded out 32pt below its foot, the terminal's view began at
+  > the sheet's top, and the grid's first rows stood under the band. It also named a **···** beside
+  > the badge; the band draws none (read at PF-1).
 - **The phone's terminal keypad** (updated 2026-11-02, James's keyboard review).
   The expanded keypad uses a spatial arrow cluster with larger Backspace and Enter keys,
   soft rounded caps, and a shared native glass surface. Its pages are **Navigate**, **Shortcuts**,
