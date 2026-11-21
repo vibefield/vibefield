@@ -39,7 +39,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       index="11"
       eyebrow="Control room"
       title="A deliberate change of register"
-      description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The swarm's bodies below are the views package's own fixtures drawn by the shipping renderer, so its state grammar is read as the pixels Godview paints."
+      description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a paper or graphite terminal deck. The swarm's bodies below are the views package's own fixtures drawn by the shipping renderer, so its state grammar is read as the pixels Godview paints."
     >
       <Specimen
         title="Godview stage — the head's circles switch the monitor's views (GV-D1); System control is the palette's act in a development build, and a production build has none (LP-6)"

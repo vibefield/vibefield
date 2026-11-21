@@ -283,8 +283,9 @@
   --vf-godview-light-working-bg: #222222;
   --vf-godview-light-working-text: #ffffff;
   --vf-godview-light-working-border: #111111;
-  --vf-godview-light-terminal-bg: #ece8dc;
-  --vf-godview-light-terminal-divider: #d2cec3;
+  /* §2.7 (TL-4c, 2026-11-19): by day the terminal's ground is paper; parchment, #ece8dc / #d2cec3, until then. */
+  --vf-godview-light-terminal-bg: #f1f0ee;
+  --vf-godview-light-terminal-divider: #d6d5d3;
 
   --vf-godview-dark-monitor-bg: #0a0a0a;
   --vf-godview-dark-panel-bg: #111111;
@@ -301,6 +302,42 @@
   --vf-godview-dark-working-border: #ffffff;
   --vf-godview-dark-terminal-bg: #282c34;
   --vf-godview-dark-terminal-divider: #414650;
+  /* §2.7 "The terminal's own colours" (TL-4c, 2026-11-19): the sixteen the device is to tell every session when no
+     catalog theme is picked for Godview's mode (item 590's second part tells them; data until then). By day each is
+     solved for its contrast on the paper; by night ghostty's set with its three inks under 4.5:1 lifted. Their twin
+     in code is godview/terminal-look.ts, held to these by a row. */
+  --vf-godview-light-terminal-ansi-0: #1e2227;
+  --vf-godview-light-terminal-ansi-1: #a9524d;
+  --vf-godview-light-terminal-ansi-2: #38793c;
+  --vf-godview-light-terminal-ansi-3: #976004;
+  --vf-godview-light-terminal-ansi-4: #306fac;
+  --vf-godview-light-terminal-ansi-5: #8d589a;
+  --vf-godview-light-terminal-ansi-6: #007879;
+  --vf-godview-light-terminal-ansi-7: #676c73;
+  --vf-godview-light-terminal-ansi-8: #51565c;
+  --vf-godview-light-terminal-ansi-9: #ad3232;
+  --vf-godview-light-terminal-ansi-10: #006f1a;
+  --vf-godview-light-terminal-ansi-11: #865400;
+  --vf-godview-light-terminal-ansi-12: #0061aa;
+  --vf-godview-light-terminal-ansi-13: #8b3f9c;
+  --vf-godview-light-terminal-ansi-14: #006a6b;
+  --vf-godview-light-terminal-ansi-15: #81868d;
+  --vf-godview-dark-terminal-ansi-0: #1d1f21;
+  --vf-godview-dark-terminal-ansi-1: #db7473;
+  --vf-godview-dark-terminal-ansi-2: #b5bd68;
+  --vf-godview-dark-terminal-ansi-3: #f0c674;
+  --vf-godview-dark-terminal-ansi-4: #81a2be;
+  --vf-godview-dark-terminal-ansi-5: #b294bb;
+  --vf-godview-dark-terminal-ansi-6: #8abeb7;
+  --vf-godview-dark-terminal-ansi-7: #c5c8c6;
+  --vf-godview-dark-terminal-ansi-8: #939292;
+  --vf-godview-dark-terminal-ansi-9: #ef6668;
+  --vf-godview-dark-terminal-ansi-10: #b9ca4a;
+  --vf-godview-dark-terminal-ansi-11: #e7c547;
+  --vf-godview-dark-terminal-ansi-12: #7aa6da;
+  --vf-godview-dark-terminal-ansi-13: #c397d8;
+  --vf-godview-dark-terminal-ansi-14: #70c0b1;
+  --vf-godview-dark-terminal-ansi-15: #eaeaea;
   /* §2.7 (AO-6b3, 2026-10-27): §2.5's attention ink per GODVIEW mode, for a state
      word that has to be read; the dark ink is the fill, which reads on the panel. */
   --vf-godview-light-ink-attention: #b25e00;

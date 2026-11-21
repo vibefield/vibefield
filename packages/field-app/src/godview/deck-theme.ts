@@ -9,14 +9,15 @@ import { useMemo } from "react";
 import { hexToRgb01 } from "../appearance/color";
 import { type DeckAppearance, deckThemeNameForMode, useDeckAppearance } from "./deck-appearance";
 import type { GodviewTheme } from "./GodviewTuningPanel";
+import { GODVIEW_TERMINAL_LOOK } from "./terminal-look";
 
 // The deck's terminal projection: the viewer's stored appearance turned into
 // the two props the workspace takes for it, `theme` and `effects`. Both live
 // here because both answer the same question — what this VIEWER draws, as
 // opposed to what the floor below configures. Each Godview mode resolves its
-// OWN catalog selection; without one it uses the exact Daylight/Midnight
-// terminal palette from the Chopsticks reference rather than borrowing the
-// other mode's choice.
+// OWN catalog selection; without one it uses Godview's own pair rather than
+// borrowing the other mode's choice: the reference's Daylight and Midnight, on
+// the deck's own grounds (TL-4c, 2026-11-19; DESIGN.md §2.7).
 //
 // Terminal TEXT is not ours to color (§3: it belongs to Ghosttea's renderer and
 // to the program running). These values give the renderer its ground, caret and
@@ -121,16 +122,14 @@ export function godviewTerminalTheme(
     };
   }
   const reference = godviewTheme === "dark" ? TERMINAL_THEMES.midnight : TERMINAL_THEMES.daylight;
+  // The ground is the deck's own (TL-4c, 2026-11-19; DESIGN.md §2.7 "The terminal's own colours"): by
+  // day paper where the reference's is parchment. Ink, cursor and selection stay the reference's, and
+  // a block cursor's text is the ground. The pane's alpha is the viewer's.
+  const [r, g, b] = hexToRgb01(GODVIEW_TERMINAL_LOOK[godviewTheme].ground);
   return {
     ...reference,
-    // Keep VibeField's renderer-native pane alpha while taking every color from
-    // the exact light/dark terminal palettes used by the reference app.
-    background: [
-      reference.background[0],
-      reference.background[1],
-      reference.background[2],
-      appearance.opacity,
-    ],
+    background: [r, g, b, appearance.opacity],
+    cursorText: [r, g, b, 1],
     backgroundOpacityCells: appearance.opacityCells,
     ...PANE_TEXT_NETS,
   };

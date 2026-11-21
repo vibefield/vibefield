@@ -32,9 +32,11 @@ public enum FieldPalette {
   // disc, `--bud-bg` white / #242424, with a 1.25 px ring at 22% ink).
   public static let bloomBud = dynamic(light: 0xFFFFFF, dark: 0x242424)
 
-  // The terminal card surface (the desktop terminal deck's paper)
-  public static let terminalBackground = dynamic(light: 0xECE8DC, dark: 0x282C34)
-  public static let terminalDivider = dynamic(light: 0xD2CEC3, dark: 0x414650)
+  // The terminal card surface (the desktop terminal deck's paper): DESIGN.md
+  // §2.7's terminal ground and divider, by day paper since TL-4c (2026-11-19),
+  // parchment 0xECE8DC / 0xD2CEC3 until then.
+  public static let terminalBackground = dynamic(light: 0xF1F0EE, dark: 0x282C34)
+  public static let terminalDivider = dynamic(light: 0xD6D5D3, dark: 0x414650)
 
   // Atmosphere
   public static let scanline = dynamic(

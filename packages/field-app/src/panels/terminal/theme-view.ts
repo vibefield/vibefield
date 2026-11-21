@@ -3,6 +3,7 @@ import {
   type GhostteaColorTheme,
   TERMINAL_THEMES,
 } from "@vibecook/ghosttea-react/workspace";
+import { GODVIEW_TERMINAL_LOOK } from "../../godview/terminal-look";
 
 // A window theme as the page DRAWS it (GT-7): the preview, the slots and the
 // browser's rows all colour from this one shape, resolved the way the deck
@@ -59,7 +60,8 @@ function builtin(mode: PreviewMode): PreviewTheme {
     name: mode === "dark" ? "Godview Midnight" : "Godview Daylight",
     catalogName: null,
     dark: mode === "dark",
-    background: hexOf(theme.background),
+    // the deck's own ground (TL-4c, 2026-11-19; DESIGN.md §2.7), as `godviewTerminalTheme` draws it
+    background: GODVIEW_TERMINAL_LOOK[mode].ground,
     foreground: hexOf(theme.foreground),
     cursor: hexOf(theme.cursor),
     cursorAlpha: theme.cursor[3],

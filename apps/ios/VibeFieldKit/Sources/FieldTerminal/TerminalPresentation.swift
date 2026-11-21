@@ -36,6 +36,11 @@ private enum FallbackColors {
 ///   foot. The margin is the renderer's because the card's ground is the
 ///   terminal's own: a margin outside the view would be a second ground.
 /// - `customShaderCount` is 0: no host-local shader paths exist on a phone.
+/// - `minimumContrast` is the desktop's 3:1 floor (TL-4c, 2026-11-19; DESIGN.md
+///   §2.7 "The terminal's own colours", on the phone): a cell's colour arrives
+///   as its session was told it, so a session whose host is light hands this
+///   ground inks made for a light one; the floor keeps each readable here, hue
+///   kept, as it does on the desktop.
 /// - `revision` is a digest of the renderer VALUES, so it changes exactly when
 ///   the device presentation changes — document identity that never drags an
 ///   unrelated edit onto the Metal path.
@@ -74,8 +79,8 @@ public func presentationConfig(
   let revision = presentationRevision(
     foreground: foreground, background: background, cursor: cursor, cursorText: cursorText,
     selectionBackground: selectionBackground, selectionForeground: selectionForeground,
-    palette: palette, backgroundOpacity: opacity, fontSize: fontSize,
-    paddingX: paddingX, paddingY: paddingY,
+    palette: palette, backgroundOpacity: opacity, minimumContrast: textContrastFloor,
+    fontSize: fontSize, paddingX: paddingX, paddingY: paddingY,
     shaderEffects: shaders, shaderAnimation: appearance.shaderAnimation)
 
   return GhostteaTerminalPresentationConfig(
@@ -90,6 +95,7 @@ public func presentationConfig(
     palette: palette,
     backgroundOpacity: opacity,
     backgroundOpacityCells: false,
+    minimumContrast: textContrastFloor,
     fontSize: fontSize,
     fontFamilies: [],
     paddingX: paddingX,
@@ -100,6 +106,10 @@ public func presentationConfig(
     customShaderCount: 0
   )
 }
+
+/// The contrast text keeps against its own cell's ground on the phone: the
+/// desktop's floor (DESIGN.md §8 "What a pane's text is held to").
+let textContrastFloor: Float = 3
 
 /// Named theme → catalog entry, degrading in one step to the default theme.
 /// (`nil` name means "our default" by contract.)
@@ -121,15 +131,16 @@ private func color(_ hex: String?, fallback: [UInt8]) -> [UInt8] {
 private func presentationRevision(
   foreground: [UInt8], background: [UInt8], cursor: [UInt8], cursorText: [UInt8],
   selectionBackground: [UInt8], selectionForeground: [UInt8],
-  palette: [GhostteaPaletteConfigEntry], backgroundOpacity: Float, fontSize: Float,
-  paddingX: [Float], paddingY: [Float],
+  palette: [GhostteaPaletteConfigEntry], backgroundOpacity: Float, minimumContrast: Float,
+  fontSize: Float, paddingX: [Float], paddingY: [Float],
   shaderEffects: [String], shaderAnimation: Bool
 ) -> String {
   let canonical = [
     "fg:\(foreground)", "bg:\(background)", "cu:\(cursor)", "ct:\(cursorText)",
     "sb:\(selectionBackground)", "sf:\(selectionForeground)",
     "pa:" + palette.map { "\($0.index)=\($0.color)" }.joined(separator: ";"),
-    "op:\(backgroundOpacity)", "fs:\(fontSize)", "px:\(paddingX)", "py:\(paddingY)",
+    "op:\(backgroundOpacity)", "mc:\(minimumContrast)", "fs:\(fontSize)", "px:\(paddingX)",
+    "py:\(paddingY)",
     "sh:" + shaderEffects.joined(separator: ";"), "an:\(shaderAnimation)",
   ].joined(separator: "|")
   var hash: UInt64 = 0xcbf2_9ce4_8422_2325
