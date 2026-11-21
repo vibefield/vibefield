@@ -66204,6 +66204,9 @@ and 3 skipped, push 154's three; none of push 154's 3,175 rows lost or moved, an
 **What it does not prove.** That the red does not come back. If it does, its reasons now say whether the lock or the
 file system refused, and that decides the product mend.
 
+> **Read after the push (2026-11-21):** GitHub's `verify` at the pushed head `fdf3a29f8` passed: run 44896246164,
+> ended 11:41:09Z; `audit` passed, run 44896246104.
+
 ## 644 — the godview smoke finds the profiles column where it stands, in the chrome layer (M503)
 
 (2026-11-21; item 644; one test-only commit, 2 paths: `0e1c06e36` ("644: the godview smoke finds the profiles column
@@ -66308,3 +66311,236 @@ SMOKE_CANVAS_* line before it printed.
   smoke:canvas reads the change at its next run. The MORE red stands until a run names its part and its cause is read.
 
 **Not done, and not claimed:** no push of its own.
+
+## Item 646 — smoke:market's red rows say the window they threw in, and tidy so the next row starts clean (M505)
+
+(2026-11-21; item 646; one commit, one path, +64 −4. Cut on main `fdf3a29f8777` as `6cd3471cbee3` (tree
+`9fb0caf6892d`) on branch `mk/646-on-fdf3a29f8777`. On main it is `a50993f91` "646: smoke:market's red rows say the
+window they threw in, and tidy so the next row starts clean". Every other id here is a run's.)
+
+**The reds it comes from.** `pnpm gate:landing` at main `fdf3a29f8777`, row 17 smoke:market, exit 2; then smoke:market
+again alone at load 5.29, red the same. Both reds are deterministic.
+- The listed run's DOOR: "the desk remounted with the clock's kind did not happen within 30000ms". fieldd's commit had
+  landed, and the clock was later read installed. DOOR throws before its own uninstall, so INSTALL found the page
+  saying "Installed" and said "no Install in the popup". In the second run RISE was red downstream of it as well.
+- The update run's COUNT: "Plugins open did not happen within 5000ms". The palette had come up, and its Updates row was
+  found and pressed. COUNT throws with the palette open, so UPDATE's ⌘K shut it and said "the palette did not happen".
+- Neither red's facts could be read (`"facts":null`). Nothing in assemblies 17–20 touches the palette, the Plugins
+  popup, the desk's remount or fieldd's install. The ledger records no smoke:market run before this gate.
+
+**What landed.** In `packages/electron-shell/src/testing/smoke-market.ts`, the rows' runner alone (`marketRunRows`):
+- A row that throws now adds the window's facts, read once in its catch (`WINDOW_FACTS`): the desk's mount and status,
+  which of the popup, the palette and the Me menu stand, and the focused element by its tag and first class. Facts of
+  the chrome only, never an object's text. It also adds the plugins fieldd lists, with their versions. The remount wait
+  names the mount it started from.
+- A row that throws then runs a tidy: the popup folded (up to three Esc, as its Esc answers the nearest first), the
+  palette and the Me menu shut, and after the listed run's DOOR the clock DOOR installed taken away. What the tidy
+  did is said on its own line (`SMOKE_MARKET_TIDY`), never counted as a red. It takes the place of the catch's one Esc.
+- It SAYS and TIDIES; it does not mend DOOR or COUNT. No product source changes, and no row's judge moves.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the one file: format by stdin
+  equal to the file and `check --error-on-warnings` exit 0, as main's own file at `fdf3a29f8777` is (the control). The
+  first check found one wrap; the cut's file takes biome's own output. The patch applied to `fdf3a29f8777` in a
+  scratch index first.
+- The cut (11:14:01Z → 11:14:04Z): the patch laid by `git apply` in a standing lane, detached at main; the one path
+  held to the mended file's sum as laid and as committed; its added lines swept (0); through the pre-commit hook (the
+  committed rows are the lock's); then one create-only ref. Read again at source: parent `fdf3a29f8777`, the one path,
+  the file's sum and the message's.
+- The train's verify and kit: `pnpm verify` whole at `d070b7449` (assembly 22's top) on the test Mac, run `v-a22r2close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, ghosttea
+  0.16.1 compiled, the gen check clean), and the kit ALL there, run `kit-a22r2close-2` (`xcodebuild` exit 0, 3,175 rows:
+  3,172 passed and 3 skipped; none of push 156's 3,175 rows lost or moved, and none new), on a new DerivedData after the
+  first run on the lane's standing one failed at build on a stale TailscaleKit module.
+
+**Not covered, and owed.**
+- Not run: a typecheck, electron-shell's tests and smoke:market itself; the assembly's verify runs the first two, and
+  smoke:market reads the change at its next run. DOOR's and COUNT's reds stand until a run says their window and their
+  cause is read.
+
+**At the gate (2026-11-21).** smoke:market at the land's head `d070b7449f89`, alone at load 5.3, 95 s: RED, and each
+red now says its window. The listed run: DOOR (the desk stood at mount 0 for 30 s while fieldd listed the clock
+installed), RISE (the clock's row in Installed, 10 s) and COMMUNITY ("Turn on community plugins?", 5 s). The update
+run: COUNT ("Plugins open did not happen within 5000ms", window {mount 0, palette open, focus BODY}). The tampered,
+forged and offline runs were green. The reds' causes are not read yet: owed.
+
+**Not done, and not claimed:** no push of its own.
+
+## 648 — the godview smoke says where focus stands when the shell's pane is not active again (M506)
+
+(2026-11-21; item 648; one test-only commit, 1 path: `29e9afc13` ("648: the godview smoke says where focus stands when
+the shell's pane is not active again"), on main `eb0863097da7`. Cut by the terminal-look lane on branch
+`tl/648-on-eb0863097da7` (as cut: `5f691ae7e4b9`, tree `0d5b006da920`). It rides assembly 22 with item 646. The carry is
+the fixer's line.)
+
+**What was wrong.** At main `eb086309` (assembly 21, with item 644), `smoke:godview` passed the profiles column and
+went red later, at rung 11m's last wait: "timed out waiting for the shell's pane focused again for 11h". After Chat's
+Jump to put the agent's session into the focused pane, the smoke placed the keyboard focus in the shell's pane
+(`focusPane` returned "ok"), and the deck still named the agent's session active 10 s later. The same smoke without a
+record, `smoke:godview:no-record` (rosettad off), passed whole on the same tree, its 11h included. The rung was written
+on 2026-11-04 and last ran green on 2026-11-10; from 2026-11-16 the profiles column's query (item 644) stopped every run
+before it.
+
+**What the red could not say.** In its last facts one session stands in two of the five panes, first and last. It is
+one of the two sessions the restart restored. `focusPane` takes the first pane showing a session, so if the shell is
+that session, the focus may stand in a pane the deck does not count. The record does not name the shell's session.
+Only the recording run opens a recorded session from History; the no-record run skips that rung.
+
+**What changes.** The smoke alone, no product change: `packages/electron-shell/src/testing/smoke.ts` +35 −5 (numstat,
+git's own), under dated comments naming the item.
+- Before the split it prints `SMOKE_GODVIEW_11H_SHELL`: the shell's session and the deck's pane list.
+- On the 11h timeout, before the red, it prints `SMOKE_GODVIEW_11H_FOCUS`: what each deck pane shows, every pane showing
+  the shell's session, the pane holding the keyboard focus, the pane marked active, and the focused element.
+
+The next recording run decides between two causes: a session shown in two panes, which may itself be a product fault,
+or a deck that does not take a focused pane as its active one.
+
+**Proved before the cut, on the development Mac.** Biome 2.5.4 with main's biome.jsonc, on the file at main and with the
+change: format by stdin unchanged, and `check --error-on-warnings` exit 0. A planted mis-format in a copy was changed by
+format, as it must be. The patch, tried on main's blob, gives the committed file byte for byte. Not run there: the
+smoke, and no typecheck.
+
+**The cut.** `lanes/tl/item-648/cut-648.sh` (`430e79c1`), once, on VF-PM's word, END 2026-11-21 11:38:21Z: one ref
+created, the path at its sum, the message the file's, the commit hook passing; the lane's other branch and main unmoved.
+
+**In the verify.** `pnpm verify` whole at `d070b7449` (assembly 22's top) on the test Mac, run `v-a22r2close` (exit 0:
+every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, ghosttea 0.16.1
+compiled, the gen check clean), and the kit ALL there, run `kit-a22r2close-2` (`xcodebuild` exit 0, 3,175 rows: 3,172
+passed and 3 skipped; none of push 156's 3,175 rows lost or moved, and none new), on a new DerivedData after the first
+run on the lane's standing one failed at build on a stale TailscaleKit module.
+
+**At the gate.** `smoke:godview` green at the land's head `d070b7449f89`, alone at load 3.4: exit 0 in 143 s, after the
+install.
+
+## Item 649 — smoke:canvas's MORE presses ↵ on the pill as a person's Enter, and starts each part clean (M507)
+
+(2026-11-21; item 649; one commit, one path, +18 −1. Cut on `eb0863097da7` (item 645, an ancestor of main's records
+head) as `4c7e44eb7579` (tree `0b586caf62d5`) on branch `mk/649-on-eb0863097da7`. On main it is `b84654be0` "649:
+smoke:canvas's MORE presses ↵ on the pill as a person's Enter, and starts each part clean". Every other id here is a
+run's.)
+
+**The red it comes from.** smoke:canvas at `eb0863097da7`, with item 645 naming the part: "MORE: Plugins open from the
+pill's ↵ did not happen within 5000ms · MORE (PRESS): the board out (PRESS) did not happen within 5000ms (board
+{open:false, held:false, p:0, popup:false, focus:BUTTON.vf-line-create})". It was red the same in three runs, at loads
+from 5 to 7, so it is deterministic.
+- TAB had run, and Tab had reached the pill (no "did not reach the pill" problem). ↵ on the focused pill opened
+  nothing.
+- PRESS was a knock-on. `opened()` returned before its Esc, so the board stood out, and PRESS's create press folded it.
+- MORE had never run green before: written 2026-11-14 without a run, it first ran at this landing's gate.
+
+**The cause.** The pill, More in Plugins…, is a plain `<button type="button">` (`PegboardView.tsx`), drawn beside the
+board's element, not in it, so the board's own Enter (`onBoardKeyDown`, which lays a specimen) never hears it. The smoke
+sent ↵ as `key("Return")`: a key down and a key up with no character. The browser clicks a focused button on Enter's
+character, never on its key down alone, so the pill took no press. A person's Enter carries the character, so the
+product is not shown at fault. The pegboard rows' ⏎ works without one because the board answers on its key down.
+
+**What landed.** In `packages/electron-shell/src/testing/smoke-more.ts`:
+- TAB's ↵ is a person's Enter: its key down, its character (`"\r"`) and its key up.
+- `opened()`, when the popup never opened, shuts what stands before it returns (the popup were it late, then the
+  board), so the next part starts from a shut board and its create press opens the board rather than folding it.
+- No product source changes.
+
+**What was proved.** On 2026-11-21, on the development Mac.
+- Before the cut: biome 2.5.4 from the lane's own install, with main's `biome.jsonc` over the one file: format by stdin
+  equal to the file and `check --error-on-warnings` exit 0, as main's own file at `eb0863097da7` is (the control). The
+  patch applied to `eb0863097da7` in a scratch index first.
+- The cut (11:56:20Z → 11:56:23Z): main held at `ca6745156b5f` (one docs commit over the base, the path unmoved
+  between); the patch laid by `git apply` in a standing lane, detached at the base; the one path held to the mended
+  file's sum as laid and as committed; its added lines swept (0); through the pre-commit hook (the committed rows are
+  the lock's); then one create-only ref. Read again at source: parent `eb0863097da7`, the one path, the file's sum and
+  the message's.
+- The train's verify and kit: `pnpm verify` whole at `d070b7449` (assembly 22's top) on the test Mac, run `v-a22r2close`
+  (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, ghosttea
+  0.16.1 compiled, the gen check clean), and the kit ALL there, run `kit-a22r2close-2` (`xcodebuild` exit 0, 3,175 rows:
+  3,172 passed and 3 skipped; none of push 156's 3,175 rows lost or moved, and none new), on a new DerivedData after the
+  first run on the lane's standing one failed at build on a stale TailscaleKit module.
+
+**Not covered, and owed.**
+- Not run: a typecheck, electron-shell's tests and smoke:canvas itself; the assembly's verify runs the first two, and
+  smoke:canvas reads the change at its next run.
+- Likely, not proved: that the `"\r"` character reaches the button as Enter's keypress; the next run says so. With TAB
+  through, PRESS and IN HAND run for the first time, so a red there is a new red, not this one.
+- smoke-market's two card ↵ (`key("Return")`, the install card's and the update card's) are as they were, until item
+  646's facts show where the focus is at each.
+
+**At the gate (2026-11-21).** smoke:canvas at the land's head `d070b7449f89`, alone at load 4.8, 839 s: RED the
+same, "MORE: Plugins open from the pill's ↵ did not happen within 5000ms". Its facts: Tab reached the pill (`tabbed`
+true); the ↵ with its character opened nothing (`keyed` {open:false}); a click opened it (`clicked` {open:true, tab
+Discover, body "Reading the plugin list…"}). So the character does not press the pill, and this mend does not take:
+the red stands, owed to a next item. The same run also named "MORE: with no plugin list Discover said "Reading the
+plugin list…"".
+
+**Not done, and not claimed:** no push of its own.
+
+## EL8 — Ghosttea 0.16.1 on every plane: the kit's Swift Truffle moves to 0.7.29; the desktop's stays 0.7.28 (M508)
+
+(2026-11-21; one commit, 19 paths +147 −146: `d070b7449` ("EL8 (ghosttea 0.16.1): the kit's Swift Truffle moves to
+0.7.29 with it; the desktop's stays 0.7.28"). Cut by the terminal-look lane on main `ca6745156b5f` as `6eb2e72e2d34`
+(tree `4ba90a8a7c1b`), branch `tl/el8-gt0161-on-ca6745156b5f`. It is assembly 23, carried onto main after 22. The carry
+is the fixer's line. Its predecessor is the EL8 to ghosttea 0.16.0, M434.)
+
+**The release.** ghosttea `v0.16.1` is a signed tag (tag object `9f5710e4`) on `55c63c53`, the merge of ghosttea #110,
+published on 2026-11-21:
+- the six crates this graph takes, on crates.io; the six `@vibecook/ghosttea*` packages at 0.16.1 on npm;
+- the Apple release `ghosttea-apple-native-42558751e80d` (50,939,640 B, CI's pin commit `4b1c5006`);
+- the VT library is 0.15.0's: Ghostty `0fa3d577`, libghostty-vt 1.0.
+
+0.16.1 is 0.16.0's sources with the Swift package's Truffle at 0.7.29 (ghosttea #109, merged as `0405855c`). Its
+manifests declare `exact: "0.7.29"`, and SwiftPM resolves one Truffle for a graph, so the kit's Swift Truffle moves in
+this event, the first move since 0.14.0's 0.7.26. The desktop's truffle (cargo `=0.7.28`, the five sidecars) does not
+move.
+
+**What moved.**
+- By `node scripts/siblings.mjs render --prod`, after the lock: Cargo.toml's `ghosttea = "=0.16.1"`, the three rendered
+  npm rows, the kit's `ghostteaRelease` and its `truffleRelease` (six `render:` lines).
+- siblings.lock.json: ghosttea's `sha` and `release` keys; truffle's `sha` (`6d485b75`, tag v0.7.29) and
+  `release.swift`; their prose, with a dated correction at its source (it said truffle's cargo and npm planes were
+  0.7.27; they are 0.7.28 since `628233925`).
+- Typed by the lane's tool: the two unrendered npm rows, the six `minimumReleaseAgeExclude` rows (the 0.16.0 rows kept
+  for the one install, then dropped), preflight's six ghosttea rows and the truffle Swift row's regex and label, the
+  App's Package.resolved pin lines (its originHash as committed), the acknowledgements' test copy and AppReviewTests'
+  version, dated notes (Cargo.toml, pnpm-workspace.yaml, the kit's Package.swift, preflight.mjs, terminal_client.rs,
+  terminal.rs), TESTFLIGHT.md's Swift row with its correction, ROADMAP's two pin rows, DECISIONS' TB row.
+- Written by the tools, on the test Mac, never by hand:
+  - Cargo.lock, by `cargo update -p ghosttea --precise 0.16.1`: the six crates (12 and 12);
+  - pnpm-lock.yaml, by the one online install: the six packages, no other key;
+  - the kit's Package.resolved, by `swift package resolve`: ghosttea and truffle together, rosetta unmoved, the
+    originHash the committed manifest's sha256;
+  - `ghostty-keys.generated.ts`, by `pnpm gen`;
+  - the Go licence record, by `third-party-notices.mjs --refresh-go-modules` with no module cache: TailscaleKit at
+    truffle 0.7.29, and two entries no shipped binary embeds any more (go1.27.3, klauspost/compress v1.20.0) gone,
+    nothing added;
+  - the phone's acknowledgements, by `--ios`: 145 components, 117 texts, 0 errors, 0 gaps; only versions move.
+
+**What 0.16.1 changes for VibeField's code.** No line outside the pins and their notes: no Rust source of the six
+crates, no npm surface and no protocol minor moved between the tags.
+
+**What was proved.** Every row ran on the test Mac on main `ca674515`, the edits made by the cut's own tool
+(`el8-edits-0161.py`, `df150177`, re-pointed from M434's `el8-edits-2.py`):
+- A (el8r161a-1, 12:29:30Z → 12:30:16Z): GREEN. The twelve packages read back at 0.16.1, the tag, the Apple asset at its
+  size and checksum, truffle's tag and TailscaleKit's zip. The red arm: preflight after the lock and the render alone
+  ended 1, on a ghosttea row at 0.16.0 and the truffle Swift row at 0.7.26. The slices: three, 4898 members each side,
+  equal with ghosttea's own crates' build hashes blanked. preflight, check:deps, `render --prod --check` and
+  check:ios-fixtures 0 each. 19 paths, the patch `cdf2cde05d7fe01c`.
+- V (el8r161v-1): `pnpm verify` whole on A's tree, exit 0: cargo 698 passed, 0 failed, 15 ignored; field-app 387 files
+  (5614 tests); fieldd 330 files and 5 skipped (5103 tests, 15 skipped).
+- K (el8r161k-1): the kit, every test target by `xcodebuild test` on a simulator, exit 0: 3,175 rows, 3,172 passed and 3
+  skipped; the acknowledgements' ghosttea row passed; Xcode's resolve put ghosttea at `55c63c53` and truffle at
+  `6d485b75`, the tree unmoved.
+- The cut, on the development Mac, 12:54:09Z → 12:54:11Z: the tool's three phases around the real render, the six
+  run-written files placed from row A's raw copies, each of the 19 held to A's sum before staging and in the commit, the
+  commit hook passing.
+
+**In the verify.** `pnpm verify` whole at `d070b7449` (assembly 22's top) on the test Mac, run `v-a22r2close` (exit 0:
+every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, ghosttea 0.16.1
+compiled, the gen check clean), and the kit ALL there, run `kit-a22r2close-2` (`xcodebuild` exit 0, 3,175 rows: 3,172
+passed and 3 skipped; none of push 156's 3,175 rows lost or moved, and none new), on a new DerivedData after the first
+run on the lane's standing one failed at build on a stale TailscaleKit module.
+
+**Not proven.** No device run; nothing joined a tailnet with TailscaleKit 0.7.29.
+
+**Owed.** A DerivedData last built at truffle 0.7.26 must be cleaned once before its next build, the kit lane's and
+James's own Xcode's alike. The landing's kit run on the kit lane's standing DerivedData (CLOSE-a22r2) failed at build,
+exit 65 with 0 rows: `TailscaleKitBackend.swift:62` "extra argument 'clientLogUpload'" and `:362` "no member
+'clientLogUpload'". Its log says why: `TailscaleKit.h` "has been modified since the module file … was built" (8,297 →
+9,520 B), so it compiled against a stale explicit precompiled module. Row K on a new DerivedData was green.
