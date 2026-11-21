@@ -187,6 +187,18 @@ struct LiveCardBandTests {
     #expect(FieldHomeModel.liveCardReadout(Self.agent(context: .nan))?.context == nil)
   }
 
+  @Test("the band's ring is handed the same share as a number, and none where the figure has none (PF-1)")
+  func theRingsShare() {
+    #expect(FieldHomeModel.liveCardReadout(Self.agent())?.contextPercent == 46)
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: 99.9))?.contextPercent == 99)
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: 140))?.contextPercent == 100)
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: -3))?.contextPercent == 0)
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: .nan))?.contextPercent == nil)
+    #expect(FieldHomeModel.liveCardReadout(Self.agent(context: nil))?.contextPercent == nil)
+    // drawn heavier from 80, as a desktop pane's meter is
+    #expect(FieldHomeModel.liveCardContextHot == 80)
+  }
+
   @Test("a peer's bare terminal has no readout: its band wears the badge alone")
   func aBareTerminal() {
     let peer = FieldBubble(

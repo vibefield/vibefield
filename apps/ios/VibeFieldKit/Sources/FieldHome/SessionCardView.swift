@@ -138,12 +138,26 @@ struct SessionCardView<Terminal: View>: View {
   /// The live card is its terminal, edge to edge (DESIGN.md §8, "The phone's
   /// live card is its terminal"; asked for 2026-10-19, T1 and F1). It wears
   /// Godview's pane frame: a line and an inner glow that follow the sheet's
-  /// corners. The header floats over the grid on a blur that fades away below
-  /// its words. The Metal surface also paints behind the home indicator; its
-  /// safe-area insets keep the last grid row above it. The closed input row
-  /// floats over the grid's last rows (the host's `InputOverlay`).
+  /// corners. The band is reserved (PF-1, 2026-11-21): the terminal's view
+  /// begins at the band's foot, so no row of the grid is under it, and the band
+  /// stands on the terminal's own ground. The Metal surface also paints behind
+  /// the home indicator; its safe-area insets keep the last grid row above it.
+  /// The closed input row floats over the grid's last rows (the host's
+  /// `InputOverlay`).
   private func liveCard(_ bubble: FieldBubble, ground: CardGround) -> some View {
     ZStack(alignment: .top) {
+      // The band's ground: the terminal's own, at its opacity, under the band
+      // alone. A cooled terminal's veil covers it too, so the two never part.
+      ground.color
+        .overlay {
+          ground.color.opacity(cooled ? FieldHomeModel.liveCardCooledVeil : 0)
+        }
+        .animation(FieldMotion.ease(0.24), value: cooled)
+        .frame(height: FieldHomeModel.liveCardBand)
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
+
       terminal()
         // A cooled terminal dims toward its ground, never toward the glass.
         .overlay {
@@ -157,6 +171,9 @@ struct SessionCardView<Terminal: View>: View {
         // input card's safe-area inset: ignoring it would put rows behind its
         // controls. Keyboard avoidance remains active in either state.
         .ignoresSafeArea(.container, edges: inputIsOpen ? [] : .bottom)
+        // PF-1: the view begins at the band's foot. Padding, never an offset: the
+        // Metal view is laid out shorter, so ghosttea measures the grid it shows.
+        .padding(.top, FieldHomeModel.liveCardBand)
 
       // Item 42 — another client drives the session: the card goes on drawing
       // it at the holder's size, dimmed under the held veil, and says so in its
@@ -184,14 +201,6 @@ struct SessionCardView<Terminal: View>: View {
       .environment(\.colorScheme, ground.inkScheme)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .overlay(alignment: .bottom) {
-      contextMeter(bubble)
-        .environment(\.colorScheme, ground.inkScheme)
-        .padding(.horizontal, 32)
-        // The upper part of the bottom safe area, clear of the keyboard key
-        // and the system's home indicator. This reserves no terminal rows.
-        .offset(y: inputIsOpen ? 0 : 8)
-    }
     .onChange(of: seatReadout != nil, initial: true) { _, shown in
       if shown { onOtherDriverAppeared() }
     }
@@ -276,94 +285,105 @@ struct SessionCardView<Terminal: View>: View {
 
   // MARK: - The band and the frame (item 41)
 
-  /// The live card's header: 44pt across the sheet's top, floating over the
-  /// terminal. At the left the readout; at the right the
-  /// badge, inset clear of the sheet's 40pt corner (the badge's own corner
-  /// stands 12pt inside its arc). The row sits under the drag indicator, its
-  /// middle 26pt down. The band takes its own touches: one that reached the
-  /// terminal under it would take the seat (DS-D5) for a touch on the name.
+  /// The live card's header: 44pt across the sheet's top, reserved (PF-1): the
+  /// terminal begins at its foot. At the left the readout capsule and the
+  /// context ring; at the right the badge, inset clear of the sheet's 40pt
+  /// corner (the badge's own corner stands 12pt inside its arc). The row sits
+  /// under the drag indicator, its middle 26pt down. The band takes its own
+  /// touches, so one on the name never reaches the terminal and takes the seat
+  /// (DS-D5).
   private func band(_ bubble: FieldBubble, ground: CardGround) -> some View {
-    HStack(spacing: 12) {
+    HStack(spacing: 10) {
       if let readout = FieldHomeModel.liveCardReadout(bubble) {
-        bandReadout(readout)
+        bandCapsule(readout)
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel(
+            [readout.model, readout.effort].compactMap { $0 }.joined(
+              separator: FieldHomeModel.LiveCardReadout.separator))
+        if let percent = readout.contextPercent, let figure = readout.context {
+          contextRing(percent: percent, figure: figure)
+        }
       }
       Spacer(minLength: 0)
       badge(bubble, ink: ground.solid)
-        // The readout gives way first: the badge is which session this is.
-        .layoutPriority(1)
+        // The capsule gives way first, its model word cut short: the ring and
+        // the badge keep their width, and the badge is which session this is.
+        .layoutPriority(2)
     }
-    .padding(.leading, 28)
+    .padding(.leading, 20)
     .padding(.trailing, 24)
     .padding(.top, 8)
     .frame(maxWidth: .infinity)
     .frame(height: FieldHomeModel.liveCardBand)
-    .background(alignment: .top) {
-      Rectangle()
-        .fill(.ultraThinMaterial)
-        .overlay(ground.solid.opacity(0.22))
-        .mask {
-          LinearGradient(
-            stops: [
-              .init(color: .black, location: 0),
-              .init(color: .black.opacity(0.96), location: 0.4),
-              .init(color: .black.opacity(0.55), location: 0.68),
-              .init(color: .black.opacity(0.15), location: 0.88),
-              .init(color: .clear, location: 1),
-            ],
-            startPoint: .top, endPoint: .bottom
-          )
-        }
-        .frame(height: FieldHomeModel.liveCardBand + 32)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
-    }
     .contentShape(Rectangle())
   }
 
-  /// The band's readout (T1): model · effort · context, lowercase, mono 11
-  /// medium at half the band's ink, as a desktop pane's — the effort italic
-  /// while it is only the launch's intent.
-  private func bandReadout(_ readout: FieldHomeModel.LiveCardReadout) -> some View {
-    let separator = AttributedString(FieldHomeModel.LiveCardReadout.separator)
-    var line = AttributedString(readout.model)
-    if let effort = readout.effort {
-      var word = AttributedString(effort)
-      if readout.effortIsIntent { word.font = FieldType.mono(11, .medium).italic() }
-      line += separator + word
+  /// The band's readout capsule (PF-1; DESIGN.md §8): model | effort,
+  /// lowercase, mono 11.5 semibold at 92% of the band's ink on a 10% tint of it
+  /// with a 16% hairline, 28pt tall, a 14pt hairline between the two words.
+  /// The effort is italic while it is only the launch's intent.
+  private func bandCapsule(_ readout: FieldHomeModel.LiveCardReadout) -> some View {
+    HStack(spacing: 0) {
+      Text(readout.model)
+        .font(FieldType.mono(11.5, .semibold))
+        .lineLimit(1)
+        .truncationMode(.tail)
+        .padding(.leading, 12)
+        .padding(.trailing, readout.effort == nil ? 12 : 9)
+      if let effort = readout.effort {
+        Rectangle()
+          .fill(FieldPalette.textMain.opacity(0.2))
+          .frame(width: 1, height: 14)
+        Text(effort)
+          .font(
+            readout.effortIsIntent
+              ? FieldType.mono(11.5, .semibold).italic() : FieldType.mono(11.5, .semibold)
+          )
+          .lineLimit(1)
+          .fixedSize()
+          .padding(.leading, 9)
+          .padding(.trailing, 12)
+      }
     }
-    if let context = readout.context { line += separator + AttributedString(context) }
-    return Text(line)
-      .font(FieldType.mono(11, .medium))
-      .tracking(FieldType.tracking(0.01, of: 11))
-      .foregroundStyle(FieldPalette.textMain.opacity(0.5))
-      .lineLimit(1)
-      .truncationMode(.tail)
+    .foregroundStyle(FieldPalette.textMain.opacity(0.92))
+    .frame(height: 28)
+    .background(Capsule().fill(FieldPalette.textMain.opacity(0.1)))
+    .overlay(Capsule().strokeBorder(FieldPalette.textMain.opacity(0.16), lineWidth: 1))
   }
 
-  /// The desktop pane's context meter: a 6pt monochrome track, stronger at
-  /// 80%, with the same clamping and 420ms fill animation. No invented value
-  /// for a shell or an agent that has not reported its context usage.
-  @ViewBuilder
-  private func contextMeter(_ bubble: FieldBubble) -> some View {
-    if let share = bubble.agent?.contextUsedPercent, share.isFinite {
-      let percent = Int(min(max(share, 0), 100).rounded(.down))
-      GeometryReader { proxy in
-        ZStack(alignment: .leading) {
-          Capsule().fill(FieldPalette.textMain.opacity(0.1))
-          Capsule()
-            .fill(FieldPalette.textMain.opacity(percent >= 80 ? 0.82 : 0.34))
-            .frame(width: proxy.size.width * CGFloat(percent) / 100)
-        }
+  /// The band's context ring (PF-1; DESIGN.md §8): the share the foot's bar
+  /// drew until then, as a 12pt ring and its figure. The track is the band's
+  /// ink at 18% and the arc at 72%; from 80% the arc and the figure take 90%,
+  /// as a desktop pane's meter grows heavier there. The arc keeps the meter's
+  /// own 420ms fill. No invented value: the caller draws none for a shell or
+  /// an agent that has not reported its context usage.
+  private func contextRing(percent: Int, figure: String) -> some View {
+    let hot = percent >= FieldHomeModel.liveCardContextHot
+    return HStack(spacing: 5) {
+      ZStack {
+        Circle().stroke(FieldPalette.textMain.opacity(0.18), lineWidth: 2.5)
+        Circle()
+          .trim(from: 0, to: CGFloat(percent) / 100)
+          .stroke(
+            FieldPalette.textMain.opacity(hot ? 0.9 : 0.72),
+            style: StrokeStyle(lineWidth: 2.5, lineCap: .butt)
+          )
+          .rotationEffect(.degrees(-90))
       }
-      .frame(height: 6)
+      .frame(width: 12, height: 12)
       .animation(
-        reduceMotion ? nil : .timingCurve(0.22, 1, 0.36, 1, duration: 0.42), value: percent
-      )
-      .allowsHitTesting(false)
-      .accessibilityElement(children: .ignore)
-      .accessibilityLabel("Context window")
-      .accessibilityValue("\(percent)% used")
+        reduceMotion ? nil : .timingCurve(0.22, 1, 0.36, 1, duration: 0.42), value: percent)
+      Text(figure)
+        .font(FieldType.mono(11, hot ? .semibold : .medium))
+        .monospacedDigit()
+        .foregroundStyle(FieldPalette.textMain.opacity(hot ? 0.9 : 0.66))
+        .lineLimit(1)
+        .fixedSize()
     }
+    .layoutPriority(1)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel("Context window")
+    .accessibilityValue("\(percent)% used")
   }
 
   /// The badge (T1): the session's OS mark · its agent's mark · its name, in

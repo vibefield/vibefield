@@ -159,9 +159,13 @@ enum FieldHomeModel {
   /// Item 41 (asked for 2026-10-19; T1) — the live card wears
   /// Godview's pane frame (DESIGN.md §8, "The phone's live card is its
   /// terminal"): a band across its top, and a line and a glow that follow the
-  /// sheet's corners. The header's controls take 44pt; its fading backdrop
-  /// overlays the grid without reserving a separate header row.
+  /// sheet's corners. The band is 44pt and RESERVED (PF-1, 2026-11-21): the
+  /// terminal's view begins at its foot, so the grid's first row is under no
+  /// chrome, and the band stands on the terminal's own ground.
   static let liveCardBand: CGFloat = 44
+  /// The band's context ring (PF-1): from this share it is drawn heavier, as a
+  /// desktop pane's meter is past 80%.
+  static let liveCardContextHot = 80
   /// The sheet's outline, which the frame's line and glow follow: the sheet's
   /// own 40pt corners on top (`.presentationCornerRadius(40)`) and, at its
   /// foot, the screen's — 62 on the 6.3-inch phones, and never less, so the
@@ -173,7 +177,9 @@ enum FieldHomeModel {
 
   /// What the band's readout says (T1): the agent's model · effort · context
   /// share, lowercase, as a desktop pane's frame reads its agent. What the
-  /// agent has not said is left out, never a placeholder.
+  /// agent has not said is left out, never a placeholder. Since PF-1
+  /// (2026-11-21) the band draws the model and the effort in one capsule and
+  /// the share as a ring beside it; `words` is the readout as speech reads it.
   struct LiveCardReadout: Equatable {
     /// The model, else the agent's own name.
     let model: String
@@ -183,6 +189,8 @@ enum FieldHomeModel {
     let effortIsIntent: Bool
     /// The context share in whole percent: `46%`.
     let context: String?
+    /// The same share as a number, 0…100, for the band's ring; nil with `context`.
+    let contextPercent: Int?
 
     static let separator = " · "
 
@@ -197,13 +205,14 @@ enum FieldHomeModel {
     guard let agent = bubble.agent else { return nil }
     let named = agent.modelName.flatMap { $0.isEmpty ? nil : $0 } ?? agent.providerName
     let effort = agent.effort.flatMap { $0.value.isEmpty ? nil : $0.value.lowercased() }
-    let context = agent.contextUsedPercent.flatMap { share -> String? in
+    let percent = agent.contextUsedPercent.flatMap { share -> Int? in
       guard share.isFinite else { return nil }
-      return "\(Int(min(max(share, 0), 100).rounded(.down)))%"
+      return Int(min(max(share, 0), 100).rounded(.down))
     }
     return LiveCardReadout(
       model: named.lowercased(), effort: effort,
-      effortIsIntent: effort != nil && agent.effort?.intent == .configured, context: context)
+      effortIsIntent: effort != nil && agent.effort?.intent == .configured,
+      context: percent.map { "\($0)%" }, contextPercent: percent)
   }
 
   // MARK: - A live card another client is driving (item 42)
