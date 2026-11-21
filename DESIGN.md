@@ -9336,7 +9336,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   content of terminal, we need add safe margin to terminal at top to avoid it"): the terminal's view
   begins at the band's foot, so the grid's first row is under no chrome, and the band stands on the
   terminal's own ground, at its opacity, with no blur and no fade. A cooled terminal's veil covers
-  the band's ground too. **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
+  the band's ground too. **Until the terminal presents its first frame** (the card connecting, or an
+  attach refused) its view paints nothing, so the same ground stands under the whole card: one
+  ground from the moment the card rises, never a band over the bare sheet. *(Added 2026-11-21, the
+  day PF-1 landed, from the first look at it on a simulator: a refused attach by day drew a dark
+  band over a white sheet.)* **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
   easy for mobile user to switch models and effort, so maybe design some button for it"). Where the
   run's row offers a model switch (its adapter's own offer, said by the desktop that owns it), the
   capsule takes a touch and wears a 7pt up-down chevron after its last word, at 60%. A press opens
