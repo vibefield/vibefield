@@ -762,9 +762,12 @@ export const TerminalSchemeSetParams = z.object({ scheme: TerminalScheme }).pass
 export type TerminalSchemeSetParams = z.infer<typeof TerminalSchemeSetParams>;
 
 /** One terminal cell's answer to a scheme change. `state` is `told` (every
- * live session in the cell was told) or `unavailable` (the cell did not
- * answer, and is told when it next does). A string, so a state added later
- * does not fail an older reader. */
+ * live session in the cell was told), `unavailable` (the cell did not
+ * answer, and is told when it next does) or, since TL-4b (2026-11-18),
+ * `refused` (the cell answered and a session of it that still lives refused
+ * the scheme; `sessions` counts the ones told, and the cell is told again
+ * when it is next reached). A string, so a state added later does not fail
+ * an older reader. */
 export const TerminalSchemeCell = z
   .object({
     /** absent for the single cell of a floor that publishes no routes */

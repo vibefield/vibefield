@@ -10,6 +10,7 @@ import {
   GhostteaAutomationClient,
   GhostteaConfigDocumentConflictError,
   GhostteaRequestError,
+  SESSION_COLORS_PROTOCOL_MINOR,
   SESSION_LIFECYCLE_PROTOCOL_MINOR,
   type SessionExitedEvent,
 } from "@vibecook/ghosttea-client";
@@ -92,7 +93,13 @@ import {
   projectRoster,
   TerminalGrantMinter,
 } from "./terminal-grants";
-import { sameScheme, schemeColors, TerminalSchemeStore, withSchemeHint } from "./terminal-scheme";
+import {
+  sameScheme,
+  schemeColors,
+  schemeColorsWithoutPalette,
+  TerminalSchemeStore,
+  withSchemeHint,
+} from "./terminal-scheme";
 
 /** DS-4 — the doors a forwarding daemon refuses to carry for a caller it
  * would itself mint read-only: they MINT, and the owner mints for the
@@ -675,11 +682,17 @@ export class TerminalService {
   private readonly scheme: TerminalSchemeStore;
   /** TL-4a — one chain, so two scheme changes never interleave their tells. */
   private schemeChain: Promise<unknown> = Promise.resolve();
+  /** TL-4b (2026-11-21) — the cells a tell is running for. A client that
+   * connects inside one is that tell's own, so it queues no catch-up: a
+   * refused cell is behind by design, and a second tell straight after the
+   * first would ask it again before the floor next names it. */
+  private readonly schemeTelling = new Set<string>();
   /** TL-4a — how many schemes this fieldd has kept, and the count each cell
    * was last told at, by key. A cell behind the count is told when it is next
    * reached. The scheme found on disk at boot counts as told (0): the fieldd
    * before this one told it. In memory, so a cell still behind when fieldd
-   * restarts is told at the next change. */
+   * restarts is told at the next change. Item 529 (2026-11-18): a cell one of
+   * whose live sessions refused the scheme is not counted, so it is behind. */
   private schemeCount = 0;
   private readonly schemeToldAt = new Map<string, number>();
   /** TL-4a — per cell, the tell in flight; the next one waits for it. */
@@ -1941,20 +1954,29 @@ export class TerminalService {
       const creationId = options.creationId ?? this.creation.getStore();
       // item 464 — the claim the door kept, read with the creation id, recorded once the floor answers
       const carried = this.succession.getStore();
-      // TL-4a — the kept scheme reaches a birth twice, here and nowhere else: as
-      // the `COLORFGBG` it is spawned with, and as the colours it is told once
-      // it exists. ghosttea 0.15 takes no colours at create, so a program whose
-      // first act is to ask its terminal can be answered from the floor's
-      // configuration one step before it is told. The tell is SENT here, right
-      // behind the create on the cell's one connection, and never waited for:
-      // a floor that takes it and does not answer costs the birth nothing.
+      // TL-4a, TL-4b (2026-11-18) — the kept scheme reaches a birth here and
+      // nowhere else: as the `COLORFGBG` it is spawned with, and as its
+      // colours. A floor that reads a session's colours takes them AT the
+      // create, so the first thing a program asks its terminal is answered
+      // from the scheme. An older floor takes none there: its session is told
+      // right behind the create on the cell's one connection, and a program
+      // whose first act is to ask can be answered from the configuration one
+      // step before. That tell is SENT and never waited for: a floor that
+      // takes it and does not answer costs the birth nothing.
+      const scheme = this.scheme.get();
+      const bornWith = scheme !== null && floorReadsSessionColors(client) ? scheme : null;
       const summary = await client.createSession({
-        ...withSchemeHint(options, this.scheme.get()),
+        ...withSchemeHint(options, scheme),
+        ...(bornWith === null ? {} : { colors: schemeColors(bornWith) }),
         ...(creationId === undefined ? {} : { creationId }),
       });
       if (cell.key !== LEGACY_CELL_KEY) this.bornIn.set(summary.id, cell.key);
       this.bornUnseen.add(summary.id);
-      void this.tellBorn(client, summary.id);
+      // Told behind its create unless it was born with the scheme kept NOW. A
+      // scheme is kept only when it differs from the one before it
+      // (`applyScheme`), and the store then holds the new object: one kept
+      // while the create was in flight is seen here.
+      if (this.scheme.get() !== bornWith) void this.tellBorn(client, summary.id);
       // The routed renderer needs the engine's real decimal handle before it
       // can mount. Carry the summary from the birth that already has it;
       // waiting for observed inventory here would recreate GT-1's race.
@@ -2216,19 +2238,21 @@ export class TerminalService {
   }
 
   /** TL-4a — THE DEVICE'S TERMINAL SCHEME: keep it, then tell every live local
-   * session, in every cell, its ground, ink and cursor. A program that asks
-   * its terminal whether the ground is dark then hears the deck's answer, pane
-   * or no pane, an agent a phone started included.
+   * session, in every cell, its ground, ink, cursor and (TL-4b, 2026-11-18)
+   * palette. A program that asks its terminal whether the ground is dark then
+   * hears the deck's answer, pane or no pane, an agent a phone started
+   * included.
    *
    * A scheme equal to the kept one answers `changed: false` and tells nobody,
    * so the deck saying it at every mount sends no program a change notice. A
    * scheme that cannot be kept is UNAVAILABLE `scheme-unkept` and nobody is
    * told it: what a restart restores is what the sessions were told. A cell
-   * that does not answer is said so in its row and told when it next does.
+   * that does not answer is said so in its row (`unavailable`) and told when
+   * it next does. So is a cell one of whose live sessions refused the scheme
+   * (`refused`, item 529): it is told again when it is next reached.
    *
-   * What this does not reach on ghosttea 0.15, by name: the palette (no door
-   * takes it), and the instant of spawn (`birth`). Both wait for the ghosttea
-   * release that takes a session's colours at create. */
+   * On a floor before ghosttea protocol 1.20 two things are not reached, by
+   * name: the palette, and the instant of spawn (`birth`). */
   async setScheme(next: TerminalScheme): Promise<TerminalSchemeSetResult> {
     const run = this.schemeChain.then(() => this.applyScheme(next));
     this.schemeChain = run.catch(() => undefined);
@@ -2276,7 +2300,9 @@ export class TerminalService {
   /** Tell every live session of one cell the kept scheme, and answer the
    * cell's row. Never rejects: a cell that does not answer is `unavailable`,
    * stays behind the kept scheme, and is told when it is next reached (a
-   * route change that names it, or a client connecting to it). One tell at a
+   * route change that names it, or a client connecting to it). A cell one of
+   * whose live sessions refused is `refused` and stays behind the same way
+   * (item 529, 2026-11-18); neither is retried on a timer. One tell at a
    * time per cell, so the last thing a session is told is the scheme kept
    * last. `onlyIfBehind` is for those catch-up calls: by the time one runs,
    * an earlier tell may already have brought the cell up to date. */
@@ -2303,6 +2329,7 @@ export class TerminalService {
     if (this.scheme.get() === null || (onlyIfBehind && !this.schemeBehind(cell.key))) {
       return { ...row, state: "told", sessions: 0 };
     }
+    this.schemeTelling.add(cell.key);
     try {
       const client = dialed ?? (await this.connectedClient(cell));
       const live = (await client.listSessions()).filter((session) => !session.exited);
@@ -2311,27 +2338,27 @@ export class TerminalService {
       const scheme = this.scheme.get();
       const count = this.schemeCount;
       if (scheme === null) return { ...row, state: "told", sessions: 0 };
+      const refusals: SchemeRefusal[] = [];
       const told = await Promise.all(
         live.map(async (session) => {
           try {
             await this.tellSession(client, session.id, scheme);
             return true;
           } catch (error) {
-            // the floor's own answer about this session (it ended between the
-            // list and the tell) is the session's alone; a tell nothing
+            // the floor's own answer about this ONE session; a tell nothing
             // answered, or a connection that died, is the cell's failure
             if (!(error instanceof GhostteaRequestError)) throw error;
-            this.logger.debug(
-              "fieldd.terminal.scheme_session_untold",
-              "A session was not told the terminal scheme",
-              { sessionId: session.id, error: errorMessage(error) },
-            );
+            refusals.push({ sessionId: session.id, error: errorMessage(error) });
             return false;
           }
         }),
       );
+      const sessions = told.filter(Boolean).length;
+      if ((await this.liveRefusals(client, refusals)) > 0) {
+        return { ...row, state: "refused", sessions };
+      }
       if ((this.schemeToldAt.get(cell.key) ?? 0) < count) this.schemeToldAt.set(cell.key, count);
-      return { ...row, state: "told", sessions: told.filter(Boolean).length };
+      return { ...row, state: "told", sessions };
     } catch (error) {
       this.logger.warn(
         "fieldd.terminal.scheme_cell_untold",
@@ -2339,25 +2366,71 @@ export class TerminalService {
         { ...row, error: errorMessage(error) },
       );
       return { ...row, state: "unavailable", sessions: 0 };
+    } finally {
+      this.schemeTelling.delete(cell.key);
     }
   }
 
-  /** THE ONE PLACE a session is told its colours. `request` with a typed
-   * command is the ghosttea client's public door (0.15 has no `setColors`
-   * method of its own); the bytes come from the parsed scheme. */
+  /** Item 529 (2026-11-18) — of the sessions that refused a tell, how many
+   * still live. A refusal is the session's alone only when the session has
+   * ended (it left between the list and the tell), and which it was is read
+   * from the floor's inventory, asked once more and only when a tell was
+   * refused; never from the words of the refusal. Each is logged as what it
+   * was: an ended session at debug, a live one that is left on other colours
+   * than the device's at warn. A list that fails rejects, and the cell is
+   * then `unavailable` like any cell that stopped answering. */
+  private async liveRefusals(
+    client: GhostteaAutomationClient,
+    refusals: readonly SchemeRefusal[],
+  ): Promise<number> {
+    if (refusals.length === 0) return 0;
+    const sessions = await client.listSessions();
+    const live = new Set(
+      sessions.filter((session) => !session.exited).map((session) => session.id),
+    );
+    let count = 0;
+    for (const { sessionId, error } of refusals) {
+      if (live.has(sessionId)) {
+        count += 1;
+        this.logger.warn(
+          "fieldd.terminal.scheme_session_refused",
+          "A live session refused the terminal scheme; its cell is told again when it is next reached",
+          { sessionId, error },
+        );
+      } else {
+        this.logger.debug(
+          "fieldd.terminal.scheme_session_untold",
+          "A session ended before it was told the terminal scheme",
+          { sessionId, error },
+        );
+      }
+    }
+    return count;
+  }
+
+  /** THE ONE PLACE a live session is told its colours (a birth is given its
+   * own at the create, in `birth`), through the ghosttea client's `setColors`:
+   * the scheme whole to a floor that reads a palette, the three colours alone
+   * to one that does not (TL-4b, 2026-11-18). The bytes come from the parsed
+   * scheme. */
   private async tellSession(
     client: GhostteaAutomationClient,
     sessionId: string,
     scheme: TerminalScheme,
   ): Promise<void> {
-    await client.request({ type: "set-colors", sessionId, ...schemeColors(scheme) });
+    await client.setColors(
+      sessionId,
+      floorReadsSessionColors(client) ? schemeColors(scheme) : schemeColorsWithoutPalette(scheme),
+    );
   }
 
-  /** A newborn session is told the kept scheme. Its birth stands whatever
-   * happens here and does not wait for it (`birth` calls this unawaited): a
-   * session that could not be told is a logged fact, never a failed or a late
-   * create. Never rejects. The request is sent before the first await, so it
-   * rides the cell's connection right behind the create. */
+  /** A newborn session is told the kept scheme: on a floor that takes no
+   * colours at a create, and on any floor when the scheme changed while the
+   * create was in flight (`birth`). Its birth stands whatever happens here and
+   * does not wait for it (`birth` calls this unawaited): a session that could
+   * not be told is a logged fact, never a failed or a late create. Never
+   * rejects. The request is sent before the first await, so it rides the
+   * cell's connection right behind the create. */
   private async tellBorn(client: GhostteaAutomationClient, sessionId: string): Promise<void> {
     const scheme = this.scheme.get();
     if (scheme === null) return;
@@ -3316,17 +3389,29 @@ export class TerminalService {
       );
     });
     // TL-4a — a cell whose configuration is reloaded and changed (fieldd's own
-    // config write among the causes) gives every session of it the
-    // configuration's colours again and then announces the reload: ghosttea
-    // 0.15 keeps no host's colours across one. The kept scheme is said to the
-    // cell again on that announcement. Retires with the ghosttea release that
-    // keeps a host's colours across a reload.
+    // config write among the causes) announces the reload, and the kept scheme
+    // is said to the cell again on that announcement. A floor before ghosttea
+    // protocol 1.20 keeps no host's colours across a reload: it gives every
+    // session the configuration's again.
+    //
+    // Corrected 2026-11-18 (TL-4b): this said the re-say "retires with the
+    // ghosttea release that keeps a host's colours across a reload". It does
+    // not. A floor from 1.20 leaves a session a host has told alone at a
+    // reload, and what that session holds is the scheme's palette laid over
+    // the configuration AS IT STOOD WHEN IT WAS TOLD. The slots the scheme
+    // leaves to the configuration are therefore stale after a reload that
+    // moved them, until the cell is told again; the contract's "a slot it
+    // does not name follows the terminal's configuration" holds because of
+    // this handler.
     client.on("config-changed", () => {
       void this.tellCell(cell, client);
     });
     this.clients.set(key, { client, token: endpoints.authToken });
-    // TL-4a — a cell behind the kept scheme is told now that it answers
-    if (this.schemeBehind(key)) void this.tellCell(cell, client, true);
+    // TL-4a — a cell behind the kept scheme is told now that it answers,
+    // unless this connect is a running tell's own (TL-4b, 2026-11-21)
+    if (this.schemeBehind(key) && !this.schemeTelling.has(key)) {
+      void this.tellCell(cell, client, true);
+    }
     return client;
   }
 
@@ -3568,6 +3653,23 @@ function spokenCells(cells: readonly ObservedStaleCell[]): string {
  * (`mgmt/mod.rs` classify_prune_error) — and so does this. */
 function isUnknownSession(error: unknown): boolean {
   return /unknown (?:or remote )?session/i.test(errorMessage(error));
+}
+
+/** Item 529 — one session's refusal of a tell: the session, and the floor's
+ * words for the log. Nothing is decided from the words. */
+interface SchemeRefusal {
+  sessionId: string;
+  error: string;
+}
+
+/** TL-4b (2026-11-18) — whether a cell's floor reads a session's colours at
+ * its create and a palette in a tell, which is ghosttea protocol 1.20. The
+ * floor outlives fieldd, so one built before that can stand under this
+ * fieldd: it is told the three colours alone, behind the create, as TL-4a
+ * told every floor. The client refuses both fields to such a floor before the
+ * wire, since the floor would drop them unsaid. */
+function floorReadsSessionColors(client: GhostteaAutomationClient): boolean {
+  return (client.serverProtocolMinor ?? 0) >= SESSION_COLORS_PROTOCOL_MINOR;
 }
 
 /** The floor's OWN spawn refusal, anchored (GT-5b). The message is byte-

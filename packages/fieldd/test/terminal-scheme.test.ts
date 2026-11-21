@@ -22,6 +22,7 @@ import {
   sameScheme,
   schemeColorFgBg,
   schemeColors,
+  schemeColorsWithoutPalette,
   schemeGroundIsLight,
   TerminalSchemeStore,
   withSchemeHint,
@@ -134,6 +135,15 @@ describe("the terminal scheme's colours (TL-4a)", () => {
         [255, [255, 255, 255]],
       ],
     });
+  });
+
+  it("without the palette, for a floor that reads none: the three colours and no palette key at all (TL-4b)", () => {
+    expect(schemeColorsWithoutPalette(LIGHT)).toStrictEqual({
+      foreground: [30, 34, 39],
+      background: [236, 232, 220],
+      cursor: [43, 106, 166],
+    });
+    expect(schemeColorsWithoutPalette(DARK)).not.toHaveProperty("palette");
   });
 
   it("reads a ground as light when black ink out-contrasts white on it, at both sides of the threshold", () => {

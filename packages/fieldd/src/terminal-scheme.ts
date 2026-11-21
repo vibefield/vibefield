@@ -18,20 +18,35 @@ import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/log
 /** One colour as the floor takes it. */
 export type SchemeRgb = [number, number, number];
 
-/** The colours a session is told (ghosttea's `set-colors`). The palette is in
- * the scheme and is not told yet: ghosttea 0.15 has no door for it. */
-export interface SchemeColors {
-  foreground: SchemeRgb;
-  background: SchemeRgb;
-  cursor: SchemeRgb;
-}
+/** What a session is told, as the floor's client takes it (ghosttea's
+ * `SessionColors`): the ground, the ink and the cursor, and a palette of
+ * `[index, colour]` slots. TL-4b (2026-11-18): the palette is told to a floor
+ * that reads one, which is ghosttea protocol 1.20; an older floor is told the
+ * three colours alone (`schemeColorsWithoutPalette`). */
+export type SchemeColors = Parameters<GhostteaAutomationClient["setColors"]>[1];
 
 function rgbOf(color: string): SchemeRgb {
   const value = Number.parseInt(color.slice(1), 16);
   return [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff];
 }
 
+/** The scheme as a session is told it: the three colours, and the palette slot
+ * by slot in index order, so two schemes that tell the same thing tell the
+ * same bytes. A scheme that names no slot says an EMPTY palette, never none:
+ * on the floor that leaves every slot to the configuration, and it takes back
+ * the slots an earlier scheme named. */
 export function schemeColors(scheme: TerminalScheme): SchemeColors {
+  return {
+    ...schemeColorsWithoutPalette(scheme),
+    palette: [...scheme.palette]
+      .sort((left, right) => left.index - right.index)
+      .map((entry): [number, SchemeRgb] => [entry.index, rgbOf(entry.color)]),
+  };
+}
+
+/** The three colours and no palette: all a floor before ghosttea protocol 1.20
+ * reads, and all the client lets through to one. */
+export function schemeColorsWithoutPalette(scheme: TerminalScheme): SchemeColors {
   return {
     foreground: rgbOf(scheme.foreground),
     background: rgbOf(scheme.background),

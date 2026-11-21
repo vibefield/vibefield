@@ -6625,7 +6625,10 @@ export async function bootstrap(
     // session are told about their terminal, sessions this caller never opened
     // among them, so it is an audited act like the config write. The attrs
     // record the ground and how many palette slots were named; the outcome
-    // records whether anything changed and how the cells answered.
+    // records whether anything changed and how the cells answered. Item 529
+    // (2026-11-18): each state is counted under its own name. `unavailable`
+    // means what it has meant in every record so far, a cell that did not
+    // answer; a cell one of whose live sessions refused is `refused`.
     api.register("terminal.scheme.set", async (ctx, params) => {
       const parsed = TerminalSchemeSetParams.safeParse(params);
       if (!parsed.success)
@@ -6648,7 +6651,8 @@ export async function bootstrap(
           attrs: {
             changed: result.changed,
             told: result.cells.filter((cell) => cell.state === "told").length,
-            unavailable: result.cells.filter((cell) => cell.state !== "told").length,
+            unavailable: result.cells.filter((cell) => cell.state === "unavailable").length,
+            refused: result.cells.filter((cell) => cell.state === "refused").length,
           },
         }),
       );
