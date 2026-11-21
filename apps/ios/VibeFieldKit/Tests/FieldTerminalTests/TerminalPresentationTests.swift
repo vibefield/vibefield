@@ -93,6 +93,19 @@ import Testing
     #expect(config.backgroundOpacityCells == false)
   }
 
+  /// TL-4c (2026-11-19): a cell's colour arrives as its session was told it,
+  /// and a session whose host is light is told inks made for a light ground.
+  /// The phone holds its text to the desktop's 3:1 floor on every theme, so
+  /// those inks stay readable on Matte Black.
+  @Test func holdsTextToTheDesktopsContrastFloor() {
+    #expect(presentationConfig(for: .default).minimumContrast == 3)
+    var appearance = TerminalAppearance.default
+    appearance.themeName = "Vesper"
+    appearance.backgroundOpacity = 0.4
+    #expect(presentationConfig(for: appearance).minimumContrast == 3)
+    #expect(presentationConfig(for: appearance).isValid)
+  }
+
   @Test func producedConfigsPassUpstreamValidation() {
     #expect(presentationConfig(for: .default).isValid)
     var appearance = TerminalAppearance.default
@@ -147,6 +160,8 @@ import Testing
       palette: config.palette,
       backgroundOpacity: config.backgroundOpacity,
       backgroundOpacityCells: config.backgroundOpacityCells,
+      minimumContrast: config.minimumContrast,
+      lightAdaptation: config.lightAdaptation,
       fontSize: fontSize ?? config.fontSize,
       fontFamilies: config.fontFamilies,
       paddingX: config.paddingX,

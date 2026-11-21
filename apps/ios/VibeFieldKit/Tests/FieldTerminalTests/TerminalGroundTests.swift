@@ -45,9 +45,10 @@ import Testing
     #expect(ground.inkScheme == .dark)
   }
 
-  /// A light theme's ground takes the light ramp (§2.7's paper, as a theme).
+  /// A light theme's ground takes the light ramp (§2.7's paper, as a theme; paper
+  /// since TL-4c, 2026-11-19).
   @Test func aLightGroundTakesTheLightRamp() {
-    #expect(TerminalGround(config(background: [0xEC, 0xE8, 0xDC])).inkScheme == .light)
+    #expect(TerminalGround(config(background: [0xF1, 0xF0, 0xEE])).inkScheme == .light)
     #expect(TerminalGround(config(background: [0xFF, 0xFF, 0xFF])).inkScheme == .light)
   }
 
