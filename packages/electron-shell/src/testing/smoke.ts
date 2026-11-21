@@ -7925,8 +7925,11 @@ export async function runSmokeGodview(opts: {
       )
       .catch(() => monitorWatch.current() ?? painted);
     verdict["profileCircles"] = profilesFacts.profileCircles;
+    // item 644 (2026-11-21): the column stands in the chrome layer, the stage's sibling, since
+    // the meters became chrome (2026-11-16); this asked for it inside the stage, which no longer
+    // matches.
     const profilesColumnMounted = (await win.webContents.executeJavaScript(
-      `document.querySelector(".vf-godview-monitor-stage .vf-profiles-column") !== null`,
+      `document.querySelector(".vf-monitor-chrome-layer .vf-profiles-column") !== null`,
     )) as boolean;
     verdict["profilesColumnMounted"] = profilesColumnMounted;
     if (!profilesColumnMounted || profilesFacts.profileCircles < 1) {

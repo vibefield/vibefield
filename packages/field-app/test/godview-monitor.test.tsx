@@ -2109,6 +2109,12 @@ describe("the monitor stage", () => {
     const layer = host.querySelector<HTMLElement>(".vf-monitor-chrome-layer");
     expect(layer?.previousElementSibling).toBe(stage);
     expect(layer?.querySelector(".vf-monitor-chrome .vf-profiles-column")).not.toBeNull();
+    // item 644 (2026-11-21): the godview smoke's query for the column, held to this mount. The
+    // stage-scoped one it carried until then finds nothing here; the chrome layer's finds it.
+    expect(host.querySelector(".vf-godview-monitor-stage .vf-profiles-column")).toBeNull();
+    expect(host.querySelector(".vf-monitor-chrome-layer .vf-profiles-column")).toBe(
+      layer?.querySelector(".vf-profiles-column"),
+    );
     expect(layer?.querySelector(".vf-monitor-claims")).not.toBeNull();
     expect(stage?.querySelector(".vf-monitor-chrome, .vf-monitor-claims")).toBeNull();
   });
