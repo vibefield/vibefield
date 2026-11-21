@@ -64038,3 +64038,1650 @@ the red, panels.test.ts 5 rows passing and 1 failing, by assertion; at the green
 typecheck; `pnpm lint` with no warning or info gained over the reference `v-638r2` (188 and 57). The train's whole
 verify and the kit ALL at the train's top, the census commit over this green: `v-train641c` (`pnpm verify` exit 0) and
 `kit-train641c` (`xcodebuild` exit 0, 3,151 rows).
+
+> **Read after the push (2026-11-20):** GitHub's `verify` at the pushed head `d18929aa5` passed: run 44830592197,
+> ended 23:24:10Z; `audit` passed, run 44830592196.
+
+## EL8 — puppeteer 0.4.7: Codex pastes, stop stages, turn ends, row marks, a failed attach's words (M473)
+
+(2026-11-21; one commit, 25 paths +260 −243. Cut by 4a on main `d18929aa5995` as `3beab2ad84b3` (tree `97a3ad80cd55`)
+on branch `4a/el8-pup047-on-d18929aa5995`, the first car of assembly 17. On main it is `99d04aceb` "EL8: puppeteer
+0.4.7 — Codex pastes, stop stages, turn ends, row marks, a failed attach's words". Every other id here is a run's or a
+sibling's.)
+
+**What landed.**
+- puppeteer `v0.4.7` = `9e24e28a`, the release #106; the 20 `@vibefield/puppeteer-*` packages VibeField pins, read
+  back at 0.4.7 from the registry (core published 2026-11-20 at 08:19:01.026Z, `latest`). 0.4.5 (`v0.4.5` = `e9e864d3`,
+  the release #101) and 0.4.6 (`v0.4.6` = `648c6e41`, the release #104) were never pinned here and ride with it. One
+  EL8 event:
+  - pnpm-workspace.yaml: the seven override rows 0.4.4 → 0.4.7 (rendered from the lock), a dated note, and the 20
+    `minimumReleaseAgeExclude` rows at @0.4.7. The 20 rows at @0.4.4 were kept for the one install that rewrote the
+    lock, then cut; a frozen install proves the lock without them. Under item 554's strict release age, pnpm's
+    supply-chain check ran whole at both installs (668 entries each).
+  - preflight's `PIN_EXPECTATIONS`: the seven rows, still end-anchored, with their dated sentence.
+  - siblings.lock.json, by exact text edits: puppeteer's `sha` `4de5edd6` → `9e24e28a`, `release.npm` 0.4.7, and the
+    `"//"` lead. `render --prod --check` agrees.
+  - pnpm-lock.yaml is pnpm's: the 20 packages swap (+131 −131), and no package is gained or lost. Between v0.4.4 and
+    v0.4.7 every package.json changes its version line alone, and puppeteer's own lock nothing.
+- What the three releases carry, by their CHANGELOG:
+  - 0.4.5: a prompt pasted into Codex's managed terminal is confirmed only when Codex's own thread records it, and is
+    `uncertain` when it does not within 5 s (#99); a host's stop stage reaches the pane frame and the monitor row, and
+    a run's own turn ends are counted (`turnsEnded`, `lastTurnEnded`), the runtime exporting its turn-observing rule
+    (#100); an attach given the host's cursor (`replayAfter`) replays what the agent's record holds after it (#102).
+  - 0.4.6: every view draws a host's mark on a row: a picture, a name, its words and its attention (`HostMark`, every
+    field optional; a colour picture only from a `data:image/…` URL) (#103).
+  - 0.4.7: a failed attach says the adapter's refusal or a generic sentence, as create does (#105).
+- What the pin forces here: nothing. The monitor's schema is 3 at every tag; every field 0.4.5 and 0.4.6 add is
+  optional and VibeField passes none (`monitor-history.ts`:333 lends history with no marks, `pane-frame-facts.ts`
+  :117-132 builds an agent with no mark and no stop); fieldd's scripted adapters refuse an attach through
+  `AgentAttachRefusedError`, whose words still reach the failure. VibeField adopts none of #100, #102 or #103 here;
+  items 591 to 593 and the marks (TH-3) follow as their own commits.
+- Re-bless: the 8 phone goldens regenerated and copied to their 9 kit mirrors, by their stamp alone (each its three
+  version lines; the timeline golden also its note). The hand strings that cite puppeteer's views at the pin move with
+  what they cite: puppeteer-views 0.4.7 and its timeline's last change `7879498a` (#103); four cites that were already
+  off at 0.4.4, set true (`view.d.ts:140-145`; `TERMINAL_LANE` :39, `DIVIDER` :40, `MAP_LEFT` :41; `columnsFor` :49-53;
+  `RainView.js:128-129`); `TimelineView.js` :505 and :514, moved by #103. Each was read in the published tarballs of
+  0.4.4, 0.4.6 and 0.4.7; 0.4.7's views, view-sdk and monitor are 0.4.6's byte for byte but for package.json.
+- docs/ROADMAP.md: the pin row says 0.4.7.
+- What a person sees, by reading, not a live run: a line Chat sends to a Codex run in its managed terminal reads
+  "Delivered" only once Codex's own thread records it; a paste Codex does not submit within 5 s reads "‹name› may not
+  have it: look in its pane", and a spark that sent it is woken with "uncertain". Before, any paste the terminal
+  accepted read "Delivered". Nothing else: the stop stage, the turn ends, the cursor and the marks reach no face here,
+  and a failed re-attach's reason (#105) is drawn on no face (it is kept in the run's record, the audit's attrs and the
+  session list's `continuation.reason`). Godview's swarm draws as before, by reading: VibeField passes no mark and no
+  picture.
+
+**What was proved.** On 2026-11-20.
+- A (el8q-a47, 22:48:58Z → 22:50:15Z; run.log `302d29640deee679`), on the test Mac in a new clone detached at main
+  `d18929aa5995`, the edits made by the cut's tool (`el8-pup047-edits.py`, `06a918952a25`) with `--day 2026-11-20`:
+  GREEN. The 20 read back at 0.4.7 and the tag; preflight 0 on the untouched base, its 20 at 0.4.4; the tool's
+  `--check` on the base; lock and render, the seven rows; typed, 7 paths; the one install, the 20 alone, through the
+  @0.4.7 exclude rows, pnpm's supply-chain check run whole and passing (668 entries); drop-old-age and a frozen install
+  under the commit's yaml, the lock unmoved, the check whole again (668), nothing downloaded; the 8 goldens (seven at
+  3 and 3 lines, the timeline's at 4 and 4) and the 9 mirrors, each equal to its origin, `check-ios-fixtures` 0; THE
+  WHOLE `pnpm gen`, which changed no path beyond the EL8's 25, then `pnpm gen:check` exit 0, its second generation
+  moving nothing; the typecheck of fieldd and field-app; preflight, check:deps, `render --prod --check`,
+  `check:ios-fixtures`, fieldd's agent-monitor-pin 9/9 and field-app's phone-goldens-list 8/8, each 0. Its 25 paths are
+  its patch (`01ba63690338a019`, 1006 lines, `git diff --binary` over the base), each at the sum its record names. It
+  cost 575 MiB of the test Mac's disk.
+- The cut, on the development Mac, 22:58:21Z → 22:58:25Z (cut log `94aa65ff737b7da9`): A's own patch laid on main by
+  `git apply` in a standing lane, detached; each of the 25 paths held to A's sum as laid and again as committed; the
+  added lines swept (none but the lock's note, which keeps the base's own words); through the pre-commit hook
+  (`siblings.mjs render --prod --check --staged`); then one create-only ref. Before it, the patch applied to a scratch
+  copy of the base's 25 files and left each at A's sum.
+- The steps (STEPS-047) list every reader of the installed puppeteer, for the next EL8 to start from: the generator
+  `phone:goldens` (the 8 goldens, copied to the 9 mirrors), nothing in `pnpm gen`; tests in fieldd (39 files), field-app
+  (39) and tooling/dev-runner (2); preflight's R23 and check:deps. The package census holds file names, never sizes:
+  views 0.4.4 → 0.4.7 adds one statically imported module and no chunk.
+- The assembly's whole verify and kit, at its top on the test Mac: `pnpm verify` whole at `2a8b92f8e` (assembly 17's
+  top) on the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698
+  passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0,
+  3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new,
+  each passed)
+
+**Not covered, and owed.**
+- `pnpm gate:landing` (`pnpm still` and the desk smokes): not run.
+- No live Codex run measured the "Delivered" change; it is read from the code and the upstream tests (a live Codex
+  test is owed).
+- No gate here draws Godview's swarm against a golden; the colour mode's first GPU run is TH-3's.
+- The follow-up that drops the 20 `@vibefield/puppeteer-*@0.4.7` rows from `minimumReleaseAgeExclude`, no earlier than
+  2026-11-21 08:19:01Z: one file, the lock unmoved, proved by a frozen install under the strict policy without them.
+
+**Not done, and not claimed:** no push of its own.
+
+## Item 610 — the Godview smoke takes `--use-mock-keychain`, handed to Electron as given (M474)
+
+(2026-11-21; two commits of its own in the fixer's assembly: `a05231745` "610 (red): the Godview smoke's launcher
+refuses `--use-mock-keychain`", `37e6e1ed1` "610: smoke:godview takes `--use-mock-keychain`, handed to Electron as
+given". Cut on main `d18929aa5995` as the first two of d5/i610-612-on-d18929aa5995 (item 612 on them), the red alone as
+d5/i610-red-on-d18929aa5995. Each is patch-equal (`git patch-id --stable`) to the first cut on `5ee5e20ef2f2`
+(`c8eff4ec6ab3`, `4fa0570ab917`); the patch-ids are held at the replay.)
+
+**What the flag covers, first.** It covers Chromium's OSCrypt: main's custody keystore (Electron's `safeStorage`) and
+the profile's cookie key. It does NOT cover fieldd's own `/usr/bin/security find-generic-password` child process,
+which runs when a plugin reads a SECRET setting or a launch reads an Agent Profile's kept values. So on a machine whose
+login keychain no test may reach, a keychain dialog is still a stop. Read at the cut's base: no plugin, example plugin
+or smoke fixture declares any setting (user, device or secret), and a fresh smoke home keeps no values. That was read,
+not measured. The proof stays the run's own: the Keychains folder held before and after, and a dialog stops the run.
+
+**What a person sees.** Nothing, in a person's own run: no launcher a person starts changes. A developer or a test
+machine can now run `pnpm smoke:godview --use-mock-keychain`. The same goes for `smoke:terminal-direct` and
+`smoke:chat-night`, which run the same launcher. Electron then gets the flag after the mode flag. Without the flag,
+Electron's list is the one before, byte for byte.
+
+**Why.** On the test Mac no Electron run may reach the login keychain, and `scripts/smoke-godview.mjs` refused every
+argument but its two modes. So smoke:godview could not run there, and item 589's gate carried it as OWED.
+`pnpm smoke` and `smoke:terminal-door` run `run-smoke.mjs`, which already hands its arguments to Electron.
+
+**What changed.**
+- `scripts/smoke-godview.mjs`: the guard admits `--use-mock-keychain` by exact name, beside the two modes, and its
+  usage error names the argument it refuses. The literal `"--chat-night"` stays here, where
+  smoke-chat-night.test.ts reads it. The spawn takes its list from:
+- `scripts/godview-lab-arms.mjs`: `smokeGodviewArgv(args, directory)`, a pure function: the mode flag, the admitted
+  arguments as given, the profile, and the two background switches.
+- `tooling/dev-runner/test/smoke-godview-argv.test.mjs` (node:test, four rows):
+  - absent: today's five-item list;
+  - a mode: after the mode flag;
+  - asked: the flag in the same place, alone and after a mode;
+  - the guard: `--use-mock-keychain --nope` refused, naming `--nope`, before any profile or Electron.
+- `scripts/gate-landing.mjs` runs all four smokes with no flag, so the landing gates are unchanged.
+
+**Proved.**
+- **The pre-cut check at both trees** (check-610.sh, run1 at 00:56:20Z, on this Mac, in a lane worktree with no
+  install), BOTH AS WANTED:
+  - biome check with warnings failing, 0;
+  - the row: at red, exactly the guard row failing BY ITS OWN ASSERTION (the reporter's `code: 'ERR_ASSERTION'` line
+    and the failed match naming `[--use-mock-keychain]`, 1 each), and at green all four passing;
+  - the six import walls 0, with an R8 control that fires;
+  - the source row's literal 1.
+  - The row's TAP patterns were tried first on a throwaway's real output.
+- **The test Mac, before any trial** (ROW-610): `pnpm --filter @vibefield/dev-runner test` whole. It ran at the FIRST
+  cut (runs i610-base at `5ee5e20ef2f2` and i610-green at `4fa0570ab917`), AS WANTED: 513 tests and 517, 0 failing at
+  both, the green's four rows each passing once by name.
+  - It stands for the re-cut: the three files and everything they import, walked to the end (six repo files, no
+    package; the launcher loads Electron only past its guard), are the same blobs at `5ee5e20ef2f2` and `d18929aa5995`.
+  - The assembly's verify runs the package's tests on the real top. Its count there is higher by item 620's two new
+    test files: a reading, not held.
+- **The landing's own proof** is the assembly's V at the landed tree: `pnpm verify` whole at `2a8b92f8e` (assembly 17's
+  top) on the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698
+  passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0,
+  3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new,
+  each passed).
+
+**Owed.**
+- **smoke:godview's first run on the test Mac, with `--use-mock-keychain`.** It is item 589's owed gate (its
+  typed-agent step reads `leakedVariables`). The other owed gates run with it. A dialog is a stop there.
+- **Not read:** the siblings' own code (puppeteer, rosettad), and whether a smoke mode starts a real agent CLI with
+  its own keychain item. The godview smoke's typed agent is the smoke's own stub.
+
+## Item 612 — the simulator resolver takes its picture path from every caller, and reads no environment (M475)
+
+(2026-11-21; one commit of its own in the fixer's assembly: `5f9a86cef` "612: the simulator resolver takes its picture
+path from every caller, and reads no environment". Cut on main `d18929aa5995` as the top of d5/i610-612-on-d18929aa5995,
+on item 610's two; it is patch-equal (`git patch-id --stable`) to the first cut `a3568c8e5af0` on `756fd253596c`, and
+the patch-id is held at the replay. It is item 567's S4b, landed on its own, whatever the signed build's measurement
+of the framebuffer path reads.)
+
+**What a person sees.** Nothing. No behaviour moves: product code always passed the option this item makes required.
+
+**Why.** `IosSimulatorSourceResolver` fell back to its own read of the environment when a caller left `framebuffer`
+out: `VF_SIMULATOR_FRAMEBUFFER === "1"`, off unless "1". That is the OPPOSITE of the product's read
+(`authority-production.ts`: `!== "0"`, on unless "0"). Only a caller that left the option out took the class's
+default: the producer test, by stubbing the variable. A new caller would have taken the opposite picture path from
+the product's without a word.
+
+**What changed.**
+- `ios-simulator-producer.ts`: `IosSimulatorSourceResolverOptions.framebuffer` is required, with its doc. The
+  constructor reads the option alone.
+- `ios-simulator-producer.test.ts`: `resolverSetup` takes `framebuffer` (default `false`). The two framebuffer rows
+  pass `true` by argument instead of stubbing the variable. The three direct constructions pass `false`.
+- The other constructions already said it: authority-production's two (main's `framebuffer`) and the SCK lab's in
+  `testing/smoke.ts` (`false`). Seven in all.
+
+**Proved.**
+- **The pre-cut check** (check-s4b.sh, run1 at 01:16:30Z, in a lane worktree with no install), AS WANTED:
+  - biome check with warnings failing, 0;
+  - the CONSTRUCTIONS read in the laid tree: 7 made, 7 naming `framebuffer`, and 0 lines naming the variable in the
+    producer. The hold was tried first on the real files: at the base it reads 7 and 3, naming the test's four;
+  - the six import walls 0, with an R8 control that fires.
+  - **It ran on `5ee5e20ef2f2`, before main moved to `756fd253596c`.** That move is one commit: DESIGN.md and three
+    iOS Swift files. The check's tools read none of them (biome ran on the two set files; the constructions read
+    .ts/.tsx/.mts/.mjs; the walls read .js/.mjs/.mts/.ts/.tsx/.rs). All six made-on blobs and the lock are the same at
+    both, so its result stands at the cut's base.
+- **The sets re-made on `d18929aa5995`**: the maker on main's own files writes the first cut's two files byte for
+  byte; biome format unchanged and the file-based lint with warnings failing 0, at main's biome.jsonc (item 620's
+  React rules included).
+- **The test Mac** (ROW-612): ios-simulator-producer.test.ts and authority-production.test.ts whole, and
+  electron-shell's tsc under both configs.
+  - Arm B at the first cut's base `756fd253596c`: 22 passed (12 and 10), 0 failed.
+  - Arm T at the first cut `a3568c8e5af0`: tsc 0 under both configs, the same 22 rows by name, 0 failed.
+  - Arm T AGAIN at the re-cut's commit `a3523e494b7d` (held to 612's patch-id and blobs), because electron-shell
+    moved below it: tsc 0 under both configs, and the same 12 and 10 rows as B's by full name, all passed, nothing
+    unhandled.
+- **The landing's own proof** is the assembly's V at the landed tree: `pnpm verify` whole at `2a8b92f8e` (assembly 17's
+  top) on the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698
+  passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0,
+  3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new,
+  each passed).
+
+**Owed.**
+- Item 567's S4 proper, a packaged app on the screen-capture path, lands ONLY if the signed build's measurement of
+  the framebuffer path reads NO (MEASURE-567-7). Its red and green are prepared and wait.
+
+## 615 — The orphan bound says a held vacancy, once, and when its span begins (M476)
+
+(2026-11-21; two commits: `fd2d062cc` (red, "615 (red): a floor's orphan bound held by a session says nothing at all")
+and `c60bc861e` (green, "615 (green): the orphan bound says a held vacancy, once, and when its span begins").
+- The QA stage's floor was left alive after the 01:48:39Z restart of the night's working tools.
+- Its last line, at 01:48:40.578Z, was "the management client left; the floor's orphan bound is armed". Then
+  nothing for eighteen minutes, past the bound's ten.
+- That read as a bound never armed. The reading, by the code and the stage's files: the bound WAS armed, and it was
+  waiting, as its rule says, on one session. The machine ledger counted one governed session for that floor, rewritten
+  every 5 s.
+- The bound logs only once it has decided, so a floor held by a session said nothing at all.
+- The 17:22Z floor that did idle-exit the same day was a new floor holding nothing. The count was the whole
+  difference.)
+
+**What a person sees.** Nothing in the app. A reader of the floor's log now sees why a floor with no fieldd is still
+alive:
+- `orphan_held` with how many sessions hold it;
+- `orphan_released` when those sessions have ended and the ten minutes begin.
+When the bound stops a floor is unchanged.
+
+**What changed.**
+- `packages/field-native/src/orphan.rs`:
+  - `Verdict` gains `Held(n)` and `Released`.
+  - `OrphanBound::observe` answers `Held(n)` at a vacancy's first counted read that is not zero, and `Released` at
+    the first read where that count is zero again: the read that already starts the span, so there is no new timer.
+  - Each is said once per vacancy, and a new vacancy says them afresh. `Stop` is decided first, and the two answer only
+    where `Wait` did.
+  - `spawn` logs them and waits as for `Wait`:
+    - `field_native.lifecycle.orphan_held` with `sessions`, a number, and nothing of any session;
+    - `field_native.lifecycle.orphan_released` with `span_ms`.
+  - A count that cannot be read (not yet fresh, or unknown) still waits without a line. This item says only a counted
+    hold.
+- Its tests:
+  - `said`, a verdict by its Debug name, so the red compiles on a base without the two verdicts;
+  - a pin of the night's order: a planned leave, a new client's hello, that client lost unplanned. The bound is armed
+    from the last loss, never stops while one session is counted, and stops one span after the count reads zero;
+  - a held vacancy says its count once and once more when its span begins. A second count, an unread count and a
+    re-hold say nothing new; the stop's instant is unchanged; a new vacancy says it again;
+  - the existing restart row's two reads that meet a held vacancy move to the said verdicts.
+- **LOG events** (logging spec §8.4, new names): field_native.lifecycle.orphan_held · …orphan_released.
+
+**Proved.**
+- The cut: `hl/615c-on-d18929aa5` at `5914cbcf801e`, its red `0efca7d45f86`, two commits on main `d18929aa5995`, made
+  by `cut-615c-d18929aa.sh` (`8230c8e2…`) in a lane clone, 22:44:27Z to 22:44:29Z, 2026-11-20.
+  - It re-cuts the same two patches on the moved main: each commit's `git patch-id --stable` is the first cut's.
+  - First, rustfmt --check on the file.
+  - Each stage was laid and then committed through the repository's hook.
+  - Each commit's diff from its parent is its prepared diff by sum.
+  - One create-only fetch into the repository: main and every `hl/` ref unmoved, no other head moved.
+- In that lane clone, `check-615.sh` ran on main `906328374319`, 02:30:54Z to 02:30:59Z: "AS WANTED (every step PASS)",
+  10 of 10. It also ran at `21929a8c488e`, before the set's base was named, with the same result. The steps:
+  - rustfmt --check clean at the base (the control), the red and the green;
+  - the six wall commands clean at both trees;
+  - a broken indent fails rustfmt as it must.
+- cargo was not run there: it builds field-native. On the test Mac, ROWS-615 is the run of record, AS WANTED at both
+  commits of the first cut (runs `i615-red` and `i615-green`), 2026-11-20, whose crate is byte-same: no path under
+  `packages/field-native`, `Cargo.toml`, `Cargo.lock` or `rust-toolchain.toml` differs.
+  - `i615-red`, at the red, 14:54:04Z to 14:54:35Z:
+    - clippy with warnings denied, all targets: exit 0, no warning. The red compiles on a base without the two
+      verdicts;
+    - `orphan::tests`: 12 run, 10 ok (the pin of the order among them), and exactly the two said rows failed. Each
+      failed at its first said read: left "Wait", right "Held(1)" (`orphan.rs:486`) and "Held(2)" (`:593`);
+    - `cargo fmt --check` and `pnpm check:walls`, clean.
+  - `i615-green`, at the green, 14:56:48Z to 14:59:35Z:
+    - clippy, exit 0, no warning;
+    - `orphan::tests`, 12 of 12;
+    - the whole `cargo test -p field-native`, exit 0: 43 result lines, all ok; 698 passed, 0 failed, 15 ignored;
+    - fmt and the walls, clean.
+  - Each run wrote no ref and left its tree clean. The records are in the test Mac's runs, `i615-red` and
+    `i615-green`.
+- The assembly's verify and kit: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run
+  `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3
+  skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Not covered, and owed.**
+- An unreadable count still waits without a line. Whether it should say so too was not ruled.
+- What sent the 01:48Z signals, and why the stage's runner was ended before its teardown, is outside this
+  repository's code.
+- Item 618, a reading: when a fieldd dies without its stop, its product record keeps naming it and a live floor. The
+  next `pnpm dev` then refuses, with a kill as its remedy, which ends the floor's sessions.
+- The logging spec's §8.4 takes the two names in the draft corpus, through its owner's snapshot (the text:
+  `LOGSPEC-615.txt` in the lane).
+
+## 621 — The dev start's refusal says its pids may be stale and what stopping a floor ends (M477)
+
+(2026-11-21; two commits: `33c219166` (red, "621 (red): the dev start's refusal names a kill by a stale pid and keeps
+quiet on its cost") and `0f1662c62` (green, "621 (green): the dev start's refusal says its pids may be stale and what
+stopping a floor ends").
+- A fieldd that dies without its stop leaves its product record naming it and its floor, and the next `pnpm dev`
+  refuses at its lock with `kill <pids>` as its remedy.
+- On 2026-11-20 the QA stage met it: a fieldd abandoned at the 01:48Z restart left a record naming its dead pid and
+  a live floor that still held one terminal session.
+- The words said neither that a pid read from that record may since be another program's, which is why the runner
+  never stops one itself, nor that stopping field-native ends every terminal session on it.)
+
+**What a person sees.** The same refusal and the same remedy, with what it costs said before it:
+- "the pids are read from fieldd's product record, which a daemon that died without its stop leaves behind, so one
+  may now belong to another program: confirm each is VibeField's before you stop it";
+- and, when the record's floor is among the live pids, "stopping field-native ends every terminal session on it".
+
+The runner still refuses and still never stops a pid itself. Adopting a floor whose fieldd is gone, instead of
+refusing, is a choice for James (item 618), and this entry does not make it.
+
+**What changed.**
+- `tooling/dev-runner/src/dev-lock.mjs`:
+  - `RECORD_CAVEAT` and `FLOOR_CAVEAT`, and `remedyCaveats(floorLive)`;
+  - both refusals carry them before the remedy: the fresh lock's, and a stale runner's lock's (`describeLiveStack`,
+    for daemons only);
+  - each message is built from two local consts, and the remedy is still its end.
+- `tooling/dev-runner/test/dev-lock.test.mjs`: a `recordNaming` helper and three rows, each with a fake `pidAlive`
+  and no process:
+  - a fresh lock with the floor alive;
+  - a stale runner's lock with the floor alive;
+  - a record whose floor is gone, which says the stale-record caveat and nothing of sessions.
+
+**Proved.**
+- The cut: `hl/621c-on-d18929aa5` at `821b0b238b26`, its red `342e5f1115cf`, two commits on main `d18929aa5995`, made
+  by `cut-621c-d18929aa.sh` (`b95cc947…`) in a lane clone, 22:45:20Z to 22:45:21Z, 2026-11-20.
+  - It re-cuts the same two patches on the moved main: each commit's `git patch-id --stable` is the first cut's.
+  - First, biome with warnings failing on both files, under that main's own config.
+  - Each stage was laid and then committed through the repository's hook.
+  - Each commit's diff from its parent is its prepared diff by sum.
+  - One create-only fetch into the repository: main and every `hl/` ref unmoved, no other head moved.
+- In that lane clone, `check-621.sh` (`2f7d641c…`) ran once, 03:14:21Z to 03:14:29Z: "AS WANTED (every step PASS)",
+  13 of 13.
+  - At the base, `dev-lock.test.mjs` passes 6 of 6 (the control).
+  - At the red: 6 ok, and exactly the three new rows fail. Each fails by a `match` assertion whose actual is today's
+    message ("…exited uncleanly; stop them with: kill 304").
+  - At the green: 9 of 9.
+  - biome format by stdin and lint with warnings failing clean on both files, and the six wall commands clean, at both
+    trees.
+- These node:test rows are light, so the lane's run is their record, and it stands for the re-cut:
+  - the two files' import closure, five repository files (the two, and the runner's `paths.mjs`, `processes.mjs` and
+    `product.mjs`), is the same at `906328374319` and `d18929aa5995`;
+  - biome's config moved between them (item 620), so `check-621c.sh` (`5b44e3c9…`) ran format by stdin and lint with
+    warnings failing under the moved config, 15:06:56Z to 15:06:59Z: "AS WANTED", 11 of 11, its two must-fail
+    controls failing as they must. The config is the same at `d18929aa5995`.
+- The next assembly's whole verify on the test Mac covers the rest.
+- The assembly's verify and kit: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run
+  `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3
+  skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Not covered, and owed.**
+- Whether a dev start should adopt such a floor instead of refusing: James's card (READING-618's O2). If he picks it,
+  the custody code and the win32 branches are read first.
+- On Windows the remedy is `taskkill … /F`. The new words are the same on both, and only POSIX ran.
+
+## 603 — A service's instance key is the persisted local id, read once, so a moving roster id never supersedes it (M478)
+
+(2026-11-21; two commits: `c86e9e8c9` (red, "603 (red): a service whose device id moves during its lease mint refuses
+itself") and `b661d74f1` (green, "603 (green): a service's instance key is the persisted local id, read once").
+- The QA stage's dev runner logged `fieldd.plugin_service.startup_activation_failed` for the dev example
+  `vibefield.example.kv`, with "service target superseded after lease mint", at 2 of its 7 fieldd boots that day:
+  11:33:07Z on main 599f4edadcca, and 18:07:09Z on 846ea63c714a. The other five activated.
+
+The reading, by the code:
+- A service's runtime target is keyed by `instanceKey.deviceId`. fieldd handed the service host
+  `devices.currentDeviceId()`, the roster's key, which moves from the persisted local id to the mesh id when the mesh
+  identity arrives (and again at a relink).
+- An activation re-reads its target after its awaited, audited lease mint (`isCurrentTarget`). When the id moved in that
+  window, the target no longer matched, so the activation revoked its own lease and refused itself.
+- The controller then settled as failed, and the service read "degraded" with no retry until a restart, a reload or the
+  next boot.
+- The ruled-out causes: the logs show revision 1 and grant generation 0; a dev-linked revision is a content hash; the
+  boot's refreshes run before `startEligible`; and the reconciler skips dev-linked rows.)
+
+**What a person sees.**
+- No bundled plugin ships a service today; only `examples/plugins/kv-service` does (activation `onStartup`). So a
+  released build showed nothing, and an author running that example saw it degraded on some starts.
+- Now a service activates whenever the mesh identity arrives during its start.
+- A plugin service runs on the desktop it started on, keyed by the id this desktop persists.
+
+**What changed.**
+- `packages/fieldd/src/daemon.ts`: the service host is handed `devices.localDeviceId()`, the persisted id no link,
+  unlink or relink moves (PJ-2 §0). It replaces `currentDeviceId()`. The config's own doc already asked for "the durable
+  local device id". The device service is built (`:6045`) long before the service host, and its `localId` is readonly
+  from construction.
+- `packages/fieldd/src/service-host.ts`:
+  - the host reads the key ONCE, in its constructor, into `instanceDeviceId`;
+  - the controller's label (`service:<plugin>:<id>`) and every target's `instanceKey` read that field;
+  - the config's doc says so.
+  The two halves are each enough for this race; together, a key can't move under the host whatever a caller hands it.
+- What reads the key:
+  - the target's identity compare (`samePluginRuntimeTarget`, in memory);
+  - the controller's label;
+  - the runtime diagnostic over `plugins.runtime.get`/`subscribe` (locality local);
+  - the system log's `targetInstance` field.
+  Nothing persists it, compares it across boots or sends it to another device, and the lease carries no device.
+- `packages/fieldd/test/service-controller.test.ts`: the rig takes a `deviceId`, defaulting to the id it used before.
+  Two rows:
+  - the device id moving during the lease mint does not supersede the activation (the start resolves, no lease is
+    revoked, one worker is built, active);
+  - the control: a grant generation moving in the same window still refuses (revoked `lease-1`, no worker).
+  They stand here, not in `service-lease-fence.test.ts`, because this rig activates a service for real with a real
+  `ServiceRegistry`, while the fence file's fakes stop before activation.
+- `packages/fieldd/test/service-host.test.ts`: with the mock floor's mesh identity ("dev-self") known, a re-enable's
+  fresh target names `devices.localDeviceId()`, read over `plugins.runtime.get`.
+
+**Proved.**
+- The cut: `hl/603c-on-d18929aa5` at `eca4b11dd772`, its red `eaf5aa404c48` (also `hl/603c-red-on-d18929aa5`), two
+  commits on main `d18929aa5995`, made by `cut-603c.sh` (`ef45e123…`) in a lane clone, 22:47:37Z to 22:47:39Z,
+  2026-11-20.
+  - It re-cuts, on the moved main, the trees of two earlier cuts on `846ea63c714a`. The first of those had a green
+    message saying a running service was no longer replaced "at a relink", and nothing starts a service at a relink;
+    the second carried the message as it stands. Neither lands.
+  - The red's two files are byte-same as at those cuts. The green's `daemon.ts` hunk is the same three lines, at the
+    service host's construction, which moved with the file.
+  - First, biome with warnings failing on the four files.
+  - Each stage's files were laid and then committed through the repository's hook.
+  - Each commit's diff from its parent is its prepared diff by sum.
+  - One create-only fetch into the repository: main and every `hl/` ref unmoved, no other head moved.
+- On the development Mac, in that lane clone, `check-603.sh` (`4a8f621e…`) ran once at `846ea63c714a`, 19:13:32Z to
+  19:14:38Z, 2026-11-19: "AS WANTED (every step PASS)", 14 of 14 (`check-603.log`, `461e10a5…`). Its form,
+  `check-603c.sh` (`39229e90…`), ran again at `5dc301f99047`, 13:57:23Z to 13:58:25Z, 2026-11-20: AS WANTED, 14 of 14
+  (`check-603c.log`, `69713e46…`), the base's same two install lines. Each step was run one tool at a time under the
+  light lock, biome on four threads.
+  - At the base: fieldd's tsc shows two lines, both the install's (below).
+  - At the red tree (the two test files) and at the green tree (all four):
+    - biome format by stdin, byte-equal;
+    - biome lint with warnings failing, clean;
+    - fieldd's tsc, EXACTLY the base's two lines, no new error;
+    - `check:walls`' three scripts, each its self-test then its run, exit 0, the three walls clean.
+  - A control on the green, the wiring row naming a method the roster lacks, failed tsc as it must: the base's lines
+    plus one, in `service-host.test.ts`.
+  - The check's first run (kept as the lane's `tmp/check-603.run1.log`) failed five steps on the check itself:
+    - biome ran outside the clone, so it formatted without `biome.jsonc`;
+    - tsc was held to zero errors on an older install.
+    No source changed between the runs.
+- That clone's install is from an older lock (87e71631c's). Its two tsc lines are `test/agent-monitor-pin.test.ts`
+  asking for `PlanTierSchema`, which main's pinned puppeteer-core 0.4.4 has and the install's 0.4.2 lacks.
+- The control's expectation was also read in the code before the cut:
+  - `samePluginRuntimeObservation` compares `observedGrantGeneration`;
+  - the superseded lease is released through `revokeServiceLease`;
+  - `start()` throws `${pluginId}: ${snapshot.error}`.
+- The fieldd rows are not run on the development Mac (fieldd's global setup builds field-native). On the test Mac,
+  ROWS-603c is the run of record, AS WANTED at both commits of this cut, 2026-11-21:
+  - `i603c-red`, at the red, 00:25:02Z to 00:25:18Z:
+    - fieldd's type-check, exit 0, no error;
+    - `service-controller.test.ts` whole: 1 failed, 11 passed. The one is the device-id row, by assertion, its received
+      value "…service target superseded after lease mint"; the control passed;
+    - the wiring row (`-t "item 603"`): 1 failed, 4 skipped, at its last expectation, the mock floor's "dev-self"
+      where the local id is wanted;
+    - biome over the four files and `pnpm check:walls`, clean.
+  - `i603c-green`, at the green, 00:27:56Z to 00:28:22Z: the type-check clean; controller 12 of 12, service-host 5 of 5,
+    lease fence 2 of 2; biome and the walls clean.
+  - The same rows ran AS WANTED at the earlier cut's two commits on `846ea63c714a` (runs `i603-red` and `i603-green`,
+    2026-11-20). They ran again here because 28 files of the three test files' import closure moved between,
+    `daemon.ts` and the mock floor among them.
+- The assembly's verify and kit: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run
+  `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3
+  skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Not covered, and owed.**
+- THE WRINKLE (a follow-up, its own item): two names for one desktop.
+  - These name the persisted local id: the runtime diagnostic's answer (the service controller's label and its targets'
+    `instanceKey`, over `plugins.runtime.get`/`subscribe`) and the system log's `targetInstance` field.
+  - The device roster names the same desktop by its mesh id once linked.
+  - Settings' Plugins diagnostics show neither: `controllerWords` reads the state, the revisions, the scope and the last
+    close. So a person sees no mismatch today. A reader of the log or of the diagnostic over the door does.
+  - Whether to show both, or to say which one, is the follow-up's.
+- No smoke reads a plugin service's state at start. A row that boots with a service and reads it active would have
+  caught this. It needs a service-carrying plugin staged for the run (none is bundled), so it is a later item, as ruled.
+- No DECISIONS row: the fix applies PJ-2 §0's rule (what this desktop keys by is the persisted local id) to the service
+  instance key, which its config's doc already named.
+
+## 512 — The phone logs History's index standing when it moves, fieldd's own words private (M479)
+
+(2026-11-21; two commits, in order: `775c9f313` (red, "512 (red): the index's standing is logged when it moves…") and
+`08e3f799e` (green, "512 (green): the index's standing is logged when it moves…").)
+
+**What a person sees.** Nothing on screen moves. Item 505 took fieldd's index words off the phone's History, and
+nothing on the phone logged them. Now History's reader writes one line in the device's log when the standing of the
+index it reads changes (`index: failed · ‹words›`, `index: ready`), never one per recheck of an index that is not
+ready.
+- The phase is said in the open: not offered, ready, starting, rebuilding, `reading 61% (8,400 of 13,700)`, failed,
+  unconfigured or stopped.
+- fieldd's own words (`rosettad.detail`) stand beside it PRIVATE: Console shows `<private>`; a debugger or a logging
+  profile shows the words. They can carry rosettad's stderr, a path under the account's home among it. History's
+  other log lines say only ids, fixed words and the codes this build names, never a daemon's own words.
+- The desktop already logs every change with the words where they are made (fieldd's `fieldd.rosettad.state`); the
+  phone's line says which standing the phone saw, and when.
+
+**The seams.**
+- `ProjectFold.swift`: `FieldHistoryModel.indexLogLine`, the phase and the words, pure.
+- `HistoryReads.swift`: `logIndex`, the one notice line, the phase public and the words private.
+- `HistoryProjects.swift`: `readIndex` stands its index through `standIndex`, which logs only when the standing moves,
+  through an `indexLog` hook (its default `HistoryReads.logIndex`), as `HistoryDesktopReader` takes `log`.
+
+**The rows.** Two, in FieldHistoryTests, red first: "item 512: the reader's log line says the index's phase, and
+fieldd's words only beside it" (FieldHistoryModelTests) and "item 512: the reader logs the index's standing when it
+moves, once, never per poll" (HistoryProjectsTests: an index that has failed, asked again and again, is logged once,
+and its coming back once more).
+
+**Proved.**
+- The cut (2026-11-20 22:44:18Z to 22:44:24Z, with item 398's second slice) made `6740a4500130` (red) and
+  `3c226f5f2f2a` (green) on James's main `d18929aa5995` from files prepared and summed beforehand, each held to its
+  parent, its message and its blobs, the repository's hook passing on both. None of this item's five paths moved
+  between `906328374319` and `d18929aa5995`. Each commit is held by `git patch-id --stable` to the cut whose rows ran
+  (`e18a5115167e`, `6d4340f8cf8d` on `906328374319`, 03:13Z), itself a replay of the first cut of 2026-11-19
+  (`884634f50d01`, `582f70b09842` on `87e71631c083`). The green's five blobs are equal to that cut's green. The refs:
+  the cut's two branches added (this item's `hg/i512c-on-d18929aa5995`, and the second slice's on it), none moved;
+  main did not move. It ran no test. The earlier cuts do not land.
+- The kit, red: `i512-kit-red` (FieldHistoryTests at `e18a5115167e`, 2026-11-20 13:48:23Z to 13:49:39Z). It compiles.
+  513 rows: 511 passed, and exactly the two rows above failed, each on its own expectations.
+- The kit, green: `i512-kit-top` (ALL at `6d4340f8cf8d`, 13:54:12Z to 13:56:26Z): TEST SUCCEEDED. 3153 rows. Every
+  target's count is its base run's (`kit-push148`, ALL at `906328374319`) except FieldHistoryTests, at 513 of 513.
+  None failed; the base's three skips stand. Both runs read the tree over `906328374319`: five kit files have moved on
+  main since, none of this item's. The landed tree's own run is the verify below.
+- The assembly's verify and kit: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run
+  `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3
+  skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+- The phone build:
+not run: no phone build was made or installed in this assembly; its kit ran on the simulator, in the closing kit ALL
+above
+
+**Not run, and owed.**
+- No line was read from a phone's Console: the line's form is held by the rows, not seen on a device.
+- `pnpm gate:landing` not run (owed).
+
+## Item 398, slice 2 — A session past a phone's hundred wears its figures; a project's messages count whole (M480)
+
+(2026-11-21; two commits, in order: `7258e96f1` (red, "398 (red): a session past a phone's hundred is asked for by id…")
+and `9470622b2` (green, "398 (green): a session past a phone's hundred wears its figures…"). Slice 1, the door's half,
+landed as M307 on 2026-11-14 (LANDED "Item 398, slice 1").)
+
+**What a person sees.** On a project of more than a hundred sessions, every listed entry whose session has a row
+wears its figures (`88 msgs · 1h 53m · 182K · $1.24 · started 14:06`, item 393's line), not only the hundred a
+desktop answered; a subagent's own row carries none. The ledger's messages figure and a project's own count every
+row its desktops gathered, not the page a phone is answered.
+- A desktop answers a phone a hundred of a project's `contribution` rows. When a project's answer was cut, the phone
+  asks the door, as it reads that project's sessions (the opened project's, and those live in the last minutes), for
+  the listed sessions it holds no row for, by id (`project.figures`' `sessions`, slice 1). It asks a hundred at a
+  time, the newest first, each once until the project's figures are read again.
+- A project's messages are the door's own `totals` (slice 1) when it gives them. The ledger's messages figure keeps
+  its `+` while the door says a project's lifetime is not whole (`lifetimePartial`), and the door says so of every
+  cut project: its `clipped` includes the phone's own cut. So while a project past a hundred is read, the ledger's
+  messages keep their `+` (a follow-up, below).
+- A desktop of an earlier build gives no `totals`, and its answer reads as before.
+- No new look: James chose item 393's line, and it is the line drawn.
+
+**The seams.**
+- FieldProduct (`ProjectShapes.swift`): `ProjectFiguresSession`, `ProjectFiguresTotals`, `ProjectFiguresResult.totals`
+  (a malformed one reads as none) and `ProjectFiguresParams.sessions`.
+- FieldHistory: `figuresWanted` (`ProjectFold.swift`, pure); `HistoryProjects.askFiguresById`, its rows joined after
+  the project's own in the fold (`LedgerInputs.figuresById`); `lifetime` (`HistoryStats.swift`) and the project's four
+  numbers (`HistoryFold.withFigures`) take `totals.messages`.
+- Words: two dated amendments in `DESIGN.md` §8 (at item 393's "until the door answers each listed session's figures,
+  which is item 398", and at the four figures' `+`); the comments that said the door was not built.
+
+**The rows.** Five, red first: in FieldProductTests, `theFiguresCarryTheDoorsTotalsWhenItGivesThem()` and
+`theFiguresAskedByIdMatchTheirGolden()` (ProjectShapeTests, over slice 1's goldens); in FieldHistoryTests, "item 398: a
+project's messages are the door's totals when it gives them, a lower bound while it says so", "item 398: the listed
+sessions a cut answer lacks are asked for by id, the newest first, each once, a page" and "item 398: an opened
+project's sessions its cut answer lacks are asked for by id, once, and wear their figures". The test's copy of the
+fold (`foldAsItWas`) takes the asked rows as `folded` does, with a dated amendment.
+
+**Proved.**
+- The cut (2026-11-20 22:44:18Z to 22:44:24Z, after item 512's pair) made `9bc5e1855b39` (red) and `4631b221100f`
+  (green) on item 512's green `3c226f5f2f2a`, over James's main `d18929aa5995`, from files prepared and summed
+  beforehand, each held to its parent, its message and its blobs, the repository's hook passing on both.
+  - Before it moved, each of the thirteen paths at the base was held to the file it was prepared over.
+  - Re-made by content as main moved, each change proved line for line equal to the first cut's: `ProjectShapes.swift`
+    on `906328374319` (item 586's `ProjectPlace` comment), and `DESIGN.md` there and again on `d18929aa5995`. Its two
+    hunks now sit 59 lines lower, with exact context.
+  - Both commits are held by `git patch-id --stable` to the cut whose rows ran (`4d8c8a9d052d`, `d29a75c10871` on
+    `906328374319`, 03:13Z), whose patch-ids equal the first cut's (`49be455acdbd`, `d6fbd2114cd6`, on
+    `87e71631c083`). The ten kit files it touches are that cut's blobs byte for byte.
+  - The refs: the cut's two branches added (item 512's, and this slice's `hg/i398s2c-on-i512c` on it), none moved;
+    main did not move. It ran no test. The earlier cuts do not land.
+- The kit, red: `i398s2-kit-red` (FieldProductTests and FieldHistoryTests at `4d8c8a9d052d`, 2026-11-20 13:58:31Z to
+  14:00:14Z). It compiles. FieldProductTests 372: 369 passed, the base's one skip, and the two rows above failed.
+  FieldHistoryTests 516: 513 passed and the three rows above failed. Each failed on its own expectations; the last
+  also on its settle's timeout.
+- The kit, green: `i398s2-kit-top` (ALL at `d29a75c10871`, 14:04:48Z to 14:07:18Z): TEST SUCCEEDED. 3158 rows. Every
+  target's count is item 512's green run's except FieldProductTests 372 (371 passed, 1 skipped) and FieldHistoryTests
+  516 of 516. None failed. Both runs read the tree over `906328374319`: five kit files have moved on main since, none
+  of this item's. The landed tree's own run is the verify below.
+- The assembly's verify and kit: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run
+  `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored,
+  the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3
+  skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+- The phone build:
+not run: no phone build was made or installed in this assembly; its kit ran on the simulator, in the closing kit ALL
+above
+
+**Not run, and owed.**
+- No phone read a project past a hundred sessions: the ask and the join are held by the rows over the goldens.
+- FOLLOW-UP (fieldd, one contract line): fieldd sets `lifetimePartial = missing || clipped`
+  (`projects/project-figures.ts`), and `clipped` is one flag for a peer's own cut and the phone's own, saying not
+  which. So the phone cannot tell whole `totals` from cut ones, and every project past a hundred keeps the ledger's
+  `+`. Slice 1's comment on `ProjectFiguresTotals`
+  (`packages/contracts/src/project-doors.ts`) reads as if the local cut were excluded; it is owed a dated correction
+  at its source with that follow-up.
+- `pnpm gate:landing` not run (owed).
+
+## FL (3) — the cards say "it in a browser", the one name, in the act and in its note (M481)
+
+(2026-11-21; two commits that both land, in order: `5ecf79446` "FL (red): the cards still say "a browser pane" where the
+one name is "Browser"", `e76cb619e` "FL: the cards say "it in a browser", the one name, in the act and in its note". Cut
+on main `d18929aa5995` as `6e31e41cb38f` and `28c555fba815` (branch `ob/fl-cards-browser-on-d18929aa5`; the red also
+stands as `ob/fl-cards-browser-red-on-d18929aa5`), 2026-11-20 22:45:20Z to 22:45:33Z; their `git patch-id --stable`:
+`5ecf79446` `15a5788d8cf4c7bf`, `e76cb619e` `e520e5958235d3e3`. Two earlier cuts of the same three files, on main
+`5ee5e20ef2f2`, never landed: `b722ec83fb1f` and `df4f08cfb178` (`ob/fl-cards-browser-on-5ee5e20ef-b`, 01:18:06Z to
+01:18:19Z), with these same patch-ids and messages, at which the test Mac's rows ran (below); and before it the same
+hour `9008fceace65` and `fffef64f3324` (`ob/fl-cards-browser-on-5ee5e20ef`, the same trees), whose red's message gave a
+wrong cause for a row staying green, and whose two messages said a little more than the code does. None of the three
+paths moved from `5ee5e20ef2f2` to `d18929aa5995`. One piece of the official-plugins set, cut on main's tip; its paths
+share none with the set's other pieces (the set's own paths page). Files, under `packages/field-app`: `5ecf79446`
+`test/card-landing.test.ts` +10 −2; `e76cb619e` `src/frame/cards/card-landing.ts` +1 −1,
+`src/frame/cards/cards-words.ts` +1 −1.)
+
+**What was wrong.**
+- Decided 2026-11-19: the browser plugin has one name, "Browser". Two card sentences a person reads still named the old
+  pane: the desk's act for an address, "Open a browser pane at it", and the status line's note once the desk has placed
+  the browser at the address, "Opened a browser pane at it".
+- No row held the note's words, nor the whole act sentence; one row held the noun alone.
+
+**What moved,** in `e76cb619e`, the cards' words (OB-1b):
+- `card-landing.ts`: the desk's noun for an address is "it in a browser" (`LANDING_WORDS.aPane`, whose key keeps its old
+  name), so the act reads "Open it in a browser", as "Go to it" does for an object. The drag's label joins verb and noun
+  in `dragLabelOf` (`${one.verb} ${one.noun}`, unchanged), and the bloom shows them side by side.
+- `cards-words.ts`: `OUTCOME_WORDS.placedPage` is "Opened it in a browser".
+
+**What a person sees.** Dragging a card of two or more faces, of which only the address fits, onto a desk that holds the
+browser kind says "Open it in a browser" over the card; where other faces fit too, the bloom's address bud says the
+same. Once the desk has placed the browser at the address, the status line says "Opened it in a browser". The browser
+kind is bundled, so this is the packaged app too. A card whose ONE face is an address would say otherwise (Not covered).
+
+**Untouched.**
+- The desk's refusal where it holds no browser: "The desk can't open a page yet".
+- Every code comment, test title and key that still says "browser pane", among them: the kind's comments,
+  `card-landing.ts:66`'s comment ("a link on a desk that holds no browser pane"), `desk-card-target.ts:218`'s comment
+  quoting the design's old sentence ("a link: a browser pane at it"), the landing row's title "…only where the desk
+  holds the browser pane", and the key `aPane`.
+
+**Proved before the cut, on the development Mac, nothing of record.** check-mk3.on-d18929aa.sh in a scratch worktree,
+2026-11-20 22:44:31Z to 22:45:02Z, at main `d18929aa5995`'s own tree (`962f37b8ebd0`) and the cut's trees (`5ecf79446`
+`1557581c63d7`, `e76cb619e` `503f3b431b07`), after a control that must fail: at another item's red tree, biome at
+warning level, warnings failing, exited non-zero on its own fixed line
+("spark-starts.ts:13:32 lint/correctness/noUnusedPrivateClassMembers"), as wanted. At each of the cut's trees: biome at
+warning level, warnings failing, over the three paths, its formatter included, no warning or error; `biome check .`, no
+error, 189 warnings and 57 infos, equal to main's own tree's counts (counts compared, not each diagnostic);
+check:walls's six runs (three walls, each with its self-test); check-retired-names; check-ios-fixtures;
+check-web-markers with its self-test. Every run exits 0. The same runs at the earlier cut's trees (check-mk3.sh,
+01:01:12Z to 01:01:33Z) also all exit 0, at 73 warnings and 57 infos at both; biome's formatter, run on the three
+files before that check, left them unchanged. No typecheck or vitest ran here: the typechecks and rows of record are
+the test Mac's.
+
+**The red.** `5ecf79446` changes `card-landing.test.ts` alone. At it, two rows are red by value: the desk's landing for
+an address (wanting "it in a browser"), and the new row, which stops at its label ("Open it in a browser", `:219`) after
+its `onlyFit` passes; its note expectation (`OUTCOME_WORDS.placedPage`, `:220`) is held only from the green. The
+fixture's kind name for a live page becomes "Browser"; that row stays green by design, because its noun comes from the
+fixture's spaced label ("Live page"), which `liveNoun` returns lower-cased ("the live page") without reading the kind
+name.
+
+**Proved, on the test Mac, at the earlier cut.** ROWS-mk3's arms, each from its run file, ran at `b722ec83fb1f` and
+`df4f08cfb178` on `5ee5e20ef2f2`, whose patch-ids `5ecf79446` and `e76cb619e` carry, every one as wanted. No row ran at
+`5ecf79446` or `e76cb619e` themselves.
+- The red arm at `b722ec83fb1f` (`5ecf79446`'s patch), 2026-11-20 15:31:25Z to 15:31:41Z: field-app's typecheck exit 0
+  with no error line; `card-landing.test.ts` "Tests 2 failed | 18 passed (20)", the two rows, each an AssertionError:
+  "opens an address on the desk only where the desk holds the browser pane" (`:154`, failing at `:159`) and "opens an
+  address on a desk that holds a browser, and says so in the act's own words" (`:216`, failing at `:219`). vitest's diff
+  shows the words received: `"noun": "a browser pane at it"` where `"it in a browser"` is wanted, and
+  `"label": "Open a browser pane at it"` where `"Open it in a browser"` is wanted. The row green by design passes among
+  the 18.
+- The green arm at `df4f08cfb178` (`e76cb619e`'s patch), 15:34:03Z to 15:35:49Z: field-app's typecheck exit 0;
+  `card-landing.test.ts` "Tests 20 passed (20)"; field-app whole "Test Files 372 passed (372)", "Tests 5449 passed
+  (5449)".
+- Their proof at the new top is the assembly's closing verify and the iOS kit's tests there, below.
+
+**The joined verify and the iOS kit, at the assembly's top.** `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on
+the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0
+failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows:
+3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed).
+
+**Not covered.**
+- A card whose ONE face is a link takes `soleWords`, which on a desk that holds the browser kind says "Place as a note"
+  while its play opens a page (`deskCardTarget.play` → `pageOnto`). No card has a link face alone today: the only maker
+  of one is the desk's Copy (`copy-face.ts:146`), for a kind that declares a link face, none does today, and that copy
+  is dealt only with its picture beside it. One-face copies do exist (a lone note, or a kind with no agent half gets its
+  Picture alone), but none is a link. So the label cannot lie yet; it is latent, and no row holds it on a desk with the
+  browser kind (a row holds the browserless desk's refusal).
+- macOS only.
+
+**Not done, and not claimed:** the landing-only gates (`pnpm gate:landing`) were not run and are owed at the landing;
+nothing pushed.
+
+## SH-1 — a tutorial chapter's record beside the moments, and what each answer may replace (M482)
+
+(2026-11-21; three commits on `sh/sh1-on-d18929aa` over main `d18929aa5995`, re-cut from the first cut of 2026-11-19 on
+`5ee5e20ef`. The assembly's carry is `fixer/assembly17-on-d18929aa5`, its top `2a8b92f8e` landed as main.)
+- c1 `9b35b9d1e268`, "SH-1 (contracts): the setup ledger keeps a tutorial chapter's record beside the moments". DR's
+  hand.
+- c2 `6993b0272308`, "SH-1 (red): a tutorial answer over a chapter it may not replace is written anyway".
+- c3 `5389b7396b99`, "SH-1: a tutorial chapter's record beside the moments, and what each answer may replace".
+
+**What a person sees.** Nothing yet. This is the ledger alone. Nothing calls the new door until the slices that offer
+a chapter, light its beacon, list it in Settings → Tutorials and run its layer (SH-2 on).
+
+**What it records.**
+- **Contracts (c1).**
+  - `setup.ts` gives a chapter's four states (offered, declined, started, finished) and its id, an open key under a
+    moment's name rule, so a newer build's chapter rides through. It names the Mac's six chapters.
+  - `SetupTutorialRecord` is passthrough, with the step a started chapter is at and its step count when written.
+  - `SetupLedger` gains an optional `tutorials` beside `moments`. `setupTutorialRecord` reads one row and is undefined
+    when it cannot; `setupTutorialsUnread` names the rows a newer build wrote.
+  - `methods.ts` gains `setup.tutorial` on `settings.manage`, local and idempotent. Its params (`SetupTutorialParams`,
+    in `setup.ts`) refuse a bad answer: started carries step < steps, and no other state carries either.
+  - Two goldens, `setup-ledger-tutorials.valid.json` (a chapter in each state, and one row a newer build wrote) and
+    `setup-tutorial-params.valid.json`, each with its fixtures-sweep row.
+- **fieldd (c2, c3).**
+  - `TUTORIAL_REPLACE` says each of sixteen cells, by the state a chapter is in and the answer: write or keep. Not now
+    (`declined`) is final against an offer, and only the person's own Start moves it. A started row is written again
+    at a new step, and Again starts a finished chapter over. An offer never lands on a chapter begun, declined or done.
+  - `SetupLedgerStore.tutorial()` is declarative: a started row at the same step of the same count is not written
+    again. Over a row a newer build wrote, the person's own acts are written and an offer is not.
+  - The store logs `fieldd.setup.tutorials_unread` when it loads rows it cannot read, and never throws.
+  - The door's handler takes a trusted desktop caller alone, as the other setup doors do.
+- **The window (c2).** `tutorialRecord`, `recordTutorial`, and `tutorialShown`. The last shows "paused" and "left" from
+  a started row and the running window, and neither is ever written, so a stale "paused" cannot stand behind a crash.
+- **DESIGN.md §8 (c3).** "Tutorials"'s "Kept" line is corrected at its source and dated 2026-11-19, the day it was
+  first cut; the re-cut carries it byte for byte. It said `tutorial:<id>` with paused and left as states, "learned on
+  both". It now says a `tutorials` map (offered, declined, started at step n, finished), on the Mac it was taken on.
+
+**What changes.** All counts are numstat, read by git, and are the first cut's.
+- c1: `setup.ts` +78 −1, `methods.ts` +9, `fixtures.test.ts` +11 −1, `setup.test.ts` +58, and the two goldens +44
+  and +1.
+- c2: fieldd's `setup-ledger.ts` +42, `daemon.ts` +15, `setup-ledger.test.ts` +103 −2 and
+  `setup-ledger.integration.test.ts` +36 −1; field-app's `setup/ledger.ts` +47 and `test/tutorial-ledger.test.ts`
+  +60.
+- c3: `DESIGN.md` +6 −2, `setup-ledger.ts` +14 −6.
+- 13 files, +518 −7 over the base.
+
+**The rulings.**
+- VF-PM ruled the shape at the reading's leans at 2026-11-19 17:40:23Z (a message, not a file):
+  - Q-A, a `tutorials` map with its own door;
+  - Q-B, paused and left derived, never written;
+  - Q-C, Not now final but for the person's own Start;
+  - Q-D, chapter ids an open key, with the Mac's six named in contracts.
+  Its conditions: the contracts are DR's hand; a tolerant reader; the sixteen cells said and red by assertion; the
+  "Kept" line corrected at its source; an EL9 golden parsed on both sides of the door.
+- James answered his card at 2026-11-19 23:07:27Z with "All three as leaned: leave it waiting;
+  each device its own; quietly keep the place (Recommended)" (VF-PM's relay of 23:08:02Z, a message):
+  - Q1: for an existing user, the desk tour waits in Settings → Tutorials;
+  - Q2: each device keeps its own record for now. In the "Kept" line this is "on the Mac it was taken on" and the
+    closing "Each Mac keeps its own ledger, as setup's answers are kept";
+  - Q3: leaving halfway quietly keeps the place.
+  Of the three, only Q2 touches SH-1's commits (c3's DESIGN.md).
+- VF-PM ruled at 2026-11-20 22:45Z that c1's message names the main DR's try ran on: "on its tree laid on main
+  c6d12c43 (2026-11-19)". As first written, "laid on main" would read as this base. DR read it at source and agreed.
+  That bullet is the only change to c1's message.
+
+**Read before the cut.**
+- DR read the SH lead's contracts shape (`lanes/sh/sh1/CONTRACTS-SH-1-shape.md`) and wrote it as c1
+  (`lanes/dr/ey/sh1/make-sh1.py`, `d3161d41`). It added:
+  - the two goldens' fixtures-sweep rows;
+  - the door's params golden;
+  - in `setup.test.ts`, the params' accept-and-refuse row and the six-chapters row.
+  The ledger golden's reader row was in the shape.
+- The SH lead's width read of DR's first output, in characters, found nine added `setup.ts` comment lines of 101–119
+  in a file with none over 100. It also found one added line each in `methods.ts`, `fixtures.test.ts` and
+  `setup.test.ts`, files that already ran wide. DR rewrapped all twelve, and DR's maker now refuses any added line over
+  100.
+- VF-PM read each cut script whole (`sh1-cut.zsh` `be059c00`, then `sh1-cut-d189.zsh` `b2027584` by its diffs
+  `ea22620d`, `23ca1981` and `0d00ff3e`) and every pre-cut check before each word.
+
+**Proved before the cut, on the development Mac.**
+- **The re-make on d18929aa.** `lanes/sh/sh1/remake-on.py` (`b151f65b`, its output `remake-d189.out` `19383d0e`,
+  "RESULT: ALL HOLD") ran the same two makers on d18929aa's own files, from git objects alone:
+  - counted from the first cut's base `5ee5e20ef` (249 commits), four of SH-1's paths moved: DESIGN.md, `methods.ts`,
+    `fixtures.test.ts` and `daemon.ts`;
+  - in each, SH-1's hunks are the same byte for byte, and main's own hunks carry: DESIGN.md's one hunk moves from
+    line 4479 to 4522, `daemon.ts`'s two to 186 and 8333, and `fixtures.test.ts`'s two to 335 and 881;
+  - the nine other paths re-make byte-equal to the first cut's blobs at c1, c2 and c3;
+  - a must-fail control (DESIGN.md's committed c2 paired with the re-made c3) failed.
+- **check-sh1-3.zsh** (`8d339fde`; `lanes/sh/sh1/check3/check-sh1-3.log`, `106e73ac`) ran on a whole-tree copy of
+  d18929aa. All were as wanted.
+  - At the base: the six walls of `check:walls` alone, as the harness's control.
+  - At c1, c2 and c3, each of:
+    - biome format by stdin;
+    - biome lint, file-based, with warnings failing (item 620's field-app rules apply by path);
+    - the six walls (wall R35 among them);
+    - an R8 control.
+- **The first cut's rows.** ROWS-sh1 v3 (`2fb01ca8`) ran on the test Mac at the first cut's forties on `5ee5e20ef`
+  (i-sh1-c1, -c2 and -c3, 2026-11-20 15:15:33Z–15:21:17Z). They were whole as wanted:
+  - R5, the typecheck of record of contracts, fieldd and field-app, gave 0 errors at c1, c2 and c3;
+  - R1 gave 807 passed at each tree;
+  - R2 gave "Tests 9 failed | 23 passed (32)" at c2 (exactly the nine, each an AssertionError) and "32 passed (32)"
+    at c3;
+  - R3 gave 2 passed and R4 gave 3 passed at c2 and c3, and R6 exited 0 at c3.
+  Their base was not this one, so every row runs again at these forties.
+- **No typecheck of fieldd or field-app, and none of their rows, ran on the development Mac.**
+
+**The cut.** `lanes/sh/sh1/sh1-cut-d189.zsh` (`b2027584`, its log `sh1-cut-d189.log` `8b58beeb`) ran
+2026-11-20 22:50:09Z–22:50:12Z in the SH lane's sparse worktree. Its first act moved the worktree from the first cut's
+branch (`sh/sh1-on-5ee5e20e`, which stays at `bb88b3fc` with its three commits) to a new branch at d18929aa. Its cone:
+`packages/contracts`, fieldd's `src` and `test`, field-app's `src/setup` and `test`, `scripts` and
+`apps/ios/VibeFieldKit` (for the hook).
+- It held every file of every commit to its prepared after-sum twice: in the worktree after its maker, and as the
+  committed blob. It held each commit's numstat and swept every staged added line.
+- The pre-commit hook ran on each of the three: "siblings:render: the committed rows (staged) are the lock's (15 npm,
+  0 cargo + 6 released on the registry, 3 swift)".
+- The fixer read the three commits' `--stable` patch-ids as equal to the first cut's.
+
+**On the test Mac.** `lanes/sh/sh1/ROWS-sh1.md` v4 (`a5f34fe0`) went to qa-01 at 2026-11-20 22:51:28Z for the assembly's
+trial series. Its rows and wanted results are v3's, at these forties. The typechecks of record run at each tree, then
+the rows: c2 red by exactly nine named tests, by assertion, and c3 green.
+- ROWS-sh1 v4 `a5f34fe0` ran on the test Mac in the assembly's trial series:
+  - i-sh1d-c1, 2026-11-20 23:04:57Z–23:05:18Z;
+  - i-sh1d-c2, 2026-11-21 00:19:02Z–00:19:28Z;
+  - i-sh1d-c3, 00:22:07Z–00:22:32Z.
+  Each END reads "IS AS WANTED (GREEN)".
+- R5, the typecheck of record of contracts, fieldd and field-app, exited 0 with 0 "error TS" lines at c1, c2 and c3.
+- R1, contracts' `setup.test.ts` and `fixtures.test.ts`, gave "Tests 817 passed (817)" at each tree. The first cut
+  read 807; `fixtures.test.ts` moved with main.
+- R2, fieldd's `setup-ledger.test.ts`:
+  - at c2, "Tests 9 failed | 23 passed (32)": exactly the nine named, each by assertion;
+  - at c3, "Tests 32 passed (32)", the count read from c2's own report, with 0 failed.
+- R3, the door's integration test, gave 2 passed at c2 and c3.
+- R4, the window's `tutorial-ledger.test.ts`, gave 3 passed at c2 and c3.
+- R6, `pnpm check:walls` at c3, exited 0.
+
+**Found on the way.**
+- **The base moved under the cut, twice.**
+  - On 2026-11-19, main moved four commits from the first base `adc620f1` to `5ee5e20ef`. Of SH-1's files they touched
+    DESIGN.md alone, about a thousand lines from SH-1's line, and `prove-design-5ee5.py` proved the re-made piece.
+  - By 2026-11-20 main had moved 249 commits more, to d18929aa, with the carry of CP-4a2b and the train of 641, 638,
+    583 and 614. The re-make and its check above are the proof, and SH-1 was re-cut there.
+- **A re-cut's holds are read against its own start.** The first launch of `sh1-cut-d189.zsh` stopped at its holds
+  (22:44:15Z) before any write. A hold from the first cut wanted SH-1's three new files absent from the worktree, but
+  the re-cut starts from the first cut's c3, which holds them. That one hold now asks for each in the first cut's c3
+  and absent from the base. The hold after the switch stands.
+- **The red is nine, not ten.** Ten of the sixteen cells say keep. The three same-state keeps hold even with every
+  cell saying write, because a declarative write keeps them. So the red is the table row, the seven different-state
+  keeps and the newer-build offer row.
+- **Biome passes lines it cannot break.** Its check exited 0 on a dry tree holding a 109-character test name and a
+  110-character string. It breaks no string and reflows no comment, so only a width read in characters catches such a
+  line. Both makers now hold one.
+- **The walls in a sparse tree.** `repo-files.mjs` skips a listed file absent from disk, so the walls in a sparse
+  worktree read the cone alone. The checks ran on a whole-tree copy (`git clone --shared --no-checkout` of the main
+  checkout, then a detached checkout), on the development Mac's internal disk by VF-PM's word.
+
+**Owed.**
+- ROADMAP's SH row: SH-1 landed, SH-2 (the lesson layer) next.
+- DECISIONS' SH row: SH-1's Q-A…Q-D (VF-PM) and James's three answers.
+- The thinking doc (`draft/thinking-tutorials.md`) takes James's three answers. Q1's waiting desk tour and Q3's kept
+  place are carried by the slices that offer and run a chapter (SH-2 on, Settings → Tutorials at SH-7).
+- On VF-PM's removable list: the old branches `sh/sh1-on-adc620f1` and `sh/sh1-on-5ee5e20e`, and the check's tree in
+  the SH lead's scratchpad.
+
+## SP-1e4 — Stop all and Pause all on Chat's crew card, and a paused turn wakes its spark as paused (M483)
+
+(2026-11-21; six commits: `af56649de` "SP-1e4: DESIGN.md — Stop all and Pause all on the crew card, at the lean",
+`5cfd5b7e8` "SP-1e4: red — the waker tells a turn the person paused as finished", `880c148e6` "SP-1e4: a turn the person
+paused wakes its spark as paused, never finished", `68619bb65` "SP-1e4: seam — the crew card's acts, their words and the
+terminate door, behaviour unchanged", `3705e411b` "SP-1e4: red — the crew card has no Pause all, no Stop all and no
+Paused" and `6c7776cb5` "SP-1e4: Stop all and Pause all on Chat's crew card". First cut on `87e71631c083` (2026-11-19),
+carried onto M-r2's top (M468), its field-app red and green re-cut (below), and cut again on main `d18929aa5995` for
+this landing (the cut's top `4626594af014`), its rows run there, then replayed in the assembly. Two of its files were
+resolved in the carry within their conflicts' hunks, each keeping both sides' additions: `agent-waker.test.ts` and
+`agent-runtime.ts`. S3 (Stop all takes one press) and S5 (a paused row reads Paused) are built at the lean: his pick is
+still owed on the PM board. The same question's third part, the 12-an-hour hold on a spark's sends, is CP-4e's and is
+not built here.)
+
+**What a person sees.** On Chat's crew card, after Open in Godview: **Pause all** and **Stop all**, the same quiet
+buttons, each only while it has a member to take (S7: never a press that does nothing).
+- **Stop all** ends each Working or Starting member's terminal once, on this desktop's floor. A member with no terminal
+  here is refused "it has no terminal on this desktop"; while fieldd's runs cannot be read, "VibeField could not tell
+  where its terminal is". The first refusal of a press is the card's line, before every other.
+- **Pause all** pauses each working member's current turn once. The agent stays open.
+- **A row passes through words** in its state's place: "Stopping agent…" until it reads Ended, "Pausing current turn…",
+  and "Still running" in the attention ink when fieldd cannot confirm the cancellation. A member whose turn the person
+  paused reads **Paused**, counted apart from done: "2 of 4 done · 1 paused". No "All done" while one is paused.
+- **The spark hears it truly:** a turn the person paused wakes its spark (and any watcher) as "‹label› was paused by the
+  user", never "finished". Every Pause does, a pane's and Chat's head's too. A spark's own agent_interrupt is no Pause:
+  its turn's end stays "finished".
+
+**The seam.**
+- **fieldd:** `AgentRuntimeService.pausedTurn(runId)` reads the runtime's own Pause: the request in flight (installed
+  before its delivery, so a turn that ends before the floor answers is still paused), then the held Stop with
+  `stopKeepOpen` until the next turn lets it go (`applyMonitor`). No door sets a mark. `WakerOptions.pausedTurn` takes
+  it, and daemon.ts hands it over at the waker's construction (one option; held by the typecheck alone, since no row
+  drives a spark's wake through the daemon).
+- **field-app:** crew-card.ts derives Paused, the passing words, the count, the acts and the line from fieldd's record
+  and the window's presses. `SparksPort.terminate` over `terminal.terminate` is new; Stop all reads fieldd's runs once
+  at the press (`agent.list`, Jump to's rule) and Pause all sends `agent.pause` through the head's `pauseTurn`. A ref
+  guards each act against a second send. The catalog gains an "acts" plate (crew-fixtures.ts): its rows pausing,
+  Paused, Still running and stopping beside one at work, so both acts stand; docs/UI_SYSTEM.md's crew card list
+  names it.
+- **DESIGN.md:** §8 "Chat's crew card" (the foot's acts and "The crew's acts") and §9 "Chat's words" (the acts, the
+  passing words, Paused, the count, the two refusals).
+
+**The carry.** Assembly 16 met SP-1e4 in daemon.ts and agent-session.test.ts alone, in neither at SP-1e4's own lines:
+SP-1e4's change laid by content on the landed text, every anchor found once and the same lines added (+2 and +12).
+M-r2's carry met it in four files:
+- `agent-waker.test.ts`, by a prepared file: M-r2's origin spawner (R35b) and SP-1e4's `pausedTurn` option both kept;
+- `agent-runtime.ts`, by a prepared file: M-r2's `replacing()` (Q29 (i)) and SP-1e4's `pausedTurn()` both kept, after
+  `isLive`;
+- daemon.ts and agent-session.test.ts, picked clean.
+Each prepared file's two sides were held to the blobs it was made against before it was laid. On main `d18929aa5995`
+it met the landed work in DESIGN.md alone, laid by content on its text (4 hunks, every anchor found once, the same 31
+lines added and 4 removed); its other 21 files were the blobs it was made on.
+
+**Proved before the cut, on the development Mac** (2026-11-19, on `87e71631c083`):
+- fieldd tsc 0 at red and green; field-app tsc 0 at the seam, red and green;
+- the native biome clean on every changed file, and its control file fails it.
+- Under item 620's biome.jsonc, SP-1e4's 14 field-app files add no diagnostic: ThreadFlowView.tsx's 3 noArrayIndexKey
+  warnings are main's own, moved by SP-1e4's +8 lines above them.
+
+**On the test Mac, its rows at its own commits** (qa-01's run `sp1e4-trial-4626594af014`, 22:55:45Z–23:00:38Z, out
+`921e36c84845388a`, in the V lane's clone at main, at the cut's six and a scratch control fetched from one bundle):
+- the typechecks of fieldd at the two fieldd commits and of field-app at the seam, red and green: 0 each;
+- the waker at its red: 1 failed of 11, the S4 row, by assertion, its guard passing; at its green: 11 of 11;
+- the real floor's Pause row at the fieldd green: 1 passed; at the scratch control (`pausedTurn` answering false, never
+  landed): 1 failed, by assertion ("expected false to be true"), so the row holds the accessor;
+- agent-session, agent-inventory-age and typed-end-deps whole at the fieldd green: 142 passed, 2 skipped;
+- the eight field-app files: 270 of 270 at the seam; at the red, 11 failed by assertion (crew-card A1–A8, thread-flow 2
+  with its plates row, chat-view 1), 270 passed, A9 passing; at the green, 281 of 281;
+- the catalog wall at the green: 63 of 63; field-app's WHOLE suite at the green: 378 files, 5,519 of 5,519.
+`pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+`census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL
+there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push
+151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**What happened first** (2026-11-20). SP-1e4 first reached a landing window as six commits carried onto M-r2's top
+(`d373e7720dab`), and its whole verify there was red, 1 of 5,477 in field-app: the crew card's plates row wanted Pause
+all at the "acts" plate's foot and read only Stop all. The product's rule was right (Pause all stands only with a member
+it can take, §8): the plate's four members all passed through a word or were paused, so it gave Pause all none. The row
+was red at SP-1e4's own top before any carry too, and had never run: field-app's tests do not run on the development
+Mac, and SP-1e4's forms called the row green, "thread-flow 18", a count nobody had run. M-r2 landed alone. FA-RED and
+FA-GREEN were re-cut, the plate gaining a fifth member plainly at work, and the six were cut again on main.
+- **The rule it leaves, for every lane's form from that day:** a row a form calls green or red is marked RUN, with the
+  run's name, or NOT RUN; and a tree's first whole run is never again its landing verify (field-app's whole suite runs
+  at the green top before any `real`).
+- **Its plates row RAN before the cut this time:** as files at the re-made red (2 failed of 18, by assertion) and
+  green (18 of 18), then at the commits in the trial above.
+
+**Owed:**
+- If his pick on S3 or S5 is not the lean: a follow-up item, the text and the code.
+- The 12-an-hour hold: CP-4e's, with its own pick.
+- 593's waker door: at an INFERRED end of a paused turn, the runtime calls the waker before it lets the held Stop go
+  (its name still a placeholder), in 593's carry onto this.
+
+## TH-3 (C) — a spark's face as a picture a host can draw: its still edge to edge, or its flat star as an SVG (M484)
+
+(2026-11-21; three commits: `39ca74612` "TH-3: seam — a face as a picture, its shapes and an inert stub, behaviour
+unchanged", `68f703004` "TH-3: red — a face has no picture yet" and `c409d36bd` "TH-3: a face as a picture — its still
+edge to edge, or its flat star as an SVG". Prepared on `5ee5e20ef2f2` and proved there and on `906328374319`; its five
+files were the same blobs on main, so it was cut there as made (the cut's top `e2b69d52e405`), then replayed in the
+assembly. DESIGN.md §2.10, decided 2026-11-19. It is TH-3's third piece: the picture a host draws. Godview's use of it
+(a spark's face in its views) is TH-3's later pieces.)
+
+**What a person sees.** Nothing yet. Every face draws as it did: the window's faces keep their stills and their flat
+stars, their keys and their room. The picture is a new door for a host that draws a face inside its own box.
+
+**The seam.** In design-kit's spark-face:
+- **`sparkPicture(engines, face)` → `{ key, image }`, or null:**
+  - where the window has WebGL2, the still its one canvas draws, edge to edge (room 1, no room for its props), keyed by
+    its still's key;
+  - where it has none, the flat star as a `data:image/svg+xml` picture that fetches nothing (no reference but its own
+    gradients), keyed by its seed, size, frame and freedom.
+  - The same key promises the same picture; a new seed, size or frame is a new one, a status never is.
+- **`flatStarFigure(engines, face)`:** the flat star's one drawing (its box, glow, backdrop, disc, outline and eyes).
+  SparkFace's flat view now draws from it, so the face in the window and its picture are one drawing.
+- **stills.ts:** `StillFace` takes an optional `room`, a free face's box over its size. A face's room reads only when
+  free and not the default: `stillKey` names it only then, so every key in use keys as it did, and `drawStill`'s box is
+  the size times that room. FREE_FACE_ROOM is as before.
+- **index.ts** exports the picture's block, plus FREE_FACE_ROOM, StillFace and stillKey.
+
+**Proved before the cut, on the development Mac** (run `run-c-rows` and its re-run `run-c-rows-r2`, 2026-11-20, in a
+lane worktree whose spark-face files were C's base blobs, by copy with no git write; FIGURES-c e099e076):
+- **the base:** the five tests that read spark-face (spark-face, spark-night, chat-portal, chat-portal-motion,
+  spark-face-goldens), 49 of 49;
+- **the red** (seam and its test): spark-picture's 8 failed of 8, each by assertion, the file loading. The first run
+  found one failing by a TypeError (a matcher handed `undefined`); its row now first asserts the picture is a string;
+- **the green:** 57 of 57, spark-picture's 8 and the five at the base's counts. So no golden moves: spark-face-goldens
+  pins hatch.tsx and the two vendored engines, none of them C's files, and spark-face recomputes the DNA and flat-star
+  goldens.
+- biome, under item 620's rules, clean on the changed files.
+- **NOT RUN there:** the typecheck, and the field-app tests that mount a module importing spark-face (most of the
+  suite).
+
+**On the test Mac** its rows did not run at its own commits: run-c-rows and run-c-rows-r2 ran in a lane worktree on
+the development Mac, before the cut (above). On the test Mac it ran only inside the assembly's closing verify:
+`pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+`census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL
+there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push
+151's 3,151 rows lost or moved, and 16 new, each passed).
+
+**Follow-ups, named and not done:**
+- TH-3's piece A, DESIGN.md's lines for a spark in Godview, re-proved on main's text before its cut.
+- TH-3's D to G after the puppeteer EL8: the marks' reader, Godview's wiring, the rung and its pixel step, the records.
+
+## Item 596 — a card picked up turns toward the pointer, and the lamp lights it as it turns (M485)
+
+(2026-11-21; three commits, 21 paths: the doc `51dc80ca3` "596 (doc): a card picked up
+turns toward the pointer, and the lamp is live on it", the red `c02c487ed` "596 (red): the card's brightness is the
+night's dim times the lamp's light" and the green `1b08e22c7` "596 (green): a card picked up turns toward the
+pointer, and the lamp lights it as it turns". Cut first on `906328374319` (`a4d47b315aa5`, `a0b89904f8e5`,
+`857594216ee8`), re-made on `d18929aa5995` by the lane's own script (as cut: `cde1171f9080`, `edd90d087cee`,
+`42818422a21a`), each commit through the repository's own
+pre-commit hook and its tree held to a trial's; items 613 and 616 stand on it and land with it (596 and 613 land
+together or neither does). Landed in assembly 17.)
+
+**What a person sees.** A card picked up from the hand turns toward the pointer on a spring, as a card turns in the
+fingers: up to 0.42 rad about its upright and 0.30 about its level, facing the pointer on either side, and it
+straightens from the moment it is put back. As it turns, the light runs across it: the side that is up brightens
+toward the lamp (up to 1.135 at the turn's full reach, never past 1.35) and darkens away from it, and the weave, the
+varnish's sheen, a picture's gloss and the back's pressed mark and three lights move with the turn. At rest the card
+is its print. Under reduced motion it never turns. Where there is no lamp (WebGL2 refused, the press not yet printed,
+the agent's dark card) the card still turns and brightens and darkens whole (DESIGN.md §5 "The lamp, live", §6 "The
+hand", §8 "Picking one up").
+
+**The seam.**
+- **The turn** (`lamp/turn.ts`, pure): the round's numbers (0.30 and 0.42 rad, a spring of 300 and 27, seen from
+  1000), where the pointer asks the card to turn, the spring's step, the side's frame (CSS's `rotateY(y) rotateX(x)`)
+  and the press's diffuse for a flat side (`lampOn`).
+- **The held layer** (`lamp/use-held-turn.ts`, `CardsView.tsx`): a `.vf-cards-turn` between the held card and its flip
+  takes the turn as two custom properties; frames are asked for only while the spring moves or the card turns over.
+- **The light, in two parts:** how brightly the side is lit rides the card's own brightness filter (the night's dim
+  times `--vf-cards-lamp`); what crosses it is one small WebGL2 surface over the side that is up (`lamp/lamp.ts`,
+  `lamp-shader.ts`), cleared head on and flat. `press/light-glsl.ts` holds the light the press and the lamp share;
+  `press/gl-kit.ts` the program, quad, texture and uniform steps; `press/print-light.ts` the root's word that the
+  print is ready and in which theme.
+- **The re-make.** The green differs from its first cut in three files: `press/press.ts` keeps the two lines item 620
+  put over its WebGL `useProgram` call; `lamp/lamp.ts` takes two lines of this item's own over its call (item 620's
+  hook rule reads it as a React hook, an error in this package since that item); and `test/card-turn.test.ts` has
+  two rows mended, which were the test's errors at their first run (a frame at rest compared by an equality that
+  tells −0 from 0; a bound of 1.2 where the light squarely at the lamp is 1.183 by day and 1.226 by night).
+
+**On the test Mac.**
+- The first cut's rows, `ROWS-596b-613.md` (runs `i596b-c2` and `i596b-c3`, on `906328374319`): at the red, card-face
+  and cards-flip 2 rows of 25 failing, by assertion, as named; at the green the typecheck and Biome clean and 112 of
+  114 rows passing, the two being `card-turn.test.ts`'s own errors above, the finding that mended them.
+- The re-made rows, `ROWS-596b-613.md` `c7a9c11b` (qa-01's runs `i596d-c2` and `i596d-c3`, 2026-11-21): at the red,
+  field-app's typecheck 0 errors; `biome check` of the cards and the tests exit 0 with exactly main's seven findings
+  at `d18929aa5995`; 2 of 25 rows failing, by assertion, as named. At the green: the typecheck 0; Biome as at the
+  red; the eight card files 114 rows passing (card-turn 15, card-lamp 15, cards-held-turn 13, card-face 17,
+  cards-flip 8, cards-view 29, card-press 14, card-press-catalog 3).
+- No `import()`, worker or asset in the added code (read at source, 0 lines with a control found), so by reading the
+  packaged app's census does not move; the assembly's verify, at its bundle stage, is the proof.
+- `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+  `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit
+  ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of
+  push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Owed:** the look on a GPU. Every still behind this item is the stills' software renderer, and motion was not seen;
+the landing's GPU row is where the lamp is first seen on a GPU. Toward the lamp, at the worst turn, the window's words
+stay under 4.5:1 (a terminal's output 3.04:1 by day on a plate): a known break, said in DESIGN.md, until the sheen's
+own item (619).
+
+## Item 613 — a card's light stops at 0.72, and the lamp gives back over the light it is shown at (M486)
+
+(2026-11-21; three commits on item 596's green `1b08e22c7`, 10 paths: the doc `05c1eb24c` "613 (doc): a held
+card's words read turned from the lamp, by day and by night", the red `7277e1466` "613 (red): a card's light is
+asked to stop at a floor, and the lamp to know it" and the green `9b29dcee4` "613 (green): a card's light stops at
+0.72, and the lamp gives back over the light it is shown at". Cut first on `857594216ee8` (`2adeb0f80d6b`,
+`1d69a5a30ec9`, `cc9e8346142a`) and re-made with 596's (as cut: `a40fe9c2cdd0`, `e87a0c1ce415`,
+`912017a363d6`), each commit its first cut's own diff. Landed in assembly 17
+with 596, as it must.)
+
+**What a person sees.** A card picked up and turned from the lamp no longer dims past reading: its light stops at
+0.72, by day and by night, where by night it fell to 0.86 × 0.55 and a terminal's output read 2.96:1. At rest and
+toward the lamp nothing moves; by day the floor lifts only the corner turned down and left, from 0.68 to 0.72. By
+night, turned from the lamp, the back's three lights stay under their rest instead of flaring (DESIGN.md §5 "The
+lamp, live", How brightly).
+
+**The seam.**
+- `--vf-card-light-floor: 0.72` in tokens.css, once, in the root, the same in both themes. The face's and the back's
+  filters are `brightness(max(floor, dim × lamp))` (`cards.css`).
+- The lamp reads the floor too (`uFloor`, the floor over the night's dim), and its shader figures the sheen and the
+  back's three lights over `max(flatDiff, uFloor)`; the shade and the lift stay of the flat card.
+- **The one exception, by James's pick ("Land it as cut", 2026-11-20):** `--vf-card-dark-ink-2` goes from white at 62%
+  to 70% so the agent's dark card's state holds the floor, with its words in DESIGN.md (the token table and §5) and
+  two assertions of `card-light-floor.test.ts`. The dark card is a stand-in that no view of the app makes (only the
+  catalog's fixture); item 633, which prints a session on the paper stock, removes it, that token and those words.
+
+**On the test Mac.**
+- The first cut's rows (runs `i613-c5` and `i613-c6`, on `906328374319`'s stack): at the red, 11 of 60 rows failing,
+  by assertion, as named; at the green the typecheck of field-app and design-kit and Biome clean, and every row green
+  but `card-turn.test.ts`'s two (item 596's finding).
+- The re-made rows, `ROWS-596b-613.md` `c7a9c11b` (runs `i613d-c5` and `i613d-c6`, 2026-11-21): at the red the
+  typecheck 0; `biome check` of the cards, the tests and design-kit's source exit 0 with exactly main's seven; 11 of
+  60 rows failing, by assertion, as named (card-light-floor 5 of 5, card-face 2 of 17, cards-flip 1 of 8,
+  cards-held-turn 1 of 13, card-lamp 2 of 17). At the green: field-app's and design-kit's typecheck 0 each; Biome as
+  at the red; the nine card files 121 rows passing; every `card*` and `cards*` file and ui-system-boundaries, 22
+  files and 404 rows passing.
+- `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+  `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit
+  ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of
+  push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Owed:** the same as item 596's: the floor's figures were read on plates by the software renderer and by arithmetic,
+not on a GPU.
+
+## Item 616 — a terminal's summary line and the waiting words read, and two marks show (M487)
+
+(2026-11-21; four commits on item 613's green `9b29dcee4`, 5 paths: the doc `8cf1a838d` "616 (doc): what a
+card prints holds §2.4's floors, said once, and four inks rise to them", the red `92592eb20` "616 (red): four
+quiet inks are asked to stand at §2.4's floors", the green `83c816ca6` "616 (green): a terminal's summary line and
+the waiting words read, and two marks show" and the errata `94227c482` "616 (doc, errata): two inks wait on item
+617, not three, since the dark card is to leave". Cut first on `cc9e8346142a` (`bb1f4fd7c607`, `5f9a1dfc95c2`,
+`e682b553205d`, `f2f96b9901a8`) and re-made with 596's and 613's (as cut: `e2810e42b70a`, `c2b06f33af6b`,
+`8df57f387947`, `a8a97baa3196`), each commit its first cut's own diff. Landed in
+assembly 17 with them.)
+
+**What a person sees.** Four quiet inks of a card's face rise to §2.4's floors. A terminal's summary line stands as
+dark as the output around it (74% of the ink, where it read 3.22:1 at 50%), its count still in the pass ink; the
+words of a card on its way in read at the same 74% (2.58:1 before); a prompt's `$` and the second and later faces
+along a card's foot are darker, as marks at 55% (2.21:1 and 2.11:1 before). DESIGN.md §5 says once what a card prints
+holds: on the paper stock its words at 74% of its ink or more and its marks at 55% or more, by night and turned from
+the lamp; §8 carries a dated note of what each of the four was.
+
+**The seam.** `cards.css`: `.vf-card-out [data-quiet]` 50% to 74%, `.vf-card-wait` from `--card-ink-3` to the ink at
+74%, `.vf-card-prompt` 36% to 55%. tokens.css: `--vf-card-face-ink-2` 34% to 55%, its one user `.vf-card-faces`.
+Under the floor by decision, named in DESIGN.md: the pass ink and a file's comment until their look is picked (item
+617), and the agent's dark card's project and its state's dot until the dark card itself leaves (item 633). The
+errata says two, not three, at its source with a dated correction; no reader of DESIGN.md held the sentence it removes.
+
+**On the test Mac.**
+- The first cut's rows, `ROWS-616.md` (runs `i616-c8` and `i616-c9`): at the red 4 of 24 rows failing, by assertion,
+  as named; at the green the typecheck and Biome clean, and every row green but `card-turn.test.ts`'s two.
+- The re-made rows, `ROWS-616.md` `b1baf783` (runs `i616d-c8` and `i616d-c9`, 2026-11-21): at the red the typecheck
+  0; Biome exit 0 with exactly main's seven; 4 of 24 rows failing, by assertion, as named (the summary line 3.22:1
+  flat, a prompt's `$` 2.21:1, the other faces 2.11:1). At the green: field-app's and design-kit's typecheck 0;
+  Biome as at the red; the card files 123 rows passing; every `card*` and `cards*` file and ui-system-boundaries, 22
+  files and 406 rows passing. The errata changes DESIGN.md alone and has no row.
+- `pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+  `census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit
+  ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of
+  push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Owed:** a still of the four inks: none was made; the look is held by the rows' arithmetic, by token and rule.
+
+## FL — the browser is called Browser everywhere, and its listing says what a person gets (M488)
+
+(2026-11-21; two commits: `279813154` (red, "FL (red): the browser is called Browser everywhere, and its listing says
+what a person gets") and `6374dcacc` (green, "FL (green): the browser is called Browser everywhere, and its listing says
+what a person gets").
+- The official-plugins set's rows 3 and 6, decided 2026-11-19: the browser plugin has ONE name, "Browser", everywhere
+  a person reads it, and its description says what a person gets, in their words, last that it asks for no account.
+- Before this, the plugin's own title was "Browser pane", while its kind's title and its pegboard label were already
+  "Browser". Its description named the pane's insides: "the desk's LIVE service", "its own sample a still".)
+
+**What a person sees.**
+- The plugin is listed as "Browser", the same name as the thing it puts on the desk and its pegboard label.
+- Its page's description reads "Live web pages on your desk: browse them, sign in, and choose the device they're
+  shown at. No account needed."
+- The browser itself, its kind's own description and everything it does are unchanged.
+
+**What changed.**
+- `plugins/browser-pane/src/manifest.ts`:
+  - the plugin's `title` is "Browser";
+  - its `description` is the sentence above.
+  The kind's own title ("Browser") and description are unchanged.
+- `plugins/browser-pane/vibefield.plugin.json` follows the manifest in those two lines alone (numstat 2 2).
+  - It is the kit's own emission: emitManifest writes canonicalJson of the validated manifest.
+  - The manifest test's canonical row holds the committed file to that emission, byte for byte.
+- `plugins/browser-pane/test/manifest.test.ts` gains one row, "is called Browser everywhere and describes itself in
+  a person's words". It asks:
+  - the plugin's title and description;
+  - its kind's title and its pegboard label, each "Browser".
+- No import and no asset is added, so the package census is unmoved.
+
+**Proved.**
+- The cut: `fd/bn3-on-d18929aa5995` at `b32dcc5f2321`, its red `d655d27d612b`, two commits on main `d18929aa5995`,
+  2026-11-21 00:17:08Z to 00:17:12Z.
+  - Each set was made by content on `5dc301f99047`. At the base, each of the three paths' blobs is its blob there, held
+    before anything was laid.
+  - Each commit was laid from its set at its sums and committed through the repository's hook (siblings:render clean
+    on both).
+  - Each commit's message equals its prepared text, and its files are its set's bytes.
+  - base..tip changes the three files alone, with no merge.
+  - One create-only ref write: main and the cut's own prefix unmoved, no other head moved.
+- The trial of record: run `bn3-trial-b32dcc5f2321` on the test Mac, at the cut's own two commits, 2026-11-21
+  01:10:51Z to 01:11:07Z, on a row fill at the base. Out `bddf3771f3f175b1`, 48 lines, END "BN3-TRIAL AS WANTED".
+  - The control: base → red → base, the tree and the test's sum held at each end.
+  - At the base:
+    - the pane's whole suite: 11 files, 169 rows passed;
+    - the pane built alone: `renderer.js` `5142763a7d947c5c`;
+    - the kit's check on that build: exit 0, no refusal, and its activation and artifact rows ran on it.
+  - At the red:
+    - the manifest test: 9 rows, 8 passed, and the new row alone failed, by assertion at its first line ("expected
+      'Browser pane' to be 'Browser'");
+    - the pane's typecheck: 0;
+    - biome's format and check on the test: clean.
+  - At the green:
+    - the manifest test: 9 of 9, the canonical row among them;
+    - the pane's whole suite: 11 files, 170 rows passed;
+    - the typecheck: 0;
+    - biome on manifest.ts and the test: clean;
+    - the pane built again: `renderer.js` `5142763a7d947c5c`, the same bytes as at the base, since the bundle's graph
+      holds no file the commits change;
+    - the kit's check on that build: exit 0, no refusal and no unknown manifest key, its activation and artifact rows
+      the same as at the base.
+  - The clone was back at the base, its porcelain empty. The run wrote one trial ref, and left the pane's ignored
+    dist at that build.
+- The closing verify:
+`pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+`census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL
+there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push
+151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Not covered, and owed.**
+- A card fixture still names the kind "Browser pane" (`card-landing.test.ts:128`, `kindName`). It is the cards' own,
+  so it is not changed here.
+- The two card sentences of the same set are the cards' owner's, not in this entry.
+- A form finding of the trial, not of this change: a step's last line is cut to 160 characters before its scrub runs,
+  so a home path cut mid-way escapes the mask. Here it showed only "/Use". The rows' form takes the mend.
+
+## FL — the iOS Simulator plugin says it needs no account (M489)
+
+(2026-11-21; decided 2026-11-19. Cut on main `d18929aa5995` as `c49d199ba` and `7d14dcbdb` (branch
+`es/noacct-on-d18929aa5995`). Two commits, in order:
+- `4b8ffd4e9` (red, "FL (red): the iOS Simulator says it needs no account — the rows first");
+- `7f0fd2fda` (green, "FL (green): the iOS Simulator says it needs no account, on its listing and in its README").)
+
+**What changes.** The iOS Simulator plugin's own description now ends "No account needed.": "Run iPhones from Xcode on
+your desk: choose a model and an iOS version, then tap and type into them. No account needed." The rule, decided
+2026-11-19, is that a plugin which asks for no account says so, last in its own description. Its object row's
+description and its title, "iOS Simulator", are unchanged. Its README's lead line is the new description. Two README
+lines that said it "ships Built in" now say it "comes with VibeField", the 2026-11-19 words for a plugin that comes
+with the app.
+
+**The seams.**
+- `plugins/simulator/src/manifest.ts` (`7f0fd2fda`): the `description` string, under the dated line "decided 2026-11-19:
+  a plugin that asks for no account says so, last in its own description".
+- `plugins/simulator/vibefield.plugin.json` (`7f0fd2fda`): the plugin's own emission (its `gen:manifest`,
+  `tsx scripts/emit-manifest.ts`). Line 87, the description, alone changes.
+- `plugins/simulator/README.md` (`7f0fd2fda`): line 3 (the description), line 5 and lines 42–43 ("comes with
+  VibeField").
+- Nothing else moves. At `d18929aa5995` the description's text stood in exactly these files and the test. The json's
+  three other readers (fieldd's desk-kinds and plugin-registry-platform tests, electron-shell's smoke-phone) read no
+  description.
+
+**The rows.** `plugins/simulator/test/manifest.test.ts` (`4b8ffd4e9`):
+- item 572's row now asks for the description with the sentence at its end;
+- one new row, "asks for no account, and says so last in its own description; the object's row does not (decided
+  2026-11-19)", holds the description ending " No account needed." and the object row's description without
+  "account";
+- the file's byte row, already there, holds the committed json to its canonical emission.
+
+**Proved.**
+- **The json** was computed by the plugin's own `gen:manifest` over the base's sources, at `5dc301f99047` (ICE 0.18.0)
+  and again at `d18929aa5995` (ICE 0.20.0). The scratch was a git archive linked to a real lane install at each
+  lock. CONTROL: each commit's own manifest.ts emits its committed json (`390343af`). The green emits sha-256
+  `3fb7c1f8…`, the committed file.
+- **Every wanted count** was run in that scratch before it was written, and biome's format and
+  `--error-on-warnings` lint are clean on the two `.ts` files.
+- **On the test Mac**, in the V lane's clone, the trial pair (`a7916306` / `041c9b6c`, the same trees as these
+  commits: red `f2dee332`, green `a53e9be0`) ran `noacct-trial-041c9b6c5d6c-t2` (its out `ed020828d7b0050e`), AS WANTED:
+  - the control (top → red → top);
+  - at the red: manifest.test.ts 2 failed and 9 passed of 11, at :55 and :64, each an AssertionError; the plugin's
+    suite 134 passed, law.test.ts's one Xcode-gated row skipped by its own gate (that Mac's Xcode is not the
+    catalog's 17F113), and 2 failed; tsc 0;
+  - at the green: the suite 136 passed and that one row skipped, 14 files; tsc 0; the plugin's build;
+    `pnpm check:bundled-plugins`; `pnpm lint` with no warning or info gained over the base's own verify;
+  - back at the base, its build again.
+- **The first try**, `noacct-trial-041c9b6c5d6c`, stopped at the red's suite row: the counts had been computed on a
+  Mac whose Xcode is the catalog's, where that row runs. The rows were mended to hold that row by name, and the try
+  above ran once.
+- **The cut** (`cut-noacct.sh` 5da8d50c): through the repository's pre-commit hook, author and committer the base's
+  author. Each tree is held equal to the trial pair's. One create-only branch is written by fetch, under the ref
+  guard.
+- **The landing's own proof** is the assembly's V at the landed tree: `pnpm verify` whole at `2a8b92f8e` (assembly 17's
+  top) on the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698
+  passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0,
+  3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new,
+  each passed).
+
+**Not proved here.** The description is not checked on any screen; this change moves only the manifest's text, its
+json and the README.
+
+## 587a — terminal.create may name its folder by a place's ref, never beside a cwd (M490)
+
+(2026-11-21; one commit on `dr/i587a-on-d18929aa5995` over main `d18929aa5995`, carried straight from its first cut
+`e152ef6f7919` of 2026-11-19 on `a22f710b9a76`. The assembly's carry is `fixer/assembly17-on-d18929aa5`, its top
+`2a8b92f8e` landed as main.)
+- c1 `caf281b3e`, "587a: terminal.create may name its folder by a place's ref, never beside a cwd". DR's hand. bb's 587b
+  (fieldd's resolver and the bound-birth check) sits on it.
+
+**What a person sees.** Nothing yet. The contract alone: the phone's launch sheet (a Terminal beside Start, at a
+place, under an Agent Profile) needs fieldd's resolver, which is 587b's, and the kit's mirror.
+
+**What it records.**
+- `TerminalCreateParams` gains `place?: PlaceRef` (contracts' `terminal.ts`): the folder named by its ref instead of
+  its path, as `agent.spawn`'s `place` is, one of the asking desktop's places, resolved from fieldd's own place facts.
+- Another device's ref is refused `not-here`, an id fieldd does not know `unknown-place`, a folder gone or unmounted
+  `missing-cwd`. A place or a cwd, never both, refined exactly as `AgentSpawnParams` is. Absent: `cwd` as before.
+- A fieldd older than this field passes it through unread, and the shell is born where a body with neither is born.
+- The golden `terminal-create-params.place.json` (a place and a profile set, synthetic ids), parsed by the fixtures
+  sweep. `terminal-pipeline.test.ts` holds that it reads, that the valid body has none, that a body with a place and a
+  cwd is refused, and that a ref with an empty device or id, no device, or a path string is refused.
+
+**What changes.** Numstat, read by git: `terminal.ts` +11 −1, `terminal-pipeline.test.ts` +22, the golden +8. 3 files,
++41 −1, contracts only.
+
+**The rulings.**
+- VF-PM ruled the stack at 2026-11-20 03:06:32Z (568c, then this carry, then 588a's C1), and at 22:47Z, for the
+  assembly on d18929aa, this commit FIRST, on main, under the branch name bb's 587b filler reads.
+- Its message is the first cut's byte for byte: it names no base and no run (VF-PM's re-cut rule, 2026-11-20
+  13:55:36Z).
+
+**Proved before the cut.**
+- Its three blobs are `e152ef6f7919`'s, and at d18929aa its two existing paths are `e152ef6f7919`'s parent blobs: a
+  straight carry.
+- None of its paths is among the 66 that the train of 641, 638, 583 and 614 moved (`co-plan/train641-moved-paths.txt`
+  `d0768af0`, equal to `git diff --name-only 43973b6f..d18929aa`).
+- The fixer read its `--stable` patch-id (`b047b757`) and its message body as equal to `e152ef6f7919`'s.
+
+**The cut.** `lanes/dr/ey/cut-587a.d189.sh` (`c9b58b57`, its diff `ae03f4d8` from the stack cut `cut-587a.4b03.sh`
+`fa89a75a` that ran) ran ONCE on VF-PM's word, 2026-11-20 22:47:02Z–22:47:03Z, after the HOLD file's END and a load
+read of 7.63. It held its sources list (`d5db97d7`) and each staged blob to its source, swept every added line, and
+committed through the hooks ("siblings:render: the committed rows (staged) are the lock's"). Its one create-only ref
+`dr/i587a-on-d18929aa5995`; the held refs showed one added and none moved.
+
+**On the test Mac.** Its contract rows ran inside the re-cut trials, on trees that hold it, by qa-01 (read at source in
+its run folders):
+- i568c-r at `e5feadfa5afc` (568c over this commit), 2026-11-21 00:32:43Z–00:33:24Z: contracts' typecheck exit 0, 0
+  error TS; contracts' WHOLE suite "Test Files 79 passed (79)", "Tests 2263 passed (2263)", with
+  `terminal-pipeline.test.ts` among the 79.
+- i588a-c1 at `ecd5cde835fd`, 00:36:10Z–00:36:46Z: contracts' and fieldd's typechecks exit 0, 0 error TS each (fieldd
+  reads `TerminalCreateParams`).
+- Its fieldd rows are 587b's (bb's).
+`pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+`census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL
+there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push
+151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Found on the way.** Its earlier cuts stand, superseded: `dr/i587a-on-a22f710b9` (the first, 2026-11-19) and
+`dr/i587a-on-4b03a311b690` = `24648bd295ba` (the stack on the 906 tip, 2026-11-20 03:29Z).
+
+**Owed.**
+- The kit's mirror of the golden comes with the phone's reader.
+- On VF-PM's removable list: `dr/i587a-on-a22f710b9` and `dr/i587a-on-4b03a311b690`.
+
+## Item 587b — a phone's shell under a profile opens in the place it names, or is refused (M491)
+
+(2026-11-21; two commits, `25b17161c` (red) and `e22f72214` (green), on 587a. Paths: fieldd's terminal-service.test.ts,
+agent-runtime.ts, daemon.ts and a new place-folder.ts.)
+
+**What a person had.** The phone's Terminal could not open a shell in a chosen place under the header's profile:
+- terminal.create read a bound birth's spawn rights off `principal.scopes`, so the self phone, a tailnet principal
+  whose grant holds agent.spawn, was refused FORBIDDEN_SCOPE;
+- terminal.create had no way to name a place. 587a's contract `place` passed through unread, and the shell was born in
+  the default folder.
+
+**What landed.**
+- `25b17161c` adds the Item 587 rows to terminal-service.test.ts, over the fake floor, the scripted index and the
+  product door:
+  - the phone's bound birth by place, and a place with no profile;
+  - a peer desktop's same ask, refused at the product door: terminal.create is local (D36) and does not federate;
+  - a guest and a place beside a cwd, both refused;
+  - not-here, unknown-place and missing-cwd, in agent.spawn's words, the ref in the details and never a path;
+  - the ledger naming a birth's place by its ref;
+  - the rows assert the shell's environment exactly, as the daemon row "through the daemon…" does, so like that row
+    they hold outside a smoke (item 589 hands VF_SMOKE_RUN back).
+- `e22f72214` makes them pass:
+  - terminal.create reads a bound birth's grant through `grantedScopesOf`;
+  - `place-folder.ts` is agent.spawn's place rule lifted out of the agent runtime, so both doors read a place by one
+    rule;
+  - inside the audited effect, terminal.create reads the grant, then the place, then creates. A refusal is a recorded
+    failed attempt, and nothing reaches the floor. The attempt names the place by its ref, and the place's folder goes
+    to the floor as `cwd`.
+  - A shell at a place does not report to the place shelf.
+  - Every desktop then either refuses the phone's shell (older) or opens it in the place (newer), and it is never born
+    in the wrong folder.
+
+**How it was checked.**
+- The test Mac, in the assembly's trial series, run i587b-trial-73563a7a8495 (23:02:00–23:02:56Z), on main d18929aa
+  with 587a under the pair:
+  - at the red: fieldd's typecheck 0; `-t "Item 587"` "3 failed | 140 skipped (143)", each at its own point ("opening
+    a terminal under a profile requires agent.spawn", "expected terminal.create to fail", an AssertionError at the
+    attempt's place); lint with nothing gained over the top's verify; walls 0.
+  - at the green: the typecheck 0; the three passed; terminal-service.test.ts whole, 143 passed; agent-session's two
+    place rows passed; project-doors-phone.test.ts whole, 14 passed; lint with nothing gained; walls 0.
+- The test file's change, and the two source files' after main moved, were re-made by content on each newer main and
+  proved equal-change before the cut.
+- biome --error-on-warnings was 0 on the four files, with main's config.
+- The landing's own proof is the assembly's V at the landed tree: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top)
+  on the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0
+  failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows:
+  3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Not covered, and owed.**
+- A real floor: the rows run on the fake one.
+- The phone's Terminal button is 587c's.
+- The earlier cuts, the q4/i587b- and q4/i587b2- pairs, never land.
+- `pnpm gate:landing` not run (owed).
+
+## Item 587c — the phone's Terminal opens a shell where the folder is, on the desktop that holds it (M492)
+
+(2026-11-21; two commits: `dea81cb46` "587c (doc): Terminal beside Start opens a terminal where the folder is —
+DESIGN.md first" and `7e97e7cf7` "587c: the phone's Terminal opens a shell in the chosen folder, on the desktop that
+holds it". Cut as `737f11d0878e` and `092c9ea3381a`, branch `sm/terminal-on-73563a7a8`, on 587b's green `73563a7a8495`,
+with 587b's red `264de8c15b6e`, 587a `56498c7e092b` and main `d18929aa5995` under it; the patch-ids `e1bb6a3bbb9b…` and
+`17df840fad63…`, equal to 587c's first cut's (`0c57b6c91`, `95958d89c`). It lands only above 587a and 587b, never
+alone.)
+
+**What a person sees.** On the phone's launch sheet, **Terminal** stands beside Start:
+- **The look:** `prompt` and the word, in the well's fill and hairline.
+- **What it opens:** a shell in the chosen folder, under the header's Agent Profile, on the desktop that holds the
+  folder. It asks that desktop by the place's ref, or Browse's folder by its path, and never another desktop:
+  `terminal.create` is local to its device. Success puts the sheet away, and the field brings the shell, as it does
+  Start's agent.
+- **When it is Off:** until the profile is read, with no folder, or with the desktop asleep.
+- **Opening:** `prompt` turns to a spinner and the word to `Opening…`, so the pill keeps its look (§7). While either
+  button's press runs, the other is Off.
+- **Its refusals, said where Start's are:** another desktop's place,
+  `That folder is on another desktop. Choose a folder on studio.`; a desktop older than the place door,
+  `studio needs an update before this phone can open a terminal there.`; a lost reply, in Start's sentence, never
+  retried; the rest, in fieldd's own words.
+- **A screen reader** hears `Open a terminal in vibe-field`, then `Opening a terminal in vibe-field`.
+- **A guest's grant** (no agent.spawn) never asks: its sheet holds no profile, so Terminal stays Off.
+
+**Why.** Over the design canvas on 2026-11-19, in the lane's session, James chose Terminal beside Start (C2·b), as item
+586's entry records. 587c is that button; 587a and 587b are the desktop's door it needs.
+
+**What changed.**
+- `dea81cb46`: DESIGN.md alone, +13 −3. In §8's "The phone's launch sheet asks two things", the clause "It waits on the
+  desktop's door (item 587 …), and until that lands Start has the row to itself" becomes Terminal's own sentences,
+  ending with a dated amendment saying what the clause was. ow-design read the draft (the §8 text and the sheet's Swift)
+  before the first cut: yes, with three findings, all carried (WorkspaceLaunch's startReady and shellReady properties
+  came out, `Opening…` was added, and the refusal words now say what to do next).
+- `7e97e7cf7`: 9 paths, +361 −18, one of them new: FieldProduct's `LaunchShapes.swift` (TerminalCreateParams);
+  FieldWorkspace's `LaunchModel`, `WorkspaceLaunch`, `WorkspaceSheets` and `WorkspaceFixtureDoor`; the tests
+  `LaunchShapeTests` and `LaunchSheetTests` and the new fixture
+  `Tests/FieldProductTests/Fixtures/terminal-create-params.place.json`; and `scripts/check-ios-fixtures.mjs`, one
+  launchFixtures row. The IOS lane read the Swift.
+- The new kit fixture mirrors 587a's `packages/contracts/fixtures/terminal-create-params.place.json`, blob
+  `95ea33a8761d` at both, which is why 587c lands only above 587a.
+
+**The carry onto main `d18929aa5995`,** sm's read by git:
+- Item 586 is already on main, patch-equal (`6b85ca5f1`, `1cc0f173b`), so nothing of 586's rides again.
+- Of 587c's ten paths, two moved since its made-on tree (`c7c82beb3`), and each was carried and proved, with a control
+  that must fail and did:
+  - DESIGN.md: 587c's hunks sit at d18929aa's lines 8976 and 9003; the nearest of main's hunks since that tree is at
+    9505.
+  - `scripts/check-ios-fixtures.mjs`: one commit, `133bcc0a3`, took the flow-cap row out at line 359; 587c's row is at
+    line 274.
+- The other paths are byte-same, the new fixture is absent at both, and 587a and 587b touch none of 587c's paths.
+
+**Proved.**
+- Before the cut: every removed line was read; the kit's copy of the golden has the contracts fixture's blob at the
+  tree; the two carries were proved, each with its must-fail control; the cut's 16 holds passed.
+- **K2, inside the closing kit ALL,** held to sm's `K2-587c-counts.md` (`7ef2cf9813f1a993`) by suite name: 62 rows
+  wanted, 60 passed and 2 skipped (FieldWorkspaceTests 38, of them 36 passed and PlaceLaunchLoopbackTests' and
+  WorkspaceLoopbackTests' opt-in rows skipped; FieldProductTests' LaunchShapeTests 20; KitFaintWordsTests 3 and
+  KitWordsNameNoOneTests 1). As read at the top: in run `kit-a17close`, 60 passed and 2 skipped of 62:
+  FieldWorkspaceTests 36 passed and its two opt-in loopback rows skipped, LaunchShapeTests 20 passed, and the two
+  kit-words suites 3 and 1 passed, as wanted
+- **F, inside the closing verify:** `node scripts/check-ios-fixtures.mjs` holds the kit's fixture to the contracts'.
+- The landing's own proof is the assembly's V at the landed tree: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top)
+  on the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0
+  failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows:
+  3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Not covered.**
+- Desktops older than SB-2 (2026-09-29) read neither profileSet nor place, and open the shell unbound in their default
+  folder, as they always did. "Never born in the wrong folder" holds for desktops at or after SB-2.
+- A version floor: whether the phone should refuse desktops older than a product version is a follow-up question.
+- No live shell is opened from a phone in these rows: the loopback rows skip without the fixture handshake.
+- No stills: Row S has no accepted form on the test Mac. The scenes `launch`, `shell-opening` and `shell-older` are
+  named for when one exists.
+
+**Owed.** Nothing of 587c's beyond the version-floor question above.
+
+## 568c — VibeField's simulators are known by name; Settings counts and removes them (contracts) (M493)
+
+(2026-11-21; one commit on `dr/i568c-on-56498c7e092b` over 587a's `56498c7e092b` on main `d18929aa5995`, re-cut from the
+first cut `4b03a311b690` of 2026-11-20 on assembly 15's tip `906328374319`. The assembly's carry is
+`fixer/assembly17-on-d18929aa5`, its top `2a8b92f8e` landed as main.)
+- c1 `5242a8410`, "568c (contracts): VibeField's simulators are known by name; Settings counts and removes them". DR's
+  hand. Item 568's main-side reader with its delete verb, and the Settings row, come in their own commits.
+
+**What a person sees.** Nothing yet. The contract alone: Settings' "Remove VibeField's simulators" row and main's reader
+are the next commits'.
+
+**What it records.**
+- `live-surfaces.ts` names the one rule: a simulated device is VibeField's when its name is `VibeField <T> [<16 hex>]`
+  and `<T>` is the first 88 characters of the name of that device's own type (`MADE_SIMULATOR_NAME`,
+  `isMadeSimulator`; `madeSimulatorName` builds it). The name is the record of creation. The rule is Mac-wide, so the
+  app's remove also takes, at rest, the devices a dev run or a smoke's profile made. A plain-named device of the older
+  attach is never taken.
+- Two shapes, counts only, with no UDID, name or path: `SimulatorsMadeStatus` (ready: devices, bytes or null, inUse,
+  elsewhere; or unavailable, never read as none) and `SimulatorsMadeRemoveResult` (ready: removed, freedBytes or null,
+  kept {inUse, elsewhere}, failed; or unavailable). The remove is partial and honest. Unknown fields pass through; a
+  state this build has not heard, or an answer it cannot read, reads as unavailable by `readSimulatorsMadeStatus` and
+  `readSimulatorsMadeRemoveResult`.
+- `IPC_CHANNELS` gains `simulatorsMadeRead` and `simulatorsMadeRemove`, whose requests carry nothing (`{}`).
+  `shell.test.ts` pins them: the count found at 46 is written 48.
+- Five goldens with their two prefix rows in `fixtures.test.ts`, and `simulators-made.test.ts` (six rows): the rule, a
+  look-alike of another type, the person's own names, the tag's shape, the 88-character cut, the goldens' reads and
+  the unreadable ones.
+- TS-only: no generator reads these.
+
+**What changes.** Numstat, read by git: `live-surfaces.ts` +83, `registries.ts` +8, `fixtures.test.ts` +10 −1,
+`shell.test.ts` +6 −1, `simulators-made.test.ts` +96, and the five goldens +8, +4, +8, +8 and +4. 10 files, +235 −2,
+contracts only.
+
+**The rulings.**
+- VF-PM ruled the reading `READING-simulators-made.md` (`e2c08c4d`) at 2026-11-20 01:55:34Z:
+  - Q1, the NAME is the record of creation, with the type check, and no second "made" record; Mac-wide;
+  - Q2, in use is refused per device: this shell's idle one is shut down, then deleted, and one running elsewhere is
+    never shut down;
+  - Q3 and Q4 are the UM lead's (the main side); Q5 is ow-design's (the row's confirm).
+- Before the first cut, VF-PM read a false sentence in the message ("Both are strict"): every arm is passthrough. It
+  was mended to the "Unknown fields pass through …" sentence above.
+- At the re-cut, by VF-PM's rule of 2026-11-20 13:55:36Z, the check bullet alone was refilled with what was read and
+  run on the new tip, and its rows are marked NOT RUN there. Every other sentence is the first cut's byte for byte.
+
+**Proved before the cut.**
+- The maker (`make-sim-c1.py` `f86b361f`) ran on d18929aa's own four files. Every anchor stood once, and the count
+  read "found 46, written 48". Its output (`restack/sim-d18929aa`) is byte-equal to the carry top's re-make and
+  equal-change on all ten against the first cut's set.
+- The carry (CP-4a2b's M-r2) moved two of its paths, `registries.ts` and `fixtures.test.ts`, and the train's 66 moved
+  none. So the first cut's green rows were re-run at this forty (below).
+- Format unchanged and lint clean on all ten (`fmt-sim-d18929aa`, file-based, main's `biome.jsonc`).
+- Its `fixtures.test.ts` meets SH-1's: the two sets' hunks are 102 lines apart or more at d18929aa, and laying each by
+  content on the other's file gives one file either way (`36586cec`), so their order is free.
+- The fixer read its `--stable` patch-id (`b05bf252`) as equal to the first cut `4b03a311b690`'s.
+
+**The cut.** `lanes/dr/ey/cut-568c.d189.sh` (`a0678e7f`, its diff `8bc9386c` from `cut-sim.906.sh` `82412d3f` that ran)
+ran ONCE on VF-PM's word, 2026-11-20 22:51:30Z–22:51:32Z, after the HOLD file's END and a load read of 7.09. Its base
+hold was "587a's ref IS TOP and main holds TOP^". It held its sources list (`1e9ce672`) and each staged blob, swept
+every added line and committed through the hooks. Its one create-only ref `dr/i568c-on-56498c7e092b`; the held refs
+showed one added and none moved.
+
+**On the test Mac** (qa-01; read at source in its run folders):
+- The first cut's ROWS-568c (`65503b75`), i568c at `4b03a311b690`, 2026-11-20 14:15:15Z–14:16:01Z, GREEN: the ten
+  paths blob-equal; contracts' typecheck 0; "Tests 2226 passed (2226)"; gen:check 0; electron-shell's and field-app's
+  typechecks 0.
+- Its re-run at this forty, i568c-r at `e5feadfa5afc` (DR's arm, laid by qa-01 into rows-one v33r), 2026-11-21
+  00:32:43Z–00:33:24Z, "STAGE ROWSONE (i568c-r) IS AS WANTED (GREEN)":
+  - the hold: the paths `56498c7e092b..e5feadfa5afc` name 10, each blob-equal in the tree;
+  - ROW 1, contracts' typecheck: exit 0, 0 error TS;
+  - ROW 2, contracts' WHOLE suite at 4 workers: "Test Files 79 passed (79)", "Tests 2263 passed (2263)";
+    `simulators-made.test.ts` 6 of 6, `shell.test.ts` 72 of 72, `fixtures.test.ts` 802 of 802;
+  - ROW 3, `pnpm gen:check`: exit 0, the porcelain after 0;
+  - ROW 4, electron-shell's and field-app's typechecks: exit 0, 0 error TS each;
+  - the refs unmoved.
+`pnpm verify` whole at `2a8b92f8e` (assembly 17's top) on the test Mac, run `v-a17close` (exit 0: every stage,
+`census:assert` OK with no drift, the Rust tests 698 passed, 0 failed, 15 ignored, the gen check clean), and the kit ALL
+there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows: 3,164 passed and 3 skipped, push 151's three; none of push
+151's 3,151 rows lost or moved, and 16 new, each passed)
+
+**Found on the way.**
+- A fill chain without `set -e` wrote the sources list over an unfilled message when its subject's width assert
+  failed (2026-11-20 03:12Z). Nothing ran; the list was set aside and the chain redone under `bash -e`.
+- Its stack cut on the 906 tip (`dr/i568c-on-906328374319` = `4b03a311b690`) stands, superseded.
+
+**Owed.**
+- Item 568's main side: the reader with its delete verb, and the Settings row (the UM lead's), with the request `{}`.
+- The design corpus's rows for the door (`ESR-6.2-rows-sim.md` `27eeacf2`), held by VF-PM for James's own
+  `pnpm commit-draft`.
+- On VF-PM's removable list: `dr/i568c-on-906328374319`.
+
+## Item 588a — a made app's preview is drawn when published, and again on an open at most once in ten minutes (M494)
+
+(2026-11-21; five commits on main, made 2026-11-19, cut and re-cut 2026-11-20: DR's contracts `24500978c`, then the kit
+`6c77505c2`, the red `d6ea6f7b0`, the green `824ec94e6` and MA-L3's dated words `2a8b92f8e`. James answered the item's
+card on 2026-11-19: "Both as proposed".)
+As cut, on DR's ecd5cde835fd (on 568c e5feadfa5afc, on 587a, on main d18929aa): `ma/i588a-r5-on-ecd5cde835fd`: C2
+1689e4c9e25e, C3 82c123ef0efc, C4 e1ba2135b1b8, C5 71ed57ead983. C4's daemon.ts and C5's two docs were re-made by
+content on d18929aa, since other landings had moved them. C3's made-app-service.test.ts carries one row's mend, found
+by the trial; C2, C4 and C5 have their first cut's patch-ids. The earlier cuts' ids do not land.
+
+**What landed.** An app an agent made gets its picture when it is published, not only at its first open, so the
+shelf, the phone and every other desktop show it at once.
+- At publish, fieldd serves the app at its own origin for the capture alone, asks the shell to draw it only once that
+  serve answers, and removes the serve the moment the picture is taken, the drawing fails or its time runs out. That
+  is at most 18 seconds (MADE_APP_LIMITS.CAPTURE_SERVE_WAIT_MS 10 s for the serve, then the shell's own 8 s deadline).
+  For those seconds any device signed in as the same person could reach the page. MA-L3 says so in its dated words.
+- One capture at a time, among the newest MADE_APP_LIMITS.PUBLISH_CAPTURES (24) apps this desktop can serve. It never
+  takes the last place under the shared ceiling, so an open always fits, and an open during a capture takes its
+  serve over.
+- When VibeField is not open on the app's desktop at publish, the drawing is OWED and runs when a shell registers.
+  The row says `owed` (the phone: "No preview yet — it's drawn the next time VibeField is open on ‹desktop›").
+- A drawing that fails or times out is kept on the record for that page. The row says `failed` (the phone: "No
+  preview — it couldn't be drawn. It's drawn again the next time the app opens on ‹desktop›"), and the next open
+  draws it.
+- An open draws the app again once its preview is ten minutes old (MADE_APP_LIMITS.REDRAW_FLOOR_MS), a fresh load in
+  the shell's own capture window, never the person's. The ten minutes count from the last drawing that succeeded.
+- Contracts (DR's C1, 8 files, +226 −1, contracts only): MADE_APP_LIMITS gains PUBLISH_CAPTURES (24),
+  CAPTURE_SERVE_WAIT_MS (10 000) and REDRAW_FLOOR_MS (ten minutes). IndexCatalogApp gains `previewState?` (`owed`,
+  `failed`; an open word, so one this build has not heard reads `unknown` and never refuses the row).
+  MadeAppServeRecord gains `captureFailed?` {pageDigest, at}; one this build cannot read costs that fact, never the
+  record. Four new goldens, each parsed by its prefix. TS only: no generated file, Rust or schema holds these shapes.
+- MA-L3's dated words: docs/DECISIONS.md's MA row and docs/agent-plane/api.html's citation, in this landing. Its
+  source in draft/thinking-mini-apps.md waits for James's own `pnpm commit-draft` (the text:
+  lanes/ma-6/i588/r846/MA-L3-source.txt).
+
+**What was proved.**
+- C1 was made on 568c's registries.ts and d18929aa's other three files, equal-change on all eight against the first
+  C1's set, format unchanged and lint clean on all eight. Its `--stable` patch-id and numstat equal the first C1's
+  (9e49ad87cd30). Its cut (2026-11-20 22:56:05Z) held a three-deep base: 568c, then 587a, then main.
+- The set was re-made on main 846ea63c by build-588a.py. Each of its eight fieldd bases was proved equal to the blob
+  the change was made on (PROOF-588a.txt); the two docs were made from main's blobs by one anchor each.
+- The light check (check-588a-r846.sh, 2026-11-19 23:22:28Z to 23:22:51Z, AS WANTED) laid main 846ea63c's paths
+  and each stage in turn, and held biome with warnings failing on each stage's code files and the six walls at every
+  tree, plus a control that had to fail by its own diagnostic and did. No tsc there: the typecheck of record is the
+  test Mac's.
+- The cut (cut-588a-r5.sh, 2026-11-21 01:15:28Z to 01:15:41Z) made the four commits on DR's ecd5cde835fd, each
+  through the repo's hook. It pre-checked each commit's own tree with biome with warnings failing and the six walls,
+  read against the worktree's older install (87e71631's). Every committed file is the prepared one, C3's mended test
+  held by its blob. C2, C4 and C5 have the first cut's patch-ids (made on 846ea63c, 2026-11-20 00:56Z).
+- The mend: the row "removes the capture's serve when fieldd stops mid-capture" opened an app with no preview before
+  it held the capture, so the capture it held was that open's drawing and the publish's never ran. The row now lets
+  the open's drawing end first. Its red at C3 and its green at C4 are the test Mac's rows below.
+- The test Mac's rows, one commit a run (ROWS-588a.filled-r5.md):
+  - C1 ecd5cde835fd (2026-11-21 00:36Z): contracts' and fieldd's typechecks 0; contracts' whole suite 2270 of 2270
+    (made-apps 39, fixtures 806); `pnpm gen:check` 0; field-app's typecheck 0 (it reads MADE_APP_LIMITS).
+  - C2 (00:59Z, at the earlier cut's C2, whose tree equals this C2's): fieldd tsc 0; the three files 94 of 94.
+  - C3 (01:21Z): fieldd tsc 0; EXACTLY the named reds, each an AssertionError: made-app-service 15 of 64,
+    shell-provider 2 of 12, index-apps 2 of 38. The one guard passes.
+  - C4 (01:24Z): fieldd tsc 0; the four files 141 of 141, the mended row among them.
+  - C5 (01:27Z): fieldd tsc 0; contracts' whole suite 2270 of 2270; `pnpm gen:check` 0.
+- The landing's own proof is the assembly's V at the landed tree: `pnpm verify` whole at `2a8b92f8e` (assembly 17's top)
+  on the test Mac, run `v-a17close` (exit 0: every stage, `census:assert` OK with no drift, the Rust tests 698 passed, 0
+  failed, 15 ignored, the gen check clean), and the kit ALL there, run `kit-a17close` (`xcodebuild` exit 0, 3,167 rows:
+  3,164 passed and 3 skipped, push 151's three; none of push 151's 3,151 rows lost or moved, and 16 new, each passed)
+- The audit line, one `artifact.preview.capture` per capture, is held BY A READING: both captures, the open's and the
+  publish's, go through the daemon's one capturePreview wiring (daemon.ts:9255 and :9353 at C4's tree).
+
+**Not covered.**
+- At the registry's cap (MADE_APP_LIMITS.INTENTS, 4096 apps), an owed app with no record is passed over, so the apps
+  behind it are drawn. It still reads `owed`, and is drawn only when a place frees and a later walk reaches it.
+- The publish serve's audience is any device signed in as the same person. Narrowing it to this desktop's own node
+  is a follow-up in truffle.
+- When an open takes over a capture's serve, the row reads `failed` for those seconds, until the open's own capture
+  draws the page.
+- The kept-in-memory failures of apps whose export failed before any record (`#failedUnminted`) are never trimmed:
+  they hold only those apps.
