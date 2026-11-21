@@ -6300,15 +6300,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   sit in a well** set into it: 8 in from each side of the sheet (the 8 a covered view keeps
   clear, §10) and from its foot, corners 10, the panes 1 in from its edge and clipped at 9; drawn
   OVER the panes, a 1px inner edge and a soft shade at its top; under its foot, a rim of light —
-  set in, not drawn on. The well has no ground of its own, so a pane's own ground stands over the
-  frame's: the lip and the sheet around the well are a shade off the panes, on purpose. The
-  panes, their frames and the launcher are the ones that shipped before it, untouched (GV-D2).
+  set in, not drawn on. **The well's ground is the desk** (TL-3, 2026-11-19; "The glass is the
+  desk", below): the panes stand over the same still the cover stands on, so a pane's own ground,
+  at its alpha, is the only layer between its text and the desk, and the lip and the sheet around
+  the well keep the frame's tone, a shade off the panes, on purpose. *(Until 2026-11-19 the well
+  had no ground of its own: a pane's ground stood over the frame's, and the frame over the stage's
+  tint, so at the default the desk was 1.4% of a pane's ground.)* The panes, their frames and the
+  launcher are the ones that shipped before it, untouched (GV-D2).
   *(Until 2026-10-11 the card's ground was the terminal's own background exactly — James,
   2026-09-28 — so that lip, gaps and panes were one surface.)* A viewer who thins the backdrop
   thins the sheet with the rest of Godview; the panes cannot shed their ground (ghosttea draws
   inverse video and glyph backdrops from it). *Since 2026-10-03 (FC-D16) the backdrop's default
   is the covers' glass, 72%*; the panes keep their own 82% and the launcher its 92% floor (§2.7),
-  so text never sits on the field. **Inside the cover (§10, FC-D15)** the sheet's ground still runs to the
+  so text never sits on the field: it sits on the pane's ground, and since TL-3 that ground is
+  glass over the desk's still (below).
+  **Inside the cover (§10, FC-D15)** the sheet's ground still runs to the
   window's foot and edges, under the line, but the panes stop at 692 — the 88px reserve above the
   foot — and keep 8px clear of each edge.
   *Erratum 2026-10-03 (DK-0d, against the desk — DK-D25, R16):* on the desk Godview's LIVE backdrop
@@ -6359,6 +6365,25 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   as a light design, pane by pane; a program that follows the terminal is left as it is. Neither
   changes a colour that already reads. *Since 2026-11-19 (TL-4c)* the phone holds a session's text
   to the same 3:1 floor (§2.7 "The terminal's own colours", on the phone).
+  **The glass is the desk** (TL-3, 2026-11-19; James, typed 2026-11-17 on the look check, TL-D3:
+  "Glass: build it for real"; and on the page *Terminal Look Design* he picked the default kept at
+  82% and program backgrounds taking the glass). What stands behind Godview is the person's desk,
+  blurred once (§8, the covers over the desk). Real glass is that still reaching the eye through a
+  pane, in the share the pane's opacity sets, with nothing else thinning it.
+  - **Inside the well, under the panes, stands the same still**, at its own place in the window,
+    opaque. A pane's ground at its alpha is the only layer over it: at the default 82% the desk is
+    18% of a pane's ground. The still reaches the well once per capture, as a picture a quarter of
+    its size (the blur hides the rest), painted as the well's background and moved with the deck's
+    own shift: never a backdrop filter, and nothing drawn per frame (R16, DK-D25). Where the cover stands
+    on the mat's ground (a capture that answered nothing), the well's ground is the mat's. Under
+    Reduce transparency, or with the panes Solid, the well has no picture: the panes stand on the
+    frame's tone, as before.
+  - **Program backgrounds take the glass:** a cell's own background, the colour a program painted,
+    takes the pane's alpha too (`opacityCells`), so a program that paints its whole screen keeps
+    its pane glass beside its neighbours, and a prompt row a program paints is a tint, not a slab.
+    A viewer who turns it off keeps it off. *(Off by default until 2026-11-19: "a program that
+    paints a background usually means it". Every record saved before carried that default, which
+    nobody chose, so the stored field was renamed, and a record's old value is left unread.)*
   **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
   frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")
   stands in its middle, in its pill: a 40 × 6 slot pressed into the frame, the well's own depth
@@ -6844,6 +6869,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   Look → Glass is two layers, each terminal's ground then Godview's cover over your canvas, and the
   miniature's stage is the fixed 72% over its stand-in canvas, left unblurred, saying so ("over
   Godview's cover: the covers' glass at 72% over a still of your desk").
+  *Amended 2026-11-19 (TL-3, "The glass is the desk", above):* a pane's glass is one layer, the
+  pane's opacity over your canvas; Godview's cover stands round the deck and over the monitor,
+  never under a pane. Settings → Terminal → Look → Glass says so: "Two layers, top to bottom:
+  each terminal's ground, then your desk. Thin the ground to see your desk through it."; its
+  opacity row says "Your desk shows through each pane." (or, solid, "Solid: the pane hides your
+  desk."); its second row, **Dim program backgrounds too**, is on by default and says "Let the
+  backgrounds a program paints show your desk too, so a program that fills its screen keeps the
+  glass."; the canvas layer's line is "a blurred picture of your desk, under the panes". The
+  miniature's well stands on its stand-in canvas as the deck's
+  stands on the still, and its stage keeps the covers' 72% round it.
   Variants: `window` (on the page), `deck` (the
   theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
   one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
