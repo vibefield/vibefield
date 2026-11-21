@@ -400,16 +400,22 @@ overrides:
   # seven rows change by version alone; the re-bless moves the phone goldens by their stamp (views draws a host's
   # mark only where a row carries one, view-sdk and monitor add optional fields, and the goldens' inputs carry
   # none), and the timeline golden's note by what it cites there.
-  "@vibefield/puppeteer-runtime": 0.4.7
-  "@vibefield/puppeteer-builtin-providers": 0.4.7
-  "@vibefield/puppeteer-core": 0.4.7
-  "@vibefield/puppeteer-record": 0.4.7
-  "@vibefield/puppeteer-monitor": 0.4.7
+  # EL8 2026-11-21: 0.4.8 (v0.4.8 = 996de4fc, the release #109, published 2026-11-21). views: the pane frame's badge
+  # and context meter are capsules inside the pane, and a host hands the selected badge's label and shade
+  # (`--vf-pane-badge-ink`, `--vf-pane-badge-shade`, #107; DESIGN.md §2.7 "The pane frame's capsules"). core,
+  # runtime, adapter-claude: a running agent's model and effort are changed through its adapter
+  # (`AgentModelSwitchService`, `Agent.modelSwitch`, `Agent.switchModel`, #108), which `agent.switchModel` asks
+  # (PF-3). The seven rows change by version alone; the re-bless moves the phone goldens by their stamp.
+  "@vibefield/puppeteer-runtime": 0.4.8
+  "@vibefield/puppeteer-builtin-providers": 0.4.8
+  "@vibefield/puppeteer-core": 0.4.8
+  "@vibefield/puppeteer-record": 0.4.8
+  "@vibefield/puppeteer-monitor": 0.4.8
   # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
   # backend emits and the desk row mirrors; the renderer's adapter and replica
   # read it too). Types for fieldd; the replica's scheduler type for field-app.
-  "@vibefield/puppeteer-view-sdk": 0.4.7
-  "@vibefield/puppeteer-views": 0.4.7
+  "@vibefield/puppeteer-view-sdk": 0.4.8
+  "@vibefield/puppeteer-views": 0.4.8
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
   # EXACT registry pin (EL8; ice's shape — packages ask for "*"). FS-1b
@@ -541,26 +547,28 @@ minimumReleaseAgeExclude:
   # rewrote the lock.
   # EL8 2026-11-20: reviewed 0.4.7 (published 2026-11-20), carrying 0.4.5 and 0.4.6; the 0.4.4 rows went after the
   # install that rewrote the lock.
-  - '@vibefield/puppeteer-adapter-acp@0.4.7'
-  - '@vibefield/puppeteer-adapter-antigravity@0.4.7'
-  - '@vibefield/puppeteer-adapter-claude@0.4.7'
-  - '@vibefield/puppeteer-adapter-codex@0.4.7'
-  - '@vibefield/puppeteer-adapter-copilot@0.4.7'
-  - '@vibefield/puppeteer-adapter-grok@0.4.7'
-  - '@vibefield/puppeteer-adapter-hermes@0.4.7'
-  - '@vibefield/puppeteer-adapter-kimi@0.4.7'
-  - '@vibefield/puppeteer-adapter-opencode@0.4.7'
-  - '@vibefield/puppeteer-adapter-pi@0.4.7'
-  - '@vibefield/puppeteer-builtin-providers@0.4.7'
-  - '@vibefield/puppeteer-core@0.4.7'
-  - '@vibefield/puppeteer-monitor@0.4.7'
-  - '@vibefield/puppeteer-native-observation@0.4.7'
-  - '@vibefield/puppeteer-react@0.4.7'
-  - '@vibefield/puppeteer-record@0.4.7'
-  - '@vibefield/puppeteer-runtime@0.4.7'
-  - '@vibefield/puppeteer-view-sdk@0.4.7'
-  - '@vibefield/puppeteer-views@0.4.7'
-  - '@vibefield/puppeteer-workspaces@0.4.7'
+  # EL8 2026-11-21: reviewed 0.4.8 (published 2026-11-21); the 0.4.7 rows went after the install that rewrote the
+  # lock.
+  - '@vibefield/puppeteer-adapter-acp@0.4.8'
+  - '@vibefield/puppeteer-adapter-antigravity@0.4.8'
+  - '@vibefield/puppeteer-adapter-claude@0.4.8'
+  - '@vibefield/puppeteer-adapter-codex@0.4.8'
+  - '@vibefield/puppeteer-adapter-copilot@0.4.8'
+  - '@vibefield/puppeteer-adapter-grok@0.4.8'
+  - '@vibefield/puppeteer-adapter-hermes@0.4.8'
+  - '@vibefield/puppeteer-adapter-kimi@0.4.8'
+  - '@vibefield/puppeteer-adapter-opencode@0.4.8'
+  - '@vibefield/puppeteer-adapter-pi@0.4.8'
+  - '@vibefield/puppeteer-builtin-providers@0.4.8'
+  - '@vibefield/puppeteer-core@0.4.8'
+  - '@vibefield/puppeteer-monitor@0.4.8'
+  - '@vibefield/puppeteer-native-observation@0.4.8'
+  - '@vibefield/puppeteer-react@0.4.8'
+  - '@vibefield/puppeteer-record@0.4.8'
+  - '@vibefield/puppeteer-runtime@0.4.8'
+  - '@vibefield/puppeteer-view-sdk@0.4.8'
+  - '@vibefield/puppeteer-views@0.4.8'
+  - '@vibefield/puppeteer-workspaces@0.4.8'
   # The truffle pins are exact and move together as one EL8 commit across the three places.
   # 0.7.19 → 0.7.22 (2026-10-25, with ghosttea 0.13.4): published 2026-10-25
   # 10:58Z, inside the release-age window on the day the pin moves. Sidecar

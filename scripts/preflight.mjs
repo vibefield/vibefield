@@ -293,48 +293,49 @@ const PIN_EXPECTATIONS = [
   // 0.4.5 and 0.4.6, never pinned here: a Codex paste is confirmed on the thread's own record; a host's stop
   // stage reaches the frame and the row; a run's turn ends are counted; an attach replays after the host's
   // cursor; every view draws a host's mark on a row; a failed attach says the adapter's refusal or a generic
-  // sentence).
+  // sentence). 0.4.8 since 2026-11-21 (v0.4.8 = 996de4fc: the pane frame's badge and meter are capsules inside the
+  // pane; a running agent's model and effort are changed through its adapter, `Agent.switchModel`).
   // Anchored to the line's end like rosetta's.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-runtime":\s*0\.4\.7\s*$/m,
-    label: '"@vibefield/puppeteer-runtime": 0.4.7',
+    re: /"@vibefield\/puppeteer-runtime":\s*0\.4\.8\s*$/m,
+    label: '"@vibefield/puppeteer-runtime": 0.4.8',
     package: "@vibefield/puppeteer-runtime",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.4\.7\s*$/m,
-    label: '"@vibefield/puppeteer-builtin-providers": 0.4.7',
+    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.4\.8\s*$/m,
+    label: '"@vibefield/puppeteer-builtin-providers": 0.4.8',
     package: "@vibefield/puppeteer-builtin-providers",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-core":\s*0\.4\.7\s*$/m,
-    label: '"@vibefield/puppeteer-core": 0.4.7',
+    re: /"@vibefield\/puppeteer-core":\s*0\.4\.8\s*$/m,
+    label: '"@vibefield/puppeteer-core": 0.4.8',
     package: "@vibefield/puppeteer-core",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-record":\s*0\.4\.7\s*$/m,
-    label: '"@vibefield/puppeteer-record": 0.4.7',
+    re: /"@vibefield\/puppeteer-record":\s*0\.4\.8\s*$/m,
+    label: '"@vibefield/puppeteer-record": 0.4.8',
     package: "@vibefield/puppeteer-record",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-monitor":\s*0\.4\.7\s*$/m,
-    label: '"@vibefield/puppeteer-monitor": 0.4.7',
+    re: /"@vibefield\/puppeteer-monitor":\s*0\.4\.8\s*$/m,
+    label: '"@vibefield/puppeteer-monitor": 0.4.8',
     package: "@vibefield/puppeteer-monitor",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.4\.7\s*$/m,
-    label: '"@vibefield/puppeteer-view-sdk": 0.4.7',
+    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.4\.8\s*$/m,
+    label: '"@vibefield/puppeteer-view-sdk": 0.4.8',
     package: "@vibefield/puppeteer-view-sdk",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-views":\s*0\.4\.7\s*$/m,
-    label: '"@vibefield/puppeteer-views": 0.4.7',
+    re: /"@vibefield\/puppeteer-views":\s*0\.4\.8\s*$/m,
+    label: '"@vibefield/puppeteer-views": 0.4.8',
     package: "@vibefield/puppeteer-views",
   },
 ];
