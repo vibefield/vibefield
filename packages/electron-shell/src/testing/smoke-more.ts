@@ -314,6 +314,19 @@ const BOARD_SHUT = `(() => {
 })()`;
 const POPUP_OPEN = `document.querySelector('.vf-plugins-pop[role="dialog"]') !== null`;
 const POPUP_SHUT = `document.querySelector('.vf-plugins-pop[role="dialog"]') === null`;
+/** MK-6 (2026-11-21): what the board and the frame were when a board wait ran out, read once at the
+ * throw: the tray's open, held and slide, whether the popup stands, and the focused element by its
+ * tag and first class. Facts of the chrome only, never an object's text. */
+const BOARD_FACTS = `(() => {
+  const b = globalThis.__vfDesk.pegboard();
+  const a = document.activeElement;
+  const first = a === null ? "" : String(a.className ?? "").split(" ")[0];
+  return JSON.stringify({
+    board: b === null ? null : { open: b.anchor.open, held: b.anchor.held === true, p: b.anchor.drawer?.p ?? null },
+    popup: document.querySelector('.vf-plugins-pop[role="dialog"]') !== null,
+    focus: a === null ? null : a.tagName + (first === "" ? "" : "." + first),
+  });
+})()`;
 
 /** The first specimen's centre and a drop where nothing picks, both in the window's px: the desk's
  * door says them in the desk's own, which starts at the desk element's corner (smoke-desk-rig.ts's
@@ -358,10 +371,18 @@ export async function moreRows(d: MoreRowsDriver): Promise<string[]> {
   const hands = handsOver(d.win, d.shotDir);
   const { js, until, key } = hands;
   const problems: string[] = [];
+  // MK-6 (2026-11-21): the part running now, said in a wait's words when it runs out, so a red names
+  // which of the four board openings it was (PLACE, TAB, PRESS, IN HAND)
+  let part = "PLACE";
   const pill = (): Promise<PillSeen | null> => js<PillSeen | null>(PILL_READ);
   const settled = async (): Promise<void> => {
-    await until("the board out", 5_000, BOARD_OPEN);
-    await until("the board's slide done", 5_000, BOARD_SETTLED);
+    try {
+      await until(`the board out (${part})`, 5_000, BOARD_OPEN);
+      await until(`the board's slide done (${part})`, 5_000, BOARD_SETTLED);
+    } catch (error) {
+      const facts = await js<string>(BOARD_FACTS).catch(() => "unread");
+      throw new Error(`${error instanceof Error ? error.message : String(error)} (board ${facts})`);
+    }
     await sleep(350); // the filters' fade, the thumb's 300 ms
   };
   const theme = async (name: "light" | "dark"): Promise<void> => {
@@ -393,117 +414,127 @@ export async function moreRows(d: MoreRowsDriver): Promise<string[]> {
     return seen;
   };
 
-  // ── PLACE: the board raised by the create, the pill read whole at its foot ───────────────────
-  await hands.pressAt(".vf-line-create");
-  await settled();
-  const drawn = await pill();
-  const anchor = await js<{ drawer: DrawerAt | null }>("globalThis.__vfDesk.pegboard().anchor");
-  const view = await js<{ width: number; height: number }>(
-    "({ width: innerWidth, height: innerHeight })",
-  );
-  problems.push(...judgePlace(drawn, anchor.drawer, view));
-  d.say(`SMOKE_CANVAS_MORE_PLACE ${JSON.stringify({ pill: drawn, drawer: anchor.drawer, view })}`);
-  if (drawn === null) {
-    // A7 — no pill until MK-4d draws it: Tab, ↵ and a press would land on whatever else holds
-    // the focus, so MORE stops at its one red, which names the slice it waits on
-    d.say(
-      "SMOKE_CANVAS_MORE_WAITS MK-4d: no pill at the board's foot, so Tab, ↵, the press and the step aside were not read",
+  // A wait run out in a part keeps the problems the parts before it found (MK-6, 2026-11-21)
+  try {
+    // ── PLACE: the board raised by the create, the pill read whole at its foot ───────────────────
+    await hands.pressAt(".vf-line-create");
+    await settled();
+    const drawn = await pill();
+    const anchor = await js<{ drawer: DrawerAt | null }>("globalThis.__vfDesk.pegboard().anchor");
+    const view = await js<{ width: number; height: number }>(
+      "({ width: innerWidth, height: innerHeight })",
     );
+    problems.push(...judgePlace(drawn, anchor.drawer, view));
+    d.say(
+      `SMOKE_CANVAS_MORE_PLACE ${JSON.stringify({ pill: drawn, drawer: anchor.drawer, view })}`,
+    );
+    if (drawn === null) {
+      // A7 — no pill until MK-4d draws it: Tab, ↵ and a press would land on whatever else holds
+      // the focus, so MORE stops at its one red, which names the slice it waits on
+      d.say(
+        "SMOKE_CANVAS_MORE_WAITS MK-4d: no pill at the board's foot, so Tab, ↵, the press and the step aside were not read",
+      );
+      await key("Escape");
+      await until("the board shut", 5_000, BOARD_SHUT);
+      return problems;
+    }
+    await hands.shoot("mk-6-more-light.png");
+    await theme("dark");
+    await hands.shoot("mk-6-more-dark.png");
+    await theme("light");
     await key("Escape");
     await until("the board shut", 5_000, BOARD_SHUT);
-    return problems;
-  }
-  await hands.shoot("mk-6-more-light.png");
-  await theme("dark");
-  await hands.shoot("mk-6-more-dark.png");
-  await theme("light");
-  await key("Escape");
-  await until("the board shut", 5_000, BOARD_SHUT);
 
-  // ── TAB + ↵: B raises the board with the keyboard; Tab reaches the pill, the third stop ───────
-  await key("B", [], true);
-  await settled();
-  await until(
-    "the board focused",
-    5_000,
-    `document.activeElement?.classList.contains("vf-pegboard-board") === true`,
-  );
-  await key("Tab");
-  const tabbed = await pill();
-  if (tabbed?.focused !== true) problems.push("MORE: Tab from the board did not reach the pill");
-  await key("Return");
-  const keyed = await opened("↵");
+    // ── TAB + ↵: B raises the board with the keyboard; Tab reaches the pill, the third stop ───────
+    part = "TAB";
+    await key("B", [], true);
+    await settled();
+    await until(
+      "the board focused",
+      5_000,
+      `document.activeElement?.classList.contains("vf-pegboard-board") === true`,
+    );
+    await key("Tab");
+    const tabbed = await pill();
+    if (tabbed?.focused !== true) problems.push("MORE: Tab from the board did not reach the pill");
+    await key("Return");
+    const keyed = await opened("↵");
 
-  // ── PRESS from a chosen category: the board on Surfaces, the pill pressed ───────────────────
-  await hands.pressAt(".vf-line-create");
-  await settled();
-  await hands.pressAt('.vf-pegboard-track button[data-id="surfaces"]');
-  await until(
-    "the board showing Surfaces",
-    5_000,
-    `globalThis.__vfDesk.pegboard()?.anchor.category === "surfaces"`,
-  );
-  let clicked: PopupBrief | null = null;
-  if (await hands.pressWords(".vf-pegboard", [PILL.words])) clicked = await opened("press");
-  else problems.push("MORE: no pill to press on Surfaces");
+    // ── PRESS from a chosen category: the board on Surfaces, the pill pressed ───────────────────
+    part = "PRESS";
+    await hands.pressAt(".vf-line-create");
+    await settled();
+    await hands.pressAt('.vf-pegboard-track button[data-id="surfaces"]');
+    await until(
+      "the board showing Surfaces",
+      5_000,
+      `globalThis.__vfDesk.pegboard()?.anchor.category === "surfaces"`,
+    );
+    let clicked: PopupBrief | null = null;
+    if (await hands.pressWords(".vf-pegboard", [PILL.words])) clicked = await opened("press");
+    else problems.push("MORE: no pill to press on Surfaces");
 
-  // ── IN HAND: mid-take, where the board still stands, the pill steps aside ───────────────────
-  // A specimen pressed where the desk draws it and dragged up; read before the release, then
-  // dropped where nothing picks and taken back by ⌘Z.
-  await hands.pressAt(".vf-line-create");
-  await settled();
-  const take = await js<{ type: string; from: Point; to: Point } | null>(TAKE_AT);
-  let inHand: { held: boolean; drawer: boolean; pill: PillSeen | null } | null = null;
-  if (take === null)
-    problems.push("MORE: the board hung no specimen to take, or the desk no place to drop it");
-  else {
-    const census0 = await js<Record<string, number>>("globalThis.__vfDesk.census()");
-    const move = (x: number, y: number): void =>
-      d.win.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(x), y: Math.round(y) });
-    move(take.from.x, take.from.y);
-    await sleep(40);
-    d.win.webContents.sendInputEvent({
-      type: "mouseDown",
-      x: take.from.x,
-      y: take.from.y,
-      button: "left",
-      clickCount: 1,
-    });
-    // up off the board, a third of the way, then read: the board may still stand with it in hand
-    for (let step = 1; step <= 6; step += 1) {
-      await sleep(16);
-      move(take.from.x, take.from.y - ((take.from.y - take.to.y) * step) / 18);
+    // ── IN HAND: mid-take, where the board still stands, the pill steps aside ───────────────────
+    part = "IN HAND";
+    // A specimen pressed where the desk draws it and dragged up; read before the release, then
+    // dropped where nothing picks and taken back by ⌘Z.
+    await hands.pressAt(".vf-line-create");
+    await settled();
+    const take = await js<{ type: string; from: Point; to: Point } | null>(TAKE_AT);
+    let inHand: { held: boolean; drawer: boolean; pill: PillSeen | null } | null = null;
+    if (take === null)
+      problems.push("MORE: the board hung no specimen to take, or the desk no place to drop it");
+    else {
+      const census0 = await js<Record<string, number>>("globalThis.__vfDesk.census()");
+      const move = (x: number, y: number): void =>
+        d.win.webContents.sendInputEvent({ type: "mouseMove", x: Math.round(x), y: Math.round(y) });
+      move(take.from.x, take.from.y);
+      await sleep(40);
+      d.win.webContents.sendInputEvent({
+        type: "mouseDown",
+        x: take.from.x,
+        y: take.from.y,
+        button: "left",
+        clickCount: 1,
+      });
+      // up off the board, a third of the way, then read: the board may still stand with it in hand
+      for (let step = 1; step <= 6; step += 1) {
+        await sleep(16);
+        move(take.from.x, take.from.y - ((take.from.y - take.to.y) * step) / 18);
+      }
+      inHand = await js<{ held: boolean; drawer: boolean; pill: PillSeen | null }>(IN_HAND);
+      for (let step = 1; step <= 12; step += 1) {
+        await sleep(16);
+        move(
+          take.from.x + ((take.to.x - take.from.x) * step) / 12,
+          take.from.y + ((take.to.y - take.from.y) * step) / 12,
+        );
+      }
+      d.win.webContents.sendInputEvent({
+        type: "mouseUp",
+        x: take.to.x,
+        y: take.to.y,
+        button: "left",
+        clickCount: 1,
+      });
+      await sleep(400);
+      const census1 = await js<Record<string, number>>("globalThis.__vfDesk.census()");
+      if ((census1[take.type] ?? 0) > (census0[take.type] ?? 0)) await hands.chord("z");
+      if (inHand.held && inHand.drawer && inHand.pill?.shown === true)
+        problems.push("MORE: the pill stood while an object was in hand");
+      if (!inHand.held || !inHand.drawer)
+        d.say(
+          `SMOKE_CANVAS_MORE_SKIP in hand: no take held the board out to read (held ${inHand.held}, drawer ${inHand.drawer}); the step-aside is MK-4d's unit row's`,
+        );
+      await key("Escape");
+      await key("Escape");
     }
-    inHand = await js<{ held: boolean; drawer: boolean; pill: PillSeen | null }>(IN_HAND);
-    for (let step = 1; step <= 12; step += 1) {
-      await sleep(16);
-      move(
-        take.from.x + ((take.to.x - take.from.x) * step) / 12,
-        take.from.y + ((take.to.y - take.from.y) * step) / 12,
-      );
-    }
-    d.win.webContents.sendInputEvent({
-      type: "mouseUp",
-      x: take.to.x,
-      y: take.to.y,
-      button: "left",
-      clickCount: 1,
-    });
-    await sleep(400);
-    const census1 = await js<Record<string, number>>("globalThis.__vfDesk.census()");
-    if ((census1[take.type] ?? 0) > (census0[take.type] ?? 0)) await hands.chord("z");
-    if (inHand.held && inHand.drawer && inHand.pill?.shown === true)
-      problems.push("MORE: the pill stood while an object was in hand");
-    if (!inHand.held || !inHand.drawer)
-      d.say(
-        `SMOKE_CANVAS_MORE_SKIP in hand: no take held the board out to read (held ${inHand.held}, drawer ${inHand.drawer}); the step-aside is MK-4d's unit row's`,
-      );
-    await key("Escape");
-    await key("Escape");
+    d.say(
+      `SMOKE_CANVAS_MORE ${JSON.stringify({ tabbed: tabbed?.focused ?? null, keyed, clicked, inHand })}`,
+    );
+  } catch (error) {
+    problems.push(`MORE (${part}): ${error instanceof Error ? error.message : String(error)}`);
   }
-  d.say(
-    `SMOKE_CANVAS_MORE ${JSON.stringify({ tabbed: tabbed?.focused ?? null, keyed, clicked, inHand })}`,
-  );
   return problems;
 }
 
