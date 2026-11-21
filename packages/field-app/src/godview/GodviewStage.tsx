@@ -33,8 +33,9 @@ export interface GodviewStageProps {
   monitor?: ReactNode;
   tuningPanel?: ReactNode;
   deck: ReactNode;
-  /** What stands in the well under the panes (TL-3, 2026-11-19; DESIGN.md §8 "The glass is the desk"). Not drawn
-   * yet: the panes stand over the frame. */
+  /** What stands in the well under the panes (TL-3, 2026-11-19; DESIGN.md §8 "The glass is the desk"): the window's
+   * Godview hands the desk's glass (`DeskGlass`), Settings' miniature its stand-in canvas. Absent, the panes stand over
+   * the frame, as before TL-3. */
   wellGround?: ReactNode;
   /** The deck's movable edge (DESIGN.md §8, 2026-09-28). Absent, the Lip is
    * drawn with its groove at rest and nothing moves — the Settings miniature
@@ -75,6 +76,7 @@ export function GodviewStage({
   monitor,
   tuningPanel,
   deck,
+  wellGround,
   deckEdge,
   deckState = "up",
   onDeckState,
@@ -234,6 +236,7 @@ export function GodviewStage({
           />
         ) : null}
         <div className="vf-godview-deck-well">
+          {wellGround}
           <div ref={bodyRef} className="vf-godview-terminal-deck-body">
             {deck}
           </div>

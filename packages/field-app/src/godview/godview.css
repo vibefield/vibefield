@@ -1098,8 +1098,9 @@
    sheet's sides and its foot — its own frame, which outlived the 8 a covered
    view kept clear for the slivers (FC-D15, until HN-8) —
    corners 10 (a selected pane's 8, the 1 gap, the 1 edge), and a rim of light
-   under its foot. It has no ground of its own: the panes paint theirs over
-   the frame's.
+   under its foot. Its ground is the desk (TL-3, 2026-11-19; the glass, below):
+   while the glass is wanted the panes paint theirs over the desk's still;
+   otherwise over the frame's, as before.
 
    It is also the wrapper's one window region (GV-D11's carve, declared for
    good): the pane area never moves the window. An "up" sheet never stands in
@@ -1128,6 +1129,25 @@
   box-shadow:
     inset 0 0 0 1px var(--deck-well-edge),
     inset 0 2px 4px var(--deck-well-shade);
+  pointer-events: none;
+}
+
+/* THE GLASS IS THE DESK (TL-3, 2026-11-19; DESIGN.md §8 "The glass is the
+   desk"; R16, DK-D25): under the panes, the desk's still at its own place in
+   the window, opaque, so a pane's ground at its alpha is the only layer over
+   it. Its picture, a quarter of the still's size, is drawn once per still and
+   placed from the still's resting box and the well's (`desk-glass.tsx`, the
+   four placement properties); never a backdrop filter. Under a cover that
+   stands on the mat's ground, the well stands on it too. First in the well,
+   so the panes' body paints over it and the well's edge over both. */
+.vf-godview-deck-glass {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background-color: var(--vf-mat-ground);
+  background-repeat: no-repeat;
+  background-position: var(--vf-godview-glass-x, 0) var(--vf-godview-glass-y, 0);
+  background-size: var(--vf-godview-glass-w, 100%) var(--vf-godview-glass-h, 100%);
   pointer-events: none;
 }
 

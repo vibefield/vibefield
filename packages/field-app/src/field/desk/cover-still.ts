@@ -1,5 +1,6 @@
 import type { FrameControl } from "@vibecook/ice";
 import type { DeskLayerHandle } from "@vibecook/ice/desk";
+import { sayDeskStill } from "./desk-still";
 
 // THE STILL UNDER THE COVERS (DK-15; DESIGN.md §8 "The covers over the desk"; DK-D25 — James: "frozen desk should be still
 // and consume no render time at all, do it properly"; R16; FC-D13, FC-D15, FC-D16; ICE I23's capture door). Under a cover
@@ -458,7 +459,8 @@ export function blurStill(
  * over whole (no copy), the mat's ground a CSS colour (`--vf-mat-ground`), nothing at all a transparent canvas the
  * compositor skips (`data-still="none"` — hidden). THE RECEDE starts as a still first stands: its scale-1 style flushed,
  * then `data-recede` — 0.98 over 560 ms, transform only (`cover-still.css`); a still taken again under a standing cover
- * keeps the recede where it is. The ground never recedes: a flat colour has nothing to settle.
+ * keeps the recede where it is. The ground never recedes: a flat colour has nothing to settle. Each face shown is said
+ * to the still's notice (`desk-still.ts`, TL-3), which Godview's well reads: a still with its canvas and its size.
  */
 export function stillCanvasSurface(el: HTMLCanvasElement): StillSurface {
   let ctx: ImageBitmapRenderingContext | null = null;
@@ -473,19 +475,23 @@ export function stillCanvasSurface(el: HTMLCanvasElement): StillSurface {
         if (c === null) {
           face.bitmap.close();
           el.dataset.still = "ground";
+          sayDeskStill("ground");
           return;
         }
+        const { width, height } = face.bitmap;
         c.transferFromImageBitmap(face.bitmap);
         el.dataset.still = "still";
         if (el.dataset.recede !== "true") {
           void getComputedStyle(el).transform;
           el.dataset.recede = "true";
         }
+        sayDeskStill("still", { canvas: el, width, height });
         return;
       }
       ctx?.transferFromImageBitmap(null);
       el.dataset.still = face.kind;
       el.dataset.recede = "false";
+      sayDeskStill(face.kind);
     },
   };
 }

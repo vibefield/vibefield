@@ -20,6 +20,7 @@ import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
 import { deckAfter, installGodviewDeckLab, storeDeckState, storedDeckState } from "./deck-state";
 import { godviewTerminalGroundStyle } from "./deck-theme";
+import { DeskGlass, glassWanted, useReduceTransparency } from "./desk-glass";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
 import { GodviewStage, GodviewUnavailableDeck } from "./GodviewStage";
@@ -129,6 +130,10 @@ export function GodviewOverlay({
   }
   const [tuningOpen, setTuningOpen] = useState(false);
   const appearance = useDeckAppearance();
+  // TL-3 — the glass is the desk: wanted while Godview shows panes that are not solid, and never under Reduce
+  // transparency (DESIGN.md §8 "The glass is the desk")
+  const reduceTransparency = useReduceTransparency();
+  const glass = glassWanted(open, appearance.opacity, reduceTransparency);
   const monitor = useMonitorTuning();
   const fieldd = useFielddClient();
   const offersConnect = useOffersConnect();
@@ -425,6 +430,8 @@ export function GodviewOverlay({
         onDeckState={setDeckState}
         publishesDeck
         deckRaisedBy={raisedBy}
+        // TL-3: the panes stand on the desk's own still, the cover's picture of it under them
+        wellGround={<DeskGlass wanted={glass} />}
         deck={
           terminalAvailable ? (
             <ChromeBoundary name="Deck" retryKey={deckRetryKey}>

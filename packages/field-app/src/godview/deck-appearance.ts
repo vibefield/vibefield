@@ -38,6 +38,11 @@ import { getRendererLogger } from "../logging";
  * app's IPC channel prefix, which wall R6 reserves for contracts. */
 const APPEARANCE_STORAGE_KEY = "vf-godview-appearance-v1";
 
+/** The name `opacityCells` is stored under since TL-3 (2026-11-19). Every record saved before carried the old default,
+ * off, which nobody chose, so the stored field was renamed: the old name, `opacityCells`, is never read again, and the
+ * next write leaves it out. */
+const CELLS_STORED_AS = "dimProgramBackgrounds";
+
 export interface DeckAppearance {
   /** `GHOSTTY_COLOR_THEMES` entry names, or `null` for Godview's built-in
    * palette for that mode. Light and dark are intentionally independent: a
@@ -50,8 +55,11 @@ export interface DeckAppearance {
    * makes this true transparency rather than a composite. */
   opacity: number;
   /** Whether a cell's OWN background — the color a program painted — takes the
-   * same alpha. Off by default: a program that paints a background usually
-   * means it, and dissolving it hides output rather than framing it. */
+   * same alpha. On by default since TL-3 (2026-11-19; DESIGN.md §8 "The glass is
+   * the desk"): a program that paints its whole screen keeps its pane glass
+   * beside its neighbours, and a prompt row it paints is a tint, not a slab. A
+   * viewer who turns it off keeps it off. (Off by default until then: "a program
+   * that paints a background usually means it".) Stored as `dimProgramBackgrounds`. */
   opacityCells: boolean;
   /** `GHOSTTEA_SHADER_OPTIONS` port ids, IN ORDER — the renderer runs one pass
    * per effect in this order (0.11.1's `#shaderStack`), so the order is part of
@@ -94,7 +102,8 @@ export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
   lightThemeName: null,
   darkThemeName: null,
   opacity: 0.82,
-  opacityCells: false,
+  // TL-3 (2026-11-19): program backgrounds take the glass
+  opacityCells: true,
   // No shader is the deck's default because it is what GT-3v shipped: this
   // slice adds a control, and adding a control must not restyle every existing
   // viewer's panes on its way in.
@@ -171,7 +180,11 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
       "lightThemeName" in record ? parsedName(record.lightThemeName) : legacyThemeName,
     darkThemeName: "darkThemeName" in record ? parsedName(record.darkThemeName) : legacyThemeName,
     opacity: clamped(record.opacity, 0, 1, DEFAULT_DECK_APPEARANCE.opacity),
-    opacityCells: record.opacityCells === true,
+    // read under its new name alone (TL-3): a record from before it reads as the new default
+    opacityCells:
+      typeof record[CELLS_STORED_AS] === "boolean"
+        ? (record[CELLS_STORED_AS] as boolean)
+        : DEFAULT_DECK_APPEARANCE.opacityCells,
     shaderEffects: parsedShaderEffects(record),
     shaderAnimate: record.shaderAnimate === true,
     // Only the two modes override; anything else is no override at all.
@@ -205,13 +218,20 @@ export function subscribeDeckAppearance(fn: () => void): () => void {
   };
 }
 
+/** A record as it is stored: every field under its own name, but `opacityCells`, stored as `dimProgramBackgrounds`
+ * (TL-3) and never under its old name. */
+function storedRecord(appearance: DeckAppearance): Record<string, unknown> {
+  const { opacityCells, ...rest } = appearance;
+  return { ...rest, [CELLS_STORED_AS]: opacityCells };
+}
+
 /** The one writer. Persist first, then announce: a listener that re-reads
  * storage must not see the old bytes, and a write that throws should not leave
  * subscribers believing something was saved. */
 export function setDeckAppearance(next: DeckAppearance): void {
   current = next;
   try {
-    localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(next));
+    localStorage.setItem(APPEARANCE_STORAGE_KEY, JSON.stringify(storedRecord(next)));
   } catch (cause) {
     getRendererLogger()
       .child({ component: "godview" })

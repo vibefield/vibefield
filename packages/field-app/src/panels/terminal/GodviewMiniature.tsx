@@ -25,7 +25,9 @@ import { type PreviewMode, type PreviewTheme, withAlpha } from "./theme-view";
 // views package's `PaneFrameChrome`, the frame the deck portals into every pane
 // (record §07). Three things are stand-ins, said so here: the CANVAS behind
 // (the field's CSS ground and two content cards — Godview holds the real one
-// still while it covers it), the monitor's BODIES (the real swarm is a WebGPU
+// still while it covers it; since TL-3, 2026-11-19, it stands again in the well
+// under the panes, at its own place, as the deck's well stands on the desk's
+// still: DESIGN.md §8 "The glass is the desk"), the monitor's BODIES (the real swarm is a WebGPU
 // view; these are its surface and ink, as circles), and the TERMINAL TEXT
 // (ghosttea draws on a canvas; this is DOM text in the same palette). The
 // effects are CSS approximations of the WGSL ports, and the caption says so.
@@ -401,7 +403,11 @@ export function GodviewMiniature({
         ...(thumb ? { width: SIZES.thumb.width, transform: `scale(${scale})` } : {}),
       }}
       role="img"
-      aria-label={`Godview in ${mode} mode: a terminal in ${theme.name} at ${Math.round(appearance.opacity * 100)}% opacity, over Godview's cover: the covers' glass at 72% over a still of your desk`}
+      aria-label={
+        appearance.opacity < 1
+          ? `Godview in ${mode} mode: a terminal in ${theme.name} at ${Math.round(appearance.opacity * 100)}% opacity over a blurred picture of your desk, with Godview's cover around it at 72%.`
+          : `Godview in ${mode} mode: a solid terminal in ${theme.name}, with Godview's cover around it at 72%.`
+      }
     >
       <div className="vf-ts-mini-inert" aria-hidden="true" inert>
         <Field />
@@ -422,6 +428,24 @@ export function GodviewMiniature({
             } as CSSProperties
           }
           {...(size.monitor > 0 ? { monitor: <Monitor /> } : {})}
+          // TL-3: the well stands on the stand-in canvas, at its own place, while the panes are glass
+          {...(appearance.opacity < 1
+            ? {
+                wellGround: (
+                  <div
+                    className="vf-ts-mini-glass"
+                    style={
+                      {
+                        "--vf-ts-mini-glass-top": `${-(size.monitor + DECK_LIP)}px`,
+                        "--vf-ts-mini-height": `${height}px`,
+                      } as CSSProperties
+                    }
+                  >
+                    <Field />
+                  </div>
+                ),
+              }
+            : {})}
           deck={
             <div
               className="vf-deck-framed vf-ts-mini-deck"

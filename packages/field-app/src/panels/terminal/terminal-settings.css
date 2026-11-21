@@ -308,6 +308,25 @@
     12.5px 12.5px;
 }
 
+/* the well's ground (TL-3, 2026-11-19; DESIGN.md §8 "The glass is the desk"): the same canvas again, in the well under
+   the panes, at its own place in the miniature, as the deck's well stands on the desk's still. The well stands 8 in
+   from the miniature's side and the Lip's 30 below the monitor (`--vf-ts-mini-glass-top`, from the sizes). */
+.vf-ts-mini-glass {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.vf-ts-mini-glass > .vf-ts-mini-field {
+  inset: auto;
+  top: var(--vf-ts-mini-glass-top);
+  left: -8px;
+  width: 100cqw;
+  height: var(--vf-ts-mini-height);
+}
+
 .vf-ts-mini-card {
   position: absolute;
   display: flex;

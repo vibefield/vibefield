@@ -217,7 +217,7 @@ export function LookTab({
         id="look-glass"
         title="Glass"
         scope="window"
-        description="Two layers, top to bottom: each terminal's ground, then Godview's cover over your canvas. Thin the ground to see the cover through it."
+        description="Two layers, top to bottom: each terminal's ground, then your desk. Thin the ground to see your desk through it."
       >
         <div className="vf-ts-glass">
           <LayerHead at={0} name="Terminal" line="each pane's ground, drawn by the renderer" />
@@ -225,8 +225,8 @@ export function LookTab({
             title="Background opacity"
             description={
               appearance.opacity >= 1
-                ? "Solid: Godview's cover stays behind the pane."
-                : "Godview's cover shows through each pane."
+                ? "Solid: the pane hides your desk."
+                : "Your desk shows through each pane."
             }
           >
             <RangeControl
@@ -241,7 +241,7 @@ export function LookTab({
           </SettingsRow>
           <SettingsRow
             title="Dim program backgrounds too"
-            description="Apply the same alpha to backgrounds a program painted itself, like the PASS and FAIL badges. Off by default: a program that colours a cell usually means it."
+            description="Let the backgrounds a program paints show your desk too, so a program that fills its screen keeps the glass."
           >
             <SettingsSwitch
               checked={appearance.opacityCells}
@@ -249,14 +249,14 @@ export function LookTab({
               label="Dim program backgrounds too"
             />
           </SettingsRow>
-          {/* DK-15: Godview's backdrop is not a layer to set any more — on the desk
-              the cover is a tint at the covers' 72% over a still of the desk,
-              blurred once (DESIGN.md §8 "The covers over the desk"); its opacity
-              and blur rows retired with GT-7's saved backdrop. */}
+          {/* DK-15: Godview's backdrop is not a layer to set any more, and its opacity
+              and blur rows retired with GT-7's saved backdrop. TL-3 (2026-11-19;
+              DESIGN.md §8 "The glass is the desk"): under the panes stands the
+              desk's own still, blurred once; the cover's 72% stands round the deck. */}
           <LayerHead
             at={1}
             name="Your canvas"
-            line="a still of your desk under Godview's cover — the covers' glass at 72%, blurred once"
+            line="a blurred picture of your desk, under the panes"
           />
         </div>
       </PageSection>
