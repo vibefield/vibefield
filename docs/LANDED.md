@@ -66125,3 +66125,78 @@ assembly: owed, by ruling. That a picture drawn from the still's own canvas show
 capture step on the test Mac, and James's eye on its captures.
 
 **Owed.** Whether the desk reads well through a pane is James's eye on the row's captures.
+
+## CLAUDE.md — mille is released, and plugin-sdk has two design-kit doors (M501)
+
+(2026-11-21; one docs commit `d5e0c337b`, CLAUDE.md alone (+26 −20), on James's word typed in the fixer's session that
+morning, about 07:36Z: "go ahead on these 2", the two CLAUDE.md lines owed since the EL8 to mille 0.3.6 and item 570.
+Cut on main `49bf268fcbbb` as `0b6b78ae7` (as cut) on fixer/claude-md-on-49bf268fc, in a side worktree through the
+hook.)
+
+- mille is released. The files service sibling window (FS-1b) closed at the EL8 to mille 0.3.6 (`0d1e63b07`,
+  2026-11-17), and CLAUDE.md still described it open. Five spots move: Machine setup's npm line names the
+  `@vibecook/mille*` rows, not `link:` rows; a fresh tree needs one checkout, `../rosetta-pin`, and the italic
+  measurement says so; the sibling model's released bullet names mille, and the unreleased bullet says none is open; the
+  FS-1b paragraph is rewritten as the closed window.
+- plugin-sdk has two design-kit doors. Line 74 said `ui.ts` is the only design-kit re-export plugins may touch. Item 570
+  (`57fb97dbc`, 2026-11-19) opened `ui-dom.ts`, the kit's glyphs and control classes for a plugin that draws its own DOM
+  and has no React. The line names both, with a dated errata at it.
+- Read at source before the cut: the lock's `release.npm` 0.3.6 at `85c35e7d`; the workspace's exact overrides rows and
+  their note (the tag v0.3.6, `./drive`, mille #46's remap and notices); `needsCheckout` run on each lock entry (rosetta
+  true, mille false); `verify.yml`'s retired `prepare-mille`; `scripts/mille-aliases.mjs`'s header; wall R24's comment;
+  `packages/plugin-sdk/src/ui-dom.ts`'s header.
+- The mille text is the mille lane's draft, with two of its claims corrected at source: R24's engine is every entry but
+  `/port` and `/remote` (0.3.6 exports ten; the draft named three), and a claim about `pnpm check:deps` that was not
+  read at source is left out.
+- No rule, command or pin moves; no added line over 120 characters.
+- `pnpm verify` whole at `eaa0d4c6b` (assembly 20's top) on the test Mac, run `v-a20close` (exit 0: every stage,
+  `census:assert` OK with no drift, item 643's dev-lock row passing, the Rust tests 698 passed, 0 failed, 15 ignored,
+  the gen check clean), and the kit ALL there, run `kit-a20close` (`xcodebuild` exit 0, 3,175 rows: 3,172 passed and 3
+  skipped, push 154's three; none of push 154's 3,175 rows lost or moved, and none new)
+
+## 643 — the dev lock's race row says why each runner was refused (M502)
+
+(2026-11-21; item 643; one test-only commit, 1 path: `eaa0d4c6b` ("643: the dev lock's race row says why each runner was
+refused"), on main `49bf268fcbbb`. Cut by the terminal-look lane on branch `tl/643-on-49bf268fcbbb` (as cut:
+`aeef84ed226b`, tree `eea8d8fd0503`). It rides assembly 20 with the CLAUDE.md commit. The carry is the fixer's line.)
+
+**What was wrong.** CLOSE-a19r3's first verify went red on one row that assembly 19 does not touch:
+`tooling/dev-runner/test/dev-lock.test.mjs:232`, "elects exactly one owner when two runners reclaim the same stale
+lock", `AssertionError` at :266, "iteration 18 acquired 0 locks" (both racers refused; 524 of 525 passing). It had
+passed in the four verifies before. The row asserts the count first, with a message that names only the count, so both
+refusals' reasons were thrown away and the red could not say what refused them.
+
+**What changes.** The test alone, no product change: `dev-lock.test.mjs` +10 −1 (numstat, git's own). On a miscount the
+assertion's message now carries each refusal's `name: message` ("refused: …"), under a dated comment naming the item.
+A second red then tells a lock fault (two `DevLockError`s) from an I/O error that is no refusal at all.
+
+**Read before the cut.** `tooling/dev-runner/src/dev-lock.mjs` whole at main (297 lines); its last changes, `33c21916`
+and `0f1662c6` (item 621), touched only the refusal's words. No product fault was found by reading. The lock refuses in
+three places:
+- after a failed publish, when the lock's record names a live owner;
+- inside a won reclaim claim, on the same check;
+- after eight attempts that each found the lock changing.
+
+The first two need the other runner's published record, so that runner holds the lock. The third needs the other runner
+to hold the reclaim claim across eight attempts, and a claimer publishes and acquires. Traced by hand, each interleaving
+of two reclaimers elects one owner. Both reject only on an error outside those refusals: an I/O error in the quarantine
+steps or the readdir, or a publish rename failing with a code other than EEXIST, ENOTEMPTY or EPERM.
+
+No red row: no fault was found to hold red, and forcing both refusals would need a fault seam the lock does not have.
+
+**Proved before the cut, on the development Mac.** Biome 2.5.4 with main's biome.jsonc, on the file at main and with the
+change: format by stdin unchanged, and `check --error-on-warnings` exit 0 on both. A planted mis-format in a copy was
+changed by format, as it must be. The patch, tried on main's blob, gives the committed file byte for byte. The row was
+not run there.
+
+**The cut.** `lanes/tl/dev-lock-a19/cut-643.sh` (`522c8441`), once, on VF-PM's word, END 2026-11-21 08:31:34Z: one ref
+created, the one path at its sum, the message the file's, the commit hook passing; the lane's other branch and main
+unmoved.
+
+**In the verify.** `pnpm verify` whole at `eaa0d4c6b` (assembly 20's top) on the test Mac, run `v-a20close` (exit 0:
+every stage, `census:assert` OK with no drift, item 643's dev-lock row passing, the Rust tests 698 passed, 0 failed, 15
+ignored, the gen check clean), and the kit ALL there, run `kit-a20close` (`xcodebuild` exit 0, 3,175 rows: 3,172 passed
+and 3 skipped, push 154's three; none of push 154's 3,175 rows lost or moved, and none new)
+
+**What it does not prove.** That the red does not come back. If it does, its reasons now say whether the lock or the
+file system refused, and that decides the product mend.
