@@ -19,6 +19,7 @@ import {
   MadeAppAvailability,
   MadeAppHostedUrl,
   MadeAppPreview,
+  type MadeAppPreviewState,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { IndexArtifactsRead } from "./agent-index";
@@ -139,6 +140,8 @@ export interface AppIntentStamp {
   kept?: true | undefined;
   hidden?: true | undefined;
   preview?: MadeAppPreview | undefined;
+  /** Item 588 (2026-11-19): why the app has no preview of its page yet, as its origin says it. */
+  previewState?: MadeAppPreviewState | undefined;
 }
 
 /** The owner's standing as every frame declares it (`IndexAppsCatalog*`'s OWNER_STANDING). Absent: unknown. */
@@ -242,6 +245,12 @@ function previewOf(stamp: AppIntentStamp | undefined): MadeAppPreview | undefine
     pageDigest: offered.pageDigest,
     capturedAt: offered.capturedAt,
   };
+}
+
+/** Item 588 (2026-11-19): the newest `limit` rows of a table, newest first, never moving the table's own order. Inert
+ * until its green. */
+export function newestOf(_table: { rows(): IndexCatalogApp[] }, _limit: number): IndexCatalogApp[] {
+  return [];
 }
 
 export class IndexApps extends EventEmitter {

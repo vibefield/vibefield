@@ -67,6 +67,7 @@ import {
   type MadeAppAvailability,
   MadeAppOpenRefusal,
   MadeAppPreview,
+  type MadeAppPreviewState,
   MadeAppRegistry,
   MadeAppServeRecord,
   madeAppFoldKey,
@@ -358,6 +359,9 @@ export interface MadeAppRows {
   speaks(): boolean;
   /** One presentation of an app (3a's `IndexService.artifacts({artifactId})`), or undefined. */
   presentation(appId: string, presentationId: string): Promise<MadeAppPresentation | undefined>;
+  /** Item 588 (2026-11-19): this desktop's newest rows, newest first (the table's order), at most `limit`. Absent:
+   * nothing is owed a capture at publish, and an app is drawn at its open alone, as before. */
+  newest?(limit: number): readonly IndexCatalogApp[];
 }
 
 /** The person's intent for one fold key (`madeAppFoldKey`), merged, as slice 3h reads it from the settings document. */
@@ -396,6 +400,9 @@ const DEFAULT_TIMERS: MadeAppTimers = {
 /** What the service stamps on its own desktop's row (slice 3a's `AppIntentStamps.of`): the newest capture. */
 export interface MadeAppStamp {
   preview?: MadeAppPreview;
+  /** Item 588 (2026-11-19): why the app has no preview of its page yet (`MadeAppPreviewState`); absent when drawn, or
+   * for an app not owed a capture. */
+  previewState?: MadeAppPreviewState;
 }
 
 /** What `open` is asked: the daemon has already routed `device` and keeps `reveal` for the home (slice 3e). */
@@ -448,6 +455,9 @@ export interface MadeAppServiceOptions {
   timers?: MadeAppTimers;
   /** How long `open` waits for its listener's URL before it answers `starting` (MADE_APP_LIMITS.OPEN_WAIT_MS). */
   openWaitMs?: number;
+  /** Item 588: how long a capture's own serve may take to report its URL before it is removed, main never asked
+   * (MADE_APP_LIMITS.CAPTURE_SERVE_WAIT_MS). */
+  captureServeWaitMs?: number;
   /** Fault seam for the atomic registry write. */
   writeRegistry?: (path: string, body: string) => void;
 }

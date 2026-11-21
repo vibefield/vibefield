@@ -202,6 +202,12 @@ export class ShellProviderBroker {
     return this.provider?.methods.has(method) === true;
   }
 
+  /** Item 588 (2026-11-19): told once each time a provider newly registers (a repeat on the same transport is not
+   * new), so a capture owed while no shell could draw is drawn when one can. Answers its own stop. */
+  onRegistered(_listener: () => void): () => void {
+    return () => undefined;
+  }
+
   register(
     ctx: CallerContext,
     transport: ShellProviderTransport,
