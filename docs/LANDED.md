@@ -66816,3 +66816,56 @@ each" (the tool's own promise, `test/tool.test.ts`) did not hold across a chunk 
   seen red. Unread: whether the native helpers ever print non-ASCII on stderr (a display's name could).
 
 **Not done, and not claimed:** no push of its own.
+
+## Track PF — the pane frame's capsules, the phone's reserved band, and a running run's model switch (M515)
+
+(2026-11-21; track PF; seven commits on local main, landed there directly at James's word: "I like desktop A and mobile
+A, now start implementation and land it directly on local main". `f32208ea3` PF-1 (doc) · `f8bc6fa1d` PF-1 (green) ·
+`25bd4c53d` PF-2, PF-3 (doc) · `36275430a` EL8: puppeteer 0.4.8 · `7629195b2` PF-2 (green) · `d3926beca` PF-3 (green),
+the door · `7a0f6225a` PF-3 (green), the phone. Upstream: puppeteer #107 `23c5f63c`, #108 `3a7f174b`, and the release
+#109, v0.4.8 = `996de4fc`.)
+
+**Where it comes from.** James's pass over Godview's terminal pane, desktop and phone: "the top and bottom notch is not
+looking good with our newly refined terminal look"; "the top is obscuring the top area content of terminal, we need add
+safe margin to terminal at top to avoid it"; "I want to make it easy for mobile user to switch models and effort, so
+maybe design some button for it". Options were drawn on the page "Godview terminal pane"; he picked desktop A and
+phone A.
+
+**What landed.**
+- PF-1, the phone's layout: the live card's 44pt band is reserved, so the terminal's view begins at its foot and the
+  grid's first row is under no chrome. The readout is one capsule, model | effort, with the context share as a ring
+  beside it. The 6pt context bar over the home indicator is retired.
+- PF-2, the desktop's frame: a pane's badge and context meter are capsules inside the pane (puppeteer-views 0.4.8,
+  #107), in bands that keep their heights. VibeField hands the frame the selected badge's label and shade per Godview
+  mode, so the label holds 4.5:1 on the pane colour by day and by night, and draws its exit chip as the same capsule.
+- EL8, puppeteer 0.4.8: the seven rows, the lock, preflight's expectations, the phone goldens re-blessed by their
+  version stamps.
+- PF-3, the switch: `agent.switchModel` (`agent.control`, `federate`) asks a running run's adapter for one change, its
+  model or one control of it, through puppeteer's `Agent.switchModel` (#108). The run's offer rides the fold's row and
+  the remote cut's (`modelSwitch`). On the phone the band's capsule opens the agent's own list where the row offers a
+  switch, and a sent change is drawn as asked until the row confirms it.
+
+**What was proved.** On 2026-11-21, on the development Mac, in the checkout itself, vitest at 4 workers.
+- Upstream: #107, #108 and #109 each green on CI's six jobs (packages and apps on three systems) before its merge. The
+  20 packages read back at 0.4.8 from the registry.
+- The pin: the one install and a frozen install exit 0; `pnpm preflight` OK; `pnpm check:deps`, `pnpm check:walls` and
+  `pnpm check:ios-fixtures` exit 0; `tsc` for contracts, fieldd and field-app exit 0.
+- contracts: 79 files, 2283 tests passed. fieldd: the door's two rows on the real floor and the remote cut's row, then
+  `agent-remote-cut`, `agent-field`, `agent-monitor-pin` and `agent-stop-key` whole, 71 passed. field-app: 36 files, 564
+  tests passed (the deck, the pane frame, the design system, the tokens, the boundaries, the phone goldens).
+- The kit: it and every test bundle build for the arm64 simulator. On the iPhone 17 simulator, iOS 26.5:
+  `FieldHomeTests/LiveCardBandTests` 11 passed, `FieldProductTests` whole 378 passed in 59 suites.
+
+**Not covered, and owed.**
+- Nothing was looked at. No pane in the running app, no live card on a simulator or a phone, no switch list opened.
+  Every claim about how it looks is by reading and by computed contrast.
+- No model was switched on a real agent, from the phone or anywhere. Puppeteer's live proof of the adapter was not run.
+- `pnpm verify` whole, the Rust tests, the kit's whole suite, every smoke and `pnpm gate:landing` were not run. The
+  door's rows were not seen red first, and the plugin refusal has no row.
+- One adapter names a switch (Claude Code's), and that agent saves a typed model or effort as its default for new
+  sessions. The offer and the phone's list say so. A model change can raise the agent's own confirmation, which nothing
+  here answers.
+- No window offers the switch: the desktop's pane frame has no control for it.
+- A peer desktop's run lists its models under that desktop's default profile, which may not be the run's.
+
+**Not done, and not claimed:** no push of its own.

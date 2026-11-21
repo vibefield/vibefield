@@ -339,6 +339,11 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   RETIRED with the desk: DK-8 `91bda4f6`, DK-17; the doc archived 2026-10-28).
 - **A0–A5** altitude ladder · **R0–R3** trust rungs · **L0 + P0–P7** slices — plugin spec
   §4.3/§20.5/§21.
+- **PF-1…PF-3** — track PF, the pane frame (2026-11-21): the phone's reserved band and its capsule and ring (PF-1),
+  the desktop frame's capsules and the selected badge's label (PF-2), `agent.switchModel` and the phone's switch list
+  (PF-3). Defined in `DESIGN.md` §2.7 "The pane frame's capsules" and §8 "The phone's live card is its terminal"; the
+  door in `docs/agent-plane/api.html`. **LANDED 2026-11-21 (M515)**, unseen on a screen and unproved end to end (the
+  ledger's entry says what is owed).
 
 ## Petitions
 
