@@ -71,10 +71,13 @@ in the split.
   `live-surfaces` — the live-surface foundation's browser-compatible library (demand, the frame
   queue, the lifecycle; its `./renderer` entry), consumed by field-app and electron-shell; its
   wall keeps it independent of Electron, Node, ICE, plugins and field-app.
-- **Plugin system:** `plugin-sdk` (the R10 door; its `ui.ts` is the only design-kit re-export
+- **Plugin system:** `plugin-sdk` (the R10 door; its `ui.ts` and `ui-dom.ts` are the only design-kit re-exports
   plugins may touch) · `plugin-runtime` · the authoring kit `tooling/plugin-build`,
   `tooling/plugin-cli` (`pnpm plugin`) and `tooling/create-plugin`; product plugins live at the
   repo root. `tooling/dev-runner` is the `pnpm dev` supervisor; `apps/*` are packaging roots.
+  > **Errata (2026-11-21):** this said `ui.ts` is the only design-kit re-export plugins may touch. Item 570
+  > (2026-11-19, `57fb97dbc`) opened a second door, `ui-dom.ts`: the kit's glyphs and control classes for a plugin
+  > that draws its own DOM and has no React, curated as `ui.ts` is.
 
 ## Machine setup
 
@@ -82,9 +85,9 @@ in the split.
 pin stated from memory is how lockstep quietly breaks.
 - Cargo: `Cargo.toml` `[workspace.dependencies]` (exact `=` registry pins, e.g. `truffle-core`, `ghosttea`) and
   `Cargo.lock`.
-- npm: the `pnpm-workspace.yaml` overrides (ICE, loro, ghosttea, the `@vibefield/rosetta-*` and
-  `@vibefield/puppeteer-*` rows, mille's `link:` rows; packages ask for `"*"`), and `apps/desktop/package.json` for
-  the five `@vibecook/truffle-sidecar-*` packages.
+- npm: the `pnpm-workspace.yaml` overrides (ICE, loro, ghosttea, the `@vibefield/rosetta-*`, `@vibefield/puppeteer-*`
+  and `@vibecook/mille*` rows; packages ask for `"*"`), and `apps/desktop/package.json` for the five
+  `@vibecook/truffle-sidecar-*` packages.
 - Swift: `apps/ios/VibeFieldKit/Package.swift`'s `let <name>Release` lines and `apps/ios/VibeFieldKit/Package.resolved`.
 - Siblings: `siblings.lock.json` (each checkout's revision, and a `release` per plane). The compiler:
   `rust-toolchain.toml`.
@@ -110,16 +113,17 @@ pin stated from memory is how lockstep quietly breaks.
 **Which checkouts a fresh tree needs.** The repo does not build standalone. `needsCheckout` in `scripts/siblings.mjs`
 decides it: a sibling needs its checkout while any of its planes is committed in dev shape (`link:` rows, path
 patches, a path package), while something is built from it (rosettad), or while the local overlay links it. Today
-that is two checkouts beside this one: `../rosetta-pin` (rosettad is built from it) and `../mille-pin` (mille's
-`link:` rows). `node scripts/siblings.mjs fetch NAME` creates each at its pin, and `pnpm preflight` names a missing
-one rather than letting a build fail later.
+that is one checkout beside this one: `../rosetta-pin` (rosettad is built from it). mille left the list at its EL8 to
+0.3.6 (2026-11-17, `0d1e63b07`): every plane released, nothing built from it. `node scripts/siblings.mjs fetch NAME`
+creates a checkout at its pin, and `pnpm preflight` names a missing one rather than letting a build fail later.
 *The last measurement (James's Mac mini, 2026-10-22 on the EL8's ghosttea 0.13.0 build and 2026-10-23 at its 0.13.1
 tip; the lane's logs/mini/standalone-*.log and gate-r2's bare-preflight.log) named three: `../puppeteer`,
 `../rosetta-pin` and `../mille-pin`. With those three it installs, builds field-native and passes preflight.
 puppeteer's npm plane went exact on 2026-10-26 (RD-5a-2, `a04850e29`), which
 drops it from the list by `needsCheckout`'s rule (true for rosetta and mille alone, read 2026-10-28); CI's verify
-has run without `../puppeteer` since that day (`verify.yml`). The two is read from the code, not re-measured on a
-bare host.*
+has run without `../puppeteer` since that day (`verify.yml`). mille's npm plane went exact on 2026-11-17 (0.3.6,
+`0d1e63b07`), which leaves rosetta alone by the same rule (`needsCheckout` run on each lock entry, 2026-11-21). The one
+is read from the code, not re-measured on a bare host.*
 
 **truffle is released on every plane.** RFC 025's petition window opened on 2026-09-16 (B0). Its cargo and npm
 planes closed the same day (UA-P-X). Its SwiftPM plane closed on 2026-10-24, at the EL8 to ghosttea 0.13.1 (G28's
@@ -162,9 +166,10 @@ pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 is **rosetta** (chopsticks and spaghetti retired 2026-09-04). `siblings.lock.json` pins every sibling by revision.
 Each plane is committed in one of two shapes, by `thinking-release-deps.md` (RD-1):
 - A **released** plane is committed EXACT: puppeteer's `@vibefield/puppeteer-*` rows (RD-5a-2, 2026-10-26), rosetta's
-  `@vibefield/rosetta-protocol` and `-room` (RD-5a, 2026-10-14, published from the revision the lock pins), ghosttea
-  and truffle on every plane. Its lock entry stays as the dev overlay's coordinate.
-- An **unreleased** plane is committed as `link:`/path rows: mille's npm plane (FS-1b, below).
+  `@vibefield/rosetta-protocol` and `-room` (RD-5a, 2026-10-14, published from the revision the lock pins), mille's
+  `@vibecook/mille` and `-ui` (2026-11-17, 0.3.6, published from the tag v0.3.6 = `85c35e7d`), ghosttea and truffle on
+  every plane. Its lock entry stays as the dev overlay's coordinate.
+- An **unreleased** plane is committed as `link:`/path rows. None is open since mille's EL8 to 0.3.6.
 - Rosetta publishes daemon archives. This host still builds rosettad from the same pinned release source
   in `../rosetta-pin`; adopting the published archives remains RD-D7.
 - Only directly imported packages are rows; adapters never are (walls R20–R22).
@@ -220,14 +225,15 @@ The lock's `ghosttea` entry (its checkout `../ghosttea-0.11.2`, at the lock's re
 crates and its Swift package back. Name it to build its JavaScript (`install-js ghosttea`, `build-js ghosttea`): the
 sweep skips a released, unlinked plane. CI needs no ghosttea checkout, and the `prepare-ghosttea` composite retired.
 
-**Files service sibling window (FS-1b, 2026-10-05):** `../mille-pin` is a dedicated checkout at
-`siblings.lock.json`'s revision, supplying mille and mille-ui together for the unreleased WebSocket channel.
-`node scripts/siblings.mjs fetch mille`, then named `install-js mille` / `build-js mille`, prepares it (CI: the
-`prepare-mille` composite). Host React peers are linked only inside that dedicated checkout's generated
-node_modules; its source and lock stay unchanged. Renderer and test aliases share the lock's built exports,
-including rosetta's nested consumer. R24 permits mille's engine (the root entry, `/node`) only in the files worker;
-field-app may import `/port`, `/remote` and mille-ui, and fieldd's and field-app's tests the same two clients. Exit
-is an exact npm version after the release (RD-5).
+**mille is released (the files service sibling window, FS-1b, opened 2026-10-05, CLOSED 2026-11-17 at the EL8 to mille
+0.3.6, `0d1e63b07`):** `@vibecook/mille` and `@vibecook/mille-ui` are exact registry rows. The lock's `mille` entry (its
+checkout `../mille-pin`, at the release's revision) is only the dev overlay's coordinate: `node scripts/siblings.mjs
+fetch mille` creates it, and `pnpm siblings use mille` links it back, with the host's React peers bound inside it as
+before. The renderer and test aliases (`scripts/mille-aliases.mjs`) stand only while it is linked; otherwise both
+resolve the installed packages. The release carries the drive (`./drive`), and each platform package its crates'
+notices and the release build's path remap (mille #46). CI needs no mille checkout, and the `prepare-mille` composite
+retired. R24 permits mille's engine (the root entry and every entry but `/port` and `/remote`) only in the files
+worker; field-app may import `/port`, `/remote` and mille-ui, and fieldd's and field-app's tests the same two clients.
 
 > **Errata (2026-10-07):** this paragraph said R24 admits "browser client/port/remote
 > entries". It never admitted a `/browser` entry: the wall (`scripts/check-import-boundaries.mjs`)
