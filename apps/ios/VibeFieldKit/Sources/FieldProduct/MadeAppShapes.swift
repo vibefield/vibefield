@@ -25,6 +25,18 @@ public enum MadeAppAvailability: String, Sendable, Equatable, CaseIterable {
   }
 }
 
+/// Item 588 (2026-11-19) — why a row has no preview of its page yet, as its origin says it: the contracts'
+/// `MADE_APP_PREVIEW_STATES`. Open: a word this build has not heard reads as `unknown`, which About shows as no state.
+public enum MadeAppPreviewState: String, Sendable, Equatable, CaseIterable {
+  case owed
+  case failed
+  case unknown
+
+  public init(wire: String?) {
+    self = wire.flatMap(Self.init(rawValue:)) ?? .unknown
+  }
+}
+
 /// An app's face (MA-D10 (b); `MadeAppPreview`), which carries no URL: the address is derived from its desktop's
 /// `previewsBase` and never stored. A preview this build cannot read costs the preview, never the row.
 public struct MadeAppPreview: Sendable, Equatable {
@@ -105,6 +117,8 @@ public struct IndexAppRow: Sendable, Equatable, Identifiable {
   /// rosetta 0.1.4's: `> 0` is a page served without its files ("page only"). Absent is unknown.
   public let droppedFiles: Int64?
   public let preview: MadeAppPreview?
+  /// Item 588 (2026-11-19): why it has no preview of its page yet. Absent (nil) is no state: today's line.
+  public let previewState: MadeAppPreviewState?
   public let projectKey: String?
   /// The project's deal index, the fallback icon's colour (MA-D10 (b)).
   public let ink: Int64?
@@ -136,6 +150,7 @@ public struct IndexAppRow: Sendable, Equatable, Identifiable {
     hostedUrl = object.string("hostedUrl")
     droppedFiles = object.int("droppedFiles")
     preview = MadeAppPreview(json: object.value("preview"))
+    previewState = nil
     projectKey = object.string("projectKey")
     ink = object.int("ink")
     kept = object.bool("kept") == true

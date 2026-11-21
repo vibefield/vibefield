@@ -491,6 +491,8 @@ const requiredMirrors = [
       "index-apps.valid.json",
       "index-apps.tailnet.json",
       "index-apps.mesh.json",
+      // item 588 (2026-11-19): each row's preview state, as the About reads it
+      "index-apps.preview-states.json",
       "error-data.apps-export-unbuilt.json",
       "error-data.apps-not-kept.json",
       "error-data.apps-reading.json",

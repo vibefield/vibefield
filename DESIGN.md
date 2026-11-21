@@ -11189,7 +11189,9 @@ is not plain ASCII in its `xn--` form, so a look-alike never reads as the name i
   none, "Your desktop"; search's strip, "All apps"; the group of apps with no project, "No project"; an empty
   shelf, "Your agents haven't made an app yet"; while the phone waits for its first list, "Reading your apps"; and
   when the phone stops reading at ten pages, "Not every app is shown here". *Ruled 2026-11-12 (James, 03:38:38Z,
-  the PM board): kept.*
+  the PM board): kept.* *Added 2026-11-19 (item 588b):* "Your desktop", and "Another desktop" for a desktop the
+  phone cannot name, are capitalised only where they stand alone. Inside a sentence they are words, not a name, and
+  read lower-case: "…the next time VibeField is open on your desktop". A desktop's own name stays as it is.
 - **The acts.** An app's acts are **Open**, **Keep** (or **Stop keeping**), **Versions**, **About this app**,
   **Reload**, **Open on ‹desktop›**, **Open in ‹host›** (only with a hosted link) and, for a live app, **Copy link**.
   *Hide from Apps dropped 2026-11-13 (James, 01:29:54Z).*
@@ -11206,9 +11208,13 @@ is not plain ASCII in its `xn--` form, so a look-alike never reads as the name i
   word, typed in VF-PM's session at 10:11:20Z, "go with lean", no longer ‹draft› (VF-PM's reading, said back to
   him: this reading, and a folder's app offers Keep as the shelf's does).*
 - **About** says "Made by ‹agent›", its session and project, "on ‹desktop›" and its date, and opens the session in
-  History. Before an app has a preview it says "No preview yet — it's drawn the first time the app opens".
-  ‹for James: the line for a capture that failed›. Before MA-5, an app this phone cannot run yet says "This app
-  can't run here yet". *Ruled 2026-11-12 (James, 03:38:38Z, the PM board): kept.*
+  History. Before an app has a preview it says "No preview yet — it's drawn the next time VibeField is open on
+  ‹desktop›" while its drawing is owed (VibeField was not open there when it was published); "No preview — it couldn't
+  be drawn. It's drawn again the next time the app opens on ‹desktop›" when the drawing failed; and, for an older app
+  past the newest 24 that publishing does not draw, "No preview yet — it's drawn the first time the app opens".
+  *Amended 2026-11-19 (item 588; answered 2026-11-19): an app's preview is drawn when it is published, and again on
+  later opens; this said only the third line, and the failed line was an open slot.* Before MA-5, an app this phone
+  cannot run yet says "This app can't run here yet". *Ruled 2026-11-12 (James, 03:38:38Z, the PM board): kept.*
 - **The states.** "Opening on ‹desktop›…" (late: nothing for 120ms, then a fade) · "‹desktop› is asleep", over
   "This app runs on ‹desktop›. It opens when ‹desktop› wakes.", with **Open in ‹host›** when it has a hosted link ·
   "Can't reach ‹desktop›" with its reason · "This page wasn't kept", with the hosted link · "Its 3 other files
