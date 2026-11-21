@@ -76,24 +76,63 @@ const DARK: TerminalScheme = {
 /** DARK on another ground: the one field the light-or-dark answer reads. */
 const ground = (background: string): TerminalScheme => ({ ...DARK, background });
 
+/** TL-4b (2026-11-18) — LIGHT's two palette slots as a session is told them. */
+const LIGHT_SLOTS = [
+  [1, [163, 77, 73]],
+  [4, [43, 106, 166]],
+];
+
 describe("the terminal scheme's colours (TL-4a)", () => {
-  it("turns #rrggbb, in either case, into the three bytes a session is told", () => {
+  // TL-4b (2026-11-18): a session is told the palette with the three colours,
+  // so each answer here names it: LIGHT's two slots, none for a scheme with none
+  it("turns #rrggbb, in either case, into the bytes a session is told: the three colours and each palette slot", () => {
     expect(schemeColors(LIGHT)).toEqual({
       foreground: [30, 34, 39],
       background: [236, 232, 220],
       cursor: [43, 106, 166],
+      palette: LIGHT_SLOTS,
     });
     const mixed = { ...LIGHT, foreground: "#ABB2BF", background: "#ECE8DC", cursor: "#0a0B0c" };
     expect(schemeColors(mixed)).toEqual({
       foreground: [171, 178, 191],
       background: [236, 232, 220],
       cursor: [10, 11, 12],
+      palette: LIGHT_SLOTS,
     });
     const edges = { ...DARK, foreground: "#ffffff", background: "#000000", cursor: "#ff0080" };
     expect(schemeColors(edges)).toEqual({
       foreground: [255, 255, 255],
       background: [0, 0, 0],
       cursor: [255, 0, 128],
+      palette: [],
+    });
+  });
+
+  it("names the palette in index order, whatever order the scheme names it in (TL-4b)", () => {
+    const reversed: TerminalScheme = { ...LIGHT, palette: [...LIGHT.palette].reverse() };
+    expect(schemeColors(reversed)).toEqual({
+      foreground: [30, 34, 39],
+      background: [236, 232, 220],
+      cursor: [43, 106, 166],
+      palette: LIGHT_SLOTS,
+    });
+    const scattered: TerminalScheme = {
+      ...DARK,
+      palette: [
+        { index: 255, color: "#FFFFFF" },
+        { index: 0, color: "#000000" },
+        { index: 16, color: "#0a0B0c" },
+      ],
+    };
+    expect(schemeColors(scattered)).toEqual({
+      foreground: [171, 178, 191],
+      background: [40, 44, 52],
+      cursor: [82, 139, 255],
+      palette: [
+        [0, [0, 0, 0]],
+        [16, [10, 11, 12]],
+        [255, [255, 255, 255]],
+      ],
     });
   });
 

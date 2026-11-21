@@ -65,6 +65,13 @@ describe("the terminal scheme (TL-4a)", () => {
       cells: [{ state: "a-later-state", sessions: 0 }],
     });
     expect(later.cells[0]?.state).toBe("a-later-state");
+    // TL-4b (2026-11-18): the third state fieldd says, a cell one of whose
+    // live sessions refused the scheme; `sessions` counts the ones told
+    const refused = TerminalSchemeSetResult.parse({
+      changed: true,
+      cells: [{ cellBootId: "cell-i", state: "refused", sessions: 1 }],
+    });
+    expect(refused.cells[0]).toMatchObject({ state: "refused", sessions: 1 });
   });
 
   it("is said on settings.manage, on this device only, and no tailnet caller holds that scope", () => {
