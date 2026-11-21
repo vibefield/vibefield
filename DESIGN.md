@@ -62,7 +62,10 @@ alpha, but does not reinterpret that reference through rounded cards, colorful a
 floating pills — with the exceptions James named: the terminal deck's sheet edge (§8, 2026-09-28)
 and, since round 3 (2026-10-02), Godview's head (GV-D1) and the wrapper around its terminals
 (GV-D7, GV-D11, GV-D12); and, since 2026-11-17 (TL-2), the scanlines and the vignette, which are
-the monitor's and end at the deck's top edge (§8). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
+the monitor's and end at the deck's top edge (§8); and, since 2026-11-19 (TL-4c), the terminal's own
+colours: its light ground is paper where the reference's is parchment, and its sixteen colours are
+solved for each ground (§2.7 "The terminal's own colours"). The scoped `--vf-godview-*` tokens are
+the exact reference palette but for those. VibeField
 composites those status-body colors at 72% by default so they remain legible glass over the field;
 the temporary system-control panel exposes that alpha for live tuning. *(In development builds only since
 2026-11-05, LP-6: the panel is the surface lab, which HK Q3 (James, 2026-10-28, "B") made development's alone.)*
@@ -73,7 +76,7 @@ Stories"): the 40px bar, its counters (FC-D18) and its ☼◐ switch (FC-D7) are
 puppeteer's own Godview keeps the bar. *(Until the Stories head, built 2026-10-11, this paragraph
 said Godview "keeps this instrument bar as its head for now".)*
 **Since FR-4 (2026-10-03) Godview follows the app's theme (FC-D7):** its ☼◐ switch and its own
-remembered light are gone, and the parchment or graphite deck is whichever the app's one theme
+remembered light are gone, and the paper or graphite deck is whichever the app's one theme
 control (§8, the Me menu) resolves to — unless Settings → Terminal → Look holds the one override,
 Godview's mode (As the app · Light · Dark), saved with the rest of this viewer's deck appearance.
 
@@ -308,12 +311,12 @@ It is light, not paint, so the Moon does not dim it, and its four tokens hold on
 |---|---|---|
 | `--vf-tutor` | `#79B5F8` | the pencil: a tutorial's ring and its glow, its card, every hint, the beacon. It marks your next move, never a status |
 | `--vf-tutor-ink` | `#08162B` | the words, keys and buttons on the pencil: 7.8–8.4:1 on the card's swipe (96% pencil over the dim, solid where strokes cross) |
-| `--vf-tutor-keyline` | `rgb(4 8 20 / 55%)` | under every pencil stroke, 2 wider, as ICE keys the brackets: 4.4:1 on light paper, 4.2:1 on Godview's parchment |
+| `--vf-tutor-keyline` | `rgb(4 8 20 / 55%)` | under every pencil stroke, 2 wider, as ICE keys the brackets: 4.4:1 on light paper, 4.3:1 on Godview's paper |
 | `--vf-tutor-glass` | `rgb(10 22 40 / 86%)` | the stepper's ground; its words are white at 60%, 6.7:1 or more over the dim |
 
 The dim is the field's own ground, `--vf-field-ground` (§2.1). It runs from 62% at the focus to 86% at the far
 corners, and over a light ground (Godview by day, a sheet) from 68% to 88%, so the ring keeps 3:1: 7.4:1 on the Sun's
-mat, 8.1:1 on the Moon's, 3.6:1 on Godview by day. On Godview by night the ground is already the dim's colour, so the
+mat, 8.1:1 on the Moon's, 3.7:1 on Godview by day. On Godview by night the ground is already the dim's colour, so the
 dim falls on the bodies, the panes and the frame, and the ring carries the focus alone.
 
 ### 2.6 Organizational accents (containers, comments, tags)
@@ -346,7 +349,7 @@ the general chrome palette.
 | idle body / text | `#E5E5E5 / #666666` | `#2A2A2A / #AAAAAA` |
 | control hover border / ground (added 2026-11-04, PG-4t: tokens.css has carried the pair since at least 2026-08-08 as `--vf-godview-{light,dark}-control-hover-*`; this table never had it) | `#777777 / #F2F2F2` | `#A8A8A8 / #242424` |
 | working body / text | `#222222 / #FFFFFF` | `#EEEEEE / #111111` |
-| terminal ground / divider | `#ECE8DC / #D2CEC3` | `#282C34 / #414650` |
+| terminal ground / divider (by day paper since 2026-11-19, TL-4c, and parchment `#ECE8DC / #D2CEC3` until then; the divider is the ground darkened as before, channel by channel) | `#F1F0EE / #D6D5D3` | `#282C34 / #414650` |
 | deck sheet shadow (§8, the deck's edge) | `0 -20px 40px rgba(0,0,0,0.08)` | `0 -20px 40px rgba(0,0,0,0.4)` |
 | attention ink (a state word that has to be read, §2.5) | `#B25E00` `--vf-godview-light-ink-attention` | `#FF9F0A` `--vf-godview-dark-ink-attention` |
 
@@ -355,6 +358,58 @@ The attention ink is §2.5's, keyed to Godview's own mode as the deck's shadow i
 Godview's dark panel the orange itself reads (9.2:1 on `#111111`), so the dark ink is the fill;
 marks and bars keep the fill `--vf-orange` in both modes (added 2026-10-27, AO-6b3, for the limit
 moment's number, §8).
+
+**The terminal's own colours** (added 2026-11-19, TL-4c; James picked the lean of the page *Terminal
+Look Design*: paper for the light ground, and both sets as drawn). What the deck draws its panes in
+when no catalog theme is picked for Godview's mode, and what the device tells every session it runs
+(its terminal scheme, which the deck says to fieldd, TL-4): a program that asks its terminal for a
+colour is answered in these, and every viewer of the session draws them. *(2026-11-19, item 590:
+the ground and these sixteen as tokens land first; the deck tells them to sessions when its second
+part lands, and this mark goes then.)* A catalog theme picked for a mode (Settings → Terminal →
+Look → Theme) replaces them whole for that mode, its own sixteen included.
+The ground is the row above; the ink is `#1E2227` by day (14.0:1 on the paper) and `#FFFFFF` by
+night; the cursor and the selection are the reference's, and a block cursor's text is the ground.
+
+| # | colour | light (on `#F1F0EE`) | at least | dark (on `#282C34`) | at least |
+|---|---|---|---|---|---|
+| 0 | black | `#1E2227` (the ink) | 14:1 | `#1D1F21` | a ground colour |
+| 1 | red | `#A9524D` | 4.6:1 | `#DB7473` | 4.5:1 |
+| 2 | green | `#38793C` | 4.6:1 | `#B5BD68` | 4.5:1 |
+| 3 | yellow | `#976004` | 4.6:1 | `#F0C674` | 4.5:1 |
+| 4 | blue | `#306FAC` | 4.6:1 | `#81A2BE` | 4.5:1 |
+| 5 | magenta | `#8D589A` | 4.6:1 | `#B294BB` | 4.5:1 |
+| 6 | cyan | `#007879` | 4.6:1 | `#8ABEB7` | 4.5:1 |
+| 7 | white | `#676C73` | 4.6:1 | `#C5C8C6` | 4.5:1 |
+| 8 | bright black | `#51565C` | 6.5:1 | `#939292` | 4.5:1 |
+| 9 | bright red | `#AD3232` | 5.6:1 | `#EF6668` | 4.5:1 |
+| 10 | bright green | `#006F1A` | 5.6:1 | `#B9CA4A` | 4.5:1 |
+| 11 | bright yellow | `#865400` | 5.6:1 | `#E7C547` | 4.5:1 |
+| 12 | bright blue | `#0061AA` | 5.6:1 | `#7AA6DA` | 4.5:1 |
+| 13 | bright magenta | `#8B3F9C` | 5.6:1 | `#C397D8` | 4.5:1 |
+| 14 | bright cyan | `#006A6B` | 5.6:1 | `#70C0B1` | 4.5:1 |
+| 15 | bright white | `#81868D` | 3.2:1 | `#EAEAEA` | 4.5:1 |
+
+*At least* is WCAG 2's contrast ratio of the colour on its ground, unrounded: a colour clears its
+floor, and is never rounded up to it.
+
+- **By day** every hue is solved in OKLCH for its contrast on the paper: the six colours (red 25°,
+  green 145°, yellow 70°, blue 250°, magenta 320°, cyan 195°) at 4.6:1 and a calm chroma, 0.115;
+  their bright forms at 5.6:1 and a fuller one, 0.16, so bright on paper means a stronger ink. The
+  neutrals stand at hue 255° and chroma 0.012: white is a readable grey (a program that prints
+  white text is read), bright black darker still, and bright white the faintest, still over the
+  3:1 floor. Black is the ink.
+- **By night** they are ghostty's set, which Godview has always drawn, with the three inks under
+  4.5:1 on the graphite lifted in OKLCH lightness, hue and chroma kept: red `#CC6666` → `#DB7473`,
+  bright red `#D54E53` → `#EF6668`, bright black `#666666` → `#939292`. Black stays a ground colour.
+- **Where they live:** `--vf-godview-light-terminal-ansi-0` … `-15` and
+  `--vf-godview-dark-terminal-ansi-0` … `-15`. The deck reads them through their twin in code,
+  `godview/terminal-look.ts`, held to tokens.css by a row: the scheme leaves the renderer as data
+  for fieldd, so it is never read back from a stylesheet.
+- **On the phone** a session's colours arrive in its frames as they are, and the phone draws them on
+  its own ground, Matte Black by default in both modes (§8 "The phone's live card is its
+  terminal"). It holds them to the desktop's 3:1 floor (§8 "What a pane's text is held to"), so a
+  session told the day's inks stays readable there. The phone's card tint
+  (`FieldPalette.terminalBackground`) is the ground above, paper by day.
 
 **The app's chrome in Godview's mode** (added 2026-11-06, track UM; UM-D21 A, ruled by James on the page *The Bands
 Meter*, and the lead's call that the column follows Godview's own mode, as drawn). Godview's profiles column is the
@@ -6297,7 +6352,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   box drawing, block elements and colour glyphs are exempt. **Light adaptation on auto**: under a
   light ground, a program that paints most of its screen dark with its own backgrounds is redrawn
   as a light design, pane by pane; a program that follows the terminal is left as it is. Neither
-  changes a colour that already reads.
+  changes a colour that already reads. *Since 2026-11-19 (TL-4c)* the phone holds a session's text
+  to the same 3:1 floor (§2.7 "The terminal's own colours", on the phone).
   **The Lip** (GV-D7; built 2026-10-11) is the lip grown into the drag bar: **30** tall, on the
   frame's tone. **The groove** (GV-D12 — James's pick over the lean: "i like the groove one")
   stands in its middle, in its pill: a 40 × 6 slot pressed into the frame, the well's own depth
