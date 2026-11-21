@@ -43,20 +43,36 @@ struct AppsAbout: Equatable {
   /// "on ‹desktop›".
   let desktop: String
   let at: Int64
-  /// "No preview yet — it's drawn the first time the app opens"; nil once it has one.
+  /// Item 588 (2026-11-19), §9 "About": while it has no preview, why. Owed: "No preview yet — it's drawn the next
+  /// time VibeField is open on ‹desktop›". Failed: "No preview — it couldn't be drawn. It's drawn again the next
+  /// time the app opens on ‹desktop›". Otherwise: "No preview yet — it's drawn the first time the app opens". Nil
+  /// once it has one.
   let noPreview: String?
 
   static func of(
     _ app: IndexAppRow, agent: String?, sources: [IndexAppsSource], projects: [String: String], here: String
   ) -> AppsAbout {
-    let desktop = MadeAppFacts.desktop(MadeAppFacts.source(of: app, in: sources), here: here)
+    let source = MadeAppFacts.source(of: app, in: sources)
+    let inSentence = MadeAppFacts.desktopInSentence(source, here: here)
     return AppsAbout(
       title: app.title,
       madeBy: agent.map { "Made by \($0)" },
       project: app.projectKey.flatMap { projects[$0] },
-      desktop: "on \(desktop)",
+      // item 588 (2026-11-19): an existing line's capital, found while adding the two new ones: a stand-in word,
+      // mid-sentence, is lower-case
+      desktop: "on \(inSentence)",
       at: MadeAppFacts.at(app),
-      noPreview: app.preview == nil ? "No preview yet — it's drawn the first time the app opens" : nil)
+      noPreview: app.preview == nil ? noPreviewLine(app.previewState, desktop: inSentence) : nil)
+  }
+
+  /// Item 588 (2026-11-19): the line for an app with no preview, by its state, with `desktop` as a sentence names it.
+  /// A word not heard says what no state says, so it never promises a drawing.
+  static func noPreviewLine(_ state: MadeAppPreviewState?, desktop: String) -> String {
+    switch state {
+    case .owed: "No preview yet — it's drawn the next time VibeField is open on \(desktop)"
+    case .failed: "No preview — it couldn't be drawn. It's drawn again the next time the app opens on \(desktop)"
+    case .unknown, nil: "No preview yet — it's drawn the first time the app opens"
+    }
   }
 }
 

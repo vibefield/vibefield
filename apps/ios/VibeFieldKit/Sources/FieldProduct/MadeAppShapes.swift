@@ -150,7 +150,8 @@ public struct IndexAppRow: Sendable, Equatable, Identifiable {
     hostedUrl = object.string("hostedUrl")
     droppedFiles = object.int("droppedFiles")
     preview = MadeAppPreview(json: object.value("preview"))
-    previewState = nil
+    // a missing state, or one that is not a word, is none (today's line); a word not heard is `unknown`
+    previewState = object.string("previewState").map(MadeAppPreviewState.init(wire:))
     projectKey = object.string("projectKey")
     ink = object.int("ink")
     kept = object.bool("kept") == true

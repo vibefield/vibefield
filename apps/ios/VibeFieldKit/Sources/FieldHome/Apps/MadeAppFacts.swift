@@ -101,6 +101,14 @@ enum MadeAppFacts {
     return source?.isSelf == true ? here : "Another desktop"
   }
 
+  /// Item 588 (2026-11-19): a desktop as a sentence names it (§9 is sentence case): its own name as it is, and a
+  /// word that stands in for one ("Your desktop", "Another desktop") lower-cased.
+  static func desktopInSentence(_ source: IndexAppsSource?, here: String) -> String {
+    let word = desktop(source, here: here)
+    let named = source?.name?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    return named ? word : word.prefix(1).lowercased() + word.dropFirst()
+  }
+
   /// The agent's label through the catalog (R23b): the row's provider is a catalog id, compared to the catalog's own.
   static func agentLabel(_ row: IndexAppRow, catalog: [AgentCatalogRow]) -> String? {
     guard let provider = row.provider else { return nil }
