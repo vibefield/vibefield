@@ -198,6 +198,46 @@ describe("ShellProviderBroker", () => {
     await expect(result).rejects.toMatchObject({ kind: "UNAVAILABLE", retryable: true });
   });
 
+  it("item 588: tells each new registration once, never a repeat on the same transport, and again after a loss", () => {
+    const broker = new ShellProviderBroker();
+    let told = 0;
+    const stop = broker.onRegistered(() => {
+      told += 1;
+    });
+    const lane = transport();
+    broker.register(shellContext(), lane, { methods: METHODS });
+    expect(told, "a shell that can draw is here").toBe(1);
+    broker.register(shellContext(), lane, { methods: METHODS });
+    expect(told, "a repeat on the same transport is not new").toBe(1);
+    expect(() => broker.register(shellContext(), transport(), { methods: METHODS })).toThrow(
+      /already connected/,
+    );
+    expect(told, "a refused registration tells nothing").toBe(1);
+    broker.withdraw(lane);
+    const next = transport();
+    broker.register(shellContext(), next, { methods: METHODS });
+    expect(told, "a provider after a loss is new").toBe(2);
+    stop();
+    broker.withdraw(next);
+    broker.register(shellContext(), transport(), { methods: METHODS });
+    expect(told, "a stopped listener hears nothing").toBe(2);
+  });
+
+  it("item 588: a listener that throws never refuses the shell's registration, nor silences the others", () => {
+    const broker = new ShellProviderBroker();
+    broker.onRegistered(() => {
+      throw new Error("scripted listener failure");
+    });
+    let told = 0;
+    broker.onRegistered(() => {
+      told += 1;
+    });
+    expect(broker.register(shellContext(), transport(), { methods: METHODS })).toEqual({
+      registered: [...METHODS],
+    });
+    expect(told).toBe(1);
+  });
+
   it("refuses a shell dispatch from a non-loopback caller even with scope", async () => {
     const broker = new ShellProviderBroker();
     const lane = transport();

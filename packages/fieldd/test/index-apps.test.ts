@@ -32,6 +32,7 @@ import {
   IndexApps,
   type IndexAppsOptions,
   type IndexAppsReader,
+  newestOf,
 } from "../src/index-apps";
 import { IndexCatalog } from "../src/index-catalog";
 import { RpcCallError } from "../src/native-link";
@@ -816,6 +817,58 @@ describe("IndexApps — the row (MA-3a; MA §4.2, R23b, EL2)", () => {
     stamped.set(id("b"), { preview: { ...preview, id: "01JC4MA0PV0000000000000002" } });
     apps.restampIntents([id("b")]);
     expect(apps.table.get(id("b"))?.preview?.id, "restamped").toBe("01JC4MA0PV0000000000000002");
+    expect(apps.table.revision, "as one frame").toBe(revision + 1);
+  });
+
+  it("item 588: names the newest rows newest first, and never moves the table's own order", () => {
+    const row = (appId: string, publishedAt: number) => ({ appId, publishedAt }) as IndexCatalogApp;
+    // the worst case: a table that hands back its own array
+    const held = [row("a", 100), row("b", 300), row("c", 200)];
+    const table = { rows: () => held };
+    expect(newestOf(table, 2).map((each) => each.appId)).toEqual(["b", "c"]);
+    expect(
+      held.map((each) => each.appId),
+      "the table's own order",
+    ).toEqual(["a", "b", "c"]);
+  });
+
+  it("item 588: stamps the origin's preview state beside its preview, never a word the origin cannot mean, and drops it once the origin says none", async () => {
+    const preview: MadeAppPreview = {
+      id: "01JC4MA0PV0000000000000001",
+      digest: hex("jpeg"),
+      pageDigest: hex("page:b:1"),
+      capturedAt: 5_000,
+    };
+    const stamped = new Map<string, unknown>([
+      [id("a"), { previewState: "owed" }],
+      [id("b"), { preview, previewState: "failed" }],
+      [id("c"), { previewState: "drawing" }],
+      [id("d"), { previewState: "unknown" }],
+    ]);
+    const stamps = { of: (appId: string) => stamped.get(appId) } as AppIntentStamps;
+    const names = ["a", "b", "c", "d"];
+    const { apps, catalog } = appsOver(library(names.map((name, n) => app(name, 4 - n))), {
+      stamps,
+    });
+    catalog.land();
+    await advance(0);
+    expect(apps.table.get(id("a"))?.previewState, "owed rides the row").toBe("owed");
+    expect(apps.table.get(id("a")), "with no preview yet").not.toHaveProperty("preview");
+    expect(apps.table.get(id("b")), "failed rides beside the older preview").toMatchObject({
+      preview,
+      previewState: "failed",
+    });
+    expect(apps.table.get(id("c")), "a word the contract does not name").not.toHaveProperty(
+      "previewState",
+    );
+    expect(apps.table.get(id("d")), "the origin never says unknown").not.toHaveProperty(
+      "previewState",
+    );
+
+    const revision = apps.table.revision;
+    stamped.set(id("a"), { preview: { ...preview, id: "01JC4MA0PV0000000000000002" } });
+    apps.restampIntents([id("a")]);
+    expect(apps.table.get(id("a")), "drawn: the state goes").not.toHaveProperty("previewState");
     expect(apps.table.revision, "as one frame").toBe(revision + 1);
   });
 

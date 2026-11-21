@@ -2158,3 +2158,463 @@ describe("MadeAppService (MA-3b unit)", () => {
     });
   });
 });
+
+// ---- item 588 (2026-11-19): a made app's preview is drawn when it is published -------------------------------------
+
+/** A library that names its newest rows, as the daemon's adapter over the apps table does (the table's order). */
+class PublishRows extends FakeRows {
+  newest(limit: number): IndexCatalogApp[] {
+    const key = (row: IndexCatalogApp) => row.publishedAt ?? row.capturedAt ?? 0;
+    return [...this.apps.values()]
+      .sort((a, b) => key(b) - key(a) || (a.appId < b.appId ? -1 : a.appId > b.appId ? 1 : 0))
+      .slice(0, limit);
+  }
+}
+
+const published = (n: number, at: number, over: Record<string, unknown> = {}) =>
+  appRow(n, { publishedAt: at, ...over });
+
+/** Every app serve this desktop ever declared for `appId`, under any spelling. */
+const appSpecsEver = (bridge: FakeBridge, appId: string) =>
+  bridge.declared
+    .flat()
+    .filter((spec) => spec.serveId?.startsWith(`artifact-made-${appId.slice(0, 16)}-`) === true);
+
+/** A capture the row holds open until it lets go: asked, then answered as the shell would. While `holds()` says no, a
+ * call is answered at once, so a drawing the row does not watch (an open's) finishes before the one it holds. */
+function heldCapture(p: Parts, holds: () => boolean = () => true) {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let asked: () => void = () => undefined;
+  const wasAsked = new Promise<void>((resolve) => {
+    asked = resolve;
+  });
+  const fn = async (params: ShellWebContentsCaptureArtifactPreviewParams) => {
+    if (!holds()) return await p.capture.fn(params);
+    asked();
+    await held;
+    return await p.capture.fn(params);
+  };
+  return { fn, release: () => release(), wasAsked };
+}
+
+/** Whether the held capture is asked before the service has nothing left to do: never a wait past the work. */
+async function askedBeforeIdle(
+  capture: ReturnType<typeof heldCapture>,
+  svc: MadeAppService,
+): Promise<boolean> {
+  // a row that fails while the capture is held lets it go before its service's dispose waits on it
+  cleanup.push(() => capture.release());
+  return await Promise.race([capture.wasAsked.then(() => true), svc.settled().then(() => false)]);
+}
+
+describe("item 588: a made app's preview is drawn when it is published", () => {
+  it("draws a published app with no open: its port and preview id are minted, its own serve is declared for the capture alone under the login's gate, and the serve goes once it answers", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const row = p.rows.add(published(1, T0));
+    let asksBeforeDeclare = 0;
+    const svc = made(p, {
+      capturePreview: async (params) => {
+        if (appSpecsEver(p.bridge, row.appId).length === 0) asksBeforeDeclare += 1;
+        return await p.capture.fn(params);
+      },
+    });
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+
+    const record = recordOf(p, row.appId);
+    const previewId = previewIdOf(p, row.appId);
+    expect(record?.listenPort, "its port, by the made rule, kept for life").toBe(appPort(row));
+    expect(record?.state, "nothing listens until a person opens it").toBe("closed");
+    expect(record?.lastOpenedAt, "never opened").toBeUndefined();
+    const declared = appSpecsEver(p.bridge, row.appId);
+    expect(declared.length, "one serve, declared for the capture").toBeGreaterThan(0);
+    const serveId = declared[0]?.serveId ?? "<none>";
+    expect(
+      declared[0]?.allow,
+      "the login's gate: any device signed in as the person, for the window alone",
+    ).toEqual([glob(TEST_LOGIN)]);
+    expect(declared[0]?.listenPort).toBe(appPort(row));
+    expect(asksBeforeDeclare, "main is never asked before the serve is declared").toBe(0);
+    expect(p.capture.calls).toEqual([
+      { artifactId: previewId, url: `https://${HOST}:${appPort(row)}`, allowHosts: HOSTS },
+    ]);
+    expect(p.bridge.removedAt(serveId), "the serve goes").toBeGreaterThan(
+      p.bridge.firstDeclaredAt(serveId),
+    );
+    expect(p.bridge.native.has(serveId), "nothing of it stands").toBe(false);
+    expect(appSpecOf(p.bridge, row.appId), "nor is it declared").toBeUndefined();
+    const preview = {
+      id: previewId,
+      digest: sha256(readFileSync(capturedFile(p, previewId))),
+      pageDigest: row.digest,
+      capturedAt: T0,
+    };
+    expect(record?.preview).toEqual(preview);
+    expect(svc.of(row.appId), "the row's stamp: drawn, no state").toEqual({ preview });
+    expect(p.stamps, "the stamp is announced").toContainEqual([row.appId]);
+  });
+
+  it("never asks main while the serve has not reported its URL: at the bound the serve goes, and the page is failed", async () => {
+    const p = parts({ rows: new PublishRows() });
+    p.bridge.autoCarry = false;
+    const row = p.rows.add(published(1, T0));
+    const svc = made(p, { captureServeWaitMs: 20 });
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    const declared = appSpecsEver(p.bridge, row.appId);
+    expect(declared.length, "its serve was declared").toBeGreaterThan(0);
+    const serveId = declared[0]?.serveId ?? "<none>";
+    expect(p.capture.calls, "main is never asked").toEqual([]);
+    expect(p.bridge.removeAttempts, "the serve is removed at the bound").toContain(serveId);
+    expect(appSpecOf(p.bridge, row.appId), "and no longer declared").toBeUndefined();
+    expect(recordOf(p, row.appId)?.captureFailed).toEqual({ pageDigest: row.digest, at: T0 });
+    expect(svc.of(row.appId)).toEqual({ previewState: "failed" });
+  });
+
+  it("removes the serve after a failed capture, says failed for that page, and owes it no second capture until the app opens", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const row = p.rows.add(published(1, T0));
+    let fail = true;
+    const svc = made(p, {
+      capturePreview: async (params) => {
+        if (fail) throw new Error("scripted capture failure");
+        return await p.capture.fn(params);
+      },
+    });
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    const serveId = appSpecsEver(p.bridge, row.appId)[0]?.serveId ?? "<none>";
+    expect(p.bridge.native.has(serveId), "the serve goes after a failure too").toBe(false);
+    expect(appSpecOf(p.bridge, row.appId)).toBeUndefined();
+    expect(recordOf(p, row.appId)?.captureFailed).toEqual({ pageDigest: row.digest, at: T0 });
+    expect(recordOf(p, row.appId)?.preview, "no preview").toBeUndefined();
+    expect(svc.of(row.appId), "the row says why").toEqual({ previewState: "failed" });
+    expect(p.stamps, "and it is announced").toContainEqual([row.appId]);
+
+    const declaredBefore = appSpecsEver(p.bridge, row.appId).length;
+    await svc.reconsider();
+    await svc.settled();
+    expect(appSpecsEver(p.bridge, row.appId), "nothing is declared for it again").toHaveLength(
+      declaredBefore,
+    );
+    expect(p.capture.calls, "and main is not asked again").toEqual([]);
+
+    // an open draws it again, and its preview clears the failure
+    fail = false;
+    p.clock.now += 1_000;
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    await svc.settled();
+    expect(recordOf(p, row.appId)?.preview?.pageDigest).toBe(row.digest);
+    expect(recordOf(p, row.appId)?.captureFailed, "the failure is cleared").toBeUndefined();
+    expect(svc.of(row.appId)?.previewState, "and the row says nothing more").toBeUndefined();
+  });
+
+  it("asks main nothing when the serve's declare fails, and says failed for that page", async () => {
+    const p = parts({ rows: new PublishRows() });
+    p.bridge.failDeclare = true;
+    const row = p.rows.add(published(1, T0));
+    const svc = made(p);
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    expect(p.capture.calls).toEqual([]);
+    expect([...p.bridge.native.keys()].filter((id) => id.includes(row.appId.slice(0, 16)))).toEqual(
+      [],
+    );
+    expect(svc.of(row.appId)).toEqual({ previewState: "failed" });
+  });
+
+  it("removes the capture's serve when fieldd stops mid-capture, though every opened serve stays up", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const opened1 = p.rows.add(appRow(2));
+    let holding = false;
+    const capture = heldCapture(p, () => holding);
+    const svc = made(p, { capturePreview: capture.fn });
+    await svc.start();
+    expect(await opened(svc, opened1.appId)).toEqual(serving(appPort(opened1)));
+    // the open draws its app, which has no preview, and that drawing ends first: the capture held is the publish's
+    await svc.settled();
+    const row = p.rows.add(published(1, T0 + 1_000));
+    holding = true;
+    await svc.reconsider();
+    expect(await askedBeforeIdle(capture, svc), "the publish's capture is asked").toBe(true);
+    const serveId = appSpecsEver(p.bridge, row.appId)[0]?.serveId ?? "<none>";
+    const openedId = appSpecOf(p.bridge, opened1.appId)?.serveId ?? "<none>";
+    const stop = svc.dispose();
+    capture.release();
+    await stop;
+    expect(p.bridge.removeAttempts, "the capture's serve goes at the stop").toContain(serveId);
+    expect(p.bridge.native.has(serveId)).toBe(false);
+    expect(
+      p.bridge.native.has(openedId),
+      "an opened app's serve stays up (a restart adopts it)",
+    ).toBe(true);
+  });
+
+  it("owes the capture while the shell cannot draw (declaring nothing), says owed, and draws it when the shell can", async () => {
+    const p = parts({ rows: new PublishRows() });
+    p.available = false;
+    const row = p.rows.add(published(1, T0));
+    const svc = made(p);
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    expect(appSpecsEver(p.bridge, row.appId), "nothing is declared").toEqual([]);
+    expect(p.capture.calls).toEqual([]);
+    expect(svc.of(row.appId), "the row says it is owed").toEqual({ previewState: "owed" });
+    expect(p.stamps, "the owed state is announced").toContainEqual([row.appId]);
+
+    // the shell registers: the daemon asks the service to reconsider
+    p.available = true;
+    await svc.reconsider();
+    await svc.settled();
+    expect(p.capture.calls).toHaveLength(1);
+    expect(svc.of(row.appId)?.preview?.pageDigest).toBe(row.digest);
+    expect(svc.of(row.appId)?.previewState, "drawn: no state").toBeUndefined();
+
+    // the shell registers again (an Electron restart that re-adopts the daemons): nothing drawn is drawn again
+    const declaredBefore = appSpecsEver(p.bridge, row.appId).length;
+    await svc.reconsider();
+    await svc.settled();
+    expect(p.capture.calls, "a second registration draws nothing more").toHaveLength(1);
+    expect(appSpecsEver(p.bridge, row.appId), "and declares nothing for it").toHaveLength(
+      declaredBefore,
+    );
+  });
+
+  it("owes no capture without a linked login, says owed, and declares nothing", async () => {
+    const p = parts({ rows: new PublishRows(), login: null });
+    const row = p.rows.add(published(1, T0));
+    const svc = made(p);
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    expect(appSpecsEver(p.bridge, row.appId)).toEqual([]);
+    expect(p.capture.calls).toEqual([]);
+    expect(svc.of(row.appId)).toEqual({ previewState: "owed" });
+  });
+
+  it("owes only the newest 24, newest first, one capture at a time; an older app is drawn at its open, as before", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const rows = Array.from({ length: 30 }, (_, n) => p.rows.add(published(n + 1, T0 + n * 1_000)));
+    let inFlight = 0;
+    let most = 0;
+    const svc = made(p, {
+      capturePreview: async (params) => {
+        inFlight += 1;
+        most = Math.max(most, inFlight);
+        try {
+          return await p.capture.fn(params);
+        } finally {
+          inFlight -= 1;
+        }
+      },
+    });
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    const newest = rows.slice(6).reverse();
+    expect(p.capture.calls.map((call) => call.artifactId)).toEqual(
+      newest.map((row) => previewIdOf(p, row.appId)),
+    );
+    expect(most, "one at a time").toBe(1);
+    for (const row of rows.slice(0, 6)) {
+      expect(recordOf(p, row.appId), `app ${row.title}: no port minted`).toBeUndefined();
+      expect(svc.of(row.appId), `app ${row.title}: today's words`).toBeUndefined();
+    }
+  });
+
+  it("never takes the shared ceiling's last place: at one place left the capture waits, at two it runs", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const row = p.rows.add(published(1, T0));
+    let others = ARTIFACT_LIMITS.LOCAL_OBJECTS - 1;
+    const svc = made(p, { otherLiveObjects: () => others });
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    expect(appSpecsEver(p.bridge, row.appId), "the last place is an open's").toEqual([]);
+    expect(svc.of(row.appId)).toEqual({ previewState: "owed" });
+
+    others = ARTIFACT_LIMITS.LOCAL_OBJECTS - 2;
+    await svc.reconsider();
+    await svc.settled();
+    expect(p.capture.calls).toHaveLength(1);
+    expect(svc.of(row.appId)?.previewState).toBeUndefined();
+  });
+
+  it("lets an open that comes during the capture take its serve over: one capture, and the open's serve stays", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const row = p.rows.add(published(1, T0));
+    const capture = heldCapture(p);
+    const svc = made(p, { capturePreview: capture.fn });
+    await svc.start();
+    await svc.reconsider();
+    expect(await askedBeforeIdle(capture, svc), "the publish's capture is asked").toBe(true);
+    p.clock.now += 1_000;
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    capture.release();
+    await svc.settled();
+    const spec = appSpecOf(p.bridge, row.appId);
+    expect(spec, "the open's serve is declared").toBeDefined();
+    expect(p.bridge.native.has(spec?.serveId ?? "<none>"), "and stands").toBe(true);
+    expect(recordOf(p, row.appId)?.state).toBe("open");
+    expect(p.capture.calls, "one capture, the publish's").toHaveLength(1);
+    expect(recordOf(p, row.appId)?.preview?.pageDigest).toBe(row.digest);
+  });
+
+  it("never owes a row of another desktop, a page its library did not keep, or one with no digest", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const other = p.rows.add(published(1, T0 + 3_000, { device: "01J9ZK3M5Q8XR2V7N4B6C1D0ZZ" }));
+    const unkept = p.rows.add(published(2, T0 + 2_000, { availability: "not_captured" }));
+    const undigested = p.rows.add(published(3, T0 + 1_000, { digest: undefined }));
+    const svc = made(p);
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    expect(p.capture.calls).toEqual([]);
+    for (const row of [other, unkept, undigested]) {
+      expect(recordOf(p, row.appId), row.title).toBeUndefined();
+      expect(svc.of(row.appId), row.title).toBeUndefined();
+    }
+  });
+
+  it("leaves nothing wanted of a capture cut short by a crash: the next start's sweep removes its serve", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const row = p.rows.add(published(1, T0));
+    const capture = heldCapture(p);
+    const first = made(p, { capturePreview: capture.fn });
+    await first.start();
+    await first.reconsider();
+    expect(await askedBeforeIdle(capture, first), "the publish's capture is asked").toBe(true);
+    const serveId = appSpecsEver(p.bridge, row.appId)[0]?.serveId ?? "<none>";
+    expect(p.bridge.native.has(serveId), "the capture's serve stands").toBe(true);
+
+    // a crash: the first service never finishes; a new one starts on the same desktop
+    const next = made({ ...p, capture: new FakeCapture(p.dataDir) });
+    await next.start();
+    expect(p.bridge.removeAttempts, "the sweep removes it").toContain(serveId);
+    expect(p.bridge.native.has(serveId)).toBe(false);
+    capture.release();
+  });
+
+  it("at the registry's cap passes over an owed app with no record, and draws an older one that holds a record", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const newer = p.rows.add(published(1, T0 + 2));
+    const older = p.rows.add(published(2, T0 + 1));
+    // the registry full: the older app's own record, and reservations in every other place
+    const taken = appPort(older);
+    const ports: number[] = [];
+    for (
+      let port = ARTIFACT_LIMITS.LISTEN_PORT_MIN;
+      ports.length < MADE_APP_LIMITS.INTENTS - 1;
+      port += 1
+    )
+      if (port !== taken) ports.push(port);
+    const record = (appId: string, listenPort: number) => ({
+      appId,
+      listenPort,
+      state: "closed",
+      retiringServeIds: [],
+      createdAt: T0,
+      updatedAt: T0,
+    });
+    const apps = [
+      ...ports.map((port, i) => record(hex(`reserved-${i}`), port)),
+      record(older.appId, taken),
+    ];
+    mkdirSync(join(p.dataDir, "registries"), { recursive: true });
+    writeFileSync(registryPath(p), JSON.stringify({ v: 1, apps }));
+    const svc = made(p);
+    await svc.start();
+    expect(svc.health().apps).toBe(MADE_APP_LIMITS.INTENTS);
+    await svc.reconsider();
+    await svc.settled();
+    expect(appSpecsEver(p.bridge, newer.appId), "no record, no place: nothing declared").toEqual(
+      [],
+    );
+    expect(
+      appSpecsEver(p.bridge, older.appId),
+      "its record holds a place: its serve declared",
+    ).toHaveLength(1);
+    expect(p.capture.calls.map((call) => call.artifactId)).toEqual([previewIdOf(p, older.appId)]);
+  });
+  it("removes the serve after a capture that timed out, as after any failure, and says failed", async () => {
+    const p = parts({ rows: new PublishRows() });
+    const row = p.rows.add(published(1, T0));
+    const svc = made(p, {
+      // the shell provider's own deadline (ARTIFACT_PREVIEW_LIMITS.DEADLINE_MS) rejects the call so
+      capturePreview: async () => {
+        throw new RpcCallError(
+          "TIMEOUT",
+          "shell.webcontents.captureArtifactPreview timed out",
+          true,
+          { service: "shell", state: "timeout" },
+        );
+      },
+    });
+    await svc.start();
+    await svc.reconsider();
+    await svc.settled();
+    const serveId = appSpecsEver(p.bridge, row.appId)[0]?.serveId ?? "<none>";
+    expect(serveId, "a serve was declared for the capture").not.toBe("<none>");
+    expect(p.bridge.native.has(serveId), "the serve goes after a timeout").toBe(false);
+    expect(appSpecOf(p.bridge, row.appId)).toBeUndefined();
+    expect(recordOf(p, row.appId)?.captureFailed).toEqual({ pageDigest: row.digest, at: T0 });
+    expect(svc.of(row.appId), "the row says why").toEqual({ previewState: "failed" });
+  });
+
+  it("draws an opened app again once its preview is older than the floor, never sooner", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    await svc.settled();
+    expect(p.capture.calls).toHaveLength(1);
+    // MADE_APP_LIMITS.REDRAW_FLOOR_MS, ten minutes
+    p.clock.now += 600_000 - 1;
+    await svc.open({ appId: row.appId });
+    await svc.settled();
+    expect(p.capture.calls, "within the floor: none").toHaveLength(1);
+    p.clock.now += 1;
+    await svc.open({ appId: row.appId });
+    await svc.settled();
+    expect(p.capture.calls, "at the floor: drawn again").toHaveLength(2);
+    expect(recordOf(p, row.appId)?.preview?.capturedAt).toBe(T0 + 600_000);
+  });
+
+  it("a redraw that fails is tried again at the next open, never held by the floor", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(1));
+    let fail = false;
+    const svc = made(p, {
+      capturePreview: async (params) => {
+        if (fail) throw new Error("scripted capture failure");
+        return await p.capture.fn(params);
+      },
+    });
+    await svc.start();
+    expect(await opened(svc, row.appId)).toEqual(serving(appPort(row)));
+    await svc.settled();
+    expect(p.capture.calls).toHaveLength(1);
+    // past MADE_APP_LIMITS.REDRAW_FLOOR_MS the redraw fails: the preview stays the one drawn first
+    p.clock.now += 600_000;
+    fail = true;
+    await svc.open({ appId: row.appId });
+    await svc.settled();
+    expect(recordOf(p, row.appId)?.preview?.capturedAt, "the old drawing stands").toBe(T0);
+    // a second later the floor still counts from that drawing, so the next open draws
+    fail = false;
+    p.clock.now += 1_000;
+    await svc.open({ appId: row.appId });
+    await svc.settled();
+    expect(p.capture.calls, "drawn at the next open").toHaveLength(2);
+    expect(recordOf(p, row.appId)?.preview?.capturedAt).toBe(T0 + 601_000);
+  });
+});
