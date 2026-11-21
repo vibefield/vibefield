@@ -44,8 +44,9 @@ export const simulatorManifest: PluginManifestV1 = {
   id: SIMULATOR_TYPE,
   version: "0.1.0",
   title: "iOS Simulator",
+  // decided 2026-11-19: a plugin that asks for no account says so, last in its own description
   description:
-    "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
+    "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them. No account needed.",
   // item 565 (2026-11-19): CoreSimulator is macOS's alone, so fieldd refuses this plugin elsewhere
   engines: { app: ">=0.0.0", contracts: "^0.1.0", platforms: ["darwin"] },
   entries: { renderer: "./dist/renderer.js" },

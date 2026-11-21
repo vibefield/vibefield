@@ -84,7 +84,7 @@
       }
     ]
   },
-  "description": "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.",
+  "description": "Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them. No account needed.",
   "engines": {
     "app": ">=0.0.0",
     "contracts": "^0.1.0",

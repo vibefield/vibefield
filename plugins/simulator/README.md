@@ -1,8 +1,8 @@
 # iOS Simulator
 
-Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them.
+Run iPhones from Xcode on your desk: choose a model and an iOS version, then tap and type into them. No account needed.
 
-`vibefield.simulator` is one of VibeField's official plugins. It ships Built in with the app, because most of what
+`vibefield.simulator` is one of VibeField's official plugins. It comes with VibeField, because most of what
 it needs lives in the app, outside this folder (below).
 
 ## What your Mac needs
@@ -39,8 +39,8 @@ carry:
 - **The SDK's setup door**, `SimulatorSetup` (`packages/plugin-sdk/src/desk.ts`).
 - **The desk's lending of devices** to the object (`packages/field-app/src/surfaces/live/simulator-devices.ts`).
 
-So the plugin works only inside a VibeField that carries these. That is why it ships Built in: a copy from a market
-alone would not have them.
+So the plugin works only inside a VibeField that carries these. That is why it comes with VibeField: a copy from a
+market alone would not have them.
 
 ## Two generated files
 
