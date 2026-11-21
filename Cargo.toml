@@ -366,7 +366,10 @@ truffle-core = "=0.7.28"
 # 1.20, ghosttea #106), and builds its own daemons against quinn-udp 0.5.16 (#107). No engine change: Ghostty
 # 0fa3d577 and its three patches stand. The Swift Truffle pin stays 0.7.26, which 0.16.0 declares too. Tag
 # v0.16.0 = 3e719397. Cargo.lock moves by the six crates alone.
-ghosttea = "=0.16.0"
+# EL8 (2026-11-21): 0.16.1's Swift package takes Truffle 0.7.29 (ghosttea #109), so the kit's Swift
+# Truffle pin moves to 0.7.29 in this event; truffle-core here stays =0.7.28. No Rust source of the
+# six crates changed between the tags. Tag v0.16.1 = 55c63c53. Cargo.lock moves by the six crates alone.
+ghosttea = "=0.16.1"
 # RETIRED 2026-09-14 (TM-1): `ghosttea-truffle = "=0.11.1"`, GT-4's mesh half of
 # the terminal floor. It served TSP1 against an IN-PROCESS session registry
 # (`TruffleTerminalMesh::serve` takes ghosttea's `Registry` by value), which is

@@ -4106,6 +4106,9 @@ mod tests {
     ///
     /// *2026-11-18 (the EL8 to ghosttea 0.16.0):* the same holds at 0.16.0. Between the two tags no
     /// changed line of ghosttea's Rust sources names the activity.
+    ///
+    /// *2026-11-21 (the EL8 to ghosttea 0.16.1):* the same holds at 0.16.1, whose Rust sources are
+    /// 0.16.0's.
     #[test]
     fn a_row_carries_its_panes_activity_kind_and_no_more_of_the_sample() {
         let sampled = |kind: &str, observed_at_ms: u64| {

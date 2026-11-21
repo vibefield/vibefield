@@ -24,7 +24,9 @@ import PackageDescription
 // which ghosttea 0.14.0 declares exact, until a ghosttea declares 0.7.27.
 // *2026-11-12 (the EL8 to ghosttea 0.15.0, libghostty-vt 1.0):* it still stays 0.7.26, which 0.15.0 declares exact too.
 // *2026-11-18 (the EL8 to ghosttea 0.16.0):* it still stays 0.7.26, which 0.16.0 declares exact too.
-let truffleRelease: Version? = "0.7.26"
+// *2026-11-21 (the EL8 to ghosttea 0.16.1):* it moves to 0.7.29, which 0.16.1 declares exact (ghosttea #109); the
+// desktop's core and sidecars stay 0.7.28.
+let truffleRelease: Version? = "0.7.29"
 let truffleDependency: Package.Dependency =
   if let release = truffleRelease {
     .package(url: "https://github.com/vibecook-dev/truffle.git", exact: release)
@@ -36,7 +38,7 @@ let truffleDependency: Package.Dependency =
 // siblings.lock.json's ghosttea `release.swift`, never by hand: the exact tag in the committed shape, and the checkout
 // (`../ghosttea-0.11.2`, reached through `.window/ghosttea` so the path package keeps the package's own identity, as
 // `.window/truffle` does) while `pnpm siblings use ghosttea` renders it nil.
-let ghostteaRelease: Version? = "0.16.0"
+let ghostteaRelease: Version? = "0.16.1"
 let ghostteaDependency: Package.Dependency =
   if let release = ghostteaRelease {
     .package(url: "https://github.com/vibecook-dev/ghosttea.git", exact: release)

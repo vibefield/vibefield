@@ -6,17 +6,10 @@
     "version": "0.7.28"
   },
   "tailscaleKit": {
-    "truffle": "0.7.26",
+    "truffle": "0.7.29",
     "revision": "d1dc45d039edb7759ecbee6ba2aea0c4bca884b8"
   },
   "go": [
-    {
-      "version": "go1.27.3",
-      "texts": [
-        "08c323783124",
-        "f1a3af7e2570"
-      ]
-    },
     {
       "version": "go1.27.4",
       "texts": [
@@ -94,13 +87,6 @@
       "version": "v1.3.0",
       "texts": [
         "abdf124ba719"
-      ]
-    },
-    {
-      "path": "github.com/klauspost/compress",
-      "version": "v1.20.0",
-      "texts": [
-        "000c1296f033"
       ]
     },
     {

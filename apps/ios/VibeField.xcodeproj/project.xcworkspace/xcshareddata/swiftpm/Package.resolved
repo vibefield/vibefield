@@ -6,8 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vibecook-dev/ghosttea.git",
       "state" : {
-        "revision" : "3e71939735f6594305bf20c7e7e363867eacf1fa",
-        "version" : "0.16.0"
+        "revision" : "55c63c53fe2bd249d5ff847f6e63754c0b5b771b",
+        "version" : "0.16.1"
       }
     },
     {
@@ -24,8 +24,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/vibecook-dev/truffle.git",
       "state" : {
-        "revision" : "101889f676d32989e2c32295c3b608ccd5972c02",
-        "version" : "0.7.26"
+        "revision" : "6d485b753da160c9eef10245be37eadb85e2f7af",
+        "version" : "0.7.29"
       }
     }
   ],

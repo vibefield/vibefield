@@ -85,6 +85,9 @@ use tokio::sync::{mpsc, oneshot};
 /// after `hello` is at :2026 and `events-lost` at :2052. So this client still hears
 /// every event the service sends. The line numbers in the note above are 0.15.0's;
 /// in 0.16.0 the per-connection minor is recorded at :1990.
+///
+/// *2026-11-21 (the EL8 to ghosttea 0.16.1):* the pin is 0.16.1, which serves the same 1.20:
+/// no Rust source of the crates changed between the two tags.
 pub const PROTOCOL_MAJOR: u16 = 1;
 pub const PROTOCOL_MINOR: u16 = 17;
 
