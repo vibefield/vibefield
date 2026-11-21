@@ -545,14 +545,15 @@ const POPUP_OPEN = `document.querySelector('${POPUP}') !== null`;
 const POPUP_SHUT = `document.querySelector('${POPUP}') === null`;
 const PALETTE_OPEN = `document.querySelector(".vf-palette-layer[data-visible]") !== null`;
 const ME_OPEN = `document.querySelector(".vf-me[data-open]") !== null`;
-/** Item 646 (2026-11-21): what the window was when a row threw, read once in its catch: the desk's mount and
- * status, which of the popup, the palette and the Me menu stand, and the focused element by its tag and first
- * class. Facts of the chrome only, never an object's text. */
+/** Item 646 (2026-11-21): what the window was when a row threw, read once in its catch: the desk's generation,
+ * mount and status, which of the popup, the palette and the Me menu stand, and the focused element by its tag
+ * and first class. Facts of the chrome only, never an object's text. */
 const WINDOW_FACTS = `(() => {
   const d = globalThis.__vfDesk;
   const a = document.activeElement;
   const first = a === null ? "" : String(a.className ?? "").split(" ")[0];
   return JSON.stringify({
+    generation: d?.generation ?? null,
     mount: d?.mount ?? null,
     desk: d?.status?.().state ?? null,
     popup: ${POPUP_OPEN},
@@ -561,6 +562,11 @@ const WINDOW_FACTS = `(() => {
     focus: a === null ? null : a.tagName + (first === "" ? "" : "." + first),
   });
 })()`;
+/** Which desk stands: the door's document generation and its mount within it (-1: no door). */
+interface DeskAt {
+  readonly generation: number;
+  readonly mount: number;
+}
 /** "Reading the plugin list…" (§9), the foot while a read runs */
 const READING = "Reading the plugin list…";
 /** The read on open done: the foot says it no more. */
@@ -734,12 +740,22 @@ export async function marketRunRows(
 
   // the desk under it
   const census = (): Promise<Record<string, number>> => js("globalThis.__vfDesk.census()");
-  const mount = (): Promise<number> => js("globalThis.__vfDesk?.mount ?? -1");
-  const remounted = (label: string, from: number): Promise<void> =>
+  // A plugin new to the window's realm reopens the board on a new engine (DK-9's GENERATION move), whose
+  // desk counts its mounts from 0 again, so a remount is the door's generation or its mount moved, never
+  // the mount alone grown (item 651, 2026-11-21)
+  const mount = (): Promise<DeskAt> =>
+    js(
+      "({ generation: globalThis.__vfDesk?.generation ?? -1, mount: globalThis.__vfDesk?.mount ?? -1 })",
+    );
+  const remounted = (label: string, from: DeskAt): Promise<void> =>
     until(
-      `${label} (the mount from ${from})`,
+      `${label} (the desk from generation ${from.generation}, mount ${from.mount})`,
       30_000,
-      `(globalThis.__vfDesk?.mount ?? -1) > ${from} && globalThis.__vfDesk.status().state === "ready"`,
+      `(() => {
+        const d = globalThis.__vfDesk;
+        if (d === undefined || d.status().state !== "ready") return false;
+        return d.generation !== ${from.generation} || d.mount !== ${from.mount};
+      })()`,
     );
   const drawsAs = async (type: string): Promise<unknown> =>
     (await js<{ state: unknown }>(`globalThis.__vfDesk.words(${JSON.stringify(type)})`)).state;
@@ -1023,6 +1039,7 @@ export async function marketRunRows(
     // moved on (its second, signed by the same key, copied over the one fieldd reads)
     SETUP: async () => {
       const next = fixture.next as MarketNext;
+      const from = await mount();
       const prepared = await prepare(installed.id);
       await d.request("plugins.install.commit", { candidate: prepared.candidate });
       problems.push(
@@ -1032,6 +1049,9 @@ export async function marketRunRows(
           installed.version,
         ).map((p) => `SETUP: ${p}`),
       );
+      // the install reopens the board on a new engine; COUNT's palette waits until that desk stands
+      // (item 651, 2026-11-21)
+      await remounted("the desk remounted with the clock's kind", from);
       d.copy(next.signature, next.intoSignature);
       d.copy(next.index, next.into);
       facts["SETUP"] = { installed: installed.version, next: next.version };
