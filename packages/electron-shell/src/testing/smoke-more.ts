@@ -57,6 +57,9 @@ export const SHOW_ON_BOARD = ["Show on the pegboard", "Show them on the pegboard
 
 /** "Nothing to discover yet" (§9; `frame/plugins/plugins-words.ts` NO_REGISTRY.title). */
 export const NOTHING_TO_DISCOVER = "Nothing to discover yet";
+/** "Reading the plugin list…" (§9 "Reading the list"; `frame/plugins/plugins-words.ts` READING): Discover's
+ * body while an opening's first read runs. */
+const READING_LIST = "Reading the plugin list…";
 
 const near = (a: number, b: number, eps = 1.5): boolean => Math.abs(a - b) <= eps;
 
@@ -314,6 +317,8 @@ const BOARD_SHUT = `(() => {
 })()`;
 const POPUP_OPEN = `document.querySelector('.vf-plugins-pop[role="dialog"]') !== null`;
 const POPUP_SHUT = `document.querySelector('.vf-plugins-pop[role="dialog"]') === null`;
+/** The opening's read answered: Discover's body says "Reading the plugin list…" no more. */
+const BODY_READ = `!(document.querySelector('.vf-plugins-pop[role="dialog"] .vf-plugins-body')?.textContent ?? "").includes(${JSON.stringify(READING_LIST)})`;
 /** MK-6 (2026-11-21): what the board and the frame were when a board wait ran out, read once at the
  * throw: the tray's open, held and slide, whether the popup stands, and the focused element by its
  * tag and first class. Facts of the chrome only, never an object's text. */
@@ -398,6 +403,9 @@ export async function moreRows(d: MoreRowsDriver): Promise<string[]> {
     let seen: PopupBrief = { open: false, tab: null, body: "" };
     try {
       await until(`Plugins open from the pill's ${how}`, 5_000, POPUP_OPEN);
+      // an opening's first read says "Reading the plugin list…" until fieldd answers, so the body is
+      // judged once the read has answered, never on the popup's first frame (item 650, 2026-11-21)
+      await until(`Plugins' read answered after the pill's ${how}`, 10_000, BODY_READ);
       seen = await js<PopupBrief>(POPUP_BRIEF);
     } catch (error) {
       problems.push(`MORE: ${error instanceof Error ? error.message : String(error)}`);
