@@ -471,7 +471,63 @@ enum Remote {
     RowEdit(name: "terminal.succeeds null", path: [.key("terminal"), .key("succeeds")], value: .null),
     .monitor("inputUsed \"yes\"", [.key("inputUsed")], .string("yes")),
     .monitor("inputUsed null", [.key("inputUsed")], .null),
+    // PF-3 — a model switch offer is whole or absent: its three parts typed and bounded, `null` neither
+    RowEdit(name: "modelSwitch null", path: [.key("modelSwitch")], value: .null),
+    RowEdit(
+      name: "modelSwitch names no persistence", path: [.key("modelSwitch")],
+      value: .object(["model": .bool(true), "controls": .array([.string("effort")])])),
+    RowEdit(
+      name: "modelSwitch.model \"yes\"", path: [.key("modelSwitch")],
+      value: .object([
+        "model": .string("yes"), "controls": .array([]), "persistence": .string("session"),
+      ])),
+    RowEdit(
+      name: "modelSwitch.controls of 17", path: [.key("modelSwitch")],
+      value: .object([
+        "model": .bool(true), "controls": .array(Array(repeating: .string("effort"), count: 17)),
+        "persistence": .string("session"),
+      ])),
+    RowEdit(
+      name: "modelSwitch.controls holds \"\"", path: [.key("modelSwitch")],
+      value: .object(["model": .bool(true), "controls": .array([.string("")]), "persistence": .string("session")])),
   ]
+
+  /// PF-3 — a run's model switch offer is read whole, with a word this build never heard of kept as it came; a row
+  /// with none reads as none.
+  @Test func aModelSwitchOfferIsReadWholeAndItsOpenWordsKept() throws {
+    let row = try Remote.turnRow()
+    #expect(try AgentRemoteRow(json: row).modelSwitch == nil)
+    let offered = edited(
+      row, [.key("modelSwitch")],
+      .object([
+        "model": .bool(true), "controls": .array([.string("effort"), .string("a-newer-role")]),
+        "persistence": .string("a-newer-word"), "later": .int(1),
+      ]))
+    let offer = try #require(try AgentRemoteRow(json: offered).modelSwitch)
+    #expect(offer.model)
+    #expect(offer.controls == ["effort", "a-newer-role"])
+    #expect(offer.persistence == "a-newer-word")
+    #expect(offer.unknownFields == ["later"])
+  }
+
+  /// PF-3 — the switch's answer: sent, or a refusal that says why; an answer this build predates is never read as
+  /// sent. The change it asks is one model, or one control's value.
+  @Test func theSwitchAnswersSentOrARefusalWithItsReason() throws {
+    #expect(try AgentSwitchModelResult(json: .object(["status": .string("sent")])).sent)
+    let refused = try AgentSwitchModelResult(
+      json: .object(["status": .string("rejected"), "reason": .string("working"), "retryable": .bool(false)]))
+    #expect(!refused.sent)
+    #expect(refused.reason == "working")
+    #expect(refused.retryable == false)
+    #expect(throws: (any Error).self) { try AgentSwitchModelResult(json: .object(["status": .string("rejected")])) }
+    #expect(throws: (any Error).self) { try AgentSwitchModelResult(json: .object(["status": .string("confirmed")])) }
+    #expect(
+      AgentSwitchModelChange.model(id: "sonnet[1m]").json
+        == .object(["kind": .string("model"), "modelId": .string("sonnet[1m]")]))
+    #expect(
+      AgentSwitchModelChange.control(id: "effort", value: "high").json
+        == .object(["kind": .string("control"), "controlId": .string("effort"), "value": .string("high")]))
+  }
 
   /// T8 — each edit refuses the row, named by its key; its unedited baseline reads first.
   @Test(arguments: refusals) func aRowThisBuildCannotReadIsRefusedByKey(edit: RowEdit) throws {

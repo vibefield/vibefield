@@ -128,7 +128,12 @@ public func fieldBubble(
     // Its one reader, the 30 s rule, retires: the row's `stale` is the owner's.
     lastEvidenceAt: nil,
     join: join,
-    catalogEntry: catalog.entry(for: provider))
+    catalogEntry: catalog.entry(for: provider),
+    // PF-3 — only an observed run's offer is drawn: a switch is asked of an agent whose turns the owner reads
+    modelSwitch: observed
+      ? board.modelSwitch.map {
+        AgentModelSwitch(model: $0.model, controls: $0.controls, persistence: $0.persistence)
+      } : nil)
   return FieldBubble(
     id: row.visualId, project: project, detail: detail, status: status, identityKey: identityKey,
     createdAt: createdAt, agent: facet, stale: stale, unread: monitor.unread && !suppressUnread, host: host,

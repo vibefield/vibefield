@@ -1,5 +1,6 @@
 import FieldAgents
 import FieldMesh
+import FieldProduct
 import FieldTerminal
 import Foundation
 import SwiftUI
@@ -197,6 +198,57 @@ struct LiveCardBandTests {
     #expect(FieldHomeModel.liveCardReadout(Self.agent(context: nil))?.contextPercent == nil)
     // drawn heavier from 80, as a desktop pane's meter is
     #expect(FieldHomeModel.liveCardContextHot == 80)
+  }
+
+  @Test("the switch list says a refusal in the phone's words, and any other reason as the owner said it (PF-3)")
+  func theSwitchsWords() {
+    #expect(ModelSwitch.refusal("working") == "It's mid-turn. Ask again when it's idle.")
+    #expect(ModelSwitch.refusal("blocked") == "It's waiting on an answer. Ask again after.")
+    #expect(ModelSwitch.refusal("the adapter names no model switch") == "It couldn't take that: the adapter names no model switch.")
+    // the owner's sentence keeps one full stop, never two
+    #expect(ModelSwitch.refusal("not offered.") == "It couldn't take that: not offered.")
+    #expect(ModelSwitch.unreachable("studio") == "Couldn't reach studio.")
+    #expect(ModelSwitch.keeps("Atlas") == "Atlas keeps this for its new sessions too.")
+  }
+
+  @Test("the serving model is the listed one the readout names; Effort is its own, else the one every model shares (PF-3)")
+  func theSwitchsServingModel() throws {
+    func model(_ id: String, _ label: String, effort: [String]?) throws -> AgentModelChoice {
+      let controls: [JSONValue] =
+        effort.map { values in
+          [
+            .object([
+              "id": .string("effort"), "label": .string("Effort"), "role": .string("effort"),
+              "values": .array(values.map { .object(["id": .string($0), "label": .string($0.capitalized)]) }),
+            ])
+          ]
+        } ?? []
+      return try AgentModelChoice(
+        json: .object(["id": .string(id), "label": .string(label), "controls": .array(controls)]))
+    }
+    let big = try model("big-1", "Big 1", effort: ["low", "high", "max"])
+    let small = try model("small-1", "Small 1", effort: ["low", "high"])
+    let plain = try model("plain-1", "Plain 1", effort: nil)
+    // by its label as the readout says it, lowercase, or by its id
+    #expect(ModelSwitch.serving([big, small], model: "small 1")?.id == "small-1")
+    #expect(ModelSwitch.serving([big, small], model: "big-1")?.id == "big-1")
+    #expect(ModelSwitch.serving([big, small], model: "another") == nil)
+    // the serving model's own control, and none where it has none
+    #expect(ModelSwitch.effortControl([big, small], serving: small)?.values.map(\.id) == ["low", "high"])
+    #expect(ModelSwitch.effortControl([big, plain], serving: plain) == nil)
+    // no serving model: only values every listed model offers
+    #expect(ModelSwitch.effortControl([big, small], serving: nil) == nil)
+    #expect(ModelSwitch.effortControl([big, big], serving: nil)?.values.map(\.id) == ["low", "high", "max"])
+    #expect(ModelSwitch.effortControl([], serving: nil) == nil)
+  }
+
+  @Test("an asked change is drawn until the row says a new model or effort: the row's word is the confirmation (PF-3)")
+  func anAskedSwitchSettles() throws {
+    let before = try #require(FieldHomeModel.liveCardReadout(Self.agent()))
+    let asked = ModelSwitch.Asked(part: .effort, word: "max", model: before.model, effort: before.effort)
+    #expect(!asked.settled(by: before))
+    let moved = try #require(FieldHomeModel.liveCardReadout(Self.agent(effort: AgentEffort(value: "max"))))
+    #expect(asked.settled(by: moved))
   }
 
   @Test("a peer's bare terminal has no readout: its band wears the badge alone")

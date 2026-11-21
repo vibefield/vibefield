@@ -3372,6 +3372,8 @@ public struct HomeScreen: View {
       // the live card's readout, centered over its held veil.
       seatReadout: cardSeatReadout,
       inputIsOpen: inputCardFace == .shown && inputCard.keyboardOwner != .none,
+      // PF-3: the band's capsule is the switch where the run's row offers one.
+      modelSwitch: cardModelSwitch,
       onOtherDriverAppeared: { inputCard.dismissKeyboard() }
     ) {
       liveTerminal(title: bubble?.project)
@@ -4153,6 +4155,27 @@ public struct HomeScreen: View {
   /// store is the only one of the two wires that still answers since TM-5.
   private var cardTerminalFace: AgentTerminalFace {
     FieldHomeModel.cardTerminalFace(cardBubble, desktops: link?.desktops ?? [])
+  }
+
+  /// PF-3 (DESIGN.md §8, "The capsule is the switch") — the open card's road to its run's model switch: the agent's
+  /// own list and one change, each asked of the HOME's door for the desktop that owns the run (`FieldLink`). nil where
+  /// the card's subject is no run on a desktop (the mock, a bare terminal), and then the capsule is a readout.
+  private var cardModelSwitch: ModelSwitchDoor? {
+    guard let bubble = cardBubble, let agent = bubble.agent, let join = agent.join, let run = bubble.runKey, let link
+    else { return nil }
+    let device = join.deviceID
+    let provider = agent.provider.rawValue
+    let profileSet = bubble.profileSet
+    return ModelSwitchDoor(
+      models: {
+        try AgentModelsResult(
+          json: try await link.runModels(on: device, provider: provider, profileSet: profileSet))
+      },
+      ask: { change in
+        try AgentSwitchModelResult(
+          json: try await link.switchModel(runtimeRunId: run, on: device, change: change.json))
+      },
+      desktop: link.desktops.first { $0.deviceId == device }?.name ?? "the desktop")
   }
 
   /// The one act an ended run has: RESUME, over that desktop's door. The new

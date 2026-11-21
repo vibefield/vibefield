@@ -572,6 +572,29 @@ public struct AgentSessionOrigin: Sendable, Equatable {
   }
 }
 
+/// PF-3 — what a running run's model switch can change (`AgentModelSwitchOffer`, `agent-session.ts`): `model` a
+/// boolean; `controls` at most 16 role words of 1 to 32 UTF-16 units (OPEN: `effort` today); `persistence` one word
+/// of the same bound (OPEN: `session`, `default`). A word this build never heard of must not refuse a row.
+public struct AgentModelSwitchOffer: Sendable, Equatable {
+  public let model: Bool
+  public let controls: [String]
+  public let persistence: String
+  public let unknownFields: [String]
+
+  init(remote json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentModelSwitchOffer", value: json)
+    model = try object.flag("model")
+    let rows = try object.requiredArray(strict: "controls")
+    guard rows.count <= 16 else { throw object.mismatch("controls", "at most 16 roles") }
+    controls = try rows.map { row in
+      guard let word = row.stringValue else { throw object.mismatch("controls", "an array of strings") }
+      return try object.bounded("controls", word, 1...32)
+    }
+    persistence = try object.text("persistence", 1...32)
+    unknownFields = object.unknownFields
+  }
+}
+
 /// A row of the remote cut (`AgentRemoteRow`): an agent, or (`kind: "terminal"`) a bare terminal. Keyed on the board
 /// by `runtimeRunId`, which is NOT `monitorRow.id`.
 public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
@@ -595,6 +618,9 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
   public let spark: String?
   /// IOS-12a — who started the run (CP-D15). Absent reads `you`, as on the field row.
   public let origin: AgentSessionOrigin?
+  /// PF-3 — what `agent.switchModel` can change on this run. Absent: none is offered, a bare terminal's row, or a row
+  /// from a daemon before PF-3.
+  public let modelSwitch: AgentModelSwitchOffer?
   public let monitorRow: MonitorAgentRow
   public let unknownFields: [String]
 
@@ -621,11 +647,13 @@ public struct AgentRemoteRow: Sendable, Equatable, Identifiable {
       stop = object.tolerant("stop", AgentFieldStop.init(remote:))
       spark = object.tolerant("spark") { try Self.sparkId($0, shape: "AgentRemoteRow", key: "spark") }
       origin = object.tolerant("origin", AgentSessionOrigin.init(remote:))
+      modelSwitch = object.tolerant("modelSwitch", AgentModelSwitchOffer.init(remote:))
     } else {
       nativeSessionId = try object.strict("nativeSessionId", Self.sessionId)
       stop = try object.strictObject("stop", AgentFieldStop.init(remote:))
       spark = try object.strict("spark") { try Self.sparkId($0, shape: "AgentRemoteRow", key: "spark") }
       origin = try object.strictObject("origin", AgentSessionOrigin.init(remote:))
+      modelSwitch = try object.strictObject("modelSwitch", AgentModelSwitchOffer.init(remote:))
     }
     unknownFields = object.unknownFields
   }

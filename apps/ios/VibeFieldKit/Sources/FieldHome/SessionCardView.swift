@@ -95,6 +95,14 @@ struct SessionCardView<Terminal: View>: View {
   /// The open input card reserves space below the terminal. Its custom safe
   /// area must stay in effect while the card holds the keyboard.
   var inputIsOpen: Bool = false
+  /// PF-3 — the card's road to its run's model switch (the two asks of the desktop that owns the run). nil: the band's
+  /// capsule is a readout and takes no touch, as it is for a run whose row offers no switch.
+  var modelSwitch: ModelSwitchDoor? = nil
+  /// PF-3 — the switch list is open under the capsule.
+  @State private var switchOpen = false
+  /// PF-3 — a change that was sent and that the row has not confirmed: the capsule draws its word in italic until the
+  /// row says something new, or `ModelSwitch.askedFor` passes.
+  @State private var asked: ModelSwitch.Asked?
   /// Fold the host's keyboard when the held overlay first appears. Observing
   /// its presence, rather than its geometry, lets a later explicit tap take
   /// control without a resize immediately folding the keyboard again.
@@ -295,11 +303,41 @@ struct SessionCardView<Terminal: View>: View {
   private func band(_ bubble: FieldBubble, ground: CardGround) -> some View {
     HStack(spacing: 10) {
       if let readout = FieldHomeModel.liveCardReadout(bubble) {
-        bandCapsule(readout)
+        let said = [readout.model, readout.effort].compactMap { $0 }.joined(
+          separator: FieldHomeModel.LiveCardReadout.separator)
+        if let door = modelSwitch, let offer = bubble.agent?.modelSwitch {
+          // PF-3 — the capsule is the switch: the row's word is the only confirmation, so a sent change is drawn as
+          // asked only until the readout moves.
+          let pending = asked.flatMap { $0.settled(by: readout) ? nil : $0 }
+          Button {
+            switchOpen = true
+          } label: {
+            bandCapsule(readout, asked: pending, switches: true)
+          }
+          .buttonStyle(.plain)
           .accessibilityElement(children: .ignore)
-          .accessibilityLabel(
-            [readout.model, readout.effort].compactMap { $0 }.joined(
-              separator: FieldHomeModel.LiveCardReadout.separator))
+          .accessibilityLabel(said)
+          .accessibilityHint("Changes the model or the effort")
+          .popover(isPresented: $switchOpen) {
+            ModelSwitchList(
+              door: door, offer: offer, readout: readout, agentName: bubble.agent?.providerName ?? "",
+              onSent: { sent in
+                asked = sent
+                switchOpen = false
+              }
+            )
+            .presentationCompactAdaptation(.popover)
+          }
+          .task(id: asked) {
+            guard asked != nil else { return }
+            try? await Task.sleep(for: ModelSwitch.askedFor)
+            if !Task.isCancelled { asked = nil }
+          }
+        } else {
+          bandCapsule(readout)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(said)
+        }
         if let percent = readout.contextPercent, let figure = readout.context {
           contextRing(percent: percent, figure: figure)
         }
@@ -322,27 +360,46 @@ struct SessionCardView<Terminal: View>: View {
   /// lowercase, mono 11.5 semibold at 92% of the band's ink on a 10% tint of it
   /// with a 16% hairline, 28pt tall, a 14pt hairline between the two words.
   /// The effort is italic while it is only the launch's intent.
-  private func bandCapsule(_ readout: FieldHomeModel.LiveCardReadout) -> some View {
-    HStack(spacing: 0) {
-      Text(readout.model)
-        .font(FieldType.mono(11.5, .semibold))
+  ///
+  /// PF-3: where the run's row offers a switch (`switches`) the capsule wears a 7pt up-down chevron after its last
+  /// word at 60%, and a change that was sent and is not confirmed (`asked`) is drawn in its word's place, italic at
+  /// 60%.
+  private func bandCapsule(
+    _ readout: FieldHomeModel.LiveCardReadout, asked: ModelSwitch.Asked? = nil, switches: Bool = false
+  ) -> some View {
+    let askedModel = asked?.part == .model ? asked?.word : nil
+    let askedEffort = asked?.part == .effort ? asked?.word : nil
+    let effort = askedEffort ?? readout.effort
+    let last: CGFloat = switches ? 6 : 12
+    return HStack(spacing: 0) {
+      Text(askedModel ?? readout.model)
+        .font(askedModel == nil ? FieldType.mono(11.5, .semibold) : FieldType.mono(11.5, .semibold).italic())
+        .opacity(askedModel == nil ? 1 : 0.6)
         .lineLimit(1)
         .truncationMode(.tail)
         .padding(.leading, 12)
-        .padding(.trailing, readout.effort == nil ? 12 : 9)
-      if let effort = readout.effort {
+        .padding(.trailing, effort == nil ? last : 9)
+      if let effort {
         Rectangle()
           .fill(FieldPalette.textMain.opacity(0.2))
           .frame(width: 1, height: 14)
         Text(effort)
           .font(
-            readout.effortIsIntent
+            readout.effortIsIntent || askedEffort != nil
               ? FieldType.mono(11.5, .semibold).italic() : FieldType.mono(11.5, .semibold)
           )
+          .opacity(askedEffort == nil ? 1 : 0.6)
           .lineLimit(1)
           .fixedSize()
           .padding(.leading, 9)
-          .padding(.trailing, 12)
+          .padding(.trailing, last)
+      }
+      if switches {
+        Image(systemName: "chevron.up.chevron.down")
+          .font(.system(size: 7, weight: .bold))
+          .opacity(0.6)
+          .padding(.trailing, 10)
+          .accessibilityHidden(true)
       }
     }
     .foregroundStyle(FieldPalette.textMain.opacity(0.92))

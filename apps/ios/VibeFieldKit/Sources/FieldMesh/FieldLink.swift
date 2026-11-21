@@ -939,6 +939,30 @@ public final class FieldLink {
         kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: false))
   }
 
+  /// PF-3 (2026-11-21) — one change to a RUNNING run's model, or to one control of it (`agent.switchModel`), asked
+  /// of the HOME's door as Resume is (`homeAsk`): `{device}` added for another desktop's run, which the home forwards
+  /// whole, and the owner's adapter makes the change. The answer comes back unread: `sent`, or the owner's refusal in
+  /// its own word. Nothing is put on the field here: what the agent serves next is its row's, a beat later and true.
+  public func switchModel(runtimeRunId: String, on deviceId: String, change: JSONValue) async throws -> JSONValue {
+    try await homeAsk(
+      "agent.switchModel", on: deviceId,
+      params: ["runtimeRunId": .string(runtimeRunId), "change": change],
+      refusal: FieldProductError(
+        kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: true))
+  }
+
+  /// PF-3 — an agent's own picker on the desktop that owns a run (`agent.models`, `federate`), asked of the HOME's
+  /// door by the same rule: the list a running run's switch chooses from. `profileSet` is the home's own id, so it
+  /// is sent only for the home's runs; a peer's run reads under that desktop's default.
+  public func runModels(on deviceId: String, provider: String, profileSet: String?) async throws -> JSONValue {
+    var params: [String: JSONValue] = ["provider": .string(provider)]
+    if let profileSet, deviceId == home { params["profileSet"] = .string(profileSet) }
+    return try await homeAsk(
+      "agent.models", on: deviceId, params: params,
+      refusal: FieldProductError(
+        kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: true))
+  }
+
   /// SP-7b's 7c-2 (D-c2 (a), decided 2026-11-06) — an ask about a session or a run, asked of
   /// the HOME's door: `params` as they are for the home's own, `device` added for another desktop's,
   /// which the home forwards whole to that desktop (DS-4's `forwardVia`), as F1b's approval rides it.

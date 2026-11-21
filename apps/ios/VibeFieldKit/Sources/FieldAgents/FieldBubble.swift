@@ -50,6 +50,9 @@ public struct AgentFacet: Sendable, Equatable {
   /// The catalog's row for this agent, as the snapshot carried it (AC-D9). nil
   /// draws the raw id and the letter — see `AgentSnapshot.catalogEntry`.
   public let catalogEntry: AgentCatalogEntry?
+  /// PF-3 — what the run's own model switch can change, as its owner's row says. nil: none is offered (the run's
+  /// adapter names no switch, a daemon before PF-3, or a feed with no desktop behind it).
+  public let modelSwitch: AgentModelSwitch?
 
   /// What this agent is called on every surface: the catalog's label (AC-D4),
   /// else the label its row carries, else the raw id.
@@ -73,7 +76,8 @@ public struct AgentFacet: Sendable, Equatable {
     statusSince: Date? = nil,
     lastEvidenceAt: Date? = nil,
     join: AgentJoin? = nil,
-    catalogEntry: AgentCatalogEntry? = nil
+    catalogEntry: AgentCatalogEntry? = nil,
+    modelSwitch: AgentModelSwitch? = nil
   ) {
     self.provider = provider
     self.label = label
@@ -89,6 +93,7 @@ public struct AgentFacet: Sendable, Equatable {
     self.lastEvidenceAt = lastEvidenceAt
     self.join = join
     self.catalogEntry = catalogEntry
+    self.modelSwitch = modelSwitch
   }
 }
 

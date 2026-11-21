@@ -446,6 +446,50 @@ public struct AgentInterruptResult: Sendable, Equatable, Decodable {
   }
 }
 
+/// PF-3 (2026-11-21) — `agent.switchModel`'s answer. `sent` means the run's terminal took the request, never that the
+/// agent switched: it may refuse, ask its person to confirm, or resolve the asked model to another, and what it
+/// serves next is its row's own model and effort. A refusal carries the owner's word (`working`, `blocked`, the
+/// adapter's own reason); `retryable == false` says no later ask can land. A value and not a thrown error, as the
+/// stop's answer is: "it is mid-turn" is something a card shows.
+public struct AgentSwitchModelResult: Sendable, Equatable {
+  public let sent: Bool
+  /// Present only on a refusal.
+  public let reason: String?
+  public let retryable: Bool?
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentSwitchModelResult", value: json)
+    let status = try object.requiredString("status")
+    // an answer this build predates is never read as sent
+    guard status == "sent" || status == "rejected" else {
+      throw WireDecodeError(shape: "AgentSwitchModelResult", reason: "`status` is neither sent nor rejected")
+    }
+    sent = status == "sent"
+    reason = object.string("reason")
+    if !sent, reason == nil {
+      throw WireDecodeError(shape: "AgentSwitchModelResult", reason: "a refusal with no `reason`")
+    }
+    retryable = object.bool("retryable")
+    unknownFields = object.unknownFields
+  }
+}
+
+/// One change `agent.switchModel` is asked for: the model, or one control of the model that serves the run. Every id
+/// is the agent's own, as `agent.models` listed it.
+public enum AgentSwitchModelChange: Sendable, Equatable {
+  case model(id: String)
+  case control(id: String, value: String)
+
+  public var json: JSONValue {
+    switch self {
+    case .model(let id): return .object(["kind": .string("model"), "modelId": .string(id)])
+    case .control(let id, let value):
+      return .object(["kind": .string("control"), "controlId": .string(id), "value": .string(value)])
+    }
+  }
+}
+
 // RETIRED 2026-09-14 (TM-3, TM-D3): `TerminalMirrorWriteGrant`, G4's answer —
 // the mirror-write capability a desktop handed this phone, with the redaction
 // that kept it out of `description`, `debugDescription` and a custom `Mirror`,

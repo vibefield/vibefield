@@ -104,6 +104,28 @@ public enum AgentEffortIntent: String, Sendable, Codable {
   case observed
 }
 
+/// PF-3 (2026-11-21) — what a RUNNING run's model switch can change, as its owner's row says it (the remote row's
+/// `modelSwitch`, the run's adapter's own offer): whether the model itself, which control ROLES (`effort` today; an
+/// open word), and how far the agent keeps a change (`session`: this run alone; `default`: the agent also saves it
+/// as its own default for the sessions it starts later; an open word). A facet with none offers no switch: the
+/// card's capsule is a readout and takes no touch.
+public struct AgentModelSwitch: Sendable, Equatable {
+  public let model: Bool
+  public let controls: [String]
+  public let persistence: String
+
+  public init(model: Bool, controls: [String], persistence: String) {
+    self.model = model
+    self.controls = controls
+    self.persistence = persistence
+  }
+
+  /// The switch can change the effort of the model that serves the run.
+  public var effort: Bool { controls.contains("effort") }
+  /// The agent keeps a change as its own default for later sessions.
+  public var savesDefault: Bool { persistence == "default" }
+}
+
 public struct AgentEffort: Sendable, Equatable, Codable {
   public var value: String
   public var intent: AgentEffortIntent
