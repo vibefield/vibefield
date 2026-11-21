@@ -263,7 +263,16 @@ test("elects exactly one owner when two runners reclaim the same stale lock", as
     ]);
     const acquired = results.filter((result) => result.status === "fulfilled");
     const refused = results.filter((result) => result.status === "rejected");
-    assert.equal(acquired.length, 1, `iteration ${iteration} acquired ${acquired.length} locks`);
+    // item 643 (2026-11-21): a run that elects no owner, or two, says why each runner was refused;
+    // a red that names only a count cannot tell a lock fault from a slow file system.
+    const reasons = refused
+      .map((result) => `${result.reason?.name}: ${result.reason?.message}`)
+      .join(" | ");
+    assert.equal(
+      acquired.length,
+      1,
+      `iteration ${iteration} acquired ${acquired.length} locks; refused: ${reasons || "none"}`,
+    );
     assert.equal(refused.length, 1);
     assert.ok(refused[0].reason instanceof DevLockError);
     await acquired[0].value.release();
