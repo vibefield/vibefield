@@ -21,7 +21,7 @@ struct TerminalSurfaceResizeTests {
       return TerminalSurface(
         scene: scene,
         visible: true,
-        configuration: presentationConfig(for: appearance),
+        configuration: presentationConfig(for: appearance, mode: .dark),
         onGridSize: { sent.append($0) },
         onRenderFailure: { failures.append($0) }
       )

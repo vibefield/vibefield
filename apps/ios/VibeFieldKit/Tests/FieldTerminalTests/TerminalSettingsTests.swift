@@ -90,14 +90,52 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
     #expect(TerminalSettingsModel.themeCountWord(0) == "0 themes")
   }
 
-  /// `nil` is our default by contract, so the tick lands on the row that is
-  /// actually rendering — and that row is in the real catalog.
+  /// No pick is the mode's own look by contract, so the tick lands on the row
+  /// that is actually rendering — and by night that row is in the real catalog.
   @Test func theDefaultThemeIsTheOneInUseAndIsCarried() {
     var appearance = TerminalAppearance.default
-    appearance.themeName = nil
-    let name = TerminalSettingsModel.themeName(of: appearance)
+    appearance.darkThemeName = nil
+    let name = TerminalSettingsModel.themeName(of: appearance, mode: .dark)
     #expect(name == "Matte Black")
     #expect(GhostteaThemeCatalog.themes.contains { $0.name == name })
+    #expect(TerminalSettingsModel.ownTheme(of: .dark) == nil)
+  }
+
+  /// PF-6 (2026-11-21): by day the mode's own look is Daylight, which no
+  /// catalog carries, so the light list is headed by a row of its own; a pick
+  /// for one mode never names the other's theme.
+  @Test func byDayTheOwnLookIsDaylightAndHeadsTheLightList() throws {
+    #expect(TerminalSettingsModel.themeName(of: .default, mode: .light) == "Daylight")
+    #expect(!GhostteaThemeCatalog.themes.contains { $0.name == "Daylight" })
+    let own = try #require(TerminalSettingsModel.ownTheme(of: .light))
+    #expect(own == TerminalLook.day)
+    #expect(TerminalSettingsModel.swatchBytes(for: own).count == TerminalSettingsModel.swatchCount)
+    #expect(TerminalSettingsModel.swatchBytes(for: own).first == [0xF1, 0xF0, 0xEE])
+
+    var appearance = TerminalAppearance.default
+    appearance.setThemeName("Vesper", for: .dark)
+    #expect(TerminalSettingsModel.themeName(of: appearance, mode: .dark) == "Vesper")
+    #expect(TerminalSettingsModel.themeName(of: appearance, mode: .light) == "Daylight")
+    #expect(appearance.shownThemeName(in: .light) == "Daylight")
+    #expect(appearance.shownThemeName(in: .dark) == "Vesper")
+    appearance.setThemeName("3024 Day", for: .light)
+    #expect(TerminalSettingsModel.themeName(of: appearance, mode: .light) == "3024 Day")
+    #expect(TerminalSettingsModel.themeName(of: appearance, mode: .dark) == "Vesper")
+  }
+
+  /// The own row is searched as the catalog's rows are.
+  @Test func aNameMatchesAQueryAsTheCatalogsRowsDo() {
+    #expect(TerminalSettingsModel.matches("Daylight", query: ""))
+    #expect(TerminalSettingsModel.matches("Daylight", query: "  "))
+    #expect(TerminalSettingsModel.matches("Daylight", query: "DAY"))
+    #expect(!TerminalSettingsModel.matches("Daylight", query: "night"))
+  }
+
+  /// The two rows and their pages' titles, in the desktop's words.
+  @Test func eachModesRowSaysItsMode() {
+    #expect(TerminalSettingsWords.themeRow(.light) == "Light mode theme")
+    #expect(TerminalSettingsWords.themeRow(.dark) == "Dark mode theme")
+    #expect(TerminalLookMode.allCases == [.light, .dark])
   }
 }
 
@@ -253,7 +291,8 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
 /// payload can carry (`Int(.nan)` traps).
 @Suite struct PageReadoutTests {
   private let hostile = TerminalAppearance(
-    themeName: "a theme the catalog never carried",
+    lightThemeName: "another the catalog never carried",
+    darkThemeName: "a theme the catalog never carried",
     backgroundOpacity: .nan,
     shaderEffects: ["ghosttea:not-a-shader", GhostteaShaderOption.available[3].id],
     shaderAnimation: true,
@@ -270,7 +309,8 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
     #expect(TerminalSettingsModel.percent(hostile.backgroundOpacity) == "100%")
     #expect(TerminalSettingsModel.opacityDetail(hostile.backgroundOpacity) == "Solid: the field stays behind the terminal.")
     #expect(TerminalSettingsModel.pointsText(hostile.fontSize) == "9 pt")
-    #expect(TerminalSettingsModel.themeName(of: hostile) == "a theme the catalog never carried")
+    #expect(TerminalSettingsModel.themeName(of: hostile, mode: .dark) == "a theme the catalog never carried")
+    #expect(TerminalSettingsModel.themeName(of: hostile, mode: .light) == "another the catalog never carried")
     // An id the renderer would drop is not an effect the terminal wears.
     #expect(TerminalSettingsModel.effectsWord(hostile.shaderEffects) == GhostteaShaderOption.available[3].name)
   }

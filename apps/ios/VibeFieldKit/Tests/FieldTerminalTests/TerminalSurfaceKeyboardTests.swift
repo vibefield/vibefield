@@ -18,7 +18,7 @@ struct TerminalSurfaceKeyboardTests {
       TerminalSurface(
         scene: scene,
         visible: true,
-        configuration: presentationConfig(for: .default),
+        configuration: presentationConfig(for: .default, mode: .dark),
         focus: focus,
         focusEpoch: epoch,
         onScrollRows: { scrolled.append($0) },

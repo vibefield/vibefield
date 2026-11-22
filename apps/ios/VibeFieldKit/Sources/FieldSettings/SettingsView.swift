@@ -28,6 +28,7 @@ public struct SettingsView: View {
   @State private var path: NavigationPath
   @AppStorage(PhoneAppearance.storageKey) private var look: PhoneAppearance = .auto
   @Environment(\.dismiss) private var dismiss
+  @Environment(\.colorScheme) private var colorScheme
   #if DEBUG || VF_TESTFLIGHT
     /// RB-2 (Q2, decided 2026-11-12) — under a demo, This phone › Lock changes nothing: the lock is this phone's real
     /// one, and a demo never turns it on or off. The home says whether a demo stands (`lockHeld(_:)`).
@@ -119,7 +120,9 @@ public struct SettingsView: View {
       }
     case .terminal:
       NavigationLink(value: SettingsRoute.terminal) {
-        ChromeRow("Terminal", lead: .glyph(.terminal), value: terminal.shownThemeName)
+        // PF-6: the theme of the mode the phone is in
+        ChromeRow(
+          "Terminal", lead: .glyph(.terminal), value: terminal.shownThemeName(in: TerminalLookMode(colorScheme)))
       }
     #if DEBUG || VF_TESTFLIGHT
       case .notifications:

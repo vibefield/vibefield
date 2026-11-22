@@ -135,10 +135,6 @@ public final class TerminalAttachment {
   /// frame, from the cell — see `TerminalPresentation`'s note.
   public private(set) var presentation: GhostteaTerminalPresentationConfig
   public private(set) var appearance: TerminalAppearance
-  /// PF-4 — the room, in points, that the place this terminal is drawn in keeps
-  /// at the surface's top for chrome standing over it (the live card's band).
-  /// The surface paints its ground there and the grid begins under it
-  /// (`presentationConfig`'s `gridTopInset`). 0 until a host says otherwise.
   /// PF-4 — the surface holds this session's picture: a frame of it was taken
   /// since the session was put on the scene. It stays true through a pause or
   /// a re-dial (the last picture stays on the glass) and through a card closed
@@ -146,10 +142,25 @@ public final class TerminalAttachment {
   /// place that paints the ground's colour while nothing is painted reads this
   /// to know when to stop: a second ground under a translucent one would show.
   public private(set) var holdsPicture = false
+  /// PF-4 — the room, in points, that the place this terminal is drawn in keeps
+  /// at the surface's top for chrome standing over it (the live card's band).
+  /// The surface paints its ground there and the grid begins under it
+  /// (`presentationConfig`'s `gridTopInset`). 0 until a host says otherwise.
   @ObservationIgnored public var gridTopInset: Double = 0 {
     didSet {
       guard gridTopInset != oldValue else { return }
-      presentation = presentationConfig(for: appearance, gridTopInset: gridTopInset)
+      presentation = presentationConfig(for: appearance, mode: lookMode, gridTopInset: gridTopInset)
+    }
+  }
+  /// PF-6 — the mode of the place this terminal is drawn in (the phone's light
+  /// or dark), which decides the look the appearance projects to
+  /// (`presentationConfig`'s `mode`; DESIGN.md §2.7 "The terminal's own
+  /// colours", on the phone). The night's until a host says otherwise, and a
+  /// host says so again whenever its mode changes.
+  @ObservationIgnored public var lookMode: TerminalLookMode = .dark {
+    didSet {
+      guard lookMode != oldValue else { return }
+      presentation = presentationConfig(for: appearance, mode: lookMode, gridTopInset: gridTopInset)
     }
   }
   /// The local half of the session, when the user or the app put it there:
@@ -286,7 +297,7 @@ public final class TerminalAttachment {
     self.appearance = appearance
     self.deadline = deadline
     self.log = log
-    presentation = presentationConfig(for: appearance)
+    presentation = presentationConfig(for: appearance, mode: .dark)
   }
 
   // MARK: - What the card reads
@@ -1176,7 +1187,7 @@ public final class TerminalAttachment {
   /// is no longer a component here that can decline a change.
   public func apply(appearance next: TerminalAppearance) {
     appearance = next
-    presentation = presentationConfig(for: next, gridTopInset: gridTopInset)
+    presentation = presentationConfig(for: next, mode: lookMode, gridTopInset: gridTopInset)
   }
 
   // MARK: - Plumbing

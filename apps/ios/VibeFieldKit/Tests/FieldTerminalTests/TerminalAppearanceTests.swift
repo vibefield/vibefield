@@ -38,7 +38,8 @@ import Testing
   @Test func roundTripsThroughTheStore() {
     let defaults = freshDefaults("roundtrip")
     let appearance = TerminalAppearance(
-      themeName: "Vesper",
+      lightThemeName: "3024 Day",
+      darkThemeName: "Vesper",
       backgroundOpacity: 0.85,
       shaderEffects: ["ghosttea:crt"],
       shaderAnimation: true,
@@ -57,7 +58,7 @@ import Testing
         .utf8)
     let decoded = try JSONDecoder().decode(TerminalAppearance.self, from: old)
     #expect(decoded.backgroundOpacity == 0.82)
-    #expect(decoded.themeName == "Vesper")
+    #expect(decoded.darkThemeName == "Vesper")
     #expect(decoded.shaderEffects == ["ghosttea:crt"])
     #expect(decoded.shaderAnimation)
     #expect(decoded.fontSize == 16)
@@ -70,6 +71,44 @@ import Testing
     #expect(keys["backgroundOpacity"] == nil)
     // Solid stays a choice: a value saved under the new name is the person's.
     #expect(try JSONDecoder().decode(TerminalAppearance.self, from: saved).backgroundOpacity == 1)
+  }
+
+  /// PF-6 (2026-11-21; DESIGN.md §2.7 "The terminal's own colours", on the
+  /// phone): a theme is picked for each mode. A record saved before held one,
+  /// drawn in both: it is kept as the night's, and the day starts unpicked, so
+  /// it takes the day look. The old key is read and never written again.
+  @Test func aRecordsOneThemeIsKeptAsTheNightsAndTheDayStartsUnpicked() throws {
+    let old = Data(#"{"themeName":"Matte Black","groundOpacity":0.82,"shaderEffects":["ghosttea:crt"]}"#.utf8)
+    let decoded = try JSONDecoder().decode(TerminalAppearance.self, from: old)
+    #expect(decoded.darkThemeName == "Matte Black")
+    #expect(decoded.lightThemeName == nil)
+    #expect(decoded.themeName(for: .dark) == "Matte Black")
+    #expect(decoded.themeName(for: .light) == nil)
+    #expect(decoded.shaderEffects == ["ghosttea:crt"])
+
+    var picked = decoded
+    picked.setThemeName("3024 Day", for: .light)
+    picked.setThemeName("Vesper", for: .dark)
+    let saved = try JSONEncoder().encode(picked)
+    let keys = try #require(try JSONSerialization.jsonObject(with: saved) as? [String: Any])
+    #expect(keys["lightThemeName"] as? String == "3024 Day")
+    #expect(keys["darkThemeName"] as? String == "Vesper")
+    #expect(keys["themeName"] == nil)
+    #expect(try JSONDecoder().decode(TerminalAppearance.self, from: saved) == picked)
+
+    // A mode put back on its own look is saved as no pick, and stays so when read back.
+    picked.setThemeName(nil, for: .light)
+    let unpicked = try JSONEncoder().encode(picked)
+    #expect(try JSONDecoder().decode(TerminalAppearance.self, from: unpicked).lightThemeName == nil)
+    // A record that says both: the new name wins over the retired one.
+    let both = Data(#"{"themeName":"Matte Black","darkThemeName":"Vesper"}"#.utf8)
+    #expect(try JSONDecoder().decode(TerminalAppearance.self, from: both).darkThemeName == "Vesper")
+  }
+
+  /// Neither mode has a theme picked until a person picks one.
+  @Test func theDefaultPicksNoTheme() {
+    #expect(TerminalAppearance.default.lightThemeName == nil)
+    #expect(TerminalAppearance.default.darkThemeName == nil)
   }
 
   @Test func missingDataDegradesToDefault() {
@@ -86,8 +125,9 @@ import Testing
   /// with a default when absent.
   @Test func decodingToleratesMissingFields() throws {
     let decoded = try JSONDecoder().decode(
-      TerminalAppearance.self, from: Data(#"{"themeName":"Vesper"}"#.utf8))
-    #expect(decoded.themeName == "Vesper")
+      TerminalAppearance.self, from: Data(#"{"darkThemeName":"Vesper"}"#.utf8))
+    #expect(decoded.darkThemeName == "Vesper")
+    #expect(decoded.lightThemeName == nil)
     // PF-5: the ground nobody chose is the desktop's 82%.
     #expect(decoded.backgroundOpacity == 0.82)
     #expect(TerminalAppearance.default.backgroundOpacity == 0.82)

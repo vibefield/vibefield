@@ -143,3 +143,45 @@ describe("Godview's own look stands on the deck's own ground (TL-4c)", () => {
     }
   });
 });
+
+describe("the phone's day look is the deck's (PF-6, 2026-11-21)", () => {
+  // DESIGN.md §2.7 "The terminal's own colours", on the phone: by day the phone's terminal wears the
+  // deck's day look, and its twin in the kit is held to this one here, value for value.
+  const SWIFT = readFileSync(
+    join(REPO, "apps/ios/VibeFieldKit/Sources/FieldTerminal/TerminalLook.swift"),
+    "utf8",
+  );
+  /** `TerminalLook.day`'s own text, from its name to its palette's last colour. */
+  const DAY = /static let day = TerminalThemeColours\(([\s\S]*?)\]\)/.exec(SWIFT)?.[1] ?? "";
+  const field = (name: string): string =>
+    new RegExp(`\\b${name}: "(#[0-9a-f]{6})"`).exec(DAY)?.[1] ?? "";
+  const palette = /palette: \[([\s\S]*)$/.exec(DAY)?.[1]?.match(/#[0-9a-f]{6}/g) ?? [];
+  const deck = godviewTerminalTheme(DEFAULT_DECK_APPEARANCE, "light");
+
+  /** A translucent colour laid over the paper, as the phone's renderer needs it: solid. */
+  function overPaper(colour: readonly number[] | undefined): string {
+    const [r = 0, g = 0, b = 0, alpha = 1] = colour ?? [];
+    return [r, g, b]
+      .map((value, index) =>
+        Math.round((value * alpha + (deck.background[index] ?? 0) * (1 - alpha)) * 255),
+      )
+      .join(" ");
+  }
+
+  it("names the paper, the reference's ink and the day's sixteen as the deck does", () => {
+    expect(field("background")).toBe(GODVIEW_TERMINAL_LOOK.light.ground);
+    expect(field("cursorText"), "a block cursor's text is the ground").toBe(
+      GODVIEW_TERMINAL_LOOK.light.ground,
+    );
+    expect(rgbText(field("foreground"))).toBe(rgbOf(deck.foreground));
+    expect(palette).toEqual(GODVIEW_TERMINAL_LOOK.light.palette);
+  });
+
+  it("lays the reference's translucent cursor and selection over the paper", () => {
+    expect(deck.cursor?.[3], "the reference's cursor is translucent").toBeLessThan(1);
+    expect(deck.selection?.[3], "and so is its selection").toBeLessThan(1);
+    expect(rgbText(field("cursor"))).toBe(overPaper(deck.cursor));
+    expect(rgbText(field("selection"))).toBe(overPaper(deck.selection));
+    expect(rgbText(field("selectionForeground"))).toBe(rgbOf(deck.selectionForeground ?? []));
+  });
+});

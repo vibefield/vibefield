@@ -11,7 +11,7 @@ import Testing
   private func config(background: [UInt8], opacity: Double = 1) -> GhostteaTerminalPresentationConfig {
     var appearance = TerminalAppearance.default
     appearance.backgroundOpacity = opacity
-    let base = presentationConfig(for: appearance)
+    let base = presentationConfig(for: appearance, mode: .dark)
     return GhostteaTerminalPresentationConfig(
       schemaVersion: base.schemaVersion,
       revision: base.revision,
@@ -39,12 +39,25 @@ import Testing
   /// the dark ramp: white text by day too, whatever the app's theme. The ramp
   /// is the colour's alone, so glass never moves it.
   @Test func matteBlackIsTheGroundAndTakesWhiteText() {
-    let ground = TerminalGround(presentationConfig(for: .default))
+    let ground = TerminalGround(presentationConfig(for: .default, mode: .dark))
     #expect(ground.red == Double(0x12) / 255)
     #expect(ground.green == Double(0x12) / 255)
     #expect(ground.blue == Double(0x12) / 255)
     #expect(abs(ground.opacity - 0.82) < 0.0001)
     #expect(ground.inkScheme == .dark)
+  }
+
+  /// PF-6 (2026-11-21): by day the default ground is §2.7's paper at the same
+  /// 82%, and the chrome on it takes the light ramp, so the band's ink is dark.
+  @Test func byDayThePaperIsTheGroundAndTakesDarkText() {
+    let ground = TerminalGround(presentationConfig(for: .default, mode: .light))
+    #expect(ground.red == Double(0xF1) / 255)
+    #expect(ground.green == Double(0xF0) / 255)
+    #expect(ground.blue == Double(0xEE) / 255)
+    #expect(abs(ground.opacity - 0.82) < 0.0001)
+    #expect(ground.inkScheme == .light)
+    #expect(TerminalLookMode(ColorScheme.light) == .light)
+    #expect(TerminalLookMode(ColorScheme.dark) == .dark)
   }
 
   /// A light theme's ground takes the light ramp (§2.7's paper, as a theme; paper

@@ -262,8 +262,12 @@
   /// made-up names: the project garden-planner, on the desktop studio), laid out as the live card lays them out.
   private struct InputCardLabStage: View {
     let model: InputCardModel
-    /// The terminal's ground in the default look, as the live card paints it behind its terminal.
-    private let ground = TerminalGround(presentationConfig(for: .default))
+    @Environment(\.colorScheme) private var scheme
+    /// The terminal's ground in the default look of the mode the lab is shown in (PF-6), as the live card paints it
+    /// behind its terminal.
+    private var ground: TerminalGround {
+      TerminalGround(presentationConfig(for: .default, mode: TerminalLookMode(scheme)))
+    }
 
     private static let session = "garden-planner"
     private static let desktop = "studio"

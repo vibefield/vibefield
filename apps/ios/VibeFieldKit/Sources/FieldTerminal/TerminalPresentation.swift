@@ -2,24 +2,46 @@ import Foundation
 import GhostteaAppearance
 import GhostteaCore
 
-/// The hand-built fallback: Matte Black's chrome bytes, hardcoded so a theme
-/// name the catalog no longer carries (or a malformed catalog entry) degrades
-/// to the monochrome default instead of an invalid config. The catalog itself
-/// preconditions on load upstream, so in practice this only covers a *name*
-/// miss.
-private enum FallbackColors {
-  static let background: [UInt8] = [0x12, 0x12, 0x12]
-  static let foreground: [UInt8] = [0xbe, 0xbe, 0xbe]
-  static let cursor: [UInt8] = [0xea, 0xea, 0xea]
-  static let cursorText: [UInt8] = [0x12, 0x12, 0x12]
-  static let selectionBackground: [UInt8] = [0x33, 0x33, 0x33]
-  static let selectionForeground: [UInt8] = [0xea, 0xea, 0xea]
+/// The hand-built fallback, one for each mode: the chrome bytes of the mode's
+/// own look, hardcoded so a malformed colour (or, by night, a catalog that has
+/// lost Matte Black) degrades to that look instead of an invalid config. The
+/// catalog itself preconditions on load upstream, so in practice this only
+/// covers a *name* miss. The day's are `TerminalLook.day`'s own, held to it by
+/// a test.
+struct FallbackColors {
+  let background: [UInt8]
+  let foreground: [UInt8]
+  let cursor: [UInt8]
+  let cursorText: [UInt8]
+  let selectionBackground: [UInt8]
+  let selectionForeground: [UInt8]
+
+  static let night = FallbackColors(
+    background: [0x12, 0x12, 0x12], foreground: [0xbe, 0xbe, 0xbe], cursor: [0xea, 0xea, 0xea],
+    cursorText: [0x12, 0x12, 0x12], selectionBackground: [0x33, 0x33, 0x33],
+    selectionForeground: [0xea, 0xea, 0xea])
+  static let day = FallbackColors(
+    background: [0xf1, 0xf0, 0xee], foreground: [0x1e, 0x22, 0x27], cursor: [0x60, 0x89, 0xb8],
+    cursorText: [0xf1, 0xf0, 0xee], selectionBackground: [0xb6, 0xca, 0xde],
+    selectionForeground: [0x1e, 0x22, 0x27])
+
+  static func of(_ mode: TerminalLookMode) -> FallbackColors {
+    switch mode {
+    case .light: day
+    case .dark: night
+    }
+  }
 }
 
 /// Appearance → the renderer carrier, built DIRECTLY through the public
 /// memberwise init (D-i8) — no config document in between.
 ///
 /// Field-by-field policy, each line a finding:
+/// - The colours are the theme of `mode`, the mode of the place the terminal
+///   is drawn in (PF-6, 2026-11-21; DESIGN.md §2.7 "The terminal's own
+///   colours", on the phone): the theme picked for that mode, else the mode's
+///   own look (`TerminalLook`). It is asked of every caller, because a caller
+///   that forgot it would draw the night's look by day.
 /// - Palette entries are carried through as `GhostteaPaletteConfigEntry`,
 ///   never dropped — a theme without its 16 ANSI slots lies to every TUI.
 /// - Shader ids are filtered to `GhostteaShaderOption.available` (4 real
@@ -47,23 +69,38 @@ private enum FallbackColors {
 ///   as its session was told it, so a session whose host is light hands this
 ///   ground inks made for a light one; the floor keeps each readable here, hue
 ///   kept, as it does on the desktop.
+/// - `lightAdaptation` is the desktop's too, `auto`: under a light ground a
+///   program that paints most of its screen dark is redrawn as a light design.
 /// - `revision` is a digest of the renderer VALUES, so it changes exactly when
 ///   the device presentation changes — document identity that never drags an
 ///   unrelated edit onto the Metal path.
 public func presentationConfig(
   for appearance: TerminalAppearance,
+  mode: TerminalLookMode,
   gridTopInset: Double = 0
 ) -> GhostteaTerminalPresentationConfig {
-  let theme = resolveTheme(named: appearance.themeName)
+  presentationConfig(
+    for: appearance, theme: TerminalLook.theme(for: appearance, mode: mode), mode: mode,
+    gridTopInset: gridTopInset)
+}
 
-  let background = color(theme?.background, fallback: FallbackColors.background)
-  let foreground = color(theme?.foreground, fallback: FallbackColors.foreground)
-  let cursor = color(theme?.cursor, fallback: FallbackColors.cursor)
-  let cursorText = color(theme?.cursorText, fallback: FallbackColors.cursorText)
+/// The builder itself, over a theme already resolved: `nil` draws the mode's
+/// hand-built bytes. Apart so a test can hand it no theme.
+func presentationConfig(
+  for appearance: TerminalAppearance,
+  theme: TerminalThemeColours?,
+  mode: TerminalLookMode,
+  gridTopInset: Double = 0
+) -> GhostteaTerminalPresentationConfig {
+  let fallback = FallbackColors.of(mode)
+  let background = color(theme?.background, fallback: fallback.background)
+  let foreground = color(theme?.foreground, fallback: fallback.foreground)
+  let cursor = color(theme?.cursor, fallback: fallback.cursor)
+  let cursorText = color(theme?.cursorText, fallback: fallback.cursorText)
   let selectionBackground = color(
-    theme?.selection, fallback: FallbackColors.selectionBackground)
+    theme?.selection, fallback: fallback.selectionBackground)
   let selectionForeground = color(
-    theme?.selectionForeground, fallback: FallbackColors.selectionForeground)
+    theme?.selectionForeground, fallback: fallback.selectionForeground)
   let palette = (theme?.palette ?? []).prefix(256).enumerated().compactMap {
     index, hex -> GhostteaPaletteConfigEntry? in
     parseHexColor(hex).map { GhostteaPaletteConfigEntry(index: UInt8(index), color: $0) }
@@ -103,6 +140,7 @@ public func presentationConfig(
     backgroundOpacity: opacity,
     backgroundOpacityCells: false,
     minimumContrast: textContrastFloor,
+    lightAdaptation: .auto,
     fontSize: fontSize,
     fontFamilies: [],
     paddingX: paddingX,
@@ -117,17 +155,6 @@ public func presentationConfig(
 /// The contrast text keeps against its own cell's ground on the phone: the
 /// desktop's floor (DESIGN.md §8 "What a pane's text is held to").
 let textContrastFloor: Float = 3
-
-/// Named theme → catalog entry, degrading in one step to the default theme.
-/// (`nil` name means "our default" by contract.)
-private func resolveTheme(named name: String?) -> GhostteaColorTheme? {
-  let wanted = name ?? TerminalAppearance.default.themeName
-  if let wanted, let theme = GhostteaThemeCatalog.themes.first(where: { $0.name == wanted }) {
-    return theme
-  }
-  guard let fallback = TerminalAppearance.default.themeName, fallback != wanted else { return nil }
-  return GhostteaThemeCatalog.themes.first(where: { $0.name == fallback })
-}
 
 private func color(_ hex: String?, fallback: [UInt8]) -> [UInt8] {
   hex.flatMap(parseHexColor) ?? fallback

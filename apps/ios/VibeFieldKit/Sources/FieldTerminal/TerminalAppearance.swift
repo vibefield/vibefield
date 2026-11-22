@@ -10,8 +10,15 @@ import Foundation
 /// If that story ever arrives, `GhostteaConfigurationModel` upstream is the
 /// named escape hatch.
 public struct TerminalAppearance: Sendable, Equatable, Codable {
-  /// A `GhostteaThemeCatalog` theme name; `nil` means our default.
-  public var themeName: String?
+  /// A `GhostteaThemeCatalog` theme name picked for the phone's light mode;
+  /// `nil` is the day's own look (`TerminalLook.day`). PF-6 (2026-11-21;
+  /// DESIGN.md §2.7 "The terminal's own colours", on the phone): a theme is
+  /// picked for each mode, as the desktop keeps one for each of Godview's.
+  public var lightThemeName: String?
+  /// The same for the phone's dark mode; `nil` is the night's own look, the
+  /// catalog's Matte Black. A record saved before PF-6 held one `themeName`,
+  /// drawn in both modes: it is read as this one, and the day starts unpicked.
+  public var darkThemeName: String?
   /// 0...1. Composes with the card's glass, so the field can show through the
   /// terminal itself (§10.4). Stored as `groundOpacity` since PF-5 (2026-11-21;
   /// DESIGN.md §8 "The card's glass is the field"): the default became the
@@ -32,14 +39,10 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   /// phone as in Godview (PF-5; DESIGN.md §8 "The card's glass is the field").
   public static let defaultGroundOpacity = 0.82
 
-  /// Matte Black is the catalog's closest match to the godview instrument
-  /// palette (DESIGN.md §2.7 — near-black ground, grey text ramp): pure
-  /// greyscale chrome (#121212 ground, #bebebe text, a colorless #333333
-  /// selection) while the 16 ANSI slots keep their semantic reds and ambers —
-  /// status colors stay meaningful, never decorative, exactly the monochrome
-  /// control room's rule.
+  /// No theme picked for either mode: each wears its own look (`TerminalLook`).
   public static let `default` = TerminalAppearance(
-    themeName: "Matte Black",
+    lightThemeName: nil,
+    darkThemeName: nil,
     backgroundOpacity: defaultGroundOpacity,
     shaderEffects: [],
     shaderAnimation: false,
@@ -47,30 +50,58 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   )
 
   public init(
-    themeName: String?,
+    lightThemeName: String?,
+    darkThemeName: String?,
     backgroundOpacity: Double,
     shaderEffects: [String],
     shaderAnimation: Bool,
     fontSize: Double
   ) {
-    self.themeName = themeName
+    self.lightThemeName = lightThemeName
+    self.darkThemeName = darkThemeName
     self.backgroundOpacity = backgroundOpacity
     self.shaderEffects = shaderEffects
     self.shaderAnimation = shaderAnimation
     self.fontSize = fontSize
   }
 
+  /// The theme picked for a mode, or `nil` where the mode wears its own look.
+  public func themeName(for mode: TerminalLookMode) -> String? {
+    switch mode {
+    case .light: lightThemeName
+    case .dark: darkThemeName
+    }
+  }
+
+  /// Picks a theme for a mode; `nil` puts the mode back on its own look.
+  public mutating func setThemeName(_ name: String?, for mode: TerminalLookMode) {
+    switch mode {
+    case .light: lightThemeName = name
+    case .dark: darkThemeName = name
+    }
+  }
+
   private enum CodingKeys: String, CodingKey {
-    case themeName, shaderEffects, shaderAnimation, fontSize
+    case lightThemeName, darkThemeName, shaderEffects, shaderAnimation, fontSize
     /// PF-5: renamed with its default; a record's old `backgroundOpacity` is not read.
     case backgroundOpacity = "groundOpacity"
+  }
+
+  /// What a record saved before PF-6 called its one theme. Read, never written.
+  private enum RetiredKeys: String, CodingKey {
+    case themeName
   }
 
   /// Tolerant reader for our own stored payloads: a field added later must not
   /// reset a user's theme when an older payload is read back.
   public init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
-    themeName = try values.decodeIfPresent(String.self, forKey: .themeName)
+    lightThemeName = try values.decodeIfPresent(String.self, forKey: .lightThemeName)
+    // PF-6: the one theme of an older record was drawn in both modes. It is
+    // kept as the night's; the day is left unpicked, so it takes the day look.
+    darkThemeName =
+      try values.decodeIfPresent(String.self, forKey: .darkThemeName)
+      ?? decoder.container(keyedBy: RetiredKeys.self).decodeIfPresent(String.self, forKey: .themeName)
     backgroundOpacity =
       try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity)
       ?? Self.defaultGroundOpacity
@@ -78,6 +109,17 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
     shaderAnimation = try values.decodeIfPresent(Bool.self, forKey: .shaderAnimation) ?? false
     fontSize = try values.decodeIfPresent(Double.self, forKey: .fontSize) ?? 13
   }
+}
+
+/// Which of the phone's two modes a terminal is drawn for: the look of the
+/// window it stands in (`PhoneAppearance`), as the place that draws it reads it.
+///
+/// PF-6 (2026-11-21; DESIGN.md §2.7 "The terminal's own colours", on the
+/// phone): a terminal wears the look of the mode the phone is in, as a pane
+/// wears the look of Godview's mode on the desktop.
+public enum TerminalLookMode: String, CaseIterable, Hashable, Sendable {
+  case light
+  case dark
 }
 
 /// UserDefaults-backed persistence for the appearance (§10.4: theme name,

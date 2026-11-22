@@ -152,9 +152,10 @@ extension FieldHomeModel {
 
 extension FieldHomeModel {
   /// `-vf-open-settings[=<page>]` → where Settings opens: `account`,
-  /// `desktop:<id>`, `appearance`, `terminal`, `theme` and `effects` (Terminal
-  /// one step back), `about`, `acknowledgements` (About one step back), `lock`
-  /// (WI-3); anything else is the root.
+  /// `desktop:<id>`, `appearance`, `terminal`, `theme` (the dark mode's theme;
+  /// `theme:light` the light mode's, PF-6) and `effects` (Terminal one step
+  /// back), `about`, `acknowledgements` (About one step back), `lock` (WI-3);
+  /// anything else is the root.
   static func settingsOpening(argument: String) -> SettingsOpening {
     let value = String(argument.drop(while: { $0 != "=" }).dropFirst())
     switch value {
@@ -162,7 +163,8 @@ extension FieldHomeModel {
     case "appearance": return SettingsOpening([.appearance])
     case "lock": return SettingsOpening([.lock])
     case "terminal": return .terminal
-    case "theme": return SettingsOpening([.terminal], terminalPage: .theme)
+    case "theme", "theme:dark": return SettingsOpening([.terminal], terminalPage: .theme(.dark))
+    case "theme:light": return SettingsOpening([.terminal], terminalPage: .theme(.light))
     case "effects": return SettingsOpening([.terminal], terminalPage: .effects)
     case "about": return SettingsOpening([.about])
     case "acknowledgements": return SettingsOpening([.about, .acknowledgements])

@@ -461,6 +461,9 @@ public struct HomeScreen: View {
     .onChange(of: selection?.id) { refold() }
     .onChange(of: colorScheme) { refold() }
     // --- end IOS-6d
+    // PF-6: the terminal wears the look of the mode the phone is in, so a change of mode re-dresses the one on
+    // the card. A kept attachment takes its mode when its card is raised again.
+    .onChange(of: colorScheme) { attachment?.lookMode = TerminalLookMode(colorScheme) }
     // IOS-8d — on the stage for the type-checker's sake, like the cover above.
     .confirmationDialog(
       SettingsWords.signOutTitle(login: accountLogin), isPresented: $signOutPending,
@@ -3616,7 +3619,8 @@ public struct HomeScreen: View {
 
   /// The terminal's own ground, for the live card (item 41).
   private var cardGround: CardGround {
-    let ground = TerminalGround(attachment?.presentation ?? presentationConfig(for: appearance))
+    let ground = TerminalGround(
+      attachment?.presentation ?? presentationConfig(for: appearance, mode: TerminalLookMode(colorScheme)))
     return CardGround(color: ground.color, solid: ground.solidColor, inkScheme: ground.inkScheme)
   }
 
@@ -3703,7 +3707,8 @@ public struct HomeScreen: View {
             scene: scene,
             visible: true,
             configuration: presentationConfig(
-              for: appearance, gridTopInset: Double(FieldHomeModel.liveCardBand)),
+              for: appearance, mode: TerminalLookMode(colorScheme),
+              gridTopInset: Double(FieldHomeModel.liveCardBand)),
             controlsGridSize: false)
         }
       #endif
@@ -4433,6 +4438,8 @@ public struct HomeScreen: View {
         ?? TerminalAttachment(lanes: lanes, appearance: appearance)
       // PF-4: the surface runs under the card's band; its grid begins at the band's foot.
       attachment.gridTopInset = Double(FieldHomeModel.liveCardBand)
+      // PF-6: and it is drawn in the look of the mode the phone is in.
+      attachment.lookMode = TerminalLookMode(colorScheme)
       attachment.apply(appearance: appearance)
       self.attachment = attachment
       attachedDeviceID = deviceID

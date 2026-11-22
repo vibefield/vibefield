@@ -8,6 +8,11 @@ import SwiftUI
 /// Theme, Background opacity, Effects, Animate effects), under the preview
 /// that tab opens on (item 358, `TerminalLookPreview`).
 ///
+/// Theme is two rows since PF-6 (2026-11-21; DESIGN.md §8 "The phone's
+/// Settings"): one for each of the phone's modes, as the desktop's Look keeps
+/// a theme for each of Godview's. The preview and its caption show the mode
+/// the phone is in.
+///
 /// It was the terminal settings sheet (D-i8), drawn in the godview mono, and
 /// the phone's only settings; Settings pushes it now, and the card's `···`
 /// opens Settings on it. Upstream exports DATA — 602 themes with their
@@ -29,6 +34,7 @@ import SwiftUI
 /// and can open on either.
 public struct TerminalSettingsPage: View {
   @Binding private var appearance: TerminalAppearance
+  @Environment(\.colorScheme) private var colorScheme
 
   public init(appearance: Binding<TerminalAppearance>) {
     _appearance = appearance
@@ -38,7 +44,7 @@ public struct TerminalSettingsPage: View {
     List {
       // Item 358 — the page opens on its preview, as the desktop's Look does: a picture on the sheet's paper, no tile
       Section {
-        TerminalLookPreview(appearance: appearance)
+        TerminalLookPreview(appearance: appearance, mode: TerminalLookMode(colorScheme))
           .listRowInsets(EdgeInsets())
           .listRowBackground(Color.clear)
           .listRowSeparator(.hidden)
@@ -46,8 +52,11 @@ public struct TerminalSettingsPage: View {
         ChromeListHead("Preview")
       }
       Section {
-        NavigationLink(value: TerminalSettingsRoute.theme) {
-          ChromeRow("Theme", value: TerminalSettingsModel.themeName(of: appearance))
+        ForEach(TerminalLookMode.allCases, id: \.self) { mode in
+          NavigationLink(value: TerminalSettingsRoute.theme(mode)) {
+            ChromeRow(
+              TerminalSettingsWords.themeRow(mode), value: TerminalSettingsModel.themeName(of: appearance, mode: mode))
+          }
         }
         opacityRow
         fontRow
@@ -137,49 +146,72 @@ public struct TerminalSettingsPage: View {
 
 /// The Terminal page's own pages, pushed by value.
 public enum TerminalSettingsRoute: Hashable, Sendable {
-  case theme
+  /// The theme of one of the phone's modes (PF-6).
+  case theme(TerminalLookMode)
   case effects
 
   /// The page this route opens, over the same binding as the Terminal page.
   @MainActor @ViewBuilder
   public func destination(appearance: Binding<TerminalAppearance>) -> some View {
     switch self {
-    case .theme: TerminalThemePage(appearance: appearance)
+    case .theme(let mode): TerminalThemePage(appearance: appearance, mode: mode)
     case .effects: TerminalEffectsPage(appearance: appearance)
     }
   }
 }
 
-/// Settings › Terminal › Theme: every theme the phone carries, searchable, the
-/// one in use first. A `List` draws the 602 rows lazily, so the page shows
-/// them all rather than the ten the sheet once capped at.
+/// Settings › Terminal › a mode's theme: every theme the phone carries,
+/// searchable, the one in use first. A `List` draws the 602 rows lazily, so
+/// the page shows them all rather than the ten the sheet once capped at.
+///
+/// A mode whose own look is no catalog theme (the day's, `TerminalLook.day`)
+/// heads the list with it: the row that puts the mode back on its own look.
+/// The night's own is the catalog's Matte Black, so its list needs no such row.
 struct TerminalThemePage: View {
   @Binding var appearance: TerminalAppearance
+  let mode: TerminalLookMode
   @State private var query = ""
 
   var body: some View {
-    let selected = TerminalSettingsModel.themeName(of: appearance)
+    let selected = TerminalSettingsModel.themeName(of: appearance, mode: mode)
     let matches = TerminalSettingsModel.themes(matching: query)
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    let own = TerminalSettingsModel.ownTheme(of: mode)
+    let wearsOwn = own != nil && appearance.themeName(for: mode) == nil
+    let listsOwn = own.map { TerminalSettingsModel.matches($0.name, query: query) } ?? false
     return List {
-      if trimmed.isEmpty, let current = GhostteaThemeCatalog.themes.first(where: { $0.name == selected }) {
-        Section {
-          themeRow(current, selected: true)
-        } header: {
-          ChromeListHead("In use")
+      if trimmed.isEmpty {
+        if let own, wearsOwn {
+          Section {
+            ownRow(own, selected: true)
+          } header: {
+            ChromeListHead("In use")
+          }
+          .chromeRows()
+        } else if let current = GhostteaThemeCatalog.themes.first(where: { $0.name == selected }) {
+          Section {
+            themeRow(current, selected: true)
+          } header: {
+            ChromeListHead("In use")
+          }
+          .chromeRows()
         }
-        .chromeRows()
       }
       Section {
-        if matches.isEmpty {
+        if matches.isEmpty && !listsOwn {
           ChromeRow("No theme matches", detail: "Nothing called “\(trimmed)”.")
         } else {
+          if let own, listsOwn {
+            ownRow(own, selected: wearsOwn)
+          }
           ForEach(matches) { theme in
-            themeRow(theme, selected: theme.name == selected)
+            themeRow(theme, selected: !wearsOwn && theme.name == selected)
           }
         }
       } header: {
-        ChromeListHead(trimmed.isEmpty ? "All themes" : TerminalSettingsModel.themeCountWord(matches.count))
+        ChromeListHead(
+          trimmed.isEmpty
+            ? "All themes" : TerminalSettingsModel.themeCountWord(matches.count + (listsOwn ? 1 : 0)))
       } footer: {
         ChromeListFoot(TerminalSettingsModel.catalogFoot())
       }
@@ -192,18 +224,35 @@ struct TerminalThemePage: View {
     )
     .autocorrectionDisabled()
     .textInputAutocapitalization(.never)
-    .navigationTitle("Theme")
+    .navigationTitle(TerminalSettingsWords.themeRow(mode))
     .navigationBarTitleDisplayMode(.inline)
   }
 
   private func themeRow(_ theme: GhostteaColorTheme, selected: Bool) -> some View {
-    Button {
-      guard appearance.themeName != theme.name else { return }
-      appearance.themeName = theme.name
-    } label: {
+    row(theme.name, swatch: TerminalSettingsModel.swatchBytes(for: theme), selected: selected) {
+      pick(theme.name)
+    }
+  }
+
+  /// The mode's own look: picking it leaves the mode with no theme picked.
+  private func ownRow(_ own: TerminalThemeColours, selected: Bool) -> some View {
+    row(own.name, swatch: TerminalSettingsModel.swatchBytes(for: own), selected: selected) {
+      pick(nil)
+    }
+  }
+
+  private func pick(_ name: String?) {
+    guard appearance.themeName(for: mode) != name else { return }
+    appearance.setThemeName(name, for: mode)
+  }
+
+  private func row(
+    _ name: String, swatch: [[UInt8]], selected: Bool, pick: @escaping () -> Void
+  ) -> some View {
+    Button(action: pick) {
       HStack(spacing: 12) {
-        SwatchStrip(bytes: TerminalSettingsModel.swatchBytes(for: theme))
-        Text(theme.name)
+        SwatchStrip(bytes: swatch)
+        Text(name)
           .font(ChromeListType.row)
           .foregroundStyle(ChromePalette.ink)
           .lineLimit(1)
@@ -219,7 +268,7 @@ struct TerminalThemePage: View {
       .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
-    .accessibilityLabel(theme.name)
+    .accessibilityLabel(name)
     .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
   }
 }
@@ -349,21 +398,36 @@ enum TerminalSettingsModel {
   /// at one end and a terminal that still fits 80 columns at the other.
   static let fontSizeRange: ClosedRange<Double> = 9...20
 
-  /// The theme the terminal is wearing. `nil` means our default by contract
-  /// (`TerminalAppearance.default`), so the tick lands on the row that is
-  /// actually rendering.
-  static func themeName(of appearance: TerminalAppearance) -> String {
-    appearance.themeName ?? TerminalAppearance.default.themeName ?? ""
+  /// The theme a mode is wearing, by name. No theme picked means the mode's
+  /// own look by contract (`TerminalLook`), so the tick lands on the row that
+  /// is actually rendering.
+  static func themeName(of appearance: TerminalAppearance, mode: TerminalLookMode) -> String {
+    appearance.themeName(for: mode) ?? TerminalLook.ownName(mode)
+  }
+
+  /// A mode's own look where it is no catalog theme, for the row that heads
+  /// that mode's list: the day's. The night's own is a catalog row already.
+  static func ownTheme(of mode: TerminalLookMode) -> TerminalThemeColours? {
+    switch mode {
+    case .light: TerminalLook.day
+    case .dark: nil
+    }
   }
 
   /// Case-insensitive substring on the name. An empty (or all-whitespace) query
   /// matches everything: nothing typed is not a filter.
+  static func matches(_ name: String, query: String) -> Bool {
+    let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty || name.range(of: trimmed, options: .caseInsensitive) != nil
+  }
+
+  /// The catalog's themes a query keeps, by `matches`.
   static func themes(
     matching query: String, in catalog: [GhostteaColorTheme] = GhostteaThemeCatalog.themes
   ) -> [GhostteaColorTheme] {
     let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return catalog }
-    return catalog.filter { $0.name.range(of: trimmed, options: .caseInsensitive) != nil }
+    return catalog.filter { matches($0.name, query: trimmed) }
   }
 
   /// A search's head: what it found, counted.
@@ -399,6 +463,10 @@ enum TerminalSettingsModel {
   /// substituted: an invented colour would misrepresent the theme, and the
   /// catalog's own format is the only one `parseHexColor` blesses.
   static func swatchBytes(for theme: GhostteaColorTheme) -> [[UInt8]] {
+    swatchBytes(for: TerminalThemeColours(theme))
+  }
+
+  static func swatchBytes(for theme: TerminalThemeColours) -> [[UInt8]] {
     let values = [theme.background, theme.foreground, theme.cursor]
       + theme.palette.prefix(swatchPaletteCount)
     return values.compactMap(parseHexColor)
@@ -509,9 +577,11 @@ enum TerminalSettingsModel {
 }
 
 extension TerminalAppearance {
-  /// The theme as Settings' Terminal row says it: the one in use, our
-  /// default's name for nil.
-  public var shownThemeName: String { TerminalSettingsModel.themeName(of: self) }
+  /// The theme as Settings' Terminal row says it: the one a mode is wearing,
+  /// the mode's own look by name where none is picked.
+  public func shownThemeName(in mode: TerminalLookMode) -> String {
+    TerminalSettingsModel.themeName(of: self, mode: mode)
+  }
 }
 
 /// The effects the phone ships, each with its licence, for About's credits —
@@ -533,6 +603,15 @@ public enum TerminalCredits {
 enum TerminalSettingsWords {
   /// The tag on Look and on Drawn over the terminal: whose these settings are.
   static func tag(_ device: DeviceWord) -> String { device.This }
+
+  /// A mode's theme row and its page's title, in the desktop's words for its
+  /// two theme slots (PF-6).
+  static func themeRow(_ mode: TerminalLookMode) -> String {
+    switch mode {
+    case .light: "Light mode theme"
+    case .dark: "Dark mode theme"
+    }
+  }
 
   /// Look's foot.
   static func lookFoot(_ device: DeviceWord) -> String {

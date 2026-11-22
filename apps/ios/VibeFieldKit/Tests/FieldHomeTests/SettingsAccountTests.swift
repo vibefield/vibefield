@@ -196,7 +196,10 @@ struct SettingsAccountTests {
     #expect(opening("-vf-open-settings") == .root)
     #expect(opening("-vf-open-settings=account") == .account)
     #expect(opening("-vf-open-settings=terminal") == .terminal)
-    #expect(opening("-vf-open-settings=theme") == SettingsOpening([.terminal], terminalPage: .theme))
+    // PF-6: a theme page is a mode's; the bare word opens the dark mode's.
+    #expect(opening("-vf-open-settings=theme") == SettingsOpening([.terminal], terminalPage: .theme(.dark)))
+    #expect(opening("-vf-open-settings=theme:dark") == SettingsOpening([.terminal], terminalPage: .theme(.dark)))
+    #expect(opening("-vf-open-settings=theme:light") == SettingsOpening([.terminal], terminalPage: .theme(.light)))
     #expect(opening("-vf-open-settings=effects") == SettingsOpening([.terminal], terminalPage: .effects))
     #expect(opening("-vf-open-settings=acknowledgements") == SettingsOpening([.about, .acknowledgements]))
     #expect(opening("-vf-open-settings=lock") == SettingsOpening([.lock]))

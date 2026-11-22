@@ -45,18 +45,36 @@ struct TerminalLookPreviewTests {
     #expect(inks.slot(-1) == Model.neutralText)
   }
 
-  @Test("the terminal's theme is the one drawn, and a name the catalog does not hold draws the neutral pair")
+  @Test("the mode's theme is the one drawn, and a name the catalog does not hold draws the mode's own look")
   func theThemeInUse() throws {
     let matte = try #require(GhostteaThemeCatalog.themes.first { $0.name == "Matte Black" })
-    let inks = Model.inks(for: .default)
+    let inks = Model.inks(for: .default, mode: .dark)
     #expect(inks.ground == parseHexColor(matte.background))
     #expect(inks.foreground == parseHexColor(matte.foreground))
     #expect(inks.palette.count == matte.palette.count)
     var unknown = TerminalAppearance.default
-    unknown.themeName = "No Such Theme"
-    let neutral = Model.inks(for: unknown)
+    unknown.darkThemeName = "No Such Theme"
+    #expect(Model.inks(for: unknown, mode: .dark) == inks, "what the renderer draws for it (`TerminalLook.theme`)")
+    // A catalog that has lost the night's own: the neutral pair, never an invented colour.
+    let neutral = Model.inks(for: unknown, mode: .dark, in: [])
     #expect(neutral.ground == Model.neutralGround && neutral.foreground == Model.neutralText)
     #expect(neutral.palette.isEmpty)
+  }
+
+  @Test("PF-6: by day the picture is the day look, the paper and its ink, and a pick for the night leaves it be")
+  func theDayLook() {
+    var appearance = TerminalAppearance.default
+    appearance.darkThemeName = "Vesper"
+    let inks = Model.inks(for: appearance, mode: .light)
+    #expect(inks.ground == [0xF1, 0xF0, 0xEE] && inks.foreground == [0x1E, 0x22, 0x27])
+    #expect(inks.cursor == [0x60, 0x89, 0xB8] && inks.cursorText == inks.ground)
+    #expect(inks.selection == [0xB6, 0xCA, 0xDE] && inks.selectionForeground == inks.foreground)
+    #expect(inks.palette.count == 16 && inks.slot(1) == [0xA9, 0x52, 0x4D])
+    #expect(Model.caption(appearance, mode: .light).theme == "Daylight")
+    #expect(Model.caption(appearance, mode: .dark).theme == "Vesper")
+    #expect(Model.spoken(.default, mode: .light).contains("Daylight, 13 points"))
+    // The day's own needs no catalog.
+    #expect(Model.inks(for: .default, mode: .light, in: []) == Model.inks(for: .default, mode: .light))
   }
 
   @Test("a run's colours: its slot on the ground, its slot on a slot, the selection's pair, the cursor's pair")
@@ -89,15 +107,15 @@ struct TerminalLookPreviewTests {
   func theCaption() throws {
     var appearance = TerminalAppearance.default
     appearance.fontSize = 15
-    let plain = Model.caption(appearance)
+    let plain = Model.caption(appearance, mode: .dark)
     #expect(plain.theme == "Matte Black" && plain.size == "15 pt" && plain.note == "Sample text")
     let shader = try #require(GhostteaShaderOption.available.first)
     appearance.shaderEffects = [shader.id]
-    #expect(Model.caption(appearance).note == "Sample text · effects not drawn")
+    #expect(Model.caption(appearance, mode: .dark).note == "Sample text · effects not drawn")
     appearance.shaderEffects = ["ghosttea:no-such-effect"]
-    #expect(Model.caption(appearance).note == "Sample text", "an effect the renderer would drop is not claimed")
+    #expect(Model.caption(appearance, mode: .dark).note == "Sample text", "an effect the renderer would drop is not claimed")
     appearance.fontSize = .nan
-    #expect(Model.caption(appearance).size == "13 pt", "read through the clamp")
+    #expect(Model.caption(appearance, mode: .dark).size == "13 pt", "read through the clamp")
   }
 
   @Test("the picture is said as one sentence: the theme, the size, the opacity, and that the text is a sample")
@@ -105,7 +123,7 @@ struct TerminalLookPreviewTests {
     var appearance = TerminalAppearance.default
     appearance.backgroundOpacity = 0.55
     #expect(
-      Model.spoken(appearance)
+      Model.spoken(appearance, mode: .dark)
         == "Preview of the terminal’s look. Matte Black, 13 points, background 55%. The text is a sample.")
   }
 }

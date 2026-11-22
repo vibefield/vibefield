@@ -71,7 +71,7 @@ enum TerminalLookPreviewModel {
     }
   }
 
-  /// `TerminalGround`'s own fallback, and Matte Black's text (`TerminalAppearance.default`'s note).
+  /// `TerminalGround`'s own fallback, and Matte Black's text (`TerminalLook.nightThemeName`'s note).
   static let neutralGround: [UInt8] = [0x12, 0x12, 0x12]
   static let neutralText: [UInt8] = [0xBE, 0xBE, 0xBE]
 
@@ -90,12 +90,13 @@ enum TerminalLookPreviewModel {
       palette: palette.map { parseHexColor($0) ?? text })
   }
 
-  /// The colours of the theme the terminal is wearing; the neutral pair when the catalog has no theme of that name.
+  /// The colours of the theme the terminal wears in a mode (PF-6: the one picked for it, else the mode's own look,
+  /// `TerminalLook.theme`); the neutral pair by night when the catalog has lost the night's own.
   static func inks(
-    for appearance: TerminalAppearance, in catalog: [GhostteaColorTheme] = GhostteaThemeCatalog.themes
+    for appearance: TerminalAppearance, mode: TerminalLookMode,
+    in catalog: [GhostteaColorTheme] = GhostteaThemeCatalog.themes
   ) -> Inks {
-    let name = TerminalSettingsModel.themeName(of: appearance)
-    guard let theme = catalog.first(where: { $0.name == name }) else {
+    guard let theme = TerminalLook.theme(for: appearance, mode: mode, in: catalog) else {
       return Inks(
         ground: neutralGround, foreground: neutralText, cursor: neutralText, cursorText: neutralGround,
         selection: neutralText, selectionForeground: neutralGround, palette: [])
@@ -114,17 +115,20 @@ enum TerminalLookPreviewModel {
   }
 
   /// The caption's left: the theme and the size. Its right: what the picture is not.
-  static func caption(_ appearance: TerminalAppearance) -> (theme: String, size: String, note: String) {
+  static func caption(
+    _ appearance: TerminalAppearance, mode: TerminalLookMode
+  ) -> (theme: String, size: String, note: String) {
     let on = GhostteaShaderOption.available.filter { appearance.shaderEffects.contains($0.id) }
     return (
-      TerminalSettingsModel.themeName(of: appearance), TerminalSettingsModel.pointsText(appearance.fontSize),
+      TerminalSettingsModel.themeName(of: appearance, mode: mode),
+      TerminalSettingsModel.pointsText(appearance.fontSize),
       on.isEmpty ? "Sample text" : "Sample text · effects not drawn"
     )
   }
 
   /// The picture, said: it is one element to VoiceOver.
-  static func spoken(_ appearance: TerminalAppearance) -> String {
-    let caption = caption(appearance)
+  static func spoken(_ appearance: TerminalAppearance, mode: TerminalLookMode) -> String {
+    let caption = caption(appearance, mode: mode)
     let points = Int(TerminalSettingsModel.clampedFontSize(appearance.fontSize).rounded())
     let opacity = TerminalSettingsModel.percent(appearance.backgroundOpacity)
     return "Preview of the terminal’s look. \(caption.theme), \(points) points, background \(opacity). "
@@ -135,15 +139,17 @@ enum TerminalLookPreviewModel {
 /// Settings › Terminal's preview: the live card in miniature, and its caption.
 struct TerminalLookPreview: View {
   let appearance: TerminalAppearance
+  /// The mode the phone is in: the preview shows the theme the terminal wears now (PF-6).
+  let mode: TerminalLookMode
 
   /// The picture's height at the list's width.
   static let height: CGFloat = 176
 
   var body: some View {
-    let inks = TerminalLookPreviewModel.inks(for: appearance)
+    let inks = TerminalLookPreviewModel.inks(for: appearance, mode: mode)
     let opacity = TerminalSettingsModel.clampedOpacity(appearance.backgroundOpacity)
     let size = CGFloat(TerminalSettingsModel.clampedFontSize(appearance.fontSize))
-    let caption = TerminalLookPreviewModel.caption(appearance)
+    let caption = TerminalLookPreviewModel.caption(appearance, mode: mode)
     let shape = RoundedRectangle(cornerRadius: ChromeRadius.card, style: .continuous)
     return VStack(alignment: .leading, spacing: 8) {
       ZStack {
@@ -177,7 +183,7 @@ struct TerminalLookPreview: View {
       .padding(.horizontal, 6)
     }
     .accessibilityElement(children: .ignore)
-    .accessibilityLabel(TerminalLookPreviewModel.spoken(appearance))
+    .accessibilityLabel(TerminalLookPreviewModel.spoken(appearance, mode: mode))
     .accessibilityAddTraits(.isImage)
     .allowsHitTesting(false)
   }

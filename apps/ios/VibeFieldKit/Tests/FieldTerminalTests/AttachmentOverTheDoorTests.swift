@@ -197,6 +197,16 @@ import Testing
     #expect(attachment.presentation.paddingY == [44, 6])
     attachment.apply(appearance: .default)
     #expect(attachment.presentation.paddingY == [44, 6])
+    // PF-6: it is drawn in the night's look until its host says the mode, and takes the day's
+    // at once when it does; an appearance applied after keeps the mode and the room.
+    #expect(attachment.presentation.background == [0x12, 0x12, 0x12])
+    attachment.lookMode = .light
+    #expect(attachment.presentation.background == [0xf1, 0xf0, 0xee])
+    #expect(attachment.presentation.paddingY == [44, 6])
+    attachment.apply(appearance: .default)
+    #expect(attachment.presentation.background == [0xf1, 0xf0, 0xee])
+    attachment.lookMode = .dark
+    #expect(attachment.presentation.background == [0x12, 0x12, 0x12])
 
     // 3. The seed frame. It reaches the renderer's frame path BYTE FOR BYTE —
     //    the cell rendered it once, and nothing on this device re-encodes it.
