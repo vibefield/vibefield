@@ -2,8 +2,12 @@ import FieldDesign
 import FieldTerminal
 import SwiftUI
 
-/// The input card: a composer row over a rail of terminal keys, sitting on the
-/// session sheet's glass above the keyboard.
+/// The input card: one row on the session sheet's glass above the keyboard.
+/// It is the composer while a message is written and the rail of terminal keys
+/// while the keys go to the terminal (PF-8, 2026-11-22; DESIGN.md §8 "The
+/// phone's input card is one row in each of its two modes"). The switch
+/// between them is not on the card: it floats beside the fold key
+/// (`ModeSwitch`, in `InputOverlay`).
 ///
 /// **IOS-5v — the card speaks VibeField.** It used to speak godview: mono
 /// labels, `FieldPalette`, a key that inverted rather than filled. That was the
@@ -48,8 +52,9 @@ public struct InputCard: View {
     self.model = model
   }
 
-  /// The canvas's geometry: the card is `padding: 8` with `gap: 6` between its
-  /// rows and `gap: 4` inside one; the card is inset 9 from the screen's edges.
+  /// The canvas's geometry: the card is `padding: 8` round its one row, with
+  /// `gap: 4` between the rail's keys; it is inset 9 from the screen's edges
+  /// and stands 6 over the keyboard.
   private static let rowGap: CGFloat = 6
   private static let keyGap: CGFloat = 4
   private static let padding: CGFloat = 8
@@ -100,61 +105,51 @@ public struct InputCard: View {
   /// draws it: this sits on the session sheet, which is already the system's
   /// own material, and the hairline plus the specular top edge are what make
   /// two translucent layers read as two rather than as haze.
+  ///
+  /// One row, and which one is the mode's (PF-8): the composer's, which grows
+  /// upward with its draft, or the rail's.
   private var card: some View {
-    VStack(spacing: Self.rowGap) {
-      inputRow
-      rail
+    ZStack(alignment: .bottom) {
+      composerRow
+      if model.mode == .live { rail }
     }
     .padding(Self.padding)
     .chromeGlass(radius: ChromeRadius.card)
   }
 
-  // MARK: - Row 1
+  // MARK: - The composer's row
 
   /// Keep the composer mounted across mode changes. Removing a first-responder
   /// UITextView makes UIKit hide the keyboard before the terminal or keypad
-  /// can take it, so `>_` used to close and reopen the keyboard on every tap.
-  /// The outgoing responder now stays available until the incoming one takes.
-  private var inputRow: some View {
-    HStack(alignment: .bottom, spacing: model.mode == .draft ? 0 : Self.keyGap) {
-      PlusMenu(model: model)
-      ZStack(alignment: .leading) {
-        ComposerField(
-          model: model,
-          height: $composerHeight,
-          keyboardAppearance: colorScheme == .dark ? .dark : .light,
-          textSize: InputCardMetrics.composerTextSize(for: dynamicTypeSize)
-        )
-        .frame(height: max(rowHeight, composerHeight))
-        .opacity(model.mode == .draft ? 1 : 0)
-        .accessibilityHidden(model.mode != .draft)
-        if model.mode == .live { terminalStrip }
-      }
-      .frame(height: model.mode == .draft ? max(rowHeight, composerHeight) : rowHeight)
-      .clipped()
+  /// can take it, so a switch used to close and reopen the keyboard on every
+  /// tap. The outgoing responder now stays available until the incoming one
+  /// takes: under the rail the field is there, unseen, one row tall and
+  /// taking no touch.
+  private var composerRow: some View {
+    HStack(alignment: .bottom, spacing: 0) {
+      // One `+` on the card at a time: its menu is a presentation off this
+      // button, and the rail carries its own while the keypad is up.
+      if model.mode == .draft { PlusMenu(model: model) }
+      ComposerField(
+        model: model,
+        height: $composerHeight,
+        keyboardAppearance: colorScheme == .dark ? .dark : .light,
+        textSize: InputCardMetrics.composerTextSize(for: dynamicTypeSize)
+      )
+      .frame(height: max(rowHeight, composerHeight))
+      .opacity(model.mode == .draft ? 1 : 0)
+      .allowsHitTesting(model.mode == .draft)
+      .accessibilityHidden(model.mode != .draft)
 
       if model.mode == .draft {
         DictationKey(model: model)
         sendKey
       }
     }
-  }
-
-  /// The terminal mode's readout replaces the composer's visible contents.
-  private var terminalStrip: some View {
-    HStack(spacing: 8) {
-      FieldGlyph(.prompt, size: FieldGlyph.box(for: glyphSize))
-      Text("Typing into terminal")
-        .font(ChromeType.sans(InputCardMetrics.stripSize(for: dynamicTypeSize), .semibold))
-        .lineLimit(1)
-        .truncationMode(.tail)
-    }
-    .foregroundStyle(ChromePalette.inkStrip)
-    .padding(.horizontal, 10)
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .frame(height: rowHeight)
-    .accessibilityElement()
-    .accessibilityLabel("Typing into terminal")
+    .frame(
+      height: model.mode == .draft ? max(rowHeight, composerHeight) : rowHeight, alignment: .bottom
+    )
+    .clipped()
   }
 
   /// Send is never disabled. `.circle.quiet` with an empty draft, and the
@@ -198,26 +193,19 @@ public struct InputCard: View {
       .frame(width: rowHeight, height: rowHeight)
   }
 
-  // MARK: - Row 2, the rail
+  // MARK: - The rail
 
-  /// Nine equal keys, `⋯` last (IOS-5d).
+  /// Eight equal keys, `⋯` last (IOS-5d; eight since PF-8, when the mode
+  /// switch left the rail for the floating row).
   ///
-  /// Every key but the mode toggle carries a long-press fan (IOS-5b): the
-  /// chords under Ctrl, the far ends under the arrows, ⇧Tab under Tab, and the
-  /// Meta burst under Esc.
+  /// Every key carries a long-press fan (IOS-5b) but `⋯`: the chords under
+  /// Ctrl, the far ends under the arrows, ⇧Tab under Tab, and the Meta burst
+  /// under Esc.
   private var rail: some View {
     HStack(spacing: Self.keyGap) {
-      key(
-        glyph: .prompt,
-        label: model.mode == .live ? "Typing into terminal" : "Type into terminal",
-        tone: model.mode == .live ? .on : .normal,
-        action: {
-          model.toggleMode()
-          // IOS-5e: the mode is drawn as a lit key and a changed row, and both
-          // are invisible to a reader whose focus is elsewhere on the card.
-          // Announced AFTER the flip, so it names the mode now in force.
-          InputAnnouncement.post(InputAnnouncement.mode(model.mode))
-        })
+      // PF-8: the `+` menu's doors keep a place in this mode, at the head of
+      // the rail while the keypad is up and the rail has the room.
+      if model.keypadShown { PlusMenu(model: model) }
       escapeKey
       controlKey
       if model.keypadShown {
@@ -283,8 +271,8 @@ public struct InputCard: View {
     // `.scrollDismissesKeyboard(.interactively)` on — the session card is a
     // VStack over a Metal surface — and the terminal below cannot take the
     // gesture either, because a drag there is a selection. So the rail itself
-    // is the handle: it is the one strip of chrome that exists in both modes
-    // and holds no scrollable content of its own. Simultaneous rather than
+    // is the handle: a strip of chrome that holds no scrollable content of
+    // its own. (The composer's row has its own way down: the fold key.) Simultaneous rather than
     // exclusive so the keys keep their taps; 20 pt before it engages, so a
     // finger sliding off a key is still a key.
     .simultaneousGesture(

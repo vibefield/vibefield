@@ -47,9 +47,8 @@ public enum InputAnnouncement {
   /// that expires unheard is the one way this control lies.
   public static let metaArmed = "Meta armed for the next key"
 
-  /// The `>_` toggle. What the strip says, said out loud — and "Drafting" for
-  /// the way back, which is the one state on this card with no strip of its
-  /// own to read.
+  /// The mode switch. What the mode is, said as what is happening, for a
+  /// reader whose focus is not on the switch when it changes.
   public static func mode(_ mode: InputCardModel.Mode) -> String {
     switch mode {
     case .live: return "Typing into terminal"

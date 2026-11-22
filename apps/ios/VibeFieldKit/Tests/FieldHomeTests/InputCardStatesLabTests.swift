@@ -62,7 +62,8 @@ struct InputCardStatesLabTests {
     let fan = model.openFan
     let owner = model.keyboardOwner
     #expect(fan == KeyFan.control)
-    #expect(owner == .composer)
+    // PF-8: the rail, and so a key's fan, stands in the terminal's mode alone.
+    #expect(owner == .terminal)
   }
 
   @Test("Control, armed is one tap on Ctrl and Control, locked two, each over a card whose keyboard is up")
@@ -72,7 +73,7 @@ struct InputCardStatesLabTests {
     let phases = [armed.latch.phase, locked.latch.phase]
     let owners = [armed.keyboardOwner, locked.keyboardOwner]
     #expect(phases == [.armed, .locked])
-    #expect(owners == [.composer, .composer])
+    #expect(owners == [.terminal, .terminal])
   }
 
   @Test("Meta, armed: Esc's burst waits for the next key, with the latch off and the letters up, so Esc says Meta")
@@ -85,7 +86,7 @@ struct InputCardStatesLabTests {
     #expect(armed)
     #expect(phase == .off)
     #expect(!keypad)
-    #expect(owner == .composer)
+    #expect(owner == .terminal)
   }
 
   @Test("Listening: the heard words are in the draft, and a mic made while the lab holds the look listens")
@@ -119,6 +120,8 @@ struct InputCardStatesLabTests {
     #expect(pages == [.keys, .combos, .functions])
     #expect(titles == ["Navigate", "Shortcuts", "Fn"])
     #expect(owners == [.keypad, .keypad, .keypad])
+    // PF-8: the keypad stands in the terminal's mode alone.
+    #expect(models.map { $0.mode } == [.live, .live, .live])
   }
 
   @Test("A paste to read first: five made-up lines held for the review sheet, as a paste, in the terminal's mode")

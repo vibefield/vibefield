@@ -1,9 +1,13 @@
 import FieldDesign
 import SwiftUI
 
-/// Paste, replies, and the keyboard control float over the terminal in both
-/// input states. Only InputCard reserves space for the composer and key rail;
-/// these controls never change the terminal's grid when they appear or leave.
+/// Paste, replies, the mode switch and the fold key float over the terminal in
+/// both input states. Only InputCard reserves space, for its one row; these
+/// controls never change the terminal's grid when they appear or leave.
+///
+/// The mode switch stands at the row's right in both states (PF-8,
+/// 2026-11-22): beside the fold key with the keyboard up, and alone, as the
+/// two doors, with it down, where one keyboard key stood.
 public struct InputOverlay: View {
   let model: InputCardModel
   let pasteboard: PasteboardWatcher?
@@ -28,12 +32,9 @@ public struct InputOverlay: View {
 
   private var rowHeight: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
 
-  private var side: CGFloat {
-    rowHeight + Self.buttonGrowth
-  }
-
-  /// The overlay's reading footprint, used only to center the held-seat
-  /// message above the controls. It never changes the terminal's safe area.
+  /// The overlay's reading footprint, at its tallest (the doors, which stand
+  /// `buttonGrowth` over a row). It is used only to center the held-seat
+  /// message above the controls, and never changes the terminal's safe area.
   public static func footprint(for size: DynamicTypeSize) -> CGFloat {
     InputCardMetrics.rowHeight(for: size) + buttonGrowth + lift + messageClearance
   }
@@ -55,9 +56,8 @@ public struct InputOverlay: View {
         ChipsRow(model: model, pasteboard: pasteboard)
       }
       Spacer(minLength: 0)
-      if model.keyboardOwner == .none {
-        keyboardButton
-      } else {
+      ModeSwitch(model: model, doors: model.keyboardOwner == .none)
+      if model.keyboardOwner != .none {
         dismissKeyboardButton
       }
     }
@@ -80,22 +80,5 @@ public struct InputOverlay: View {
     .buttonStyle(.plain)
     .accessibilityLabel("Hide the keyboard")
     .accessibilityIdentifier("terminal.hideKeyboard")
-  }
-
-  /// Quiet: getting the keyboard back is a door that is merely available, and
-  /// the card's one prominent control is Send.
-  private var keyboardButton: some View {
-    Button {
-      model.requestKeyboard()
-    } label: {
-      FieldGlyph(.keyboard, size: FieldGlyph.box(for: InputCardMetrics.glyphSize(for: dynamicTypeSize) + 2))
-        .foregroundStyle(ChromePalette.ink)
-        .frame(width: side, height: side)
-        .contentShape(Circle())
-    }
-    .buttonStyle(.plain)
-    .liquidGlassCircle()
-    .accessibilityLabel("Show the keyboard")
-    .accessibilityIdentifier("terminal.showKeyboard")
   }
 }

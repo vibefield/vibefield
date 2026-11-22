@@ -87,7 +87,6 @@ struct InputCardMetricsTests {
     #expect(
       InputCardMetrics.circleDiameter(for: size)
         > InputCardMetrics.circleDiameter(for: .large))
-    #expect(InputCardMetrics.stripSize(for: size) > InputCardMetrics.stripSize(for: .large))
     #expect(
       InputCardMetrics.chipLabelSize(for: size) > InputCardMetrics.chipLabelSize(for: .large))
     #expect(

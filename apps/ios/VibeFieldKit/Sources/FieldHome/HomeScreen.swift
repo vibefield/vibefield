@@ -2843,21 +2843,30 @@ public struct HomeScreen: View {
             print("input act:", act)
             return true
           }
-          if LaunchArguments.current.contains("-vf-demo-input-live") {
+          // PF-8: the rail stands in the terminal's mode alone, so a fixture
+          // that shows one of its states (a fan, Meta, the keypad) is in it.
+          let showsRail = LaunchArguments.current.contains {
+            $0 == "-vf-demo-input-live" || $0 == "-vf-demo-input-fan" || $0 == "-vf-demo-input-meta"
+              || $0.hasPrefix(DemoArguments.keypad)
+          }
+          if showsRail {
             inputCard.mode = .live
+            // A held latch on the rail: LOCKED rather than armed, since an
+            // armed latch has a 3 s window and would be gone before a
+            // screenshot could be taken, which is the window working rather
+            // than the fixture failing.
+            if LaunchArguments.current.contains("-vf-demo-input-locked") {
+              inputCard.tapControl()
+              inputCard.tapControl()
+            }
           } else {
             inputCard.fieldFocused = true
           }
-          // The states a screenshot cannot tap its way into: a filled draft
-          // (inverted Send, the field grown past one line) with the latch
-          // held (inverted CTRL and its dot). Fixture text, plainly so.
+          // A state a screenshot cannot type its way into: a filled draft
+          // (inverted Send, the field grown past one line). Fixture text,
+          // plainly so.
           if LaunchArguments.current.contains("-vf-demo-input-draft") {
             inputCard.draft = "git status --short\ngit log --oneline -5"
-            // LOCKED rather than armed: an armed latch has a 3 s window and
-            // would be gone before a screenshot could be taken, which is the
-            // window working rather than the fixture failing.
-            inputCard.tapControl()
-            inputCard.tapControl()
           }
           // --- IOS-5b: the two states a long press is the only way into ----
           // The fan is opened after the card is on screen — a popover anchored

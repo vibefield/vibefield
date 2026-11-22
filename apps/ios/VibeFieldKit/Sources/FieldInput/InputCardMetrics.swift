@@ -13,7 +13,9 @@ import SwiftUI
 /// grows 44 → 52 pt and the label 13 → 15 pt.
 ///
 /// The design says the number outright (§4's trade-offs: "about 110 pt of
-/// chrome whenever the keyboard is up (Rail is 52)").
+/// chrome whenever the keyboard is up (Rail is 52)"). Since PF-8 (2026-11-22)
+/// the card is one row, the composer or the rail by its mode, so that chrome
+/// is 60 pt, or 68 at the accessibility step.
 ///
 /// **IOS-5v — the base sizes are now the canvas's.** The card wears DESIGN.md's
 /// chrome family as the KeyboardLab canvas draws it, so a key's label is SF 13
@@ -87,11 +89,6 @@ public enum InputCardMetrics {
   /// card, so it is the one size here that scales as prose.
   public static func composerTextSize(for size: DynamicTypeSize) -> CGFloat {
     size.isAccessibilitySize ? 20 : 17
-  }
-
-  /// The strip's sentence in Live (`.strip`, 15 semibold).
-  public static func stripSize(for size: DynamicTypeSize) -> CGFloat {
-    size.isAccessibilitySize ? 17 : 15
   }
 
   /// A `+` menu item (`.mi`, 17 regular) — prose on a floating surface, so it

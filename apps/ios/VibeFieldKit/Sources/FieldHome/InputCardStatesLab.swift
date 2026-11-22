@@ -70,23 +70,24 @@
       """
 
     /// The card's model, moved into the state: the lab's sink first, which takes nothing, then the state's own acts.
-    /// Every draft state asks for the keyboard first, as the card's keyboard key does, so the card stands open.
+    /// A state the composer shows asks for the keyboard first, and a state the rail shows enters the terminal's mode
+    /// as the mode switch does (PF-8: the rail stands in that mode alone), so the card stands open either way.
     @MainActor func seed(_ model: InputCardModel) {
       // Nothing typed in the lab is sent: every act is refused, and the card keeps what was typed.
       model.sink = { _ in false }
       switch self {
       case .fanOpen:
-        model.requestKeyboard()
+        model.enter(.live)
         model.showFan(.control)
       case .controlArmed:
-        model.requestKeyboard()
+        model.enter(.live)
         model.tapControl()
       case .controlLocked:
-        model.requestKeyboard()
+        model.enter(.live)
         model.tapControl()
         model.tapControl()
       case .metaArmed:
-        model.requestKeyboard()
+        model.enter(.live)
         model.armMeta()
       case .listening:
         model.requestKeyboard()
@@ -99,7 +100,7 @@
         Self.showKeypad(.functions, on: model)
       case .pasteToRead:
         // A paste is held for reading only in the terminal's mode: in the draft it is already on screen.
-        model.toggleMode()
+        model.enter(.live)
         model.acceptPaste(Self.paste)
       case .replyChips:
         model.requestKeyboard()
@@ -109,7 +110,7 @@
           model.chips = FieldInput.replyChips(provider: typed, permissions: [AgentPermission(tool: "Bash")])
         }
       case .typingIntoTerminal:
-        model.toggleMode()
+        model.enter(.live)
       }
     }
 
@@ -136,7 +137,7 @@
 
     /// The keypad on `page`, in the system keyboard's place under the draft.
     @MainActor private static func showKeypad(_ page: KeypadPage, on model: InputCardModel) {
-      model.requestKeyboard()
+      model.enter(.live)
       model.keypadPage = page
       model.setKeypad(true)
     }

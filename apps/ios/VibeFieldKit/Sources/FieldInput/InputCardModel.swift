@@ -176,8 +176,8 @@ public struct LatchState: Equatable, Sendable {
 ///
 /// Two modes, one model. Draft edits a local `draft` and sends it as a block;
 /// Live hands the keyboard to the terminal itself. The draft survives the trip
-/// either way — leaving Live gives it back untouched — and the rail's keys
-/// mean the same thing in both.
+/// either way — leaving Live gives it back untouched. Since PF-8 (2026-11-22)
+/// the card draws one row for each: the composer in Draft, the rail in Live.
 @MainActor
 @Observable
 public final class InputCardModel {
@@ -422,7 +422,42 @@ public final class InputCardModel {
     if emit(.sendDraft(draft)) { draft = "" }
   }
 
-  /// The `>_` key. The draft persists across the flip in both directions; only
+  /// The mode switch (PF-8, 2026-11-22): take `wanted`, and stand the keyboard
+  /// up in it.
+  ///
+  /// One act for the switch's two halves in both of its places. With the
+  /// keyboard up, the other half changes the mode and the half in force does
+  /// nothing. With it down, either half is a door: the keyboard rises in that
+  /// half's mode.
+  ///
+  /// Leaving for the draft puts the keypad away and lets go of every held
+  /// modifier. The composer's row has no key that would show a latch, and a
+  /// locked Ctrl would turn the next letter of a draft into a chord.
+  public func enter(_ wanted: Mode) {
+    guard mode != wanted else {
+      if keyboardOwner == .none { requestKeyboard() }
+      return
+    }
+    if wanted == .draft {
+      keypadShown = false
+      releaseModifiers()
+    }
+    toggleMode()
+  }
+
+  /// Ctrl, the Meta burst and Shift, let go together, with their clocks.
+  private func releaseModifiers() {
+    expiryTask?.cancel()
+    expiryTask = nil
+    latch = LatchState()
+    metaExpiryTask?.cancel()
+    metaExpired()
+    shiftExpiryTask?.cancel()
+    shiftExpiryTask = nil
+    shiftArmed = false
+  }
+
+  /// A flip of the mode. The draft persists across it in both directions; only
   /// the keyboard's owner changes.
   public func toggleMode() {
     mode = mode == .draft ? .live : .draft
