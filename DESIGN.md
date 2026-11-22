@@ -9522,7 +9522,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the switch is the two doors**: it stands alone at the row's right, 52pt tall with halves of 50 by
   44, where the one keyboard key stood, and a tap on either half raises the keyboard in that half's
   mode. A tap on the terminal still raises it in the mode in force. The switch reserves no space,
-  as nothing on its row does. **The reply chips end 12pt before the switch.** A row of chips too
+  as nothing on its row does *(with the keyboard down only, since PF-11: the next sentence)*.
+  **While the keyboard is up the row is a shelf** (PF-11, 2026-11-22; James, with the switch and
+  the fold key over a program's last two rows on his phone: "these button can block terminal
+  content, how can we design better?"; his pick of the three ways put to him: "Go with 2"). The
+  grid ends above the row, which keeps one row's height, 44pt, between the grid's last line and
+  the card, the controls 5pt over the card; the chips, the switch and the fold key are drawn as
+  they were, on the terminal's own ground. Nothing covers the grid while a person types. It costs
+  the grid those 44pt, two or three lines at the default size, and the room over the keyboard is
+  110pt again (44 · 60 · 6), where PF-8 had brought it to 66. With the keyboard down nothing
+  changes: the doors and the chips float over the last rows, as before.
+  **The reply chips end 12pt before the switch.** A row of chips too
   long for the room left of it scrolls and is cut at its own sides, so no chip runs under the
   switch or the fold key *(until PF-8 a long row ran under the fold key, its clip turned off for
   the chips' shadows; seen under the switch on the simulator the day PF-8 landed)*.
@@ -9546,7 +9556,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   whose two halves are the show control: the bullet before this one)*. Paste and the show/fold
   controls share native Liquid Glass
   and float over terminal content in both keyboard states. Their row reserves no space and never
-  moves the grid; only the composer and key rail inset the terminal. Paste reads the clipboard
+  moves the grid; only the composer and key rail inset the terminal. *(Amended 2026-11-22, PF-11,
+  the bullet before this one: with the keyboard up their row is a shelf the grid ends above, and
+  they float over the grid only with the keyboard down.)* Paste reads the clipboard
   only on a tap and respects the system's paste-permission prompt; the system Paste control's
   opaque fill cannot supply this glass treatment. The message uses the desktop's figure at the phone's scale:
   **studio**, the holder's name as fieldd minted it
