@@ -95,9 +95,10 @@ struct SessionCardView<Terminal: View>: View {
   /// The open input card reserves space below the terminal. Its custom safe
   /// area must stay in effect while the card holds the keyboard.
   var inputIsOpen: Bool = false
-  /// PF-1 — the terminal has presented a frame, so its own ground is painted under its rows. false while the card
-  /// connects and while an attach is refused: the terminal's view paints nothing then, and the card stands on the
-  /// terminal's ground whole, never a band over the bare sheet.
+  /// PF-1, PF-4 — the terminal's surface holds a picture, so its own ground is
+  /// painted under its rows and under the band. false while the card connects
+  /// and while an attach is refused: the surface paints nothing then, and the
+  /// card stands on the ground's colour whole, never on the bare sheet.
   var terminalPainted: Bool = true
   /// PF-3 — the card's road to its run's model switch (its row's offer and the two asks of the desktop that owns the
   /// run). nil: the band's capsule is a readout and takes no touch, as it is for a run whose row offers no switch.
@@ -150,30 +151,34 @@ struct SessionCardView<Terminal: View>: View {
   /// The live card is its terminal, edge to edge (DESIGN.md §8, "The phone's
   /// live card is its terminal"; asked for 2026-10-19, T1 and F1). It wears
   /// Godview's pane frame: a line and an inner glow that follow the sheet's
-  /// corners. The band is reserved (PF-1, 2026-11-21): the terminal's view
-  /// begins at the band's foot, so no row of the grid is under it, and the band
-  /// stands on the terminal's own ground. The Metal surface also paints behind
-  /// the home indicator; its safe-area insets keep the last grid row above it.
+  /// corners. The band is reserved (PF-1, 2026-11-21): the grid's first row
+  /// begins at the band's foot. The band and the terminal are one surface
+  /// (PF-4, 2026-11-21): the Metal surface runs under the band to the card's
+  /// top edge, and the band's height reaches it as the grid's top inset (the
+  /// host's `gridTopInset`), so the band stands on the ground the terminal
+  /// itself paints. The surface also paints behind the home indicator; its
+  /// safe-area insets keep the last grid row above it.
   /// The closed input row floats over the grid's last rows (the host's
   /// `InputOverlay`).
   private func liveCard(_ bubble: FieldBubble, ground: CardGround) -> some View {
     ZStack(alignment: .top) {
-      // The band's ground: the terminal's own, at its opacity, under the band
-      // alone. A cooled terminal's veil covers it too, so the two never part.
       // Until the terminal presents its first frame its view paints nothing, so
-      // the same ground stands under the whole card: one ground from the moment
-      // the card rises, by day too (seen 2026-11-21 on the simulator, a refused
-      // attach by day: a dark band over the bare white sheet).
-      ground.color
-        .overlay {
-          ground.color.opacity(cooled ? FieldHomeModel.liveCardCooledVeil : 0)
-        }
-        .animation(FieldMotion.ease(0.24), value: cooled)
-        .frame(height: terminalPainted ? FieldHomeModel.liveCardBand : nil)
-        .frame(maxWidth: .infinity, maxHeight: terminalPainted ? nil : .infinity)
-        .ignoresSafeArea(.container, edges: terminalPainted ? [] : .bottom)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
+      // the ground's colour stands under the whole card: one ground from the
+      // moment the card rises, by day too (seen 2026-11-21 on the simulator, a
+      // refused attach by day: a dark band over the bare white sheet). Once the
+      // terminal paints, nothing of the card's own is under it or under the band
+      // (PF-4): a second ground there would double a translucent one.
+      if !terminalPainted {
+        ground.color
+          .overlay {
+            ground.color.opacity(cooled ? FieldHomeModel.liveCardCooledVeil : 0)
+          }
+          .animation(FieldMotion.ease(0.24), value: cooled)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .ignoresSafeArea(.container, edges: .bottom)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
+      }
 
       terminal()
         // A cooled terminal dims toward its ground, never toward the glass.
@@ -188,9 +193,9 @@ struct SessionCardView<Terminal: View>: View {
         // input card's safe-area inset: ignoring it would put rows behind its
         // controls. Keyboard avoidance remains active in either state.
         .ignoresSafeArea(.container, edges: inputIsOpen ? [] : .bottom)
-        // PF-1: the view begins at the band's foot. Padding, never an offset: the
-        // Metal view is laid out shorter, so ghosttea measures the grid it shows.
-        .padding(.top, FieldHomeModel.liveCardBand)
+      // PF-4: no padding above. The view runs under the band, and the renderer
+      // keeps the band's room itself (the host's `gridTopInset`), so ghosttea
+      // still measures the grid it shows.
 
       // Item 42 — another client drives the session: the card goes on drawing
       // it at the holder's size, dimmed under the held veil, and says so in its

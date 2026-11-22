@@ -88,6 +88,17 @@ import Testing
     // top, so 10pt in from each edge, 2pt down and 8pt up from the foot.
     #expect(config.paddingX == [8, 8])
     #expect(config.paddingY == [0, 6])
+    // PF-4: chrome over the surface's top keeps its room INSIDE the renderer, added to the
+    // padding above, so the surface paints its ground there and only the grid begins lower.
+    let underABand = presentationConfig(for: .default, gridTopInset: 44)
+    #expect(underABand.paddingY == [44, 6])
+    #expect(underABand.paddingX == [8, 8])
+    // a different device presentation, so a different revision: the renderer takes it
+    #expect(underABand.revision != config.revision)
+    #expect(presentationConfig(for: .default, gridTopInset: 0).revision == config.revision)
+    // a hostile inset never reaches the renderer
+    #expect(presentationConfig(for: .default, gridTopInset: -8).paddingY == [0, 6])
+    #expect(presentationConfig(for: .default, gridTopInset: .nan).paddingY == [0, 6])
     #expect(config.postProcess == .none)
     #expect(config.customShaderCount == 0)
     #expect(config.backgroundOpacityCells == false)

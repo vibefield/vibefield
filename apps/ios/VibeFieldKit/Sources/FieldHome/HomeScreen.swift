@@ -3160,11 +3160,12 @@ public struct HomeScreen: View {
         // A terminal earns the room from the card's first frame: at the 0.55
         // detent it is a letterbox, the keyboard would take what is left, and
         // a card that opened small and grew as its attach began moved twice.
-        .presentationDetents(
-          attachment == nil && !cardTerminalFace.offersAttach ? [.fraction(0.55), .large] : [.large])
+        .presentationDetents(cardIsTerminal ? [.large] : [.fraction(0.55), .large])
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
-        .fieldGlassSheet()
+        // PF-5: a terminal's card stands on a blur of the field, so its ground's
+        // opacity has something to show; every other card keeps the sheet's glass.
+        .fieldGlassSheet(blurring: cardIsTerminal ? cardGround.inkScheme : nil)
     }
     .sheet(isPresented: $settingsSheetOpen, onDismiss: { afterSettings() }) {
       settingsSheet(at: settingsOpening)
@@ -3372,8 +3373,9 @@ public struct HomeScreen: View {
       // the live card's readout, centered over its held veil.
       seatReadout: cardSeatReadout,
       inputIsOpen: inputCardFace == .shown && inputCard.keyboardOwner != .none,
-      // PF-1: until the terminal presents a frame the card stands on its ground whole.
-      terminalPainted: attachment?.phase == .live,
+      // PF-1, PF-4: until the terminal's surface holds a picture the card stands on its
+      // ground's colour whole; from then on the surface's own ground is the only one.
+      terminalPainted: attachment?.holdsPicture ?? cardShowsRecordedPicture,
       // PF-3: the band's capsule is the switch where the run's row offers one.
       modelSwitch: cardModelSwitch,
       onOtherDriverAppeared: { inputCard.dismissKeyboard() }
@@ -3596,6 +3598,22 @@ public struct HomeScreen: View {
     return DeviceMark.OS(platform: link?.desktops.first { $0.deviceId == device }?.platform)
   }
 
+  /// `-vf-demo-terminal-picture` (DEBUG): the card shows a recorded picture with nothing attached.
+  private var cardShowsRecordedPicture: Bool {
+    #if DEBUG
+      return attachment == nil && TerminalPictureDemo.scene(LaunchArguments.current) != nil
+    #else
+      return false
+    #endif
+  }
+
+  /// Whether the presented card is a terminal's: one attached, or one whose run
+  /// offers an attach. It decides the card's height (full, from its first
+  /// frame) and its glass (PF-5: the blur a translucent ground shows).
+  private var cardIsTerminal: Bool {
+    attachment != nil || cardTerminalFace.offersAttach
+  }
+
   /// The terminal's own ground, for the live card (item 41).
   private var cardGround: CardGround {
     let ground = TerminalGround(attachment?.presentation ?? presentationConfig(for: appearance))
@@ -3677,6 +3695,18 @@ public struct HomeScreen: View {
         // 2026-10-17): the device the person touched last has it.
         onTouch: { attachment.engage() }
       )
+    } else {
+      #if DEBUG
+        // `-vf-demo-terminal-picture`: a recorded picture where nothing is attached.
+        if let scene = TerminalPictureDemo.scene(LaunchArguments.current) {
+          TerminalSurface(
+            scene: scene,
+            visible: true,
+            configuration: presentationConfig(
+              for: appearance, gridTopInset: Double(FieldHomeModel.liveCardBand)),
+            controlsGridSize: false)
+        }
+      #endif
     }
   }
 
@@ -4401,6 +4431,8 @@ public struct HomeScreen: View {
       let attachment =
         kept.map { keptAttachments.remove(at: $0).attachment }
         ?? TerminalAttachment(lanes: lanes, appearance: appearance)
+      // PF-4: the surface runs under the card's band; its grid begins at the band's foot.
+      attachment.gridTopInset = Double(FieldHomeModel.liveCardBand)
       attachment.apply(appearance: appearance)
       self.attachment = attachment
       attachedDeviceID = deviceID

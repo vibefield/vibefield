@@ -135,6 +135,23 @@ public final class TerminalAttachment {
   /// frame, from the cell — see `TerminalPresentation`'s note.
   public private(set) var presentation: GhostteaTerminalPresentationConfig
   public private(set) var appearance: TerminalAppearance
+  /// PF-4 — the room, in points, that the place this terminal is drawn in keeps
+  /// at the surface's top for chrome standing over it (the live card's band).
+  /// The surface paints its ground there and the grid begins under it
+  /// (`presentationConfig`'s `gridTopInset`). 0 until a host says otherwise.
+  /// PF-4 — the surface holds this session's picture: a frame of it was taken
+  /// since the session was put on the scene. It stays true through a pause or
+  /// a re-dial (the last picture stays on the glass) and through a card closed
+  /// and raised again, and it falls when another session takes the scene. A
+  /// place that paints the ground's colour while nothing is painted reads this
+  /// to know when to stop: a second ground under a translucent one would show.
+  public private(set) var holdsPicture = false
+  @ObservationIgnored public var gridTopInset: Double = 0 {
+    didSet {
+      guard gridTopInset != oldValue else { return }
+      presentation = presentationConfig(for: appearance, gridTopInset: gridTopInset)
+    }
+  }
   /// The local half of the session, when the user or the app put it there:
   /// `idle` before an attach and after a detach, `suspended` while the app is
   /// in the background, a refusal or a failure the door itself answered. Absent
@@ -366,7 +383,10 @@ public final class TerminalAttachment {
     let previous = self.sessionID
     // Another session's picture must not stand under this one's name; the same
     // session's last picture may, until the new activation's seed replaces it.
-    if previous != sessionID { scene.clear() }
+    if previous != sessionID {
+      scene.clear()
+      holdsPicture = false
+    }
     self.sessionID = sessionID
     self.deviceName = deviceName
     localPhase = .connecting
@@ -596,7 +616,9 @@ public final class TerminalAttachment {
     RoutedTerminalFrameSink(
       render: { [weak self] frame in
         guard let self, binding == self.binding else { return false }
-        return self.scene.render(frame)
+        let took = self.scene.render(frame)
+        if took, !self.holdsPicture { self.holdsPicture = true }
+        return took
       },
       identityFailed: { [weak self] _, reason in
         guard let self, binding == self.binding else { return }
@@ -1154,7 +1176,7 @@ public final class TerminalAttachment {
   /// is no longer a component here that can decline a change.
   public func apply(appearance next: TerminalAppearance) {
     appearance = next
-    presentation = presentationConfig(for: next)
+    presentation = presentationConfig(for: next, gridTopInset: gridTopInset)
   }
 
   // MARK: - Plumbing

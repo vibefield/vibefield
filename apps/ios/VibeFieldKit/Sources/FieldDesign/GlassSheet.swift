@@ -10,9 +10,20 @@ extension View {
   /// material, which blurs the scene behind the sheet the classic way.
   /// Card internals stay translucent either way (DESIGN.md §5: chrome is
   /// glass); the monitor scene reads through, dimmed and refracted.
+  ///
+  /// `blurring` (PF-5, 2026-11-21; DESIGN.md §8 "The card's glass is the
+  /// field"): a card that is a terminal asks for the material itself, in the
+  /// scheme its ground's lightness decides, at every height. The system's
+  /// sheet glass is solid at full height, where such a card always stands, so
+  /// a translucent terminal would show nothing through it. nil keeps the
+  /// sheet's own glass.
   @ViewBuilder
-  public func fieldGlassSheet() -> some View {
-    if #available(iOS 26.0, *) {
+  public func fieldGlassSheet(blurring scheme: ColorScheme? = nil) -> some View {
+    if let scheme {
+      presentationBackground {
+        Rectangle().fill(.ultraThinMaterial).environment(\.colorScheme, scheme)
+      }
+    } else if #available(iOS 26.0, *) {
       self
     } else {
       presentationBackground(.ultraThinMaterial)

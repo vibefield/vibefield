@@ -34,14 +34,16 @@ import Testing
       customShaderCount: base.customShaderCount)
   }
 
-  /// The default theme's ground is Matte Black, at full opacity, and takes the
-  /// dark ramp: white text by day too, whatever the app's theme.
+  /// The default theme's ground is Matte Black, at the desktop's 82% (PF-5,
+  /// 2026-11-21: the card's glass is the field; solid until then), and takes
+  /// the dark ramp: white text by day too, whatever the app's theme. The ramp
+  /// is the colour's alone, so glass never moves it.
   @Test func matteBlackIsTheGroundAndTakesWhiteText() {
     let ground = TerminalGround(presentationConfig(for: .default))
     #expect(ground.red == Double(0x12) / 255)
     #expect(ground.green == Double(0x12) / 255)
     #expect(ground.blue == Double(0x12) / 255)
-    #expect(ground.opacity == 1)
+    #expect(abs(ground.opacity - 0.82) < 0.0001)
     #expect(ground.inkScheme == .dark)
   }
 

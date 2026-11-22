@@ -35,6 +35,12 @@ private enum FallbackColors {
 ///   so the text sits 10pt in from each edge, 2pt down and 8pt up from the
 ///   foot. The margin is the renderer's because the card's ground is the
 ///   terminal's own: a margin outside the view would be a second ground.
+/// - `gridTopInset` is added to the padding above for the same reason (PF-4,
+///   2026-11-21; DESIGN.md §8 "The band and the terminal are one surface"):
+///   chrome that stands over the surface's top (the live card's band) keeps
+///   its room inside the renderer, so the surface paints its ground and its
+///   effects there and only the grid begins lower. 0 wherever nothing stands
+///   over the surface.
 /// - `customShaderCount` is 0: no host-local shader paths exist on a phone.
 /// - `minimumContrast` is the desktop's 3:1 floor (TL-4c, 2026-11-19; DESIGN.md
 ///   §2.7 "The terminal's own colours", on the phone): a cell's colour arrives
@@ -45,7 +51,8 @@ private enum FallbackColors {
 ///   the device presentation changes — document identity that never drags an
 ///   unrelated edit onto the Metal path.
 public func presentationConfig(
-  for appearance: TerminalAppearance
+  for appearance: TerminalAppearance,
+  gridTopInset: Double = 0
 ) -> GhostteaTerminalPresentationConfig {
   let theme = resolveTheme(named: appearance.themeName)
 
@@ -74,7 +81,7 @@ public func presentationConfig(
   }
 
   let paddingX: [Float] = [8, 8]
-  let paddingY: [Float] = [0, 6]
+  let paddingY: [Float] = [gridTopInset.isFinite ? Float(max(gridTopInset, 0)) : 0, 6]
 
   let revision = presentationRevision(
     foreground: foreground, background: background, cursor: cursor, cursorText: cursorText,

@@ -13,7 +13,10 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   /// A `GhostteaThemeCatalog` theme name; `nil` means our default.
   public var themeName: String?
   /// 0...1. Composes with the card's glass, so the field can show through the
-  /// terminal itself (§10.4).
+  /// terminal itself (§10.4). Stored as `groundOpacity` since PF-5 (2026-11-21;
+  /// DESIGN.md §8 "The card's glass is the field"): the default became the
+  /// desktop's 82%, and every record saved before carried 100%, which nobody
+  /// chose, so a record's old `backgroundOpacity` is left unread.
   public var backgroundOpacity: Double
   /// `GhostteaShaderOption` ids (`ghosttea:*`). Unknown ids are dropped at
   /// projection time, not here — the stored value keeps what the user chose.
@@ -24,6 +27,11 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   /// literally `fontSize != other.fontSize`).
   public var fontSize: Double
 
+  /// The ground's opacity nobody chose: the desktop's own default (its
+  /// `DEFAULT_DECK_APPEARANCE.opacity`), so a terminal is the same glass on the
+  /// phone as in Godview (PF-5; DESIGN.md §8 "The card's glass is the field").
+  public static let defaultGroundOpacity = 0.82
+
   /// Matte Black is the catalog's closest match to the godview instrument
   /// palette (DESIGN.md §2.7 — near-black ground, grey text ramp): pure
   /// greyscale chrome (#121212 ground, #bebebe text, a colorless #333333
@@ -32,7 +40,7 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   /// control room's rule.
   public static let `default` = TerminalAppearance(
     themeName: "Matte Black",
-    backgroundOpacity: 1,
+    backgroundOpacity: defaultGroundOpacity,
     shaderEffects: [],
     shaderAnimation: false,
     fontSize: 13
@@ -53,7 +61,9 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case themeName, backgroundOpacity, shaderEffects, shaderAnimation, fontSize
+    case themeName, shaderEffects, shaderAnimation, fontSize
+    /// PF-5: renamed with its default; a record's old `backgroundOpacity` is not read.
+    case backgroundOpacity = "groundOpacity"
   }
 
   /// Tolerant reader for our own stored payloads: a field added later must not
@@ -61,7 +71,9 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   public init(from decoder: Decoder) throws {
     let values = try decoder.container(keyedBy: CodingKeys.self)
     themeName = try values.decodeIfPresent(String.self, forKey: .themeName)
-    backgroundOpacity = try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity) ?? 1
+    backgroundOpacity =
+      try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity)
+      ?? Self.defaultGroundOpacity
     shaderEffects = try values.decodeIfPresent([String].self, forKey: .shaderEffects) ?? []
     shaderAnimation = try values.decodeIfPresent(Bool.self, forKey: .shaderAnimation) ?? false
     fontSize = try values.decodeIfPresent(Double.self, forKey: .fontSize) ?? 13

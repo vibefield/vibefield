@@ -47,6 +47,31 @@ import Testing
     #expect(TerminalAppearanceStore.load(from: defaults) == appearance)
   }
 
+  /// PF-5 (2026-11-21; DESIGN.md §8 "The card's glass is the field"): the
+  /// stored opacity was renamed with its default. Every record saved before
+  /// carried 100%, which nobody chose, so a record's old value is left unread
+  /// and the rest of the record is kept; what is saved now is read back.
+  @Test func aRecordsOldOpacityIsLeftUnreadAndTheRestIsKept() throws {
+    let old = Data(
+      #"{"themeName":"Vesper","backgroundOpacity":1,"shaderEffects":["ghosttea:crt"],"shaderAnimation":true,"fontSize":16}"#
+        .utf8)
+    let decoded = try JSONDecoder().decode(TerminalAppearance.self, from: old)
+    #expect(decoded.backgroundOpacity == 0.82)
+    #expect(decoded.themeName == "Vesper")
+    #expect(decoded.shaderEffects == ["ghosttea:crt"])
+    #expect(decoded.shaderAnimation)
+    #expect(decoded.fontSize == 16)
+
+    var chosen = decoded
+    chosen.backgroundOpacity = 1
+    let saved = try JSONEncoder().encode(chosen)
+    let keys = try #require(try JSONSerialization.jsonObject(with: saved) as? [String: Any])
+    #expect(keys["groundOpacity"] as? Double == 1)
+    #expect(keys["backgroundOpacity"] == nil)
+    // Solid stays a choice: a value saved under the new name is the person's.
+    #expect(try JSONDecoder().decode(TerminalAppearance.self, from: saved).backgroundOpacity == 1)
+  }
+
   @Test func missingDataDegradesToDefault() {
     #expect(TerminalAppearanceStore.load(from: freshDefaults("missing")) == .default)
   }
@@ -63,7 +88,9 @@ import Testing
     let decoded = try JSONDecoder().decode(
       TerminalAppearance.self, from: Data(#"{"themeName":"Vesper"}"#.utf8))
     #expect(decoded.themeName == "Vesper")
-    #expect(decoded.backgroundOpacity == 1)
+    // PF-5: the ground nobody chose is the desktop's 82%.
+    #expect(decoded.backgroundOpacity == 0.82)
+    #expect(TerminalAppearance.default.backgroundOpacity == 0.82)
     #expect(decoded.shaderEffects.isEmpty)
     #expect(decoded.shaderAnimation == false)
     #expect(decoded.fontSize == 13)

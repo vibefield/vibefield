@@ -189,6 +189,15 @@ import Testing
         sessionHandle: String(identity.sessionHandle), viewHandle: String(identity.viewHandle)),
       on: .frames)
 
+    // PF-4: nothing is painted yet, so a card still stands on its ground's colour; and the
+    // room a host keeps at the surface's top reaches the renderer as padding, at once.
+    #expect(attachment.holdsPicture == false)
+    #expect(attachment.presentation.paddingY == [0, 6])
+    attachment.gridTopInset = 44
+    #expect(attachment.presentation.paddingY == [44, 6])
+    attachment.apply(appearance: .default)
+    #expect(attachment.presentation.paddingY == [44, 6])
+
     // 3. The seed frame. It reaches the renderer's frame path BYTE FOR BYTE —
     //    the cell rendered it once, and nothing on this device re-encodes it.
     let seedStamp = Script.stamp(1)
@@ -197,7 +206,8 @@ import Testing
       base: nil, result: seedStamp, payload: frames.seed)
     await door.sendUnit(unit)
     try await Self.until("the seed frame to reach the renderer") {
-      await MainActor.run { rendered.frames == [frames.seed] }
+      // PF-4: the surface holds a picture from the frame it took, so the card's own ground leaves
+      await MainActor.run { rendered.frames == [frames.seed] && attachment.holdsPicture }
     }
 
     // 4. The cell says it is presenting and input is allowed; only then is the
