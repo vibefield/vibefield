@@ -9507,7 +9507,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   rail alone: Esc, Ctrl, Tab, the four arrows and the keypad key, eight keys. The card is 60pt in
   either (8 · 44 · 8, and 6 under it), where both rows stood in both modes at 110, and the
   "Typing into terminal" line is gone: a row of keys says it. A draft is kept across the switch,
-  both ways.
+  both ways. **The keyboard stays up across the switch**, handed from one mode's holder to the
+  other's in one move. For that the composer stays under the rail, unseen and still able to hold
+  the keyboard until the terminal takes it.
+  *(Erratum, 2026-11-22: PF-8 also turned touches off on the composer under the rail. The system
+  takes the keyboard from a field marked so, and it did so before the terminal's take, so every
+  switch from Message to Terminal dropped the keyboard and raised it again. James, the same day,
+  from his phone: "it will hide and jump back again, this is not good and feel glitchy". Mended as
+  PF-10: that mark is gone, and the field refuses its own touches instead.)*
   **The switch** is one capsule of two halves on the floating row, left of the fold key: the
   message glyph and the prompt glyph, each 40 by 32 in a 38pt capsule of the row's glass, taking a
   touch at the row's 44. The half of the mode in force is solid (the key's `on` fill and its ink);
