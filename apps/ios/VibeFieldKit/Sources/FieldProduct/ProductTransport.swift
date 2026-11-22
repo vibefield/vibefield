@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 /// The contract facts this client speaks, pinned in ONE place.
 ///
@@ -128,6 +129,7 @@ private actor WebSocketConnection: ProductConnection {
   private let task: URLSessionWebSocketTask
   private let session: URLSession
   private var closed = false
+  private var pendingPings: [UUID: WebSocketPong] = [:]
 
   init(task: URLSessionWebSocketTask, session: URLSession) {
     self.task = task
@@ -155,22 +157,44 @@ private actor WebSocketConnection: ProductConnection {
   func close() {
     guard !closed else { return }
     closed = true
+    for pong in pendingPings.values { pong.finish(URLError(.cancelled)) }
+    pendingPings.removeAll()
     task.cancel(with: .goingAway, reason: nil)
     session.invalidateAndCancel()
   }
 
-  /// SP-2 (b) — RFC 6455's PING. The system calls the handler exactly once:
-  /// with nothing when the PONG arrives, with an error when the connection is
-  /// lost first — so a closed socket answers at once and never strands this.
   func ping() async throws {
-    try await withCheckedThrowingContinuation { (pong: CheckedContinuation<Void, any Error>) in
-      task.sendPing { error in
-        if let error {
-          pong.resume(throwing: error)
-        } else {
-          pong.resume()
-        }
-      }
+    guard !closed else { throw URLError(.cancelled) }
+    let id = UUID()
+    defer { pendingPings[id] = nil }
+    try await withCheckedThrowingContinuation { continuation in
+      let pong = WebSocketPong(continuation)
+      pendingPings[id] = pong
+      task.sendPing(pongReceiveHandler: pong.finish)
+    }
+  }
+}
+
+/// URLSession can call the same ping handler twice when its peer disconnects.
+/// A pong, a transport error, and a local close all compete for this one result.
+struct WebSocketPong: Sendable {
+  private let pending: OSAllocatedUnfairLock<CheckedContinuation<Void, any Error>?>
+
+  init(_ continuation: CheckedContinuation<Void, any Error>) {
+    pending = OSAllocatedUnfairLock(initialState: continuation)
+  }
+
+  func finish(_ error: (any Error)?) {
+    let continuation = pending.withLock { slot in
+      let continuation = slot
+      slot = nil
+      return continuation
+    }
+    guard let continuation else { return }
+    if let error {
+      continuation.resume(throwing: error)
+    } else {
+      continuation.resume()
     }
   }
 }

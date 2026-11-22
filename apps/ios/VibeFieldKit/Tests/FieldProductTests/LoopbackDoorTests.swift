@@ -28,6 +28,7 @@ private actor LoopbackDoor {
   private var listener: NWListener?
   private var connections: [NWConnection] = []
   private(set) var accepted = 0
+  private(set) var receivedPings = 0
 
   init(script: @escaping Script) {
     self.script = script
@@ -90,13 +91,21 @@ private actor LoopbackDoor {
   }
 
   private nonisolated func receive(on connection: NWConnection) {
-    connection.receiveMessage { [weak self] data, _, _, error in
+    connection.receiveMessage { [weak self] data, context, _, error in
       guard let self else { return }
       if error != nil { return }
-      if let data { Task { await self.answer(data, on: connection) } }
+      let frame =
+        context?.protocolMetadata(definition: NWProtocolWebSocket.definition) as? NWProtocolWebSocket.Metadata
+      if frame?.opcode == .ping {
+        Task { await self.recordPing() }
+      } else if let data {
+        Task { await self.answer(data, on: connection) }
+      }
       self.receive(on: connection)
     }
   }
+
+  private func recordPing() { receivedPings += 1 }
 
   private func answer(_ data: Data, on connection: NWConnection) {
     guard let value = try? JSONValue.parse(data),
@@ -241,6 +250,43 @@ private func waitUntil(
     #expect(pong.value == "answered")
     await connection.close()
     _ = await pinging.value
+    await door.stop()
+  }
+
+  @Test(arguments: [true, false])
+  func pendingPingsFinishWhenEitherEndCloses(closeLocally: Bool) async throws {
+    let door = LoopbackDoor { _, id, _ in [Frame.result(id: id, .null)] }
+    let port = try await door.start(autoReplyPing: false)
+    let connection = try await URLSessionProductTransport(timeout: 10).connect(
+      to: URL(string: "ws://127.0.0.1:\(port)")!)
+    try await connection.send(#"{"id":1,"method":"test.ready"}"#)
+    _ = try await connection.receive()
+    let receiving = Task { try? await connection.receive() }
+    let pings = [PongBox(), PongBox()]
+    let tasks = pings.map { pong in
+      Task {
+        do {
+          try await connection.ping()
+          pong.set("answered")
+        } catch {
+          pong.set((error as? URLError)?.code == .cancelled ? "cancelled" : "failed")
+        }
+      }
+    }
+    try await waitUntil("both pings at the peer") { await door.receivedPings == 2 }
+    if closeLocally { await connection.close() } else { await door.hangUp() }
+    try await waitUntil("both ping callers to finish") { pings.allSatisfy { $0.value != nil } }
+    for pong in pings {
+      if closeLocally {
+        #expect(pong.value == "cancelled")
+      } else {
+        #expect(pong.value == "failed" || pong.value == "cancelled")
+      }
+    }
+    await connection.close()
+    _ = await receiving.value
+    for task in tasks { await task.value }
+    await #expect(throws: URLError(.cancelled)) { try await connection.ping() }
     await door.stop()
   }
 
