@@ -67124,3 +67124,31 @@ simulator's stills set the pull by a temporary fixture, which is not in the comm
 blur's cost while a terminal draws.
 
 **Not done, and not claimed:** no push of its own.
+
+## Track PF — the keyboard stays up across the mode switch (M521)
+
+**2026-11-22 · on local main: PF-10 (doc) and PF-10 (green), the two commits before this entry.**
+James, 2026-11-22, from the PF-8 build on his phone: "when I switch between the two mode by click the switch button,
+while keyboard already on ... it will hide and jump back again, this is not good and feel glitchy, fix this as well".
+
+- **The cause** was one modifier PF-8 added to the composer under the rail, `.allowsHitTesting(false)`. SwiftUI turns
+  user interaction off on the field's wrapper view for it, and UIKit makes a first responder inside such a view
+  resign. That ran a turn before the terminal's take, so the keyboard fell and rose on every switch from Message to
+  Terminal.
+- **The fix** is the modifier's removal. The field refuses its own touches under the rail, as it did before.
+
+**Seen**, on the iPhone 17 simulator with a temporary probe (not in the commits): with the modifier, the composer was
+asked to resign on the switch to Terminal, called from `-[UIView setUserInteractionEnabled:]` under SwiftUI's view
+updater; without it, the composer is not asked to resign on either switch. The field's zero opacity alone did not
+cause a resign.
+
+**Proved, 2026-11-22, on the development Mac:** `FieldInputTests` 182 in 20 suites (one new row) and `FieldHomeTests`
+876 in 103 suites passed.
+
+**Erratum made:** DESIGN.md §8, where PF-8's rule stands.
+
+**Not seen:** the switch on a phone with the system keyboard up. The simulator draws no keyboard and its fixture
+terminal takes none. Whether the keyboard's height still moves a little between the two modes (a suggestions bar
+over the composer's keyboard and none over the terminal's) is the phone's to show.
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets. **Not done:** no push of its own.
