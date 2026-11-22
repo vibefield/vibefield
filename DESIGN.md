@@ -411,9 +411,19 @@ floor, and is never rounded up to it.
   `godview/terminal-look.ts`, held to tokens.css by a row: the scheme leaves the renderer as data
   for fieldd, so it is never read back from a stylesheet.
 - **On the phone** a session's colours arrive in its frames as they are, and the phone draws them on
-  its own ground, Matte Black by default in both modes (§8 "The phone's live card is its
-  terminal"). It holds them to the desktop's 3:1 floor (§8 "What a pane's text is held to"), so a
-  session told the day's inks stays readable there. The phone's card tint
+  its own ground: **the look of the mode the phone is in** (PF-6, 2026-11-21; James: "for light
+  mode, the mobile terminal is not switching to day theme like desktop"). By day that is the day
+  look above, the paper `#F1F0EE`, the ink `#1E2227` and the day's sixteen, so a session told the
+  day's inks is drawn on the ground they were solved for. By night it is Matte Black, as it was (§8
+  "The phone's live card is its terminal"). A catalog theme picked for a mode replaces that mode's
+  look whole, as on the desktop, and each mode is picked on its own (§8 "The phone's Settings"). The
+  reference's day cursor and selection are translucent and the phone's renderer takes solid
+  colours, so each is its colour laid over the paper: the cursor `#6089B8`, the selection
+  `#B6CADE`. The day look's twin in the kit (`FieldTerminal/TerminalLook.swift`) is held to
+  `godview/terminal-look.ts` by a row. The phone holds a cell's colours to the desktop's 3:1 floor
+  (§8 "What a pane's text is held to") and keeps the renderer's light adaptation on, as the desktop
+  does, so a session told the other mode's inks stays readable. *(Until PF-6 the ground was Matte
+  Black by default in both modes, and one theme was picked for both.)* The phone's card tint
   (`FieldPalette.terminalBackground`) is the ground above, paper by day.
 
 **The app's chrome in Godview's mode** (added 2026-11-06, track UM; UM-D21 A, ruled by James on the page *The Bands
@@ -9323,8 +9333,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   containing the terminal content in the rounded rectangle right now, just make it fully fill the
   entire tab area…", and at 20:48Z "i said fully fill the tab card"; the look ruled 21:38Z, "good,
   design all go with the lean"). While the card is live the sheet IS the terminal. **Its ground** is
-  the terminal's own background at its own opacity (the theme's; Matte Black `#121212` by default,
-  never §2.7's paper), from the sheet's top edge to its foot, behind the home indicator. There is
+  the terminal's own background at its own opacity: the theme's for the mode the phone is in, by
+  night Matte Black `#121212` and by day §2.7's paper `#F1F0EE`, unless a theme is picked for that
+  mode *(PF-6, 2026-11-21; James: "for light mode, the mobile terminal is not switching to day
+  theme like desktop". Until then it was Matte Black by default in both modes and "never §2.7's
+  paper", the look ruled 2026-10-19)*, from the sheet's top edge to its foot, behind the home
+  indicator. There is
   no paper, no rounded inset, no divider and no header block. **The card wears Godview's pane
   frame**: a 1px line and the inner glow in text main follow the sheet's corners, 40pt at the top
   and the display's own at the foot (62pt on James's iPhone) so the display never cuts the line, and
@@ -9501,6 +9515,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   says the theme, the size and the opacity, and it takes no touch. Its caption names the theme and the size and says
   what the picture is not: **Sample text** (a real terminal's text keeps its desktop's type and colours, as the
   foot says), and **effects not drawn** while any is on (they are the renderer's, over a real terminal).
+  *Amended 2026-11-21 (PF-6; James: "for light mode, the mobile terminal is not switching to day theme like
+  desktop"):* Theme is two rows, **Light mode theme** and **Dark mode theme**, as the desktop keeps a theme for each
+  of Godview's modes (§2.7 "The terminal's own colours", on the phone). Each opens the 602. The light list is headed
+  by the phone's own day look, **Daylight**, which is no catalog theme: the row that puts the day back on it. The
+  dark list needs no such row, since the night's own look is the catalog's Matte Black. The Preview, its caption and
+  the root's Terminal row show the theme of the mode the phone is in. A theme picked before PF-6 was drawn in both
+  modes; it is kept as the night's, and the day starts on Daylight.
   **About** gives the version, your desktops, Acknowledgements,
   and Tailscale's trademark line, which left the terminal sheet's foot (§13). The corner's
   **Settings…** opens the root and *you* open Account; the card's `···` menu's **Terminal look…**
