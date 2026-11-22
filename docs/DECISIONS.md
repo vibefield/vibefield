@@ -344,6 +344,12 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   (PF-3). Defined in `DESIGN.md` §2.7 "The pane frame's capsules" and §8 "The phone's live card is its terminal"; the
   door in `docs/agent-plane/api.html`. **LANDED 2026-11-21 (M515)**, unseen on a screen and unproved end to end (the
   ledger's entry says what is owed).
+- **PF-4…PF-6** — track PF, from James's looks at the build (2026-11-21): a pane is one piece with its bands, on the
+  desktop and the phone (PF-4); the phone's card as glass over the field (PF-5); the phone's terminal wears the look of
+  the mode the phone is in, with a theme picked for each mode (PF-6). Defined in `DESIGN.md` §2.7 "The pane frame's
+  capsules" and "The terminal's own colours" (on the phone), and §8 "The phone's live card is its terminal" and "The
+  phone's Settings". **PF-4 and PF-5 LANDED 2026-11-21 (M516); PF-5's glass was falsified the same day** (a sheet at
+  full height is opaque on iOS 26; its mend waits on James's pick). **PF-6 LANDED 2026-11-21 (M517).**
 
 ## Petitions
 

@@ -66940,3 +66940,48 @@ the blur over a field with colour in it, a pane in a deck split top and bottom (
 pixel), and a terminal effect on the desktop (it draws under the rows alone, so the bands are flat beside it).
 
 **Not done, and not claimed:** no push of its own.
+
+## Track PF — the phone's terminal wears the look of the mode the phone is in (M517)
+
+**2026-11-21 · on local main: `29e982f14` PF-6 (doc) · `848e1ef5a` PF-6 (green).** James, on his phone by day: "for
+light mode, the mobile terminal is not switching to day theme like desktop".
+
+- **The cause.** The phone stored one theme and drew it in both modes, Matte Black by default (DESIGN.md said so:
+  "Matte Black by default in both modes", and of the card's ground "never §2.7's paper"). The desktop keeps a look for
+  each of Godview's modes.
+- **By day the phone's terminal wears the desktop's day look**: the paper `#F1F0EE`, the ink `#1E2227` and the day's
+  sixteen. The reference's day cursor and selection are translucent and the phone's renderer takes solid colours, so
+  each is its colour laid over the paper (`#6089B8`, `#B6CADE`). By night it is Matte Black, as it was.
+- **A theme is picked for each mode**, as on the desktop: Settings › Terminal has **Light mode theme** and **Dark mode
+  theme**. The light list is headed by **Daylight**, the day's own look, which no catalog carries. The preview, its
+  caption and the root's Terminal row show the mode the phone is in.
+- **A stored theme is kept as the night's.** A record's old `themeName` is read as the dark mode's pick and never
+  written again, so the day starts on Daylight on every phone, a phone that had picked a light theme included.
+- **The mode is asked of every caller** (`presentationConfig(for:mode:)`, no default), and an attachment is told the
+  mode of the place it is drawn in (`lookMode`), again when the phone's mode changes.
+- **The kit's day colours are held to the desktop's** by a row in field-app's `godview-terminal-look.test.ts`
+  (`TerminalLook.swift` against `terminal-look.ts` and the deck's theme).
+- **The night was left alone on purpose.** The desktop's night ground is the graphite `#282C34`; the phone's stays
+  Matte Black, since the ask was the day. Not ruled either way.
+
+**Seen**, on the iPhone 17 simulator (iOS 26.5) through the recorded-picture fixture. By day: the card is the paper
+from its top edge to its foot (239, 238, 236 down a clear column, no step over 3 of 255), the ink at 14.0:1, the
+band's capsule, ring and badge in the light ramp. By night: as before (26, 26, 26; text at 9.6:1). Settings › Terminal
+by day and by night, and the light list headed by Daylight. With an old-format record that names Matte Black and has
+the CRT effect on, by day: the day look, drawn through the effect, which greys the paper (about 170 to 215 of 255) and
+leaves a light rim outside its curve at the card's edges.
+
+**Proved, 2026-11-21, on the development Mac.** The kit's `FieldTerminalTests` 197 in 36 suites, `FieldHomeTests` 870
+in 102 suites and `FieldSettingsTests` 48 in 7 suites passed. field-app's `godview-terminal-look.test.ts` 8 of 8,
+`tsc --noEmit` clean.
+
+**Found, not mended:** the preview's caption in Settings › Terminal is clipped by a glyph at each end (the first letter
+of the theme's name and the last of "Sample text"), by day and by night; it was so before this change.
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets.
+
+**Not seen:** a real attach on a phone, so a change of the phone's mode under a live attachment is held by its unit
+row alone; a program that paints its own colours on the paper (the renderer's light adaptation and the 3:1 floor at
+work).
+
+**Not done, and not claimed:** no push of its own. PF-5's glass is still as M516's correction says.
