@@ -66886,3 +66886,47 @@ Three commits followed on local main: `5b0afbeca` PF-1 (doc), `a996abbc0` PF-1, 
   capsule's asked word.
 
 **Not done, and not claimed:** no push of its own.
+
+## Track PF — a pane is one piece with its bands; the phone's card is glass over the field (M516)
+
+**2026-11-21 · on local main: `08688a1e1` PF-4, PF-5 (doc) · `ddfca7009` PF-4 (green), the desktop · `4e5776791` PF-4,
+PF-5 (green), the phone.** James looked at the first build of M515 on his own desktop and phone and named two faults:
+"both desktop and mobile terminal pane has the weird bar on top and bottom of the terminal edge that are not visually
+consistent with terminal background, make them one seamless piece", and "phone's terminal does not have the
+semitransparent blur backdrop as desktop, make it look more consistent as desktop".
+
+- **The desktop's bars were a hole, not a colour.** The frame's two bands are the pane's padding, the terminal's canvas
+  fills only the box inside it, and since TL-3 the well under the panes is the desk's still. The deck now paints both
+  bands in the pane's own ground at the pane's own alpha (`--vf-godview-pane-ground`). No upstream change.
+- **A hairline behind it.** The deck's rest, 5/13 of the stage, is a fractional pixel (287.69 of 748), which left a
+  pane's box a fraction of a pixel taller than its canvas and the canvas's last row half painted. Rest is now said to
+  the whole pixel.
+- **The phone's band and terminal are one surface.** The terminal's view covers the card from its top edge and keeps
+  the band's 44pt as its own padding. The card's stand-in ground leaves when the surface holds a picture
+  (`holdsPicture`). *M515's correction says "until the attachment's phase is `live`": that rule is replaced here, since
+  the phase would put a second ground under a paused terminal's last picture.*
+- **The phone's card is glass.** A terminal's card stands on a blur of the field, and the ground's default opacity is
+  the desktop's 82%. The stored field is renamed (`groundOpacity`), so a value chosen on the slider before today is
+  lost once.
+- **A new instrument:** `-vf-demo-terminal-picture=<path>` (DEBUG) puts a recorded terminal picture on the simulator's
+  card. M515's "still not seen: a terminal's rows under the phone's band" is seen through it.
+
+**Seen.** The desktop app by night (`pnpm smoke:godview`, exit 0, twice): before, a lighter bar across the top and foot
+of every pane; after, no value moves by more than 3 of 255 down a clear column from a pane's top edge to its foot. The
+phone app on the iPhone 17 simulator, by night and by day: one ground through the band's foot (23 and 47 of 255), the
+day card lighter than the night one.
+
+**Proved, 2026-11-21, on the development Mac.** field-app `tsc --noEmit` clean, 81 files and 1307 tests passed (godview,
+deck, terminal, design-system, ui-system). The kit's `FieldTerminalTests` 186 in 36 suites and `FieldHomeTests` 870 in
+102 suites passed.
+
+**Red, and not this change's to say why.** The kit's `FieldDesignTests`: `SparkStarStillTests` fails 58 stills against
+its goldens on this simulator. This change touches none of its inputs, and it was not run at the base.
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's whole suite, the desktop app by day.
+
+**Not seen:** a real attach on a phone (a live grid, an effect such as the CRT curve under the band, a paused terminal),
+the blur over a field with colour in it, a pane in a deck split top and bottom (its height can still be a fraction of a
+pixel), and a terminal effect on the desktop (it draws under the rows alone, so the bands are flat beside it).
+
+**Not done, and not claimed:** no push of its own.
