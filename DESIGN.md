@@ -9394,7 +9394,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   terminal's ground where a bubble passes behind it (measured on the iPhone 17 simulator over the
   witness field at 82%: the ground moves by 2 of 255 by night and by 6 by day, where at full height
   it moved by 1 and by 0). The card floats 8pt in from each side with the home's top bar standing
-  above it, and is 46pt shorter than at full height on that phone. The ground's default opacity
+  above it, and is 46pt shorter than at full height on that phone. *(Measured 2026-11-22 on the
+  same simulator: at this height iOS draws everything on the sheet at about 95% of its size, so a
+  44pt key is 42pt tall, the 110pt input card of that day was 105, and a terminal row is 18pt for
+  19. It is the system's own scale for a sheet that is nearly full, and every size in this section
+  is the size asked for.)* The ground's default opacity
   stays 82%; the same page offers 70, 60 and 40, and none of them is picked. Every other card keeps
   its two heights. The stored opacity was renamed with its default (`groundOpacity`): every record saved
   before carried 100%, which nobody chose, and a record's old value is left unread. Solid stays a
@@ -9481,7 +9485,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the switch is the two doors**: it stands alone at the row's right, 52pt tall with halves of 50 by
   44, where the one keyboard key stood, and a tap on either half raises the keyboard in that half's
   mode. A tap on the terminal still raises it in the mode in force. The switch reserves no space,
-  as nothing on its row does.
+  as nothing on its row does. **The reply chips end 12pt before the switch.** A row of chips too
+  long for the room left of it scrolls and is cut at its own sides, so no chip runs under the
+  switch or the fold key *(until PF-8 a long row ran under the fold key, its clip turned off for
+  the chips' shadows; seen under the switch on the simulator the day PF-8 landed)*.
   **Leaving Terminal for Message** puts the keypad away and lets go of Ctrl, Alt and Shift, armed or
   locked: Message has no key that would show them, and a held Ctrl would turn the next letter of a
   draft into a chord. The plus's doors (Scan text, Snippets, Clipboard history) keep a place in
