@@ -67025,3 +67025,50 @@ Three ways are drawn on the page "Phone Keyboard Modes"; none is picked and noth
 holding focus), and a real attach on a phone.
 
 **Not done, and not claimed:** no push of its own.
+
+## Track PF — the phone's input card is one row per mode, with a two-way switch beside the fold key (M519)
+
+**2026-11-22 · on local main: `2ff311ba4` and `36a11e8f5` PF-8 (doc) · `5cc59f5dd` and `ecae717b3` PF-8 (green).**
+James, 2026-11-21: "currently we mixed them in one which is a bit confusing and busy ... we can separate them so they
+each can be more compact and take less height, and there should be a intuitive switch button". Three ways were drawn on
+the page "Phone Keyboard Modes"; his pick, 2026-11-22: "i choose B, land it now".
+
+- **One row in each mode.** The card draws the composer while a message is written and the key rail while the keys go
+  to the terminal: 60pt where both rows stood at 110. The "Typing into terminal" strip is gone. The rail is eight keys,
+  since the mode key left it.
+- **The switch floats beside the fold key**: one capsule of two halves, the message glyph and the prompt glyph, and
+  the half in force is solid. With the keyboard down it stands alone as the two doors, where the one keyboard key
+  stood, and either half raises the keyboard in its own mode.
+- **Leaving the terminal's mode** puts the keypad away and lets go of Ctrl, Meta and Shift, so a held Ctrl cannot turn
+  a draft's next letter into a chord.
+- **The plus's doors keep a place in the terminal's mode**, at the head of the rail while the keypad is up.
+- **The reply chips end before the switch.** A long row scrolls and is cut at its own sides. It ran under the fold
+  key before, and under the new switch too until the second green commit.
+- **Debug only:** the input lab's rail states and the fan, Meta and keypad fixtures enter the terminal's mode, and
+  `-vf-demo-input-locked` carries the locked Ctrl that `-vf-demo-input-draft` used to.
+
+**Seen**, on the iPhone 17 simulator (iOS 26.5) through the recorded-picture and input fixtures, by day and by night:
+the composer's row and the rail, each alone on the card; the switch with the right half solid in each; the two doors
+with the keyboard down; a two-line draft, the card grown upward; a locked Ctrl on the rail; the keypad's rail headed
+by the plus; and the fixture permission's four chips stopping 12pt short of the switch in all three places.
+
+**Proved, 2026-11-22, on the development Mac**, before the chips' clip: the kit's `FieldInputTests` 181 in 20 suites
+(eight new rows, `ModeSwitchTests`) and `FieldHomeTests` 870 in 102 suites passed. The chips' clip is a view-only
+change; the app built with it and the suites were not run again.
+
+**Found, said:** at 98% of full height iOS draws everything on the sheet at about 95% of its size (measured against
+the full-height stills: a 44pt key is 42pt tall, a row of terminal 18pt for 19). So the card above the keys is about
+57pt on the screen, and the rows the page computed are a little low. DESIGN.md §8 says so at PF-7's sentence.
+
+**Still in the code and reached by no key:** a keypad under a draft (`setKeypad` in the draft's mode, and the
+composer's own input view for it).
+
+**Another hand on main:** `b7f7ded80` (a WebSocket ping fix in FieldProduct) landed between this slice's doc and its
+green. The suites above ran on a build without it; the app that was photographed has it.
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets.
+
+**Not seen:** the card over the system keyboard (the simulator draws none), so the switch of modes with a real
+keyboard up, which is the hand-off the composer is kept mounted for; a real attach on a phone; VoiceOver.
+
+**Not done, and not claimed:** no push of its own.
