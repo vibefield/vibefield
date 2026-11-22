@@ -66908,13 +66908,23 @@ semitransparent blur backdrop as desktop, make it look more consistent as deskto
 - **The phone's card is glass.** A terminal's card stands on a blur of the field, and the ground's default opacity is
   the desktop's 82%. The stored field is renamed (`groundOpacity`), so a value chosen on the slider before today is
   lost once.
+  *Corrected 2026-11-21, at its source: the card is not glass. James looked on his phone the same day ("the terminal
+  is still not seeing through to the field in the back"). At full height, where a terminal's card stands, iOS 26 puts
+  an opaque backing (`#1C1C1E` by night) behind a sheet's content whatever its background is, so the blur has nothing
+  of the field to show. Measured on the simulator over the witness field's bubbles, with a clear background and the
+  ground at 20%: the card read 26, 26, 28, which is that backing under the ground, and it did not move where a bubble
+  passed behind. Below full height (98%, 96% and 93% were tried) the system's own glass shows the field. The 82% and
+  the renamed field stand. The mend is not built: James's pick of the card's height and the ground's opacity is asked
+  on the page "Phone Glass Options".*
 - **A new instrument:** `-vf-demo-terminal-picture=<path>` (DEBUG) puts a recorded terminal picture on the simulator's
   card. M515's "still not seen: a terminal's rows under the phone's band" is seen through it.
 
 **Seen.** The desktop app by night (`pnpm smoke:godview`, exit 0, twice): before, a lighter bar across the top and foot
 of every pane; after, no value moves by more than 3 of 255 down a clear column from a pane's top edge to its foot. The
 phone app on the iPhone 17 simulator, by night and by day: one ground through the band's foot (23 and 47 of 255), the
-day card lighter than the night one.
+day card lighter than the night one. *Corrected 2026-11-21: the day card was lighter because the system's backing
+behind a full-height sheet is light by day, not because the field showed through. That reading was mine and it was
+wrong; the field was the witness board's plain grey, which could not have told the two apart.*
 
 **Proved, 2026-11-21, on the development Mac.** field-app `tsc --noEmit` clean, 81 files and 1307 tests passed (godview,
 deck, terminal, design-system, ui-system). The kit's `FieldTerminalTests` 186 in 36 suites and `FieldHomeTests` 870 in

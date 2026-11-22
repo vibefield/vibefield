@@ -9378,7 +9378,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   over it at its opacity: **82%** unless the person chose another, the desktop's default (§8, "The
   glass is the desk"). The sheet's own glass is solid at full height, where a terminal's card
   always stands, so that card asks for the material itself; every other card keeps the sheet's
-  glass. The stored opacity was renamed with its default (`groundOpacity`): every record saved
+  glass. *Erratum, 2026-11-21 (James, on his phone the same day: "the terminal is still not seeing
+  through to the field in the back"; then measured on the simulator over the witness field's
+  bubbles): the material shows nothing of the field. On iOS 26 a sheet at full height stands on an
+  opaque backing of the system's (`#1C1C1E` by night) whatever its background is, so there is
+  nothing behind the card to blur; the card's ground does not move where a bubble passes behind
+  it. Below full height the system's own glass does show the field. The rule that replaces this
+  one is not written: it waits on James's pick of the card's height and the ground's opacity (the
+  page "Phone Glass Options").* The stored opacity was renamed with its default (`groundOpacity`): every record saved
   before carried 100%, which nobody chose, and a record's old value is left unread. Solid stays a
   choice in Settings › Terminal. **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
   easy for mobile user to switch models and effort, so maybe design some button for it"). Where the
