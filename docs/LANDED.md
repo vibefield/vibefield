@@ -67072,3 +67072,55 @@ green. The suites above ran on a build without it; the app that was photographed
 keyboard up, which is the hand-off the composer is kept mounted for; a real attach on a phone; VoiceOver.
 
 **Not done, and not claimed:** no push of its own.
+
+## Track PF — a session's card is the phone's own panel, edge to edge, over the blurred home (M520)
+
+**2026-11-22 · on local main: `eed80fe92` and `4033b8d21` PF-9 (doc) · `d90b0ee6e` PF-9 (green).**
+James, 2026-11-22, with the 98% card on his phone: "is there a reason to have left, right and bottom margin? can they
+fully bleed to screen edges?" The margins were the system's: under full height it floats a sheet 8pt in from the sides
+and the foot and draws it at about 95%, and at full height it backs the sheet opaque. His word after the answer: "Go
+and build it nicely".
+
+- **The card is no sheet.** It is drawn in the home's own window (`TerminalPanel`): flush with the left, right and
+  bottom edges, a terminal's card with its top edge at the status bar's foot, 40pt top corners, a grabber. Nothing on
+  it is scaled, so a 44pt key is 44pt again.
+- **The home behind it is blurred by 40pt**, the desk's measure under Godview, takes no touch, and the field stops
+  drawing while a card is open. The terminal's ground is the only layer over the blur.
+- **The band is the handle.** A pull moves the panel with the finger and eases the blur. Let go past a quarter of the
+  panel's height, or thrown past half of it, the panel leaves; otherwise it returns. It rises and leaves on the island
+  curve over 420ms (a 200ms fade under reduced motion).
+- **The open input card and the keyboard stand on the terminal's ground**, one surface to the screen's foot.
+- **A card that is not its terminal** stands in the same panel on the chrome's material at 55% of the room; the whole
+  of it is its handle and a touch on the home above it closes it.
+- **What the card held is let go when the panel has gone**, as the sheet's dismissal let it go. A card opened while
+  one is still leaving closes the old one first.
+
+**Seen**, on the iPhone 17 simulator (iOS 26.5) through the recorded-picture and input fixtures, by day and by night:
+the panel over the blurred field with the composer's row; the rail; the keypad's rail over the keypad; the keyboard
+folded, the grid run to the foot; a panel pulled 180pt with the home showing above it; a card closed (the home back,
+unblurred) and opened again; a card closed and opened again 120ms later, still open two seconds on; and two runs with
+no terminal, on the material at 55%. Pixel columns down the card are continuous across the grid's foot and across the
+home indicator's strip.
+
+**Proved, 2026-11-22, on the development Mac**, before three comment-only edits: the kit's `FieldHomeTests` 876 in 103
+suites (six new rows, `TerminalPanelTests`) and `FieldInputTests` 181 in 20 suites passed.
+
+**Found, said:**
+- An opaque blur cuts the home at the safe area: a hard edge at the status bar's foot, and black bled in when its
+  bounds were padded out to the screen's. The plain blur is used. At the screen's edges it thins toward the app's
+  ground: 8 to 10 of 255 lighter by day in the status bar's strip.
+- With no card open the home carries no blur layer (the window's layer tree, read on the simulator), so the home pays
+  nothing for the panel while no card stands.
+- The first doc commit said the covered field "costs nothing". The field's drawing stops; the compositor's blur over
+  it is not measured on a phone. DESIGN.md says so where the sentence stood.
+
+**Built and not installed:** a Release build of `d90b0ee6e` for the phone. The phone was not reachable from the Mac
+when it finished.
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets.
+
+**Not seen:** the panel on a phone; the system keyboard under it (the simulator draws none); a finger's pull (the
+simulator's stills set the pull by a temporary fixture, which is not in the commit); a real attach; VoiceOver; the
+blur's cost while a terminal draws.
+
+**Not done, and not claimed:** no push of its own.
