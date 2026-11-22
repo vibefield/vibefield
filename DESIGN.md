@@ -9404,18 +9404,30 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   reason to have left, right and bottom margin? can they fully bleed to screen edges?", then "Go
   and build it nicely") **a terminal's card is the phone's own panel**, and no sheet of the
   system's. It bleeds to the screen's left, right and bottom edges, and its top edge stands at the
-  status bar's foot, the top corners 40pt. **The home behind it is blurred as one picture, by
+  status bar's foot, the top corners 40pt. Nothing on it is scaled: every size in this section is
+  drawn at the size asked for. **The home behind it is blurred as one picture, by
   40pt**, the desk's own measure under Godview (§8 "The covers over the desk"), and the field stops
-  drawing while the panel stands, by that section's rule: what is covered is a still and costs
-  nothing. The terminal's ground lies over that blur at its opacity with nothing else between, so at
+  drawing while the panel stands, by that section's rule: what is covered is a still. *(This
+  sentence ended "and costs nothing" in the doc commit of the same day. The field's own drawing
+  does stop; the blur over it is the system compositor's, and what that costs on a phone while the
+  terminal above it draws is not measured. With no panel standing the home carries no blur layer at
+  all, read from the window's layer tree on the simulator.)* It is the plain blur, which takes the
+  field where it runs under the status bar; at the screen's edges it thins toward the app's ground,
+  8 to 10 of 255 lighter by day in the status bar's strip on the simulator. The terminal's ground
+  lies over that blur at its opacity with nothing else between, so at
   the default 82% the home is 18% of the ground, as a pane's desk is. The panel rises and leaves on
   the island curve over 420ms (a 200ms fade under reduced motion). **A pull down on its band** moves
   it with the finger, the blur easing as it goes; let go past a quarter of the panel's height, or
   thrown downward, it leaves, and otherwise it returns. A grabber, 36 by 5, stands 6 under its top
   edge in the ground's own ink at 28%. While the panel stands the home takes no touch and is hidden
-  from VoiceOver, and the panel answers the escape gesture. A card that is not its terminal (a run
-  that ended, a session that left the field) stands in the panel on the chrome's material. Every
-  other card keeps the system's sheet and its two heights. *(PF-7's sheet at 98% stood from
+  from VoiceOver, and the panel answers the escape gesture. **The open input card and the keyboard
+  stand on the terminal's ground**, which the panel carries from the grid's last row to the screen's
+  foot: one surface, where the sheet's material stood. **A card that is not its terminal** (a run
+  with no terminal to offer, a session that left the field) stands in the same panel on the
+  chrome's material, shorter: 55% of the room between the status bar and the home indicator, the
+  height its sheet opened at. The whole of it is its handle, a touch on the home above it closes
+  it (a touch on the status bar's strip above a terminal's card closes nothing), and it grows to a terminal's height on the same curve if its terminal arrives. Every other
+  kind of card (Settings, the launch sheet, a paste's review) keeps the system's sheet. *(PF-7's sheet at 98% stood from
   2026-11-21 until PF-9. Under full height the system floats a sheet 8pt in from the sides and the
   foot and draws it at about 95%; at full height it backs the sheet opaque. So no height of the
   system's sheet is both edge to edge and glass.)* The stored opacity was renamed with its default (`groundOpacity`): every record saved
