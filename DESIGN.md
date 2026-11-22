@@ -9340,8 +9340,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   paper", the look ruled 2026-10-19)*, from the sheet's top edge to its foot, behind the home
   indicator. There is
   no paper, no rounded inset, no divider and no header block. **The card wears Godview's pane
-  frame**: a 1px line and the inner glow in text main follow the sheet's corners, 40pt at the top
-  and the display's own at the foot (62pt on James's iPhone) so the display never cuts the line, and
+  frame**: a 1px line and the inner glow in text main follow the sheet's corners, 40pt all round
+  *(since PF-7, 2026-11-21: the card floats at 98% of full height, so its foot is the sheet's own
+  corner. Until then the card stood at full height and the foot followed the display's corner, 62pt
+  on James's iPhone, so the display never cut the line; on the floating card that line cut inside
+  the sheet's corner, seen on the simulator the day PF-7 landed)*, and
   a 44pt band across its top holds, at the left, **the readout capsule** (model | effort,
   lowercase, mono 11.5 semibold in text main at 92%, on a 10% tint of text main with a 16% hairline,
   28pt tall, a 14pt hairline between its two words; the effort italic while it is only the launch's
@@ -9384,8 +9387,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   opaque backing of the system's (`#1C1C1E` by night) whatever its background is, so there is
   nothing behind the card to blur; the card's ground does not move where a bubble passes behind
   it. Below full height the system's own glass does show the field. The rule that replaces this
-  one is not written: it waits on James's pick of the card's height and the ground's opacity (the
-  page "Phone Glass Options").* The stored opacity was renamed with its default (`groundOpacity`): every record saved
+  one waited on James's pick of the card's height (the page "Phone Glass Options") and is the next
+  sentence.* **Since PF-7** (2026-11-21; James, from that page's stills: "98 is good") a terminal's
+  card stands at **98% of full height**, on the sheet's own glass, with no material of its own. Just
+  under full height the system keeps the sheet's glass see-through, so the field shows through the
+  terminal's ground where a bubble passes behind it (measured on the iPhone 17 simulator over the
+  witness field at 82%: the ground moves by 2 of 255 by night and by 6 by day, where at full height
+  it moved by 1 and by 0). The card floats 8pt in from each side with the home's top bar standing
+  above it, and is 46pt shorter than at full height on that phone. The ground's default opacity
+  stays 82%; the same page offers 70, 60 and 40, and none of them is picked. Every other card keeps
+  its two heights. The stored opacity was renamed with its default (`groundOpacity`): every record saved
   before carried 100%, which nobody chose, and a record's old value is left unread. Solid stays a
   choice in Settings › Terminal. **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
   easy for mobile user to switch models and effort, so maybe design some button for it"). Where the
