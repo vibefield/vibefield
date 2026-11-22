@@ -9340,11 +9340,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   paper", the look ruled 2026-10-19)*, from the sheet's top edge to its foot, behind the home
   indicator. There is
   no paper, no rounded inset, no divider and no header block. **The card wears Godview's pane
-  frame**: a 1px line and the inner glow in text main follow the sheet's corners, 40pt all round
-  *(since PF-7, 2026-11-21: the card floats at 98% of full height, so its foot is the sheet's own
-  corner. Until then the card stood at full height and the foot followed the display's corner, 62pt
-  on James's iPhone, so the display never cut the line; on the floating card that line cut inside
-  the sheet's corner, seen on the simulator the day PF-7 landed)*, and
+  frame**: a 1px line and the inner glow in text main follow the card's corners, 40pt at the top
+  and the display's own at the foot (62pt, never less, so the display never cuts the line; a screen
+  rounded tighter shows it a hair inside) *(PF-7, 2026-11-21, made them 40pt all round for the sheet
+  that floated at 98%, where the foot's line cut inside the sheet's own corner; PF-9's panel, the
+  day after, bleeds to the foot again)*, and
   a 44pt band across its top holds, at the left, **the readout capsule** (model | effort,
   lowercase, mono 11.5 semibold in text main at 92%, on a 10% tint of text main with a 16% hairline,
   28pt tall, a 14pt hairline between its two words; the effort italic while it is only the launch's
@@ -9400,7 +9400,25 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   19. It is the system's own scale for a sheet that is nearly full, and every size in this section
   is the size asked for.)* The ground's default opacity
   stays 82%; the same page offers 70, 60 and 40, and none of them is picked. Every other card keeps
-  its two heights. The stored opacity was renamed with its default (`groundOpacity`): every record saved
+  its two heights. **Since PF-9** (2026-11-22; James, with the 98% card on his phone: "is there a
+  reason to have left, right and bottom margin? can they fully bleed to screen edges?", then "Go
+  and build it nicely") **a terminal's card is the phone's own panel**, and no sheet of the
+  system's. It bleeds to the screen's left, right and bottom edges, and its top edge stands at the
+  status bar's foot, the top corners 40pt. **The home behind it is blurred as one picture, by
+  40pt**, the desk's own measure under Godview (§8 "The covers over the desk"), and the field stops
+  drawing while the panel stands, by that section's rule: what is covered is a still and costs
+  nothing. The terminal's ground lies over that blur at its opacity with nothing else between, so at
+  the default 82% the home is 18% of the ground, as a pane's desk is. The panel rises and leaves on
+  the island curve over 420ms (a 200ms fade under reduced motion). **A pull down on its band** moves
+  it with the finger, the blur easing as it goes; let go past a quarter of the panel's height, or
+  thrown downward, it leaves, and otherwise it returns. A grabber, 36 by 5, stands 6 under its top
+  edge in the ground's own ink at 28%. While the panel stands the home takes no touch and is hidden
+  from VoiceOver, and the panel answers the escape gesture. A card that is not its terminal (a run
+  that ended, a session that left the field) stands in the panel on the chrome's material. Every
+  other card keeps the system's sheet and its two heights. *(PF-7's sheet at 98% stood from
+  2026-11-21 until PF-9. Under full height the system floats a sheet 8pt in from the sides and the
+  foot and draws it at about 95%; at full height it backs the sheet opaque. So no height of the
+  system's sheet is both edge to edge and glass.)* The stored opacity was renamed with its default (`groundOpacity`): every record saved
   before carried 100%, which nobody chose, and a record's old value is left unread. Solid stays a
   choice in Settings › Terminal. **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
   easy for mobile user to switch models and effort, so maybe design some button for it"). Where the
