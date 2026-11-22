@@ -43,6 +43,9 @@ struct ChipsRow: View {
     model.chips.isEmpty && !(pasteboard?.hasNewContent ?? false)
   }
 
+  /// Room the scrolling row's clip leaves above and below its chips.
+  private static let clipRoom: CGFloat = 12
+
   private var chipHeight: CGFloat { InputCardMetrics.chipHeight(for: dynamicTypeSize) }
   private var labelSize: CGFloat { InputCardMetrics.chipLabelSize(for: dynamicTypeSize) }
   private var numberSide: CGFloat {
@@ -58,14 +61,18 @@ struct ChipsRow: View {
 
   var body: some View {
     // Fit the visible controls instead of leaving an invisible scroll view
-    // across the terminal. A long row still scrolls without clipping labels.
+    // across the terminal. A long row scrolls, and is cut at its own sides
+    // and nowhere else (PF-8, 2026-11-22): the row ends where the mode switch
+    // begins, so a chip never runs under the switch or the fold key. The
+    // scroll view's clip is given room above and below instead of being
+    // turned off, which is what a chip's glass and shadow need.
     ViewThatFits(in: .horizontal) {
       chips.fixedSize(horizontal: true, vertical: false)
       ScrollView(.horizontal, showsIndicators: false) {
-        chips
+        chips.padding(.vertical, Self.clipRoom)
       }
       .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-      .scrollClipDisabled()
+      .padding(.vertical, -Self.clipRoom)
     }
     .frame(height: rowHeight + 2)
     // --- IOS-5e: what this row IS, said before its chips are read.
