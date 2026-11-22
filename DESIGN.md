@@ -9449,7 +9449,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   soft rounded caps, and a shared native glass surface. Its pages are **Navigate**, **Shortcuts**,
   and **Fn**. Letters, numbers, and symbols remain on the system keyboard. While expanded, the
   input card's rail keeps the mode switch, Esc, Ctrl, Alt, Shift, and **ABC**, without duplicating
-  the navigation keys below. Common shell shortcuts lead; Claude and tmux have named profiles,
+  the navigation keys below *(since PF-8, 2026-11-22, the rail's head is the plus: the mode switch
+  left the rail, and the keypad stands in Terminal alone; the bullet after this one)*. Common shell shortcuts lead; Claude and tmux have named profiles,
   tmux's Control prefix is configurable, and Emacs/Screen remain secondary choices. Action labels
   describe terminal behavior: Ctrl-C interrupts, and clipboard copy remains a separate action.
   Navigation and deletion keys repeat while held; shortcuts and Return do not. Page changes and
@@ -9462,6 +9463,32 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   across the composer's rounded bottom. Hardware typing continues while the keypad is visible.
   Existing tap-to-focus, scroll-without-focus, floating paste/fold controls, and automatic folding
   when another device takes the seat remain part of the input behavior.
+- **The phone's input card is one row in each of its two modes** (PF-8, 2026-11-22; James,
+  2026-11-21: "currently we mixed them in one which is a bit confusing and busy, when in direct
+  terminal typing mode, user needs all the helpful buttons, while in message prompt mode, user just
+  need the text prompt, so we can separate them so they each can be more compact and take less
+  height, and there should be a intuitive switch button"; his pick from the three ways drawn on the
+  page "Phone Keyboard Modes", 2026-11-22: "i choose B").
+  **Message** is the composer alone: the plus, the field, the mic and Send. **Terminal** is the key
+  rail alone: Esc, Ctrl, Tab, the four arrows and the keypad key, eight keys. The card is 60pt in
+  either (8 · 44 · 8, and 6 under it), where both rows stood in both modes at 110, and the
+  "Typing into terminal" line is gone: a row of keys says it. A draft is kept across the switch,
+  both ways.
+  **The switch** is one capsule of two halves on the floating row, left of the fold key: the
+  message glyph and the prompt glyph, each 40 by 32 in a 38pt capsule of the row's glass, taking a
+  touch at the row's 44. The half of the mode in force is solid (the key's `on` fill and its ink);
+  the other is in secondary ink. A tap on the other half changes the mode. **With the keyboard down
+  the switch is the two doors**: it stands alone at the row's right, 52pt tall with halves of 50 by
+  44, where the one keyboard key stood, and a tap on either half raises the keyboard in that half's
+  mode. A tap on the terminal still raises it in the mode in force. The switch reserves no space,
+  as nothing on its row does.
+  **Leaving Terminal for Message** puts the keypad away and lets go of Ctrl, Alt and Shift, armed or
+  locked: Message has no key that would show them, and a held Ctrl would turn the next letter of a
+  draft into a chord. The plus's doors (Scan text, Snippets, Clipboard history) keep a place in
+  Terminal at the head of the rail while the keypad is up.
+  *(Until PF-8 the composer row and the rail both stood in both modes, the rail's first key was the
+  switch and lit in Terminal, one keyboard key stood on the floating row with the keyboard down,
+  and the keypad could stand under a draft.)*
 - **A live card another client is driving** (item 42's phone half; James, 2026-10-19 17:42Z: "studio
   is driving · touch to take it back"; the look ruled 21:38Z, "good, design all go with the lean").
   While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
@@ -9471,7 +9498,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   complete message and its bloom between the header and floating input controls, independently
   of the holder's rows. The bloom is decorative and must not widen the text layout. Long names
   wrap to two lines and scale within the phone's margins. The fold-keyboard button sits outside
-  the input card, at its upper right. Paste and the show/fold controls share native Liquid Glass
+  the input card, at its upper right *(with the mode switch at its left since PF-8, 2026-11-22,
+  whose two halves are the show control: the bullet before this one)*. Paste and the show/fold
+  controls share native Liquid Glass
   and float over terminal content in both keyboard states. Their row reserves no space and never
   moves the grid; only the composer and key rail inset the terminal. Paste reads the clipboard
   only on a tap and respects the system's paste-permission prompt; the system Paste control's
