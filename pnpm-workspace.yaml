@@ -291,26 +291,26 @@ overrides:
   # EL8 2026-11-12: 0.15.0 (v0.15.0 = 8f5b3d12), libghostty-vt 1.0; protocol 1.19 (Option as Alt, not adopted here).
   # EL8 2026-11-18: 0.16.0 (v0.16.0 = 3e719397), a host tells a session its colors; protocol 1.20 (not adopted here).
   # EL8 2026-11-21: 0.16.1 (v0.16.1 = 55c63c53), the Swift package's Truffle 0.7.29 (#109); no npm surface moves.
-  "@vibecook/ghosttea-client": 0.16.1
+  "@vibecook/ghosttea-client": 0.16.2
   # GT-0 (2026-08-01): the Godview terminal planes join at the same exact version
   # (one-version law) — electron-shell consumes ghosttea-electron, field-app
   # consumes ghosttea-react; packages ask for "*".
-  "@vibecook/ghosttea-electron": 0.16.1
+  "@vibecook/ghosttea-electron": 0.16.2
   # ghosttea-react: a link: row into the Godview performance window's checkout
   # (2026-09-27) until ghosttea 0.13.0 published the window's renderer fixes.
-  "@vibecook/ghosttea-react": 0.16.1
+  "@vibecook/ghosttea-react": 0.16.2
   # GT-3m (2026-08-04): field-app declares the wire vocabulary directly — the
   # monitor's rows ARE floor sessions, so `SessionSummary` is the honest type for
   # them. Types-and-constants only (zero dependencies), already resolved at this
   # version transitively; declaring it puts it under the one-version law rather
   # than leaving a hoisted transitive to drift.
-  "@vibecook/ghosttea-protocol": 0.16.1
+  "@vibecook/ghosttea-protocol": 0.16.2
   # The EL8 to 0.13.1 found this row MISSING: tooling/terminal-perf asks
   # `@vibecook/ghosttea-frame: "*"`, and with no row the lock had held it at
   # 0.10.1 while the renderer's own frame moved on — two copies. It joins the
   # one-version law here. FRAME_PROTOCOL_VERSION is 1 in both, so the committed
   # TRF1 corpus (captured at 0.10.1) stays readable; the bench is the proof.
-  "@vibecook/ghosttea-frame": 0.16.1
+  "@vibecook/ghosttea-frame": 0.16.2
   # rosetta — EXACT registry pins since RD-5a (2026-10-14; W-D8's exit shape under
   # RL5's `@vibefield` scope; packages ask for "*"). `@vibefield/rosetta-protocol`
   # is the TypeScript client (types + the REST/WS client); `@vibefield/rosetta-room`
@@ -521,14 +521,13 @@ minimumReleaseAgeExclude:
   - '@vibecook/mille-linux-x64-musl@0.3.6'
   - '@vibecook/mille-win32-arm64-msvc@0.3.6'
   - '@vibecook/mille-win32-x64-msvc@0.3.6'
-  # EL8 2026-11-21: reviewed Ghosttea 0.16.1 (the Swift package's Truffle), published inside the release-age window.
-  # The prior 0.16.0 rows were retained through the install that regenerated the lock, then removed.
-  - '@vibecook/ghosttea-client@0.16.1'
-  - '@vibecook/ghosttea-protocol@0.16.1'
-  - '@vibecook/ghosttea-electron@0.16.1'
-  - '@vibecook/ghosttea-react@0.16.1'
-  - '@vibecook/ghosttea-frame@0.16.1'
-  - '@vibecook/ghosttea@0.16.1'
+  # Reviewed Ghosttea 0.16.2 for the iOS terminal power-state fix.
+  - '@vibecook/ghosttea-client@0.16.2'
+  - '@vibecook/ghosttea-protocol@0.16.2'
+  - '@vibecook/ghosttea-electron@0.16.2'
+  - '@vibecook/ghosttea-react@0.16.2'
+  - '@vibecook/ghosttea-frame@0.16.2'
+  - '@vibecook/ghosttea@0.16.2'
   # EL8 2026-11-21: reviewed Rosetta 0.1.8 release (tags v0.1.8 and npm-v0.1.8 at bf5b526de), inside the age window.
   # The prior 0.1.7 rows were retained through the install that regenerated the lock, then removed.
   - '@vibefield/rosetta-protocol@0.1.8'

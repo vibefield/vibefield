@@ -304,6 +304,31 @@ import Testing
     #expect(scene.failure == nil)
   }
 
+  @MainActor
+  @Test(.enabled(if: MTLCreateSystemDefaultDevice() != nil, "needs a Metal device"))
+  func aRetainedSceneStaysPausedWhenPowerChangesOffscreen() async throws {
+    let scene = TerminalScene()
+    let view = try #require(scene.hostedView())
+    scene.clear()
+    view.preferredFramesPerSecond = 1
+
+    await withCheckedContinuation { posted in
+      DispatchQueue.global(qos: .utility).async {
+        NotificationCenter.default.post(name: .NSProcessInfoPowerStateDidChange, object: nil)
+        posted.resume()
+      }
+    }
+
+    let expected = ProcessInfo.processInfo.isLowPowerModeEnabled ? 30 : 60
+    let deadline = ContinuousClock.now + .seconds(2)
+    while view.preferredFramesPerSecond != expected && ContinuousClock.now < deadline {
+      try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(view.preferredFramesPerSecond == expected)
+    #expect(view.isHidden && view.isPaused)
+    #expect(scene.hostedView() === view)
+  }
+
   /// The input audit's H (2026-10-17): a card verb goes out AFTER the system
   /// keyboard's composition. With marked text on the shipping view, a rail key
   /// first sends the composed text on (the view's own `unmarkText`), so its

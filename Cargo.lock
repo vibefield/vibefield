@@ -616,9 +616,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2dc93104a8d9bad98a566ecabf4c4fe201dce85caa4366a6266c6457fef35d43"
+checksum = "18a8053ae24ca5c6d3fbaf5e216c247da21339f423d883f62c1fe5aab5d62789"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -639,9 +639,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-config"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ff370e45bd8f5c49fde7d92378163508fd9db3c93c88b013782072f54abc0b8"
+checksum = "95ef90ddbbeb359026caeb157d846cf9fa463ea7ced83195e61a6f6f2ea3319c"
 dependencies = [
  "libc",
  "serde",
@@ -652,9 +652,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-core"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f1fc4b20bde6f3e9d6b8e7e13065476ec0bc0806247e99bbe0b50f142cac732"
+checksum = "ff0ebbe2ca89791b08c9f4cf1dbe8d644e05436a8871776d4b78f84adbe48014"
 dependencies = [
  "anyhow",
  "ghosttea-text",
@@ -665,9 +665,9 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-text"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00530231aa1b279bbd360f50702089b043df1a115b400d22d5f0078123308bcd"
+checksum = "788d929686bc294dfe2a5128048e17bda7524e4316fa2dba59960a45fa0657e7"
 dependencies = [
  "anyhow",
  "fontdb",
@@ -679,18 +679,18 @@ dependencies = [
 
 [[package]]
 name = "ghosttea-vt"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "362a620ffa142c28fff8fb1ec9555484d01c25c981593bde358033222c977eed"
+checksum = "532e7e9988d746e92a1735f99d33ef6515cfd6e9437d960c5e81da40c8eabd0d"
 dependencies = [
  "ghosttea-vt-sys",
 ]
 
 [[package]]
 name = "ghosttea-vt-sys"
-version = "0.16.1"
+version = "0.16.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1726df464c364454ce5624193277fd84ab2db6be1c5c335686530a82d19724b6"
+checksum = "646f551809a1310fae306046886fc66b5a822eaaa47a5620459c9b3cda07dc92"
 dependencies = [
  "cc",
  "serde",
