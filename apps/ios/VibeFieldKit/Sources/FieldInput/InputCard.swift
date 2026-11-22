@@ -127,6 +127,17 @@ public struct InputCard: View {
   /// tap. The outgoing responder now stays available until the incoming one
   /// takes: under the rail the field is there, unseen, one row tall and
   /// taking no touch.
+  ///
+  /// Never `.allowsHitTesting(false)` on the field (PF-10, 2026-11-22). PF-8
+  /// added it for the field under the rail. SwiftUI answers it by turning user
+  /// interaction off on the field's wrapper view, and UIKit makes a first
+  /// responder inside such a view resign, in the update pass and so before the
+  /// terminal's take on the next turn: the same close and reopen, on every
+  /// switch from Message to Terminal (seen on a phone the day PF-8 landed;
+  /// the resign's caller read on the simulator, `-[UIView
+  /// setUserInteractionEnabled:]` under SwiftUI's view updater). The field's
+  /// zero opacity does not do it (measured the same day). The field refuses
+  /// its own touches under the rail (`InputTextView.acceptsTouchInput`).
   private var composerRow: some View {
     HStack(alignment: .bottom, spacing: 0) {
       // One `+` on the card at a time: its menu is a presentation off this
@@ -140,7 +151,6 @@ public struct InputCard: View {
       )
       .frame(height: max(rowHeight, composerHeight))
       .opacity(model.mode == .draft ? 1 : 0)
-      .allowsHitTesting(model.mode == .draft)
       .accessibilityHidden(model.mode != .draft)
 
       if model.mode == .draft {

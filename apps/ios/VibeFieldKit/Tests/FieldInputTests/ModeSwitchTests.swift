@@ -118,6 +118,25 @@ struct ModeSwitchTests {
     #expect(model.latch.phase == .armed)
   }
 
+  @Test("across the switch the keyboard always has an owner: the new one takes, the old one yields, no one releases")
+  func theKeyboardIsHandedOver() {
+    let model = InputCardModel()
+    model.enter(.draft)
+    #expect(model.responderRole(for: .composer) == .take)
+
+    model.enter(.live)
+    #expect(model.keyboardOwner == .terminal)
+    #expect(model.responderRole(for: .terminal) == .take)
+    #expect(model.responderRole(for: .composer) == .yield)
+    #expect(model.responderRole(for: .keypadHost) == .yield)
+
+    model.enter(.draft)
+    #expect(model.keyboardOwner == .composer)
+    #expect(model.responderRole(for: .composer) == .take)
+    #expect(model.responderRole(for: .terminal) == .yield)
+    #expect(model.responderRole(for: .keypadHost) == .yield)
+  }
+
   @Test("the capsule is 88 by 38 beside the fold key and 110 by 52 as the doors, and both grow at the accessibility row")
   func theFigures() {
     #expect(ModeSwitch.halfSize(rowHeight: 44, doors: false) == CGSize(width: 40, height: 32))
