@@ -344,7 +344,7 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   (PF-3). Defined in `DESIGN.md` §2.7 "The pane frame's capsules" and §8 "The phone's live card is its terminal"; the
   door in `docs/agent-plane/api.html`. **LANDED 2026-11-21 (M515)**, unseen on a screen and unproved end to end (the
   ledger's entry says what is owed).
-- **PF-4…PF-10** — track PF, from James's looks at the build (2026-11-21 and 22): a pane is one piece with its bands, on the
+- **PF-4…PF-11** — track PF, from James's looks at the build (2026-11-21 and 22): a pane is one piece with its bands, on the
   desktop and the phone (PF-4); the phone's card as glass over the field (PF-5); the phone's terminal wears the look of
   the mode the phone is in, with a theme picked for each mode (PF-6); a terminal's card stands at 98% of full height
   on the sheet's own glass (PF-7, "98 is good"); the phone's input card is one row in each of its two modes, with a
@@ -357,7 +357,9 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   the height James picked; the ground's default opacity is not picked a second time and stays 82%. **PF-8 LANDED
   2026-11-22 (M519)**, defined in §8 "The phone's input card is one row in each of its two modes". **PF-9 LANDED
   2026-11-22 (M520)**, defined in §8 "The card's glass is the field"; unseen on a phone. **PF-10 LANDED 2026-11-22
-  (M521)**: PF-8's mend, the keyboard stays up across the mode switch; unseen on a phone.
+  (M521)**: PF-8's mend, the keyboard stays up across the mode switch; unseen on a phone. **PF-11 LANDED 2026-11-22
+  (M522)**: with the keyboard up the switch's row is a shelf the grid ends above ("Go with 2", of three ways put to
+  him); it gives back 44pt of the height PF-8 saved; unseen on a phone.
 
 ## Petitions
 

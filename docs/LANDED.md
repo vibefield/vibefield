@@ -67152,3 +67152,32 @@ terminal takes none. Whether the keyboard's height still moves a little between 
 over the composer's keyboard and none over the terminal's) is the phone's to show.
 
 **Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets. **Not done:** no push of its own.
+
+## Track PF — with the keyboard up, the switch's row is a shelf the grid ends above (M522)
+
+**2026-11-22 · on local main: `f190fd30a` PF-11 (doc) and PF-11 (green), the commit before this entry.**
+James, 2026-11-22, with the mode switch and the fold key over a program's last two rows on his phone: "these button
+can block terminal content, how can we design better?" Three ways were put to him (the controls on the card; a real
+shelf; controls that tuck away). His pick: "Go with 2".
+
+- **While the keyboard is up** the row of paste, replies, the mode switch and the fold key keeps one row's height,
+  44pt, between the grid and the card. The grid ends above it, and the controls are drawn as they were.
+- **With the keyboard down** nothing changes: the doors and the chips float over the grid's last rows.
+- The row and the card are mounted together in the card's one bottom inset (`InputDock`).
+
+**The cost, which he was told before he picked:** 44pt of grid while the keyboard is up, two or three lines at the
+default size. The room over the keyboard is 110pt again, where PF-8 had brought it to 66.
+
+**Measured**, on the iPhone 17 simulator with a temporary probe (not in the commits): on the rail the terminal's frame
+ends at 730 and the row's is 730 to 774, the card under it; folded, the row's frame has no height and the terminal's
+runs to 840. **Seen** there by day and by night: the shelf over the rail, over the composer, with the fixture's reply
+chips, over the keypad's rail, and the doors floating with the keyboard folded.
+
+**Proved, 2026-11-22, on the development Mac:** `FieldInputTests` 185 in 21 suites (three new rows, `InputShelfTests`)
+and `FieldHomeTests` 876 in 103 suites passed.
+
+**Left as it was, and said to him:** with the keyboard down the two doors still cover the grid's lower right corner.
+
+**Not seen:** a phone; the system keyboard; a program's footer standing clear above the shelf.
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets. **Not done:** no push of its own.
