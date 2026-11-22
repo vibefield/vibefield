@@ -552,6 +552,15 @@ Godview mode and draws one chip of its own.
 - **The bands keep their heights**, 24 at the top and 30 at the foot, so no row of a terminal
   moves. Each capsule is 18 tall with corners of 5, and stands 4 from the pane's edges: the badge
   at the top right, the meter and its figure in one capsule at the foot's right.
+- **The bands are the pane's own ground** (PF-4, 2026-11-21; James, on the first build: "both
+  desktop and mobile terminal pane has the weird bar on top and bottom of the terminal edge that
+  are not visually consistent with terminal background, make them one seamless piece"). A terminal
+  paints its ground under its rows alone, so the two bands showed whatever the pane stands on:
+  since the glass (§8, "The glass is the desk"), the bare desk, a dark bar above and under a pale
+  pane. The deck paints both bands in the pane's own ground at the pane's own alpha
+  (`--vf-godview-pane-ground`, from the projection the panes are handed), so a pane is one piece
+  from its top edge to its foot, on glass and solid alike, and the frame's line and glow lie over
+  all of it. What a terminal's effects draw (§8, the shader stack) stays under its rows.
 - **A resting badge** is the terminal's ink at 80% on that ink at 7%, with a 1px inner line at
   9%, and a 6px dot in the pane colour before its name. **The selected pane's badge** is filled
   with the pane colour and loses the dot and the line.
@@ -6439,8 +6448,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   from the stage's top in the drawing's 780-tall window** — where the sheet's top corners cleared
   the edges' slivers (332–428) while there were edges (until HN-8; the rest stands as ruled), so
   the lip is 300–330 and the panes 330–692 — **and the same
-  share, 5/13, on any other height, never above 232** (L21): 5/13 is the ruling's 38.5% made
-  exact, the drawing's 300 of 780; 232 is the field's least height, 220, and its 12, so at rest
+  share, 5/13, on any other height, never above 232** (L21), **to the whole pixel** (PF-4,
+  2026-11-21: on a stage 748 tall the share is 287.69, so a pane's box was a fraction of a pixel
+  taller than the canvas its terminal draws, and the canvas's last row was half painted: a hairline
+  where the rows meet the foot's band, once that band is the pane's own ground, §2.7): 5/13 is
+  the ruling's 38.5% made exact, the drawing's 300 of 780; 232 is the field's least height, 220, and its 12, so at rest
   the monitor's field always ends 12 above the edge and is never shorter than 220. A height the
   old slider stored is read past,
   removed from storage on load, and never applies. The floor holds below a 603-tall stage.
@@ -9333,14 +9345,28 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   takes §2.4's dark ramp by day too, and a light ground takes the light ramp. The band takes its
   own touches, so a touch there never reaches the terminal under it (that touch would take the seat,
   DS-D5). **The band is reserved** (PF-1, 2026-11-21; James: "the top is obscuring the top area
-  content of terminal, we need add safe margin to terminal at top to avoid it"): the terminal's view
-  begins at the band's foot, so the grid's first row is under no chrome, and the band stands on the
-  terminal's own ground, at its opacity, with no blur and no fade. A cooled terminal's veil covers
-  the band's ground too. **Until the terminal presents its first frame** (the card connecting, or an
-  attach refused) its view paints nothing, so the same ground stands under the whole card: one
-  ground from the moment the card rises, never a band over the bare sheet. *(Added 2026-11-21, the
-  day PF-1 landed, from the first look at it on a simulator: a refused attach by day drew a dark
-  band over a white sheet.)* **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
+  content of terminal, we need add safe margin to terminal at top to avoid it"): the grid's first
+  row begins at the band's foot, so no row is under chrome. **The band and the terminal are one
+  surface** (PF-4, 2026-11-21; James, on the first build: "make them one seamless piece"): the
+  terminal's own surface runs under the band to the card's top edge, as it runs behind the home
+  indicator, and the band's 44pt reach it as the grid's top inset. So the band stands on the ground
+  the terminal itself paints, its effects included, and a cooled terminal's veil covers both.
+  *(PF-1 laid the terminal's view out from the band's foot and painted a strip of the ground's
+  colour under the band: a flat strip beside a surface that draws scanlines and a curve, and a
+  seam where they met.)* **Until the terminal presents its first frame** (the card connecting, or
+  an attach refused) its view paints nothing, so the ground's colour stands under the whole card:
+  one ground from the moment the card rises, never a band over the bare sheet. *(Added 2026-11-21,
+  the day PF-1 landed, from the first look at it on a simulator: a refused attach by day drew a
+  dark band over a white sheet.)* **The card's glass is the field** (PF-5, 2026-11-21; James:
+  "phone's terminal does not have the semitransparent blur backdrop as desktop, make it look more
+  consistent as desktop"). A terminal's card stands on a blur of the field behind it, the system's
+  thinnest material in the scheme the ground's lightness decides, and the terminal's ground lies
+  over it at its opacity: **82%** unless the person chose another, the desktop's default (§8, "The
+  glass is the desk"). The sheet's own glass is solid at full height, where a terminal's card
+  always stands, so that card asks for the material itself; every other card keeps the sheet's
+  glass. The stored opacity was renamed with its default (`groundOpacity`): every record saved
+  before carried 100%, which nobody chose, and a record's old value is left unread. Solid stays a
+  choice in Settings › Terminal. **The capsule is the switch** (PF-3, 2026-11-21; James: "I want to make it
   easy for mobile user to switch models and effort, so maybe design some button for it"). Where the
   run's row offers a model switch (its adapter's own offer, said by the desktop that owns it), the
   capsule takes a touch and wears a 7pt up-down chevron after its last word, at 60%. A press opens
