@@ -27,6 +27,7 @@
  */
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { act, type ReactElement } from "react";
@@ -1076,14 +1077,62 @@ describe("the deck sheet's ground", () => {
         expect(godviewTerminalGroundStyle(appearance, mode)).toEqual({
           "--vf-godview-terminal-bg": panes.background,
           "--vf-godview-terminal-ink": panes.ink,
+          // PF-4: the same colour at the pane's own alpha, for the frame's bands
+          "--vf-godview-pane-ground": `${panes.background.slice(0, -1)} / ${appearance.opacity})`,
         });
       }
     }
-    // The reference grounds (§2.7), opaque: the alpha is the stage's to set.
+    // The reference grounds (§2.7), opaque: the alpha is the stage's to set. The pane's own ground
+    // carries the viewer's alpha (the default 82%), as the renderer clears to it.
     expect(godviewTerminalGroundStyle(DEFAULT_DECK_APPEARANCE, "dark")).toEqual({
       "--vf-godview-terminal-bg": "rgb(40 44 52)",
       "--vf-godview-terminal-ink": "rgb(255 255 255)",
+      "--vf-godview-pane-ground": "rgb(40 44 52 / 0.82)",
     });
+    // Solid panes: the bands are solid with them. A hostile alpha is clamped, never printed.
+    for (const [opacity, alpha] of [
+      [1, "1"],
+      [0, "0"],
+      [7, "1"],
+    ] as const) {
+      expect(
+        godviewTerminalGroundStyle({ ...DEFAULT_DECK_APPEARANCE, opacity }, "light")[
+          "--vf-godview-pane-ground"
+        ],
+      ).toBe(`rgb(241 240 238 / ${alpha})`);
+    }
+  });
+
+  it("paints the frame's two bands in the pane's own ground, at the package's own heights (PF-4)", () => {
+    // DESIGN.md §2.7 "The pane frame's capsules": a terminal paints its ground under its rows
+    // alone, so the bands (the frame's padding) are painted by the deck, in the colour the
+    // renderer clears to. Two strips, never the whole box: under the rows it would double.
+    const godview = readFileSync(join(PACKAGE_ROOT, "src/godview/godview.css"), "utf8");
+    const bands =
+      godview.match(
+        /^\.vf-godview-terminal-deck \.vf-deck-framed \.ghostty-pane \{([^}]*)\}/m,
+      )?.[1] ?? "";
+    const flat = bands.replace(/\s+/g, " ");
+    expect(flat).toContain("--pane-band: var(--vf-godview-pane-ground, transparent);");
+    expect(flat).toContain(
+      "linear-gradient(var(--pane-band), var(--pane-band)) top / 100% var(--vf-terminal-safe-top, 24px) no-repeat",
+    );
+    expect(flat).toContain(
+      "linear-gradient(var(--pane-band), var(--pane-band)) bottom / 100% var(--vf-terminal-safe-bottom, 30px) no-repeat",
+    );
+    // The heights are the frame's: the same tunables, the same fallbacks, read from the stylesheet
+    // the app imports. A frame that moves a band moves this test before it moves a seam.
+    const frame = readFileSync(
+      createRequire(import.meta.url).resolve("@vibefield/puppeteer-views/styles/deck-frame.css"),
+      "utf8",
+    ).replace(/\s+/g, " ");
+    expect(frame).toContain(
+      "padding: var(--vf-terminal-safe-top, 24px) var(--vf-terminal-safe-right, 0px) var(--vf-terminal-safe-bottom, 30px) var(--vf-terminal-safe-left, 0px);",
+    );
+    // the wrappers under the rows stay clear, so the renderer's ground is the only one there
+    expect(godview).toMatch(
+      /\.vf-godview-terminal-deck \.ghostty-pane \{\s*background: transparent;\s*\}/,
+    );
   });
 
   it("is what a deck pane's look hands any surface showing a deck session, beside the deck's own theme and effects, from the one projection (useDeckPaneLook; SP-1d)", () => {
@@ -1141,9 +1190,10 @@ describe("the deck sheet's stylesheet", () => {
     // set above rest (a shift below zero) counts as none (James, 2026-10-19:
     // "no more squeezing the swarm bounds").
     const root = rule(".vf-godview");
-    // rest (N15 (a)): the drawing's share of the stage, never above its floor
+    // rest (N15 (a)): the drawing's share of the stage, never above its floor, to the whole pixel
+    // (PF-4: a fractional rest left every pane a fraction of a pixel taller than its canvas)
     expect(root).toMatch(
-      /--vf-godview-deck-rest: max\(\s*var\(--vf-godview-deck-rest-share\),\s*var\(--vf-godview-deck-rest-floor\)\s*\);/,
+      /--vf-godview-deck-rest: round\(\s*max\(var\(--vf-godview-deck-rest-share\), var\(--vf-godview-deck-rest-floor\)\),\s*1px\s*\);/,
     );
     expect(root).toMatch(
       /--vf-godview-field-foot: calc\(\s*var\(--vf-godview-deck-rest\) \+\s+max\(0px, var\(--vf-godview-field-shift, 0px\)\) -\s*var\(--vf-godview-deck-field-gap\)\s*\);/,

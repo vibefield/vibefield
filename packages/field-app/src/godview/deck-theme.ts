@@ -181,11 +181,21 @@ export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffe
   return { postProcess: "none", shaderEffects: stack, animate: appearance.shaderAnimate };
 }
 
-/** The terminal's ground and ink as the two custom properties the deck's stylesheets read: the
- * stage's root (`--vf-godview-terminal-bg`, the sheet's ground) and the pane frame
- * (`--vf-godview-terminal-ink`). */
+/** A pane's own ground as its renderer paints it, ALPHA INCLUDED (PF-4, 2026-11-21; DESIGN.md §2.7
+ * "The pane frame's capsules", the bands). The renderer premultiplies the theme's background into
+ * its clear colour, so this text over the same backdrop composites to the colour under a terminal's
+ * rows: what the frame's two bands, where no row is drawn, are painted in. */
+function cssGround(colour: Rgba): string {
+  const alpha = Math.min(1, Math.max(0, colour[3] ?? 1));
+  return `${cssColor(colour).slice(0, -1)} / ${Number(alpha.toFixed(4))})`;
+}
+
+/** The terminal's ground and ink as the custom properties the deck's stylesheets read: the stage's
+ * root (`--vf-godview-terminal-bg`, the sheet's ground), the pane frame
+ * (`--vf-godview-terminal-ink`), and the pane's own ground at its alpha
+ * (`--vf-godview-pane-ground`, the frame's bands; PF-4). */
 export type TerminalGroundStyle = Record<
-  "--vf-godview-terminal-bg" | "--vf-godview-terminal-ink",
+  "--vf-godview-terminal-bg" | "--vf-godview-terminal-ink" | "--vf-godview-pane-ground",
   string
 >;
 
@@ -196,6 +206,7 @@ export function terminalGroundStyle(theme: TerminalTheme): TerminalGroundStyle {
   return {
     "--vf-godview-terminal-bg": ground.background,
     "--vf-godview-terminal-ink": ground.ink,
+    "--vf-godview-pane-ground": cssGround(theme.background),
   };
 }
 

@@ -118,8 +118,16 @@
      set above rest is a shift below zero, and counts as none. Both resolve the
      share's percent where they are used: a flex basis and a top, each against
      the stage's height. (Until N15 rest was the head's 40 and a tuned
-     `Monitor height`, 35% above a 170 floor.) */
-  --vf-godview-deck-rest: max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor));
+     `Monitor height`, 35% above a 170 floor.) To the WHOLE PIXEL (PF-4,
+     2026-11-21; DESIGN.md §8 "Rest"): the share of a 748 stage is 287.69, and a
+     sheet placed there gave every pane a box a fraction of a pixel taller than
+     the canvas its terminal draws, so the canvas's last row was half painted
+     and showed as a hairline over the foot's band. The edge's own shift is
+     whole already (`deck-edge.ts`). */
+  --vf-godview-deck-rest: round(
+    max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor)),
+    1px
+  );
   /* What the well keeps clear under the panes: its 8, the covers' reserve
      inside the cover (88, FC-D15) — where the Maximize readout centres. */
   --vf-godview-panes-foot: 8px;
@@ -1544,12 +1552,33 @@
   opacity: 0.999;
 }
 
-/* Every CSS wrapper stays clear; Ghosttea 0.9 owns the visible pane ground. */
+/* Every CSS wrapper stays clear; Ghosttea 0.9 owns the visible pane ground under its rows (the
+   frame's two bands are painted below, PF-4). */
 .vf-godview-terminal-deck .ghostty-window,
 .vf-godview-terminal-deck .ghosttea-workspace-body,
 .vf-godview-terminal-deck .terminal-host,
 .vf-godview-terminal-deck .ghostty-pane {
   background: transparent;
+}
+
+/* THE BANDS ARE THE PANE'S OWN GROUND (PF-4, 2026-11-21; DESIGN.md §2.7 "The pane frame's
+   capsules"). The frame keeps two bands clear of the grid (the package's `deck-frame.css`: the
+   pane's padding, 24 above and 30 below unless tuned), and the terminal paints its ground under its
+   rows alone. So each band showed what the pane stands on: since the glass (TL-3), the bare desk, a
+   dark bar above and under a pale pane. Both are painted here in the pane's own ground at the
+   pane's own alpha (`--vf-godview-pane-ground`, `deck-theme.ts`: the colour the renderer clears
+   to), so over the same backdrop a band composites to the colour under the rows and the pane is one
+   piece. The pane's background, so it lies under everything the pane holds; two strips, never the
+   whole box, because a ground painted under the rows too would double theirs. The heights are the
+   package's tunables with the package's fallbacks, which a test holds to its stylesheet. This host
+   tunes no side inset, so there is no side strip to paint. */
+.vf-godview-terminal-deck .vf-deck-framed .ghostty-pane {
+  --pane-band: var(--vf-godview-pane-ground, transparent);
+  background:
+    linear-gradient(var(--pane-band), var(--pane-band)) top / 100% var(--vf-terminal-safe-top, 24px)
+    no-repeat,
+    linear-gradient(var(--pane-band), var(--pane-band)) bottom / 100%
+    var(--vf-terminal-safe-bottom, 30px) no-repeat;
 }
 
 .vf-godview.theme-light .vf-godview-terminal-deck .ghostty-window {

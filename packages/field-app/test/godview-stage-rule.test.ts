@@ -105,6 +105,15 @@ function evaluateLength(
       take(")");
       return token === "max" ? Math.max(...values) : Math.min(...values);
     }
+    // PF-4: rest is said to the whole pixel, `round(<length>, 1px)`
+    if (token === "round") {
+      take("(");
+      const value = sum();
+      take(",");
+      const step = sum();
+      take(")");
+      return Math.round(value / step) * step;
+    }
     if (token === "var") {
       take("(");
       const name = take();
@@ -228,8 +237,10 @@ describe("the bar's 40px go to the monitor, and the deck's edge rests where it d
     expect(basis).toBe("calc(var(--vf-godview-deck-rest) - var(--vf-godview-head-height, 40px))");
     // the deck's place at rest names no head: it holds whatever stands above the monitor (L8a)
     // — the drawing's share of the stage, never above the floor (N15 (a))
+    // to the whole pixel (PF-4): a fractional rest left every pane a fraction of a pixel taller
+    // than the canvas its terminal draws
     expect(PLACES["--vf-godview-deck-rest"]).toBe(
-      "max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor))",
+      "round(max(var(--vf-godview-deck-rest-share), var(--vf-godview-deck-rest-floor)), 1px)",
     );
     expect(PLACES["--vf-godview-deck-rest-share"]).toBe("calc(100% * 5 / 13)");
     expect(PLACES["--vf-godview-deck-rest-floor"]).toBe("232px");
