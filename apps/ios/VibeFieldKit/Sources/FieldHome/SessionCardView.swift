@@ -112,6 +112,10 @@ struct SessionCardView<Terminal: View>: View {
   /// its presence, rather than its geometry, lets a later explicit tap take
   /// control without a resize immediately folding the keyboard again.
   var onOtherDriverAppeared: () -> Void = {}
+  /// PF-9 — the card stands in the phone's own panel, and its band is the
+  /// panel's handle: a pull on it is reported here. nil on a sheet of the
+  /// system's, which moves itself.
+  var onBandPull: ((PanelPull) -> Void)? = nil
   /// The act that fixes "no write key for this host" (IOS-3c), when there is
   /// one to offer. `nil` means not offered and draws nothing — this card never
   /// renders a control it cannot honour (D-i6). It is a callback rather than a
@@ -124,7 +128,7 @@ struct SessionCardView<Terminal: View>: View {
   }
 
   var body: some View {
-    if let bubble, face == .session, let liveGround, slot(bubble) == .live {
+    if let bubble, let liveGround, isLive(bubble) {
       liveCard(bubble, ground: liveGround)
     } else {
       VStack(spacing: 0) {
@@ -136,14 +140,15 @@ struct SessionCardView<Terminal: View>: View {
           endedFace
         }
       }
-      // No opaque background: the sheet's liquid glass carries the card, and
-      // the field stays visible behind it, blurred and dimmed.
+      // No background of its own: the panel it stands in carries it on the
+      // chrome's material (PF-9), over the home blurred behind.
     }
   }
 
-  private func slot(_ bubble: FieldBubble) -> FieldHomeModel.TerminalSlot {
-    FieldHomeModel.terminalSlot(
-      attached: isAttached, remote: bubble.remote != nil, agentAttachable: agentAttachable)
+  private func isLive(_ bubble: FieldBubble) -> Bool {
+    FieldHomeModel.cardIsLive(
+      hasSubject: true, listed: listed, attached: isAttached, remote: bubble.remote != nil,
+      agentAttachable: agentAttachable)
   }
 
   // MARK: - The live card (item 41)
@@ -175,7 +180,22 @@ struct SessionCardView<Terminal: View>: View {
           }
           .animation(FieldMotion.ease(0.24), value: cooled)
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .ignoresSafeArea(.container, edges: .bottom)
+          // PF-9: to the screen's foot, under the keyboard too.
+          .ignoresSafeArea(.all, edges: .bottom)
+          .allowsHitTesting(false)
+          .accessibilityHidden(true)
+      } else if inputIsOpen {
+        // PF-9 — the open input card and the keyboard stand on the terminal's
+        // ground, which the grid stops short of: one surface from the grid's
+        // last row to the screen's foot, where the sheet's own material stood
+        // until then. It begins where the grid ends (a strip of no height at
+        // the safe area's foot, run out to the screen's), and it is under the
+        // frame, as the grid is. Folded, the grid itself runs to the foot, and
+        // a second ground there would double a translucent one.
+        ground.color
+          .ignoresSafeArea(.all, edges: .bottom)
+          .frame(height: 0)
+          .frame(maxHeight: .infinity, alignment: .bottom)
           .allowsHitTesting(false)
           .accessibilityHidden(true)
       }
@@ -374,6 +394,8 @@ struct SessionCardView<Terminal: View>: View {
     .frame(maxWidth: .infinity)
     .frame(height: FieldHomeModel.liveCardBand)
     .contentShape(Rectangle())
+    // PF-9: beside the capsule's and the badge's own taps, never in their place.
+    .simultaneousGesture(PanelPull.gesture { onBandPull?($0) }, including: onBandPull == nil ? .subviews : .all)
   }
 
   /// The band's readout capsule (PF-1; DESIGN.md §8): model | effort,

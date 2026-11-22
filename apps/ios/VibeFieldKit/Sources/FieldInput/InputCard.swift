@@ -2,7 +2,8 @@ import FieldDesign
 import FieldTerminal
 import SwiftUI
 
-/// The input card: one row on the session sheet's glass above the keyboard.
+/// The input card: one row on the terminal's ground above the keyboard (on the
+/// session sheet's glass until PF-9, 2026-11-22).
 /// It is the composer while a message is written and the rail of terminal keys
 /// while the keys go to the terminal (PF-8, 2026-11-22; DESIGN.md §8 "The
 /// phone's input card is one row in each of its two modes"). The switch
@@ -102,9 +103,10 @@ public struct InputCard: View {
   }
 
   /// `.glass.card` — the card itself. Glass on glass, exactly as the canvas
-  /// draws it: this sits on the session sheet, which is already the system's
-  /// own material, and the hairline plus the specular top edge are what make
-  /// two translucent layers read as two rather than as haze.
+  /// draws it: this sits on the terminal's own ground over the blurred home
+  /// (since PF-9, 2026-11-22; on the session sheet's material until then), and
+  /// the hairline plus the specular top edge are what make two translucent
+  /// layers read as two rather than as haze.
   ///
   /// One row, and which one is the mode's (PF-8): the composer's, which grows
   /// upward with its draft, or the rail's.

@@ -13,8 +13,10 @@ extension View {
   ///
   /// At FULL height iOS 26 stands a sheet on an opaque backing of its own,
   /// whatever its background is, so nothing behind it shows (PF-7, 2026-11-21;
-  /// DESIGN.md §8 "The card's glass is the field"). A card that wants the
-  /// scene through its glass stands just under full height instead.
+  /// DESIGN.md §8 "The card's glass is the field"). A sheet that wants the
+  /// scene through its glass stands under full height instead. (A session's
+  /// card did, at 98%, until PF-9, 2026-11-22; it is no sheet now, and stands
+  /// in the phone's own panel: `TerminalPanel`, in FieldHome.)
   @ViewBuilder
   public func fieldGlassSheet() -> some View {
     if #available(iOS 26.0, *) {

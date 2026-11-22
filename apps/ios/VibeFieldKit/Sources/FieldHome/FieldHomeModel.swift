@@ -154,6 +154,17 @@ enum FieldHomeModel {
     return remote ? .peer : .absence
   }
 
+  /// Whether a card is its terminal, edge to edge on the terminal's own
+  /// ground: a session's card whose slot is live. The card draws by it and its
+  /// panel stands by it (PF-9), so the two can never disagree about whether a
+  /// ground is painted.
+  static func cardIsLive(
+    hasSubject: Bool, listed: Bool, attached: Bool, remote: Bool, agentAttachable: Bool
+  ) -> Bool {
+    cardFace(hasSubject: hasSubject, listed: listed, attached: attached) == .session
+      && terminalSlot(attached: attached, remote: remote, agentAttachable: agentAttachable) == .live
+  }
+
   // MARK: - The live card is its terminal (item 41)
 
   /// Item 41 (asked for 2026-10-19; T1) — the live card wears
@@ -166,20 +177,70 @@ enum FieldHomeModel {
   /// The band's context ring (PF-1): from this share it is drawn heavier, as a
   /// desktop pane's meter is past 80%.
   static let liveCardContextHot = 80
-  /// How tall a terminal's card stands, as a share of the room a sheet has
-  /// (PF-7, 2026-11-21; DESIGN.md §8 "The card's glass is the field"). At full
-  /// height iOS 26 puts an opaque backing behind a sheet, so a translucent
-  /// ground shows nothing of the field; just under it the sheet floats on the
-  /// system's glass, 8pt in from each side, and the field shows through.
-  static let liveCardHeight: CGFloat = 0.98
-  /// The sheet's outline, which the frame's line and glow follow: the sheet's
-  /// own 40pt corners (`.presentationCornerRadius(40)`), all round. A card
-  /// under full height floats, so its foot is the sheet's corner too. (Until
-  /// PF-7 the card stood at full height and its foot followed the screen's
-  /// corner, 62 on the 6.3-inch phones; on the floating card that line cut
-  /// inside the sheet's corner and left a crescent of bare glass.)
+  // MARK: - The terminal's panel (PF-9)
+
+  /// A terminal's card is the phone's own panel, and no sheet of the system's
+  /// (PF-9, 2026-11-22; DESIGN.md §8 "The card's glass is the field"). The
+  /// system floats a sheet under full height 8pt in from the sides and the
+  /// foot, and backs one at full height opaque, so no sheet is both edge to
+  /// edge and glass. The panel bleeds to the left, right and bottom edges with
+  /// its top at the status bar's foot, and these are its figures.
+  ///
+  /// Its top corners, the sheet's own 40.
+  static let livePanelCorner: CGFloat = 40
+  /// The blur the home wears behind it: the desk's own measure under Godview
+  /// (DESIGN.md §8 "The covers over the desk"). The terminal's ground is the
+  /// only layer over it.
+  static let livePanelBlur: CGFloat = 40
+  /// The rise and the leave, on the island curve; a fade under reduced motion.
+  static let livePanelTravel: Double = 0.42
+  static let livePanelFade: Double = 0.2
+  /// The grabber: 36 by 5, 6 under the top edge, in the ground's ink at 28%.
+  static let livePanelGrabber = CGSize(width: 36, height: 5)
+  static let livePanelGrabberTop: CGFloat = 6
+  static let livePanelGrabberInk: Double = 0.28
+
+  /// A card that is not its terminal stands shorter: this share of the room
+  /// between the status bar and the home indicator, the height its sheet
+  /// opened at until PF-9.
+  static let livePanelShortShare: CGFloat = 0.55
+
+  /// How far under the status bar's foot a card's top edge stands: at it for a
+  /// terminal's card, and for any other, down by what its shorter share leaves.
+  static func livePanelTop(isTerminal: Bool, room: CGFloat) -> CGFloat {
+    isTerminal ? 0 : max(0, room) * (1 - livePanelShortShare)
+  }
+
+  /// How far a pull on the band moves the panel: with the finger downward,
+  /// and not at all upward, where it has nowhere to go.
+  static func livePanelPull(translation: CGFloat) -> CGFloat {
+    max(0, translation)
+  }
+
+  /// Whether a pull let go closes the panel: past a quarter of its height, or
+  /// thrown downward so that it would come to rest past half of it.
+  static func livePanelCloses(pull: CGFloat, predicted: CGFloat, height: CGFloat) -> Bool {
+    guard height > 0 else { return false }
+    return pull > height * 0.25 || predicted > height * 0.5
+  }
+
+  /// The home's blur behind the panel. It eases as the panel is pulled down,
+  /// so the home comes back into focus under the finger, and it is nothing
+  /// while no panel stands.
+  static func livePanelBlur(standing: Bool, pull: CGFloat, height: CGFloat) -> CGFloat {
+    guard standing else { return 0 }
+    guard height > 0 else { return livePanelBlur }
+    return livePanelBlur * (1 - min(1, max(0, pull / height)))
+  }
+
+  /// The card's outline, which the frame's line and glow follow: 40pt corners
+  /// on top and, at its foot, the screen's (62 on the 6.3-inch phones, and
+  /// never less, so the display never cuts the line; a screen rounded tighter
+  /// shows it a hair inside). The panel bleeds to the foot, as the full-height
+  /// sheet did until PF-7. (PF-7's sheet floated at 98% of full height and
+  /// took 40 all round, where the foot's line cut inside the sheet's corner.)
   static let liveCardOutline = UnevenRoundedRectangle(
-    topLeadingRadius: 40, bottomLeadingRadius: 40, bottomTrailingRadius: 40, topTrailingRadius: 40)
+    topLeadingRadius: 40, bottomLeadingRadius: 62, bottomTrailingRadius: 62, topTrailingRadius: 40)
   /// A cooled terminal dims toward its ground, under a veil of it at this opacity.
   static let liveCardCooledVeil: Double = 0.45
 

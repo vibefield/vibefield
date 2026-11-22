@@ -108,6 +108,10 @@ public struct HomeScreen: View {
       FieldSliceSignIn.launch(LaunchArguments.current) == nil ? nil : false
   #endif
   @State private var selection: SessionSelection?
+  /// PF-9 — how far the handle's pull has moved the open card's panel down.
+  @State private var cardPull: CGFloat = 0
+  /// PF-9 — the card's panel is travelling away: what the card held is let go when it has gone (`dismissCard`).
+  @State private var cardLeaving = false
   /// The card's SUBJECT, remembered rather than looked up fresh every frame.
   /// A card is about the session it opened on, and the field's listing is only
   /// the field's current view of it — one that a four-second discovery hiccup
@@ -401,7 +405,8 @@ public struct HomeScreen: View {
       // IOS-9e — the field draws only while it is the page standing: the
       // other two keep it alive under them, and a hidden Metal view
       // rendering at 120 Hz is a battery spent on nobody.
-      let active = scenePhase == .active && selectedTab == .field
+      // PF-9 — nor under a card's panel: what is covered is a still (DESIGN.md §8 "The card's glass is the field")
+      let active = scenePhase == .active && selectedTab == .field && selection == nil
       // PG-4s — the Godview view the page stands on: the swarm, until PG-5…8
       // add theirs. It stands where SwarmField stood. (Corrected 2026-11-04,
       // PG-4t: this said "so the overlays below stay above every view". J-S3
@@ -780,7 +785,11 @@ public struct HomeScreen: View {
         tabs
           .allowsHitTesting(wayInStep == nil)
           .accessibilityHidden(wayInStep != nil)
+          // PF-9 — under a card's panel the home is one blurred picture that takes no touch
+          .modifier(UnderCardPanel(blur: cardPanelBlur, covered: selection != nil || cardLeaving))
       }
+      // PF-9 — a session's card, in the phone's own panel over the home
+      cardPanel
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .splashHolds(wayInStep != nil)
@@ -3167,20 +3176,7 @@ public struct HomeScreen: View {
       // moment the face offers it, as the open would have.
       if selection != nil, face.offersAttach, let cardBubble { beginAttachment(to: cardBubble) }
     }
-    .sheet(item: $selection, onDismiss: { closeCard() }) { selected in
-      sessionCard(selected)
-        // A terminal earns the room from the card's first frame: at the 0.55
-        // detent it is a letterbox, the keyboard would take what is left, and
-        // a card that opened small and grew as its attach began moved twice.
-        // PF-7: it stands just under full height, where the sheet's own glass
-        // still shows the field through the terminal's ground.
-        .presentationDetents(
-          cardIsTerminal ? [.fraction(FieldHomeModel.liveCardHeight)] : [.fraction(0.55), .large]
-        )
-        .presentationDragIndicator(.visible)
-        .presentationCornerRadius(40)
-        .fieldGlassSheet()
-    }
+    // PF-9 — the session's card is no sheet here: it stands in the phone's own panel (`cardPanel`, in `standing`).
     .sheet(isPresented: $settingsSheetOpen, onDismiss: { afterSettings() }) {
       settingsSheet(at: settingsOpening)
     }
@@ -3361,7 +3357,7 @@ public struct HomeScreen: View {
 
   // MARK: - Sheets
 
-  private func sessionCard(_ selected: SessionSelection) -> some View {
+  private func sessionCard(_ selected: SessionSelection, panelHeight: CGFloat) -> some View {
     // The subject is the remembered one; the field is only asked whether it
     // still LISTS it. Looking the subject up fresh here is what let a discovery
     // blip replace a live terminal with "this session left the field".
@@ -3392,7 +3388,9 @@ public struct HomeScreen: View {
       terminalPainted: attachment?.holdsPicture ?? cardShowsRecordedPicture,
       // PF-3: the band's capsule is the switch where the run's row offers one.
       modelSwitch: cardModelSwitch,
-      onOtherDriverAppeared: { inputCard.dismissKeyboard() }
+      onOtherDriverAppeared: { inputCard.dismissKeyboard() },
+      // PF-9: the band is the panel's handle.
+      onBandPull: { cardPulled($0, height: panelHeight) }
     ) {
       liveTerminal(title: bubble?.project)
     }
@@ -3435,9 +3433,10 @@ public struct HomeScreen: View {
     // --- end IOS-5a --------------------------------------------------------
     // --- IOS-5c: a long paste, read before it goes through.
     //
-    // Presented from the session card rather than from the root, because the
-    // root is behind this sheet: a second presentation from the same
-    // controller is a sheet that never appears.
+    // Presented from the session card. (Until PF-9 the card was itself a
+    // sheet, and a second presentation from the root behind it never
+    // appeared; the card stands in the root's own panel now, and its sheets
+    // stay with it.)
     .sheet(
       item: Binding(
         get: { inputCard.pendingPasteReview },
@@ -3465,8 +3464,7 @@ public struct HomeScreen: View {
       .fieldGlassSheet()
     }
     // --- end IOS-5c --------------------------------------------------------
-    // --- IOS-5d: the `+` menu's doors, on the same presenter and for the same
-    // reason — the root is behind this sheet.
+    // --- IOS-5d: the `+` menu's doors, on the same presenter.
     //
     // Two presentations rather than one: Scan Text is a viewfinder, and a
     // camera behind a detent is a camera nobody can aim.
@@ -3621,11 +3619,80 @@ public struct HomeScreen: View {
     #endif
   }
 
-  /// Whether the presented card is a terminal's: one attached, or one whose run
-  /// offers an attach. It decides the card's height (PF-7: just under full,
-  /// from its first frame, so the sheet's glass shows the field).
-  private var cardIsTerminal: Bool {
-    attachment != nil || cardTerminalFace.offersAttach
+  /// Whether the open card is its terminal (`FieldHomeModel.cardIsLive`, the rule the card itself draws by). It
+  /// decides where the panel's top edge stands and whether the panel lends the card a material (PF-9). A terminal
+  /// earns the room from the card's first frame: a card that opened short and grew as its attach began moved twice.
+  private func cardIsTerminal(_ selected: SessionSelection) -> Bool {
+    FieldHomeModel.cardIsLive(
+      hasSubject: cardBubble != nil, listed: bubbles.contains(where: { $0.id == selected.id }),
+      attached: attachment != nil, remote: cardBubble?.remote != nil,
+      agentAttachable: cardTerminalFace.offersAttach)
+  }
+
+  // MARK: - The card's panel (PF-9)
+
+  /// The room a card's panel has: under the status bar, above the home indicator.
+  private var cardRoom: CGFloat { screenHeight - safeTop - homeInset }
+
+  /// The rise, the leave and the return: §6's island curve, a plain fade under reduced motion.
+  private var cardMotion: Animation {
+    reduceMotion
+      ? FieldMotion.plainEase(FieldHomeModel.livePanelFade) : FieldMotion.island(FieldHomeModel.livePanelTravel)
+  }
+
+  /// The home's blur under the panel: full while one stands, easing as it is pulled down.
+  private var cardPanelBlur: CGFloat {
+    FieldHomeModel.livePanelBlur(standing: selection != nil, pull: cardPull, height: screenHeight - safeTop)
+  }
+
+  /// A session's card in the phone's own panel, over the home (DESIGN.md §8 "The card's glass is the field").
+  @ViewBuilder
+  private var cardPanel: some View {
+    if let selected = selection {
+      let isTerminal = cardIsTerminal(selected)
+      let top = FieldHomeModel.livePanelTop(isTerminal: isTerminal, room: cardRoom)
+      TerminalPanel(
+        isTerminal: isTerminal, top: top, pull: cardPull, inkScheme: cardGround.inkScheme, motion: cardMotion,
+        onPull: { cardPulled($0, height: screenHeight - safeTop - top) },
+        onClose: { dismissCard() }
+      ) {
+        sessionCard(selected, panelHeight: screenHeight - safeTop - top)
+      }
+      .zIndex(1)
+      .transition(reduceMotion ? .opacity : .offset(y: screenHeight))
+    }
+  }
+
+  /// The handle's pull: the panel follows the finger down; let go, it leaves or returns
+  /// (`FieldHomeModel.livePanelCloses`).
+  private func cardPulled(_ pull: PanelPull, height: CGFloat) {
+    switch pull {
+    case .moved(let translation):
+      cardPull = FieldHomeModel.livePanelPull(translation: translation)
+    case .ended(let translation, let predicted):
+      let closes = FieldHomeModel.livePanelCloses(
+        pull: FieldHomeModel.livePanelPull(translation: translation), predicted: predicted, height: height)
+      if closes {
+        dismissCard()
+      } else {
+        withAnimation(cardMotion) { cardPull = 0 }
+      }
+    }
+  }
+
+  /// The card leaves by the person's hand: the keyboard folds, the panel travels away, and what the card held is
+  /// let go when it has gone (`closeCard`), as a sheet's dismissal let it go. A card opened meanwhile has already
+  /// closed this one (`openCard`).
+  private func dismissCard() {
+    guard selection != nil else { return }
+    inputCard.dismissKeyboard()
+    cardLeaving = true
+    withAnimation(cardMotion) {
+      selection = nil
+    } completion: {
+      guard cardLeaving, selection == nil else { return }
+      closeCard()
+    }
   }
 
   /// The terminal's own ground, for the live card (item 41).
@@ -4334,9 +4401,9 @@ public struct HomeScreen: View {
       return .init(id: action.rawValue, label: label) {
         switch action {
         case .backToTheField:
-          // Navigation is the card's act, not the attachment's — dismissing
-          // the sheet is what detaches (onDismiss), so both paths agree.
-          selection = nil
+          // Navigation is the card's act, not the attachment's — the card
+          // leaving is what detaches (`dismissCard`), so both paths agree.
+          dismissCard()
         case .retryNow:
           attachment.retryNow()
         }
@@ -4355,6 +4422,8 @@ public struct HomeScreen: View {
   /// path that opens a card comes through here so none of them can open one
   /// with no subject to fall back on.
   private func openCard(on bubble: FieldBubble) {
+    // PF-9 — a card still travelling away is let go first: its end would otherwise close this one.
+    if cardLeaving { closeCard() }
     cardBubble = bubble
     // --- IOS-5c: the card's context, gathered at the moment it is raised.
     inputCard.chips = replyChips(for: bubble)
@@ -4365,7 +4434,8 @@ public struct HomeScreen: View {
     // which is true whether or not a terminal ever answered.
     inputCard.history = clipboardHistory
     // --- end IOS-5d
-    selection = SessionSelection(id: bubble.id)
+    // PF-9 — the panel rises on the card's own motion, and the home blurs under it in the same breath
+    withAnimation(cardMotion) { selection = SessionSelection(id: bubble.id) }
     reportCard()
     // FW-D2 (asked for 2026-10-17: the terminal connects and shows its
     // content by itself, with no attach button) — opening the card IS the
@@ -4553,6 +4623,9 @@ public struct HomeScreen: View {
   /// so nothing else would ever clear it.
   private func closeCard() {
     let deviceID = attachedDeviceID
+    // PF-9 — the panel's own state ends with its card
+    cardLeaving = false
+    cardPull = 0
     cardBubble = nil
     reportCard()
     attachedDeviceID = nil

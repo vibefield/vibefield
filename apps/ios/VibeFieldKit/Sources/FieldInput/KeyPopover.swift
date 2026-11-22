@@ -113,7 +113,7 @@ extension View {
   /// Hang a long-press fan on a rail key.
   ///
   /// **Why a popover.** The card lives in a `safeAreaInset` at the bottom of
-  /// the session sheet, and the fan has to stand ABOVE the key it belongs to —
+  /// the session's card, and the fan has to stand ABOVE the key it belongs to —
   /// over the terminal, outside the card's own bounds. A popover is the one
   /// presentation that is anchored to the key, drawn outside every ancestor,
   /// and already dismissed by a tap anywhere else. `presentationCompactAdaptation`
