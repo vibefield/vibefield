@@ -66985,3 +66985,43 @@ row alone; a program that paints its own colours on the paper (the renderer's li
 work).
 
 **Not done, and not claimed:** no push of its own. PF-5's glass is still as M516's correction says.
+
+## Track PF — the phone's terminal card stands at 98%, on the sheet's own glass (M518)
+
+**2026-11-21 · on local main: `b31e800ae` PF-7 (doc) · `925528cd4` PF-7 (green).** James, from the stills on the page
+"Phone Glass Options": "98 is good".
+
+- **A terminal's card stands at 98% of full height.** At full height iOS 26 stands a sheet on an opaque backing, so
+  PF-5's blur had nothing behind it to blur (M516's correction). Just under full height the sheet floats on the
+  system's glass, 8pt in from each side with the home's top bar above it, and the field shows through the terminal's
+  ground. Every other card keeps its two heights.
+- **PF-5's material is gone.** `fieldGlassSheet(blurring:)` loses its parameter, and the terminal's card takes the
+  sheet's own glass as every other card does.
+- **The frame's line follows the sheet's corner, 40pt all round.** Its foot followed the display's corner (62pt) while
+  the card stood at full height. On the floating card that line cut inside the sheet's own corner and left a crescent
+  of bare glass at both bottom corners: seen on the simulator before the change, and in the stills of the options
+  page, where nobody had looked at the foot.
+- **The ground's default opacity is unchanged, 82%.** The page offers 70, 60 and 40, and none of them is picked.
+
+**Seen**, on the iPhone 17 simulator (iOS 26.5) through the recorded-picture fixture, with no launch switch: the card
+floats under the home's top bar by day and by night; down its clear ground the paper moves by 6 of 255 by day (234 to
+240) and Matte Black by 2 by night (21 to 23) where the witness field's bubbles pass behind, with the text at 13.3:1 and
+9.6:1. The frame's line is one curve with the sheet's edge at the bottom corners. The input card, in both its modes,
+sits inside the floating card.
+
+**Proved, 2026-11-21, on the development Mac.** The kit's `FieldHomeTests` 870 in 102 suites and `FieldWorkspaceTests`
+38 in 7 suites passed.
+
+**Red, as at M516:** the kit's `FieldDesignTests` ran 101 tests and `SparkStarStillTests` fails 58 stills against its
+goldens on this simulator, the same 58 M516 recorded before this change. Not run at the base.
+
+**The cost, said:** the card is 46pt shorter on the iPhone 17, which is two rows of terminal with the keyboard up.
+James's ask in the same message is to split the input card into a message mode and a terminal mode, one row each.
+Three ways are drawn on the page "Phone Keyboard Modes"; none is picked and nothing of it is built.
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets.
+
+**Not seen:** the card with the system keyboard up (the simulator drew no software keyboard, with the composer
+holding focus), and a real attach on a phone.
+
+**Not done, and not claimed:** no push of its own.
