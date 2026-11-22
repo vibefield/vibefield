@@ -3163,12 +3163,14 @@ public struct HomeScreen: View {
         // A terminal earns the room from the card's first frame: at the 0.55
         // detent it is a letterbox, the keyboard would take what is left, and
         // a card that opened small and grew as its attach began moved twice.
-        .presentationDetents(cardIsTerminal ? [.large] : [.fraction(0.55), .large])
+        // PF-7: it stands just under full height, where the sheet's own glass
+        // still shows the field through the terminal's ground.
+        .presentationDetents(
+          cardIsTerminal ? [.fraction(FieldHomeModel.liveCardHeight)] : [.fraction(0.55), .large]
+        )
         .presentationDragIndicator(.visible)
         .presentationCornerRadius(40)
-        // PF-5: a terminal's card stands on a blur of the field, so its ground's
-        // opacity has something to show; every other card keeps the sheet's glass.
-        .fieldGlassSheet(blurring: cardIsTerminal ? cardGround.inkScheme : nil)
+        .fieldGlassSheet()
     }
     .sheet(isPresented: $settingsSheetOpen, onDismiss: { afterSettings() }) {
       settingsSheet(at: settingsOpening)
@@ -3611,8 +3613,8 @@ public struct HomeScreen: View {
   }
 
   /// Whether the presented card is a terminal's: one attached, or one whose run
-  /// offers an attach. It decides the card's height (full, from its first
-  /// frame) and its glass (PF-5: the blur a translucent ground shows).
+  /// offers an attach. It decides the card's height (PF-7: just under full,
+  /// from its first frame, so the sheet's glass shows the field).
   private var cardIsTerminal: Bool {
     attachment != nil || cardTerminalFace.offersAttach
   }

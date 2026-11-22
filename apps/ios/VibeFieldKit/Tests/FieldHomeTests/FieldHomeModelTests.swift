@@ -262,14 +262,17 @@ struct LiveCardBandTests {
     #expect(FieldHomeModel.liveCardReadout(peer) == nil)
   }
 
-  @Test("the band is 44pt; the frame follows the sheet's 40pt corners and the screen's 62 at its foot")
+  @Test("the band is 44pt; the card stands at 98% and its frame follows the sheet's 40pt corners all round")
   func theFigures() {
     #expect(FieldHomeModel.liveCardBand == 44)
+    // PF-7: under full height, so the sheet keeps the system's glass.
+    #expect(FieldHomeModel.liveCardHeight == 0.98)
+    #expect(FieldHomeModel.liveCardHeight < 1)
     let corners = FieldHomeModel.liveCardOutline.cornerRadii
     #expect(corners.topLeading == 40)
     #expect(corners.topTrailing == 40)
-    #expect(corners.bottomLeading == 62)
-    #expect(corners.bottomTrailing == 62)
+    #expect(corners.bottomLeading == 40)
+    #expect(corners.bottomTrailing == 40)
     #expect(FieldHomeModel.liveCardCooledVeil == 0.45)
   }
 }

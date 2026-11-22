@@ -166,12 +166,20 @@ enum FieldHomeModel {
   /// The band's context ring (PF-1): from this share it is drawn heavier, as a
   /// desktop pane's meter is past 80%.
   static let liveCardContextHot = 80
+  /// How tall a terminal's card stands, as a share of the room a sheet has
+  /// (PF-7, 2026-11-21; DESIGN.md §8 "The card's glass is the field"). At full
+  /// height iOS 26 puts an opaque backing behind a sheet, so a translucent
+  /// ground shows nothing of the field; just under it the sheet floats on the
+  /// system's glass, 8pt in from each side, and the field shows through.
+  static let liveCardHeight: CGFloat = 0.98
   /// The sheet's outline, which the frame's line and glow follow: the sheet's
-  /// own 40pt corners on top (`.presentationCornerRadius(40)`) and, at its
-  /// foot, the screen's — 62 on the 6.3-inch phones, and never less, so the
-  /// glass never cuts the line; a screen rounded tighter shows it a hair inside.
+  /// own 40pt corners (`.presentationCornerRadius(40)`), all round. A card
+  /// under full height floats, so its foot is the sheet's corner too. (Until
+  /// PF-7 the card stood at full height and its foot followed the screen's
+  /// corner, 62 on the 6.3-inch phones; on the floating card that line cut
+  /// inside the sheet's corner and left a crescent of bare glass.)
   static let liveCardOutline = UnevenRoundedRectangle(
-    topLeadingRadius: 40, bottomLeadingRadius: 62, bottomTrailingRadius: 62, topTrailingRadius: 40)
+    topLeadingRadius: 40, bottomLeadingRadius: 40, bottomTrailingRadius: 40, topTrailingRadius: 40)
   /// A cooled terminal dims toward its ground, under a veil of it at this opacity.
   static let liveCardCooledVeil: Double = 0.45
 
