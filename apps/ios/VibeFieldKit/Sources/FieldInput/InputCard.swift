@@ -68,8 +68,10 @@ public struct InputCard: View {
   private var actionGlyph: CGFloat { InputCardMetrics.actionGlyphSize(for: dynamicTypeSize) }
 
   public var body: some View {
-    // Only the composer and key rail reserve terminal space. Paste, replies,
-    // and the show/fold key live in the host's InputOverlay in both states.
+    // This view keeps the room of its one row. Paste, replies, the mode switch
+    // and the fold key are the row over it (`InputOverlay`, mounted with this
+    // card by `InputDock`), which keeps its own room while the keyboard is up
+    // (PF-11) and none while it is down.
     // Keep this view mounted at zero height when folded: the keypad's hidden
     // responder below must never leave the hierarchy.
     Group {

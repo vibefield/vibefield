@@ -3394,15 +3394,6 @@ public struct HomeScreen: View {
     ) {
       liveTerminal(title: bubble?.project)
     }
-    // Paste, replies, and the show/fold key float over the grid in both input
-    // states. The open card below alone reserves terminal space.
-    .overlay(alignment: .bottom) {
-      if inputCardFace == .shown {
-        let ground = cardGround
-        InputOverlay(model: inputCard, pasteboard: pasteboard)
-          .environment(\.colorScheme, ground.inkScheme)
-      }
-    }
     // A keyboard coming up — any owner, either mode — is the person engaging
     // this pane: it takes the seat (DS-D5), and puts the view back on the
     // bottom first, so the prompt is on screen to type into.
@@ -3425,9 +3416,12 @@ public struct HomeScreen: View {
       attachment?.takeEmptySeat()
     }
     // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
+    // PF-11: and the row of paste, replies, the mode switch and the fold key rides over it in the same inset. With
+    // the keyboard up the row is a shelf the grid ends above; with it down it keeps no room and floats over the
+    // grid's last rows (`InputOverlay`).
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if inputCardFace == .shown {
-        InputCard(model: inputCard)
+        InputDock(model: inputCard, pasteboard: pasteboard, rowScheme: cardGround.inkScheme)
       }
     }
     // --- end IOS-5a --------------------------------------------------------

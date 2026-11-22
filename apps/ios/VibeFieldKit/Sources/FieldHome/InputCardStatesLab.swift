@@ -284,13 +284,9 @@
         header
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      // Paste, replies and the show and fold key float over the ground; the card below alone takes room.
-      .overlay(alignment: .bottom) {
-        InputOverlay(model: model)
-          .environment(\.colorScheme, ground.inkScheme)
-      }
+      // The row of paste, replies, switch and fold key over the card, as the live card mounts them (PF-11).
       .safeAreaInset(edge: .bottom, spacing: 0) {
-        InputCard(model: model)
+        InputDock(model: model, rowScheme: ground.inkScheme)
       }
       // A long paste, read before it goes through, presented as the live card presents it. Send is refused by the
       // sink, so the sheet stays until Cancel.
