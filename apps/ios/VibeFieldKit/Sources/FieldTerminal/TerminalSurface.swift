@@ -16,6 +16,15 @@ import UIKit.UIGestureRecognizerSubclass
 ///   scene in order as they arrive, so one that lands between two SwiftUI
 ///   updates is applied rather than overwritten, and a view that outlives this
 ///   surface keeps its picture for the next one to host.
+extension EnvironmentValues {
+  /// How far above its own bottom edge a terminal's surface ends its grid (PF-18, 2026-11-23; DESIGN.md §8 "The
+  /// foot and the terminal are one surface"): the height of what stands over the surface's foot, the input's row,
+  /// its card and the keyboard. The place that draws a terminal says it, and the surface paints its ground and its
+  /// effects under all of that while the grid ends above it. `nil`, the default, leaves the view's own safe area
+  /// to decide, as it does for the home indicator.
+  @Entry public var terminalFootClearance: CGFloat? = nil
+}
+
 public struct TerminalSurface: UIViewRepresentable {
   let scene: TerminalScene
   let visible: Bool
@@ -136,6 +145,18 @@ public struct TerminalSurface: UIViewRepresentable {
   @MainActor
   public final class Coordinator: NSObject {
     var metalView: GhostteaTerminalMetalView?
+    /// PF-18 — what stands over the surface's foot, as the place that draws it says (`terminalFootClearance`).
+    var footClearance: CGFloat?
+
+    /// Keeps the grid's last row above what stands over the foot. Worked out from the view's own safe area each
+    /// time, since that is the part of the clearance the renderer already keeps.
+    func applyFootInset() {
+      guard let view = metalView, let latest else { return }
+      let padding = latest.configuration.paddingY.count == 2 ? CGFloat(latest.configuration.paddingY[1]) : 0
+      let bottom = TerminalSurface.footInset(
+        padding: padding, clearance: footClearance, safeArea: view.safeAreaInsets.bottom)
+      if view.terminalContentInsets.bottom != bottom { view.terminalContentInsets.bottom = bottom }
+    }
     /// The reference's own guard, coordinator-held: reapply the configuration
     /// only when its revision changed. Our revisions digest the renderer
     /// values, so this is exactly "reapply when the presentation changed".
@@ -269,10 +290,36 @@ public struct TerminalSurface: UIViewRepresentable {
 
   public func makeCoordinator() -> Coordinator { Coordinator() }
 
+  /// The inset under the grid's last row: the renderer's own padding, and what the foot's clearance asks beyond
+  /// the safe area the view already keeps (ghosttea adds the view's safe area to this inset itself, so the two
+  /// are never counted twice, whatever UIKit says the safe area is while a keyboard stands).
+  static func footInset(padding: CGFloat, clearance: CGFloat?, safeArea: CGFloat) -> CGFloat {
+    guard let clearance, clearance.isFinite else { return padding }
+    return padding + max(0, clearance - max(0, safeArea))
+  }
+
+  /// The surface's own view: it tells the coordinator when its bounds or its safe area moved, which is when the
+  /// foot's inset is worked out again.
+  private final class Container: UIView {
+    var onGeometry: () -> Void = {}
+
+    override func layoutSubviews() {
+      super.layoutSubviews()
+      onGeometry()
+    }
+
+    override func safeAreaInsetsDidChange() {
+      super.safeAreaInsetsDidChange()
+      onGeometry()
+    }
+  }
+
   public func makeUIView(context: Context) -> UIView {
-    let container = UIView()
+    let container = Container()
     container.backgroundColor = .clear
     context.coordinator.latest = self
+    context.coordinator.footClearance = context.environment.terminalFootClearance
+    container.onGeometry = { [weak coordinator = context.coordinator] in coordinator?.applyFootInset() }
     let tap = UITapGestureRecognizer(
       target: context.coordinator, action: #selector(Coordinator.handleTap))
     tap.cancelsTouchesInView = false
@@ -302,6 +349,7 @@ public struct TerminalSurface: UIViewRepresentable {
     context.coordinator.appliedConfigurationRevision = configuration.revision
     container.addSubview(view)
     context.coordinator.metalView = view
+    context.coordinator.applyFootInset()
     return container
   }
 
@@ -315,6 +363,9 @@ public struct TerminalSurface: UIViewRepresentable {
       view.applyConfiguration(configuration)
       context.coordinator.appliedConfigurationRevision = configuration.revision
     }
+    // After the configuration, which sets the insets from its padding alone.
+    context.coordinator.footClearance = context.environment.terminalFootClearance
+    context.coordinator.applyFootInset()
   }
 
   public static func dismantleUIView(_ container: UIView, coordinator: Coordinator) {

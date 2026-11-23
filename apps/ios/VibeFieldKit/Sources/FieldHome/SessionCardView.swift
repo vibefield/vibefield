@@ -187,35 +187,31 @@ struct SessionCardView<Terminal: View>: View {
           .ignoresSafeArea(.all, edges: .bottom)
           .allowsHitTesting(false)
           .accessibilityHidden(true)
-      } else if inputIsOpen {
-        // PF-9 — the open input card and the keyboard stand on the terminal's
-        // ground, which the grid stops short of: one surface from the grid's
-        // last row to the screen's foot, where the sheet's own material stood
-        // until then. It begins where the grid ends (a strip of no height at
-        // the safe area's foot, run out to the screen's), and it is under the
-        // frame, as the grid is. Folded, the grid itself runs to the foot, and
-        // a second ground there would double a translucent one.
-        ground.color
-          .ignoresSafeArea(.all, edges: .bottom)
-          .frame(height: 0)
-          .frame(maxHeight: .infinity, alignment: .bottom)
-          .allowsHitTesting(false)
-          .accessibilityHidden(true)
       }
 
-      terminal()
-        // A cooled terminal dims toward its ground, never toward the glass.
-        .overlay {
-          ground.color
-            .opacity(cooled ? FieldHomeModel.liveCardCooledVeil : 0)
-            .allowsHitTesting(false)
-        }
-        .animation(FieldMotion.ease(0.24), value: cooled)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // Paint through the home-indicator area while reading. Keep the open
-        // input card's safe-area inset: ignoring it would put rows behind its
-        // controls. Keyboard avoidance remains active in either state.
-        .ignoresSafeArea(.container, edges: inputIsOpen ? [] : .bottom)
+      // PF-18 (2026-11-23) — the foot and the terminal are one surface. The
+      // surface runs to the screen's foot whatever stands over it: the home
+      // indicator, or the input's row, its card and the keyboard. Open, the
+      // room those take is the safe area under this reader, and the surface is
+      // told it, so the grid ends above the row while the ground and its
+      // effects are painted under all of it. Folded, the view's own safe area
+      // keeps the last row above the home indicator, as before. (Until PF-18
+      // the surface stopped at the row and a flat strip of the ground's colour
+      // ran on under it: a line across the card wherever the surface drew
+      // more than a flat ground, as it does under any effect.)
+      GeometryReader { room in
+        terminal()
+          .environment(\.terminalFootClearance, inputIsOpen ? room.safeAreaInsets.bottom : nil)
+          // A cooled terminal dims toward its ground, never toward the glass.
+          .overlay {
+            ground.color
+              .opacity(cooled ? FieldHomeModel.liveCardCooledVeil : 0)
+              .allowsHitTesting(false)
+          }
+          .animation(FieldMotion.ease(0.24), value: cooled)
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .ignoresSafeArea(.all, edges: .bottom)
+      }
       // PF-4: no padding above. The view runs under the band, and the renderer
       // keeps the band's room itself (the host's `gridTopInset`), so ghosttea
       // still measures the grid it shows.
