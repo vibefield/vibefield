@@ -74,7 +74,7 @@ struct ComboCatalogTests {
 
   // MARK: - The fixed row
 
-  /// James, 2026-11-22: "things like tab+shift should always be there".
+  /// PF-16, 2026-11-22: tab and shift always stay in the fixed row.
   @Test("the fixed row is the same five keys under every profile")
   func fixedRowNeverMoves() {
     for pack in Self.profiles {
