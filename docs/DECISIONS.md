@@ -352,7 +352,7 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   ledger's entry says what is owed). Its phone fixture reddened wall R23b on main until **the mend of 2026-11-22
   (M524)**. Since **the EL8 to puppeteer 0.4.9 (2026-11-22, M526)** a Codex run's row offers the switch too, its
   adapter's own (`session`: Codex's saved configuration is not written); no source here changed for it.
-- **PF-4…PF-19** — track PF, from James's looks at the build (2026-11-21 to 23): a pane is one piece with its bands, on the
+- **PF-4…PF-20** — track PF, from James's looks at the build (2026-11-21 to 23): a pane is one piece with its bands, on the
   desktop and the phone (PF-4); the phone's card as glass over the field (PF-5); the phone's terminal wears the look of
   the mode the phone is in, with a theme picked for each mode (PF-6); a terminal's card stands at 98% of full height
   on the sheet's own glass (PF-7, "98 is good"); the phone's input card is one row in each of its two modes, with a
@@ -394,7 +394,11 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   grid ends above the floating row too ("these buttons also overlapping the terminal content"), 64pt at the default
   size, four lines; the row still floats and is drawn as it was, on the terminal's ground; it amends PF-11's "with
   the keyboard down nothing changes"; defined in §8 "The phone's input card is one row in each of its two modes";
-  unseen on a phone.
+  unseen on a phone. **PF-20 LANDED 2026-11-23 (M536)** with **the EL8 to puppeteer 0.4.11**: a Godview row is named
+  by its session's own title before its project ("can we show the session title instead?"; "let's do it properly in
+  puppeteer"); the rule is puppeteer's (`rowName`: the host's mark, the title, the project), VibeField hands the
+  title over (the contract's row, fieldd's host title, the peer's bound, the pane frame's fact); defined in §2.7
+  "A badge says the session's own title"; the phone's own views not built; unseen on a running desktop.
 - **WI-5** — track WI, from James's look at the build (2026-11-22, a phone signed in to an account with no desktop:
   "we should provide a log in to another account option for users here so they don't get trapped here"): **No desktops
   yet.** and **Waiting for approval.** end their glass with *Use another account*, the way in's own link, which asks

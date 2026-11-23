@@ -67640,3 +67640,54 @@ the changed files: no error, and only the 22 warnings main already carried on th
 **Not seen:** any of it in a running Godview, by day or by night; the cards' placement and the flow views' narrower
 slot rest on happy-dom, which lays nothing out. **Not run:** `pnpm verify` whole, the bundle and census stages, every
 smoke and `pnpm gate:landing`. **Not done:** no push of its own.
+
+## EL8: puppeteer 0.4.11, and PF-20 — a session's own title names its row (M536)
+
+**2026-11-23 · on local main: `ac7d10bac` (EL8: puppeteer 0.4.11), `32bb005af` PF-20 (doc), `ab9d4138e` PF-20
+(green). Upstream: vibefield/puppeteer #114 (`e57e314e`) and the release #115 (v0.4.11 = `ec792a96`).**
+James, 2026-11-23, of Godview's monitor: "currently for the title we are showing the project title, can we show the
+session title instead?"; of the route, after a window-only way was put to him: "let's do it via puppeteer instead,
+let's do it properly in puppeteer and cut new release and bump here".
+
+- **What was so.** Every Godview row was named by its project's folder, so three sessions in one folder read alike.
+  A session's own title existed in two places nothing joined: Claude Code's transcript and hooks, and a Codex
+  thread's name. puppeteer's `session:started` carried a `title` that no reader took.
+- **Upstream, puppeteer 0.4.11 (#114).** A session's title is a fact of the run: core's event
+  `session:title-updated` and `AgentMonitorState.session.title`, one line of at most 120 code points. The Claude
+  adapter reads it from the transcript's `custom-title` rows (a person's `-n` or `/rename`) and `ai-title` rows
+  (the one Claude writes), the person's first, and from the hooks. The Codex adapter reads the thread's name; a
+  thread's preview is no longer taken for a title. The monitor's row carries `title` (the session's, else the
+  host's for the run). `rowName` is the host's mark, else the title, else the project.
+- **What each view does with it.** The list sets the title as the row's name and reads `project · branch` under it.
+  A swarm body sets it a size under a name, on two rows broken between words where one does not hold it. The
+  timeline names a live lane by it. A pane's badge says it, and its pointer words add the folder. Find matches
+  it. The rain and the spend view still say the project.
+- **Here (PF-20).** The contract's `MonitorAgentRow` names `title`. fieldd hands the backend the title a run was
+  launched with and bounds the row's title for a peer as it bounds every text; the window's cut carries it whole
+  and the `field` projection carries none. The pane frame is handed the title beside the folder. DESIGN.md §2.7
+  gains "A badge says the session's own title", and the agent plane's API page a dated paragraph on the row.
+- **The pin** is the EL8's usual set: the lock, the seven override rows and their 20 release-age rows, preflight's
+  expectations, pnpm's lock, 8 phone goldens and their 9 kit mirrors by their version lines, three hand strings, the
+  ROADMAP row. No word of any golden moved: the fixture's rows carry no title.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source:**
+- Upstream: #114's six CI jobs on three systems, twice, and #115's, green; the tests of every package that has them (22), one
+  package at a time (core 301, adapter-claude 571, adapter-codex 434, monitor 204, view-sdk 258, views 1131).
+- Read live upstream, each in its adapter's isolated rig with a loopback model: codex-cli 0.171.0 names a thread
+  after its first turn and the adapter hears it, and hears a rename (three runs in a row); Claude Code 2.1.330
+  says a `-n` title at its start and in its transcript, and a `/rename` is heard from the transcript.
+- The pin: the one install and the frozen install exit 0; `pnpm preflight` OK with the 6 standing warnings;
+  `pnpm check:deps`, `pnpm check:walls`, `node scripts/check-ios-fixtures.mjs`; `tsc` for contracts, fieldd and
+  field-app; fieldd's seven agent files (227 passed, 3 skipped); field-app's phone golden, parity and pane frame
+  files (125 passed); the kit's FieldHomeTests 880, FieldMeshTests 341 and FieldProductTests 382.
+- PF-20: fieldd's five monitor and cut files (125 passed, two new rows); field-app's five pane frame and model
+  board files (186 passed, one new row); contracts whole (2284); biome clean on the seven files;
+  `node scripts/check-agent-catalog.mjs --literals`.
+
+**Not seen:** a real session's title on a real Godview. No product daemon and no app were started from this
+checkout. The upstream views were looked at in puppeteer's own lab stills (six new goldens), with made-up titles.
+A desktop shows it only once it runs `ab9d4138e` or later. **Not seen upstream:** an `ai-title` row written by a
+live Claude Code (the rig's wrote none; the reader's tests hold the shape, which was read from real transcripts).
+**Not built:** the phone's own views do not name a row by its title; the other seven adapters say a title only
+where they already did at a session's start. **Not run:** `pnpm verify` whole, the Rust tests, the kit's other
+suites, every smoke and `pnpm gate:landing`. **Not done:** no push of its own.
