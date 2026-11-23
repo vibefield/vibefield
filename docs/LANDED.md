@@ -67547,3 +67547,50 @@ terminal content".
 
 **Not seen:** a phone's own picture of it, and an accessibility type size, where the row is taller. **Not run:**
 `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other suites. **Not done:** no push of its own.
+
+## EL8: puppeteer 0.4.10, and AR-S2e — every sign-in's identity is kept read (M534)
+
+**2026-11-23 · on local main: `aeb5ec630` (EL8: puppeteer 0.4.10), `6e5f7876e` AR-S2e (doc), `f04a942a1` AR-S2e
+(green). Upstream: vibefield/puppeteer #112 (`fa77d714`) and the release #113 (v0.4.10 = `dff3715e`).**
+James, 2026-11-23, of the profile meter in Godview: "it does not seem to update the subscription plan automatically,
+the plan seems only updates at sign in, after sign in, the plan will never update, even through the sign-in's plan
+already changed"; of the fix: "good, let's fix properly, and shall we move all these identity stuff to puppetear as
+well? what will be better design?"; and of who runs the upstream push, PR and release: "This session does it all".
+
+- **What was wrong.** A meter's plan is its sign-in's identity, read from the agent's own status surface and stored.
+  A profile's sign-in was read once, when its login pane closed. This Mac's were read at each daemon boot and on
+  Agent Profiles' own refresh. Godview's refresh asked for usage alone, and no view called `agents.profiles.verify`.
+- **Seen on the QA desktop that day**, in its registry: six Claude Code sign-ins, four last read on 16 Nov (within
+  two minutes of being made) and two on 20 Nov. Under each root the agent's own `claude auth status --json` said
+  `max` / `max_20x`; the registry held `ultra` for two and no tier for four.
+- **The design.** When a reading has aged is puppeteer's to say, since it depends on each agent's status surface;
+  which sign-ins, and when a person asked, are fieldd's. puppeteer 0.4.10 adds `createProfileIdentityMonitor`
+  (runtime, host-composed as the usage monitor is): a reading holds an hour by the registry's own stamp, a forced
+  refresh reads now (one sign-in at most once in 30 seconds), reads are bounded, a failure that may pass is retried
+  after a minute, doubling to the hour. Its RFC 006 gains "Identity freshness".
+- **Here.** fieldd's profile service composes it for every sign-in of an installed agent whose adapter can say who.
+  The product daemon starts it at its boot inventory. `agents.profileSets.list {refresh}` reads every sign-in, and
+  `agents.usage {refresh}` from this desktop's window reads those sign-ins' identities beside their usage, so
+  Godview's refresh brings the present plan. No door's shape changed, and no view changed: a new reading is a
+  registry change and arrives through the profiles feed.
+- **The pin** is the EL8's usual set: the lock, the seven override rows and their 20 release-age rows, preflight's
+  expectations, pnpm's lock, 8 phone goldens and their 9 kit mirrors by their version lines, three hand strings, the
+  ROADMAP row.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source:**
+- Upstream: #112's six CI jobs and #113's, green; the monitor's own 11 tests; runtime 612.
+- The pin: the one install and the frozen install exit 0; `pnpm preflight` OK with the 6 standing warnings;
+  `pnpm check:deps`, `pnpm check:walls`, `node scripts/check-ios-fixtures.mjs`; `tsc` for contracts, fieldd and
+  field-app; the phone golden tests (104 passed); the kit's FieldHomeTests 880, FieldMeshTests 341 and
+  FieldProductTests 382.
+- AR-S2e: fieldd's `agent-profiles` (19, four new), `agent-usage`, `agent-usage-tailnet`, `agent-runtime`,
+  `agent-session` and `stream-doors`, 207 passed with 5 skipped; biome clean on the three files;
+  `node scripts/check-agent-catalog.mjs --literals` and `node scripts/check-retired-names.mjs`.
+
+**Not seen:** a daemon running it. No product daemon was started from this checkout, so the monitor reading a real
+sign-in through fieldd, and the plan changing on a meter in Godview or on a phone, are unseen. The QA desktop shows
+it only once it runs `f04a942a1` or later; its six sign-ins are then read within the first minute of its boot.
+**Not measured:** any agent but Claude Code; how soon after a plan changes the agent itself reports it (its sign-in
+is renewed about every eight hours, and a plan changed minutes ago may read as the old one until then).
+**Not run:** `pnpm verify` whole, the Rust tests, the kit's other suites, every smoke and `pnpm gate:landing`.
+**Not built:** an interval an adapter declares for itself; a read asked for by a usage reading (a renewed sign-in).
