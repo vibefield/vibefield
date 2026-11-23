@@ -123,7 +123,8 @@ func presentationConfig(
   let revision = presentationRevision(
     foreground: foreground, background: background, cursor: cursor, cursorText: cursorText,
     selectionBackground: selectionBackground, selectionForeground: selectionForeground,
-    palette: palette, backgroundOpacity: opacity, minimumContrast: textContrastFloor,
+    palette: palette, backgroundOpacity: opacity, backgroundOpacityCells: appearance.dimsProgramBackgrounds,
+    minimumContrast: textContrastFloor,
     fontSize: fontSize, paddingX: paddingX, paddingY: paddingY,
     shaderEffects: shaders, shaderAnimation: appearance.shaderAnimation)
 
@@ -138,7 +139,7 @@ func presentationConfig(
     selectionForeground: selectionForeground,
     palette: palette,
     backgroundOpacity: opacity,
-    backgroundOpacityCells: false,
+    backgroundOpacityCells: appearance.dimsProgramBackgrounds,
     minimumContrast: textContrastFloor,
     lightAdaptation: .auto,
     fontSize: fontSize,
@@ -165,7 +166,8 @@ private func color(_ hex: String?, fallback: [UInt8]) -> [UInt8] {
 private func presentationRevision(
   foreground: [UInt8], background: [UInt8], cursor: [UInt8], cursorText: [UInt8],
   selectionBackground: [UInt8], selectionForeground: [UInt8],
-  palette: [GhostteaPaletteConfigEntry], backgroundOpacity: Float, minimumContrast: Float,
+  palette: [GhostteaPaletteConfigEntry], backgroundOpacity: Float, backgroundOpacityCells: Bool,
+  minimumContrast: Float,
   fontSize: Float, paddingX: [Float], paddingY: [Float],
   shaderEffects: [String], shaderAnimation: Bool
 ) -> String {
@@ -176,6 +178,7 @@ private func presentationRevision(
     "op:\(backgroundOpacity)", "mc:\(minimumContrast)", "fs:\(fontSize)", "px:\(paddingX)",
     "py:\(paddingY)",
     "sh:" + shaderEffects.joined(separator: ";"), "an:\(shaderAnimation)",
+    "oc:\(backgroundOpacityCells)",
   ].joined(separator: "|")
   var hash: UInt64 = 0xcbf2_9ce4_8422_2325
   for byte in canonical.utf8 {

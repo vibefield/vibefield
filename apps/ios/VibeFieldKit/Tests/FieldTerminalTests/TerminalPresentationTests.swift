@@ -174,7 +174,19 @@ import Testing
     #expect(presentationConfig(for: .default, mode: .dark, gridTopInset: .nan).paddingY == [0, 6])
     #expect(config.postProcess == .none)
     #expect(config.customShaderCount == 0)
-    #expect(config.backgroundOpacityCells == false)
+    // PF-13 (2026-11-23): a background a program paints takes the ground's opacity, as the desktop's panes do,
+    // until the person turns it off; the renderer takes the change as a new presentation.
+    #expect(config.backgroundOpacityCells)
+    var solidCells = TerminalAppearance.default
+    solidCells.dimsProgramBackgrounds = false
+    let kept = presentationConfig(for: solidCells, mode: .dark)
+    #expect(!kept.backgroundOpacityCells)
+    #expect(kept.revision != config.revision)
+    #expect(!kept.hasSameDevicePresentation(as: config))
+    // the blur is the host's: the renderer is handed nothing of it
+    var sharp = TerminalAppearance.default
+    sharp.groundBlur = 0
+    #expect(presentationConfig(for: sharp, mode: .dark).revision == config.revision)
   }
 
   /// TL-4c (2026-11-19): a cell's colour arrives as its session was told it,

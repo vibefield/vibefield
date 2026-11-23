@@ -3635,9 +3635,11 @@ public struct HomeScreen: View {
       ? FieldMotion.plainEase(FieldHomeModel.livePanelFade) : FieldMotion.island(FieldHomeModel.livePanelTravel)
   }
 
-  /// The home's blur under the panel: full while one stands, easing as it is pulled down.
+  /// The home's blur under the panel: what Settings › Terminal sets while one stands, easing as it is pulled down.
   private var cardPanelBlur: CGFloat {
-    FieldHomeModel.livePanelBlur(standing: selection != nil, pull: cardPull, height: screenHeight - safeTop)
+    FieldHomeModel.livePanelBlur(
+      full: CGFloat(appearance.clampedGroundBlur), standing: selection != nil, pull: cardPull,
+      height: screenHeight - safeTop)
   }
 
   /// A session's card in the phone's own panel, over the home (DESIGN.md §8 "The card's glass is the field").

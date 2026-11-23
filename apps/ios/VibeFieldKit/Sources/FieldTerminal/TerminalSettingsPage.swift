@@ -6,7 +6,9 @@ import SwiftUI
 /// Settings › Terminal (IOS-10a): the terminal's look on this phone, in the
 /// chrome family's voice and the desktop's words (its Terminal › Look tab:
 /// Theme, Background opacity, Effects, Animate effects), under the preview
-/// that tab opens on (item 358, `TerminalLookPreview`).
+/// that tab opens on (item 358, `TerminalLookPreview`). Background blur is the
+/// phone's own row (PF-13, 2026-11-23): the desktop blurs its desk by a fixed
+/// measure, and the phone's field is the person's to set.
 ///
 /// Theme is two rows since PF-6 (2026-11-21; DESIGN.md §8 "The phone's
 /// Settings"): one for each of the phone's modes, as the desktop's Look keeps
@@ -59,6 +61,8 @@ public struct TerminalSettingsPage: View {
           }
         }
         opacityRow
+        programBackgroundsRow
+        blurRow
         fontRow
         NavigationLink(value: TerminalSettingsRoute.effects) {
           ChromeRow("Effects", value: TerminalSettingsModel.effectsWord(appearance.shaderEffects))
@@ -75,14 +79,56 @@ public struct TerminalSettingsPage: View {
     .navigationBarTitleDisplayMode(.inline)
   }
 
-  // MARK: - Background opacity
+  // MARK: - The glass: background opacity and background blur
 
   private var opacityRow: some View {
     let opacity = TerminalSettingsModel.clampedOpacity(appearance.backgroundOpacity)
-    let text = TerminalSettingsModel.percent(opacity)
-    return VStack(alignment: .leading, spacing: 4) {
+    return glassRow(
+      "Background opacity", value: opacity, text: TerminalSettingsModel.percent(opacity),
+      in: TerminalSettingsModel.opacityRange, step: TerminalSettingsModel.opacityStep,
+      ends: (
+        TerminalSettingsModel.percent(TerminalSettingsModel.opacityRange.lowerBound),
+        TerminalSettingsModel.percent(TerminalSettingsModel.opacityRange.upperBound)
+      ),
+      detail: TerminalSettingsModel.opacityDetail(opacity)
+    ) { value in commit { $0.backgroundOpacity = value } }
+  }
+
+  /// PF-13: the desktop's second Glass row, in its words, with the field in
+  /// place of the desk.
+  private var programBackgroundsRow: some View {
+    Toggle(
+      isOn: Binding(
+        get: { appearance.dimsProgramBackgrounds },
+        set: { value in commit { $0.dimsProgramBackgrounds = value } })
+    ) {
+      ChromeRow("Dim program backgrounds too", detail: TerminalSettingsWords.programBackgroundsDetail)
+    }
+  }
+
+  /// PF-13 (2026-11-23; DESIGN.md §8 "The card's glass is the field"): how far
+  /// the home behind a session's card is blurred, beside how much of it the
+  /// ground lets through.
+  private var blurRow: some View {
+    let blur = appearance.clampedGroundBlur
+    let range = TerminalAppearance.groundBlurRange
+    return glassRow(
+      "Background blur", value: blur, text: TerminalSettingsModel.blurText(blur),
+      in: range, step: TerminalSettingsModel.blurStep,
+      ends: (TerminalSettingsModel.blurText(range.lowerBound), TerminalSettingsModel.blurText(range.upperBound)),
+      detail: TerminalSettingsModel.blurDetail(blur, opacity: appearance.backgroundOpacity)
+    ) { value in commit { $0.groundBlur = value } }
+  }
+
+  /// One of the glass's two rows: its name and its value on a line, the
+  /// slider with its ends said, and a line that says what the value does.
+  private func glassRow(
+    _ title: String, value: Double, text: String, in range: ClosedRange<Double>, step: Double,
+    ends: (low: String, high: String), detail: String, set: @escaping (Double) -> Void
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
       HStack {
-        Text("Background opacity")
+        Text(title)
           .font(ChromeListType.row)
           .foregroundStyle(ChromePalette.ink)
           .alignmentGuide(.listRowSeparatorLeading) { $0[.leading] }
@@ -92,24 +138,18 @@ public struct TerminalSettingsPage: View {
           .monospacedDigit()
           .foregroundStyle(ChromePalette.inkTertiary)
       }
-      Slider(
-        value: Binding(
-          get: { opacity },
-          set: { value in commit { $0.backgroundOpacity = value } }),
-        in: TerminalSettingsModel.opacityRange,
-        step: 0.05
-      ) {
-        Text("Background opacity")
+      Slider(value: Binding(get: { value }, set: set), in: range, step: step) {
+        Text(title)
       } minimumValueLabel: {
-        Text(TerminalSettingsModel.percent(TerminalSettingsModel.opacityRange.lowerBound))
+        Text(ends.low)
       } maximumValueLabel: {
-        Text(TerminalSettingsModel.percent(TerminalSettingsModel.opacityRange.upperBound))
+        Text(ends.high)
       }
       .font(ChromeListType.detail)
       .foregroundStyle(ChromePalette.inkTertiary)
       .tint(ChromePalette.ink)
       .accessibilityValue(text)
-      Text(TerminalSettingsModel.opacityDetail(opacity))
+      Text(detail)
         .font(ChromeListType.detail)
         .foregroundStyle(ChromePalette.inkTertiary)
         .fixedSize(horizontal: false, vertical: true)
@@ -394,6 +434,9 @@ enum TerminalSettingsModel {
   static let swatchPaletteCount = 8
   static let swatchCount = swatchPaletteCount + 3
   static let opacityRange: ClosedRange<Double> = 0.2...1
+  /// One percent, the desktop's step (PF-13). It was five, which the default
+  /// 82% is not on: a slider once moved could not be put back on it.
+  static let opacityStep: Double = 0.01
   /// Upstream's bundled-font base is 13; the bounds are legibility on a phone
   /// at one end and a terminal that still fits 80 columns at the other.
   static let fontSizeRange: ClosedRange<Double> = 9...20
@@ -561,6 +604,24 @@ enum TerminalSettingsModel {
       : "The field shows through the terminal."
   }
 
+  /// The blur's slider moves by 2pt: 21 stops from sharp to the desk's 40.
+  static let blurStep: Double = 2
+
+  /// `24 pt`, and `Off` at nothing.
+  static func blurText(_ blur: Double) -> String {
+    let points = Int(blur.isFinite ? blur.rounded() : 0)
+    return points <= 0 ? "Off" : "\(points) pt"
+  }
+
+  /// The line under Background blur. A solid ground hides the field, so the
+  /// line says where the blur is still seen rather than promising a change
+  /// the terminal will not show.
+  static func blurDetail(_ blur: Double, opacity: Double) -> String {
+    if clampedOpacity(opacity) >= 1 { return "The terminal is solid, so this shows only around it." }
+    return blur > 0
+      ? "The field behind the terminal is blurred." : "Sharp: the field behind the terminal is not blurred."
+  }
+
   static func steppedFontSize(from value: Double, by delta: Double) -> Double {
     clampedFontSize((value.isFinite ? value.rounded() : 13) + delta)
   }
@@ -612,6 +673,10 @@ enum TerminalSettingsWords {
     case .dark: "Dark mode theme"
     }
   }
+
+  /// The line under Dim program backgrounds too: the desktop's, with the field for its desk.
+  static let programBackgroundsDetail =
+    "Let the backgrounds a program paints show the field too, so a program that fills its screen keeps the glass."
 
   /// Look's foot.
   static func lookFoot(_ device: DeviceWord) -> String {

@@ -118,12 +118,18 @@ struct TerminalLookPreviewTests {
     #expect(Model.caption(appearance, mode: .dark).size == "13 pt", "read through the clamp")
   }
 
-  @Test("the picture is said as one sentence: the theme, the size, the opacity, and that the text is a sample")
+  @Test("the picture is said: the theme, the size, the opacity, the blur, and that the text is a sample")
   func spoken() {
     var appearance = TerminalAppearance.default
     appearance.backgroundOpacity = 0.55
     #expect(
       Model.spoken(appearance, mode: .dark)
-        == "Preview of the terminal’s look. Matte Black, 13 points, background 55%. The text is a sample.")
+        == "Preview of the terminal’s look. Matte Black, 13 points, background 55%, blurred by 24 points. "
+        + "The text is a sample.")
+    appearance.groundBlur = 0
+    #expect(
+      Model.spoken(appearance, mode: .dark)
+        == "Preview of the terminal’s look. Matte Black, 13 points, background 55%, not blurred. "
+        + "The text is a sample.")
   }
 }

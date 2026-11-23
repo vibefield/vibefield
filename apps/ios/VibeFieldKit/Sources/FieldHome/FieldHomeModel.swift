@@ -188,10 +188,6 @@ enum FieldHomeModel {
   ///
   /// Its top corners, the sheet's own 40.
   static let livePanelCorner: CGFloat = 40
-  /// The blur the home wears behind it: the desk's own measure under Godview
-  /// (DESIGN.md §8 "The covers over the desk"). The terminal's ground is the
-  /// only layer over it.
-  static let livePanelBlur: CGFloat = 40
   /// The rise and the leave, on the island curve; a fade under reduced motion.
   static let livePanelTravel: Double = 0.42
   static let livePanelFade: Double = 0.2
@@ -224,13 +220,16 @@ enum FieldHomeModel {
     return pull > height * 0.25 || predicted > height * 0.5
   }
 
-  /// The home's blur behind the panel. It eases as the panel is pulled down,
+  /// The home's blur behind the panel. `full` is the blur the person set
+  /// (Settings › Terminal, PF-13; 24pt where nobody chose): the terminal's
+  /// ground is the only layer over it. It eases as the panel is pulled down,
   /// so the home comes back into focus under the finger, and it is nothing
   /// while no panel stands.
-  static func livePanelBlur(standing: Bool, pull: CGFloat, height: CGFloat) -> CGFloat {
+  static func livePanelBlur(full: CGFloat, standing: Bool, pull: CGFloat, height: CGFloat) -> CGFloat {
     guard standing else { return 0 }
-    guard height > 0 else { return livePanelBlur }
-    return livePanelBlur * (1 - min(1, max(0, pull / height)))
+    let whole = max(0, full)
+    guard height > 0 else { return whole }
+    return whole * (1 - min(1, max(0, pull / height)))
   }
 
   /// The card's outline, which the frame's line and glow follow: 40pt corners

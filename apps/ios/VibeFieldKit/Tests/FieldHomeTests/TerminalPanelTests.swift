@@ -69,17 +69,22 @@ struct TerminalPanelTests {
     #expect(!FieldHomeModel.livePanelCloses(pull: 500, predicted: 900, height: 0))
   }
 
-  @Test("the home's blur is 40pt under a standing panel, eases with the pull, and is nothing with no panel")
+  @Test("the home's blur is what the person set under a standing panel, eases with the pull, and is nothing with none")
   func theHomesBlur() {
-    #expect(FieldHomeModel.livePanelBlur == 40)
-    #expect(FieldHomeModel.livePanelBlur(standing: false, pull: 0, height: 800) == 0)
-    #expect(FieldHomeModel.livePanelBlur(standing: false, pull: 300, height: 800) == 0)
-    #expect(FieldHomeModel.livePanelBlur(standing: true, pull: 0, height: 800) == 40)
-    #expect(FieldHomeModel.livePanelBlur(standing: true, pull: 400, height: 800) == 20)
-    #expect(FieldHomeModel.livePanelBlur(standing: true, pull: 800, height: 800) == 0)
+    #expect(FieldHomeModel.livePanelBlur(full: 24, standing: false, pull: 0, height: 800) == 0)
+    #expect(FieldHomeModel.livePanelBlur(full: 24, standing: false, pull: 300, height: 800) == 0)
+    #expect(FieldHomeModel.livePanelBlur(full: 24, standing: true, pull: 0, height: 800) == 24)
+    #expect(FieldHomeModel.livePanelBlur(full: 24, standing: true, pull: 400, height: 800) == 12)
+    #expect(FieldHomeModel.livePanelBlur(full: 24, standing: true, pull: 800, height: 800) == 0)
     // past the foot it stays at nothing, and a height not yet measured keeps it whole
-    #expect(FieldHomeModel.livePanelBlur(standing: true, pull: 1200, height: 800) == 0)
-    #expect(FieldHomeModel.livePanelBlur(standing: true, pull: 100, height: 0) == 40)
+    #expect(FieldHomeModel.livePanelBlur(full: 24, standing: true, pull: 1200, height: 800) == 0)
+    #expect(FieldHomeModel.livePanelBlur(full: 24, standing: true, pull: 100, height: 0) == 24)
+    // the desk's own 40, and sharp: the home is given no blur at all, standing or pulled
+    #expect(FieldHomeModel.livePanelBlur(full: 40, standing: true, pull: 400, height: 800) == 20)
+    #expect(FieldHomeModel.livePanelBlur(full: 0, standing: true, pull: 0, height: 800) == 0)
+    #expect(FieldHomeModel.livePanelBlur(full: 0, standing: true, pull: 400, height: 800) == 0)
+    // a figure below nothing is nothing
+    #expect(FieldHomeModel.livePanelBlur(full: -8, standing: true, pull: 0, height: 800) == 0)
   }
 
   @Test("the figures: 40pt corners, a 36 by 5 grabber 6 down at 28%, 420ms on the island curve, a 200ms fade")

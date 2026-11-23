@@ -121,7 +121,7 @@ struct TerminalPanel<Card: View>: View {
 /// touch and that a screen reader does not find. One modifier, always applied,
 /// so the home under it is the same view whether a panel stands or not.
 struct UnderCardPanel: ViewModifier {
-  /// `FieldHomeModel.livePanelBlur`: nothing while no panel stands.
+  /// `FieldHomeModel.livePanelBlur(full:standing:pull:height:)`: nothing while no panel stands.
   let blur: CGFloat
   /// A panel stands, or is on its way out.
   let covered: Bool

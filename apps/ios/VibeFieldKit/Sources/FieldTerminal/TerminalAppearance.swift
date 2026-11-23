@@ -25,6 +25,16 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   /// desktop's 82%, and every record saved before carried 100%, which nobody
   /// chose, so a record's old `backgroundOpacity` is left unread.
   public var backgroundOpacity: Double
+  /// Whether a background a program paints takes the ground's opacity too, as
+  /// the desktop's panes do (its `opacityCells`; DESIGN.md §8 "The glass is the
+  /// desk"). On where nobody chose (PF-13, 2026-11-23): until then the phone
+  /// drew such a background solid, a slab on a ground the field showed through.
+  public var dimsProgramBackgrounds: Bool
+  /// Points. How far the home behind a session's card is blurred, the picture
+  /// the ground's opacity lets through (PF-13, 2026-11-23; DESIGN.md §8 "The
+  /// card's glass is the field"). 0 leaves the home sharp. It is the host's to
+  /// read: the terminal's renderer is never handed it.
+  public var groundBlur: Double
   /// `GhostteaShaderOption` ids (`ghosttea:*`). Unknown ids are dropped at
   /// projection time, not here — the stored value keeps what the user chose.
   public var shaderEffects: [String]
@@ -39,11 +49,26 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   /// phone as in Godview (PF-5; DESIGN.md §8 "The card's glass is the field").
   public static let defaultGroundOpacity = 0.82
 
+  /// The blur nobody chose (PF-13). It was the desk's own 40 under Godview
+  /// until then, which on a phone left nothing of the field to see.
+  public static let defaultGroundBlur: Double = 24
+  /// What the blur may be set to: sharp, up to the desk's 40.
+  public static let groundBlurRange: ClosedRange<Double> = 0...40
+
+  /// The blur the home is given: the stored value through its range, and the
+  /// default where a record holds no number.
+  public var clampedGroundBlur: Double {
+    guard groundBlur.isFinite else { return Self.defaultGroundBlur }
+    return min(max(groundBlur, Self.groundBlurRange.lowerBound), Self.groundBlurRange.upperBound)
+  }
+
   /// No theme picked for either mode: each wears its own look (`TerminalLook`).
   public static let `default` = TerminalAppearance(
     lightThemeName: nil,
     darkThemeName: nil,
     backgroundOpacity: defaultGroundOpacity,
+    dimsProgramBackgrounds: true,
+    groundBlur: defaultGroundBlur,
     shaderEffects: [],
     shaderAnimation: false,
     fontSize: 13
@@ -53,6 +78,8 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
     lightThemeName: String?,
     darkThemeName: String?,
     backgroundOpacity: Double,
+    dimsProgramBackgrounds: Bool = true,
+    groundBlur: Double = TerminalAppearance.defaultGroundBlur,
     shaderEffects: [String],
     shaderAnimation: Bool,
     fontSize: Double
@@ -60,6 +87,8 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
     self.lightThemeName = lightThemeName
     self.darkThemeName = darkThemeName
     self.backgroundOpacity = backgroundOpacity
+    self.dimsProgramBackgrounds = dimsProgramBackgrounds
+    self.groundBlur = groundBlur
     self.shaderEffects = shaderEffects
     self.shaderAnimation = shaderAnimation
     self.fontSize = fontSize
@@ -82,9 +111,11 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
   }
 
   private enum CodingKeys: String, CodingKey {
-    case lightThemeName, darkThemeName, shaderEffects, shaderAnimation, fontSize
+    case lightThemeName, darkThemeName, groundBlur, shaderEffects, shaderAnimation, fontSize
     /// PF-5: renamed with its default; a record's old `backgroundOpacity` is not read.
     case backgroundOpacity = "groundOpacity"
+    /// PF-13: in the ground's family of names, beside its opacity and its blur.
+    case dimsProgramBackgrounds = "groundOpacityCells"
   }
 
   /// What a record saved before PF-6 called its one theme. Read, never written.
@@ -105,6 +136,9 @@ public struct TerminalAppearance: Sendable, Equatable, Codable {
     backgroundOpacity =
       try values.decodeIfPresent(Double.self, forKey: .backgroundOpacity)
       ?? Self.defaultGroundOpacity
+    // PF-13: a record saved before these were settings takes their defaults.
+    dimsProgramBackgrounds = try values.decodeIfPresent(Bool.self, forKey: .dimsProgramBackgrounds) ?? true
+    groundBlur = try values.decodeIfPresent(Double.self, forKey: .groundBlur) ?? Self.defaultGroundBlur
     shaderEffects = try values.decodeIfPresent([String].self, forKey: .shaderEffects) ?? []
     shaderAnimation = try values.decodeIfPresent(Bool.self, forKey: .shaderAnimation) ?? false
     fontSize = try values.decodeIfPresent(Double.self, forKey: .fontSize) ?? 13

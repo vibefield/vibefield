@@ -338,6 +338,28 @@ private func catalogFixture() throws -> [GhostteaColorTheme] {
         == "Reduce Motion is on. Leave this off to keep the terminal still.")
   }
 
+  /// PF-13 (2026-11-23): Background blur's value, its line, and the opacity's one-percent step.
+  @Test func theBlurSaysItsPointsAndWhatItDoes() {
+    #expect(TerminalSettingsModel.blurText(24) == "24 pt")
+    #expect(TerminalSettingsModel.blurText(40) == "40 pt")
+    #expect(TerminalSettingsModel.blurText(0) == "Off")
+    #expect(TerminalSettingsModel.blurText(.nan) == "Off")
+    #expect(TerminalSettingsModel.blurStep == 2)
+    #expect(TerminalSettingsModel.blurDetail(24, opacity: 0.82) == "The field behind the terminal is blurred.")
+    #expect(
+      TerminalSettingsModel.blurDetail(0, opacity: 0.82) == "Sharp: the field behind the terminal is not blurred.")
+    // a solid ground hides the field: the line says where the blur is still seen
+    let solid = "The terminal is solid, so this shows only around it."
+    #expect(TerminalSettingsModel.blurDetail(24, opacity: 1) == solid)
+    #expect(TerminalSettingsModel.blurDetail(0, opacity: .nan) == solid)
+    // one percent: the default 82% is a stop of the slider, so it can be put back
+    #expect(TerminalSettingsModel.opacityStep == 0.01)
+    #expect(
+      TerminalSettingsWords.programBackgroundsDetail
+        == "Let the backgrounds a program paints show the field too, so a program that fills its screen keeps "
+        + "the glass.")
+  }
+
   @Test func opacityDetailFollowsTheDesktopsTwoLines() {
     #expect(TerminalSettingsModel.opacityDetail(1) == "Solid: the field stays behind the terminal.")
     #expect(TerminalSettingsModel.opacityDetail(0.85) == "The field shows through the terminal.")

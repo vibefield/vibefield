@@ -10,7 +10,10 @@ import SwiftUI
 // What is real and what stands in, said here as the desktop's says it:
 // - The GROUND is the terminal's own: the theme's background at the opacity the renderer will be handed
 //   (`TerminalGround`'s recipe), over a depiction of the field, so the opacity is seen and not only read.
-// - The FIELD behind it is a depiction: the sheet's paper and a few bodies as circles.
+// - The FIELD behind it is a depiction: the sheet's paper and a few bodies as circles, blurred by the blur the home
+//   is given behind a card (PF-13, 2026-11-23), at its own size: the circles are about a bubble's.
+// - A background the sample paints (its PASS and FAIL) takes the ground's opacity where Dim program backgrounds too
+//   is on (PF-13), as the renderer draws one.
 // - The TEXT is a sample, in the theme's own colours at the chosen size. A real terminal's glyphs are rasterised on
 //   the desktop that runs it, so its type and its colours are that desktop's (the page's foot says so, and the
 //   caption says "Sample text").
@@ -131,8 +134,9 @@ enum TerminalLookPreviewModel {
     let caption = caption(appearance, mode: mode)
     let points = Int(TerminalSettingsModel.clampedFontSize(appearance.fontSize).rounded())
     let opacity = TerminalSettingsModel.percent(appearance.backgroundOpacity)
-    return "Preview of the terminal’s look. \(caption.theme), \(points) points, background \(opacity). "
-      + "The text is a sample."
+    let blur = Int(appearance.clampedGroundBlur.rounded())
+    return "Preview of the terminal’s look. \(caption.theme), \(points) points, background \(opacity), "
+      + (blur > 0 ? "blurred by \(blur) points. " : "not blurred. ") + "The text is a sample."
   }
 }
 
@@ -149,11 +153,19 @@ struct TerminalLookPreview: View {
     let inks = TerminalLookPreviewModel.inks(for: appearance, mode: mode)
     let opacity = TerminalSettingsModel.clampedOpacity(appearance.backgroundOpacity)
     let size = CGFloat(TerminalSettingsModel.clampedFontSize(appearance.fontSize))
+    // PF-13: a background the sample's program paints takes the ground's opacity where the switch says so.
+    let painted = appearance.dimsProgramBackgrounds ? opacity : 1
     let caption = TerminalLookPreviewModel.caption(appearance, mode: mode)
     let shape = RoundedRectangle(cornerRadius: ChromeRadius.card, style: .continuous)
     return VStack(alignment: .leading, spacing: 8) {
       ZStack {
+        // One picture, then blurred: blurred as they stand, each body is its own
+        // layer and the opaque blur squares it off (seen 2026-11-23 on the
+        // simulator). The opaque blur, because the picture fills its frame and
+        // its edges should stay whole.
         FieldDepiction()
+          .drawingGroup()
+          .blur(radius: CGFloat(appearance.clampedGroundBlur), opaque: true)
         Self.color(inks.ground).opacity(opacity)
       }
       .frame(maxWidth: .infinity)
@@ -161,7 +173,7 @@ struct TerminalLookPreview: View {
       .overlay(alignment: .topLeading) {
         VStack(alignment: .leading, spacing: 0) {
           ForEach(Array(TerminalLookPreviewModel.sample.enumerated()), id: \.offset) { _, line in
-            Text(Self.attributed(line, inks: inks, size: size))
+            Text(Self.attributed(line, inks: inks, size: size, painted: painted))
               .lineLimit(1)
               .fixedSize(horizontal: true, vertical: false)
           }
@@ -194,8 +206,10 @@ struct TerminalLookPreview: View {
   }
 
   /// One line of the sample as one run of text, each piece in its own ink on its own ground.
+  /// `painted` is the opacity of a background a run's program painted (a palette slot); the cursor and the selection
+  /// are the terminal's own and stay whole.
   private static func attributed(
-    _ line: [TerminalLookPreviewModel.Run], inks: TerminalLookPreviewModel.Inks, size: CGFloat
+    _ line: [TerminalLookPreviewModel.Run], inks: TerminalLookPreviewModel.Inks, size: CGFloat, painted: Double
   ) -> AttributedString {
     var out = AttributedString()
     for run in line {
@@ -203,7 +217,10 @@ struct TerminalLookPreview: View {
       let colours = TerminalLookPreviewModel.colours(of: run, in: inks)
       piece.font = .system(size: size, weight: run.bold ? .bold : .regular, design: .monospaced)
       piece.foregroundColor = color(colours.ink)
-      if let ground = colours.ground { piece.backgroundColor = color(ground) }
+      if let ground = colours.ground {
+        let ownToTheProgram = run.bg != nil && !run.cursor && !run.selected
+        piece.backgroundColor = color(ground).opacity(ownToTheProgram ? painted : 1)
+      }
       out += piece
     }
     return out

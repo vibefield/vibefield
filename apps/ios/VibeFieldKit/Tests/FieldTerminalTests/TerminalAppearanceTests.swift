@@ -41,11 +41,57 @@ import Testing
       lightThemeName: "3024 Day",
       darkThemeName: "Vesper",
       backgroundOpacity: 0.85,
+      dimsProgramBackgrounds: false,
+      groundBlur: 8,
       shaderEffects: ["ghosttea:crt"],
       shaderAnimation: true,
       fontSize: 16)
     TerminalAppearanceStore.save(appearance, to: defaults)
     #expect(TerminalAppearanceStore.load(from: defaults) == appearance)
+  }
+
+  /// PF-13 (2026-11-23; DESIGN.md §8 "The card's glass is the field"): the
+  /// blur behind a card and whether a program's backgrounds take the glass are
+  /// settings. A record saved before either takes their defaults and keeps the
+  /// rest; what is saved is read back under the ground's own names.
+  @Test func aRecordFromBeforeTheBlurTakesItsDefaultsAndKeepsTheRest() throws {
+    let old = Data(#"{"darkThemeName":"Vesper","groundOpacity":0.6,"shaderEffects":[],"fontSize":15}"#.utf8)
+    let decoded = try JSONDecoder().decode(TerminalAppearance.self, from: old)
+    #expect(decoded.groundBlur == 24)
+    #expect(decoded.dimsProgramBackgrounds)
+    #expect(decoded.backgroundOpacity == 0.6)
+    #expect(decoded.darkThemeName == "Vesper")
+    #expect(decoded.fontSize == 15)
+    #expect(TerminalAppearance.default.groundBlur == 24)
+    #expect(TerminalAppearance.default.dimsProgramBackgrounds)
+
+    var chosen = decoded
+    chosen.groundBlur = 0
+    chosen.dimsProgramBackgrounds = false
+    let saved = try JSONEncoder().encode(chosen)
+    let keys = try #require(try JSONSerialization.jsonObject(with: saved) as? [String: Any])
+    #expect(keys["groundBlur"] as? Double == 0)
+    #expect(keys["groundOpacityCells"] as? Bool == false)
+    // Sharp and solid slabs stay choices: what was saved is the person's.
+    #expect(try JSONDecoder().decode(TerminalAppearance.self, from: saved) == chosen)
+  }
+
+  /// The blur the home is given is read through its range: sharp to the desk's
+  /// 40, and the default where a record holds no number.
+  @Test func theBlurIsReadThroughItsRange() {
+    var appearance = TerminalAppearance.default
+    #expect(TerminalAppearance.groundBlurRange == 0...40)
+    #expect(appearance.clampedGroundBlur == 24)
+    appearance.groundBlur = 0
+    #expect(appearance.clampedGroundBlur == 0)
+    appearance.groundBlur = 90
+    #expect(appearance.clampedGroundBlur == 40)
+    appearance.groundBlur = -3
+    #expect(appearance.clampedGroundBlur == 0)
+    appearance.groundBlur = .nan
+    #expect(appearance.clampedGroundBlur == 24)
+    appearance.groundBlur = .infinity
+    #expect(appearance.clampedGroundBlur == 24)
   }
 
   /// PF-5 (2026-11-21; DESIGN.md §8 "The card's glass is the field"): the
