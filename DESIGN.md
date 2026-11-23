@@ -9538,7 +9538,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   height, and there should be a intuitive switch button"; his pick from the three ways drawn on the
   page "Phone Keyboard Modes", 2026-11-22: "i choose B").
   **Message** is the composer alone: the plus, the field, the mic and Send. **Terminal** is the key
-  rail alone: Esc, Ctrl, Tab, the four arrows and the keypad key, eight keys. The card is 60pt in
+  rail alone: Esc, Ctrl, Tab, the four arrows and the keypad key, eight keys *(since PF-14,
+  2026-11-23: the slash, Esc, Tab, the four arrows and the keypad key, still eight; the bullet
+  "The rail's eight keys, and what each holds", below)*. The card is 60pt in
   either (8 · 44 · 8, and 6 under it), where both rows stood in both modes at 110, and the
   "Typing into terminal" line is gone: a row of keys says it. A draft is kept across the switch,
   both ways. **The keyboard stays up across the switch**, handed from one mode's holder to the
@@ -9577,6 +9579,34 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   *(Until PF-8 the composer row and the rail both stood in both modes, the rail's first key was the
   switch and lit in Terminal, one keyboard key stood on the floating row with the keyboard down,
   and the keypad could stand under a draft.)*
+- **The rail's eight keys, and what each holds** (PF-14, 2026-11-23; James, 2026-11-22: "for type
+  to terminal mode, remove ctrl key, and add a / key in front of esc", and "we are trying to build
+  the best terminal keyboard experience for user to use ai agents tui"; of the page "Phone Agent
+  Keys", the same day: "good, go with your lean").
+  Over the letters the rail is **/ · Esc · Tab · ← ↓ ↑ → · ⋯**: eight equal keys, as before, and
+  Ctrl has no key among them. An agent's commands begin with a slash, and the system's letters
+  keep it behind **123**: on the rail it is one touch. The slash is typed, as a letter is, and its
+  face is in the mono family (§3: a character sent is data).
+  **A held key opens its family** (the fan, at 350ms, as before), and a fan's key is tapped:
+  - **/** holds the other characters a prompt opens with, **@** file · **!** shell · **?** help ·
+    **$** skill · **#** issue, and under them **\\** newline · **~** · **|** · **-** · **_**, each
+    two or three touches deep in the system's symbols. Each is typed, as the slash is.
+  - **Esc** holds the stops: **Esc Esc** rewind (two presses, sent as one touch) · **⌃C** interrupt
+    · **⌃D** exit · **⌃Z** suspend. *(Until PF-14 Esc held Meta alone, and ⌃C was the first of ten
+    chords under Ctrl. Those ten are on the keys page's Shortcuts, PF-15.)*
+  - **Tab** holds **⇧Tab**, as before. **←** holds Home and **⌥←** (a word back), **→** holds
+    **⌥→** and End *(the two word moves are new)*; **↑** holds PgUp and **↓** PgDn, as before.
+  - **⋯** holds **Ctrl** and **Alt**, each armed for the next key: the latch's arm and the Meta
+    burst, three seconds each, as a tap on the keys page's Ctrl or Alt arms them. No lock is set
+    from here; a lock is the keys page's Ctrl, tapped twice. *(Until PF-14 a hold on ⋯ did
+    nothing. This hold was not asked for by name: with Ctrl off the rail, a chord with no key of
+    its own would cost four touches, ⋯, Ctrl, ABC and the letter, and every Ctrl letter is bound
+    by at least one of the six agents read for the page.)*
+  **While Ctrl, Alt or Shift is held, ⋯ wears it**: **⌃**, **⌥** and **⇧**, in that order, in the
+  armed fill, or the locked fill with its dot while Ctrl is locked. A tap on it then lets go of
+  all three and opens nothing; the next tap opens the keys page. Esc no longer says Meta: what is
+  held is said in one place. The keys page's own rail keeps the plus, Esc, Ctrl, Alt, Shift and
+  ABC, and its Ctrl opens no fan.
 - **A live card another client is driving** (item 42's phone half; James, 2026-10-19 17:42Z: "studio
   is driving · touch to take it back"; the look ruled 21:38Z, "good, design all go with the lean").
   While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
