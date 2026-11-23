@@ -4,16 +4,25 @@ import SwiftUI
 
 /// A task-focused keyboard with stable geometry across all three pages. Its
 /// keys always target the terminal; ABC restores the system's text keyboard.
+///
+/// Shortcuts leads the pages (PF-16, 2026-11-23; DESIGN.md §8 "The keys page's
+/// Shortcuts are an agent's keys"): a fixed row of five keys, a strip of
+/// profiles in sight, and the chosen profile's fifteen keys.
 struct TerminalKeypad: View {
   let model: InputCardModel
   var isAccessibilitySize = false
   @Environment(\.colorScheme) private var colorScheme
   @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+  @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.colorSchemeContrast) private var contrast
-  @AppStorage("terminal.keypad.profile") private var profile = ComboCatalog.common.id
+  @AppStorage("terminal.keypad.profile") private var profile = ComboCatalog.fallback.id
   @AppStorage("terminal.keypad.tmuxPrefix") private var tmuxPrefix = "b"
 
   private let gap: CGFloat = 8
+  /// The Shortcuts page's own gap: twenty keys and a strip in the room nine
+  /// keys and a header had.
+  private let shortcutGap: CGFloat = 6
+  private let stripHeight: CGFloat = 30
   private let radius: CGFloat = 17
   private var labelSize: CGFloat { isAccessibilitySize ? 17 : 15 }
   private var ink: Color { ChromePalette.ink }
@@ -21,11 +30,9 @@ struct TerminalKeypad: View {
     let value = tmuxPrefix.lowercased()
     return value.count == 1 && value.first!.isASCII && value.first!.isLetter ? value.first! : "b"
   }
+  private var profiles: [ComboPack] { ComboCatalog.profiles(tmuxPrefix: prefix) }
   private var pack: ComboPack {
     ComboCatalog.profile(id: profile, tmuxPrefix: prefix)
-  }
-  private var profileSelection: Binding<String> {
-    Binding(get: { pack.id }, set: { profile = $0 })
   }
 
   var body: some View {
@@ -165,34 +172,114 @@ struct TerminalKeypad: View {
     }
   }
 
+  // MARK: - Shortcuts (PF-16)
+
+  /// The fixed row, the strip, and the chosen profile's three rows of five.
+  ///
+  /// The four rows of keys are one height, so the fixed row's keys are the
+  /// size of every other. In a short, wide keyboard the twenty keys are two
+  /// rows of ten under the strip, the fixed five leading the first: four rows
+  /// there would put every target under a comfortable tap size.
   @ViewBuilder private func shortcuts(wide: Bool) -> some View {
+    let fixed = ComboCatalog.fixedRow(for: pack)
+    let own = pack.combos
     if wide {
-      // Keep the profile beside the grid in a short keyboard. A header above
-      // it would squeeze the shortcut targets below a comfortable tap size.
-      HStack(spacing: gap) {
-        VStack(alignment: .leading, spacing: 0) {
-          profileMenu
-          if pack.id == ComboCatalog.tmux.id { prefixMenu }
+      VStack(spacing: shortcutGap) {
+        profileStrip.frame(height: stripHeight)
+        keyGrid(columns: 10, count: fixed.count + own.count, spacing: shortcutGap) { index in
+          if index < fixed.count {
+            comboKey(fixed[index], fixed: true)
+          } else {
+            comboKey(own[index - fixed.count], fixed: false)
+          }
         }
-        .frame(width: 126, alignment: .leading)
-        shortcutKeys(columns: 5)
       }
     } else {
-      VStack(spacing: gap) {
-        HStack {
-          if pack.id == ComboCatalog.tmux.id {
-            prefixMenu
-          } else {
-            Text("Send to terminal").font(.system(size: 12))
-              .foregroundStyle(ChromePalette.inkSecondary)
+      GeometryReader { geometry in
+        let unit = max(1, (geometry.size.height - stripHeight - shortcutGap * 4) / 4)
+        VStack(spacing: shortcutGap) {
+          keyGrid(columns: fixed.count, count: fixed.count, spacing: shortcutGap) { index in
+            comboKey(fixed[index], fixed: true)
           }
-          Spacer(minLength: 8)
-          profileMenu
+          .frame(height: unit)
+          profileStrip.frame(height: stripHeight)
+          keyGrid(columns: 5, count: own.count, spacing: shortcutGap) { index in
+            comboKey(own[index], fixed: false)
+          }
         }
-        .frame(height: 44)
-        shortcutKeys(columns: 3)
       }
     }
+  }
+
+  private func comboKey(_ combo: Combo, fixed: Bool) -> some View {
+    key(
+      combo.label.replacingOccurrences(of: "^", with: "⌃"),
+      subtitle: combo.subtitle, label: combo.accessibilityLabel, mono: true, strong: fixed
+    ) {
+      model.sendCombo(combo)
+      InputHaptics.chord()
+    }
+  }
+
+  /// The profiles, in sight: the agents, a hairline, the tools. The chosen one
+  /// wears the segment's selected fill and is kept in view. With tmux chosen,
+  /// its prefix stands after it and opens the prefix's menu.
+  private var profileStrip: some View {
+    ScrollViewReader { proxy in
+      ScrollView(.horizontal, showsIndicators: false) {
+        HStack(spacing: 2) {
+          ForEach(profiles) { candidate in
+            if candidate.id == profiles.first(where: { $0.kind == .tool })?.id {
+              Rectangle()
+                .fill(ink.opacity(0.14))
+                .frame(width: 0.5, height: 16)
+                .padding(.horizontal, 6)
+                .accessibilityHidden(true)
+            }
+            profileChip(candidate).id(candidate.id)
+            if candidate.id == pack.id, pack.id == ComboCatalog.tmux(prefix: prefix).id {
+              prefixMenu
+            }
+          }
+        }
+        .padding(.horizontal, 1)
+      }
+      .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
+      .onAppear { proxy.scrollTo(pack.id, anchor: .center) }
+      .onChange(of: pack.id) { _, chosen in
+        if reduceMotion {
+          proxy.scrollTo(chosen, anchor: .center)
+        } else {
+          withAnimation(FieldMotion.ease(0.24)) { proxy.scrollTo(chosen, anchor: .center) }
+        }
+      }
+    }
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Shortcut profile")
+  }
+
+  private func profileChip(_ candidate: ComboPack) -> some View {
+    let chosen = candidate.id == pack.id
+    return Button {
+      guard !chosen else { return }
+      profile = candidate.id
+      InputHaptics.page()
+    } label: {
+      Text(candidate.title)
+        .font(.system(size: isAccessibilitySize ? 15 : 13, weight: .medium))
+        .foregroundStyle(chosen ? ChromePalette.segSelectedInk : ChromePalette.segInk)
+        .lineLimit(1)
+        .padding(.horizontal, 11)
+        .frame(height: stripHeight)
+        .background {
+          if chosen { Capsule().fill(ChromePalette.segSelected) }
+        }
+        .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("\(candidate.title) shortcuts")
+    .accessibilityAddTraits(chosen ? [.isSelected] : [])
+    .accessibilityIdentifier("keypad-profile-\(candidate.id)")
   }
 
   private var prefixMenu: some View {
@@ -207,54 +294,29 @@ struct TerminalKeypad: View {
         }
       }
     } label: {
-      Text("Prefix: ⌃\(String(prefix).uppercased())")
-        .font(.system(size: 13, weight: .medium)).frame(minHeight: 44)
+      HStack(spacing: 4) {
+        Text("Prefix ⌃\(String(prefix).uppercased())")
+        Image(systemName: "chevron.down").font(.system(size: 9, weight: .semibold))
+      }
+      .font(.system(size: isAccessibilitySize ? 15 : 13, weight: .medium))
+      .padding(.horizontal, 9)
+      .frame(height: stripHeight)
+      .contentShape(Rectangle())
     }
-    .foregroundStyle(ink)
+    .foregroundStyle(ChromePalette.segInk)
     .accessibilityLabel("tmux prefix, Control \(String(prefix).uppercased())")
-  }
-
-  private var profileMenu: some View {
-    Menu {
-      Picker("Shortcut profile", selection: profileSelection) {
-        ForEach(ComboCatalog.profiles(tmuxPrefix: prefix)) { candidate in
-          Text(candidate.title).tag(candidate.id)
-        }
-      }
-    } label: {
-      HStack(spacing: 6) {
-        Text(pack.title)
-        Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold))
-      }
-      .font(.system(size: 14, weight: .medium))
-      .padding(.horizontal, 12).frame(minHeight: 44)
-    }
-    .foregroundStyle(ink)
-    .accessibilityLabel("Shortcut profile, \(pack.title)")
-    .accessibilityIdentifier("keypad-profile")
-  }
-
-  private func shortcutKeys(columns: Int) -> some View {
-    let combos = pack.combos
-    return keyGrid(columns: columns, count: combos.count) { index in
-      let combo = combos[index]
-      key(
-        combo.label.replacingOccurrences(of: "^", with: "⌃"),
-        subtitle: combo.subtitle, label: combo.accessibilityLabel
-      ) {
-        model.sendCombo(combo)
-        InputHaptics.chord()
-      }
-    }
+    .accessibilityIdentifier("keypad-tmux-prefix")
   }
 
   private func keyGrid<Content: View>(
-    columns: Int, count: Int, @ViewBuilder content: @escaping (Int) -> Content
+    columns: Int, count: Int, spacing: CGFloat? = nil,
+    @ViewBuilder content: @escaping (Int) -> Content
   ) -> some View {
     let rows = (count + columns - 1) / columns
-    return VStack(spacing: gap) {
+    let spacing = spacing ?? gap
+    return VStack(spacing: spacing) {
       ForEach(0..<rows, id: \.self) { row in
-        HStack(spacing: gap) {
+        HStack(spacing: spacing) {
           ForEach(0..<columns, id: \.self) { column in
             let index = row * columns + column
             if index < count {
@@ -268,47 +330,54 @@ struct TerminalKeypad: View {
     }
   }
 
+  /// One cap. `mono` is a chord's face (a chord is data, DESIGN.md §3), a
+  /// little smaller when the face is two presses long; `strong` is the fixed
+  /// row's and the arrows' brighter cap.
   private func key(
     _ text: String, symbol: String? = nil, subtitle: String? = nil,
     label: String, repeats: Bool = false, navigation: Bool = false,
+    mono: Bool = false, strong: Bool = false,
     action: @escaping () -> Void
   ) -> some View {
-    Button(action: action) {
-      VStack(spacing: 4) {
+    let bright = navigation || strong
+    let word = subtitle.flatMap { $0.isEmpty ? nil : $0 }
+    let faceSize = mono && text.count > 4 ? labelSize - 2.5 : labelSize
+    return Button(action: action) {
+      VStack(spacing: mono ? 3 : 4) {
         if let symbol {
           Image(systemName: symbol).font(
             .system(size: isAccessibilitySize ? 25 : 22, weight: .regular))
         } else {
-          Text(text).font(
-            .system(
-              size: labelSize, weight: .medium, design: subtitle == nil ? .default : .monospaced))
+          Text(text)
+            .font(.system(size: faceSize, weight: .medium, design: mono ? .monospaced : .default))
+            .minimumScaleFactor(0.75)
         }
-        if let subtitle {
-          Text(subtitle).font(.system(size: isAccessibilitySize ? 12 : 11))
+        if let word {
+          Text(word).font(.system(size: isAccessibilitySize ? 12 : 10))
             .foregroundStyle(ChromePalette.inkSecondary)
-            .lineLimit(1).minimumScaleFactor(0.85)
+            .lineLimit(1).minimumScaleFactor(0.8)
         }
       }
       .foregroundStyle(ink)
       .lineLimit(1)
-      .padding(.horizontal, 4)
+      .padding(.horizontal, mono ? 2 : 4)
       .frame(maxWidth: .infinity, maxHeight: .infinity)
       .background {
-        RoundedRectangle(cornerRadius: radius, style: .continuous)
+        RoundedRectangle(cornerRadius: mono ? 13 : radius, style: .continuous)
           .fill(
             ink.opacity(
-              colorScheme == .dark ? (navigation ? 0.14 : 0.08) : (navigation ? 0.09 : 0.045))
+              colorScheme == .dark ? (bright ? 0.14 : 0.08) : (bright ? 0.09 : 0.045))
           )
           .overlay {
-            RoundedRectangle(cornerRadius: radius, style: .continuous)
+            RoundedRectangle(cornerRadius: mono ? 13 : radius, style: .continuous)
               .strokeBorder(
                 ink.opacity(contrast == .increased ? 0.35 : 0.1),
                 lineWidth: contrast == .increased ? 1 : 0.5)
           }
       }
-      .contentShape(RoundedRectangle(cornerRadius: radius))
+      .contentShape(RoundedRectangle(cornerRadius: mono ? 13 : radius))
     }
-    .buttonStyle(KeyPressStyle(radius: radius))
+    .buttonStyle(KeyPressStyle(radius: mono ? 13 : radius))
     .buttonRepeatBehavior(repeats ? .enabled : .disabled)
     .accessibilityLabel(label)
     .accessibilityIdentifier("keypad-key-\(label)")

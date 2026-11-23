@@ -84,9 +84,13 @@ public enum CardSurface: String, Identifiable, Equatable, Sendable {
 }
 
 /// Terminal-only keys. Letters, numbers, and symbols stay on the system keyboard.
+///
+/// The cases are in the picker's order: Shortcuts leads since PF-16
+/// (2026-11-23; DESIGN.md §8 "The keys page's Shortcuts are an agent's keys").
+/// Navigate led until then. The raw values are the fixtures' names and stay.
 public enum KeypadPage: String, Equatable, Sendable, CaseIterable {
-  case keys
   case combos
+  case keys
   case functions
 
   /// The page picker's visible label.
@@ -294,8 +298,10 @@ public final class InputCardModel {
   public private(set) var keypadShown = false
   /// The page the keypad is on. It SURVIVES `reset`, which the rest of this
   /// model does not: the design says the keypad remembers its last page, and a
-  /// person who works in tmux wants Combos again next time.
-  public var keypadPage: KeypadPage = .keys
+  /// person who works in tmux wants Combos again next time. A card that never
+  /// opened the keypad opens it on Shortcuts (PF-16; on Navigate until then,
+  /// whose Tab, arrows and far ends the rail already carries).
+  public var keypadPage: KeypadPage = .combos
   /// Whether the `+` menu is open. The glyph rotates 45° from it, which is the
   /// whole reason this is state rather than a system `Menu` — see `PlusMenu`.
   public private(set) var plusMenuOpen = false

@@ -1,7 +1,7 @@
-import FieldTerminal
 import Testing
 
 @testable import FieldInput
+@testable import FieldTerminal
 
 /// What a combo IS, before any of it reaches a terminal.
 ///
@@ -11,54 +11,178 @@ import Testing
 /// correct on screen.
 @Suite("the combo packs")
 struct ComboCatalogTests {
+  private static let profiles = ComboCatalog.profiles(tmuxPrefix: "b")
 
-  @Test("a one-press combo is one control chord")
-  func emacsIsSingleChords() {
-    let pack = ComboCatalog.emacs
-    #expect(pack.combos.count == 8)
-    #expect(pack.combos.map(\.label) == ["^A", "^E", "^K", "^Y", "^F", "^B", "^N", "^P"])
-    for combo in pack.combos {
-      #expect(combo.strokes.count == 1)
-      #expect(combo.strokes[0].modifiers == .control)
+  /// PF-16: the strip's order is the catalog's, the agents and then the tools.
+  @Test("the profiles are six agents, then three tools")
+  func profileOrder() {
+    #expect(
+      Self.profiles.map(\.id) == [
+        "keypad.claude", "keypad.codex", "keypad.gemini", "keypad.opencode", "keypad.copilot",
+        "keypad.pi", "keypad.shell", "keypad.tmux", "keypad.screen",
+      ])
+    #expect(
+      Self.profiles.map(\.title) == [
+        "Claude", "Codex", "Gemini", "OpenCode", "Copilot", "Pi", "Shell", "tmux", "screen",
+      ])
+    #expect(Self.profiles.map(\.kind) == Array(repeating: .agent, count: 6) + [.tool, .tool, .tool])
+  }
+
+  @Test("every profile is fifteen keys, three rows of five")
+  func fifteenEach() {
+    for pack in Self.profiles {
+      #expect(pack.combos.count == 15, "\(pack.id)")
     }
-    #expect(pack.combos[0].strokes == [.control("a")])
+  }
+
+  /// A face is read into its presses: one stroke for each press it spells.
+  /// A press the catalog cannot read would leave a key that sends less than
+  /// it says.
+  @Test("every key sends one press for each press its face spells")
+  func facesAreRead() {
+    for pack in Self.profiles {
+      for combo in pack.combos + ComboCatalog.fixedRow(for: pack) {
+        let spelled = combo.label.split(separator: " ").count
+        #expect(combo.strokes.count == spelled, "\(combo.id)")
+      }
+    }
+  }
+
+  /// The punctuation and the option chords are the ones most likely to encode
+  /// to nothing: they leave the letter rows for the shifted-symbol table.
+  @Test("every press of every key encodes to a real key")
+  func everyStrokeEncodes() {
+    for pack in Self.profiles {
+      for combo in pack.combos + ComboCatalog.fixedRow(for: pack) {
+        for stroke in combo.strokes {
+          #expect(stroke.ghostteaEvent() != nil, "\(combo.id)")
+        }
+      }
+    }
+  }
+
+  /// A word has one line under a cap a fifth of the keyboard wide.
+  @Test("a key's word is ten characters at most, and its face seven")
+  func wordsFit() {
+    for pack in Self.profiles {
+      for combo in pack.combos + ComboCatalog.fixedRow(for: pack) {
+        #expect(combo.subtitle.count <= 10, "\(combo.id)")
+        #expect(combo.label.count <= 7, "\(combo.id)")
+      }
+    }
+  }
+
+  // MARK: - The fixed row
+
+  /// James, 2026-11-22: "things like tab+shift should always be there".
+  @Test("the fixed row is the same five keys under every profile")
+  func fixedRowNeverMoves() {
+    for pack in Self.profiles {
+      let row = ComboCatalog.fixedRow(for: pack)
+      #expect(row.map(\.label) == ["⇧Tab", "^C", "Esc Esc", "^J", "^D"], "\(pack.id)")
+      #expect(
+        row.map(\.strokes) == [
+          [.shiftTab], [.control("c")],
+          [TerminalKeystroke(.escape), TerminalKeystroke(.escape)],
+          [.control("j")], [.control("d")],
+        ], "\(pack.id)")
+    }
+  }
+
+  @Test("the word under a fixed key is the profile's")
+  func fixedRowWords() {
+    func words(_ pack: ComboPack) -> [String] { ComboCatalog.fixedRow(for: pack).map(\.subtitle) }
+    #expect(words(ComboCatalog.claude) == ["Mode", "Interrupt", "Rewind", "New line", "Exit"])
+    #expect(words(ComboCatalog.codex) == ["Mode", "Interrupt", "Edit last", "New line", "Exit"])
+    #expect(words(ComboCatalog.gemini) == ["Mode", "Interrupt", "Rewind", "New line", "Exit"])
+    #expect(words(ComboCatalog.opencode) == ["Agent", "Interrupt", "Interrupt", "New line", "Exit"])
+    #expect(words(ComboCatalog.copilot) == ["Mode", "Interrupt", "Interrupt", "", "Exit"])
+    #expect(words(ComboCatalog.pi) == ["Thinking", "Interrupt", "Tree", "New line", "Exit"])
+    for tool in [ComboCatalog.shell, ComboCatalog.tmux(prefix: "b"), ComboCatalog.screen] {
+      #expect(words(tool) == ["Back", "Interrupt", "", "Enter", "Exit"], "\(tool.id)")
+    }
+  }
+
+  /// A key of the fixed row is not said twice on a profile's own rows.
+  @Test("no profile repeats a key of the fixed row")
+  func noRepeats() {
+    for pack in Self.profiles {
+      let fixed = Set(ComboCatalog.fixedRow(for: pack).map(\.strokes))
+      for combo in pack.combos {
+        #expect(!fixed.contains(combo.strokes), "\(combo.id)")
+      }
+    }
+  }
+
+  // MARK: - The faces
+
+  @Test("a control chord, an option chord and a named key are each one press")
+  func singlePresses() {
+    func strokes(_ face: String) -> [TerminalKeystroke] {
+      ComboCatalog.combo("test", face, "").strokes
+    }
+    #expect(strokes("^O") == [.control("o")])
+    #expect(strokes("^_") == [.control("_")])
+    #expect(strokes("^/") == [.control("/")])
+    #expect(strokes("⌥P") == [TerminalKeystroke(.character("p"), modifiers: .option)])
+    #expect(strokes("⌥.") == [TerminalKeystroke(.character("."), modifiers: .option)])
+    #expect(strokes("⌥↑") == [TerminalKeystroke(.arrowUp, modifiers: .option)])
+    #expect(strokes("⌥↵") == [TerminalKeystroke(.enter, modifiers: .option)])
+    #expect(strokes("⌥⌫") == [TerminalKeystroke(.backspace, modifiers: .option)])
+    #expect(strokes("F2") == [TerminalKeystroke(.function(2))])
+    #expect(strokes("⇧Tab") == [.shiftTab])
+  }
+
+  /// A leader is a key pressed and RELEASED. `^X m` with the control still
+  /// held is `^X ^M`, which is Return.
+  @Test("a leader's key is the chord and then a plain key")
+  func leaders() {
+    let models = ComboCatalog.opencode.combos.first { $0.label == "^X m" }
+    #expect(models?.strokes == [.control("x"), TerminalKeystroke(.character("m"))])
+    let stop = ComboCatalog.claude.combos.first { $0.label == "^X ^K" }
+    #expect(stop?.strokes == [.control("x"), .control("k")])
+    let queue = ComboCatalog.opencode.combos.first { $0.label == "^X ↵" }
+    #expect(queue?.strokes == [.control("x"), TerminalKeystroke(.enter)])
+    let details = ComboCatalog.gemini.combos.first { $0.label == "Tab Tab" }
+    #expect(details?.strokes == [TerminalKeystroke(.tab), TerminalKeystroke(.tab)])
   }
 
   /// The prefix is a key you press and RELEASE. `^B c` with the control still
   /// held is `^B ^C`, which interrupts instead of making a window.
   @Test("a tmux combo is the prefix chord and then a plain key")
   func tmuxIsPrefixThenPlainKey() {
-    let newWindow = ComboCatalog.tmux.combos[0]
+    let newWindow = ComboCatalog.tmux(prefix: "b").combos[0]
     #expect(newWindow.label == "^B c")
-    #expect(
-      newWindow.strokes == [.control("b"), TerminalKeystroke(.character("c"))])
+    #expect(newWindow.strokes == [.control("b"), TerminalKeystroke(.character("c"))])
     #expect(newWindow.strokes[1].modifiers.isEmpty)
-  }
-
-  /// The punctuation entries are the ones most likely to encode to nothing —
-  /// they leave the letter rows and land in the shifted-symbol table.
-  @Test("the punctuation prefixes name real keys")
-  func punctuationCombosEncode() {
-    let copyMode = ComboCatalog.tmux.combos.first { $0.label == "^B [" }
-    let split = ComboCatalog.tmux.combos.first { $0.label == "^B %" }
+    let copyMode = ComboCatalog.tmux(prefix: "b").combos.first { $0.label == "^B [" }
+    let split = ComboCatalog.tmux(prefix: "b").combos.first { $0.label == "^B %" }
     #expect(copyMode?.strokes.last == TerminalKeystroke(.character("[")))
     #expect(split?.strokes.last == TerminalKeystroke(.character("%")))
   }
 
-  @Test("readline and screen carry the packs the design names")
-  func remainingPacks() {
-    #expect(ComboCatalog.readline.combos.map(\.label) == ["^R", "^L", "^U", "^W", "^C", "^D"])
-    #expect(ComboCatalog.screen.combos.map(\.label) == ["^A c", "^A n", "^A d"])
-    #expect(
-      ComboCatalog.packs.map(\.id) == [
-        "keypad.emacs", "keypad.tmux", "keypad.readline", "keypad.screen",
-      ])
+  @Test("screen's prefix is Control A, and a capital stays a capital")
+  func screenKeys() {
+    #expect(ComboCatalog.screen.combos[0].strokes == [.control("a"), TerminalKeystroke(.character("c"))])
+    let rename = ComboCatalog.screen.combos.first { $0.label == "^A A" }
+    #expect(rename?.strokes == [.control("a"), TerminalKeystroke(.character("A"))])
+    let next = ComboCatalog.screen.combos.first { $0.label == "^A Tab" }
+    #expect(next?.strokes == [.control("a"), TerminalKeystroke(.tab)])
   }
 
-  /// Ids are what `ForEach` renders by, and `^A` appears in two packs.
+  @Test("a key says its presses for VoiceOver, and then its word")
+  func spokenNames() {
+    #expect(ComboCatalog.claude.combos[0].accessibilityLabel == "Control O, Transcript")
+    #expect(ComboCatalog.claude.combos[3].accessibilityLabel == "Option P, Model")
+    #expect(ComboCatalog.opencode.combos[3].accessibilityLabel == "Control X then m, Models")
+    #expect(ComboCatalog.fixedRow(for: ComboCatalog.claude)[2].accessibilityLabel == "Escape then Escape, Rewind")
+    #expect(ComboCatalog.fixedRow(for: ComboCatalog.copilot)[3].accessibilityLabel == "Control J")
+  }
+
+  /// Ids are what `ForEach` renders by, and `^T` is on five profiles.
   @Test("every combo in the catalog has its own id")
   func idsAreUnique() {
-    let ids = ComboCatalog.packs.flatMap { $0.combos.map(\.id) }
+    let ids = Self.profiles.flatMap { $0.combos.map(\.id) }
     #expect(Set(ids).count == ids.count)
   }
 }
@@ -84,7 +208,7 @@ struct SendComboTests {
   @Test("the presses go out in order, one act each")
   func strokesInOrder() {
     let (model, recorder) = card()
-    model.sendCombo(ComboCatalog.tmux.combos[0])
+    model.sendCombo(ComboCatalog.tmux(prefix: "b").combos[0])
     #expect(
       recorder.acts == [
         .keystroke(.control("b")),
@@ -93,7 +217,7 @@ struct SendComboTests {
   }
 
   /// A combo names every key it presses. Folding an armed Ctrl into it would
-  /// make `^B ^C` — the interrupt, not the window.
+  /// make `^A ^C` — the interrupt, not the window.
   @Test("an armed latch is spent and NOT applied")
   func latchIsSpentNotApplied() {
     let (model, recorder) = card()
@@ -115,7 +239,7 @@ struct SendComboTests {
     let (model, recorder) = card()
     model.tapControl()
     model.tapControl()
-    model.sendCombo(ComboCatalog.readline.combos[0])
+    model.sendCombo(ComboCatalog.shell.combos[5])
     #expect(recorder.acts == [.keystroke(.control("r"))])
     #expect(model.latch.phase == .locked)
   }
@@ -127,7 +251,7 @@ struct SendComboTests {
   func burstIsSpent() {
     let (model, recorder) = card()
     model.armMeta()
-    model.sendCombo(ComboCatalog.emacs.combos[0])
+    model.sendCombo(ComboCatalog.shell.combos[0])
     #expect(recorder.acts == [.keystroke(.control("a"))])
     #expect(model.metaArmed == false)
   }

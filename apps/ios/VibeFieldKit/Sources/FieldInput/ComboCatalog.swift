@@ -31,155 +31,331 @@ public struct Combo: Identifiable, Equatable, Sendable {
 ///
 /// Grouped by the thing that owns the keys rather than by what they do,
 /// because that is how a user remembers them: the prefix belongs to tmux, and
-/// `^A` means something different once screen is the program in front of you.
+/// `^T` is the todo list in one agent and the transcript in another.
 public struct ComboPack: Identifiable, Equatable, Sendable {
+  /// The strip's two groups (PF-16): an agent's keys, or a tool's.
+  public enum Kind: Equatable, Sendable {
+    case agent
+    case tool
+  }
+
   public let id: String
-  /// The pack's heading on the page.
+  /// The pack's name on the strip.
   public let title: String
+  public let kind: Kind
   public let combos: [Combo]
+  /// What a key of the fixed row does in this program, where its word is not
+  /// the common one (`ComboCatalog.fixedRow`). An empty word is a key the
+  /// program gives no meaning of its own.
+  let fixedWords: [ComboCatalog.FixedKey: String]
+
+  init(
+    id: String, title: String, kind: Kind, combos: [Combo],
+    fixedWords: [ComboCatalog.FixedKey: String] = [:]
+  ) {
+    self.id = id
+    self.title = title
+    self.kind = kind
+    self.combos = combos
+    self.fixedWords = fixedWords
+  }
 }
 
-/// Terminal shortcut profiles, led by Common and Claude.
+/// The keys page's Shortcuts (PF-16, 2026-11-23; DESIGN.md §8 "The keys page's
+/// Shortcuts are an agent's keys"): one fixed row of five keys that stands
+/// under every profile, and a profile of fifteen keys for each of six agents
+/// and three tools.
 ///
-/// "Record" — the design's fourth entry, which would capture a sequence off
-/// the rail into a new key — is ABSENT rather than present and inert (D-i6):
-/// recording wants a store, an editor and a name, which is a slice of its own.
+/// The agents' keys were read on 2026-11-22 from each agent's own pages:
+/// Claude Code's interactive-mode and keybindings docs, Codex's keymap source
+/// on `main` (it can run ahead of a shipped build), Gemini CLI's
+/// keyboard-shortcuts reference, OpenCode's keybinds docs, GitHub's Copilot CLI
+/// command reference and Pi's keybindings doc. A program moves its keys; a
+/// profile here is re-read when it does.
+///
+/// "Record" — the design's entry that would capture a sequence off the rail
+/// into a new key — is ABSENT rather than present and inert (D-i6): recording
+/// wants a store, an editor and a name, which is a slice of its own.
 public enum ComboCatalog {
 
-  public static let common = ComboPack(
-    id: "keypad.common", title: "Common",
-    combos: [
-      control("common", "c", "Interrupt"), control("common", "r", "History"),
-      control("common", "l", "Redraw"), control("common", "a", "Line start"),
-      control("common", "e", "Line end"), control("common", "w", "Delete word"),
-      control("common", "u", "Delete left"), control("common", "k", "Delete right"),
-      control("common", "y", "Yank"),
-    ])
+  // MARK: - The fixed row
+
+  /// The five keys that stand under every profile: the chords bound alike, or
+  /// nearly, in every agent read. A key's face never changes; the word under
+  /// it is the profile's where the program means something else by it.
+  public enum FixedKey: String, CaseIterable, Sendable {
+    case mode
+    case interrupt
+    case escapeTwice
+    case newline
+    case exit
+
+    var face: String {
+      switch self {
+      case .mode: return "⇧Tab"
+      case .interrupt: return "^C"
+      case .escapeTwice: return "Esc Esc"
+      case .newline: return "^J"
+      case .exit: return "^D"
+      }
+    }
+
+    /// What the key does in most programs.
+    var word: String {
+      switch self {
+      case .mode: return "Mode"
+      case .interrupt: return "Interrupt"
+      case .escapeTwice: return "Rewind"
+      case .newline: return "New line"
+      case .exit: return "Exit"
+      }
+    }
+  }
+
+  /// The fixed row as `pack` words it: the same five keys in the same places.
+  public static func fixedRow(for pack: ComboPack) -> [Combo] {
+    FixedKey.allCases.map { key in
+      combo("keypad.fixed", key.face, pack.fixedWords[key] ?? key.word)
+    }
+  }
+
+  // MARK: - The agents
 
   public static let claude = ComboPack(
-    id: "keypad.claude", title: "Claude",
-    combos: [
-      Combo(
-        id: "keypad.claude.mode", label: "⇧ Tab", subtitle: "Change mode",
-        spoken: "Shift Tab", strokes: [.shiftTab]),
-      control("keypad.claude", "o", "Transcript"), control("keypad.claude", "t", "Task list"),
-      control("keypad.claude", "c", "Interrupt"), control("keypad.claude", "r", "History"),
-      control("keypad.claude", "l", "Redraw"), control("keypad.claude", "b", "Background"),
-      control("keypad.claude", "a", "Line start"), control("keypad.claude", "e", "Line end"),
-    ])
+    id: "keypad.claude", title: "Claude", kind: .agent,
+    combos: keys(
+      "keypad.claude",
+      [
+        ("^O", "Transcript"), ("^T", "Todos"), ("^B", "Background"), ("⌥P", "Model"),
+        ("⌥T", "Thinking"),
+        ("^R", "History"), ("^S", "Stash"), ("^G", "Editor"), ("^V", "Image"), ("^L", "Redraw"),
+        ("⌥O", "Fast mode"), ("^_", "Undo"), ("^U", "Clear line"), ("^W", "Del word"),
+        ("^X ^K", "Stop all"),
+      ]))
+
+  public static let codex = ComboPack(
+    id: "keypad.codex", title: "Codex", kind: .agent,
+    combos: keys(
+      "keypad.codex",
+      [
+        ("^T", "Transcript"), ("⌥.", "Effort +"), ("⌥,", "Effort −"), ("^O", "Copy last"),
+        ("^/", "Side chat"),
+        ("^R", "History"), ("^G", "Editor"), ("^V", "Image"), ("^L", "Clear"), ("⌥R", "Raw"),
+        ("⌥↑", "Edit queue"), ("⌥Z", "Undo"), ("^U", "Clear line"), ("^W", "Del word"),
+        ("^]", "Skip"),
+      ]),
+    fixedWords: [.escapeTwice: "Edit last"])
+
+  public static let gemini = ComboPack(
+    id: "keypad.gemini", title: "Gemini", kind: .agent,
+    combos: keys(
+      "keypad.gemini",
+      [
+        ("^Y", "YOLO"), ("^T", "Todos"), ("^O", "Expand"), ("^B", "Shells"),
+        ("Tab Tab", "Details"),
+        ("^R", "History"), ("^G", "Editor"), ("^V", "Image"), ("^L", "Clear"), ("⌥M", "Markdown"),
+        ("^S", "Mouse"), ("⌥Z", "Undo"), ("^U", "Clear line"), ("^W", "Del word"),
+        ("^K", "Kill shell"),
+      ]))
+
+  /// OpenCode's leader is `^X`, pressed and released, then a plain key.
+  public static let opencode = ComboPack(
+    id: "keypad.opencode", title: "OpenCode", kind: .agent,
+    combos: keys(
+      "keypad.opencode",
+      [
+        ("^P", "Commands"), ("^T", "Variant"), ("F2", "Model"), ("^X m", "Models"),
+        ("^X a", "Agents"),
+        ("^X n", "New"), ("^X l", "Sessions"), ("^X u", "Undo"), ("^X r", "Redo"),
+        ("^X c", "Compact"),
+        ("^X e", "Editor"), ("^X ↵", "Queue"), ("^B", "Background"), ("^O", "Recent"),
+        ("^V", "Paste"),
+      ]),
+    fixedWords: [.mode: "Agent", .escapeTwice: "Interrupt"])
+
+  /// Copilot does not bind `^J`: its new line is Option Return, on its page.
+  public static let copilot = ComboPack(
+    id: "keypad.copilot", title: "Copilot", kind: .agent,
+    combos: keys(
+      "keypad.copilot",
+      [
+        ("^T", "Reasoning"), ("^O", "Expand"), ("^E", "Expand all"), ("^F", "Search"),
+        ("⌥↵", "New line"),
+        ("^R", "History"), ("^G", "Editor"), ("^V", "Paste"), ("^L", "Clear"), ("^Q", "Queue"),
+        ("^X b", "Background"), ("^X /", "Command"), ("^X o", "Open link"), ("^X h", "Sidebar"),
+        ("^U", "Clear line"),
+      ]),
+    fixedWords: [.escapeTwice: "Interrupt", .newline: ""])
+
+  public static let pi = ComboPack(
+    id: "keypad.pi", title: "Pi", kind: .agent,
+    combos: keys(
+      "keypad.pi",
+      [
+        ("^L", "Model"), ("^P", "Next model"), ("^T", "Thinking"), ("^O", "Tools"),
+        ("⌥↵", "Follow-up"),
+        ("⌥↑", "Dequeue"), ("^G", "Editor"), ("^V", "Paste"), ("^X", "Copy last"), ("^-", "Undo"),
+        ("^U", "Clear line"), ("^W", "Del word"), ("^A", "Line start"), ("^E", "Line end"),
+        ("^K", "Kill right"),
+      ]),
+    fixedWords: [.mode: "Thinking", .escapeTwice: "Tree"])
+
+  // MARK: - The tools
+
+  /// What the fixed row's keys do at a shell's prompt, and in the two
+  /// multiplexers that pass them to one.
+  private static let toolWords: [FixedKey: String] = [
+    .mode: "Back", .escapeTwice: "", .newline: "Enter",
+  ]
+
+  /// The line editor every shell shares. It took the place of Common, and of
+  /// Emacs, whose eight keys were readline's and are among these (PF-16).
+  public static let shell = ComboPack(
+    id: "keypad.shell", title: "Shell", kind: .tool,
+    combos: keys(
+      "keypad.shell",
+      [
+        ("^A", "Line start"), ("^E", "Line end"), ("^W", "Del word"), ("^U", "Del left"),
+        ("^K", "Del right"),
+        ("^R", "History"), ("^L", "Clear"), ("^Y", "Yank"), ("⌥B", "Word back"),
+        ("⌥F", "Word fwd"),
+        ("⌥D", "Del fwd"), ("⌥⌫", "Del back"), ("^P", "Previous"), ("^N", "Next"),
+        ("^X ^E", "Editor"),
+      ]),
+    fixedWords: toolWords)
 
   /// Store the user's actual prefix, rather than sending the default to a
   /// differently configured tmux session. Prefix and command remain separate.
   public static func tmux(prefix: Character) -> ComboPack {
     ComboPack(
-      id: "keypad.tmux", title: "tmux",
-      combos: [
-        prefixed("tmux", prefix: prefix, then: "c", subtitle: "New window"),
-        prefixed("tmux", prefix: prefix, then: "n", subtitle: "Next window"),
-        prefixed("tmux", prefix: prefix, then: "p", subtitle: "Previous window"),
-        prefixed("tmux", prefix: prefix, then: "%", subtitle: "Split side"),
-        prefixed("tmux", prefix: prefix, then: "\"", subtitle: "Split below"),
-        prefixed("tmux", prefix: prefix, then: "o", subtitle: "Next pane"),
-        prefixed("tmux", prefix: prefix, then: "z", subtitle: "Zoom pane"),
-        prefixed("tmux", prefix: prefix, then: "[", subtitle: "Copy mode"),
-        prefixed("tmux", prefix: prefix, then: "d", subtitle: "Detach"),
-      ])
+      id: "keypad.tmux", title: "tmux", kind: .tool,
+      combos: prefixed(
+        "keypad.tmux", prefix: prefix,
+        [
+          ("c", "New window"), ("n", "Next"), ("p", "Previous"), ("w", "Windows"), (",", "Rename"),
+          ("%", "Split side"), ("\"", "Split down"), ("o", "Next pane"), ("z", "Zoom"),
+          ("x", "Kill pane"),
+          ("[", "Copy mode"), ("d", "Detach"), ("s", "Sessions"), (";", "Last pane"), ("?", "Keys"),
+        ]),
+      fixedWords: toolWords)
   }
 
-  /// Emacs' own motion keys, which are also readline's defaults and therefore
-  /// the ones that work in a bare shell.
-  public static let emacs = ComboPack(
-    id: "keypad.emacs",
-    title: "Emacs",
-    combos: [
-      control("emacs", "a", "line start"),
-      control("emacs", "e", "line end"),
-      control("emacs", "k", "kill to end"),
-      control("emacs", "y", "yank"),
-      control("emacs", "f", "forward"),
-      control("emacs", "b", "back"),
-      control("emacs", "n", "next"),
-      control("emacs", "p", "previous"),
-    ])
-
-  /// tmux, whose every key is the prefix and then a plain one. The prefix is
-  /// the default `^B`; a user who has rebound it reads these as the shape
-  /// rather than the binding.
-  public static let tmux = ComboPack(
-    id: "keypad.tmux",
-    title: "Tmux",
-    combos: [
-      prefixed("tmux", prefix: "b", then: "c", subtitle: "new window"),
-      prefixed("tmux", prefix: "b", then: "n", subtitle: "next"),
-      prefixed("tmux", prefix: "b", then: "p", subtitle: "previous"),
-      prefixed("tmux", prefix: "b", then: "d", subtitle: "detach"),
-      prefixed("tmux", prefix: "b", then: "[", subtitle: "copy mode"),
-      prefixed("tmux", prefix: "b", then: "%", subtitle: "split"),
-    ])
-
-  /// The line editor every shell shares.
-  public static let readline = ComboPack(
-    id: "keypad.readline",
-    title: "Readline",
-    combos: [
-      control("readline", "r", "search"),
-      control("readline", "l", "clear"),
-      control("readline", "u", "kill line"),
-      control("readline", "w", "kill word"),
-      control("readline", "c", "interrupt"),
-      control("readline", "d", "eof"),
-    ])
-
-  /// screen, for the desktops that still run it.
+  /// screen, for the desktops that still run it. Its prefix is `^A`.
   public static let screen = ComboPack(
-    id: "keypad.screen",
-    title: "Screen",
-    combos: [
-      prefixed("screen", prefix: "a", then: "c", subtitle: "new"),
-      prefixed("screen", prefix: "a", then: "n", subtitle: "next"),
-      prefixed("screen", prefix: "a", then: "d", subtitle: "detach"),
-    ])
+    id: "keypad.screen", title: "screen", kind: .tool,
+    combos: prefixed(
+      "keypad.screen", prefix: "a",
+      [
+        ("c", "New"), ("n", "Next"), ("p", "Previous"), ("\"", "Windows"), ("A", "Rename"),
+        ("S", "Split"), ("|", "Split side"), ("Tab", "Next area"), ("X", "Close area"),
+        ("k", "Kill"),
+        ("[", "Copy mode"), ("d", "Detach"), ("a", "Send ⌃A"), ("Q", "One area"), ("?", "Keys"),
+      ]),
+    fixedWords: toolWords)
 
-  /// The page's order, which is also the order of how often a phone reaches
-  /// for them: editing first, then the multiplexer.
-  public static let packs: [ComboPack] = [emacs, tmux, readline, screen]
+  // RETIRED 2026-11-23 (PF-16): `common`, `emacs`, `readline`, the default-prefix
+  // `tmux`, the three-key `screen` and the `packs` list. Common's and Emacs's
+  // keys are Shell's; a phone that had either chosen lands on Shell (`profile`).
 
+  // MARK: - The profiles
+
+  /// The strip's order: the agents, then the tools.
+  ///
   /// These are manually chosen terminal-key profiles, never agent identities.
   /// Keep their persisted IDs in a separate namespace and let the picker read
   /// this data; it must not infer a profile from the session's provider.
   public static func profiles(tmuxPrefix: Character) -> [ComboPack] {
-    [common, claude, tmux(prefix: tmuxPrefix), emacs, screen]
+    [claude, codex, gemini, opencode, copilot, pi, shell, tmux(prefix: tmuxPrefix), screen]
   }
 
-  /// The first keypad build stored unqualified profile IDs. Resolve them here
-  /// without changing the user's choice or maintaining a second program table.
+  /// The profile where nobody chose: the one that belongs to no agent.
+  public static let fallback = shell
+
+  /// The first keypad build stored unqualified profile IDs, and Common and
+  /// Emacs were profiles until PF-16. Resolve them here without changing the
+  /// user's choice or maintaining a second program table.
   public static func profile(id: String, tmuxPrefix: Character) -> ComboPack {
-    profiles(tmuxPrefix: tmuxPrefix).first {
-      $0.id == id || $0.id == "keypad.\(id)"
-    } ?? common
+    let all = profiles(tmuxPrefix: tmuxPrefix)
+    if let found = all.first(where: { $0.id == id || $0.id == "keypad.\(id)" }) { return found }
+    return fallback
   }
 
-  /// A one-press combo: a single control chord, named.
-  private static func control(_ pack: String, _ character: Character, _ subtitle: String) -> Combo {
-    let upper = String(character).uppercased()
-    return Combo(
-      id: "\(pack).\(character)",
-      label: "^\(upper)",
-      subtitle: subtitle,
-      spoken: "Control \(upper)",
-      strokes: [.control(character)])
+  // MARK: - Reading a face
+
+  /// One profile's keys, from their faces and words.
+  private static func keys(_ pack: String, _ rows: [(String, String)]) -> [Combo] {
+    rows.map { combo(pack, $0.0, $0.1) }
   }
 
-  /// A two-press combo: a prefix chord, then a plain key.
+  /// One multiplexer's keys: the prefix chord, then each plain key.
   private static func prefixed(
-    _ pack: String, prefix: Character, then key: Character, subtitle: String
-  ) -> Combo {
-    let upper = String(prefix).uppercased()
+    _ pack: String, prefix: Character, _ rows: [(String, String)]
+  ) -> [Combo] {
+    let chord = "^\(String(prefix).uppercased())"
+    return rows.map { combo(pack, "\(chord) \($0.0)", $0.1) }
+  }
+
+  /// A combo from its face. The face is the manuals' spelling, presses apart
+  /// by a space, and it is the one place a key is written: the strokes and the
+  /// spoken name are both read from it, so a key cannot say one chord and send
+  /// another.
+  static func combo(_ pack: String, _ face: String, _ subtitle: String) -> Combo {
+    let presses = face.split(separator: " ").map { press(String($0)) }
     return Combo(
-      id: "\(pack).\(prefix).\(key)",
-      label: "^\(upper) \(key)",
+      id: "\(pack).\(face)",
+      label: face,
       subtitle: subtitle,
-      spoken: "Control \(upper) then \(key)",
-      strokes: [.control(prefix), TerminalKeystroke(.character(key))])
+      spoken: presses.map(\.spoken).joined(separator: " then "),
+      strokes: presses.compactMap(\.stroke))
+  }
+
+  /// One press of a face: `^B`, `⌥P`, `⇧Tab`, `Esc`, `F2`, `↵`, or a plain
+  /// character. A press this cannot read has no stroke, which the catalog's
+  /// tests refuse.
+  private static func press(_ token: String) -> (stroke: TerminalKeystroke?, spoken: String) {
+    if let named = named(token) { return (TerminalKeystroke(named.key), named.spoken) }
+    if token == "⇧Tab" { return (.shiftTab, "Shift Tab") }
+    if token.hasPrefix("^"), token.count == 2, let character = token.last {
+      return (
+        .control(Character(String(character).lowercased())),
+        "Control \(String(character).uppercased())"
+      )
+    }
+    if token.hasPrefix("⌥"), token.count >= 2 {
+      let rest = String(token.dropFirst())
+      if let named = named(rest) {
+        return (TerminalKeystroke(named.key, modifiers: .option), "Option \(named.spoken)")
+      }
+      if rest.count == 1, let character = rest.first {
+        return (
+          TerminalKeystroke(.character(Character(String(character).lowercased())), modifiers: .option),
+          "Option \(String(character).uppercased())"
+        )
+      }
+      return (nil, token)
+    }
+    if token.count == 1, let character = token.first {
+      return (TerminalKeystroke(.character(character)), token)
+    }
+    return (nil, token)
+  }
+
+  /// The keys a face names by a word or a mark.
+  private static func named(_ token: String) -> (key: TerminalKey, spoken: String)? {
+    switch token {
+    case "Esc": return (.escape, "Escape")
+    case "Tab": return (.tab, "Tab")
+    case "↵": return (.enter, "Return")
+    case "⌫": return (.backspace, "Delete")
+    case "↑": return (.arrowUp, "Up")
+    case "↓": return (.arrowDown, "Down")
+    case "←": return (.arrowLeft, "Left")
+    case "→": return (.arrowRight, "Right")
+    default:
+      if token.hasPrefix("F"), let number = Int(token.dropFirst()), (1...12).contains(number) {
+        return (.function(number), token)
+      }
+      return nil
+    }
   }
 }

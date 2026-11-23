@@ -22,11 +22,14 @@ struct KeypadTests {
     return (model, recorder)
   }
 
-  @Test("a fresh card has no keypad, on the Keys page")
+  /// PF-16: Shortcuts leads the pages and is the one a fresh card opens.
+  @Test("a fresh card has no keypad, and would open it on Shortcuts, the first of the three pages")
   func restingState() {
     let model = InputCardModel()
     #expect(model.keypadShown == false)
-    #expect(model.keypadPage == .keys)
+    #expect(model.keypadPage == .combos)
+    #expect(KeypadPage.allCases == [.combos, .keys, .functions])
+    #expect(KeypadPage.allCases.map(\.title) == ["Shortcuts", "Navigate", "Fn"])
   }
 
   @Test("the key toggles it")
@@ -105,11 +108,11 @@ struct KeypadTests {
   @Test("closing the card puts the keypad away and keeps the page")
   func resetKeepsThePage() {
     let model = InputCardModel()
-    model.keypadPage = .combos
+    model.keypadPage = .functions
     model.setKeypad(true)
     model.reset()
     #expect(model.keypadShown == false)
-    #expect(model.keypadPage == .combos)
+    #expect(model.keypadPage == .functions)
   }
 
   @Test("a mode flip with the keypad up leaves the terminal without the keys")
@@ -329,7 +332,7 @@ struct KeypadRegressionTests {
 
   @Test(
     "saved shortcut selections survive profile namespacing",
-    arguments: ["common", "claude", "tmux", "emacs", "screen"])
+    arguments: ["claude", "tmux", "screen"])
   func legacyProfileSelection(id: String) {
     let legacy = ComboCatalog.profile(id: id, tmuxPrefix: "a")
     let current = ComboCatalog.profile(id: "keypad.\(id)", tmuxPrefix: "a")
@@ -338,14 +341,21 @@ struct KeypadRegressionTests {
     if id == "tmux" {
       #expect(legacy.combos[0].strokes == [.control("a"), TerminalKeystroke(.character("c"))])
     }
-    if id == "claude" {
-      #expect(legacy.combos[0].strokes == [.shiftTab])
-    }
   }
 
-  @Test("an unknown saved profile falls back to Common")
+  /// PF-16: Common became Shell and Emacs was retired into it, so a phone that
+  /// had either chosen, in either spelling, lands on Shell.
+  @Test(
+    "a phone that had Common or Emacs chosen lands on Shell",
+    arguments: ["common", "keypad.common", "emacs", "keypad.emacs"])
+  func retiredProfileSelection(id: String) {
+    #expect(ComboCatalog.profile(id: id, tmuxPrefix: "b") == ComboCatalog.shell)
+  }
+
+  @Test("an unknown saved profile, and no choice at all, is Shell")
   func unknownProfileSelection() {
-    #expect(ComboCatalog.profile(id: "removed-profile", tmuxPrefix: "b") == ComboCatalog.common)
+    #expect(ComboCatalog.profile(id: "removed-profile", tmuxPrefix: "b") == ComboCatalog.shell)
+    #expect(ComboCatalog.fallback == ComboCatalog.shell)
   }
 
   @Test("tmux uses the selected prefix without applying it to the command")
@@ -358,7 +368,6 @@ struct KeypadRegressionTests {
     }
     model.sendCombo(ComboCatalog.tmux(prefix: "a").combos[0])
     #expect(acts == [.keystroke(.control("a")), .keystroke(TerminalKeystroke(.character("c")))])
-    #expect(ComboCatalog.common.combos[0].strokes == [.control("c")])
-    #expect(ComboCatalog.claude.combos[0].strokes == [.shiftTab])
+    #expect(ComboCatalog.tmux(prefix: "a").combos.allSatisfy { $0.strokes.first == .control("a") })
   }
 }
