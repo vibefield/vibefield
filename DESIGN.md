@@ -1492,6 +1492,10 @@ archive is ready. It is the import's only sign outside History, so it carries no
 percentage names its step, never an invented whole). *Amended 2026-10-27 (AO-4b, built):* reduced motion (M6) stops
 the travel, and the arc rests at the top of the circle, a fifth of it from twelve o'clock, until the archive is ready;
 the glyph stays at a third of its ink.
+*Amended 2026-11-23 (track IM, IM-D1 ruled by James; §8 "History", the import's sign):* the same arc turns in
+History's own sign too, the History circle beside search, over its glyph at a third of its ink, and only while the import
+works (HG-L1): a pause, a stopped import or a service that does not answer stands it at the top of the circle, as
+reduced motion does. Outside History the views track's cell is still the import's only sign.
 *Amended 2026-10-29 (track FG; FG-D9 A, FG-D10 B, FG-D11 A and FG-D17 A ruled by James; §8 "The Setup Assistant's
 glass"; a returning boot's tear built at FG-2, the glass's forming at FG-3a — its frost and its rise, the words' fade
 and the logo to come with FG-4's holds — the rest at FG-5):* the first run happens on the field,
@@ -3395,6 +3399,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in. **Under a cover** the pill and the readout are the desk's and hide with it (§8 "The covers
   over the desk"), and the left slot holds **the package circle** (below). No keycaps and no plus
   anywhere in it (FR-3, FR-5; F1, F2).
+  *Amended 2026-11-23 (track IM, IM-D1 ruled by James):* under History the band also holds **the History circle**, one
+  head gap (12) left of the frame's search button, on the same glass and axis (§8 "History", the import's sign).
   *Amended 2026-11-05 (track MA; MA-D13 (a), ruled by James on the page Apps in a Pocket):* the
   shelf's screen words below read Apps: the package's tooltip and name "Apps" ("Close the apps"),
   its dot's "Apps — …", the sheet's two shelves Fields and Apps, and the covered sheet's name "Apps"
@@ -7412,6 +7418,48 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     words. A paused import's mark stands at rest (HG-L1, §6). *Status 2026-11-08: ruled, to be built: upstream first,
     in rosetta's room (HG-3, released in rosetta-room 0.1.6), then VibeField's EL8 to it and HG-4; until then the import
     stands as rosetta 0.1.4 draws it.*
+    *Amended 2026-11-23 (track IM, IM-D3):* the import card retired with the head's sign (below), so the mark stands in
+    two places, the view's hold and a conversation's hold in the transcript's column. HG-W3's hairline is the sign's
+    panel's now.
+  - **The import's sign stands beside search** (track IM; IM-D1…IM-D6 ruled by James 2026-11-23, "i do like your lean
+    design, now start implemetation", on the page The Import Beside Search, `MYUtK1TEYMLktu16hroDUU`, every mark at its
+    lean): under History the head holds **the History circle**, one head gap (12) left of the frame's search button, a
+    40 glass circle at `top-2` on the button's own glass (§5, the line's), so the two read as one pair; it follows the
+    button's width (`--vf-peek-find-width`). In it stands the `history` glyph at 18. While the import works the glyph
+    rests at a third of its ink under **the arc** (§6), and **a rim of four quarters**, one per step, says where it is:
+    radius 17.5 in the 40, 14° between quarters, each a 2px track of the strong hairline, a done quarter filled in the
+    ramp's t2 and the current one filled to its own fraction while the step knows one. The rim never sums the steps into
+    one figure (a percentage names its step, never an invented whole). A 6 dot at its top right says what needs you,
+    `--vf-red` when the import stopped and `--vf-orange` when search failed; never a count. After the import (IM-D2)
+    **it stays, at rest**: the glyph alone in the button's ink, no rim, no arc. Its words are the room's: rosetta reads
+    the import and hands it out (R11, `importSign`, rosetta-room 0.1.9), and VibeField draws it, so the sign, the hold
+    and what the card said are one reading. Its accessible name is the room's label ("Importing history · step 2 of 4:
+    Importing your newest conversations first"), which is its tooltip too.
+    - **Its panel** opens under the circle, right-aligned to the search button's end, 10 under the band: the solid
+      menu (§5, corners 18), 392 wide, never past the reserve, scrolling inside. The pointer resting 120ms on the circle
+      opens it, as do a press and Return or Space; leaving the circle and the panel closes it after 220ms, and Escape or
+      a press outside closes it at once (a press opens it held, until a second press). It rises `.985 → 1` with its
+      opacity over 180ms on the island curve and leaves over 120ms on the retract curve; reduced motion fades it. In
+      order: the eyebrow in the menu's mono ("Importing history · step 2 of 4", "History · up to date") and the step's
+      title at 15/600 with its count under it; **What you can do now**, the four steps, each what it opens ("Projects
+      and sessions", "Open any conversation", "Charts and figures", "Search everything") and its figure at the row's end,
+      a done step ticked, the current one ringed and its lines under it with HG-W3's hairline; **Agents**, each one still
+      importing on its own row (its mark, its name, its figure, its caption, its hairline) and the ones done on one line,
+      "Ready to browse", with their marks; **On this Mac**, what was read from the agents and what is kept on disk, one
+      bar of the four parts on one scale (the record, kept for good; the archive, hatched while it is still in memory;
+      search; media) over their legend with each part's note, then the index's memory in use; and the foot, the step's
+      rate and the time it has taken.
+    - **The column card retires** (IM-D3): with the sign up the projects column draws no import card. The cold start's
+      hold before the first project stays (HG-W1).
+    - **The space is rosetta's own measure** (IM-D4): rosetta says its files and its memory on `/api/status` (`storage`,
+      `memory`, rosetta 0.1.9), and fieldd passes them through `index.status` to this desktop's own windows only, as the
+      per-project fold, and never on the pushed feed, where a figure that moves with every read would send a frame every
+      tick. An index that does not say shows no space at all.
+    - **Pause waits** (IM-D5): the panel names no act. Pause and Resume come in their own slice, which needs the run's
+      state through fieldd and a door for it.
+    - **An agent of unknown size** (IM-D6): while reading, the step's fraction counts the sizes that are known, and its
+      line names the agents whose size is not ("Antigravity's size not known yet"); a build that knows no size draws no
+      fraction.
   - **Before its past, the room behind glass** (track HG; HG-D1…HG-D6 ruled by James 2026-11-08 05:56:00Z, "good", on
     the page The Room Behind Glass, `U12DeYQrZB4YRjycrR4wuR`, every mark at its lean): while the index waits for
     consent the view is the room seen through glass, never a list on an empty view. **The sample** (HG-D2, frost):
