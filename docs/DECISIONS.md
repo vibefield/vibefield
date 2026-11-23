@@ -360,6 +360,12 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   (M521)**: PF-8's mend, the keyboard stays up across the mode switch; unseen on a phone. **PF-11 LANDED 2026-11-22
   (M522)**: with the keyboard up the switch's row is a shelf the grid ends above ("Go with 2", of three ways put to
   him); it gives back 44pt of the height PF-8 saved; unseen on a phone.
+- **WI-5** — track WI, from James's look at the build (2026-11-22, a phone signed in to an account with no desktop:
+  "we should provide a log in to another account option for users here so they don't get trapped here"): **No desktops
+  yet.** and **Waiting for approval.** end their glass with *Use another account*, the way in's own link, which asks
+  the corner's Sign out question first (WI-G3 A). Waiting for approval was not asked for by name; it had the same trap.
+  Defined in `DESIGN.md` §8 "The phone's way in" (its amendment of 2026-11-22) and §9 "The way in". **LANDED
+  2026-11-22 (M523)**; unseen on a phone, and the holds still hold no act.
 
 ## Petitions
 

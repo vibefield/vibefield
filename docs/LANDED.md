@@ -67181,3 +67181,35 @@ and `FieldHomeTests` 876 in 103 suites passed.
 **Not seen:** a phone; the system keyboard; a program's footer standing clear above the shelf.
 
 **Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets. **Not done:** no push of its own.
+
+## Track WI — No desktops yet and Waiting for approval end with Use another account (M523)
+
+**2026-11-22 · on local main: `dfc7eb69e` WI-5 (doc) and `350bbbc09` WI-5 (green).**
+James, 2026-11-22, with **No desktops yet.** on his phone, signed in to an account that has no desktop: "I will stuck
+here forever, we should provide a log in to another account option for users here so they don't get trapped here if
+they logged in wrong account".
+
+- **No desktops yet.** ends its glass with *Use another account*, under its row and **Send the link to my computer**.
+  The glass is three, 182 tall, where it was 146.
+- **Waiting for approval.** takes the same link, under its row and **Open the admin console** where there is one. It
+  was not asked for by name: it is the same trap, a network that never approves the phone.
+- The link is the one **Sign in to Tailscale again.** and **Can’t reach your computer.** carry, and nothing behind it
+  is new: it asks the corner's question first (**Sign out of ‹login›?**, WI-G3 A), and the question's **Sign out** is
+  the full sign-out, to the welcome.
+
+**Why the two pages had no way out:** until 2026-11-02 they stood on the Field tab, where the corner's Sign out was in
+reach. Since WI-1 the way in stands with no tabs and no corner.
+
+**Seen**, on the iPhone 17 simulator by day and by night: the link as the glass's third slot on both pages; and, with a
+temporary probe that made the link's act (not in the commits), the question standing over No desktops yet.
+
+**Proved, 2026-11-22, on the development Mac:** `FieldHomeTests` 876 in 103 suites passed. Changed rows: the two
+screens' acts, the glass's heights, and every page that carries the link asking first.
+
+**Left as they are:** the holds (**Joining your network…**, **Looking for your computer…**) and **You’re offline.**
+hold no act, so a first way in that never finds its desktop still has no way to another account from a hold.
+
+**Not seen:** a phone. **Not done on any device:** the question's Sign out on a real account, and Tailscale's own page
+offering another account after it (the sign-in sheet shares Safari's cookies, so what it offers is Tailscale's).
+
+**Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets. **Not done:** no push of its own.
