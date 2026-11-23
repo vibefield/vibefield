@@ -346,7 +346,7 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   ledger's entry says what is owed). Its phone fixture reddened wall R23b on main until **the mend of 2026-11-22
   (M524)**. Since **the EL8 to puppeteer 0.4.9 (2026-11-22, M526)** a Codex run's row offers the switch too, its
   adapter's own (`session`: Codex's saved configuration is not written); no source here changed for it.
-- **PF-4…PF-12** — track PF, from James's looks at the build (2026-11-21 and 22): a pane is one piece with its bands, on the
+- **PF-4…PF-13** — track PF, from James's looks at the build (2026-11-21 to 23): a pane is one piece with its bands, on the
   desktop and the phone (PF-4); the phone's card as glass over the field (PF-5); the phone's terminal wears the look of
   the mode the phone is in, with a theme picked for each mode (PF-6); a terminal's card stands at 98% of full height
   on the sheet's own glass (PF-7, "98 is good"); the phone's input card is one row in each of its two modes, with a
@@ -363,7 +363,10 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   (M522)**: with the keyboard up the switch's row is a shelf the grid ends above ("Go with 2", of three ways put to
   him); it gives back 44pt of the height PF-8 saved; unseen on a phone. **PF-12 LANDED 2026-11-22 (M525)**: a
   readout capsule takes a touch and says in one line why it is no switch ("still not clickable", then "go ahead");
-  defined in §8 "The capsule is the switch"; unseen on a phone.
+  defined in §8 "The capsule is the switch"; unseen on a phone. **PF-13 LANDED 2026-11-23 (M527)**: the blur
+  behind a card is a setting (24pt where nobody chose, where a fixed 40 stood; 24 is not his figure), a program's
+  backgrounds take the glass as on the desk (a switch, on; not asked for by name), and the opacity moves by 1%;
+  defined in §8 "The card's glass is the field" and "The phone's Settings"; unseen on a phone.
 - **WI-5** — track WI, from James's look at the build (2026-11-22, a phone signed in to an account with no desktop:
   "we should provide a log in to another account option for users here so they don't get trapped here"): **No desktops
   yet.** and **Waiting for approval.** end their glass with *Use another account*, the way in's own link, which asks

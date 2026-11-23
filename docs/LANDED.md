@@ -67298,3 +67298,38 @@ QA stage's, at `d15029c12` when this landed; it offers a Codex run no switch unt
 
 **Not run:** `pnpm verify` whole, the Rust tests, the kit's other suites, every smoke, `pnpm gate:landing`, and the
 adapter's live rows on Linux or Windows. **Not done:** no push of its own.
+
+## Track PF — the blur behind a card and a program's backgrounds are the person's to set (M527)
+
+**2026-11-23 · on local main: `4e18f7d92` PF-13 (doc) and `077c276c0` PF-13 (green).**
+James, 2026-11-23: "update the terminal settings in ios app so the background blurness and transparency can all be
+tweaked and work properly, and currently the default blurness is too blurry, reduce a bit".
+
+- **Background blur** is a row of Settings › Terminal: Off (the home sharp) to 40 pt in steps of 2. The home behind a
+  card takes it at once, and a pull on the band eases it as before.
+- **The default blur is 24pt.** It was a fixed 40. 24 is not a figure he named.
+- **Dim program backgrounds too**, the desktop's switch, on where nobody chose: a background a program paints takes
+  the ground's opacity. Until now the phone drew one solid whatever the opacity. This was not asked for by name; it is
+  what "work properly" was read to mean, and it changes how a program's painted rows look at any opacity under 100%.
+- **Background opacity** moves by 1%, where it moved by 5% and could not be put back on its default 82%.
+- **The Preview** blurs its depicted field by the blur set and tints the backgrounds its sample paints while the
+  switch is on.
+- A record saved before takes the two defaults and keeps the rest.
+
+**Measured and seen**, on the iPhone 17 simulator (iOS 26.5), by day and by night:
+- The opacity was already one layer: with the blur Off, the home's ink through the ground reads 199 and 128 of 255 at
+  82% and 50% by day (one layer predicts 200 and 128; a doubled ground would read 234 and 185).
+- A recorded trace that paints row backgrounds, at 50%: slabs with the switch off, tints that move with the field
+  behind them with it on.
+- The card at four opacities and four blurs, and Settings › Terminal at the defaults and three other looks.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source:** `FieldTerminalTests` 201 in 36 suites and
+`FieldHomeTests` 876 in 103 suites passed; `node scripts/check-agent-catalog.mjs --literals` and
+`node scripts/check-retired-names.mjs` pass.
+
+**Installed, not watched:** the Release build of `077c276c0` is on James's phone. The phone was locked, so its launch
+was not watched.
+
+**Not seen:** a phone; a live terminal taking a change (the simulator shows a recorded picture); what the blur costs on
+a phone at any radius. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other suites.
+**Not done:** no push of its own.
