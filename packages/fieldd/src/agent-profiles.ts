@@ -27,7 +27,13 @@ import {
   type ProfileSetPlans,
   profileSetPlans,
 } from "@vibefield/puppeteer-core";
-import type { AgentRuntime, ProfileSetInfo } from "@vibefield/puppeteer-runtime";
+import {
+  type AgentRuntime,
+  createProfileIdentityMonitor,
+  type ProfileIdentityMonitor,
+  type ProfileIdentityMonitorOptions,
+  type ProfileSetInfo,
+} from "@vibefield/puppeteer-runtime";
 import { requireOffered } from "./agent-catalog-gates";
 import type { RevealPath } from "./agent-distribution";
 import type { EnrollRuntimeSpec, IndexService } from "./agent-index";
@@ -65,11 +71,18 @@ import type { RosettadSupervisor } from "./rosettad-supervisor";
 // DELETE a profile stops its sessions first (the record's words), then
 // finishes every sign-in in it and deletes the folder.
 //
-// This Mac's identities are read, never stored (HOME decides them): by the
-// product daemon after its boot inventory, on an explicit refresh, and for
-// one persona after its login pane or its sign-out. Never automatically in a
-// test or embedded daemon — a native identity read runs the vendor's own
-// status command, and those must never be the developer's real agents.
+// Every sign-in's identity (who, and the plan and tier that account is on) is
+// KEPT READ, This Mac's and a profile's alike (2026-11-23; until then a
+// profile's sign-in was read once, when its login pane closed, and its plan
+// never again). puppeteer's identity monitor decides when a reading has aged
+// (`createProfileIdentityMonitor`, an hour) and reads it again; an explicit
+// refresh reads now. This service says which sign-ins (an installed agent
+// whose adapter can say who) and holds the `reading` flag of the reads a
+// person asked for. This Mac's identities are never stored (HOME decides
+// them), so each boot reads them. The monitor runs for the product daemon
+// only, never automatically in a test or embedded daemon: an identity read
+// runs the vendor's own status command, and those must never be the
+// developer's real agents.
 //
 // What the doors carry that AR-2's did not: a DISPLAY folder on the profiles
 // feed (home-abbreviated, for the page to print beside Show in Finder). No
@@ -77,7 +90,7 @@ import type { RosettadSupervisor } from "./rosettad-supervisor";
 // fieldd resolves the path it holds.
 
 const PUBLISH_TICK_MS = 16;
-/** vendor status commands at once while This Mac's identities are read */
+/** vendor status commands at once while identities are read */
 const IDENTITY_READ_CONCURRENCY = 3;
 /** the only folder names fieldd ever allocates, and so the only ones it deletes */
 const SET_FOLDER = /^[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?$/;
@@ -140,6 +153,8 @@ export interface AgentProfileServiceOptions {
    * sign-in has kept; absent = nothing is noted (a test or embedded daemon), and
    * `create {draft}` makes an ordinary profile */
   drafts?: ProfileDraftsStore;
+  /** test seam: the identity monitor (default: puppeteer's) */
+  createIdentityMonitor?: (options: ProfileIdentityMonitorOptions) => ProfileIdentityMonitor;
   now: () => Date;
   logger: Logger;
 }
@@ -163,7 +178,9 @@ export class AgentProfileService {
   private reconciling: Promise<void> | null = null;
   private sweeping: Promise<void> | null = null;
   private sweepAgain = false;
-  private reading: Promise<void> | null = null;
+  /** the identity reads a caller asked for and is waiting on: the feed's `reading` */
+  private reading = 0;
+  private readonly identities: ProfileIdentityMonitor;
   private readonly subscribers = new Set<(frame: AgentsProfileSetsListResult) => void>();
   private publishTimer: NodeJS.Timeout | null = null;
   private readonly unsubscribe: () => void;
@@ -175,6 +192,22 @@ export class AgentProfileService {
     // Every registry change — a set made or renamed, a sign-in added or
     // retired, an identity recorded — is a new frame.
     this.unsubscribe = opts.runtime.onProfilesChanged(() => this.publish());
+    this.identities = (opts.createIdentityMonitor ?? createProfileIdentityMonitor)({
+      listProfiles: () => this.readableSignIns(),
+      // puppeteer records what it reads, and the registry's change is the frame
+      verify: (profileId) => opts.runtime.verifyProfile(profileId),
+      concurrency: IDENTITY_READ_CONCURRENCY,
+      now: opts.now,
+      // callers fire and forget (the boot, a refresh, the monitor's own timer): a
+      // runtime that stopped mid-read or a registry that cannot be read is a
+      // warning, never an unhandled rejection that ends the daemon
+      onError: (error) => {
+        if (this.disposed) return;
+        this.logger.warn("fieldd.agents.identities_unread", "Sign-ins were not read", {
+          error: error.message,
+        });
+      },
+    });
   }
 
   // ── the feed ──
@@ -206,7 +239,7 @@ export class AgentProfileService {
         .profileProviders()
         .filter((provider) => provider.support.signOut === true)
         .map((provider) => provider.id),
-      reading: this.reading !== null,
+      reading: this.reading > 0,
       routes,
     };
   }
@@ -709,58 +742,74 @@ export class AgentProfileService {
     return this.sweeping;
   }
 
-  // ── This Mac's identities ──
+  // ── the identities ──
 
-  /** Read who is signed in to each installed agent's own folder, for the
-   * agents whose adapter can say. Frames land as each read does. */
-  readNativeIdentities(): Promise<void> {
+  /** The sign-ins whose identity is kept read: every one, This Mac's and a
+   * profile's, of an INSTALLED agent whose adapter can say who signed in. An
+   * agent that is not installed has no status command to ask. */
+  private async readableSignIns(): Promise<AgentProfile[]> {
+    let installed = new Set<string>();
+    try {
+      installed = new Set(
+        (await this.opts.runtime.inspectInstallations({})).map((install) => install.provider),
+      );
+    } catch (error) {
+      this.logger.warn("fieldd.agents.inventory_failed", "Agent install inventory failed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    const readable = new Set(this.identityProviders());
+    return (await this.opts.runtime.profiles()).filter(
+      (profile) => installed.has(profile.provider) && readable.has(profile.provider),
+    );
+  }
+
+  /** Read who is signed in, and on what plan, again: every sign-in, or the
+   * ones named. `force` (the default: a person asked) reads whatever a
+   * reading's age, one sign-in at most once in 30 seconds (puppeteer's guard);
+   * without it only a reading that has aged, or was never taken, is read.
+   * Frames land as each read does, and the feed says `reading` until this
+   * settles. Never rejects. */
+  readIdentities(options: { force?: boolean; profileIds?: readonly string[] } = {}): Promise<void> {
     if (this.disposed) return Promise.resolve();
-    if (this.reading !== null) return this.reading;
-    this.reading = (async () => {
-      this.publish();
-      try {
-        let installed = new Set<string>();
-        try {
-          installed = new Set(
-            (await this.opts.runtime.inspectInstallations({})).map((install) => install.provider),
-          );
-        } catch (error) {
-          this.logger.warn("fieldd.agents.inventory_failed", "Agent install inventory failed", {
-            error: error instanceof Error ? error.message : String(error),
+    this.reading += 1;
+    this.publish();
+    const started = Date.now();
+    return this.identities
+      .refresh({
+        force: options.force ?? true,
+        ...(options.profileIds !== undefined ? { profileIds: options.profileIds } : {}),
+      })
+      .then(
+        (result) => {
+          if (this.disposed || result.read.length === 0) return;
+          this.logger.info("fieldd.agents.identities_read", "Sign-ins read", {
+            agents: result.read.length,
+            failed: result.failed.length,
+            ms: Date.now() - started,
           });
-        }
-        if (this.disposed) return;
-        const readable = new Set(this.identityProviders());
-        const natives = (await this.opts.runtime.profiles()).filter(
-          (profile) =>
-            profile.kind === "native-default" &&
-            installed.has(profile.provider) &&
-            readable.has(profile.provider),
-        );
-        const started = Date.now();
-        await eachAtMost(natives, IDENTITY_READ_CONCURRENCY, async (profile) => {
+        },
+        (error: unknown) => {
           if (this.disposed) return;
-          await this.verifyQuietly(profile.id);
-        });
-        this.logger.info("fieldd.agents.identities_read", "This Mac's sign-ins read", {
-          agents: natives.length,
-          ms: Date.now() - started,
-        });
-      } catch (error) {
-        // callers fire and forget (the boot warm, a refresh): a runtime that
-        // stopped mid-read or a registry that cannot be read is a warning, never
-        // an unhandled rejection that ends the daemon
-        if (!this.disposed) {
-          this.logger.warn("fieldd.agents.identities_unread", "This Mac's sign-ins were not read", {
+          this.logger.warn("fieldd.agents.identities_unread", "Sign-ins were not read", {
             error: error instanceof Error ? error.message : String(error),
           });
-        }
-      } finally {
-        this.reading = null;
+        },
+      )
+      .finally(() => {
+        this.reading -= 1;
         this.publish();
-      }
-    })();
-    return this.reading;
+      });
+  }
+
+  /** The product daemon's, after its boot inventory: read what was never
+   * read or has aged (This Mac's sign-ins always, since they are not stored),
+   * and keep every reading from ageing past puppeteer's interval. */
+  startIdentities(): void {
+    if (this.disposed) return;
+    void this.readIdentities({ force: false });
+    // its first wake joins the read above
+    this.identities.start();
   }
 
   // ── the reconcile (R4) ──
@@ -816,6 +865,7 @@ export class AgentProfileService {
   dispose(): void {
     this.disposed = true;
     this.unsubscribe();
+    this.identities.stop();
     this.subscribers.clear();
     if (this.publishTimer !== null) clearTimeout(this.publishTimer);
     this.publishTimer = null;
@@ -1217,23 +1267,6 @@ export class AgentProfileService {
     }
     return kind;
   }
-}
-
-/** Run `task` over `items`, at most `limit` at a time. */
-async function eachAtMost<T>(
-  items: readonly T[],
-  limit: number,
-  task: (item: T) => Promise<void>,
-): Promise<void> {
-  let next = 0;
-  const lanes = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    while (next < items.length) {
-      const item = items[next]!;
-      next += 1;
-      await task(item);
-    }
-  });
-  await Promise.all(lanes);
 }
 
 export function isFailure(value: object): value is ProfileFailure {

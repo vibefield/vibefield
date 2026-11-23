@@ -293,12 +293,113 @@ describe("AgentProfileService — what it deletes, and what it keeps", () => {
       },
     });
     const { profiles, warn } = service(root, gone);
-    await expect(profiles.readNativeIdentities()).resolves.toBeUndefined();
+    await expect(profiles.readIdentities()).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalledWith(
       "fieldd.agents.identities_unread",
       expect.any(String),
       expect.objectContaining({ error: "agent runtime is disposed" }),
     );
+  });
+});
+
+describe("AgentProfileService — every sign-in's identity is kept read (2026-11-23)", () => {
+  const thisMac = (id: string, provider: string): AgentProfile => ({
+    id,
+    provider,
+    label: "This Mac",
+    kind: "native-default",
+    dataRoot: `/Users/nobody/.${provider}`,
+    createdAt: NOW,
+  });
+
+  /** A runtime whose agents are installed, and that notes each identity read it is asked for. */
+  function reading(root: string, profiles: AgentProfile[], installed = ["claude", "kimi"]) {
+    const asked: string[] = [];
+    const state = { sets: [managedSet(root, "work")], profiles };
+    const runtime = stubRuntime(state, {
+      inspectInstallations: async () => installed.map((provider) => ({ provider })),
+      verifyProfile: async (id: string) => {
+        asked.push(id);
+        return {
+          loggedIn: true,
+          plan: "max",
+          verifiedAt: NOW,
+          source: { kind: "native-status", stability: "documented" },
+        };
+      },
+    });
+    return { asked, runtime };
+  }
+
+  it("reads a profile's sign-in as well as This Mac's, and never an agent that cannot say who", async () => {
+    const root = userRoot();
+    const { asked, runtime } = reading(root, [
+      thisMac("p-native", "claude"),
+      account(root, "work", "p-work"),
+      account(root, "work", "p-kimi", "kimi"),
+    ]);
+    const { profiles } = service(root, runtime);
+    await profiles.readIdentities();
+    expect([...asked].sort()).toEqual(["p-native", "p-work"]);
+  });
+
+  it("reads only the sign-ins named, and none of an agent that is not installed", async () => {
+    const root = userRoot();
+    const signIns = [thisMac("p-native", "claude"), account(root, "work", "p-work")];
+    const named = reading(root, signIns);
+    await service(root, named.runtime).profiles.readIdentities({ profileIds: ["p-work"] });
+    expect(named.asked).toEqual(["p-work"]);
+
+    const absent = reading(root, signIns, []);
+    await service(root, absent.runtime).profiles.readIdentities();
+    expect(absent.asked).toEqual([]);
+  });
+
+  it("says `reading` on the feed while an asked-for read runs, and not after", async () => {
+    const root = userRoot();
+    let release: (() => void) | undefined;
+    const state = { sets: [managedSet(root, "work")], profiles: [account(root, "work", "p-work")] };
+    const runtime = stubRuntime(state, {
+      inspectInstallations: async () => [{ provider: "claude" }],
+      verifyProfile: async () => {
+        await new Promise<void>((resolve) => {
+          release = resolve;
+        });
+        return { loggedIn: false, verifiedAt: NOW };
+      },
+    });
+    const { profiles } = service(root, runtime);
+    const done = profiles.readIdentities();
+    await expect(profiles.sets()).resolves.toMatchObject({ reading: true });
+    await vi.waitFor(() => expect(release).toBeDefined());
+    release?.();
+    await done;
+    await expect(profiles.sets()).resolves.toMatchObject({ reading: false });
+  });
+
+  it("started, reads what was never read, leaves a reading taken within the hour, and stops with the service", async () => {
+    vi.useFakeTimers({ now: new Date(NOW) });
+    try {
+      const root = userRoot();
+      const fresh: AgentProfile = {
+        ...account(root, "work", "p-fresh"),
+        identity: {
+          loggedIn: true,
+          verifiedAt: NOW,
+          source: { kind: "native-status", stability: "documented" },
+        },
+      };
+      const { asked, runtime } = reading(root, [thisMac("p-native", "claude"), fresh]);
+      const { profiles } = service(root, runtime);
+      profiles.startIdentities();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(asked).toEqual(["p-native"]);
+      expect(vi.getTimerCount()).toBeGreaterThan(0);
+      profiles.dispose();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

@@ -4716,9 +4716,9 @@ export async function bootstrap(
       const parsed = AgentsProfileSetsListParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { refresh? }", false);
-      // a refresh is an ask: This Mac's sign-ins are read again, and the
-      // frames that follow carry them (the answer says `reading`)
-      if (parsed.data.refresh === true) void agents.profiles.readNativeIdentities();
+      // a refresh is an ask: every sign-in is read again, and the frames that
+      // follow carry them (the answer says `reading`)
+      if (parsed.data.refresh === true) void agents.profiles.readIdentities();
       return await agents.profiles.sets();
     });
     api.registerSubscription("agents.profileSets.subscribe", async (_ctx, _params, emit) => {
@@ -5678,12 +5678,17 @@ export async function bootstrap(
       const parsed = AgentsUsageParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { refresh?, profileIds? }", false);
-      return parsed.data.refresh === true && ownWindow(ctx)
-        ? agentUsage.refresh({
-            force: true,
-            ...(parsed.data.profileIds !== undefined ? { profileIds: parsed.data.profileIds } : {}),
-          })
-        : agentUsage.snapshot();
+      if (parsed.data.refresh !== true || !ownWindow(ctx)) return agentUsage.snapshot();
+      // A refresh of an account's meters reads the account again too: its plan
+      // is the card the meters sit on, and it changes without a sign-in. The
+      // read is not waited for; its frames come by the profiles feed.
+      void agents.profiles.readIdentities(
+        parsed.data.profileIds !== undefined ? { profileIds: parsed.data.profileIds } : {},
+      );
+      return agentUsage.refresh({
+        force: true,
+        ...(parsed.data.profileIds !== undefined ? { profileIds: parsed.data.profileIds } : {}),
+      });
     });
     // Whole batches at the stream floor for every subscriber (`wholeValueDoor`).
     // The service's own subscription comes FIRST, so a window's poll is running
@@ -10187,9 +10192,10 @@ export async function bootstrap(
     // product's daemon only (see `agentInventoryWarm`).
     if (config.agentInventoryWarm === true) {
       agents.distribution.warm();
-      // AR-S2 — and This Mac's sign-ins (each installed agent's own status
-      // command), so Settings → Agent Profiles opens on who is signed in
-      void agents.profiles.readNativeIdentities();
+      // AR-S2 — and the sign-ins (each installed agent's own status command), so
+      // Settings → Agent Profiles opens on who is signed in; from here on each
+      // reading is taken again as it ages, so a plan that changed is read
+      agents.profiles.startIdentities();
     }
     // AR-0 — boot has committed: the index daemon starts now, in the
     // background. Readiness is a health transition, never a boot gate: a
