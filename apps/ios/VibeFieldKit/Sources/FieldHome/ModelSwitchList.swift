@@ -107,6 +107,13 @@ enum ModelSwitch {
 
   static func keeps(_ agent: String) -> String { "\(agent) keeps this for its new sessions too." }
 
+  /// PF-12 (2026-11-22) — what a readout capsule says when it is pressed: the row offers no switch. The phone cannot
+  /// tell why (the agent's adapter names none, its turns are not read, or its desktop is older than the switch), so
+  /// the line says only that. `agent` is the catalog's name for it, empty where it names none.
+  static func noSwitch(_ agent: String) -> String {
+    agent.isEmpty ? "This agent's model can't be changed from here." : "\(agent)'s model can't be changed from here."
+  }
+
   /// The listed model that serves the run: the one whose id or label is the readout's model word. nil where the
   /// serving model is not in the list, and then no row is checked.
   static func serving(_ models: [AgentModelChoice], model word: String) -> AgentModelChoice? {
@@ -137,6 +144,23 @@ enum ModelSwitch {
     func settled(by readout: FieldHomeModel.LiveCardReadout) -> Bool {
       readout.model != model || readout.effort != effort
     }
+  }
+}
+
+/// PF-12 (2026-11-22; DESIGN.md §8, "The capsule is the switch") — a readout capsule's one line, in the list's own
+/// line type and on its glass: why a press changes nothing.
+struct ModelSwitchWhy: View {
+  let words: String
+
+  var body: some View {
+    Text(words)
+      .font(.system(size: 15))
+      .foregroundStyle(FieldPalette.textMain.opacity(0.66))
+      .fixedSize(horizontal: false, vertical: true)
+      .padding(.horizontal, 12)
+      .frame(minHeight: 44, alignment: .leading)
+      .padding(4)
+      .frame(maxWidth: 280, alignment: .leading)
   }
 }
 

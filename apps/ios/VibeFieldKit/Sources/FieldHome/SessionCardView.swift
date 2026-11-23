@@ -101,10 +101,13 @@ struct SessionCardView<Terminal: View>: View {
   /// card stands on the ground's colour whole, never on the bare sheet.
   var terminalPainted: Bool = true
   /// PF-3 — the card's road to its run's model switch (its row's offer and the two asks of the desktop that owns the
-  /// run). nil: the band's capsule is a readout and takes no touch, as it is for a run whose row offers no switch.
+  /// run). nil: the band's capsule is a readout, as it is for a run whose row offers no switch, and a press on it
+  /// says so in one line (PF-12).
   var modelSwitch: ModelSwitchDoor? = nil
   /// PF-3 — the switch list is open under the capsule.
   @State private var switchOpen = false
+  /// PF-12 — the readout capsule's one line is up (a run whose row offers no switch).
+  @State private var readoutWhyOpen = false
   /// PF-3 — a change that was sent and that the row has not confirmed: the capsule draws its word in italic until the
   /// row says something new, or `ModelSwitch.askedFor` passes.
   @State private var asked: ModelSwitch.Asked?
@@ -374,9 +377,22 @@ struct SessionCardView<Terminal: View>: View {
             if !Task.isCancelled { asked = nil }
           }
         } else {
-          bandCapsule(readout)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(said)
+          // PF-12 (2026-11-22) — a readout still takes a touch, and says in one line why it is no switch: a capsule
+          // that took none was read as a button that did nothing
+          let why = ModelSwitch.noSwitch(bubble.agent?.providerName ?? "")
+          Button {
+            readoutWhyOpen = true
+          } label: {
+            bandCapsule(readout)
+          }
+          .buttonStyle(.plain)
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel(said)
+          .accessibilityHint(why)
+          .popover(isPresented: $readoutWhyOpen) {
+            ModelSwitchWhy(words: why)
+              .presentationCompactAdaptation(.popover)
+          }
         }
         if let percent = readout.contextPercent, let figure = readout.context {
           contextRing(percent: percent, figure: figure)

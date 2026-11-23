@@ -209,6 +209,9 @@ struct LiveCardBandTests {
     #expect(ModelSwitch.refusal("not offered.") == "It couldn't take that: not offered.")
     #expect(ModelSwitch.unreachable("studio") == "Couldn't reach studio.")
     #expect(ModelSwitch.keeps("Atlas") == "Atlas keeps this for its new sessions too.")
+    // PF-12 (2026-11-22) — a readout capsule's one line: the row offers no switch, and the phone knows no more
+    #expect(ModelSwitch.noSwitch("Atlas") == "Atlas's model can't be changed from here.")
+    #expect(ModelSwitch.noSwitch("") == "This agent's model can't be changed from here.")
   }
 
   @Test("the serving model is the listed one the readout names; Effort is its own, else the one every model shares (PF-3)")
