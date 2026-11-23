@@ -9423,7 +9423,24 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   terminal above it draws is not measured. With no panel standing the home carries no blur layer at
   all, read from the window's layer tree on the simulator.)* It is the plain blur, which takes the
   field where it runs under the status bar; at the screen's edges it thins toward the app's ground,
-  8 to 10 of 255 lighter by day in the status bar's strip on the simulator. The terminal's ground
+  8 to 10 of 255 lighter by day in the status bar's strip on the simulator. **Since PF-13**
+  (2026-11-23; James: "update the terminal settings in ios app so the background blurness and
+  transparency can all be tweaked and work properly, and currently the default blurness is too
+  blurry, reduce a bit") **the blur is the person's to set**: Settings › Terminal's **Background
+  blur**, from Off (the home sharp) to the desk's 40pt in steps of 2, and **24pt** where nobody
+  chose. *(It was a fixed 40 from PF-9 until then. 24 is not a figure he named: "a bit" was read as
+  it.)* A pull on the band eases whatever the blur is. **Program backgrounds take the glass on the
+  phone too**, by the desk's rule (§8 "The glass is the desk"): a background a program paints takes
+  the ground's opacity, so a prompt row a program paints is a tint and a program that fills its
+  screen keeps the glass. Settings › Terminal's **Dim program backgrounds too** turns it off, and it
+  is on where nobody chose. *(Until PF-13 the phone drew such a background solid, the renderer's
+  flag off since the phone's first terminal: at 50% a program's painted rows stood as slabs on a
+  ground the field showed through, seen 2026-11-23 on the simulator over a recorded trace. It was
+  not asked for by name; it is what "work properly" was read to mean.)* The opacity's slider moves
+  by 1%, the desktop's step *(it was 5%, which the default 82% is not on: once moved, it could not
+  be put back)*. Measured that day on the iPhone 17 simulator with the blur Off: the home's ink
+  read through the ground is one layer's mix (by day 199 and 128 of 255 at 82% and 50%, where one
+  layer predicts 200 and 128 and a doubled ground 234 and 185). The terminal's ground
   lies over that blur at its opacity with nothing else between, so at
   the default 82% the home is 18% of the ground, as a pane's desk is. The panel rises and leaves on
   the island curve over 420ms (a 200ms fade under reduced motion). **A pull down on its band** moves
@@ -9642,6 +9659,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   dark list needs no such row, since the night's own look is the catalog's Matte Black. The Preview, its caption and
   the root's Terminal row show the theme of the mode the phone is in. A theme picked before PF-6 was drawn in both
   modes; it is kept as the night's, and the day starts on Daylight.
+  *Amended 2026-11-23 (PF-13; James: "update the terminal settings in ios app so the background blurness and
+  transparency can all be tweaked and work properly"):* Look's rows are the two themes, then the glass's three (§8
+  "The card's glass is the field"), then Font size and Effects. **Background opacity**, 20% to 100% by 1%, with its
+  line as before. **Dim program backgrounds too**, a switch, the desktop's row and its line with the field for the
+  desk: "Let the backgrounds a program paints show the field too, so a program that fills its screen keeps the
+  glass." **Background blur**, Off to 40 pt by 2, the phone's own row (the desktop blurs its desk by a fixed
+  measure). Its line: "The field behind the terminal is blurred."; at Off, "Sharp: the field behind the terminal is
+  not blurred."; under a solid ground, "The terminal is solid, so this shows only around it." The Preview's field is
+  blurred by the blur set, at its own size, and a background its sample paints (PASS, FAIL) takes the opacity while
+  the switch is on; the picture says the blur with the rest.
   **About** gives the version, your desktops, Acknowledgements,
   and Tailscale's trademark line, which left the terminal sheet's foot (§13). The corner's
   **Settings…** opens the root and *you* open Account; the card's `···` menu's **Terminal look…**
