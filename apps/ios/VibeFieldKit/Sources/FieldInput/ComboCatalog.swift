@@ -261,9 +261,11 @@ public enum ComboCatalog {
 
   /// The strip's order: the agents, then the tools.
   ///
-  /// These are manually chosen terminal-key profiles, never agent identities.
-  /// Keep their persisted IDs in a separate namespace and let the picker read
-  /// this data; it must not infer a profile from the session's provider.
+  /// These are terminal-key profiles, never agent identities. Keep their
+  /// persisted IDs in a separate namespace and let the picker read this data.
+  /// Nothing here knows an agent's id: the profile a card's agent takes is the
+  /// agent catalog's to name (`chosen`, PF-17), where until 2026-11-23 the
+  /// rule was that the picker must not infer one from the session's provider.
   public static func profiles(tmuxPrefix: Character) -> [ComboPack] {
     [claude, codex, gemini, opencode, copilot, pi, shell, tmux(prefix: tmuxPrefix), screen]
   }
@@ -278,6 +280,23 @@ public enum ComboCatalog {
     let all = profiles(tmuxPrefix: tmuxPrefix)
     if let found = all.first(where: { $0.id == id || $0.id == "keypad.\(id)" }) { return found }
     return fallback
+  }
+
+  /// The profile the Shortcuts page shows (PF-17; DESIGN.md §8 "The keys page
+  /// opens on its card's agent"): the one a hand chose while this card is
+  /// open, else the one the card's agent takes by the agent catalog, else the
+  /// one last chosen by hand.
+  ///
+  /// The catalog's word is an open string from a desktop that may be a build
+  /// ahead: a profile this build does not have is passed over, never resolved
+  /// to the fallback, so it cannot take the hand's choice away.
+  public static func chosen(
+    picked: String?, session: String?, stored: String, tmuxPrefix: Character
+  ) -> ComboPack {
+    let all = profiles(tmuxPrefix: tmuxPrefix)
+    if let picked, let pack = all.first(where: { $0.id == picked }) { return pack }
+    if let session, let pack = all.first(where: { $0.id == session }) { return pack }
+    return profile(id: stored, tmuxPrefix: tmuxPrefix)
   }
 
   // MARK: - Reading a face

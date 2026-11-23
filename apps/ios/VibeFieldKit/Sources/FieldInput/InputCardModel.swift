@@ -302,6 +302,16 @@ public final class InputCardModel {
   /// opened the keypad opens it on Shortcuts (PF-16; on Navigate until then,
   /// whose Tab, arrows and far ends the rail already carries).
   public var keypadPage: KeypadPage = .combos
+  // --- PF-17 (2026-11-23) ---------------------------------------------------
+  /// The profile of shortcuts the card's agent takes, as the agent catalog
+  /// names it, or nil (DESIGN.md §8 "The keys page opens on its card's
+  /// agent"). The host sets it when a card opens and as the catalog arrives;
+  /// this module never learns which agent it is.
+  public var sessionProfile: String?
+  /// The profile a hand chose on the strip while this card is open. It
+  /// outlasts the agent's until the card closes (`reset`).
+  public var pickedProfile: String?
+  // --- end PF-17 --------------------------------------------------------------
   /// Whether the `+` menu is open. The glyph rotates 45° from it, which is the
   /// whole reason this is state rather than a system `Menu` — see `PlusMenu`.
   public private(set) var plusMenuOpen = false
@@ -876,6 +886,10 @@ public final class InputCardModel {
     pendingSurface = nil
     surface = nil
     // --- end IOS-5d
+    // PF-17: both belong to the card being closed. The next card follows its
+    // own agent.
+    sessionProfile = nil
+    pickedProfile = nil
   }
 
   // --- IOS-5d ---------------------------------------------------------------

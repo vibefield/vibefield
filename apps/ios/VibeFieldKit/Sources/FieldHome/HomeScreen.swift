@@ -3170,6 +3170,7 @@ public struct HomeScreen: View {
       // `tapChip` refuses anything that is no longer on the row.
       inputCard.chips = replyChips(for: match)
       // --- end IOS-5c
+      inputCard.sessionProfile = keyProfile(for: match)
     }
     // F1 — each desktop's keyring holds tickets for the sessions the field shows on it.
     .onChange(of: bubbles) { _, next in
@@ -3540,6 +3541,20 @@ public struct HomeScreen: View {
   /// that is every attachable session on the field today. The chips arrive for
   /// real when the agent feed does (IOS-4/AR); until then the only place they
   /// render is the fixture, and the record says so.
+  /// PF-17 — the profile of shortcuts the keys page opens on for this card: the one the agent catalog names for its
+  /// agent, or nil (a session that is no agent's, a row that names none, a desktop a build behind). Asked of the
+  /// catalog, so no agent's id is compared here (R23b).
+  private func keyProfile(for bubble: FieldBubble?) -> String? {
+    #if DEBUG
+      // `-vf-demo-input-profile=<profile id>`: a fixture's stand-in for a catalog the simulator never receives.
+      if let argument = LaunchArguments.current.first(where: { $0.hasPrefix(DemoArguments.profile) }) {
+        return String(argument.dropFirst(DemoArguments.profile.count).drop(while: { $0 == "=" }))
+      }
+    #endif
+    guard let agent = bubble?.agent else { return nil }
+    return (link?.catalog ?? .empty).entry(for: agent.provider)?.keyProfile
+  }
+
   private func replyChips(for bubble: FieldBubble?) -> [ReplyChip] {
     #if DEBUG
       // The fixture answers in place of a feed this phone does not have yet.
@@ -4440,6 +4455,7 @@ public struct HomeScreen: View {
     inputCard.chips = replyChips(for: bubble)
     pasteboard.sample()
     // --- end IOS-5c
+    inputCard.sessionProfile = keyProfile(for: bubble)
     // --- IOS-5d: the ring the card's own pastes feed. Installed here rather
     // than at attach because the card records what the USER pasted through it,
     // which is true whether or not a terminal ever answered.
@@ -4737,6 +4753,8 @@ public struct HomeScreen: View {
     /// three pages would be three ways to say the same thing.
     private enum DemoArguments {
       static let keypad = "-vf-demo-input-keypad"
+      /// PF-17 — the profile a card's agent would take, stood in for the catalog.
+      static let profile = "-vf-demo-input-profile"
       /// A scratch defaults suite for the snippet and history fixtures. It is
       /// wiped before use so a screenshot run can never write into — or read
       /// out of — what a real user saved.

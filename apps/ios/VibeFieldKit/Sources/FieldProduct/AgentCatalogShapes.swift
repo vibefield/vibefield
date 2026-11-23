@@ -70,6 +70,9 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
   public let starter: String?
   /// ES-5a — `seams.puppeteer.provider`, the name a run of this agent goes by: what a ruled starter's handle is built on.
   public let puppeteerProvider: String?
+  /// PF-17 — `keyProfile`, the profile of terminal shortcuts the keys page opens on for a card of this agent: the word
+  /// as sent, an OPEN grammar. The page ignores a profile this build does not have.
+  public let keyProfile: String?
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
@@ -89,6 +92,7 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
     var seams = object.object("seams")
     var puppeteer = seams.object("puppeteer")
     puppeteerProvider = puppeteer.string("provider").flatMap { $0.isEmpty ? nil : $0 }
+    keyProfile = object.string("keyProfile").flatMap { $0.isEmpty ? nil : $0 }
     unknownFields = object.unknownFields
   }
 

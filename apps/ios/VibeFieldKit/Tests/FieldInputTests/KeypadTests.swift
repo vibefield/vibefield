@@ -358,6 +358,42 @@ struct KeypadRegressionTests {
     #expect(ComboCatalog.fallback == ComboCatalog.shell)
   }
 
+  // MARK: - The profile a card opens on (PF-17)
+
+  @Test("a hand's choice on this card comes first, then the card's agent's profile, then the one last chosen by hand")
+  func chosenProfile() {
+    func chosen(_ picked: String?, _ session: String?, _ stored: String) -> String {
+      ComboCatalog.chosen(picked: picked, session: session, stored: stored, tmuxPrefix: "b").id
+    }
+    #expect(chosen(nil, nil, "keypad.tmux") == "keypad.tmux")
+    #expect(chosen(nil, "keypad.codex", "keypad.tmux") == "keypad.codex")
+    #expect(chosen("keypad.screen", "keypad.codex", "keypad.tmux") == "keypad.screen")
+    #expect(chosen(nil, nil, "") == "keypad.shell")
+  }
+
+  /// The catalog's word is a desktop's, and the desktop may be a build ahead.
+  /// A profile this build lacks must not take the hand's choice away by
+  /// resolving to the fallback.
+  @Test("a profile this build does not have is passed over, never resolved to Shell")
+  func unknownSessionProfile() {
+    let pack = ComboCatalog.chosen(
+      picked: nil, session: "keypad.not-yet", stored: "keypad.claude", tmuxPrefix: "b")
+    #expect(pack == ComboCatalog.claude)
+    let picked = ComboCatalog.chosen(
+      picked: "keypad.gone", session: "keypad.pi", stored: "keypad.claude", tmuxPrefix: "b")
+    #expect(picked == ComboCatalog.pi)
+  }
+
+  @Test("closing the card lets go of its agent's profile and of the hand's choice for it")
+  func resetClearsTheCardsProfile() {
+    let model = InputCardModel()
+    model.sessionProfile = "keypad.codex"
+    model.pickedProfile = "keypad.tmux"
+    model.reset()
+    #expect(model.sessionProfile == nil)
+    #expect(model.pickedProfile == nil)
+  }
+
   @Test("tmux uses the selected prefix without applying it to the command")
   func configuredPrefix() {
     let model = InputCardModel()

@@ -31,8 +31,12 @@ struct TerminalKeypad: View {
     return value.count == 1 && value.first!.isASCII && value.first!.isLetter ? value.first! : "b"
   }
   private var profiles: [ComboPack] { ComboCatalog.profiles(tmuxPrefix: prefix) }
+  /// The hand's choice for this card, else the card's agent's, else the one
+  /// last chosen by hand (PF-17).
   private var pack: ComboPack {
-    ComboCatalog.profile(id: profile, tmuxPrefix: prefix)
+    ComboCatalog.chosen(
+      picked: model.pickedProfile, session: model.sessionProfile, stored: profile,
+      tmuxPrefix: prefix)
   }
 
   var body: some View {
@@ -262,6 +266,9 @@ struct TerminalKeypad: View {
     let chosen = candidate.id == pack.id
     return Button {
       guard !chosen else { return }
+      // Held for this card over its agent's profile, and kept as the profile
+      // of the cards whose agent names none (PF-17).
+      model.pickedProfile = candidate.id
       profile = candidate.id
       InputHaptics.page()
     } label: {

@@ -102,6 +102,24 @@ describe("the agent catalog (AC-1)", () => {
     expect(rows.filter((row) => roleOf(row) !== undefined)).toHaveLength(3);
   });
 
+  // PF-17 (2026-11-23): the phone's keys page opens on the profile its card's agent names, and which profile an
+  // agent takes is the table's to say (AR-L1). The phone kit holds each value to a profile it has
+  // (`KeyProfileCatalogTests`); this row holds the table's own shape.
+  it("the key profiles: named by the rows whose agents have a page of keys on the phone, each once, each shown on the phone", () => {
+    const profileOf = (row: object): unknown => (row as Record<string, unknown>).keyProfile;
+    const named = rows.filter((row) => profileOf(row) !== undefined);
+    expect(Object.fromEntries(named.map((row) => [row.id, profileOf(row)]))).toEqual({
+      claude: "keypad.claude",
+      codex: "keypad.codex",
+      opencode: "keypad.opencode",
+      copilot: "keypad.copilot",
+      pi: "keypad.pi",
+    });
+    expect(new Set(named.map(profileOf)).size).toBe(named.length);
+    for (const row of named) expect(row.surfaces.phone, row.id).toBe(true);
+    expect(AgentCatalogEntry.safeParse({ ...rows[0], keyProfile: "Claude" }).success).toBe(false);
+  });
+
   it("the readers answer from the table and only the table", () => {
     expect(catalogEntry("claude")?.seams.rosetta?.kind).toBe("claude-code");
     expect(catalogIdForKind("claude-code")).toBe("claude");

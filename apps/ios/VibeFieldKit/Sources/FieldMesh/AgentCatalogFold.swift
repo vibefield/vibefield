@@ -15,7 +15,7 @@ extension AgentCatalog {
       entries: result.catalog.map { row in
         AgentCatalogEntry(
           id: AgentProvider(rawValue: row.id), label: row.label, status: row.status,
-          mark: row.mark, onPhone: row.phone)
+          mark: row.mark, onPhone: row.phone, keyProfile: row.keyProfile)
       })
   }
 }

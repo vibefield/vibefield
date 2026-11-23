@@ -174,6 +174,19 @@ export const AgentCatalogEntry = z
      * puppeteer's). Absent: none. Presentation's choice, never a capability;
      * each role is held by exactly one offered row (the table's own test). */
     starter: AgentStarterRole.optional(),
+    /** PF-17 (2026-11-23) — the profile of terminal shortcuts the phone's keys
+     * page opens on for a card of this agent (DESIGN.md §8 "The keys page
+     * opens on its card's agent"): the id of a profile in the phone kit's
+     * catalog of keys (`ComboCatalog`), which the kit's own test holds every
+     * value here to. Which profile an agent takes is the table's to say, never
+     * product code's (AR-L1). Absent: none, and the page keeps the profile the
+     * person chose. Presentation's choice, never a capability. */
+    keyProfile: z
+      .string()
+      .min(1)
+      .max(64)
+      .regex(/^keypad\.[a-z][a-z0-9-]*$/)
+      .optional(),
     /** the decision trail: the date the row was written or last changed status,
      * and the reference a reader can follow (a slate id, a LANDED section) */
     admitted: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -194,6 +207,10 @@ export type AgentCatalogEntry = z.infer<typeof AgentCatalogEntry>;
  * a refusal of the whole list; AC-4's finding). */
 export const AgentCatalogEntryWire = AgentCatalogEntry.extend({
   status: z.string().min(1).max(32),
+  // PF-17: an OPEN string on the wire. A newer desktop's profile name in a
+  // grammar this build does not know is carried, and the phone ignores a
+  // profile it does not have; it never refuses the row.
+  keyProfile: z.string().min(1).max(256).optional(),
   offers: AgentOffers.partial().passthrough(),
   surfaces: AgentSurfaces.partial().passthrough(),
 }).passthrough();
@@ -246,6 +263,7 @@ export const AGENT_CATALOG = [
     decision:
       "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here; spark claimed 2026-11-04 (CP-5a), its hand witness owed",
     surfaces: { desktop: true, phone: true },
+    keyProfile: "keypad.claude",
     starter: "handle",
   },
   {
@@ -270,6 +288,7 @@ export const AGENT_CATALOG = [
     decision:
       "AC-D6 — supported: spawn witnessed here, the join on the scripted daemon; real-daemon join owed",
     surfaces: { desktop: true, phone: true },
+    keyProfile: "keypad.codex",
     taskRoots: ["~/Documents/Codex/*/*"],
     starter: "reviewer",
   },
@@ -336,6 +355,7 @@ export const AGENT_CATALOG = [
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
+    keyProfile: "keypad.opencode",
   },
   {
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
@@ -410,6 +430,7 @@ export const AGENT_CATALOG = [
     admitted: "2026-09-22",
     decision: "AC-D6 — preview until a live spawn and history join are witnessed here",
     surfaces: { desktop: true, phone: true },
+    keyProfile: "keypad.copilot",
   },
   {
     // 2026-09-22 AC-D6: `preview`; no account-usage port in the pin (AC-D5).
@@ -433,6 +454,7 @@ export const AGENT_CATALOG = [
     decision:
       "AC-D6 — preview: the real-daemon history join is witnessed here, a live spawn is not",
     surfaces: { desktop: true, phone: true },
+    keyProfile: "keypad.pi",
   },
   {
     // 2026-09-22 AC-D7: `preview`, spawn and resume only, desktop only. ACP is a PROTOCOL,

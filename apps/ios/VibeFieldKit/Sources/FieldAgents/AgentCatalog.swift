@@ -36,15 +36,22 @@ public struct AgentCatalogEntry: Sendable, Equatable, Identifiable {
   /// still draw (R4). `nil` is a row that did not say — and the door has already
   /// applied `surfaces` for the phone, so an unsaid row is one it let through.
   public let onPhone: Bool?
+  /// PF-17 — the profile of terminal shortcuts the keys page opens on for a
+  /// card of this agent, as the catalog names it (`keyProfile`), or nil: the
+  /// row named none, or came from a desktop a build behind. Presentation, as
+  /// the mark is.
+  public let keyProfile: String?
 
   public init(
-    id: AgentProvider, label: String, status: String, mark: String? = nil, onPhone: Bool? = nil
+    id: AgentProvider, label: String, status: String, mark: String? = nil, onPhone: Bool? = nil,
+    keyProfile: String? = nil
   ) {
     self.id = id
     self.label = label
     self.status = status
     self.mark = mark ?? id.rawValue
     self.onPhone = onPhone
+    self.keyProfile = keyProfile
   }
 }
 

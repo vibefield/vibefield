@@ -41,6 +41,10 @@ import Testing
     #expect(claude.canSpawn)
     // ES-5a: `starter` and `seams` are read now, for the hello's ruled starters (`starterAgent`)
     #expect(claude.unknownFields == ["admitted", "decision", "layoutRoot"])
+    // PF-17: `keyProfile` is read, for the keys page: the profile a card of this agent opens on. A row that names
+    // none has none.
+    #expect(claude.keyProfile == "keypad.claude")
+    #expect(result.catalog.filter { $0.keyProfile != nil }.count == 5)
 
     // AC-D7: the protocol agent keeps itself off the phone. Its `mark` is
     // absent too since the review (it equalled the id, the contract's own
