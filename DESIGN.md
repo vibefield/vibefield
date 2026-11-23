@@ -9449,7 +9449,21 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   edge in the ground's own ink at 28%. While the panel stands the home takes no touch and is hidden
   from VoiceOver, and the panel answers the escape gesture. **The open input card and the keyboard
   stand on the terminal's ground**, which the panel carries from the grid's last row to the screen's
-  foot: one surface, where the sheet's material stood. **A card that is not its terminal** (a run
+  foot: one surface, where the sheet's material stood. *(Erratum, 2026-11-23, PF-18: it was two. The
+  terminal's surface stopped at the top of the row, and a flat strip of the ground's colour ran on
+  from there under the row, the card and the keyboard. They matched only where the surface drew a
+  flat ground. James, on his phone by day with the CRT effect on: "there is a hard edge below the
+  terminal content, in the floating button row". The surface's tone and its scan lines stopped on a
+  line across the card. The simulator stills of PF-9 and PF-11 had no effect on, so the two layers
+  agreed in them.)* **The foot and the terminal are one surface** (PF-18, 2026-11-23; his ask: "how
+  can we make it more seamless and smooth?"). The terminal's surface runs to the screen's foot
+  whatever stands over it: the home indicator, or the input's row, its card and the keyboard. The
+  place that draws it says how much room those take, and the grid ends above the row, where it
+  ended before, while the ground, its opacity and every effect are painted under all of it. No
+  second layer of ground stands anywhere under a painted terminal, as none stands under the band
+  (PF-4). Folded, nothing changes: the surface already ran to the foot, and its own safe area keeps
+  the last row above the home indicator. An effect that curves the picture (CRT) curves it over
+  the whole surface, so its rim at the foot is behind the keyboard while one is up. **A card that is not its terminal** (a run
   with no terminal to offer, a session that left the field) stands in the same panel on the
   chrome's material, shorter: 55% of the room between the status bar and the home indicator, the
   height its sheet opened at. The whole of it is its handle, a touch on the home above it closes
