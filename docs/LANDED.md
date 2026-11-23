@@ -67515,3 +67515,35 @@ main's tip, so it also carries the rail and the keys page of PF-14, PF-16 and PF
 **Not seen:** a phone's own picture of it, and a keyboard: the simulator shows none, so the clearance with a keyboard
 up is held by `footInset`'s rows and SwiftUI's safe area alone. **Not run:** `pnpm preflight` whole, `pnpm verify`,
 `pnpm gate:landing`, the kit's other suites. **Not done:** no push of its own.
+
+## Track PF — with the keyboard down the grid ends above the floating row (M533)
+
+**2026-11-23 · on local main: `5057a0ced` PF-19 (doc) and `bfdfd4768` PF-19 (green).**
+James, 2026-11-23, with a picture of his phone, the keyboard down, Paste and the doors standing over a program's
+footer: "now also adjust for bottom floating button row when keyboard hidden, these buttons also overlapping the
+terminal content".
+
+- **The grid ends above the row in both states now.** PF-11 ended it above the row with the keyboard up and left the
+  row floating over the last rows with it down.
+- **The row still floats** and is drawn as it was: it keeps no room in the layout. The card says how much room it
+  stands in (`InputOverlay.floatingRoom`, 64pt at the default size: the 12pt lift and the doors' 52), one rule
+  (`FieldHomeModel.liveCardFootClearance`) turns that into how far above the screen's foot the grid ends, and the
+  terminal's surface keeps its last row above it.
+- **The surface is still painted under the row to the screen's foot** (PF-18): the row stands on the terminal's ground
+  and its effects, over no row of it.
+- **The cost:** four lines at the default size with the keyboard down, 38 to 34 on a 6.3-inch phone.
+- **Where no row stands** (a card whose input is not shown) nothing changes.
+
+**Measured and seen**, on an iPhone 17 Pro simulator (iOS 26.5), the CRT effect on, by day and by night:
+- Folded, the row shown: clearance 98; the inset under the last row 70 beside a safe area of 34; 48 by 34, where it
+  was 48 by 38. The doors top out 93.7pt over the foot and the grid ends at 104 or higher.
+- Open: 144, 116 and 34, 48 by 32, as PF-18 left it. No row: 6 and 34, 48 by 38, as before.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source:** `FieldTerminalTests` 205 in 37 suites,
+`FieldHomeTests` 880 in 104 suites (one new row), `FieldInputTests` 209 in 22 suites (one new row).
+`node scripts/check-agent-catalog.mjs --literals` passes.
+
+**Installed and watched:** the Release build of `bfdfd4768` on James's phone, up 30 seconds under the console.
+
+**Not seen:** a phone's own picture of it, and an accessibility type size, where the row is taller. **Not run:**
+`pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other suites. **Not done:** no push of its own.
