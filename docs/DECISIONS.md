@@ -346,7 +346,7 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   ledger's entry says what is owed). Its phone fixture reddened wall R23b on main until **the mend of 2026-11-22
   (M524)**. Since **the EL8 to puppeteer 0.4.9 (2026-11-22, M526)** a Codex run's row offers the switch too, its
   adapter's own (`session`: Codex's saved configuration is not written); no source here changed for it.
-- **PF-4…PF-15** — track PF, from James's looks at the build (2026-11-21 to 23): a pane is one piece with its bands, on the
+- **PF-4…PF-16** — track PF, from James's looks at the build (2026-11-21 to 23): a pane is one piece with its bands, on the
   desktop and the phone (PF-4); the phone's card as glass over the field (PF-5); the phone's terminal wears the look of
   the mode the phone is in, with a theme picked for each mode (PF-6); a terminal's card stands at 98% of full height
   on the sheet's own glass (PF-7, "98 is good"); the phone's input card is one row in each of its two modes, with a
@@ -372,7 +372,12 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   which is the rail's. **PF-14 LANDED 2026-11-23 (M529)**: the phone's key rail leads with a slash and Ctrl leaves it
   ("remove ctrl key, and add a / key in front of esc"; of the page "Phone Agent Keys", "good, go with your lean");
   each key's hold is its family, and ⋯ holds Ctrl and Alt and wears what is held (not asked for by name); defined in
-  §8 "The rail's eight keys, and what each holds"; unseen on a phone.
+  §8 "The rail's eight keys, and what each holds"; unseen on a phone. **PF-16 LANDED 2026-11-23 (M530)**: the keys
+  page's Shortcuts are an agent's keys ("make sure common combo keys in popular agents TUI are all there, things like
+  tab+shift should always be there"): Shortcuts leads, a top row of five keys stands under every profile, and nine
+  profiles of fifteen keys are a strip in sight; ⌃D as the fifth key, the agents with no profile and Emacs folding
+  into Shell were picked for him as the page's leans; defined in §8 "The keys page's Shortcuts are an agent's keys";
+  unseen on a phone.
 - **WI-5** — track WI, from James's look at the build (2026-11-22, a phone signed in to an account with no desktop:
   "we should provide a log in to another account option for users here so they don't get trapped here"): **No desktops
   yet.** and **Waiting for approval.** end their glass with *Use another account*, the way in's own link, which asks

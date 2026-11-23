@@ -67410,3 +67410,35 @@ DerivedData folders (exit 65, no test run). The two stale files were moved aside
 **Not seen:** a phone; the system's letters under the rail (the simulator shows none); a fan picked by a finger; a
 slash reaching a real agent's prompt. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the
 kit's other suites. **Not done:** no push of its own; no install on his phone yet (it follows PF-16).
+
+## Track PF — the phone's keys page: Shortcuts are an agent's keys (M530)
+
+**2026-11-23 · on local main: `4217cb7bf` PF-16 (doc) and `511cdf698` PF-16 (green).**
+James, 2026-11-22: "for detailed custom keys, make sure common combo keys in popular agents TUI are all there, things
+like tab+shift should always be there"; and of the design page "Phone Agent Keys": "good, go with your lean". The
+second of that page's three slices.
+
+- **Shortcuts leads the keys page** and is the page a phone opens first. Navigate led until now.
+- **A top row never changes**: ⇧Tab · ⌃C · Esc Esc · ⌃J · ⌃D under every profile, and only the word under a key
+  follows the profile (⇧Tab is Mode, Agent for OpenCode, Thinking for Pi).
+- **The profiles are a strip in sight**: Claude, Codex, Gemini, OpenCode, Copilot, Pi, then Shell, tmux, screen. A
+  menu held five until now.
+- **A profile is fifteen keys**, where it was nine or fewer. Each agent's were read on 2026-11-22 from its own
+  documentation or source (Codex's from its keymap on `main`, which can run ahead of a shipped build).
+- **Shell takes Common's place and Emacs is retired** into it; a phone that had either chosen, or none, lands on
+  Shell.
+- Picked for him, as the page's leans: ⌃D as the top row's fifth key; the agents with no profile (Grok, Kimi Code,
+  Hermes, Antigravity, ACP) taking the top row and whichever profile is chosen; Emacs folding into Shell.
+
+**Seen** on the iPhone 17 simulator (iOS 26.5), the demo card with the keypad up: Shortcuts under Shell, Claude,
+OpenCode and tmux by night, under Codex by day, and under Claude in landscape (the strip over two rows of ten);
+Navigate as it was.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source:** `FieldInputTests` 205 in 22 suites and
+`FieldHomeTests` 876 in 103 suites passed. Every press of every key encodes through the kit's own encoder, a row of
+its own. `node scripts/check-agent-catalog.mjs --literals` and `node scripts/check-retired-names.mjs` pass.
+
+**Not seen:** a phone; a key reaching a real agent (no key was pressed against the program whose documentation names
+it); the strip under a finger; accessibility sizes. **Not run:** `pnpm preflight` whole, `pnpm verify`,
+`pnpm gate:landing`, the kit's other suites. **Not done:** no push of its own; a profile is still chosen by hand
+(PF-17 follows a card's agent).
