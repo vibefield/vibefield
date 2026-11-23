@@ -9462,7 +9462,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   ended before, while the ground, its opacity and every effect are painted under all of it. No
   second layer of ground stands anywhere under a painted terminal, as none stands under the band
   (PF-4). Folded, nothing changes: the surface already ran to the foot, and its own safe area keeps
-  the last row above the home indicator. An effect that curves the picture (CRT) curves it over
+  the last row above the home indicator. *(Since PF-19, the same day, the grid ends above the
+  floating row there: "The phone's input card is one row in each of its two modes".)* An effect that curves the picture (CRT) curves it over
   the whole surface, so its rim at the foot is behind the keyboard while one is up. **A card that is not its terminal** (a run
   with no terminal to offer, a session that left the field) stands in the same panel on the
   chrome's material, shorter: 55% of the room between the status bar and the home indicator, the
@@ -9576,7 +9577,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   the switch is the two doors**: it stands alone at the row's right, 52pt tall with halves of 50 by
   44, where the one keyboard key stood, and a tap on either half raises the keyboard in that half's
   mode. A tap on the terminal still raises it in the mode in force. The switch reserves no space,
-  as nothing on its row does *(with the keyboard down only, since PF-11: the next sentence)*.
+  as nothing on its row does *(with the keyboard down only, since PF-11: the next sentence; and
+  since PF-19 the grid ends above the row there too, though the row itself still keeps none)*.
   **While the keyboard is up the row is a shelf** (PF-11, 2026-11-22; James, with the switch and
   the fold key over a program's last two rows on his phone: "these button can block terminal
   content, how can we design better?"; his pick of the three ways put to him: "Go with 2"). The
@@ -9585,7 +9587,17 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   they were, on the terminal's own ground. Nothing covers the grid while a person types. It costs
   the grid those 44pt, two or three lines at the default size, and the room over the keyboard is
   110pt again (44 · 60 · 6), where PF-8 had brought it to 66. With the keyboard down nothing
-  changes: the doors and the chips float over the last rows, as before.
+  changes: the doors and the chips float over the last rows, as before *(until PF-19, the next
+  sentence)*. **With the keyboard down the grid ends above the row too** (PF-19, 2026-11-23; James,
+  with Paste and the doors over a program's footer on his phone: "these buttons also overlapping
+  the terminal content"). The row still floats: it keeps no room in the layout and stands 12pt over
+  the home indicator's strip, drawn as it was. The terminal ends its grid above the room the row
+  stands in, 64pt at the default size (the 12 and the doors' 52), so the last line stands 6pt over
+  the doors and nothing covers the grid in either state. The terminal's surface is still painted
+  under the row to the screen's foot (PF-18): the row stands on the terminal's ground, never on its
+  rows. It costs the grid those 64pt with the keyboard down, four lines at the default size (38 to
+  34 on a 6.3-inch phone). Where no row stands (a card whose input is not shown), the grid runs to
+  the home indicator's strip as before.
   **The reply chips end 12pt before the switch.** A row of chips too
   long for the room left of it scrolls and is cut at its own sides, so no chip runs under the
   switch or the fold key *(until PF-8 a long row ran under the fold key, its clip turned off for
@@ -9723,7 +9735,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   and float over terminal content in both keyboard states. Their row reserves no space and never
   moves the grid; only the composer and key rail inset the terminal. *(Amended 2026-11-22, PF-11,
   the bullet before this one: with the keyboard up their row is a shelf the grid ends above, and
-  they float over the grid only with the keyboard down.)* Paste reads the clipboard
+  they float over the grid only with the keyboard down.)* *(Amended 2026-11-23, PF-19: with the
+  keyboard down the grid ends above them as well; they float over the terminal's ground, and over
+  no row of it.)* Paste reads the clipboard
   only on a tap and respects the system's paste-permission prompt; the system Paste control's
   opaque fill cannot supply this glass treatment. The message uses the desktop's figure at the phone's scale:
   **studio**, the holder's name as fieldd minted it
