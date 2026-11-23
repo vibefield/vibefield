@@ -67237,3 +67237,26 @@ simulator: the fixture's list opens over a card as before.
 
 **Not run:** the gate's `--enforce` half (R23) and `pnpm preflight` whole; `pnpm verify`; `pnpm gate:landing`.
 **Not done:** no push of its own.
+
+## Track PF — a readout capsule takes a touch and says why it is no switch (M525)
+
+**2026-11-22 · on local main: `dd25fb7c2` PF-12 (doc) and `ff5c6fc2c` PF-12 (green).**
+James, 2026-11-22, twice: "the model effort pill button does not seem to work", then "the model effort pill button
+still not clickable". Measured on his phone that day with a temporary read-out (not in any commit): his one agent was
+a Codex run, whose row offered no switch, so its capsule was a readout that took no touch. He was offered a line that
+says so; his word: "go ahead".
+
+- A press on a readout capsule opens a popover of one line under it: "‹Agent›'s model can't be changed from here.",
+  the agent as the catalog names it ("This agent's model…" where it names none).
+- The line says only what the phone knows: the row offers no switch. It cannot tell an adapter that names none from
+  turns that are not read or a desktop older than the switch.
+- DESIGN.md §8 "The capsule is the switch" carries the rule and the erratum at "no chevron, no touch".
+
+**Seen**, on the iPhone 17 simulator by day and by night, with a temporary probe that pressed the capsule (not in the
+commits): the line under a capsule with no chevron.
+
+**Proved, 2026-11-22, on the development Mac:** `FieldHomeTests` 876 in 103 suites passed;
+`node scripts/check-agent-catalog.mjs --literals` and `node scripts/check-retired-names.mjs` pass.
+
+**Not seen:** a phone. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other
+targets. **Not done:** no push of its own.
