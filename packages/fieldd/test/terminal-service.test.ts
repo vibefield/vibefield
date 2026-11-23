@@ -6272,6 +6272,28 @@ describe("item 589 — a plain shell keeps the run mark fieldd holds, and no oth
   });
 });
 
+// item 657 (2026-11-23) — A PLAIN SHELL IS HANDED NONE OF A LAUNCHING CLAUDE CODE SESSION'S NAMES.
+// The floor strips them from what a shell inherits (cell.rs, with contracts' HOST_SESSION_ENV_*;
+// its real witnesses are cell_lifecycle.rs's and the kill matrix's rows). fieldd's part is to hand
+// none of them back: a birth from a fieldd environment that holds them is the bare inherit mode,
+// byte for byte, as outside a session. The values are this row's sentinels; it compares the birth's
+// environment option only.
+describe("item 657 — a plain shell is handed none of a launching Claude Code session's names (the fake floor)", () => {
+  it("a birth from fieldd inside a Claude Code session is the bare inherit mode, byte for byte", async () => {
+    const floor = await startFakeFloor();
+    const environment = {
+      PATH: "/usr/bin:/bin",
+      CLAUDECODE: "1",
+      CLAUDE_CODE_CHILD_SESSION: "sentinel-657",
+      CLAUDE_PID: "sentinel-657",
+      CLAUDE_EFFORT: "sentinel-657",
+    };
+    const bare = fakeFloorService(floor, { defaultShell: () => "/bin/zsh", environment });
+    await bare.create({});
+    expect(JSON.stringify(floor.createOptions()?.["environment"])).toBe('{"mode":"inherit"}');
+  });
+});
+
 // ── Item 587 (2026-11-19) — a phone's shell under a profile, at a place ──────────────────────────
 //
 // `terminal.create` reads a bound birth's spawn rights through the call's GRANT (`grantedScopesOf`), so the self

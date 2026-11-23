@@ -220,7 +220,17 @@ pub async fn run_cell(args: CellArgs, mut leash: Leash) -> Result<()> {
     // GT-3 overlay + EL7 strip: byte-identical policy to the in-process unit
     // (the prefixes come from the same generated registries this binary links).
     .with_config_path(args.config.clone())
-    .with_private_env_prefixes(registries::ENV_PREFIXES.iter().copied())
+    // Item 657 (2026-11-23): and a launching Claude Code session's classes, from what a PTY
+    // INHERITS alone (ghosttea strips inherited keys; a clean session's variables stay the
+    // caller's, so an agent keeps puppeteer's own). The exact names go as prefixes, ghosttea's
+    // only extension point: here a name that begins with one of them goes too.
+    .with_private_env_prefixes(
+        registries::ENV_PREFIXES
+            .iter()
+            .chain(registries::HOST_SESSION_ENV_PREFIXES)
+            .chain(registries::HOST_SESSION_ENV_NAMES)
+            .copied(),
+    )
     .context("private env prefixes rejected")?
     .with_text_engine(engine);
 

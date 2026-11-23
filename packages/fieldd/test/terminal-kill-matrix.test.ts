@@ -1003,6 +1003,64 @@ describe("the kill matrix (NF-4, real field-native)", () => {
     });
   }, 60_000);
 
+  // Item 657 (2026-11-23): a launching Claude Code session's names, planted in field-native's own
+  // environment the way a `pnpm dev` started from a Claude tab hands them down, never reach a plain
+  // shell; a person's own CLAUDE_CONFIG_DIR does. The shell writes its variables' NAMES alone
+  // (`env | cut`), so neither the file nor a red holds any value, the runner's own included. Unix
+  // only: `cmd`'s `set` has no names-only form, and the floor's fold is row 6b's.
+  const sessionRow = WIN ? it.skip : it;
+  sessionRow(
+    "row 6c: a launching Claude Code session's names never reach a plain shell (item 657)",
+    async () => {
+      const native = await spawnNative(undefined, {
+        CLAUDECODE: "1",
+        CLAUDE_CODE_CHILD_SESSION: "sentinel-657",
+        CLAUDE_CODE_SESSION_PROBE: "sentinel-657",
+        CLAUDE_PID: "sentinel-657",
+        CLAUDE_EFFORT: "sentinel-657",
+        CLAUDE_CONFIG_DIR: "/tmp/own-657",
+      });
+      await withNativeLog(native, async () => {
+        const daemon = await boot({ dataDir: native.dir, controlPort: 0, dataPort: 0 });
+        cleanup.push(() => daemon.stop());
+        const rpc = await connect(daemon);
+        const created = await createRetrying(rpc, { shell: SH }, native, 30_000);
+        await poll(async () =>
+          (await listOf(rpc)).some((t) => t.sessionId === created.sessionId) ? true : undefined,
+        );
+        const uds = udsEndpoints(daemon);
+        const client = new GhostteaAutomationClient(
+          { controlSocket: uds.controlSocket, authToken: uds.authToken },
+          { clientBuild: "kill-matrix" },
+        );
+        cleanup.push(() => client.dispose());
+        await client.connect();
+        const out = join(native.dir, "names-657.txt");
+        const input = await client.pasteAndSubmit(created.sessionId, `env | cut -d= -f1 > ${out}`);
+        expect(input.accepted).toBe(true);
+        const names = await poll(async () => {
+          try {
+            const text = readFileSync(out, "utf8");
+            return text.length > 0 ? text.split("\n").filter((name) => name !== "") : undefined;
+          } catch {
+            return undefined;
+          }
+        });
+        const session = names.filter(
+          (name) =>
+            name.startsWith("CLAUDECODE") ||
+            name.startsWith("CLAUDE_CODE_") ||
+            name === "CLAUDE_PID" ||
+            name === "CLAUDE_EFFORT",
+        );
+        expect(session).toEqual([]);
+        expect(names).toContain("CLAUDE_CONFIG_DIR");
+        expect(names).toContain("HOME");
+      });
+    },
+    60_000,
+  );
+
   // WIN-6 / G13: the exact-case prefixes are stripped (row 6). This probes the
   // CASE gap ghosttea's case-sensitive `starts_with` opened on Windows'
   // case-insensitive env — CONFIRMED to leak on the box (a `Field_Native_*`

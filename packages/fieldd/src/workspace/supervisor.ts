@@ -1,6 +1,12 @@
 import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { ENV_KEEP_NAMES, ENV_PREFIXES, WORKSPACE_SERVICE } from "@vibefield/contracts";
+import {
+  ENV_KEEP_NAMES,
+  ENV_PREFIXES,
+  HOST_SESSION_ENV_NAMES,
+  HOST_SESSION_ENV_PREFIXES,
+  WORKSPACE_SERVICE,
+} from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FilesHostLaunch } from "./launch";
 import {
@@ -156,14 +162,25 @@ const STDERR_TAIL_LINES = 4;
  * run mark, so the census still finds a worker a smoke leaves behind. */
 const KEPT_NAMES: ReadonlySet<string> = new Set(ENV_KEEP_NAMES);
 
+/** Item 657 (2026-11-23) — a launching Claude Code session's names, which no worker inherits:
+ * under its prefixes, or one of its exact names (contracts' HOST_SESSION_ENV_*). */
+const HOST_SESSION_NAMES: ReadonlySet<string> = new Set(HOST_SESSION_ENV_NAMES);
+
 /** The worker's environment: fieldd's, less the daemon's own prefixes, save the names kept by
- * exact name (`KEPT_NAMES`). The files worker's and the transcripts worker's. */
+ * exact name (`KEPT_NAMES`), and less the launching session's names (item 657). The files
+ * worker's and the transcripts worker's. */
 export function workerEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const out: NodeJS.ProcessEnv = {};
   for (const [key, value] of Object.entries(source)) {
     if (value === undefined) continue;
-    const stripped = ENV_PREFIXES.some((prefix) => key.toUpperCase().startsWith(prefix));
+    const probe = key.toUpperCase();
+    const stripped = ENV_PREFIXES.some((prefix) => probe.startsWith(prefix));
     if (stripped && !KEPT_NAMES.has(key)) continue;
+    if (
+      HOST_SESSION_ENV_PREFIXES.some((prefix) => probe.startsWith(prefix)) ||
+      HOST_SESSION_NAMES.has(probe)
+    )
+      continue;
     out[key] = value;
   }
   return out;

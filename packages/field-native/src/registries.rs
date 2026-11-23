@@ -8,6 +8,11 @@ pub const APP_ID: &str = "vibefield";
 /// never enter agent PTYs.
 pub const ENV_PREFIXES: &[&str] = &["FIELD_", "FIELDD_", "VIBEFIELD_", "VF_"];
 
+/// Item 657 — a launching Claude Code session's classes: stripped from what a PTY INHERITS, never
+/// from what VibeField sets. The exact names reach ghosttea as prefixes. See registries.ts.
+pub const HOST_SESSION_ENV_PREFIXES: &[&str] = &["CLAUDECODE", "CLAUDE_CODE_"];
+pub const HOST_SESSION_ENV_NAMES: &[&str] = &["CLAUDE_PID", "CLAUDE_EFFORT"];
+
 /// Item 345 — the socket alias's parent, a HARNESS seam both planes read: tests, smokes and lab
 /// runs give each run a short folder of its own; nothing in the product sets it. See registries.ts.
 pub const SOCKET_ALIAS_PARENT_ENV: &str = "FIELD_SOCKET_ALIAS_PARENT";

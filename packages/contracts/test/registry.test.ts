@@ -38,6 +38,8 @@ import {
   DESKTOP_TRAY_GUID,
   ENV_KEEP_NAMES,
   ENV_PREFIXES,
+  HOST_SESSION_ENV_NAMES,
+  HOST_SESSION_ENV_PREFIXES,
   HOST_SINGLETON_EXTERNALS,
   HOST_SINGLETON_MODULE_SPECIFIERS,
   INDEX_MESH,
@@ -82,6 +84,29 @@ describe("item 589 — the names fieldd hands back after VibeField's prefixes st
         ENV_PREFIXES.some((prefix) => name.startsWith(prefix)),
         name,
       ).toBe(true);
+  });
+});
+
+describe("item 657 — a launching Claude Code session's names, stripped from what a child inherits", () => {
+  it("is CLAUDECODE and CLAUDE_CODE_ by prefix, and the session's two names outside them by exact name", () => {
+    expect([...HOST_SESSION_ENV_PREFIXES]).toEqual(["CLAUDECODE", "CLAUDE_CODE_"]);
+    expect([...HOST_SESSION_ENV_NAMES]).toEqual(["CLAUDE_PID", "CLAUDE_EFFORT"]);
+  });
+
+  it("is not the whole CLAUDE_ class: a person's own setting lies under none of them", () => {
+    const own = "CLAUDE_CONFIG_DIR";
+    expect(HOST_SESSION_ENV_PREFIXES.some((prefix) => own.startsWith(prefix))).toBe(false);
+    expect(HOST_SESSION_ENV_NAMES.some((name) => own.startsWith(name))).toBe(false);
+  });
+
+  it("names no entry empty, and none under VibeField's own prefixes (the two lists carry two meanings)", () => {
+    for (const entry of [...HOST_SESSION_ENV_PREFIXES, ...HOST_SESSION_ENV_NAMES]) {
+      expect(entry.length, entry).toBeGreaterThan(0);
+      expect(
+        ENV_PREFIXES.some((prefix) => entry.startsWith(prefix)),
+        entry,
+      ).toBe(false);
+    }
   });
 });
 

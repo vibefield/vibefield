@@ -1833,6 +1833,22 @@ export const ENV_PREFIXES = ["FIELD_", "FIELDD_", "VIBEFIELD_", "VF_"] as const;
  * mark they inherit. */
 export const ENV_KEEP_NAMES = ["VF_SMOKE_RUN"] as const;
 
+/** Item 657 (2026-11-23) — the LAUNCHING session's classes. VibeField started from inside a Claude Code session
+ * (`pnpm dev` in its terminal, or a harness job) inherits that session's environment: its id, its messaging socket
+ * and token, and `CLAUDE_CODE_CHILD_SESSION`, which tells a `claude` run in a VibeField terminal that it is a child
+ * session. No child of fieldd or the floor INHERITS a name under these prefixes (HOST_SESSION_ENV_PREFIXES) or of
+ * these exact names (HOST_SESSION_ENV_NAMES, the session's names outside both prefixes).
+ * Unlike ENV_PREFIXES they are stripped from what is inherited, never from what VibeField sets: puppeteer's own
+ * `CLAUDE_CODE_NO_FLICKER` still reaches every agent (whose environment is an allow-list, so nothing of the session's
+ * reaches it), and a free shell's profile sets a person's own values again (a login shell). The class is not the
+ * whole of `CLAUDE_`: a person's own settings live there too (`CLAUDE_CONFIG_DIR`), and they pass. The floor takes the
+ * exact names as prefixes, since ghosttea's extension point is prefixes alone: there a name that begins with one of
+ * them goes too. */
+export const HOST_SESSION_ENV_PREFIXES = ["CLAUDECODE", "CLAUDE_CODE_"] as const;
+
+/** Item 657 (2026-11-23) — the launching session's names outside HOST_SESSION_ENV_PREFIXES, by exact name. */
+export const HOST_SESSION_ENV_NAMES = ["CLAUDE_PID", "CLAUDE_EFFORT"] as const;
+
 /** LOG-44 — physical diagnostic streams. The value is the ONLY category /
  * basename pair callers may resolve beneath the platform log root. Dynamic
  * component, window, session, and plugin identities belong in record fields,

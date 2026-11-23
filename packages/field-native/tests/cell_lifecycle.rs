@@ -894,6 +894,102 @@ async fn a_value_given_on_the_command_line_still_reaches_the_command() {
     let _ = wait_exit(child, Duration::from_secs(10));
 }
 
+/// Item 657 (2026-11-23) — a launching Claude Code session's names (contracts'
+/// `HOST_SESSION_ENV_PREFIXES` and `HOST_SESSION_ENV_NAMES`, generated) never reach a plain
+/// shell the cell births in `inherit` mode, and a person's own `CLAUDE_CONFIG_DIR` does: the
+/// class is not the whole of `CLAUDE_`. The tenant writes its variables' NAMES alone, so neither
+/// the dump nor a failure holds any value (the runner may itself sit inside such a session).
+#[cfg(unix)]
+#[tokio::test]
+async fn a_real_pty_never_inherits_a_launching_claude_sessions_names() {
+    use field_native::services::terminal_client::ControlClient;
+
+    let root = short_root();
+    let dump = root.path().join("names-657.txt");
+    let dump_path = dump.to_str().expect("utf8 dump path").to_string();
+
+    let (mut child, control, _frame) = spawn_cell_with_env(
+        root.path(),
+        15,
+        &[
+            ("CLAUDECODE", "1"),
+            ("CLAUDE_CODE_CHILD_SESSION", "sentinel-657"),
+            ("CLAUDE_CODE_SESSION_PROBE", "sentinel-657"),
+            ("CLAUDE_PID", "sentinel-657"),
+            ("CLAUDE_EFFORT", "sentinel-657"),
+            ("CLAUDE_CONFIG_DIR", "/tmp/own-657"),
+            ("STRIP_ROW_CONTROL_657", "must-arrive"),
+        ],
+        Stdio::null(),
+    );
+    let mut stdin = child.stdin.take().expect("stdin");
+    let stdout = child.stdout.take().expect("stdout");
+    writeln!(stdin, "{}", serde_json::json!({ "token": "tok-657" })).expect("bootstrap");
+    let mut lines = BufReader::new(stdout).lines();
+    let _hello: field_native::cell::CellHello =
+        serde_json::from_str(&lines.next().expect("hello").expect("read hello")).expect("parse");
+
+    let (client, _events) = ControlClient::connect(&control, "tok-657")
+        .await
+        .expect("dial the cell's control socket");
+
+    let session = client
+        .create_session(serde_json::json!({
+            "executable": "/bin/sh",
+            "args": ["-c", format!("env | cut -d= -f1 > {dump_path}")],
+            "cols": 80,
+            "rows": 24,
+            "persistence": "keep-until-exit",
+            "environment": {"mode": "inherit"},
+        }))
+        .await
+        .expect("create a session on the real cell");
+
+    let deadline = Instant::now() + Duration::from_secs(20);
+    let dumped = loop {
+        if let Ok(text) = std::fs::read_to_string(&dump) {
+            if !text.is_empty() {
+                break text;
+            }
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the tenant never wrote its names to {dump_path}"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    };
+    let names: Vec<&str> = dumped.lines().filter(|name| !name.is_empty()).collect();
+
+    // THE CONTROLS FIRST: without them an empty environment would read as a pass.
+    assert!(
+        names.contains(&"STRIP_ROW_CONTROL_657"),
+        "an unprefixed variable must reach the PTY, or this row is vacuous"
+    );
+    assert!(
+        names.contains(&"CLAUDE_CONFIG_DIR"),
+        "a person's own CLAUDE_CONFIG_DIR must reach the PTY: the strip is not the whole CLAUDE_ class"
+    );
+    let reached: Vec<&str> = names
+        .iter()
+        .copied()
+        .filter(|name| {
+            field_native::registries::HOST_SESSION_ENV_PREFIXES
+                .iter()
+                .any(|prefix| name.starts_with(prefix))
+                || field_native::registries::HOST_SESSION_ENV_NAMES.contains(name)
+        })
+        .collect();
+    assert!(
+        reached.is_empty(),
+        "a launching session's names reached the PTY: {reached:?}"
+    );
+
+    let _ = client.terminate(&session.id, "item-657-row").await;
+    drop(stdin);
+    let _ = lines.next();
+    let _ = wait_exit(child, Duration::from_secs(10));
+}
+
 /// Item 589 (2026-11-19) — `VF_` is a prefix the floor strips, and the one name fieldd hands
 /// back by exact name (contracts' `ENV_KEEP_NAMES`: a smoke's run mark) arrives as an override,
 /// which ghosttea applies AFTER the strip. So a plain shell keeps fieldd's mark and no other
