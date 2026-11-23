@@ -67478,3 +67478,40 @@ build those stills were taken from also held another session's unfinished edits 
 **Not seen:** a phone; a real catalog reaching a card. A catalog that arrives while a card is open reaches the card
 when its row is next read, not at once. **Not run:** `pnpm preflight` whole, `pnpm verify`, the Rust tests, the kit's
 other suites, every smoke and `pnpm gate:landing`. **Not done:** no push of its own.
+
+## Track PF — the foot and the terminal are one surface (M532)
+
+**2026-11-23 · on local main: `a103151ec` PF-18 (doc) and `6144fa5cc` PF-18 (green).**
+James, 2026-11-23, with a picture of his phone by day, the CRT effect on and the keyboard up: "there is a hard edge
+below the terminal content, in the floating button row, how can we make it more seamless and smooth?"
+
+- **The edge was two layers meeting.** With the input open, the terminal's surface ended at the top of the row of the
+  switch and the fold key, and the card painted a flat strip of the ground's colour from there under the row, the
+  card and the keyboard (PF-9, which called it one surface). Under an effect the surface's tone and scan lines
+  stopped on that line. No simulator still of PF-9 or PF-11 had an effect on, so the layers agreed in all of them.
+- **Now the surface runs to the screen's foot** under whatever stands over it, and the flat strip is gone. The card
+  tells the surface how much room the row, the card and the keyboard take (`terminalFootClearance`), and the grid ends
+  above the row, where it ended before.
+- **Folded, nothing changes:** the surface already ran to the foot there.
+- **Found:** a hosted UIKit view is not told a SwiftUI `safeAreaInset`. With the surface run to the foot and nothing
+  handed, its safe area was the home indicator's 34pt and the rows went under the input card. Hence the clearance is
+  said outright, and counted against the view's own safe area so a keyboard is never counted twice.
+
+**Measured and seen**, on an iPhone 17 Pro simulator (iOS 26.5), the CRT effect on, by day and by night:
+- Open: the surface 812pt tall; clearance 144; the inset under the last row 116 beside a safe area of 34 (150, the
+  clearance and the 6 of padding); 48 by 32, the height the grid had before.
+- Folded: 6 and 34; 48 by 38, as before.
+- The surface's tone and scan lines run under the row and the card to the foot. The effect's rim at the foot is the
+  same folded and open.
+
+**Proved, 2026-11-23, on the development Mac:** `FieldTerminalTests` 205 in 37 suites (four new rows,
+`TerminalFootTests`) on the committed source; `FieldHomeTests` 879 in 104 suites and `FieldInputTests` 208 in 22 suites
+on the same sources, before two comparisons in the new test file were corrected.
+`node scripts/check-agent-catalog.mjs --literals` passes.
+
+**Installed and watched:** the Release build of `6144fa5cc` on James's phone, up 30 seconds under the console. It is
+main's tip, so it also carries the rail and the keys page of PF-14, PF-16 and PF-17 (another session's).
+
+**Not seen:** a phone's own picture of it, and a keyboard: the simulator shows none, so the clearance with a keyboard
+up is held by `footInset`'s rows and SwiftUI's safe area alone. **Not run:** `pnpm preflight` whole, `pnpm verify`,
+`pnpm gate:landing`, the kit's other suites. **Not done:** no push of its own.
