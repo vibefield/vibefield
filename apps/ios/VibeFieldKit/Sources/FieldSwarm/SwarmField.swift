@@ -68,6 +68,7 @@ public struct SwarmField<Chrome: View>: View {
 
   public var body: some View {
     GeometryReader { proxy in
+      let _ = handHandlers()
       ZStack {
         Rectangle()
           .fill(FieldPalette.panelBackground)
@@ -105,8 +106,6 @@ public struct SwarmField<Chrome: View>: View {
       }
       .onAppear {
         stage.parameters = parameters
-        stage.onSelect = onSelect
-        stage.onCreate = holdCompleted
         stage.reducedMotion = reduceMotion
         stage.recede = recede
         touch?.read = { [stage, bloomHost] in stage.holdsBody || bloomHost.bloom != nil }
@@ -121,15 +120,21 @@ public struct SwarmField<Chrome: View>: View {
       }
     }
     .onChange(of: bloom) { bloomHost.menu = bloom }
-    // The hold comes and goes with its act: the stage is handed it again
-    // whenever the caller gives or takes it, not only at the first appearance
-    // (a field that appeared with no act would otherwise never hold).
-    .onChange(of: onCreate == nil) { stage.onCreate = holdCompleted }
     .onChange(of: bubbles) { stage.update(bubbles: bubbles, time: CACurrentMediaTime()) }
     .onChange(of: parameters) { stage.parameters = parameters }
     .onChange(of: reduceMotion) { stage.reducedMotion = reduceMotion }
     // SE-2 — the lens moved, or the bodies it recedes: the stage takes the host's weights (its pace never changes)
     .onChange(of: recede?.targets) { stage.recede = recede }
+  }
+
+  /// The stage acts through the handlers of the pass that last drew the field (PF-14, 2026-11-23). Handed once, at
+  /// the first appearance, a touch on a body ran the first pass's handler for the field's whole life, and whatever
+  /// its host read from its environment inside it (the phone's mode, reduced motion) was that pass's: a terminal
+  /// opened after the mode changed was dressed for the mode the app started in. The hold comes and goes with its
+  /// act by the same hand-over (a field that appeared with no act would otherwise never hold).
+  private func handHandlers() {
+    stage.onSelect = onSelect
+    stage.onCreate = holdCompleted
   }
 
   /// The hold ran its course: the bloom opens when there is a real choice,
