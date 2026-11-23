@@ -127,7 +127,7 @@ public struct SwarmField<Chrome: View>: View {
     .onChange(of: recede?.targets) { stage.recede = recede }
   }
 
-  /// The stage acts through the handlers of the pass that last drew the field (PF-14, 2026-11-23). Handed once, at
+  /// The stage acts through the handlers of the pass that last drew the field (PF-15, 2026-11-23). Handed once, at
   /// the first appearance, a touch on a body ran the first pass's handler for the field's whole life, and whatever
   /// its host read from its environment inside it (the phone's mode, reduced motion) was that pass's: a terminal
   /// opened after the mode changed was dressed for the mode the app started in. The hold comes and goes with its

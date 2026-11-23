@@ -255,7 +255,7 @@ public struct HomeScreen: View {
   /// (`TerminalAttachment.release`).
   @State private var terminalLanes: [String: TerminalLanes] = [:]
   @State private var keptAttachments: [KeptTerminal] = []
-  /// The mode the phone is in, kept in state (PF-14, 2026-11-23). A card is opened by closures that outlive
+  /// The mode the phone is in, kept in state (PF-15, 2026-11-23). A card is opened by closures that outlive
   /// the pass that made them (the field's stage, a task), and an environment value read from one is the value of
   /// the pass it was made in: a terminal opened after the mode changed was dressed for the mode before. State is
   /// read true from any of them.
@@ -472,7 +472,7 @@ public struct HomeScreen: View {
     .onChange(of: colorScheme) { refold() }
     // --- end IOS-6d
     // PF-6: the terminal wears the look of the mode the phone is in, so a change of mode re-dresses the one on
-    // the card. A kept attachment takes its mode when its card is raised again. PF-14: the mode is kept in state
+    // the card. A kept attachment takes its mode when its card is raised again. PF-15: the mode is kept in state
     // from the first pass, for the attach that reads it later.
     .onChange(of: colorScheme, initial: true) {
       lookModeNow = TerminalLookMode(colorScheme)
@@ -4530,7 +4530,7 @@ public struct HomeScreen: View {
         ?? TerminalAttachment(lanes: lanes, appearance: appearance)
       // PF-4: the surface runs under the card's band; its grid begins at the band's foot.
       attachment.gridTopInset = Double(FieldHomeModel.liveCardBand)
-      // PF-6: and it is drawn in the look of the mode the phone is in. PF-14: read from state, never from this
+      // PF-6: and it is drawn in the look of the mode the phone is in. PF-15: read from state, never from this
       // task's own environment, which is the one of the pass that opened the card.
       attachment.lookMode = lookModeNow
       attachment.apply(appearance: appearance)
