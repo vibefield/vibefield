@@ -67260,3 +67260,41 @@ commits): the line under a capsule with no chevron.
 
 **Not seen:** a phone. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other
 targets. **Not done:** no push of its own.
+
+## EL8: puppeteer 0.4.9 — the Codex adapter names the model switch (M526)
+
+**2026-11-22 · on local main: `b54195402` EL8: puppeteer 0.4.9.**
+James, 2026-11-22: "the model effort pill button still not clickable". His one agent that day was a Codex run, and
+PF-3's switch was the Claude adapter's alone. Asked for "a go-ahead for a new upstream puppeteer release, and for
+experiments on a live Codex session", his word was "go ahead".
+
+**Upstream (vibefield/puppeteer), from session qa1 with his sign-in:** #110 merged by squash as `09072d03` after CI's
+six jobs; the release #111 merged as `f97477a3` = v0.4.9, published 2026-11-23T04:35Z, its 20 packages read back at
+200.
+- The Codex adapter's TUI session names `AgentModelSwitchService`. A change is asked of the session's own app-server
+  (`thread/settings/update {threadId, model}` or `{threadId, effort}`) on one more connection, opted into Codex's
+  experimental API. Nothing is typed into the TUI.
+- That connection hears Codex's `thread/settings/updated` and hands it to the observer, so the model and effort a row
+  says follow Codex's own word, and a change made in the TUI's picker is observed too. Before 0.4.9 neither was.
+- The offer says `session`: Codex's `config.toml` is not written.
+- The experiments ran in the adapter's isolated rig (a loopback model provider, a throwaway `CODEX_HOME`), against
+  his installed codex-cli 0.171.0. Nothing was typed into his own Codex run, and his account and saved defaults were
+  not touched.
+
+**Here:** the pin's 24 files, the same set as 0.4.8's (the lock, the seven rows, the 20 release-age rows, preflight's
+expectations, pnpm's lock, 8 phone goldens and their 9 kit mirrors by their version lines, three hand strings, the
+ROADMAP row). No source changes: `agent.switchModel` and `agent.models` are blind to which agent it is, and the phone's
+list reads the row's offer. No Cargo and no Rust path moves.
+
+**Proved, 2026-11-22, on the development Mac, in the checkout, vitest at 4 workers:** the one install and a frozen
+install exit 0; `pnpm preflight` whole OK with no FAIL (6 warnings, as at 0.4.8); `pnpm check:deps`, `pnpm check:walls`
+and `node scripts/check-ios-fixtures.mjs` exit 0; `tsc` for contracts, fieldd and field-app exit 0; fieldd's four
+agent files 71 passed and `agent-session` 111 passed; contracts' two files 111 passed; field-app's phone golden files
+and boundaries 78 passed and `phone-parity` 26 passed; the kit's `FieldHomeTests` 876 in 103 suites, `FieldMeshTests`
+and `FieldProductTests` passed. Upstream: adapter-codex 430 passed, and the live rows three runs in a row.
+
+**Not seen:** the switch on a real Codex run through fieldd and a phone. The desktop that serves James's phone is the
+QA stage's, at `d15029c12` when this landed; it offers a Codex run no switch until it runs this pin.
+
+**Not run:** `pnpm verify` whole, the Rust tests, the kit's other suites, every smoke, `pnpm gate:landing`, and the
+adapter's live rows on Linux or Windows. **Not done:** no push of its own.
