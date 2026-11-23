@@ -67442,3 +67442,39 @@ its own. `node scripts/check-agent-catalog.mjs --literals` and `node scripts/che
 it); the strip under a finger; accessibility sizes. **Not run:** `pnpm preflight` whole, `pnpm verify`,
 `pnpm gate:landing`, the kit's other suites. **Not done:** no push of its own; a profile is still chosen by hand
 (PF-17 follows a card's agent).
+
+## Track PF — the phone's keys page opens on its card's agent (M531)
+
+**2026-11-23 · on local main: `7c1e6d148` PF-17 (doc) and `bab46d1fe` PF-17 (green).**
+The design page "Phone Agent Keys" asked "Should the keys page follow the session's agent?" and leaned to follow;
+James, 2026-11-22: "good, go with your lean". The third of that page's three slices, and its last.
+
+- **A card whose agent has a profile opens Shortcuts on it**: Claude Code's, Codex's, OpenCode's, GitHub Copilot's and
+  Pi's.
+- **Which profile an agent takes is the agent catalog's to say**: `keyProfile`, a new optional key on a catalog row,
+  sent to the phone with the row. The kit compares no agent's id, so the rule of 2026-11-02 that the picker "must not
+  infer a profile from the session's provider" is superseded with what it protected still protected.
+- **Where the catalog names none, the page keeps the profile last chosen by hand**: a row without the key (Grok, Kimi
+  Code, Hermes, Antigravity, ACP), a session that is no agent's, a desktop a build behind, a profile this build lacks.
+  Gemini's profile is reached by hand alone, since the catalog has no row for it.
+- **A hand's choice holds while the card is open**, and the next card follows its own agent again.
+- **It reaches a phone only through its desktop.** The desktop that serves James's phone is the QA stage's; until it
+  runs this commit it sends no `keyProfile`, and his phone's keys page stays on the profile chosen by hand.
+
+**Seen** on the iPhone 17 simulator (iOS 26.5), tmux chosen by hand, a fixture standing in for the catalog: the page
+on Codex where it names Codex, on tmux where it names nothing, and on tmux where it names a profile the kit lacks. The
+build those stills were taken from also held another session's unfinished edits to two files of the shared tree
+(`SessionCardView.swift`, `TerminalSurface.swift`), neither the keys page's.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source:**
+- The kit, before those edits arrived: `FieldInputTests` 208 in 22 suites, `FieldHomeTests` 879 in 104 (a new suite
+  holds every profile the catalog names to one the keys page has), `FieldProductTests` 382 in 60, `FieldMeshTests` 341
+  in 60, `FieldAgentsTests` 106 in 25, `FieldSwarmTests` 46 in 11 and `FieldWorkspaceTests` 38 in 7, passed.
+- contracts' `agent-catalog` and `fixtures` (830 passed), fieldd's `agent-gateway-catalog` and `index-catalog` (32
+  passed, 1 skipped), `tsc` for both.
+- `node scripts/check-agent-catalog.mjs --enforce` and `--literals`, `node scripts/check-ios-fixtures.mjs`,
+  `node scripts/check-retired-names.mjs`, and `pnpm gen:check` on the commit: pass. No Rust file moved.
+
+**Not seen:** a phone; a real catalog reaching a card. A catalog that arrives while a card is open reaches the card
+when its row is next read, not at once. **Not run:** `pnpm preflight` whole, `pnpm verify`, the Rust tests, the kit's
+other suites, every smoke and `pnpm gate:landing`. **Not done:** no push of its own.
