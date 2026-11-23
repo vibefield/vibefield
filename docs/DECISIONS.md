@@ -401,6 +401,16 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   the corner's Sign out question first (WI-G3 A). Waiting for approval was not asked for by name; it had the same trap.
   Defined in `DESIGN.md` §8 "The phone's way in" (its amendment of 2026-11-22) and §9 "The way in". **LANDED
   2026-11-22 (M523)**; unseen on a phone, and the holds still hold no act.
+- **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
+  window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
+  James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the
+  work column**, the profiles column's twin at the stage's right, one circle per live project in its bodies' colour and
+  one per agent, each a lens; with **A** under it, Live now's Projects and Agents, one state with the column's ring
+  (SE-D2, extended). The five calls at their leans: the rest recede, one at a time, the terminals stay, as they came
+  live, the blocked dot outside the lens; and the page's stated defaults (a bare terminal is Shell, a group of one is
+  not drawn, a choice that leaves falls back and is chosen again, the choice is the run's). Four readings of the lead's
+  are marked for his eye. Defined in `DESIGN.md` §8 "Godview's work column" and "Search — the Peek". **LANDED
+  2026-11-23 (M535)**; unseen in a running Godview.
 
 ## Petitions
 

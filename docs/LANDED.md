@@ -67594,3 +67594,49 @@ it only once it runs `f04a942a1` or later; its six sign-ins are then read within
 is renewed about every eight hours, and a plan changed minutes ago may read as the old one until then).
 **Not run:** `pnpm verify` whole, the Rust tests, the kit's other suites, every smoke and `pnpm gate:landing`.
 **Not built:** an interval an adapter declares for itself; a read asked for by a usage reading (a renewed sign-in).
+
+## Track WL — the work column: what runs, at the stage's top right, each circle a lens (M535)
+
+**2026-11-23 · on local main: `0a80d77cc` WL-1 (doc) and `86ce62fe2` WL-1 (green).**
+James asked for "a dynamic filter ui, for example, based on the opened sessions, there will be project filters showing
+the projects of these sessions so i can filter sessions by projects, and i can also filter by agent type", with
+options on a live page. The page *The Work Lens* drew four on one live Godview window: A, search's + Filter (the base
+of every option); B, a lens row of named capsules; C, the work column; D, the swarm sorting itself into islands. It
+put five smaller calls beside them. His answer, 2026-11-23: "lets go with the lean, i pick C. now start
+implementation and land it directly on local main". So C, with A under it, and the five calls at their leans.
+
+- **The work column** stands at the stage's top right, the profiles column's twin, 13 from the right edge. One circle
+  per live project holds the folder mark in the colour its bodies wear. Then a spacer, then one circle per agent, a
+  bare terminal as Shell. Each group stands in the order its first session came. A group of one value is drawn only
+  while it is chosen.
+- **A circle is a lens.** A click keeps that project's or agent's sessions, recedes every other row in place (as a
+  profile's lens does) and pins the card. A click on the chosen one shows them all again. One at a time in each group;
+  a project and an agent may stand together, beside the profile, the plan and the desktop. The terminals stay as they
+  are, and an ended lane on the timeline recedes as a live row does.
+- **The blocked dot** marks a circle a session waits under, whatever the lens holds.
+- **The card** opens beside a circle under the pointer or the keyboard. It lists the sessions under the circle (those
+  that wait first, each with its state) and its foot holds the click's own act. Its reach, focus and closing are the
+  profiles popover's, mirrored to the pill's left.
+- **One filter.** The column's ring, search's field token and the search button's token are one state, as the
+  profile's are (SE-D2). Live now's + Filter leads with Projects and Agents. A typed name offers a project (by the words
+  of its folder's name) or an agent, after a desktop. The choice is kept for the run and read where it stands: a
+  project with no session on the stage shows no filter, and is chosen again when one returns.
+- **The stage around it.** The swarm steers around the pill. The views in flow (list, rain, timeline, spend) read no
+  right inset, so their slot ends at the pill's edge.
+- **Shared, not copied.** The profiles column's card hold (which focus is the keyboard's, where the pointer is heading,
+  what a pinned card holds) and its DOM helpers move to `column-hold.ts` and `column-parts.ts`. Its 117 tests pass on
+  them unchanged.
+- **Mine, not the page's** (DESIGN.md marks each for his eye): a chosen group of one stays drawn; a card's row says the
+  session's state where the page drew a title, which the model does not carry; an agent is named by its adapter's
+  label; the new menu groups' first rows carry no mark, as Profiles' and Desktops' do.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source, under the light lock at nice 19, vitest at 2
+workers, on the puppeteer 0.4.10 install:** field-app `tsc` exit 0; 93 test files and 1591 tests passed (every
+godview*, peek*, profiles*, design-system, ui-system, live-*, phone-*, text-ramp and work-* file), the new ones
+`work-facets` (9), `work-column` (13), five rows in `godview-monitor` and one in `ui-system-boundaries`; biome check of
+the changed files: no error, and only the 22 warnings main already carried on those lines (item 620's two rules);
+`node scripts/check-agent-catalog.mjs --literals`, the import walls and `node scripts/check-retired-names.mjs` pass.
+
+**Not seen:** any of it in a running Godview, by day or by night; the cards' placement and the flow views' narrower
+slot rest on happy-dom, which lays nothing out. **Not run:** `pnpm verify` whole, the bundle and census stages, every
+smoke and `pnpm gate:landing`. **Not done:** no push of its own.
