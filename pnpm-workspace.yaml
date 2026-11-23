@@ -322,11 +322,14 @@ overrides:
   # dials nothing — VibeField's adapters (field-app `history/doors.ts`) are its
   # ports. Its react/react-dom are PEERS (>=19 <20) and resolve to this tree's
   # copy; its `@vibecook/mille*` dependencies take the mille rows below. Both were
-  # published from the same revision siblings.lock.json pins (tags v0.1.8 and
-  # npm-v0.1.8 at rosetta main bf5b526de, PRs #58 (temp paths in the ground-truth stores
-  # redacted), #42 (Antigravity 1.4.12's writer read; its normalizer 8 → 10, so a root that 0.1.7
-  # indexed replays its Antigravity sessions once) and #59 (the release); EL8 2026-11-21.
-  # The kit's Swift row stays 0.1.6 (neither 0.1.7 nor 0.1.8 changes a Swift path). 0.1.7 at
+  # published from the same revision siblings.lock.json pins (tags v0.1.9 and
+  # npm-v0.1.9 at rosetta main c5eaded1d, PRs #60 (History's import sign: what the index
+  # keeps and holds in /api/status, `storage` and `memory`, and the room's R11 `importSign`)
+  # and #61 (the release); EL8 2026-11-23. The kit's Swift row stays 0.1.6 (none of 0.1.7,
+  # 0.1.8 or 0.1.9 changes a Swift path). 0.1.8 at bf5b526de, PRs #58 (temp paths in the
+  # ground-truth stores redacted), #42 (Antigravity 1.4.12's writer read; its normalizer 8 → 10,
+  # so a root that 0.1.7 indexed replays its Antigravity sessions once) and #59 (the release),
+  # 11-21. 0.1.7 at
   # 1bc7f45ef, PRs #54 (Codex's compressed rollouts; the ledger's meta schema 2 → 3, which a 0.1.6
   # rosettad cannot replay), #55 (presented media), #56 (the day pill and the previous-message
   # button) and #57 (the release), 11-14. 0.1.6 at 00221b5b7, PRs #48 (RO-40's waitMark), #50
@@ -341,8 +344,8 @@ overrides:
   # EL8 commit: these rows, preflight's PIN_EXPECTATIONS, the lock's rosetta sha
   # (`pnpm siblings:pin rosetta`), and minimumReleaseAgeExclude for a version
   # published this week.
-  "@vibefield/rosetta-protocol": 0.1.8
-  "@vibefield/rosetta-room": 0.1.8
+  "@vibefield/rosetta-protocol": 0.1.9
+  "@vibefield/rosetta-room": 0.1.9
   # puppeteer — EXACT registry pins since 2026-10-26 (RD-5's exit for its npm
   # plane; packages ask for "*"). 0.2.3 was published from the tag v0.2.3
   # (ee785ec1, the commit npm's SLSA provenance names for every package) under
@@ -552,10 +555,10 @@ minimumReleaseAgeExclude:
   - '@vibecook/ghosttea-react@0.16.2'
   - '@vibecook/ghosttea-frame@0.16.2'
   - '@vibecook/ghosttea@0.16.2'
-  # EL8 2026-11-21: reviewed Rosetta 0.1.8 release (tags v0.1.8 and npm-v0.1.8 at bf5b526de), inside the age window.
-  # The prior 0.1.7 rows were retained through the install that regenerated the lock, then removed.
-  - '@vibefield/rosetta-protocol@0.1.8'
-  - '@vibefield/rosetta-room@0.1.8'
+  # EL8 2026-11-23: reviewed Rosetta 0.1.9 release (tags v0.1.9 and npm-v0.1.9 at c5eaded1d), inside the age window.
+  # The prior 0.1.8 rows were retained through the install that regenerated the lock, then removed.
+  - '@vibefield/rosetta-protocol@0.1.9'
+  - '@vibefield/rosetta-room@0.1.9'
   # puppeteer (RD-5's exit for its npm plane, 0.2.3 on 2026-10-26): our own packages, reviewed as an EL8 pin.
   # Every `@vibefield/puppeteer-*` package the seven rows reach is here, the adapters included: they are the
   # rows' dependencies, and the window applies to each.
