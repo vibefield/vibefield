@@ -87,6 +87,19 @@ struct TerminalPanelTests {
     #expect(FieldHomeModel.livePanelBlur(full: -8, standing: true, pull: 0, height: 800) == 0)
   }
 
+  /// PF-18, PF-19 (2026-11-23): how far above the screen's foot a live card's terminal ends its grid.
+  @Test("the grid ends above the input's row with the keyboard up and with it down, and at the strip with no row")
+  func theGridsFoot() {
+    // open: the safe area under the terminal is the row, the card and the keyboard, whole
+    #expect(FieldHomeModel.liveCardFootClearance(safeBottom: 446, inputOpen: true, floatingRow: 0) == CGFloat(446))
+    // a floating room said while open is not added: the row is in the safe area already
+    #expect(FieldHomeModel.liveCardFootClearance(safeBottom: 446, inputOpen: true, floatingRow: 64) == CGFloat(446))
+    // folded: the row floats over the home indicator's strip
+    #expect(FieldHomeModel.liveCardFootClearance(safeBottom: 34, inputOpen: false, floatingRow: 64) == CGFloat(98))
+    // no row: nothing is said, and the surface's own safe area decides
+    #expect(FieldHomeModel.liveCardFootClearance(safeBottom: 34, inputOpen: false, floatingRow: 0) == nil)
+  }
+
   @Test("the figures: 40pt corners, a 36 by 5 grabber 6 down at 28%, 420ms on the island curve, a 200ms fade")
   func theFigures() {
     #expect(FieldHomeModel.livePanelCorner == 40)

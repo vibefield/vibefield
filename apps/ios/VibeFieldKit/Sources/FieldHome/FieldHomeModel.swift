@@ -220,6 +220,16 @@ enum FieldHomeModel {
     return pull > height * 0.25 || predicted > height * 0.5
   }
 
+  /// How far above the screen's foot a live card's terminal ends its grid (PF-18, PF-19; DESIGN.md §8 "The foot
+  /// and the terminal are one surface"). `safeBottom` is the safe area under the terminal: the home indicator's
+  /// strip, and with the input open its row, its card and the keyboard too. With the keyboard down the row
+  /// floats over that strip and takes `floatingRow` more. Where neither stands, nothing is said and the
+  /// surface's own safe area decides.
+  static func liveCardFootClearance(safeBottom: CGFloat, inputOpen: Bool, floatingRow: CGFloat) -> CGFloat? {
+    if inputOpen { return safeBottom }
+    return floatingRow > 0 ? safeBottom + floatingRow : nil
+  }
+
   /// The home's blur behind the panel. `full` is the blur the person set
   /// (Settings › Terminal, PF-13; 24pt where nobody chose): the terminal's
   /// ground is the only layer over it. It eases as the panel is pulled down,

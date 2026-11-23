@@ -330,6 +330,8 @@ public struct HomeScreen: View {
   #endif
   // --- end IOS-5a ---------------------------------------------------------
   @Environment(\.colorScheme) private var colorScheme
+  /// PF-19 — the size the input's floating row stands at, for the room the card's grid keeps clear of it.
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
   @Environment(\.scenePhase) private var scenePhase
   @Environment(\.accessibilityReduceMotion) private var reduceMotion
   @Environment(\.openURL) private var openURL
@@ -3394,6 +3396,9 @@ public struct HomeScreen: View {
       // the live card's readout, centered over its held veil.
       seatReadout: cardSeatReadout,
       inputIsOpen: inputCardFace == .shown && inputCard.keyboardOwner != .none,
+      // PF-19: with the keyboard down the row floats over the foot, and the grid ends above it.
+      floatingRowRoom: inputCardFace == .shown && inputCard.keyboardOwner == .none
+        ? InputOverlay.floatingRoom(for: dynamicTypeSize) : 0,
       // PF-1, PF-4: until the terminal's surface holds a picture the card stands on its
       // ground's colour whole; from then on the surface's own ground is the only one.
       terminalPainted: attachment?.holdsPicture ?? cardShowsRecordedPicture,
@@ -3428,8 +3433,8 @@ public struct HomeScreen: View {
     }
     // --- IOS-5a: the card rides the bottom safe area, above the keyboard ---
     // PF-11: and the row of paste, replies, the mode switch and the fold key rides over it in the same inset. With
-    // the keyboard up the row is a shelf the grid ends above; with it down it keeps no room and floats over the
-    // grid's last rows (`InputOverlay`).
+    // the keyboard up the row is a shelf the grid ends above; with it down it keeps no room here and floats
+    // (`InputOverlay`), and the card ends its terminal's grid above it (PF-19, `floatingRowRoom`).
     .safeAreaInset(edge: .bottom, spacing: 0) {
       if inputCardFace == .shown {
         InputDock(model: inputCard, pasteboard: pasteboard, rowScheme: cardGround.inkScheme)

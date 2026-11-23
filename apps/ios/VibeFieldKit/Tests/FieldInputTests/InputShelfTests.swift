@@ -1,4 +1,5 @@
 import CoreGraphics
+import SwiftUI
 import Testing
 
 @testable import FieldInput
@@ -24,6 +25,18 @@ struct InputShelfTests {
     #expect(InputOverlay.reserved(shelved: true, rowHeight: 52) == 52)
     #expect(InputOverlay.reserved(shelved: false, rowHeight: 44) == 0)
     #expect(InputOverlay.shelfGap == 2)
+  }
+
+  /// PF-19 (2026-11-23): floating, the row keeps no room of its own, and the grid ends above the room it stands
+  /// in: its 12pt lift and the doors, which stand 8pt over a row.
+  @Test("the floating row stands in 64pt at the default size, and the held message clears 18 more")
+  func theFloatingRowsRoom() {
+    #expect(InputOverlay.floatingRoom(for: .large) == CGFloat(64))
+    #expect(InputOverlay.footprint(for: .large) == CGFloat(82))
+    for size in [DynamicTypeSize.xSmall, .large, .xxxLarge, .accessibility3] {
+      #expect(InputOverlay.floatingRoom(for: size) == InputCardMetrics.rowHeight(for: size) + CGFloat(20))
+      #expect(InputOverlay.footprint(for: size) == InputOverlay.floatingRoom(for: size) + CGFloat(18))
+    }
   }
 
   @Test("the row follows the model: up in either mode it is a shelf, folded it floats")

@@ -95,6 +95,10 @@ struct SessionCardView<Terminal: View>: View {
   /// The open input card reserves space below the terminal. Its custom safe
   /// area must stay in effect while the card holds the keyboard.
   var inputIsOpen: Bool = false
+  /// PF-19 — the room the input's floating row stands in over the safe area's
+  /// foot while the keyboard is down (`InputOverlay.floatingRoom`); 0 where no
+  /// row floats. The terminal's grid ends above it.
+  var floatingRowRoom: CGFloat = 0
   /// PF-1, PF-4 — the terminal's surface holds a picture, so its own ground is
   /// painted under its rows and under the band. false while the card connects
   /// and while an attach is refused: the surface paints nothing then, and the
@@ -166,8 +170,9 @@ struct SessionCardView<Terminal: View>: View {
   /// host's `gridTopInset`), so the band stands on the ground the terminal
   /// itself paints. The surface also paints behind the home indicator; its
   /// safe-area insets keep the last grid row above it.
-  /// The closed input row floats over the grid's last rows (the host's
-  /// `InputOverlay`).
+  /// The closed input row floats over the home indicator's strip (the host's
+  /// `InputOverlay`), and the grid ends above it (PF-19, 2026-11-23); until
+  /// then it stood over the grid's last rows.
   private func liveCard(_ bubble: FieldBubble, ground: CardGround) -> some View {
     ZStack(alignment: .top) {
       // Until the terminal presents its first frame its view paints nothing, so
@@ -194,14 +199,19 @@ struct SessionCardView<Terminal: View>: View {
       // indicator, or the input's row, its card and the keyboard. Open, the
       // room those take is the safe area under this reader, and the surface is
       // told it, so the grid ends above the row while the ground and its
-      // effects are painted under all of it. Folded, the view's own safe area
-      // keeps the last row above the home indicator, as before. (Until PF-18
-      // the surface stopped at the row and a flat strip of the ground's colour
-      // ran on under it: a line across the card wherever the surface drew
-      // more than a flat ground, as it does under any effect.)
+      // effects are painted under all of it. Folded, the row floats over the
+      // home indicator's strip and the grid ends above it too (PF-19); with no
+      // row, the view's own safe area keeps the last row above the strip, as
+      // before. (Until PF-18 the surface stopped at the row and a flat strip
+      // of the ground's colour ran on under it: a line across the card
+      // wherever the surface drew more than a flat ground, as it does under
+      // any effect.)
       GeometryReader { room in
         terminal()
-          .environment(\.terminalFootClearance, inputIsOpen ? room.safeAreaInsets.bottom : nil)
+          .environment(
+            \.terminalFootClearance,
+            FieldHomeModel.liveCardFootClearance(
+              safeBottom: room.safeAreaInsets.bottom, inputOpen: inputIsOpen, floatingRow: floatingRowRoom))
           // A cooled terminal dims toward its ground, never toward the glass.
           .overlay {
             ground.color

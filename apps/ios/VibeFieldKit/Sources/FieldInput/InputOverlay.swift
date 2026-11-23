@@ -9,9 +9,11 @@ import SwiftUI
 /// row's height between the grid and the card, so the grid ends above it and
 /// nothing covers a program's last lines while a person types. Until then it
 /// floated there, over the two lines a prompt and a program's footer stand on.
-/// **With the keyboard down it floats** over the grid's last rows and keeps no
-/// room, as before: it is a frame of no height, and the row stands up out of
-/// it.
+/// **With the keyboard down it floats**: it is a frame of no height, and the
+/// row stands up out of it, 12pt over the home indicator's strip. It kept no
+/// room and stood over the grid's last rows until PF-19 (2026-11-23); since
+/// then the place that draws the terminal ends the grid above it
+/// (`floatingRoom`), and the row stands on the terminal's ground alone.
 ///
 /// One view for both, mounted once above the card (`InputDock`), so the row is
 /// the same view as the keyboard comes and goes.
@@ -46,12 +48,19 @@ public struct InputOverlay: View {
 
   private var rowHeight: CGFloat { InputCardMetrics.rowHeight(for: dynamicTypeSize) }
 
-  /// The floating row's reading footprint, at its tallest (the doors, which
-  /// stand `buttonGrowth` over a row). It is used only to center the held-seat
-  /// message above the controls, and never changes the terminal's safe area.
-  /// (A held seat folds the keyboard, so the row it clears is the floating one.)
+  /// PF-19 — the room the floating row stands in, over the safe area's foot:
+  /// its lift and its tallest control (the doors, which stand `buttonGrowth`
+  /// over a row). 64pt at the default size. The terminal's grid ends above it.
+  public static func floatingRoom(for size: DynamicTypeSize) -> CGFloat {
+    InputCardMetrics.rowHeight(for: size) + buttonGrowth + lift
+  }
+
+  /// The floating row's reading footprint: its room and the breath over it. It
+  /// centers the held-seat message above the controls, and never changes the
+  /// terminal's safe area. (A held seat folds the keyboard, so the row it
+  /// clears is the floating one.)
   public static func footprint(for size: DynamicTypeSize) -> CGFloat {
-    InputCardMetrics.rowHeight(for: size) + buttonGrowth + lift + messageClearance
+    floatingRoom(for: size) + messageClearance
   }
 
   /// PF-11 — whether the row is a shelf: while anything holds the keyboard.
