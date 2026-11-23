@@ -28,17 +28,20 @@ struct ModelSwitchDoor {
   /// `-vf-demo-model-switch[=refused]` (PF-3) — a FIXTURE door for the open card's capsule, for looking at the switch
   /// list's own pixels with no desktop: an offer no row made, three invented models and their effort values, and an
   /// ask that answers `sent` after a beat. With `=refused` the list stands on the owner's `working`. It reaches no
-  /// daemon and changes no agent, and it cannot run in a build that reads no launch arguments.
+  /// daemon and changes no agent, and it cannot run in a build that reads no launch arguments. Its answer names the
+  /// provider of the card it stands on, as the real door's does: the fixture names no agent of its own (wall R23b;
+  /// mended 2026-11-22, where it had written one agent's id twice).
   enum ModelSwitchDemo {
     static let argument = "-vf-demo-model-switch"
 
-    static func door(_ arguments: [String]) -> ModelSwitchDoor? {
+    static func door(_ arguments: [String], provider: String) -> ModelSwitchDoor? {
       guard let named = arguments.first(where: { $0 == argument || $0.hasPrefix(argument + "=") }) else { return nil }
+      let answer = catalog(provider)
       return ModelSwitchDoor(
         offer: AgentModelSwitch(model: true, controls: ["effort"], persistence: "default"),
         models: {
           try await Task.sleep(for: .milliseconds(300))
-          return try AgentModelsResult(json: catalog)
+          return try AgentModelsResult(json: answer)
         },
         ask: { _ in
           try await Task.sleep(for: .milliseconds(400))
@@ -62,19 +65,21 @@ struct ModelSwitchDoor {
       ])
     }
 
-    private static let catalog: JSONValue = .object([
-      "provider": .string("claude"), "refreshing": .bool(false),
-      "catalog": .object([
-        "provider": .string("claude"), "cwd": .string(""), "observedAt": .string("2026-11-21T00:00:00.000Z"),
-        "source": .object(["kind": .string("fixture"), "freshness": .string("fresh")]),
-        "completeness": .string("complete"), "customModels": .bool(false),
-        "models": .array([
-          model("opus", "Opus 5.5", ["low", "medium", "high", "max"]),
-          model("sonnet", "Sonnet 5.5", ["low", "medium", "high"]),
-          model("haiku", "Haiku 5.5", []),
+    private static func catalog(_ provider: String) -> JSONValue {
+      .object([
+        "provider": .string(provider), "refreshing": .bool(false),
+        "catalog": .object([
+          "provider": .string(provider), "cwd": .string(""), "observedAt": .string("2026-11-21T00:00:00.000Z"),
+          "source": .object(["kind": .string("fixture"), "freshness": .string("fresh")]),
+          "completeness": .string("complete"), "customModels": .bool(false),
+          "models": .array([
+            model("opus", "Opus 5.5", ["low", "medium", "high", "max"]),
+            model("sonnet", "Sonnet 5.5", ["low", "medium", "high"]),
+            model("haiku", "Haiku 5.5", []),
+          ]),
         ]),
-      ]),
-    ])
+      ])
+    }
   }
 #endif
 

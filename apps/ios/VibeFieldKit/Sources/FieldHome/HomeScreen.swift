@@ -4273,8 +4273,13 @@ public struct HomeScreen: View {
   /// then the capsule is a readout.
   private var cardModelSwitch: ModelSwitchDoor? {
     #if DEBUG
-      // `-vf-demo-model-switch`: the fixture door, on any agent's card, so the list can be photographed with no desktop
-      if cardBubble?.agent != nil, let demo = ModelSwitchDemo.door(LaunchArguments.current) { return demo }
+      // `-vf-demo-model-switch`: the fixture door, on any agent's card, so the list can be photographed with no
+      // desktop. It answers as the card's own provider, as the real door asks for it
+      if let agent = cardBubble?.agent,
+        let demo = ModelSwitchDemo.door(LaunchArguments.current, provider: agent.provider.rawValue)
+      {
+        return demo
+      }
     #endif
     guard let bubble = cardBubble, let agent = bubble.agent, let offer = agent.modelSwitch, let join = agent.join,
       let run = bubble.runKey, let link
