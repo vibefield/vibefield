@@ -9531,6 +9531,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   across the composer's rounded bottom. Hardware typing continues while the keypad is visible.
   Existing tap-to-focus, scroll-without-focus, floating paste/fold controls, and automatic folding
   when another device takes the seat remain part of the input behavior.
+  *(Since PF-16, 2026-11-23, the bullet after the next two: Shortcuts leads the pages, the
+  profile is chosen on a strip in sight, and the profiles are six agents and three tools. "Common
+  shell shortcuts lead; Claude and tmux have named profiles … Emacs/Screen remain secondary
+  choices" described the five profiles until then.)*
 - **The phone's input card is one row in each of its two modes** (PF-8, 2026-11-22; James,
   2026-11-21: "currently we mixed them in one which is a bit confusing and busy, when in direct
   terminal typing mode, user needs all the helpful buttons, while in message prompt mode, user just
@@ -9593,7 +9597,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     two or three touches deep in the system's symbols. Each is typed, as the slash is.
   - **Esc** holds the stops: **Esc Esc** rewind (two presses, sent as one touch) · **⌃C** interrupt
     · **⌃D** exit · **⌃Z** suspend. *(Until PF-14 Esc held Meta alone, and ⌃C was the first of ten
-    chords under Ctrl. Those ten are on the keys page's Shortcuts, PF-15.)*
+    chords under Ctrl. Those ten are on the keys page's Shortcuts, PF-16.)*
+    > **Errata (2026-11-23, PF-16):** as landed (`6e88b51dc`) this said "PF-15". The Shortcuts
+    > slice is PF-16; PF-15 is the look-mode mend that landed between the two.
   - **Tab** holds **⇧Tab**, as before. **←** holds Home and **⌥←** (a word back), **→** holds
     **⌥→** and End *(the two word moves are new)*; **↑** holds PgUp and **↓** PgDn, as before.
   - **⋯** holds **Ctrl** and **Alt**, each armed for the next key: the latch's arm and the Meta
@@ -9607,6 +9613,70 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   all three and opens nothing; the next tap opens the keys page. Esc no longer says Meta: what is
   held is said in one place. The keys page's own rail keeps the plus, Esc, Ctrl, Alt, Shift and
   ABC, and its Ctrl opens no fan.
+- **The keys page's Shortcuts are an agent's keys** (PF-16, 2026-11-23; James, 2026-11-22: "for
+  detailed custom keys, make sure common combo keys in popular agents TUI are all there, things
+  like tab+shift should always be there"; of the page "Phone Agent Keys", the same day: "good, go
+  with your lean").
+  **Shortcuts leads the pages**: Shortcuts · Navigate · Fn, and a phone that never opened the keys
+  page opens it on Shortcuts *(until PF-16 Navigate led and was the first page; the rail already
+  carries Navigate's Tab, arrows and far ends)*. The page last used is still the one a tap opens.
+  **The top row never changes**: **⇧Tab · ⌃C · Esc Esc · ⌃J · ⌃D**, five keys in the arrows'
+  brighter cap, in the same places under every profile. These are the chords the agents bind
+  alike, or nearly. A key's face is the chord itself, so it is true in every program; the word
+  under it is the profile's. ⇧Tab reads **Mode**, and **Agent** for OpenCode, **Thinking** for Pi
+  and **Back** for the tools. ⌃C reads **Interrupt** and ⌃D **Exit** everywhere. Esc Esc reads
+  **Rewind**, and **Edit last** for Codex, **Interrupt** for OpenCode and Copilot, **Tree** for
+  Pi, and no word for the tools. ⌃J reads **New line**, no word for Copilot, which does not bind
+  it (its new line, ⌥↵, is on its page), and **Enter** for the tools.
+  **The profiles are a strip in sight**, 30pt, between the top row and the profile's keys:
+  **Claude · Codex · Gemini · OpenCode · Copilot · Pi**, a hairline, then **Shell · tmux ·
+  screen**, at 13/500. The one chosen wears the segment's selected fill and ink, the others the
+  segment's ink; the strip scrolls sideways and brings the chosen one to its middle. With tmux
+  chosen, its prefix ("Prefix ⌃B" where nobody chose) stands after it and opens the prefix's
+  menu, as before. *(Until PF-16 the profile was a menu at the page's right, under a line "Send
+  to terminal", over nine keys or fewer.)*
+  **A profile is fifteen keys**, three rows of five under the strip: a chord in the mono family
+  at 15/500 (12.5 where the face is two presses), its word under it at 10 in secondary ink, the
+  caps at radius 13 with 6pt between them. Each agent's keys were read on 2026-11-22 from its own
+  documentation or source, and a profile is read again when its program moves them:
+  - **Claude**: ⌃O Transcript · ⌃T Todos · ⌃B Background · ⌥P Model · ⌥T Thinking · ⌃R History ·
+    ⌃S Stash · ⌃G Editor · ⌃V Image · ⌃L Redraw · ⌥O Fast mode · ⌃_ Undo · ⌃U Clear line ·
+    ⌃W Del word · ⌃X ⌃K Stop all.
+  - **Codex** (its keymap on `main`, which can run ahead of a shipped build): ⌃T Transcript ·
+    ⌥. Effort + · ⌥, Effort − · ⌃O Copy last · ⌃/ Side chat · ⌃R History · ⌃G Editor · ⌃V Image ·
+    ⌃L Clear · ⌥R Raw · ⌥↑ Edit queue · ⌥Z Undo · ⌃U Clear line · ⌃W Del word · ⌃] Skip.
+  - **Gemini**: ⌃Y YOLO · ⌃T Todos · ⌃O Expand · ⌃B Shells · Tab Tab Details · ⌃R History ·
+    ⌃G Editor · ⌃V Image · ⌃L Clear · ⌥M Markdown · ⌃S Mouse · ⌥Z Undo · ⌃U Clear line ·
+    ⌃W Del word · ⌃K Kill shell.
+  - **OpenCode** (its leader is ⌃X, pressed and let go, then a plain key): ⌃P Commands ·
+    ⌃T Variant · F2 Model · ⌃X m Models · ⌃X a Agents · ⌃X n New · ⌃X l Sessions · ⌃X u Undo ·
+    ⌃X r Redo · ⌃X c Compact · ⌃X e Editor · ⌃X ↵ Queue · ⌃B Background · ⌃O Recent · ⌃V Paste.
+  - **Copilot**: ⌃T Reasoning · ⌃O Expand · ⌃E Expand all · ⌃F Search · ⌥↵ New line · ⌃R History
+    · ⌃G Editor · ⌃V Paste · ⌃L Clear · ⌃Q Queue · ⌃X b Background · ⌃X / Command ·
+    ⌃X o Open link · ⌃X h Sidebar · ⌃U Clear line.
+  - **Pi**: ⌃L Model · ⌃P Next model · ⌃T Thinking · ⌃O Tools · ⌥↵ Follow-up · ⌥↑ Dequeue ·
+    ⌃G Editor · ⌃V Paste · ⌃X Copy last · ⌃- Undo · ⌃U Clear line · ⌃W Del word · ⌃A Line start ·
+    ⌃E Line end · ⌃K Kill right.
+  - **Shell** (readline): ⌃A Line start · ⌃E Line end · ⌃W Del word · ⌃U Del left · ⌃K Del right
+    · ⌃R History · ⌃L Clear · ⌃Y Yank · ⌥B Word back · ⌥F Word fwd · ⌥D Del fwd · ⌥⌫ Del back ·
+    ⌃P Previous · ⌃N Next · ⌃X ⌃E Editor.
+  - **tmux** (the prefix, then): c New window · n Next · p Previous · w Windows · , Rename ·
+    % Split side · " Split down · o Next pane · z Zoom · x Kill pane · [ Copy mode · d Detach ·
+    s Sessions · ; Last pane · ? Keys.
+  - **screen** (⌃A, then): c New · n Next · p Previous · " Windows · A Rename · S Split ·
+    | Split side · Tab Next area · X Close area · k Kill · [ Copy mode · d Detach · a Send ⌃A ·
+    Q One area · ? Keys.
+  The agents disagree about most chords: ⌃T is the todo list in Claude Code and Gemini, the
+  transcript in Codex, the model's variant in OpenCode and the reasoning's view in Copilot. So a
+  page belongs to one program and says what a key does there, and a chord with no key on a page
+  is reached by a modifier and the letter (the rail's ⋯, or the keys page's Ctrl and Alt).
+  **Shell takes Common's place, and Emacs is retired**: Emacs's eight keys were readline's and are
+  among Shell's fifteen. A phone that had Common or Emacs chosen lands on Shell, and so does one
+  where nobody chose. A profile is chosen by hand and kept across sessions *(PF-17: a card's
+  session chooses it)*. An agent with no profile (Grok, Kimi Code, Hermes, Antigravity, ACP)
+  takes the top row, which three of them bind as the others do, and whichever profile is chosen.
+  **In a short, wide keyboard** the strip stands over two rows of ten, the top row's five leading
+  the first. Navigate and Fn are as they were.
 - **A live card another client is driving** (item 42's phone half; James, 2026-10-19 17:42Z: "studio
   is driving · touch to take it back"; the look ruled 21:38Z, "good, design all go with the lean").
   While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
