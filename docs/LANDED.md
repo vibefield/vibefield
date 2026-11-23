@@ -67374,3 +67374,39 @@ unfinished edits and did not build.
 **Not seen:** a live terminal drawn by day after a change of mode. The simulator attaches nothing, so the sight is
 his phone's. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other suites.
 **Not done:** no push of its own.
+
+## Track PF — the phone's key rail leads with a slash, and Ctrl leaves it (M529)
+
+**2026-11-23 · on local main: `6e88b51dc` PF-14 (doc) and `5cff3e26d` PF-14 (green).**
+James, 2026-11-22: "for type to terminal mode, remove ctrl key, and add a / key in front of esc"; "we are trying to
+build the best terminal keyboard experience for user to use ai agents tui"; and of the design page "Phone Agent Keys"
+(`claude.ai/artifact/9QRRUDSaTHuEKAFYAzvswd`), the same day: "good, go with your lean, start implement and land
+directly on local main". This is the first of that page's three slices; the keys page's Shortcuts (PF-16) and the
+keys page following a card's agent (PF-17) follow.
+
+- **The rail over the letters is / · Esc · Tab · the four arrows · ⋯**, eight keys as before. The slash is typed,
+  one touch where the system's letters take three.
+- **A held key opens its family.** The slash holds @ ! ? $ # over \ ~ | - _, each typed. Esc holds the stops: Esc Esc
+  as one touch, ⌃C, ⌃D, ⌃Z. Tab holds ⇧Tab as before, and the left and right arrows gain a word move beside Home and
+  End.
+- **⋯ holds Ctrl and Alt**, each armed for the next key, and wears what is held (⌃ ⌥ ⇧; the locked fill and its dot
+  for a locked Ctrl), where a tap lets go. This hold and the two word moves were not asked for by name. They were on
+  the page he answered, and the page said the hold was an addition.
+- **Esc no longer says Meta**, and the keys page's Ctrl opens no fan. The ten chords that stood under the rail's Ctrl
+  are reached now by Esc's hold (three of them), by ⋯'s Ctrl and a letter, or on the keys page; until PF-16 lands,
+  that page's Shortcuts still offers them only under its Common profile.
+
+**Seen** on the iPhone 17 simulator (iOS 26.5), the demo card over a made-up terminal: the rail by night and by day,
+Esc's fan open, ⋯ wearing ⌥ armed and ⌃ locked with its dot.
+
+**Proved, 2026-11-23, on the development Mac, on the committed source:** `FieldInputTests` 195 in 22 suites and
+`FieldHomeTests` 876 in 103 suites passed; `node scripts/check-agent-catalog.mjs --literals` and
+`node scripts/check-retired-names.mjs` pass.
+
+**Found on the way:** two builds stopped on a precompiled module older than ghosttea's header, in this checkout's two
+DerivedData folders (exit 65, no test run). The two stale files were moved aside, not removed, under
+`/Volumes/SamsungRed/cache/xcode-deriveddata/aside-qa2-2026-11-22-stale-ghosttea-pcm`; they are a leftover there.
+
+**Not seen:** a phone; the system's letters under the rail (the simulator shows none); a fan picked by a finger; a
+slash reaching a real agent's prompt. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the
+kit's other suites. **Not done:** no push of its own; no install on his phone yet (it follows PF-16).
