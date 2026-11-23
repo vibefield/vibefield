@@ -21,7 +21,7 @@ import {
   type SessionSeat,
   type SessionSeatAnnouncement,
 } from "../routed/session-seat";
-import { type CellBootId, type TerminalShellPolicy } from "./cell-transport";
+import type { CellBootId, TerminalShellPolicy } from "./cell-transport";
 import {
   NO_SOURCE_DEMAND,
   type SessionDemand,
@@ -1084,6 +1084,8 @@ export async function readRemoteTerminalSession(
   sessionId: string,
 ): Promise<SessionSummary | null> {
   ensureRuntime();
+  const attached = attachedSessionSummary(sessionId, device);
+  if (attached !== undefined) return attached;
   const host = routedHost;
   if (host === null) throw new Error("the routed terminal runtime has no host");
   return await host.readRemoteSession(device, sessionId);
@@ -1102,6 +1104,11 @@ export function isRemoteTerminalSession(sessionId: string): boolean {
 
 export function adoptRemoteTerminalSession(device: string, summary: SessionSummary): void {
   const target = ensureRuntime();
+  const sameOwner = remoteSessions.get(summary.id)?.device === device;
+  if (sameOwner && target.sessionSummary(summary.id) === summary) return;
+  if (!sameOwner && placements.cellFor(summary.id) !== undefined) {
+    target.discardParkedSession(summary.id);
+  }
   remoteSessions.set(summary.id, { device, summary });
   routedHost?.placeRemote(summary.id, device);
   target.registerSession(summary);
@@ -1213,6 +1220,30 @@ function readLapseMs(cause: unknown): number | undefined {
   return typeof timeoutMs === "number" && timeoutMs > 0 ? timeoutMs : ROUTED_READ_TIMEOUT_MS;
 }
 
+/** A live or parked activation ties the runtime's registered handle to the owner's current cell. */
+function attachedSessionSummary(sessionId: string, device?: string): SessionSummary | undefined {
+  if (!runtime || remoteSessions.get(sessionId)?.device !== device) return undefined;
+  const cell = placements.cellFor(sessionId);
+  if (cell === undefined) return undefined;
+  const state = runtime.routedActivation(sessionId);
+  const now = performance.now();
+  if (
+    state === undefined ||
+    (state.phase !== "presenting" &&
+      !(state.phase === "stalled" && state.sourceDemand === "none")) ||
+    !state.controlAttached ||
+    !state.framesAttached ||
+    !state.grantInputValid ||
+    !state.rights.includes("read") ||
+    state.cellLeaseDeadline <= now ||
+    state.workerLeaseDeadline <= now ||
+    state.appliedContent?.sceneEpoch.cellBootId !== cell
+  )
+    return undefined;
+  const summary = runtime.sessionSummary(sessionId);
+  return summary?.id === sessionId && !summary.exited ? summary : undefined;
+}
+
 /**
  * Resolve a session id to the ghosttea summary a PANE is mounted from.
  *
@@ -1237,20 +1268,27 @@ function readLapseMs(cause: unknown): number | undefined {
 export async function terminalSessionSummary(
   sessionId: string,
   attempts = 5,
+  signal?: AbortSignal,
 ): Promise<SessionSummary | null> {
+  signal?.throwIfAborted();
   const target = runtime;
   if (target === null) return null;
+  const attached = attachedSessionSummary(sessionId);
+  if (attached !== undefined) return attached;
   const born = createdSummaries.get(sessionId);
   if (born !== undefined) return born;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
+    signal?.throwIfAborted();
     let known: SessionSummary[];
     try {
       known = await floorReadWithin(target.listSessions(), "the floor");
     } catch (cause) {
+      signal?.throwIfAborted();
       if (cause instanceof FloorReadLate || attempt + 1 >= attempts) throw cause;
       await new Promise((resolve) => setTimeout(resolve, 20));
       continue;
     }
+    signal?.throwIfAborted();
     const found = known.find((session) => session.id === sessionId);
     if (found !== undefined) return found;
     await new Promise((resolve) => setTimeout(resolve, 20));

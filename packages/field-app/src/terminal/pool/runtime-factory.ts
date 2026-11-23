@@ -80,6 +80,8 @@ export function createTerminalRuntime(
       ...common,
       transport: "routed",
       host: transport.host,
+      // One recently viewed session can resume its routed attachment without another ticket.
+      routedAttachmentGraceMs: 4_000,
       // TP-S3f/G24: without this advertisement the cell must stay silent —
       // an un-negotiated client closes its control leg on any unknown tag.
       capabilities: [...ROUTED_CLIENT_CAPABILITIES],

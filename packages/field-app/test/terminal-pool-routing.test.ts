@@ -22,6 +22,7 @@
  *      — which REFUSES a placement key.
  */
 
+import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { ProductSessionRosterItem, TERMINAL_PIPELINE } from "@vibefield/contracts";
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -47,6 +48,9 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       startPerformanceMeasurement: () => Promise.resolve(),
       finishPerformanceMeasurement: () => Promise.resolve({ backend: "test" }),
       listSessions: () => listSessionsOverride?.() ?? Promise.resolve(sessionSummaries),
+      routedActivation: (id: string) => attached.get(id),
+      sessionSummary: (id: string) => registered.get(id),
+      discardParkedSession: (id: string) => attached.delete(id),
       registerSession: (session: unknown) => registeredSessions.push(session),
       dispose: () => undefined,
       rendererBackend: "test",
@@ -128,7 +132,7 @@ function directTicket(cellBootId: string, sessionId: string) {
   };
 }
 
-function runtimeSummary(sessionId: string) {
+function runtimeSummary(sessionId: string): SessionSummary {
   return {
     id: sessionId,
     handle: "1",
@@ -161,6 +165,20 @@ function runtimeSummary(sessionId: string) {
 
 /** Which cell each session sits on, per case. */
 let cellOf: Record<string, string> = {};
+const registered = new Map<string, ReturnType<typeof runtimeSummary>>();
+const attached = new Map<
+  string,
+  {
+    phase: string;
+    controlAttached: boolean;
+    framesAttached: boolean;
+    grantInputValid: boolean;
+    rights: string[];
+    cellLeaseDeadline: number;
+    workerLeaseDeadline: number;
+    appliedContent: { sceneEpoch: { cellBootId: string } };
+  }
+>();
 /** Sessions the runtime's own `listSessions` reports. */
 let sessionSummaries: Array<{ id: string }> = [];
 /** What `terminal.roster` answers. */
@@ -202,6 +220,8 @@ async function settle(): Promise<void> {
 }
 
 beforeEach(() => {
+  registered.clear();
+  attached.clear();
   runtimesMade = 0;
   listSessionsOverride = null;
   runtimeOptions = [];
@@ -452,6 +472,55 @@ describe("the route is the key (TP-L-C)", () => {
     expect(pool.terminalPoolSnapshot().phase).toBe("open");
     expect(pool.terminalSessionAvailability("a-1")).toEqual({ ready: true });
     expect(pool.terminalSessionAvailability("b-1")).toEqual({ ready: true });
+  });
+
+  it("reuses a registered summary only for its live route and owner", async () => {
+    const id = "outside-shell";
+    const cell = "cell-b-boot-9";
+    cellOf = { [id]: cell };
+    pool.openTerminalPool(fieldd, { sessionIds: [id] });
+    await settle();
+    const { host } = runtimeOptions[0] as { host: { openTicket(id: string): Promise<unknown> } };
+    await host.openTicket(id);
+    const current = runtimeSummary(id);
+    registered.set(id, current);
+    const state = {
+      phase: "presenting",
+      controlAttached: true,
+      framesAttached: true,
+      grantInputValid: true,
+      rights: ["read", "input"],
+      cellLeaseDeadline: performance.now() + 5_000,
+      workerLeaseDeadline: performance.now() + 5_000,
+      appliedContent: { sceneEpoch: { cellBootId: cell } },
+    };
+    attached.set(id, state);
+    const inventory = vi.fn(async () => [{ ...current, handle: "2" }]);
+    listSessionsOverride = inventory;
+    expect(await pool.terminalSessionSummary(id)).toBe(current);
+    expect(inventory).not.toHaveBeenCalled();
+    await expect(pool.readRemoteTerminalSession("another-owner", id)).rejects.toThrow();
+    expect(requests).toContain("terminal.sessions");
+    state.appliedContent.sceneEpoch.cellBootId = "previous-cell";
+    expect((await pool.terminalSessionSummary(id))?.handle).toBe("2");
+    state.appliedContent.sceneEpoch.cellBootId = cell;
+    state.workerLeaseDeadline = 0;
+    expect((await pool.terminalSessionSummary(id))?.handle).toBe("2");
+    state.workerLeaseDeadline = performance.now() + 5_000;
+    state.rights = [];
+    expect((await pool.terminalSessionSummary(id))?.handle).toBe("2");
+    state.rights = ["read"];
+    state.grantInputValid = false;
+    expect((await pool.terminalSessionSummary(id))?.handle).toBe("2");
+    expect(inventory).toHaveBeenCalledTimes(4);
+
+    pool.adoptRemoteTerminalSession("another-owner", current);
+    expect(attached.has(id)).toBe(false);
+    state.grantInputValid = true;
+    attached.set(id, state);
+    expect(await pool.readRemoteTerminalSession("another-owner", id)).toBe(current);
+    pool.adoptRemoteTerminalSession("another-owner", current);
+    expect(attached.get(id)).toBe(state);
   });
 
   it("never names a cell to a consumer (TP-L-C holds without the pin)", async () => {

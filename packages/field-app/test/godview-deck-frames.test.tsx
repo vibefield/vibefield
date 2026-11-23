@@ -312,6 +312,8 @@ vi.mock("@vibecook/ghosttea-react", () => ({
     finishPerformanceMeasurement: () => Promise.resolve({ backend: "test" }),
     listSessions: () => Promise.resolve(workspace.panes.map((pane) => ({ id: pane.session.id }))),
     createSession: () => Promise.resolve({ id: "s-created" }),
+    routedActivation: () => undefined,
+    discardParkedSession: () => undefined,
     registerSession: (session: SessionSummary) => nativeSummaries.set(session.id, session),
     sessionSummary: (id: string) =>
       nativeSummaries.get(id) ?? (runtimeBirths.has(id) ? bornSummary(id) : undefined),

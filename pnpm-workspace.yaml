@@ -9,6 +9,9 @@ packages:
   - "tooling/*"
   - "apps/*"
   - "services/*"
+# Backport Ghosttea through b75b65a for routed reattachment and continuous pane rendering.
+patchedDependencies:
+  "@vibecook/ghosttea-react@0.16.2": patches/ghosttea-react-0.16.2-reattach.patch
 allowBuilds:
   esbuild: true
   electron: true

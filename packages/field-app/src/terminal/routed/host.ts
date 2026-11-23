@@ -696,7 +696,9 @@ export function createRoutedTerminalHost(
       ownClient(params.sessionId, renewed.attachGrant.claims.clientId);
       return { attachGrant: asAttachGrant(renewed.attachGrant) };
     },
-    listSessions: async () => await listRuntimeSessions(options.fieldd),
+    // Overlapping lookups share one wire read. A later retry for a new shell
+    // still gets a fresh inventory if the first one missed its birth.
+    listSessions: async () => [...(await readInventory(true)).values()],
     // TP-S3f/G24: the routed metadata refresh — ghosttea arms its existing
     // 200ms cadence from routed frame commits and asks HERE; the coalescer
     // makes N concurrent asks one wire read. `null` = no update, never an

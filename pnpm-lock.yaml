@@ -60,6 +60,9 @@ overrides:
   '@vibecook/mille': 0.3.6
   '@vibecook/mille-ui': 0.3.6
 
+patchedDependencies:
+  '@vibecook/ghosttea-react@0.16.2': b8131172c32fb22dc9e25e9f603aaecf7481dee23e041be9dbe116add587744a
+
 importers:
 
   .:
@@ -389,7 +392,7 @@ importers:
         version: 0.16.2
       '@vibecook/ghosttea-react':
         specifier: 0.16.2
-        version: 0.16.2(react@19.2.7)
+        version: 0.16.2(patch_hash=b8131172c32fb22dc9e25e9f603aaecf7481dee23e041be9dbe116add587744a)(react@19.2.7)
       '@vibecook/ice':
         specifier: 0.20.0
         version: 0.20.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -5356,7 +5359,7 @@ snapshots:
 
   '@vibecook/ghosttea-protocol@0.16.2': {}
 
-  '@vibecook/ghosttea-react@0.16.2(react@19.2.7)':
+  '@vibecook/ghosttea-react@0.16.2(patch_hash=b8131172c32fb22dc9e25e9f603aaecf7481dee23e041be9dbe116add587744a)(react@19.2.7)':
     dependencies:
       '@vibecook/ghosttea': 0.16.2
       '@vibecook/ghosttea-frame': 0.16.2
