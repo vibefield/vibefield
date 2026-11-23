@@ -730,8 +730,10 @@ and per-room deals (D-i13, AR5-D3; the History room's own 333° wheel and puppet
   floor for a mark that must be seen. It does not clear 4.5:1 by day, so **an ink is never text**.
 - **How it is drawn:** as the **folder mark** (`folder`, §13), filled with the ink at a quarter and
   stroked in it — never a round dot, which reads as state (PJ-L7). Godview's swarm and timeline wake
-  still wear puppeteer's own deal (§2.6's exception) until they take this ink (PJ-5). A device
-  never gets an ink (§2.8, PJ-D24): a desktop is its OS mark.
+  still wear puppeteer's own deal (§2.6's exception) until they take this ink (PJ-5), and so do the
+  work column's project circles, which wear the colour their bodies wear so the two never disagree
+  (WL-1, 2026-11-23; §8 "Godview's work column"). A device never gets an ink (§2.8, PJ-D24): a
+  desktop is its OS mark.
 - **The one exception: a made app's fallback icon** (added 2026-11-05, track MA; MA-D10 (b), ruled by
   James on the page *Apps in a Pocket*; §8 "The phone's Apps", the icon). A made app's icon is its
   preview, which wears no ink. Until it has one, its squircle is drawn from its project's ink and its
@@ -3980,13 +3982,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - **Where the chrome stands** (*added 2026-11-16; James, in chat: "do not overlay the scanline pattern and the
       vagette on top of this, it should be same level as all other chrome uis"*). The column, the claims strip and
       the cards are chrome, as the head's circles are, and wear neither the scanlines nor the vignette: the frame's
-      glass carries neither. The column's slot and the claims strip stand in **the chrome layer**
+      glass carries neither. The column's slot, the work column's (WL-1, 2026-11-23) and the claims strip stand in
+      **the chrome layer**
       (`.vf-monitor-chrome-layer`), a root-level sibling after the stage, laid out in the stage's own box, so each
       of their measures, and the swarm's of them, is the stage's. It stands at the CRT layers' **30**, after them in
       the root, so over them, and under the head (31). A deck raised over the stage still covers the chrome: the
       layer ends at the deck's top edge. Under a maximized deck it fades with the stage, 260ms, and then takes no
       pointer; under the curtain it is hidden, with the cards, since the question covers the stage it stands for.
-    - **Where the cards stand.** The popover and the add's card stand in **the cards layer** (`.vf-monitor-cards`),
+    - **Where the cards stand.** The popover, the add's card and the work column's cards (WL-1, 2026-11-23) stand in
+      **the cards layer** (`.vf-monitor-cards`),
       a root-level sibling after the stage at **z 30**, after the chrome layer: over the deck (10), its veil (11),
       its readout (12), the CRT layers and the pill, and under the head (31); hidden under the curtain (20).
       *(Corrected 2026-11-16, "Where the chrome stands": this said z 13, under the curtain, the CRT layers and the
@@ -4153,6 +4157,76 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     and the pinned tell change at once; and the limit card enters with no fade (§8 "The moments"). *(Corrected
     2026-11-06, PLAN §4 (a): this said the first read "does not breathe", with no still state named.)*
   - The phone's half is §8 "The phone's corner" and "The phone's profile token".
+- **Godview's work column** (track WL, WL-1; ruled 2026-11-23 on the page *The Work Lens*, James: "lets go with the
+  lean, i pick C", which carries the page's five smaller calls at their leans and its stated defaults). What runs, at
+  the stage's top right: one circle per live project, then one per agent, in a pill that is the profiles column's twin,
+  and each circle is a lens. It is VibeField's chrome, drawn by field-app; nothing upstream moves. Search's Live now
+  carries the same two filters (§8 "Search — the Peek"), the page's A, which every option kept.
+  - **The pill** is the profiles column's (above): **52** wide, padded **6**, corners **26**, **4** between circles,
+    the Line's glass with its 24 blur in Godview's own mode, at y **64**, and **13** from the stage's right edge. Its
+    room, its circles scrolling inside it with §4's fade, and a raised deck covering it are the profiles column's,
+    mirrored. It holds no add.
+  - **Which circles.** First the projects of the sessions on the stage, the chosen desktop's and every profile's, by
+    the folder each runs in, as the bodies are titled; then a **4** spacer, so 12 stand between the groups and no
+    divider; then the agents, by the agent each session runs, a bare terminal as **Shell**. Each group stands in the
+    order its first session came (the row's `createdAt`), so a circle keeps its place while it has sessions. A group
+    with one value is not drawn unless its choice stands, so a lens is never out of sight, and with neither group
+    drawn there is no pill. A terminal in no project has no project.
+  - **A project's circle** holds the folder mark at **18**, filled with its ink at 25% and stroked in it (§2.9's
+    drawing). Its ink is the colour its bodies wear (`AgentView.colour`: puppeteer's deal while the swarm keeps it,
+    §2.9's exception), so a circle and its bodies never disagree, and it moves with them when the swarm takes PJ-L7's
+    ink (PJ-5). **An agent's circle** holds the agent's mark at **16** (`AgentIcon`), Shell's `terminal` 16, in the
+    secondary ink, the primary under the pointer, open or chosen.
+  - **Waiting.** A circle wears **the blocked dot** while a session under it waits on you, whatever the lens holds:
+    the hot dot's place and size at 40 (−45°, its centre 17 from the middle, radius 3.6), in `--vf-orange`, ringed 1.6
+    in the pill's solid (§8 "The hot dot").
+  - **A circle** fills as a profile's does: the ink at 6% under the pointer and while its card is open, the ready
+    fill (8%) while its card is pinned, and **the lens ring** (2 in the pill's solid, then 1.5 in the ink) while it is
+    chosen.
+  - **The lens.** A click shows only that project's or agent's sessions and pins its card; a click on the chosen one
+    shows them all again and closes it. **One at a time** in each group: choosing another moves the ring. A project
+    and an agent may be chosen together, and beside a profile, a plan and a desktop: a session recedes unless every
+    filter keeps it.
+    - **The rest recede**, as under a profile's lens (`RECEDED_OPACITY` 0.22 over `RECEDE_MS` 240): they keep their
+      places, and Live now lists only what the lens keeps. **The terminals stay**: the deck draws as it did.
+    - **A choice is kept as chosen and read where it stands**: a project or an agent with no session on the stage
+      shows no filter (no ring, no token, nothing receded), and is chosen again when one of its sessions returns, as
+      a desktop is (`standingChoice`). It is the run's (`vf-godview-filters-v1`, N4 (a)): closing Godview keeps it,
+      and a launch starts on everything.
+    - An ended lane on the timeline does what a live row does: off the lens, it recedes.
+    - Chosen with no session the other filters keep, the stage says so as it does for a profile ("No sessions on
+      vibe-field · Codex"), its mark in the ring.
+  - **One filter** (SE-D2, extended): the ring, the search field's token and the search button's token are one state,
+    so a lens set in any one shows in all three, and clearing any one clears all three.
+  - **The card** opens beside a circle while the pointer or the keyboard is on it, and a click pins it. It is the
+    profiles popover's material (a menu's solid in Godview's mode, with its ring and shadow), corners **20**, **300**
+    wide, padded 12 14 11, standing **16 left** of the pill with its top 6 above the circle's, in the cards layer, held
+    between the pill's top and the panes' foot. It is reached as a popover is (§8 "The reach", mirrored: the bridge
+    22, the grace 320ms, the 120ms dwell only on the way into the shown card), focused as one is ("Focus is
+    pointing") and closed as one is ("Pinned": Esc, a click outside, the chosen circle again, the terminals filling
+    the window).
+    - **Its head:** the mark at 15, the name at 14/600, and at its end "4 sessions" at 11.5 in the tertiary ink, with
+      "· 1 waiting" after it in Godview's attention ink.
+    - **Its rows**, one per session under it on the stage, those that wait first, then working, then idle, then the
+      shells: the 8 state dot (working green, waiting orange, idle and a shell faint, as Live now's), the other
+      group's mark at 14 (an agent's in a project's card, a project's in an agent's), and that name at 12.5/500 over
+      the session's state (`stateWord`: "working", "blocked · permission", "running") at 11.5 in the tertiary ink.
+      Padded 6 0, a hairline between them. They are words, not acts.
+    - **Its foot**, over a hairline: one act at its end, **Show only ‹name›**, or **Show every project** and **Show
+      every agent** while it is chosen, the click's own act, on the ready fill (8%, 14% under the pointer), 32 tall,
+      corners 16, padded 0 14, at 12.5/600.
+  - **The stage around it.** The swarm steers around the pill as around every chrome rectangle, and a view in flow
+    keeps its width clear through the stage's right inset. Its slot stands in the chrome layer beside the profiles
+    column's (§8 "Where the chrome stands"), and its cards in the cards layer (§8 "Where the cards stand"). Its
+    boundary is named **Work**.
+  - **Said** as a group, "Projects and agents". Each circle is a toggle (`aria-pressed`), "vibe-field, 4 sessions, 1
+    waiting, click to show only its sessions" or, pressed, "…, showing only its sessions", and says whether its card
+    is open (`aria-expanded`).
+  - **Reduced motion** (M6), and Godview's animations off: the ring and the fills change at once.
+  - *‹for James›, the lead's readings and not the page's drawing:* a group whose one value is chosen stays drawn (the
+    page dropped every group of one); a card's row says the session's state where the page drew a title, which the
+    model does not carry; the agent's name is the adapter's own (`provider.label`), as Live now's rows say it; and the
+    menu's two new groups lead with no mark on their first row, as Profiles' and Desktops' do.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -7526,7 +7600,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the desktop's OS mark and name, a hairline, the profile's glyph and name ("studio · Work"), at
     13/500 in primary ink — and a 26 × that clears both: a filtered view never looks unfiltered.
     A plan's filter (UM-5a, 2026-11-09) is one more part after the profile's, the agent's mark and the plan's title
-    ("studio · Work · Claude Max", the drawing's `p4f-frames.js`), and this × clears it too.
+    ("studio · Work · Claude Max", the drawing's `p4f-frames.js`), and this × clears it too. The work column's
+    lenses (WL-1, 2026-11-23; §8 "Godview's work column") are two more after it: a project's folder mark in its ink
+    and its name, then an agent's mark and its name ("Work · vibe-field · Codex"), and this × clears them too.
     **It is one state with the field's tokens and the profiles column's ring** (SE-D2 A, 2026-11-06): the
     button's token, the field's and the ring are Godview's own filter (GV-D3's), so a filter set in any one shows
     in all three, and clearing any one clears it everywhere — this × clears the field's desktop and profile tokens
@@ -7590,7 +7666,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       name, then its × — an 18 round (corners 9), `close` 8 in tertiary ink, primary on a 10% fill
       under the pointer (the step the bar's controls take), said "Remove ‹name›". Live now's tokens
       are the desktop's, the profile's and the plan's, in that order (the plan's added 2026-11-09, UM-5a: its
-      agent's mark, then its title; its × clears the plan alone); Everything's the project's, what was said
+      agent's mark, then its title; its × clears the plan alone), then the work column's project's (its folder mark
+      in its ink, §2.9's drawing: its bodies' hue on the popup's own lightness and chroma, `--vf-project-ink-l` and
+      `-c`, the one token that wears an ink) and its agent's (its mark; Shell's `terminal`) (WL-1, 2026-11-23);
+      Everything's the project's, what was said
       (only when it is not every kind: "Prompts only", "Replies only") and the agent's. A scope shows
       only its own: Everything shows no profile or desktop, since it looks through every profile
       (UM-D28). A token stands only for a filter that was chosen, so This Mac alone (TS-4's unconnected
@@ -7611,7 +7690,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       10, uppercase, tracked 0.08em, tertiary; `frame/menu.css`). *(Corrected 2026-11-06, the M-desk stack: this
       said "at most 430 tall, scrolling past that"; SE-1's review bounds it by the popup too,
       `min(430, popup − 80)`, so in a short window the menu scrolls inside the popup instead of being cut by it.)*
-      Live now's, in Godview: **Profiles**, only while there is a profile besides This Mac —
+      Live now's, in Godview: first **Projects** and **Agents** (WL-1, 2026-11-23; the page *The Work Lens*'s A,
+      which every option kept), each only while the work column draws its group (two values, or its choice standing)
+      — **Every project** with every session ("6 sessions"), then each project, its folder mark 12 in its ink and
+      "waiting" beside one a session in it waits in, else its sessions; **Any agent** the same, then each agent, its
+      mark 12 (Shell's `terminal`) — then **Profiles**, only while there is a profile besides This Mac —
       **Every profile**, then each profile, its glyph 12, "waiting" beside one a session under it waits in, else its
       sessions ("4 sessions") — then **Desktops** — **All desktops** with its agents ("6 agents"), then each desktop,
       its OS mark 11 and "name · here" beside this one, its agents or its standing beside it, a desktop not answering
@@ -7622,7 +7705,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       row back to the first. The menu lists Profiles before Desktops, as drawn, while the tokens read the desktop
       first. Its counts are every session's, whatever the other filter holds.
     - **These filter the view too** (GV-D3): Live now's desktop and profile are Godview's own, so the
-      stage shows what search's Live now shows. Everything's are the popup's own, for its open.
+      stage shows what search's Live now shows. Everything's are the popup's own, for its open. Live now's project and
+      agent are Godview's too (WL-1, 2026-11-23): the work column's lenses, so Everything's project and agent stay
+      apart from them, and a pick in one scope never sets the other's.
     - *Retired 2026-11-06 (SE-D1 A):* **the scope row**, 48 tall between two hairlines under the field:
       the segment (the ready fill as its track, padding 3, corners 12; halves 28 tall at 12.5/500) and
       that scope's dropdowns (30 tall, corners 15, a 13 glyph, the name at 12.5/500, a turned
@@ -7659,7 +7744,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     and the stage keep it until you remove it." ("Show only Work's sessions. The field, …"). Open on it says **Add
     the filter**, with ⇥ printed on it. ⇥, ↵ or a click while it is hot applies it: the filter is set, the word
     leaves the query, the hot row goes back to the first and the caret stays. The foot's counts leave it out. Its
-    count is every session's, as the menu's are.
+    count is every session's, as the menu's are. The work column's groups offer theirs the same way (WL-1,
+    2026-11-23), after a desktop's, a project's before an agent's, each only while the column draws its group: "Show
+    only vibe-field's sessions" (a project's name is read as words split at `-`, `_` and `.` as well as spaces) and
+    "Show only Codex's sessions", led by the project's folder mark in its ink or the agent's mark.
   - **A match is neutral, everywhere** (K1): the text's own primary ink at 600 on an 11% wash of it,
     corners 3 — never orange, which means "waiting on you" here (§2.5), and never the select blue.
     The peek too: the round-3 kit's orange line marker was a leftover.
