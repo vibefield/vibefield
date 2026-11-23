@@ -212,17 +212,25 @@ public struct InputCard: View {
   /// Eight equal keys, `⋯` last (IOS-5d; eight since PF-8, when the mode
   /// switch left the rail for the floating row).
   ///
-  /// Every key carries a long-press fan (IOS-5b) but `⋯`: the chords under
-  /// Ctrl, the far ends under the arrows, ⇧Tab under Tab, and the Meta burst
-  /// under Esc.
+  /// Over the letters they are the slash, Esc, Tab, the four arrows and `⋯`
+  /// (PF-14, 2026-11-23; DESIGN.md §8 "The rail's eight keys, and what each
+  /// holds": Ctrl left the rail and the slash leads it). Every one carries a
+  /// long-press fan (IOS-5b), its family: the other prompt characters under
+  /// the slash, the stops under Esc, ⇧Tab under Tab, the far ends under the
+  /// arrows, and Ctrl and Alt under `⋯`.
   private var rail: some View {
     HStack(spacing: Self.keyGap) {
       // PF-8: the `+` menu's doors keep a place in this mode, at the head of
       // the rail while the keypad is up and the rail has the room.
       if model.keypadShown { PlusMenu(model: model) }
+      if !model.keypadShown {
+        // Typed as the letters type one. Its face is mono: a character sent is
+        // data (DESIGN.md §3).
+        key(text: "/", label: "Slash", mono: true, fan: .slash, action: { model.typeSymbol("/") })
+      }
       escapeKey
-      controlKey
       if model.keypadShown {
+        controlKey
         key(
           text: "Alt", label: model.metaArmed ? "Alt armed" : "Alt",
           tone: model.metaArmed ? .armed : .normal
@@ -253,22 +261,7 @@ public struct InputCard: View {
         key(
           glyph: .arrow, turn: 90, label: "Right arrow", tone: .nav, fan: KeyFan.arrow(.arrowRight),
           action: { model.tapKey(.arrowRight) })
-        // --- IOS-5d ------------------------------------------------------------
-        // The keypad key. It lights while the keypad is up, like every other key
-        // on this card that is holding a state — and it carries no fan: the
-        // design's long-press (the keypad's last page) is what a tap already
-        // does, the page being remembered.
-        key(
-          glyph: .ellipsis,
-          label: model.keypadShown ? "Letters" : "Terminal keypad",
-          tone: model.keypadShown ? .on : .normal,
-          action: {
-            model.toggleKeypad()
-            // IOS-5e: the letters just left, or came back. Without this a screen
-            // reader finds out by exploring the keyboard again and meeting a
-            // different one.
-            InputAnnouncement.post(InputAnnouncement.keypad(model.keypadShown))
-          })
+        moreKey
       }
       // --- end IOS-5d --------------------------------------------------------
     }
@@ -300,23 +293,50 @@ public struct InputCard: View {
   }
 
   // --- IOS-5b ---------------------------------------------------------------
-  /// Esc, and the Meta burst it holds.
+  /// Esc, and the stops it holds (PF-14: Escape twice, `^C`, `^D`, `^Z`).
   ///
-  /// While the burst is armed the key says Meta and wears the canvas's
-  /// `.key.armed` fill: the next key is about to mean something different, and
-  /// the only place that can be said is the key that armed it. It still sends
-  /// Escape when tapped — the burst rides the next keystroke, and Escape is one.
+  /// Until PF-14 its fan was the Meta burst, and the key said Meta while the
+  /// burst was armed. What is held is said on the `⋯` key now, in one place.
   private var escapeKey: some View {
-    key(
-      text: model.metaArmed && !model.keypadShown ? "Meta" : "Esc",
-      label: model.metaArmed ? "Escape, Meta armed for the next key" : "Escape",
-      tone: model.metaArmed && !model.keypadShown ? .armed : .normal,
-      fan: .escape,
-      action: { model.tapKey(.escape) })
+    key(text: "Esc", label: "Escape", fan: .escape, action: { model.tapKey(.escape) })
   }
   // --- end IOS-5b -----------------------------------------------------------
 
-  /// The sticky Ctrl. Armed is `.key.armed` and locked is `.key.locked` — one
+  // --- IOS-5d, PF-14 --------------------------------------------------------
+  /// The `⋯` key: the keys page, and the modifiers.
+  ///
+  /// A tap opens the keys page, on the page last used. A hold opens Ctrl and
+  /// Alt, each armed for the next key (PF-14). While Ctrl, Alt or Shift is
+  /// held, the key wears it in the armed fill (the locked fill and its dot for
+  /// a locked Ctrl), and a tap lets go of them all and opens nothing: with
+  /// Ctrl off the rail, this is the one key over the letters that can say a
+  /// modifier is waiting on the next letter.
+  @ViewBuilder private var moreKey: some View {
+    let held = model.held
+    if held.isEmpty {
+      key(
+        glyph: .ellipsis, label: "Terminal keypad", fan: .more,
+        action: {
+          model.toggleKeypad()
+          // IOS-5e: the letters just left. Without this a screen reader finds
+          // out by exploring the keyboard again and meeting a different one.
+          InputAnnouncement.post(InputAnnouncement.keypad(model.keypadShown))
+        })
+    } else {
+      key(
+        text: held.face, label: held.accessibilityLabel,
+        tone: held.control == .locked ? .locked : .armed, marks: true,
+        hint: "Releases what is held",
+        action: {
+          model.releaseHeldModifiers()
+          InputHaptics.release()
+          InputAnnouncement.post(InputAnnouncement.released)
+        })
+    }
+  }
+  // --- end IOS-5d, PF-14 ----------------------------------------------------
+
+  /// The sticky Ctrl, on the keys page's own rail alone since PF-14. Armed is `.key.armed` and locked is `.key.locked` — one
   /// step brighter, with the dot — because "this stays until I release it" is a
   /// different promise from "this is spent on the next key" and a single fill
   /// cannot say both.
@@ -370,9 +390,8 @@ public struct InputCard: View {
     // IOS-5e: what the NEXT tap does, which on a three-phase control cannot be
     // guessed from the phase it is in.
     .accessibilityHint(model.latch.accessibilityHint)
-    // --- IOS-5b: the chord fan ---
-    .fan(.control, on: model, reduceMotion: reduceMotion, pick: pick)
-    // --- end IOS-5b ---
+    // PF-14 (2026-11-23): this key opens no fan. Its ten chords went with the
+    // rail's Ctrl: the stops are under Esc, the rest on the Shortcuts page.
   }
 
   // MARK: - Key chrome
@@ -381,6 +400,9 @@ public struct InputCard: View {
     text: String,
     label: String,
     tone: KeyTone = .normal,
+    mono: Bool = false,
+    marks: Bool = false,
+    hint: String = "",
     fan: KeyFan? = nil,
     action: @escaping () -> Void
   ) -> some View {
@@ -391,16 +413,32 @@ public struct InputCard: View {
       action()
     } label: {
       Text(text)
-        .font(ChromeType.sans(labelSize, .semibold, rounded: true))
-        .tracking(ChromeType.keyTracking)
+        .font(
+          mono
+            ? ChromeType.mono(labelSize + 3, .semibold)
+            // The modifiers' marks (⌃ ⌥ ⇧) are drawn small in their em: at a
+            // word's size they read as specks on the cap.
+            : ChromeType.sans(labelSize + (marks ? 5 : 0), .semibold, rounded: true)
+        )
+        .tracking(mono ? 0 : ChromeType.keyTracking)
         .foregroundStyle(tone.ink)
         .lineLimit(1)
         .frame(maxWidth: .infinity)
         .frame(height: rowHeight)
         .background { keyFace(tone) }
+        .overlay(alignment: .topTrailing) {
+          // `.key.locked::after`, as the keys page's Ctrl draws it.
+          if tone == .locked {
+            Circle()
+              .fill(ChromePalette.keyArmedInk)
+              .frame(width: 5, height: 5)
+              .padding(5)
+          }
+        }
     }
     .buttonStyle(KeyPressStyle())
     .accessibilityLabel(label)
+    .accessibilityHint(hint)
     .fan(fan, on: model, reduceMotion: reduceMotion, pick: pick)
   }
 
@@ -433,21 +471,22 @@ public struct InputCard: View {
   // --- IOS-5b ---------------------------------------------------------------
   /// A key was picked out of an open fan.
   ///
-  /// The fan closes first so the act cannot land twice, then the chord goes —
-  /// `tapChord`, which spends an armed latch without adding to a chord that
-  /// already names its own modifiers. Meta is the one item that arms instead of
-  /// sending.
+  /// What the pick does is the model's (`InputCardModel.pick`, PF-14). What is
+  /// felt and said is here: an arm is felt as an arm and said, because it
+  /// changes what the next key means and its sign is on another key (IOS-5e);
+  /// everything else is a chord's tick.
   private func pick(_ item: KeyFan.Item) {
-    model.closeFan()
+    model.pick(item)
     switch item.act {
-    case .stroke(let stroke): model.tapChord(stroke)
+    case .control:
+      InputHaptics.arm()
+      InputAnnouncement.post(InputAnnouncement.latch(model.latch.phase))
     case .meta:
-      model.armMeta()
-      // IOS-5e: an arm is an arm. The burst changes what the next key means and
-      // its only sign is Esc wearing Meta, which a reader elsewhere cannot see.
+      InputHaptics.arm()
       InputAnnouncement.post(InputAnnouncement.metaArmed)
+    case .stroke, .script, .type:
+      InputHaptics.chord()
     }
-    InputHaptics.chord()
   }
   // --- end IOS-5b -----------------------------------------------------------
 

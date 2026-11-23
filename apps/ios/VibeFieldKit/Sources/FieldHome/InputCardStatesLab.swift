@@ -13,13 +13,13 @@
   /// named as §9 "Developer" names it (asked for 2026-11-12). Each is reached by the card's own public acts on a fresh
   /// model, so a state the lab shows is a state the card can be in, and a test holds every one without a view.
   enum InputCardLabState: CaseIterable {
-    /// A long press on Ctrl: its chord fan.
+    /// A long press on Esc: its fan, the stops (PF-14, 2026-11-23; Ctrl's chord fan until then).
     case fanOpen
-    /// One tap on Ctrl: the next key carries Control.
+    /// Ctrl armed: the next key carries Control, and the rail's `⋯` wears it (PF-14).
     case controlArmed
-    /// Two taps: Control stays until a third releases it.
+    /// Ctrl locked: Control stays until it is released, and `⋯` wears it with the lock's dot.
     case controlLocked
-    /// A long press on Esc: Meta rides the next key.
+    /// Alt armed: Meta rides the next key, and `⋯` wears it (PF-14; Esc said Meta until then).
     case metaArmed
     /// The mic, with heard words in the draft.
     case listening
@@ -78,7 +78,7 @@
       switch self {
       case .fanOpen:
         model.enter(.live)
-        model.showFan(.control)
+        model.showFan(.escape)
       case .controlArmed:
         model.enter(.live)
         model.tapControl()

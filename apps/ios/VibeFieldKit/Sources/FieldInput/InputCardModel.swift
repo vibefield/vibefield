@@ -172,6 +172,45 @@ public struct LatchState: Equatable, Sendable {
   }
 }
 
+/// What the rail's `⋯` key wears while a modifier is held (PF-14, 2026-11-23;
+/// DESIGN.md §8 "The rail's eight keys, and what each holds").
+///
+/// Ctrl has no key on the rail over the letters, so a Ctrl armed from the `⋯`
+/// key's fan, or armed or locked on the keys page and carried back to the
+/// letters, has one place to show: the key that holds the modifiers. A value,
+/// so the face and what a screen reader hears are tested without a view.
+public struct HeldModifiers: Equatable, Sendable {
+  public let control: LatchState.Phase
+  public let option: Bool
+  public let shift: Bool
+
+  public init(control: LatchState.Phase, option: Bool, shift: Bool) {
+    self.control = control
+    self.option = option
+    self.shift = shift
+  }
+
+  public var isEmpty: Bool { control == .off && !option && !shift }
+
+  /// The key's face: the held modifiers' marks, Ctrl, Alt, Shift, in that order.
+  public var face: String {
+    (control == .off ? "" : "⌃") + (option ? "⌥" : "") + (shift ? "⇧" : "")
+  }
+
+  /// What VoiceOver reads in place of the marks.
+  public var accessibilityLabel: String {
+    var parts: [String] = []
+    switch control {
+    case .off: break
+    case .armed: parts.append("Control armed")
+    case .locked: parts.append("Control locked")
+    }
+    if option { parts.append("Alt armed") }
+    if shift { parts.append("Shift armed") }
+    return parts.joined(separator: ", ")
+  }
+}
+
 /// The input card's state and every act it can emit.
 ///
 /// Two modes, one model. Draft edits a local `draft` and sends it as a block;
@@ -198,9 +237,9 @@ public final class InputCardModel {
   ///
   /// Alt has no rail slot (decision 4): Alt-x is ESC x for readline, emacs and
   /// zsh, so Esc then x already does it. What Esc-then-x does NOT do is tmux,
-  /// which wants the escape and the key as one burst — so long-pressing ESC
-  /// arms this instead and the next keystroke carries `.option`, which the kit
-  /// encodes. One shot rather than a latch: a second phase here would be a
+  /// which wants the escape and the key as one burst — so the `⋯` key's fan
+  /// (long-press ESC until PF-14, 2026-11-23) and the keys page's Alt arm this
+  /// instead, and the next keystroke carries `.option`, which the kit encodes. One shot rather than a latch: a second phase here would be a
   /// second sticky modifier with no dot to tell it from the first.
   public private(set) var metaArmed = false
   public private(set) var shiftArmed = false
@@ -309,6 +348,47 @@ public final class InputCardModel {
     restartExpiry()
   }
 
+  // --- PF-14 (2026-11-23) ---------------------------------------------------
+  /// The `⋯` key's fan, Ctrl: arm it for the next key, and never past armed.
+  ///
+  /// A tap on the keys page's Ctrl walks the three phases. A pick out of a fan
+  /// is one act with one meaning, so it arms an idle latch and leaves a held
+  /// one as it is (a lock is the keys page's, tapped twice), and the arm's
+  /// three seconds start again either way.
+  public func armControl() {
+    if latch.phase == .off { latch.tap() }
+    restartExpiry()
+  }
+
+  /// What is held now: Ctrl's phase, the Meta burst and Shift.
+  public var held: HeldModifiers {
+    HeldModifiers(control: latch.phase, option: metaArmed, shift: shiftArmed)
+  }
+
+  /// A tap on the `⋯` key while it wears a modifier: let go of all of them,
+  /// with their clocks, a locked Ctrl included.
+  public func releaseHeldModifiers() {
+    releaseModifiers()
+  }
+
+  /// A key picked out of an open fan.
+  ///
+  /// The fan closes first, so the act cannot land twice. A keystroke goes as a
+  /// chord (`tapChord`: an armed latch is spent, never added to a chord that
+  /// names its own modifiers), a run of presses as a script, and a character
+  /// as the letters would type it. The two modifiers arm and send nothing.
+  public func pick(_ item: KeyFan.Item) {
+    closeFan()
+    switch item.act {
+    case .stroke(let stroke): tapChord(stroke)
+    case .script(let strokes): sendScript(strokes)
+    case .type(let character): typeSymbol(character)
+    case .control: armControl()
+    case .meta: armMeta()
+    }
+  }
+  // --- end PF-14 --------------------------------------------------------------
+
   // --- IOS-5b ---------------------------------------------------------------
   /// A chord picked out of a long-press fan — `^C`, `⇧Tab`, `Home`.
   ///
@@ -344,7 +424,8 @@ public final class InputCardModel {
     if keyboardWasUpBeforeFan { fieldFocused = true }
   }
 
-  /// Long-press ESC: arm `.option` for the next keystroke.
+  /// The `⋯` key's fan, Alt (long-press ESC until PF-14): arm `.option` for
+  /// the next keystroke.
   ///
   /// Arming twice restarts the window rather than toggling — three seconds is
   /// short enough that waiting one out is cheaper than a second meaning on the
@@ -858,8 +939,15 @@ public final class InputCardModel {
   /// `tapChord`: a chord is one keystroke and can carry a burst, a combo is a
   /// script and the burst has no single key to ride.
   public func sendCombo(_ combo: Combo) {
+    sendScript(combo.strokes)
+  }
+
+  /// A run of presses, in order, each exactly as written: a combo's, or a fan
+  /// key's (`Esc Esc`, PF-14). What is held is spent and not applied, by the
+  /// rule above.
+  public func sendScript(_ strokes: [TerminalKeystroke]) {
     _ = consumeModifiers()
-    for stroke in combo.strokes {
+    for stroke in strokes {
       emit(.keystroke(stroke))
     }
   }

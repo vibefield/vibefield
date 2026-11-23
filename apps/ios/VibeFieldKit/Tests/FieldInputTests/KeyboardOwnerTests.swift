@@ -77,7 +77,7 @@ struct KeyboardOwnerTests {
       var acts: [InputAct] = []
       model.sink = { acts.append($0); return true }
       let requests = model.keyboardRequests
-      if menu { model.showPlusMenu() } else { model.showFan(.control) }
+      if menu { model.showPlusMenu() } else { model.showFan(.escape) }
 
       model.dismissKeyboard()
       #expect(model.openFan == nil)

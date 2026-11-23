@@ -2893,7 +2893,7 @@ public struct HomeScreen: View {
           if LaunchArguments.current.contains("-vf-demo-input-fan") {
             Task {
               try? await Task.sleep(for: .seconds(3))
-              inputCard.showFan(.control)
+              inputCard.showFan(.escape)
             }
           }
           // The burst is a 3 s window BY DESIGN, and a screenshot run is

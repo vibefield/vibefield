@@ -56,34 +56,38 @@ struct InputCardStatesLabTests {
     #expect(lab == design)
   }
 
-  @Test("A key’s fan, open: Ctrl's chord fan stands open, over a card whose keyboard is up")
+  @Test("A key’s fan, open: Esc's fan, the stops, stands open, over a card whose keyboard is up")
   func fanOpen() {
     let model = seeded(.fanOpen)
     let fan = model.openFan
     let owner = model.keyboardOwner
-    #expect(fan == KeyFan.control)
+    #expect(fan == KeyFan.escape)
     // PF-8: the rail, and so a key's fan, stands in the terminal's mode alone.
     #expect(owner == .terminal)
   }
 
-  @Test("Control, armed is one tap on Ctrl and Control, locked two, each over a card whose keyboard is up")
+  @Test("Control, armed and Control, locked hold Ctrl over a card whose keyboard is up, so the rail's last key wears it")
   func control() {
     let armed = seeded(.controlArmed)
     let locked = seeded(.controlLocked)
     let phases = [armed.latch.phase, locked.latch.phase]
     let owners = [armed.keyboardOwner, locked.keyboardOwner]
+    let faces = [armed.held.face, locked.held.face]
     #expect(phases == [.armed, .locked])
     #expect(owners == [.terminal, .terminal])
+    #expect(faces == ["⌃", "⌃"])
   }
 
-  @Test("Meta, armed: Esc's burst waits for the next key, with the latch off and the letters up, so Esc says Meta")
+  @Test("Meta, armed: the burst waits for the next key, with the latch off and the letters up, so the rail's last key wears it")
   func meta() {
     let model = seeded(.metaArmed)
     let armed = model.metaArmed
+    let face = model.held.face
     let phase = model.latch.phase
     let keypad = model.keypadShown
     let owner = model.keyboardOwner
     #expect(armed)
+    #expect(face == "⌥")
     #expect(phase == .off)
     #expect(!keypad)
     #expect(owner == .terminal)

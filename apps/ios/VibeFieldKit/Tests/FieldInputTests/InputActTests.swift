@@ -340,14 +340,14 @@ struct InputActTests {
   func fanRestoresTheKeyboard() {
     let (up, _) = card()
     up.fieldFocused = true
-    up.showFan(.control)
+    up.showFan(.escape)
     up.fieldFocused = false  // what a presentation taking the responder looks like
     up.closeFan()
     #expect(up.fieldFocused)
     #expect(up.openFan == nil)
 
     let (down, _) = card()
-    down.showFan(.control)
+    down.showFan(.escape)
     down.closeFan()
     #expect(down.fieldFocused == false)
   }
@@ -358,7 +358,7 @@ struct InputActTests {
   func resetClearsTheBurstAndTheFan() {
     let (model, _) = card()
     model.armMeta()
-    model.showFan(.control)
+    model.showFan(.escape)
     model.reset()
     #expect(model.metaArmed == false)
     #expect(model.openFan == nil)
@@ -370,29 +370,47 @@ struct InputActTests {
 @Suite("the long-press fans")
 struct KeyFanTests {
 
-  /// The design's ten chords, in its order, with its one-word subtitles.
-  @Test("the chord fan is the design's two rows")
-  func chordFan() {
-    let fan = KeyFan.control
-    #expect(fan.rows.count == 2)
-    #expect(fan.rows.map(\.count) == [5, 5])
-    #expect(fan.items.map(\.label) == ["^C", "^D", "^Z", "^R", "^L", "^U", "^W", "^A", "^E", "^K"])
+  /// PF-14: the stops, in the order a person reaches for them. `^C` has no key
+  /// of its own on the rail, and this fan is the gesture that reaches it.
+  @Test("Esc fans to the stops: Escape twice, interrupt, exit, suspend")
+  func stopsFan() {
+    let fan = KeyFan.escape
+    #expect(fan.rows.map(\.count) == [4])
+    #expect(fan.items.map(\.label) == ["Esc Esc", "^C", "^D", "^Z"])
+    #expect(fan.items.map(\.subtitle) == ["rewind", "interrupt", "exit", "suspend"])
     #expect(
-      fan.items.map(\.subtitle) == [
-        "interrupt", "eof", "suspend", "search", "clear",
-        "kill-line", "kill-word", "home", "end", "kill-end",
-      ])
-    // No dedicated ^C key (decision 2) — this is the gesture that replaces it,
-    // so interrupt is the first thing under the finger.
-    #expect(fan.items.first?.act == .stroke(.control("c")))
+      fan.items.first?.act == .script([TerminalKeystroke(.escape), TerminalKeystroke(.escape)]))
+    #expect(fan.items[1].act == .stroke(.control("c")))
+  }
+
+  /// PF-14: the other characters a prompt opens with, then the symbols the
+  /// system keyboard keeps deepest. Every one is typed, never sent as a chord.
+  @Test("the slash fans to the prompt's other openers, each typed")
+  func slashFan() {
+    let fan = KeyFan.slash
+    #expect(fan.rows.map(\.count) == [5, 5])
+    #expect(fan.items.map(\.label) == ["@", "!", "?", "$", "#", "\\", "~", "|", "-", "_"])
+    #expect(fan.rows[0].map(\.subtitle) == ["file", "shell", "help", "skill", "issue"])
+    for item in fan.items {
+      #expect(item.act == .type(Character(item.label)))
+    }
+  }
+
+  /// PF-14: Ctrl has no key over the letters, so the modifiers are held by the
+  /// key that holds every other key.
+  @Test("the keypad key fans to Ctrl and Alt, which arm and send nothing")
+  func modifierFan() {
+    #expect(KeyFan.more.items.map(\.label) == ["Ctrl", "Alt"])
+    #expect(KeyFan.more.items.map(\.act) == [.control, .meta])
   }
 
   /// What a screen reader hears instead of "caret C".
-  @Test("every chord names itself for VoiceOver")
+  @Test("every fan key names itself for VoiceOver")
   func chordLabels() {
-    #expect(KeyFan.control.items.first?.accessibilityLabel == "Control C, interrupt")
-    #expect(KeyFan.control.items.last?.accessibilityLabel == "Control K, kill-end")
-    #expect(KeyFan.escape.items.first?.accessibilityLabel == "Meta, one key")
+    #expect(KeyFan.escape.items.first?.accessibilityLabel == "Escape twice, rewind")
+    #expect(KeyFan.escape.items[1].accessibilityLabel == "Control C, interrupt")
+    #expect(KeyFan.slash.items.first?.accessibilityLabel == "At sign, file")
+    #expect(KeyFan.more.items.first?.accessibilityLabel == "Control, next key")
     #expect(KeyFan.arrow(.arrowLeft)?.items.first?.accessibilityLabel == "Home")
   }
 
@@ -400,19 +418,24 @@ struct KeyFanTests {
   @Test("the arrows fan out to their far ends")
   func arrowFans() {
     #expect(KeyFan.arrow(.arrowLeft)?.items.first?.act == .stroke(TerminalKeystroke(.home)))
-    #expect(KeyFan.arrow(.arrowRight)?.items.first?.act == .stroke(TerminalKeystroke(.end)))
+    #expect(KeyFan.arrow(.arrowRight)?.items.last?.act == .stroke(TerminalKeystroke(.end)))
+    // PF-14: beside each far end, the word in that direction.
+    #expect(
+      KeyFan.arrow(.arrowLeft)?.items.last?.act
+        == .stroke(TerminalKeystroke(.arrowLeft, modifiers: .option)))
+    #expect(
+      KeyFan.arrow(.arrowRight)?.items.first?.act
+        == .stroke(TerminalKeystroke(.arrowRight, modifiers: .option)))
     #expect(KeyFan.arrow(.arrowUp)?.items.first?.act == .stroke(TerminalKeystroke(.pageUp)))
     #expect(KeyFan.arrow(.arrowDown)?.items.first?.act == .stroke(TerminalKeystroke(.pageDown)))
     #expect(KeyFan.arrow(.tab) == nil)
     #expect(KeyFan.arrow(.escape) == nil)
   }
 
-  /// ⇧Tab is `tab` + shift (the kit's usage 0x2b), and META arms rather than
-  /// sends — the one item in any fan that is not a keystroke.
-  @Test("tab fans to shift-tab and escape fans to the burst")
+  /// ⇧Tab is `tab` + shift (the kit's usage 0x2b).
+  @Test("tab fans to shift-tab")
   func namedFans() {
     #expect(KeyFan.tab.items.first?.act == .stroke(TerminalKeystroke(.tab, modifiers: .shift)))
-    #expect(KeyFan.escape.items.first?.act == .meta)
   }
 
   /// One fan open at a time: the card's popover binds on this id, so two fans
@@ -420,11 +443,132 @@ struct KeyFanTests {
   @Test("every fan has its own identity")
   func distinctIdentities() {
     let ids = [
-      KeyFan.control.id, KeyFan.escape.id, KeyFan.tab.id,
+      KeyFan.slash.id, KeyFan.escape.id, KeyFan.tab.id, KeyFan.more.id,
       KeyFan.arrow(.arrowLeft)?.id, KeyFan.arrow(.arrowRight)?.id,
       KeyFan.arrow(.arrowUp)?.id, KeyFan.arrow(.arrowDown)?.id,
     ].compactMap { $0 }
-    #expect(ids.count == 7)
-    #expect(Set(ids).count == 7)
+    #expect(ids.count == 8)
+    #expect(Set(ids).count == 8)
+  }
+}
+
+/// PF-14: what picking a fan key does, and what the rail's last key wears.
+@MainActor
+@Suite("a fan's pick, and the held modifiers")
+struct FanPickTests {
+  final class Recorder {
+    var acts: [InputAct] = []
+  }
+
+  private func liveCard() -> (InputCardModel, Recorder) {
+    let model = InputCardModel()
+    let recorder = Recorder()
+    model.sink = {
+      recorder.acts.append($0)
+      return true
+    }
+    model.enter(.live)
+    return (model, recorder)
+  }
+
+  private func item(_ fan: KeyFan, _ label: String) -> KeyFan.Item {
+    fan.items.first { $0.label == label }!
+  }
+
+  @Test("Escape twice goes out as two presses, and the fan is closed first")
+  func escapeTwice() {
+    let (model, recorder) = liveCard()
+    model.showFan(.escape)
+    model.pick(item(.escape, "Esc Esc"))
+    #expect(model.openFan == nil)
+    #expect(
+      recorder.acts == [
+        .keystroke(TerminalKeystroke(.escape)), .keystroke(TerminalKeystroke(.escape)),
+      ])
+  }
+
+  @Test("interrupt out of Esc's fan is one control chord")
+  func interrupt() {
+    let (model, recorder) = liveCard()
+    model.pick(item(.escape, "^C"))
+    #expect(recorder.acts == [.keystroke(.control("c"))])
+  }
+
+  /// The slash's family is typed as the letters type: text in the terminal's
+  /// mode, and a keystroke only while a modifier is held.
+  @Test("a character out of the slash's fan is typed, and carries a held Ctrl as a letter would")
+  func typedCharacter() {
+    let (model, recorder) = liveCard()
+    model.pick(item(.slash, "@"))
+    #expect(recorder.acts == [.typeText("@")])
+    model.armControl()
+    model.pick(item(.slash, "\\"))
+    #expect(
+      recorder.acts.last == .keystroke(TerminalKeystroke(.character("\\"), modifiers: .control)))
+    #expect(model.latch.phase == .off)
+  }
+
+  @Test("Ctrl out of the fan arms, sends nothing, and the next letter spends it")
+  func armControl() {
+    let (model, recorder) = liveCard()
+    model.pick(item(.more, "Ctrl"))
+    #expect(recorder.acts.isEmpty)
+    #expect(model.latch.phase == .armed)
+    #expect(model.held.face == "⌃")
+    let taken = model.takeLatchForTerminal()
+    #expect(taken == .control)
+    #expect(model.held.isEmpty)
+  }
+
+  /// A pick is one act with one meaning: it never walks the latch on to
+  /// locked, and it never releases a lock set on the keys page.
+  @Test("Ctrl out of the fan leaves an armed latch armed and a locked one locked")
+  func armControlNeverWalks() {
+    let (model, _) = liveCard()
+    model.armControl()
+    model.armControl()
+    #expect(model.latch.phase == .armed)
+    model.tapControl()
+    #expect(model.latch.phase == .locked)
+    model.armControl()
+    #expect(model.latch.phase == .locked)
+  }
+
+  @Test("Alt out of the fan arms the burst for one key")
+  func armAlt() {
+    let (model, recorder) = liveCard()
+    model.pick(item(.more, "Alt"))
+    #expect(model.metaArmed)
+    #expect(model.held.face == "⌥")
+    model.tapKey(.arrowLeft)
+    #expect(recorder.acts == [.keystroke(TerminalKeystroke(.arrowLeft, modifiers: .option))])
+    #expect(model.held.isEmpty)
+  }
+
+  @Test("the held modifiers are worn in one order and said in words")
+  func heldFace() {
+    let (model, _) = liveCard()
+    #expect(model.held.isEmpty)
+    #expect(model.held.face == "")
+    model.tapControl()
+    model.tapControl()
+    model.armMeta()
+    model.toggleShift()
+    #expect(model.held.face == "⌃⌥⇧")
+    #expect(model.held.accessibilityLabel == "Control locked, Alt armed, Shift armed")
+  }
+
+  @Test("a tap on the key that wears them lets go of every one, a lock included")
+  func release() {
+    let (model, recorder) = liveCard()
+    model.tapControl()
+    model.tapControl()
+    model.armMeta()
+    model.toggleShift()
+    model.releaseHeldModifiers()
+    #expect(model.held.isEmpty)
+    #expect(model.latch.phase == .off)
+    model.tapKey(.tab)
+    #expect(recorder.acts == [.keystroke(TerminalKeystroke(.tab))])
   }
 }

@@ -42,10 +42,14 @@ public enum InputAnnouncement {
     }
   }
 
-  /// Long-press ESC, and the keypad's ALT key. One keystroke, then gone — and
+  /// The `⋯` key's fan (long-press ESC until PF-14) and the keypad's ALT key. One keystroke, then gone — and
   /// the sentence says the window rather than just the state, because a burst
   /// that expires unheard is the one way this control lies.
   public static let metaArmed = "Meta armed for the next key"
+
+  /// A tap on the `⋯` key while it wore a modifier (PF-14): everything held
+  /// was let go at once, a locked Ctrl included.
+  public static let released = "Modifiers released"
 
   /// The mode switch. What the mode is, said as what is happening, for a
   /// reader whose focus is not on the switch when it changes.
