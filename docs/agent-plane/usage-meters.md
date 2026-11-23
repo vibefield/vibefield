@@ -178,12 +178,49 @@ These automatic requests update the meters without clearing other notices or
 adding a success notice. Listeners are removed when the page closes. A page
 opened while another profile is refreshing waits, then refreshes its own accounts.
 
-On This Mac, the same refresh also asks `agents.profileSets.list` to refresh
-native identities. Those reads are coalesced by the daemon and arrive through
-the profiles feed. This recovers a missing plan card after a failed startup
-identity read even when the separate usage read already succeeded. Usage waits
-for its plan card while an identity is unread; it does not move into the agent
-row. The refresh indicator stays active while native identities are being read.
+### The plan a meter sits on is kept read (2026-11-23)
+
+A meter's plan card is a sign-in's identity: who is signed in, and the plan
+and tier that account is on. It is a reading of the agent's own status surface,
+not of its usage, and it changes without a sign-in (a plan is upgraded or
+lapses). Until 2026-11-23 a profile's sign-in was read once, when its login
+pane closed, and This Mac's at each daemon boot and on Agent Profiles' own
+refresh; the meters renewed and the plan under them did not. On the QA desktop
+that day, six sign-ins' readings were three to seven days old: two named a plan
+the agent no longer reported, and four held no tier.
+
+Since then every sign-in's identity is kept read, a profile's as well as This
+Mac's:
+
+- **puppeteer decides when** (`createProfileIdentityMonitor`, puppeteer 0.4.10,
+  its RFC 006 "Identity freshness"): a reading holds for an hour, by the
+  registry's own stamp, and is then read again, at most three at once here. A
+  read that failed and may pass is retried after a minute, doubling up to the
+  hour. fieldd composes it (`agent-profiles.ts`) and says which sign-ins: an
+  installed agent whose adapter can say who signed in.
+- **A refresh of an account's meters reads the account too.** `agents.usage
+  {refresh: true}` from this desktop's window asks for those sign-ins'
+  identities beside their usage, one sign-in at most once in 30 seconds. So
+  Godview's refresh, and a profile or agent settings page opening or regaining
+  focus, bring the present plan. `agents.profileSets.list {refresh: true}`
+  reads every sign-in.
+- **The product daemon alone runs it**, from its boot inventory on. A test or
+  embedded daemon never starts it: a read runs the vendor's own status command.
+- A new reading is a registry change, so it arrives through the profiles feed
+  like any other; the feed says `reading` while a read someone asked for runs.
+
+How soon a changed plan can be read is the agent's own limit. Claude Code's
+status command reported the present plan under sign-ins a week old (measured
+2026-11-23); what refreshes its own knowledge was not isolated, and a plan
+changed minutes ago may read as the old one until the agent's sign-in is next
+renewed. No other agent was measured.
+
+On This Mac, Agent Profiles' refresh still asks `agents.profileSets.list` to
+read identities beside the usage. This recovers a missing plan card after a
+failed startup identity read even when the separate usage read already
+succeeded. Usage waits for its plan card while an identity is unread; it does
+not move into the agent row. The refresh indicator stays active while
+identities are being read.
 
 Puppeteer's manual refresh bypasses a successful reading's normal interval,
 reuses readings completed or pushed within 30 seconds, coalesces concurrent

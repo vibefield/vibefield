@@ -1353,7 +1353,7 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent-profiles.ts</span><br /><span class="native-type">839 lines</span></td>
-                    <td><p>Agent Profiles and their sign-ins (AR-S2): the feed and its subscription, create, rename, the default, delete, Show in Finder; a sign-in's create, its sign-out (retired at once, finished when its sessions end) and This Mac's identities; the persona reconcile.</p></td>
+                    <td><p>Agent Profiles and their sign-ins (AR-S2): the feed and its subscription, create, rename, the default, delete, Show in Finder; a sign-in's create, its sign-out (retired at once, finished when its sessions end) and every sign-in's identity, kept read (puppeteer's identity monitor, composed here); the persona reconcile.</p></td>
                     <td><p><code>agent-index</code>, <code>agent-distribution</code> (the reveal port), the fold through <code>PersonaSessions</code></p></td>
                     <td><p><code>profileSets</code>, <code>createProfileSet</code>, <code>updateProfileSet</code>, <code>setDefaultProfileSet</code>, <code>removeProfileSet</code>, <code>createProfile</code>, <code>retireProfile</code>, <code>signOutProfile</code>, <code>removeProfile</code>, <code>verifyProfile</code>, <code>onProfilesChanged</code></p></td>
                     <td><p><code>agent-runtime.test.ts</code>, <code>agent-session.test.ts</code></p></td>
@@ -2923,7 +2923,7 @@
                 <thead><tr><th>Concern</th><th>File</th></tr></thead>
                 <tbody>
                   <tr><td><p>The runtime, the fold, the re-attach; the sessions under a sign-in, stopped or waited on</p></td><td><span class="route">packages/fieldd/src/agent-runtime.ts</span></td></tr>
-                  <tr><td><p>Agent Profiles and their sign-ins: the feed, create, rename, the default, delete, Show in Finder; sign-in create, sign-out (retire, then finish), This Mac's identities</p></td><td><span class="route">packages/fieldd/src/agent-profiles.ts</span></td></tr>
+                  <tr><td><p>Agent Profiles and their sign-ins: the feed, create, rename, the default, delete, Show in Finder; sign-in create, sign-out (retire, then finish), every sign-in's identity kept read</p></td><td><span class="route">packages/fieldd/src/agent-profiles.ts</span></td></tr>
                   <tr><td><p>Distribution: the machine record, installs and their update plans, kept checks, updates, their output and stop, reveal</p></td><td><span class="route">packages/fieldd/src/agent-distribution.ts</span> · <span class="route">terminal-text.ts</span> (the output as a terminal shows it)</td></tr>
                   <tr><td><p>puppeteer's <code>AgentHost</code> over the floor; the environment policy and the EL7 strip</p></td><td><span class="route">packages/fieldd/src/agent-host.ts</span></td></tr>
                   <tr><td><p>Signed session records; <code>mirrorOf</code>, <code>foldStatus</code>, the summarizers</p></td><td><span class="route">packages/fieldd/src/agent-sessions.ts</span></td></tr>
