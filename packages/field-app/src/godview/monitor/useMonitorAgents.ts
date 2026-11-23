@@ -731,6 +731,7 @@ export function useMonitorAgents({
       void door.mountLocal(next, { replacing: old }).then(
         (outcome) => {
           remounting.current.delete(key);
+          if (outcome.state === "superseded") return;
           if (outcome.state === "mounted") {
             remounted.current.add(key);
             announce(`${name} resumed in its pane`);
@@ -785,6 +786,7 @@ export function useMonitorAgents({
         deviceName: remote.name,
         remoteSessionId,
       });
+      if (outcome.state === "superseded") return;
       if (outcome.state === "no-pane") {
         announce("no pane to attach to — open a terminal first");
         return;
@@ -809,8 +811,8 @@ export function useMonitorAgents({
    * 2026-10-18; `deck-placement.ts`): into the focused pane — the pane is an
    * observer, and the person chose it — mirrored there when another pane
    * shows it already. The door answers how, and the words follow. A row
-   * already in the active pane is acknowledged without asking the door (the
-   * rule would move nothing); a row whose PTY the board no longer names has
+   * already in the active pane goes through the same selection gate. A row
+   * whose PTY the board no longer names has
    * nothing to mount and says so.
    */
   const mountLocal = useCallback(
@@ -820,7 +822,7 @@ export function useMonitorAgents({
         announce(`${projectName(agent)} has no terminal here to mount`);
         return;
       }
-      if (agent.active && panes.activeSessionId === sessionId) {
+      if (door === null && agent.active && panes.activeSessionId === sessionId) {
         // mounted already, so no preview is left behind: the focused pane is
         // the claim, and it lapses while the terminals are away (Q04)
         setSelectedId(undefined);
@@ -835,6 +837,7 @@ export function useMonitorAgents({
         return;
       }
       const outcome = await door.mountLocal(sessionId);
+      if (outcome.state === "superseded") return;
       if (outcome.state === "no-pane") {
         announce("no pane to mount into — open a terminal first");
         return;
@@ -856,6 +859,7 @@ export function useMonitorAgents({
 
   const select = useCallback(
     (agent: MonitorAgent): void => {
+      door?.cancelPendingSelection?.();
       if (!agent.device.self) {
         void attachRemote(agent);
         return;
@@ -863,7 +867,7 @@ export function useMonitorAgents({
       setSelectedId(agent.id);
       void mountLocal(agent);
     },
-    [attachRemote, mountLocal],
+    [attachRemote, mountLocal, door],
   );
 
   /**

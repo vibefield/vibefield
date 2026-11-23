@@ -1640,12 +1640,35 @@ describe("the door's local mount, and the pane a replacement belongs in (AR-4 ·
     await dispose();
   });
 
-  it("a floor that never answers fails its own mount in words, and the mount queued behind it still runs (2026-10-11)", async () => {
-    // Two `smoke:godview` reds: History's New agent placed its run through the
-    // line door, behind a mount whose floor read never came back, and the
-    // queue (one mount at a time) never moved again. The read is bounded now:
-    // the stuck entry settles as FAILED, the next runs — the queue is never
-    // released early, only its entries end.
+  it("reselecting the focused session withdraws a slow lookup even if its result arrives later", async () => {
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    let finish!: (rows: Array<{ id: string }>) => void;
+    listSessions = () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      });
+    const pending = door.mountLocal("slow");
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(finish).toBeTypeOf("function");
+    expect(await act(async () => door.mountLocal("user-pty"))).toEqual({
+      state: "mounted",
+      sessionId: "user-pty",
+      placement: "focus",
+    });
+    finish([{ id: "slow" }]);
+    expect(await pending).toEqual({ state: "superseded" });
+    expect(store.showing("pane-1")).toBe("user-pty");
+    expect(store.log).not.toContain("mount:slow");
+    await dispose();
+  });
+
+  it("a new placement supersedes a pending local lookup without waiting for its timeout", async () => {
     const store = workspaceProbe({
       panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
       activePaneId: "pane-1",
@@ -1665,13 +1688,15 @@ describe("the door's local mount, and the pane a replacement belongs in (AR-4 ·
     try {
       // a session this window did not create and no pane shows: the floor is asked
       const stuck = door.mountLocal("unlisted-pty");
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
       const placed = lineDoor.place(terminal);
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(30_000);
+        await vi.advanceTimersByTimeAsync(20);
       });
       expect(await Promise.race([stuck, Promise.resolve(STILL_WAITING)])).toEqual({
-        state: "failed",
-        reason: "the floor did not answer in 10 s",
+        state: "superseded",
       });
       // …and History's place, queued behind it, lands: in the focused pane
       expect(await Promise.race([placed, Promise.resolve(STILL_WAITING)])).toEqual({
@@ -3108,8 +3133,12 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
     await dispose();
   });
 
-  it("an owner that never answers is refused in its NAME once the bound passes, and the mount queued behind it runs (2026-10-11)", async () => {
-    ownerSessions = () => new Promise(() => undefined);
+  it("a newer local selection can commit while a peer lookup is outstanding", async () => {
+    let finishRead!: (sessions: unknown) => void;
+    ownerSessions = () =>
+      new Promise((resolve) => {
+        finishRead = resolve;
+      });
     floor = [{ sessionId: "listed-pty" }];
     const store = workspaceProbe({
       panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
@@ -3124,13 +3153,19 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
         deviceName: "studio",
         remoteSessionId: "pane-r",
       });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
       const next = door.mountLocal("listed-pty");
       await act(async () => {
-        await vi.advanceTimersByTimeAsync(30_000);
+        await vi.advanceTimersByTimeAsync(20);
       });
       expect(await Promise.race([attached, Promise.resolve(STILL_WAITING)])).toEqual({
-        state: "failed",
-        reason: "studio did not answer in 5 s",
+        state: "superseded",
+      });
+      finishRead({ sessions: [bornSummary("pane-r")] });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
       });
       expect(await Promise.race([next, Promise.resolve(STILL_WAITING)])).toEqual({
         state: "mounted",
@@ -3143,6 +3178,31 @@ describe("the remote attach rides the routed host (DS-4e)", () => {
     expect(store.paneOf("pane-r")).toBeUndefined();
     expect(store.showing("pane-1")).toBe("listed-pty");
     await dispose();
+  });
+
+  it("still reports the owner's timeout when the selection remains current", async () => {
+    ownerSessions = () => new Promise(() => undefined);
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    vi.useFakeTimers();
+    try {
+      const pending = door.attach({
+        deviceId: STUDIO,
+        deviceName: "studio",
+        remoteSessionId: "pane-r",
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(5_001);
+      });
+      expect(await pending).toEqual({ state: "failed", reason: "studio did not answer in 5 s" });
+      expect(store.showing("pane-1")).toBe("user-pty");
+    } finally {
+      vi.useRealTimers();
+      await dispose();
+    }
   });
 
   it("no road yet: the pane says so in the desktop's NAME, asks again ONCE on the roster's next flip for it — never on a timer", async () => {

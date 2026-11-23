@@ -39,6 +39,7 @@ import {
   emitGodviewDeckMarker,
   emitGodviewDirectTerminalMarker,
   type GodviewDeckFacts,
+  godviewMarkersEnabled,
 } from "../development-console";
 import { cardTargets } from "../frame/cards/card-targets";
 import { askGodviewDeckUp } from "../frame/deck-door";
@@ -112,11 +113,11 @@ import { PaneTransitions } from "./monitor/pane-transitions";
 import { instrumentDevicesPort } from "./monitor/perf/door-instruments";
 
 import type {
-  LocalMountOptions,
   LocalMountOutcome,
   MonitorDoor,
   RemoteAttachOutcome,
   RemoteAttachRequest,
+  SupersededSelection,
 } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { paneCardTarget } from "./pane-card-target";
@@ -434,11 +435,10 @@ export function GodviewDeck({
     handoffBirths.current.delete(next);
     pending.finish();
   };
-  /** AR-4b — the door's mounts, one at a time (see `mountLocal`). Each entry
-   * settles: the floor reads inside one are bounded (`floorReadWithin`,
-   * 2026-10-11), so an entry that cannot finish fails in words and the next
-   * runs — the queue is never released early. */
+  // Handoffs borrow the focused pane until their commit completes. An obsolete
+  // selection releases its place in this queue while its owner lookup is pending.
   const mountQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const pendingSelection = useRef<AbortController | null>(null);
   /** The deck's own wrapper — the element pane zoom writes its phase onto. It
    * has to be the deck's rather than the stage's: the stage is shared with the
    * monitor and the tuning panel, and a zoom is about the panes. */
@@ -661,7 +661,7 @@ export function GodviewDeck({
   // is not proof of display: this event reaches `presentationReady` only after
   // the routed frames worker applies a scene and its lease agrees with the cell.
   useEffect(() => {
-    if (runtime === null) return;
+    if (runtime === null || !godviewMarkersEnabled()) return;
     const emitCurrent = (
       sessionId: string,
       current: {
@@ -1198,13 +1198,13 @@ export function GodviewDeck({
    * own time pass. The person's time reading the question is not counted.
    * Refs only: the door holds it without being rebuilt.
    */
-  const workspaceReady = useCallback(async (): Promise<void> => {
+  const workspaceReady = useCallback(async (signal?: AbortSignal): Promise<void> => {
     // read through a function: the ref moves under the awaits below
     const context = (): GhostteaWorkspaceContext | undefined => workspaceRef.current;
     if (context() !== undefined) return;
     let left = DECK_CALL_WAIT_MS;
     let last = Date.now();
-    while (context()?.activePaneId === undefined) {
+    while (context()?.activePaneId === undefined && !signal?.aborted) {
       if (terminalPoolSnapshot().fault !== null) return;
       await new Promise<void>((resolve) => setTimeout(resolve, 16));
       const now = Date.now();
@@ -1285,18 +1285,18 @@ export function GodviewDeck({
       // remote palette, which threw under the routed runtime (and whose replica
       // no longer exists). Serialized with the local mounts (AR-4b): they all
       // place by the one focused pane.
-      attach: (request) => {
-        // a call (GV-D5, GV-D6): the terminals come up as they were left —
-        // at the call, not after the floor answers; a failure is said in words
-        askGodviewDeckUp();
-        const run = mountQueue.current.then(workspaceReady).then(() => attachRemoteNow(request));
-        mountQueue.current = run.then(
-          () => undefined,
-          () => undefined,
-        );
-        return run;
-      },
+      cancelPendingSelection: () => pendingSelection.current?.abort(),
+      attach: (request) =>
+        selectSession(
+          () =>
+            floorReadWithin(
+              readRemoteTerminalSession(request.deviceId, request.remoteSessionId),
+              ownerName(request),
+            ),
+          (summary) => attachRemoteNow(request, summary),
+        ),
       createTerminal: async (request) => {
+        pendingSelection.current?.abort();
         askGodviewDeckUp(); // a call: ⌘T, the bloom's birth (GV-D6)
         // W7: the call may be the deck's first; it waits for what that mounts
         const first = workspaceRef.current === undefined;
@@ -1386,114 +1386,115 @@ export function GodviewDeck({
         }
       },
       mountLocal: (sessionId, options) => {
-        // A session selected is a call (GV-D5, GV-D6): the terminals come up
-        // as they were left. A hand-over selects nothing — the fold moving a
-        // PTY into the pane it replaces — and raises nothing.
-        if (options?.replacing === undefined) askGodviewDeckUp();
-        // Mounts are SERIALIZED (AR-4b): two replacements landing in one fold
-        // frame would otherwise race each other for the single active-pane
-        // slot the workspace mounts into, and the second's activation would
-        // capture the first's mount. A placement (GV-D4) reads the focused
-        // pane and mounts into it, so it waits its turn in the same queue —
-        // and a call waits there for the workspace it brings up (W7).
-        const run = mountQueue.current
-          .then(options?.replacing === undefined ? workspaceReady : undefined)
-          .then(() => mountLocalNow(sessionId, options));
-        mountQueue.current = run.then(
-          () => undefined,
-          () => undefined,
+        const replacing = options?.replacing;
+        if (replacing !== undefined) {
+          return enqueueMount(async () => {
+            if (workspaceRef.current?.activePaneId === undefined) return { state: "no-pane" };
+            try {
+              const summary = await terminalSessionSummary(sessionId);
+              if (summary === null) return missingLocal();
+              return await mountSummaryNow(summary, replacing, options?.paneId);
+            } catch (error) {
+              return failed(error);
+            }
+          });
+        }
+        return selectSession(
+          async (signal) => {
+            const context = workspaceRef.current;
+            if (
+              context?.panes.some(
+                (pane) => pane.id === context.activePaneId && pane.session.id === sessionId,
+              )
+            )
+              return undefined;
+            return await terminalSessionSummary(sessionId, undefined, signal);
+          },
+          async (summary) =>
+            summary === null ? missingLocal() : await placeSessionNow(sessionId, summary),
         );
-        return run;
       },
     };
     return built;
-    /**
-     * DS-4e — the remote attach, in three steps, each the answer of its owner:
-     *
-     *   1. the OWNER's exact summary — `terminal.sessions {device}`, through
-     *      this window's daemon (the lead's ruling (B)): the pane mounts by the
-     *      session's engine handle, which no other answer carries;
-     *   2. the session ADOPTED as the owner's — from here the routed host asks
-     *      its ticket, renewal, kill and refresh by `device`, and the summary is
-     *      registered so the owner's session events reach the pane;
-     *   3. the PLACEMENT, by the rule every session follows (GV-D4,
-     *      `placeSessionNow`; re-ruled 2026-10-18 back to GT-D17's "attach the
-     *      pane the user is in"): in the focused pane — the session it showed
-     *      is detached, never killed (GT-D5) — mirrored there if another pane
-     *      already shows it, and nothing moved if the focused one does.
-     *
-     * The ticket is the runtime's to ask once the pane mounts: its answer is
-     * the loopback pair this desktop's daemon re-homed, dialled as a local
-     * cell's — or a refusal the pane says in its own words (`RemotePaneState`).
-     */
-    async function attachRemoteNow(request: RemoteAttachRequest): Promise<RemoteAttachOutcome> {
-      if (workspaceRef.current?.activePaneId === undefined) return { state: "no-pane" };
-      // the roster's name, or "that desktop" — never the id a row falls back to
-      const named =
-        request.deviceName !== "" && request.deviceName !== request.deviceId
-          ? request.deviceName
-          : "that desktop";
-      try {
-        // bounded (2026-10-11): this read holds the door's one-at-a-time
-        // mounts, so an owner that never answers fails this attach in its
-        // name ("studio did not answer in 10 s") and the next mount runs
-        const summary = await floorReadWithin(
-          readRemoteTerminalSession(request.deviceId, request.remoteSessionId),
-          named,
-        );
-        if (summary === null)
-          return { state: "failed", reason: `${named} does not list that session` };
-        adoptRemoteTerminalSession(request.deviceId, summary);
-        // The locality record (GT-5c). This is the one moment the deck knows
-        // for certain that this pane holds a PEER'S session, and `paneMeta`
-        // stamps it into the persisted document so a later restore does not
-        // have to guess from a path.
-        remoteDevices.current.set(summary.id, request.deviceName);
-        const mounted = await placeSessionNow(summary.id, summary);
-        if (mounted.state !== "mounted") return mounted;
-        return { state: "attached", sessionId: summary.id, readWrite: summary.readWrite };
-      } catch (cause) {
-        // The daemon's own words, carried whole: an owner that cannot be
-        // reached for its summary is a state to report, not a throw.
-        return {
-          state: "failed",
-          reason: cause instanceof Error ? cause.message : String(cause),
-        };
-      }
+
+    function enqueueMount<T>(work: () => Promise<T>): Promise<T> {
+      const run = mountQueue.current.then(work);
+      mountQueue.current = run.then(
+        () => undefined,
+        () => undefined,
+      );
+      return run;
     }
-    async function mountLocalNow(
-      sessionId: string,
-      options: LocalMountOptions | undefined,
-    ): Promise<LocalMountOutcome> {
-      const context = workspaceRef.current;
-      if (context?.activePaneId === undefined) return { state: "no-pane" };
-      try {
-        // GV-D4: a session the FOCUSED pane already shows stays where it is,
-        // and nothing is read from the floor to keep it there (a hand-over is
-        // not this: it names the PTY it replaces). One another pane shows is
-        // read like any other and mounted in the focused pane too — a mirror
-        // (re-ruled 2026-10-18: "Mirror it").
-        if (
-          options?.replacing === undefined &&
-          context.panes.some(
-            (pane) => pane.id === context.activePaneId && pane.session.id === sessionId,
+
+    function failed(error: unknown): { state: "failed"; reason: string } {
+      return { state: "failed", reason: error instanceof Error ? error.message : String(error) };
+    }
+    function missingLocal(): { state: "failed"; reason: string } {
+      return { state: "failed", reason: "the floor does not list this session" };
+    }
+    function ownerName(request: RemoteAttachRequest): string {
+      return request.deviceName && request.deviceName !== request.deviceId
+        ? request.deviceName
+        : "that desktop";
+    }
+
+    function selectSession<
+      T extends SessionSummary | null | undefined,
+      Result extends LocalMountOutcome | RemoteAttachOutcome,
+    >(
+      read: (signal: AbortSignal) => Promise<T>,
+      place: (summary: T) => Promise<Result>,
+    ): Promise<
+      Result | SupersededSelection | { state: "no-pane" } | { state: "failed"; reason: string }
+    > {
+      pendingSelection.current?.abort();
+      const selection = new AbortController();
+      pendingSelection.current = selection;
+      const { signal } = selection;
+      const superseded: SupersededSelection = { state: "superseded" };
+      const destination = workspaceRef.current?.activePaneId;
+      askGodviewDeckUp();
+      return enqueueMount(async () => {
+        try {
+          if (signal.aborted) return superseded;
+          const withdrawn = new Promise<undefined>((resolve) =>
+            signal.addEventListener("abort", () => resolve(undefined), { once: true }),
+          );
+          const prepare = async () => {
+            if (workspaceRef.current === undefined) await workspaceReady(signal);
+            if (signal.aborted || workspaceRef.current?.activePaneId === undefined)
+              return undefined;
+            return { summary: await read(signal) };
+          };
+          const ready = await Promise.race([prepare(), withdrawn]);
+          if (
+            signal.aborted ||
+            (destination !== undefined && destination !== workspaceRef.current?.activePaneId)
           )
-        )
-          return await placeSessionNow(sessionId, undefined);
-        // The floor is the one authority both halves read (the pool's own
-        // join for a birth, asked here for a session that already exists).
-        const summary = await terminalSessionSummary(sessionId);
-        if (summary === null)
-          return { state: "failed", reason: "the floor does not list this session" };
-        return options?.replacing === undefined
-          ? await placeSessionNow(sessionId, summary)
-          : await mountSummaryNow(summary, options.replacing, options.paneId);
-      } catch (cause) {
-        return {
-          state: "failed",
-          reason: cause instanceof Error ? cause.message : String(cause),
-        };
-      }
+            return superseded;
+          if (ready === undefined) return { state: "no-pane" };
+          // Once mutation starts it keeps the queue through React's layout commit.
+          const outcome = await place(ready.summary);
+          return signal.aborted ? superseded : outcome;
+        } catch (error) {
+          return signal.aborted ? superseded : failed(error);
+        } finally {
+          if (pendingSelection.current === selection) pendingSelection.current = null;
+        }
+      });
+    }
+
+    async function attachRemoteNow(
+      request: RemoteAttachRequest,
+      summary: SessionSummary | null,
+    ): Promise<RemoteAttachOutcome> {
+      if (summary === null)
+        return { state: "failed", reason: `${ownerName(request)} does not list that session` };
+      adoptRemoteTerminalSession(request.deviceId, summary);
+      remoteDevices.current.set(summary.id, request.deviceName);
+      const mounted = await placeSessionNow(summary.id, summary);
+      if (mounted.state !== "mounted") return mounted;
+      return { state: "attached", sessionId: summary.id, readWrite: summary.readWrite };
     }
   }, [
     runtime,
@@ -1513,6 +1514,9 @@ export function GodviewDeck({
     // would be polling a control connection nobody owns.
     return () => onRemoteDoor?.(null);
   }, [door, onRemoteDoor]);
+  useEffect(() => {
+    if (runtime !== null) return () => pendingSelection.current?.abort();
+  }, [runtime]);
 
   /** The sessions this deck currently SHOWS, by id and nothing else (TP-L-C).
    * One list, two readers: the monitor's pane facts and the demand below. */

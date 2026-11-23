@@ -71,11 +71,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FIXTURE_NATIVE } from "../src/design-system/profiles-fixtures";
 import type { GodviewMonitorFacts } from "../src/development-console";
-import {
-  answerGodviewDeckUp,
-  publishGodviewDeck,
-  resetGodviewDeckDoorForTest,
-} from "../src/frame/deck-door";
+import { publishGodviewDeck, resetGodviewDeckDoorForTest } from "../src/frame/deck-door";
 import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import {
   GODVIEW_FILTERS_STORAGE_KEY,
@@ -1570,21 +1566,17 @@ describe("the monitor stage", () => {
   it("an agent already in the active pane is acknowledged, not re-mounted — and the terminals are called up (GV-D6)", async () => {
     const door = fakeDoor();
     const host = await mountMonitor("list", door, { ...PANES, activeSessionId: "run-codex-pty" });
-    // the door is not asked, so the select itself is the call: with the
-    // terminals away, the session in the active pane brings them back too
-    resetGodviewDeckDoorForTest();
-    let calls = 0;
-    const stop = answerGodviewDeckUp(() => {
-      calls += 1;
+    door.mountLocal.mockResolvedValueOnce({
+      state: "mounted",
+      sessionId: "run-codex-pty",
+      placement: "focus",
     });
     const row = [...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row")].find(
       (candidate) => candidate.textContent?.includes("voyager"),
     );
     await act(async () => row?.click());
-    expect(door.mountLocal).not.toHaveBeenCalled();
+    expect(door.mountLocal).toHaveBeenCalledWith("run-codex-pty");
     expect(ackText(host)).toContain("is in the active pane");
-    expect(calls).toBe(1);
-    stop();
   });
 
   it("says how the deck's rule placed it: mounted in the active pane, or there already (GV-D4, re-ruled 2026-10-18)", async () => {
@@ -4959,22 +4951,20 @@ describe("the screen's report follows the terminals, the outer light does not (L
     const door = fakeDoor();
     const host = await renderStage(door, true);
     const codex = board?.service.rowForRun("run-codex")?.id;
-    resetGodviewDeckDoorForTest();
-    let calls = 0;
-    const stop = answerGodviewDeckUp(() => {
-      calls += 1;
+    door.mountLocal.mockResolvedValueOnce({
+      state: "mounted",
+      sessionId: "run-codex-pty",
+      placement: "focus",
     });
     const body = swarmRows(host).find((row) => row.getAttribute("aria-current") === "true");
     expect(body).toBeDefined();
     await act(async () => body?.click());
     await settle();
-    expect(door.mountLocal).not.toHaveBeenCalled();
+    expect(door.mountLocal).toHaveBeenCalledWith("run-codex-pty");
     expect(ackText(host)).toContain("is in the active pane");
-    expect(calls).toBe(1);
     expect(board?.reports.at(-1)).toEqual([codex]);
     await renderStage(door, false);
     expect(board?.reports.at(-1)).toEqual([]);
-    stop();
   });
 });
 

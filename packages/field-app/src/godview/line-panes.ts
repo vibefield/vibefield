@@ -2,7 +2,7 @@ import type { PaneFrameAgent } from "@vibefield/puppeteer-views";
 import type { LinePane, NewTerminalOutcome } from "../frame/line-door";
 import { pasteIntoInput } from "../terminal/paste-road";
 import { folderName } from "./monitor/folder-name";
-import type { LocalMountOutcome } from "./monitor/remote-door";
+import type { LocalMountOutcome, SupersededSelection } from "./monitor/remote-door";
 
 // The deck's half of what Godview lends the line (One Frame FR-2,
 // `frame/line-door.ts`): its panes named as the swarm names their bodies, its
@@ -46,13 +46,17 @@ export function linePanesOf(
 /** The door's outcome in the line's terms — how the deck's rule placed it
  * (GV-D4), when the door says; its refusal in the swarm's own sentence for a
  * deck with no pane to place by (useMonitorAgents' createAt). */
-export function newTerminalOutcome(outcome: LocalMountOutcome): NewTerminalOutcome {
+export function newTerminalOutcome(
+  outcome: LocalMountOutcome | SupersededSelection,
+): NewTerminalOutcome {
   if (outcome.state === "mounted")
     return {
       state: "opened",
       ...(outcome.placement !== undefined ? { placement: outcome.placement } : {}),
     };
   if (outcome.state === "failed") return { state: "refused", reason: outcome.reason };
+  if (outcome.state === "superseded")
+    return { state: "refused", reason: "another pane or session was selected" };
   return { state: "refused", reason: "no pane to open it in — open a terminal in Godview first" };
 }
 

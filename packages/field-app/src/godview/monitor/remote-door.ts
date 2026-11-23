@@ -67,6 +67,8 @@ export interface MonitorDoor {
    * desktops (every remote row says `attachable: false` until then); the
    * verb stays for that slice to rewire. */
   attach(request: RemoteAttachRequest): Promise<RemoteAttachOutcome>;
+  /** Withdraw a pending selection, including when the newly chosen row is already focused. */
+  cancelPendingSelection?(): void;
   /** Create an empty shell through the workspace's normal birth path — under
    * an Agent Profile when the request names one (SB-3), in the folder it names
    * (HN-7) — placed by the same rule (GV-D4): in the focused pane, whose
@@ -78,7 +80,10 @@ export interface MonitorDoor {
    * mirrored there when another pane shows it, nothing moved when the focused
    * pane does. AR-4 — with `replacing`, in the pane that is showing the PTY
    * the session took the place of, whatever the rule would say. */
-  mountLocal(sessionId: string, options?: LocalMountOptions): Promise<LocalMountOutcome>;
+  mountLocal(
+    sessionId: string,
+    options?: LocalMountOptions,
+  ): Promise<LocalMountOutcome | SupersededSelection>;
   /** AR-5 — rosetta's words, as Find asks them (`index.status` /
    * `index.sessions` / `index.search`), adapted to the views' port. The views
    * never dial rosettad (AR-D14): the daemon's origin stays in fieldd.
@@ -179,6 +184,8 @@ export interface LocalMountOptions {
  * ever asked it about the mesh. */
 export type RemoteSessionDoor = MonitorDoor;
 
+export type SupersededSelection = { state: "superseded" };
+
 export type LocalMountOutcome =
   | {
       state: "mounted";
@@ -219,6 +226,7 @@ export interface RemoteAttachRequest {
  */
 export type RemoteAttachOutcome =
   | { state: "attached"; sessionId: string; readWrite: boolean }
+  | SupersededSelection
   | { state: "no-pane" }
   | { state: "failed"; reason: string };
 
