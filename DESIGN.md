@@ -5863,6 +5863,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   bold run. *Use another account*, on that page and under **Sign in to Tailscale again.**, asks the corner's own Sign
   out question first: iOS's confirmation, its title shown, **Sign out** destructive and **Cancel**. The way in asks it
   from its own view on the splash, since the tabs, which hold the corner's, are not mounted under the way in.
+  *Amended 2026-11-22 (WI-5; James, with **No desktops yet.** on his phone: "we should provide a log in to another
+  account option for users here so they don't get trapped here if they logged in wrong account"):* **No desktops
+  yet.** ends its glass with *Use another account*, the link of the two pages above, asking the same question first.
+  Its glass is three, 182 tall: its row, **Send the link to my computer**, the link. **Waiting for approval.** takes
+  the same link for the same reason, though it was not asked for by name: under its row and **Open the admin
+  console** where there is one, 182 tall with the console and 146 without. Why: since 2026-11-02 the way in stands
+  with no tabs and no corner, so the corner's Sign out, until then these two pages' one way to another account, was
+  out of reach, and a phone signed in to an account with no desktop, or to a network that never approves it, stayed
+  on its page. The holds (**Joining your network…**, **Looking for your computer…**) and **You’re offline.** still
+  hold no act.
 - **The switch** (UA-D15's reload, dressed; 2026-09-22): changing users reloads the window,
   so the transition is two halves that meet on one frame — the boot splash wearing the face of
   the user you are going to. **Leaving.** The face you clicked lifts out of its row (held,
@@ -11206,7 +11216,9 @@ computer." · "Use the same Tailscale account as VibeField on your computer." ·
 ID**: **Joining your network…** · "Signed in as ‹login›" (a hold: the picture and one line), or **Waiting for
 approval.**, then **Looking for your computer…** · "Open VibeField on your computer, signed in to Tailscale as
 ‹login›." (a hold), and **No desktops yet.** when the answer is none, with its row and **Send the link to my
-computer**. The **found beat**: your face, from your desktop, takes the mark's place, **Hi, ‹name›.** ·
+computer**. *(Since 2026-11-22, WI-5: and* Use another account *under them, as under **Waiting for approval.**'s
+acts; it asks first, WI-G3 A below.)*
+The **found beat**: your face, from your desktop, takes the mark's place, **Hi, ‹name›.** ·
 "Connected to ‹desktop›." ("Hi." while no desktop has said your name), for 1.2s; then the lock, offered (below);
 then the hand-over. **How it works**, for someone who has never seen VibeField: four pages, optional, the tour's
 dots in the steps' place and again in Settings › About. **Your agents run on your computer.** · "VibeField is a
@@ -11325,7 +11337,9 @@ and goes to the welcome; **Cancel** leaves the page as it was. The link under **
 question, by the cost James picked with WI-G3 A: "Sign in to Tailscale again has the same link and signs out at one
 tap; it should ask too, in the same slice." Under a demo the question still asks, since asking reaches nothing, and
 its **Sign out** does nothing, as no button of the way in that reaches your account does under a demo (§8 "The
-phone's Settings", Developer). As built, with no change: **You’re offline.** (WI-G2 A), which a phone whose cellular
+phone's Settings", Developer). *(Since 2026-11-22, WI-5: the same link, asking the same question, also ends **No
+desktops yet.** and **Waiting for approval.**, which had no way to another account once the way in stood without the
+corner.)* As built, with no change: **You’re offline.** (WI-G2 A), which a phone whose cellular
 data is off for VibeField says too, with no page of its own (WI-G10 B); the 5s grace (WI-G4 A); the hold's 10s before
 the page (WI-G5 A); a launch bare for its first 5s, then the hold's words (WI-G6 A); a desktop that answers and
 refuses this phone keeps the tabs, which say why (WI-G7 A); and what the tabs had open closes under the gate, as under
