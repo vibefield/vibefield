@@ -299,6 +299,12 @@ export const MonitorAgentRow = z
     pending: z.boolean().optional(),
     /** the line under the name, in the backend's words (M4: core's headline) */
     detail: z.string(),
+    /** PF-20 (2026-11-23) — the session's own title, one line: the one a person gave it, else the
+     * one its agent wrote, else the title the run was launched with (the backend's `agentTitle`).
+     * A view names the row by it before the project. The person's content: a peer reads it cut
+     * at the desk's bound (`peerMonitorRow`), and the `field` cut carries none. Absent on a row
+     * whose session has no title, and on every row from a daemon before PF-20. */
+    title: z.string().optional(),
     activity: MonitorActivity.optional(),
     project: z
       .object({

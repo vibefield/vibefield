@@ -678,6 +678,8 @@ export function peerMonitorRow(
     ...wire,
     project,
     detail: boundText(detail, chars),
+    // PF-20 — the session's title is the person's content, bounded as the row's other texts are
+    ...(wire.title !== undefined ? { title: boundText(wire.title, chars) } : {}),
     ...(activity !== undefined
       ? {
           activity: {

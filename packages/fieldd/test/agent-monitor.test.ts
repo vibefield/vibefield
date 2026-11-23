@@ -95,6 +95,29 @@ describe("hostRunFromSummary — the fold's row as the backend's host record", (
     expect(run.terminalIdentity).toBeUndefined();
   });
 
+  it("PF-20 — hands the backend the title a run was launched with; the session's own title outranks it on the row", async () => {
+    const titled = { ...working, title: "Mend invoices" };
+    expect(hostRunFromSummary(titled).title).toBe("Mend invoices");
+    expect(hostRunFromSummary(working).title).toBeUndefined();
+    expect(hostRunFromSummary({ ...working, title: "  " }).title).toBeUndefined();
+
+    // the backend's row: the launch's title until the session says one, then the session's
+    const launched = await testMonitor({ summaries: [titled] });
+    expect(launched.row("run-working").title).toBe("Mend invoices");
+    launched.service.dispose();
+    const state = stateOf(titled);
+    const said = await testMonitor({
+      summaries: [titled],
+      states: [{ ...state, session: { ...state.session, title: "Split the usage ledger" } }],
+    });
+    expect(said.row("run-working").title).toBe("Split the usage ledger");
+    said.service.dispose();
+    // and a run with neither has none: its row is named by its project, as before
+    const untitled = await testMonitor({ summaries: [working] });
+    expect(untitled.row("run-working").title).toBeUndefined();
+    untitled.service.dispose();
+  });
+
   it("an exited typed run is not alive and claims no PTY — its shell is a bare terminal again (AR-7)", () => {
     const run = hostRunFromSummary(exited);
     expect(run.alive).toBe(false);

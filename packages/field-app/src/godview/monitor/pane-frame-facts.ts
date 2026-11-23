@@ -114,6 +114,10 @@ export function paneFrameAgentFacts(run: ChromeRun): PaneFrameAgent | undefined 
   // adapter's own, or the floor's ⌃C while the adapter names none): the frame's
   // stop title names it, and names none when the stop presses no key
   const stopKey = run.local?.stopKey ?? "";
+  // PF-20 (2026-11-23) — the session's own title, the model row's word for it (the backend's:
+  // the session's, else the one the run was launched with). The frame names the badge by it
+  // before the folder; a run with none keeps the folder.
+  const title = run.monitorRow?.title ?? "";
   return {
     providerId: run.kind,
     providerLabel: run.label,
@@ -125,6 +129,7 @@ export function paneFrameAgentFacts(run: ChromeRun): PaneFrameAgent | undefined 
     // the row's clock is the mirror's own once the provider has spoken
     ...(run.statusSince === "" ? {} : { statusSince: run.statusSince }),
     ...(path === "" ? {} : { project: folderName(path, run.label), cwd: path }),
+    ...(title === "" ? {} : { title }),
     ...(model === undefined || model === "" ? {} : { model }),
     ...(effort === undefined ? {} : { effort }),
     ...(contextPercent === undefined ? {} : { contextPercent }),
@@ -230,6 +235,7 @@ export function paneFrameFactsKey(
         facts?.alive === undefined ? "" : facts.alive ? 1 : 0,
         facts?.statusSince ?? "",
         facts?.project ?? "",
+        facts?.title ?? "",
         facts?.cwd ?? "",
         facts?.model ?? "",
         facts?.effort?.value ?? "",

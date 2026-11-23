@@ -189,6 +189,13 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     const window = windowMonitorRow(row);
     expect(window.project.seq).toBe(0);
     expect(window.reply?.text).toBe(long);
+    // PF-20 — the session's title is a text of the row: bounded for a peer, whole for the window,
+    // and left off a row that has none
+    const titled = { ...row, title: long };
+    expect(peerMonitorRow(titled).title?.length).toBe(AGENT_FIELD.DESK_TEXT_CHARS);
+    expect(peerMonitorRow(titled).title?.endsWith("…")).toBe(true);
+    expect(MonitorAgentRow.parse(windowMonitorRow(titled)).title).toBe(long);
+    expect("title" in peerMonitorRow(row)).toBe(false);
     // the remote cut carries the peer's cut (PG-2)
     const remote = AgentRemoteRow.parse({
       ...projectRemoteRow(monitor.fold.list().sessions[0]!, row),

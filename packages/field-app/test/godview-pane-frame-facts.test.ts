@@ -188,6 +188,34 @@ describe("the pane frame's facts", () => {
     expect(facts?.cwd).toBeUndefined();
   });
 
+  it("PF-20 — hands the frame the session's title off the model's row, and none while the row has none", () => {
+    const run = chromeRunOf(
+      managedSummary({
+        runtimeRunId: "run-a",
+        terminalSessionId: "pty-a",
+        cwd: "/Users/j/src/rosetta",
+      }),
+    );
+    // fieldd's cut for the chrome carries no model row, and a run the backend has not assembled has none
+    expect(paneFrameAgentFacts(run)).not.toHaveProperty("title");
+    const titled = (title: string | undefined): ChromeRun =>
+      ({ ...run, monitorRow: { ...(title === undefined ? {} : { title }) } }) as ChromeRun;
+    expect(paneFrameAgentFacts(titled(undefined))).not.toHaveProperty("title");
+    // the title beside the folder: the frame names the badge by the one and says the other on hover
+    expect(paneFrameAgentFacts(titled("Split the usage ledger"))).toMatchObject({
+      title: "Split the usage ledger",
+      project: "rosetta",
+    });
+    // a new title is a redraw; the same one is not
+    const key = (row: ChromeRun): string => {
+      const byTerminal = runsByTerminal([row]);
+      return paneFrameFactsKey(paneFrameAgents(byTerminal), runIdsBySession(byTerminal));
+    };
+    expect(key(titled("Split the usage ledger"))).not.toBe(key(run));
+    expect(key(titled("Split the usage ledger"))).not.toBe(key(titled("Mend invoices")));
+    expect(key(titled("Mend invoices"))).toBe(key(titled("Mend invoices")));
+  });
+
   it("keys the frames by the floor session a pane shows, and leaves out a run with nothing to give", () => {
     const speaking = managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" });
     const silent = managedSummary({

@@ -268,6 +268,9 @@ export function hostRunFromSummary(
       : {}),
     ...(summary.profileId !== undefined ? { profileId: summary.profileId } : {}),
     ...(summary.profileSet !== undefined ? { profileSet: summary.profileSet } : {}),
+    // PF-20 (2026-11-23) — the title the run was launched with, which names the row until its
+    // session says a title of its own (the backend's rule: core's, else the host's)
+    ...(summary.title !== undefined && summary.title.trim() !== "" ? { title: summary.title } : {}),
     tier: summary.tier,
     ...(summary.continuation?.pending !== undefined
       ? { pending: summary.continuation.pending }
