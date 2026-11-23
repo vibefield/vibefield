@@ -67691,3 +67691,109 @@ live Claude Code (the rig's wrote none; the reader's tests hold the shape, which
 **Not built:** the phone's own views do not name a row by its title; the other seven adapters say a title only
 where they already did at a session's start. **Not run:** `pnpm verify` whole, the Rust tests, the kit's other
 suites, every smoke and `pnpm gate:landing`. **Not done:** no push of its own.
+
+## Item 657 — a launching Claude Code session's names never reach a terminal or a worker (M537)
+
+(2026-11-23; item 657; one commit, ten paths, +373 −4: `ecd1db30e` ("657: a launching Claude Code
+session's names never reach a terminal or a worker"), on main `f62474f05fbe`. Its change over its
+parent is byte for byte the change the test Mac's rows ran green as a trial on `501636d24956`
+(`git diff --binary`, sha256 `6c92bc0a…`). Pushed with 83 others at `1a27080ee`.)
+
+**The defect.** VibeField started inside a Claude Code session (`pnpm dev` in its terminal, or a
+harness job) inherits that session's environment, and every terminal and worker it serves inherited
+it in turn: the session's id, its messaging socket and token, and `CLAUDE_CODE_CHILD_SESSION`, which
+made a `claude` typed in a VibeField terminal say its transcript saving was off. It was found on the
+QA stage by names alone. EL7 stripped VibeField's own classes (`ENV_PREFIXES`) and nothing of the
+host session's.
+
+**Where it leaked.** Every site that reads `ENV_PREFIXES` was read at `501636d24956`.
+- The floor (`cell.rs`): a free shell is born in inherit mode, field-native's own environment less
+  ghosttea's private names and VibeField's prefixes.
+- fieldd's `workerEnvironment`: the files and transcripts workers get fieldd's environment less
+  those prefixes.
+- Not leaking: `agentEnvironment` (agent PTYs, adapters' helpers, a composition's own runs) and
+  `pluginChildEnv` start from allow-lists.
+
+**What landed.**
+- contracts' `registries.ts`: `HOST_SESSION_ENV_PREFIXES` (`CLAUDECODE`, `CLAUDE_CODE_`) and
+  `HOST_SESSION_ENV_NAMES` (`CLAUDE_PID`, `CLAUDE_EFFORT`, the session's two names outside that
+  prefix, read on a real harness by names alone). The generator emits both into field-native's
+  `registries.rs`.
+- `cell.rs` passes them to ghosttea's `with_private_env_prefixes` beside `ENV_PREFIXES`. ghosttea
+  strips inherited keys alone, so a clean session's variables stay the caller's and every agent
+  keeps puppeteer's own `CLAUDE_CODE_NO_FLICKER`. Its extension point takes prefixes alone: on the
+  floor the two exact names also match a name that begins with one of them (none is known).
+- `workerEnvironment` strips them by prefix and by exact name, case-folded as its strip of
+  `ENV_PREFIXES` is.
+- The class is not the whole of `CLAUDE_`: a person's own `CLAUDE_CONFIG_DIR` passes, and a free
+  shell's login profile sets a person's own values again. Only what the launching session set is
+  dropped, as for `VIBEFIELD_` and `VF_` (items 576 and 589).
+
+**What was proved.** Every test sets its own sentinel values and compares names alone, so a red
+prints no value.
+- `registry.test.ts`: the two lists, not the whole class, none empty and none under VibeField's
+  prefixes.
+- fieldd's new `env-prefixes-host-session.test.ts` (8 rows): agents on darwin and win32 hold none of
+  the session's names and keep `CLAUDE_CODE_NO_FLICKER` at puppeteer's own value; an adapter's
+  helper; a plugin's child; the worker, `CLAUDE_CONFIG_DIR` arriving; its case fold; an exact name
+  stays exact at fieldd's site.
+- `terminal-service.test.ts`: a birth from fieldd inside a session is the bare inherit mode, byte
+  for byte.
+- The floor's matrix row 6c and `cell_lifecycle.rs`: a real shell born in inherit mode holds none of
+  the names, and `CLAUDE_CONFIG_DIR` and a control arrive. Each shell writes its variables' names
+  alone.
+- Rows on the test Mac at the trial, all green: the vitest sets above (71, 18, 5 and 2 passed, 0
+  failed), `cell_lifecycle`'s four strip rows, `cargo fmt --check`, clippy at `-D warnings`, and
+  contracts' and fieldd's `tsc`. The runner held no session name (0 unset), and every row ran under
+  `env -i`.
+- biome 2.5.4 format and `check --error-on-warnings` on the seven changed TS files.
+
+**The cut and the land.** The patch was re-applied on main as found at the land (`f62474f05fbe`, 11
+commits over the trial's base, none touching the ten paths) by `lanes/fixer/item-657/cut/
+item657-cut.r3.zsh` (`9bc0d4a8`), in a side worktree through the pre-commit hook (passing: "the
+committed rows (staged) are the lock's"), to one create-only ref, 11:54:20Z. Two earlier cuts on
+older mains stopped as main moved under them, before any ref was written. `land-657.zsh`
+(`ad8f8998`) held the commit's shape (one commit, its change the trial's, the ten paths, the
+message, no session line, no lock path) and fast-forwarded main by `land-stack5.sh` (`4a1d62d4`) on
+a clean checkout, 11:55:14Z.
+- Its first try at 11:54:21Z stopped at `land-stack5.sh`'s guard on one hit: the QA stage's dev
+  runner, cwd `lanes/qa-stage/desk`, an SSD checkout detached at `501636d24956`. On VF-PM's ruling
+  of 11:54:56Z, under `land-stack5.sh`'s own header ruling of 2026-11-02 (a dev runner from the SSD
+  QA checkout never holds a landing while the dev-stack check reads 0/0), the second run waived that
+  one hit (`LAND_WAIVE_CWD` naming that checkout; "waived:" printed for it alone); the dev-stack
+  check read 0/0, the dirty paths 0 before and after.
+- `land-657.zsh`'s line naming the standing word for the land says "no guard waiver"; that run
+  waived the one hit above. The run's log stands as written.
+
+**In the verify.** The proof ran at main's tip on the test Mac, twice.
+- At `ecd1db30e` (PUSH-657): the landing fill (the twenty puppeteer 0.4.11 packages its lock moved,
+  the supply-chain check passing), `pnpm verify` whole (run `v-657push`: exit 0, every stage, the
+  Rust tests 699 passed, 0 failed, 15 ignored, `census:assert` OK, the gen check clean), and the kit
+  ALL on a fresh DerivedData (run `kit-657push`) RED: 3,251 rows, one failed,
+  `KitWordsNameNoOneTests`, on a comment in `ComboCatalogTests.swift` that named a person (PF-16,
+  `511cdf698`; nothing of item 657). Push 159 at that tip was void.
+- PF-16's mend `1a27080ee` (one comment line) repaired it. At `1a27080ee` (PUSH-657b): the fill
+  fetched nothing; `pnpm verify` whole (run `v-657b`: exit 0, every stage, the Rust tests 699 / 0 /
+  15, the TS counts equal to `v-657push`'s, `census:assert` OK, the gen check clean); the kit ALL
+  (run `kit-657b`: `xcodebuild` exit 0, 3,251 rows: 3,248 passed, 3 skipped, 0 failed) on
+  `kit-657push`'s standing DerivedData, by VF-PM's ruling of 12:21:11Z, for the test Mac's free
+  space (no second DerivedData set aside: this one was built fresh at `ecd1db30e`, and no Swift
+  manifest moved since); both spend-hero stills equal.
+- The judge against `kit-657push` exited 1 on one moved row, the one wanted: `KitWordsNameNoOne`'s
+  row Failed → Passed (lost 0, new 0), read so by VF-PM at 12:40:32Z. Against push 158's kit,
+  `kit-657push` read 93 rows new and 17 gone, each traced by VF-PM to main's own renames and
+  retirements since push 158.
+
+**The push.** Push 159b, 2026-11-23 12:41:28Z: origin/main `26c4eb1ff` → `1a27080ee` (+84, no
+merge), `SKIP_VERIFY=1` on `v-657b` and `kit-657b` at that forty; read back by the remote ref and
+`ls-remote`. Read after the push: origin's `verify` (run 45176703264) and `audit` (run
+45176703347) at `1a27080ee`, both success (13:45Z).
+
+**Not covered, and owed.**
+- On the floor an exact name matches as a prefix. Stripping it exactly there needs ghosttea to take
+  exact keys, which would be a petition, not this item.
+- The QA stage's own environment is the stage's mend (`wait-up.sh`), not this item's.
+- Electron main's live-surface helpers (`simctl`, the capture helper) spawn over the whole
+  environment, as they do for `FIELD_*`. They run Apple's tools, never an agent or a shell.
+- Claude Code may add a session name outside both shapes; a names-only read of a session finds it.
+- Not run: every smoke and `pnpm gate:landing`.
