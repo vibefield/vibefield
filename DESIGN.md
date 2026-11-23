@@ -9672,11 +9672,28 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   is reached by a modifier and the letter (the rail's ⋯, or the keys page's Ctrl and Alt).
   **Shell takes Common's place, and Emacs is retired**: Emacs's eight keys were readline's and are
   among Shell's fifteen. A phone that had Common or Emacs chosen lands on Shell, and so does one
-  where nobody chose. A profile is chosen by hand and kept across sessions *(PF-17: a card's
-  session chooses it)*. An agent with no profile (Grok, Kimi Code, Hermes, Antigravity, ACP)
+  where nobody chose. A profile is chosen by hand and kept across sessions *(since PF-17 a card's
+  agent chooses it first: the next bullet)*. An agent with no profile (Grok, Kimi Code, Hermes, Antigravity, ACP)
   takes the top row, which three of them bind as the others do, and whichever profile is chosen.
   **In a short, wide keyboard** the strip stands over two rows of ten, the top row's five leading
   the first. Navigate and Fn are as they were.
+- **The keys page opens on its card's agent** (PF-17, 2026-11-23; the page "Phone Agent Keys" asked
+  "Should the keys page follow the session's agent?" and leaned to follow; James, 2026-11-22:
+  "good, go with your lean").
+  A card whose session is an agent with a profile opens Shortcuts on that profile: Claude Code's
+  card on Claude, Codex's on Codex, and OpenCode's, GitHub Copilot's and Pi's on theirs. **Which
+  profile an agent takes is the agent catalog's to say**: `keyProfile` on its row, a presentation
+  key as `mark` is, sent to the phone with the row. The kit compares no agent's id (AR-L1, R23b).
+  The page stays on the profile last chosen by hand where the catalog names none: a row without
+  the key (Grok, Kimi Code, Hermes, Antigravity, ACP), a session that is no agent's, a desktop a
+  build behind that sends no such key, and a profile this build does not have. Gemini's profile is
+  reached by hand alone, since the catalog has no row for it.
+  **A hand's choice outlasts the agent's while the card is open**: a tap on the strip holds until
+  the card closes, and it is kept as the profile of the cards that name none. The next card opened
+  follows its own agent again.
+  *(Until PF-17 the profile was the hand's alone, by the rule of 2026-11-02 that the picker "must
+  not infer a profile from the session's provider". That rule kept agents' ids out of the kit, and
+  the catalog's key keeps them out still.)*
 - **A live card another client is driving** (item 42's phone half; James, 2026-10-19 17:42Z: "studio
   is driving · touch to take it back"; the look ruled 21:38Z, "good, design all go with the lean").
   While the card's session has its geometry seat (DS-4) held by another client, the studio's window,
