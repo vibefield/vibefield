@@ -574,6 +574,26 @@ Godview mode and draws one chip of its own.
 - **A resting badge** is the terminal's ink at 80% on that ink at 7%, with a 1px inner line at
   9%, and a 6px dot in the pane colour before its name. **The selected pane's badge** is filled
   with the pane colour and loses the dot and the line.
+- **A badge says the session's own title** (PF-20, 2026-11-23; James, of Godview's monitor:
+  "currently for the title we are showing the project title, can we show the session title
+  instead?", and of the route: "let's do it properly in puppeteer"). A row is named by the name
+  its host gave it (a spark's), else by the title its session goes by, else by its project, as
+  every row was until PF-20. A session's title is the one a person gave it (Claude Code's `-n`
+  and `/rename`), else the one its agent wrote for it (Claude Code's own title, a Codex thread's
+  name). The rule is puppeteer's (`rowName`, from 0.4.11), and every Godview view that names a
+  row follows it:
+  - the list sets the title as the row's name, and the small line under it reads
+    `project · branch`;
+  - a swarm body sets the title a size under a name (9.5 and 10.5 px against 12 and 14), on two
+    rows broken between words where one does not hold it;
+  - the timeline names a live lane by it, as it named an ended one;
+  - a pane's badge says it, and the badge's pointer words add the folder.
+
+  VibeField draws none of this. It hands the title over: on the model's row, and to the pane
+  frame beside the folder. The rain and the spend view still say the project. A title is the
+  person's content: it crosses to a peer desktop cut at the desk's bound, as every text of a row
+  is, and the content-free `field` cut carries none. **Not built:** the phone's own views (the
+  kit's port) do not name a row by its title.
 - **The label on a filled badge is read, so it is held to 4.5:1.** A project tint is dealt at one
   lightness per Godview mode (§2.7's tints: 0.6 by day, 0.74 by night). White on the day tint is
   3.45:1 at its least (hue 191), so the day fill is shaded 12%, and white on it is 4.70:1 at its

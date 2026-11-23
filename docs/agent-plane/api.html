@@ -1854,6 +1854,15 @@
               version until both update. The phone still reads <code>field</code> until PG-3, the kit's decode.
             </p>
             <p>
+              <em>Added 2026-11-23 (PF-20):</em> the model's row carries the session's own <code>title</code>, one
+              line (puppeteer-monitor's from 0.4.11: the session's, as its adapter observed it, else the title the run
+              was launched with, which fieldd hands the backend as <code>MonitorHostRun.title</code>). It is absent
+              on a row whose session has none. The window's cut carries it whole; the remote cut carries it as a text
+              of the row, bounded at <code>AGENT_FIELD.DESK_TEXT_CHARS</code>; the <code>field</code> projection
+              carries none. The views name a row by it before the project (puppeteer-view-sdk's
+              <code>rowName</code>). The phone's kit decodes the row and does not read the field yet.
+            </p>
+            <p>
               <em>Added 2026-11-16 (item 464):</em> the remote cut's pane join may say <code>succeeds</code>: the floor
               session whose body this row's session continues on every other screen. A window pairs a hand-off (a
               launch in an empty shell, the shell an ended agent's pane returns to, a shell born in a waiting shell's
