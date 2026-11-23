@@ -1437,7 +1437,10 @@ describe("the cards layer (UM-R1): a card stands above the terminals, in the col
     );
     expect(CSS).toMatch(/\n\.vf-profiles-stand \{[^}]*pointer-events: auto;/u);
     // a portaled card stands outside the column, so the layer carries the column's sans and the Bands circle's inks
-    const inks = /\n\.vf-monitor-cards,\n\.vf-profiles-column \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    // (and since WL-1, 2026-11-23, the work column's pill, the profiles column's twin)
+    const inks =
+      /\n\.vf-monitor-cards,\n\.vf-profiles-column,\n\.vf-work-column \{[^}]*\}/u.exec(CSS)?.[0] ??
+      "";
     expect(inks).toContain("font-family: var(--vf-font-sans);");
     expect(inks).toContain("--vf-bands-ink: var(--vf-foreground);");
     expect(inks).toContain("--vf-bands-attention: var(--vf-monitor-ink-attention);");

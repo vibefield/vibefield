@@ -1,0 +1,14 @@
+/* WL-1 (DESIGN.md §2.9 "How it is drawn", §8 "Godview's work column") — a project's mark: the folder glyph stroked in
+   its ink (the glyph's own `currentColor`, which `ProjectMark` sets) and filled with the same ink at a quarter. The
+   glyph draws its strokes unfilled, so the fill is the path's own. */
+.vf-glyph.vf-project-mark path {
+  fill: color-mix(in srgb, currentColor 25%, transparent);
+}
+
+/* an agent's mark draws at its text's size (`AgentIcon`), so its box is the size it is given */
+.vf-agent-mark {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  line-height: 1;
+}

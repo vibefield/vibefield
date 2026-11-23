@@ -46,3 +46,25 @@ export function headingInto(from: AimPoint, to: AimPoint, card: AimRect): boolea
   const positive = d1 > 0 || d2 > 0 || d3 > 0;
   return !(negative && positive);
 }
+
+/** A card's box as the aim reads it, either side of its pill. */
+export interface AimBox extends AimRect {
+  right: number;
+}
+
+/** WL-1 (DESIGN.md §8 "Godview's work column", 2026-11-23): the same trip for a card that stands on either side of its
+ * pill. The work column's cards stand LEFT of it, so the picture is mirrored: its near edge is the card's right, and a
+ * trip into it moves left. */
+export function headingIntoSide(
+  from: AimPoint,
+  to: AimPoint,
+  card: AimBox,
+  side: "right" | "left",
+): boolean {
+  if (side === "right") return headingInto(from, to, card);
+  return headingInto(
+    { x: -from.x, y: from.y },
+    { x: -to.x, y: to.y },
+    { left: -card.right, top: card.top, bottom: card.bottom },
+  );
+}

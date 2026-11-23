@@ -1,14 +1,16 @@
 // THE FILTERS FOR THE RUN (docket N4 (a), 2026-10-12). Godview's filters — the
-// desktop and the profile chosen in search's Live now (GV-D3), and the plan
-// chosen on a meter (UM-5a, UM-D14: the only one a single profile can have) — are kept
+// desktop and the profile chosen in search's Live now (GV-D3), the plan
+// chosen on a meter (UM-5a, UM-D14: the only one a single profile can have), and
+// the project and the agent chosen on the work column (WL-1, 2026-11-23) — are kept
 // while the app runs and cleared at launch, as the terminals' state is
 // (`deck-state.ts`, L3): the window's session storage, so closing Godview (which
 // unmounts its monitor) or a renderer reload keeps what was chosen, and a new
 // window or a launch starts on everything.
 //
-// What is kept is the CHOICE, never its standing: an id the board or the
-// profiles feed no longer has falls back where it is read (`standingChoice`,
-// `chosenProfile`), so a stale one shows no filter rather than a false token.
+// What is kept is the CHOICE, never its standing: an id the board, the
+// profiles feed or the stage no longer has falls back where it is read
+// (`standingChoice`, `chosenProfile`, `standingWork`), so a stale one shows no
+// filter rather than a false token.
 // Only the window's own stage — the one that lends the Peek its door — reads or
 // writes it; a catalog's stages never touch it.
 
@@ -20,9 +22,13 @@ export interface GodviewFilters {
   profile: string | null;
   /** UM-5a — the plan's key (`usage/plan-sessions.ts`): kept as chosen, read back only while the feed holds it */
   plan: string | null;
+  /** WL-1 — the project's folder name: kept as chosen, read back only while a session of it is on the stage */
+  project: string | null;
+  /** WL-1 — the agent's provider id (or the shell's, `SHELL_AGENT`), read back the same way */
+  agent: string | null;
 }
 
-const NONE: GodviewFilters = { desk: null, profile: null, plan: null };
+const NONE: GodviewFilters = { desk: null, profile: null, plan: null, project: null, agent: null };
 
 const idOrNone = (value: unknown): string | null => (typeof value === "string" ? value : null);
 
@@ -33,8 +39,14 @@ export function storedGodviewFilters(): GodviewFilters {
     if (raw === null) return NONE;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return NONE;
-    const { desk, profile, plan } = parsed as Record<string, unknown>;
-    return { desk: idOrNone(desk), profile: idOrNone(profile), plan: idOrNone(plan) };
+    const { desk, profile, plan, project, agent } = parsed as Record<string, unknown>;
+    return {
+      desk: idOrNone(desk),
+      profile: idOrNone(profile),
+      plan: idOrNone(plan),
+      project: idOrNone(project),
+      agent: idOrNone(agent),
+    };
   } catch {
     return NONE;
   }
@@ -42,7 +54,13 @@ export function storedGodviewFilters(): GodviewFilters {
 
 export function storeGodviewFilters(filters: GodviewFilters): void {
   try {
-    if (filters.desk === null && filters.profile === null && filters.plan === null) {
+    if (
+      filters.desk === null &&
+      filters.profile === null &&
+      filters.plan === null &&
+      filters.project === null &&
+      filters.agent === null
+    ) {
       sessionStorage.removeItem(GODVIEW_FILTERS_STORAGE_KEY);
     } else {
       sessionStorage.setItem(
@@ -51,6 +69,8 @@ export function storeGodviewFilters(filters: GodviewFilters): void {
           desk: filters.desk,
           profile: filters.profile,
           ...(filters.plan !== null ? { plan: filters.plan } : {}),
+          ...(filters.project !== null ? { project: filters.project } : {}),
+          ...(filters.agent !== null ? { agent: filters.agent } : {}),
         }),
       );
     }

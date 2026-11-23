@@ -532,6 +532,9 @@ export function Peek({
         if (filter === "desk") godview?.setDesk(value);
         else if (filter === "profile") godview?.setProfile(value);
         else if (filter === "plan") godview?.setPlan(value);
+        // WL-1: the work column's lenses, Godview's own as the desktop's are
+        else if (filter === "live-project") godview?.setProject(value);
+        else if (filter === "live-agent") godview?.setAgent(value);
         else if (filter === "project") setFilters((at) => ({ ...at, project: value }));
         else setFilters((at) => ({ ...at, agent: value }));
       }
@@ -754,6 +757,8 @@ export function Peek({
     godview?.setDesk(null);
     godview?.setProfile(null);
     godview?.setPlan(null);
+    godview?.setProject(null);
+    godview?.setAgent(null);
   }, [godview]);
 
   const target = container === undefined ? document.body : container;

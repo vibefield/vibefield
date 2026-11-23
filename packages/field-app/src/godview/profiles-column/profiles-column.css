@@ -27,9 +27,11 @@
 }
 
 /* the sans the column reads and the Bands circle's tones (§8 "Its paints are tones": the ink, the hot dot's ring, the
-   attention ink), on the pill and in the cards layer beyond it, which stands outside the column's DOM */
+   attention ink), on the pill and in the cards layer beyond it, which stands outside the column's DOM; since WL-1
+   (2026-11-23) on the work column's pill too, its twin at the stage's right (work-column.css) */
 .vf-monitor-cards,
-.vf-profiles-column {
+.vf-profiles-column,
+.vf-work-column {
   font-family: var(--vf-font-sans);
   --vf-bands-ink: var(--vf-foreground);
   --vf-bands-ground: var(--vf-profiles-solid);
@@ -37,6 +39,7 @@
 }
 
 .vf-godview.theme-light .vf-profiles-column,
+.vf-godview.theme-light .vf-work-column,
 .vf-godview.theme-light .vf-monitor-cards {
   --vf-profiles-line: var(--vf-godview-light-chrome-line);
   --vf-profiles-line-ring: var(--vf-godview-light-chrome-line-ring);
@@ -52,6 +55,7 @@
 }
 
 .vf-godview.theme-dark .vf-profiles-column,
+.vf-godview.theme-dark .vf-work-column,
 .vf-godview.theme-dark .vf-monitor-cards {
   --vf-profiles-line: var(--vf-godview-dark-chrome-line);
   --vf-profiles-line-ring: var(--vf-godview-dark-chrome-line-ring);

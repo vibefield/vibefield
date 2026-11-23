@@ -639,6 +639,64 @@
   max-height: calc(100% - var(--vf-godview-panes-foot) - var(--vf-godview-head-reserve) - 8px);
 }
 
+/* ── WL-1 (DESIGN.md §8 "Godview's work column", 2026-11-23) — THE WORK
+   COLUMN'S SLOT, the profiles column's twin 13 from the stage's RIGHT edge.
+   Its room is the profiles slot's, rule for rule (the five above, in their
+   order, so the same rule wins in each state). It measures no height while
+   the column draws nothing, so it is then neither an obstacle nor a room. */
+.vf-monitor-work {
+  position: absolute;
+  z-index: 8;
+  top: calc(var(--vf-godview-head-reserve) + 8px);
+  right: 13px;
+  display: flex;
+  flex-direction: column;
+  width: 52px;
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px - var(--vf-godview-deck-field-gap));
+  color: var(--text-main);
+  pointer-events: auto;
+}
+
+.vf-godview[data-godview-deck-edge] .vf-monitor-work {
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px);
+}
+
+.vf-godview[data-godview-deck-edge][data-godview-deck="away"]:not([data-godview-deck-motion])
+  .vf-monitor-work {
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px - var(--vf-godview-panes-foot));
+}
+
+.vf-cover
+  .vf-godview[data-godview-deck-edge][data-godview-deck="away"]:not([data-godview-deck-motion])
+  .vf-monitor-work {
+  max-height: calc(100% - var(--vf-godview-head-reserve) - 8px);
+}
+
+.vf-godview[data-godview-deck-edge]
+  .vf-monitor-chrome-layer[data-stage-allocation="full"]
+  > .vf-monitor-work {
+  max-height: calc(var(--vf-godview-field-foot) - var(--vf-godview-head-reserve) - 8px);
+}
+
+.vf-godview[data-godview-deck-edge][data-godview-deck="away"]
+  .vf-monitor-chrome-layer[data-stage-allocation="full"]
+  > .vf-monitor-work {
+  max-height: calc(100% - var(--vf-godview-panes-foot) - var(--vf-godview-head-reserve) - 8px);
+}
+
+/* WL-1 — a view in flow reads no right inset (the list, the rain, the timeline
+   and spend pad their left and their top alone), so while the work column
+   stands its slot ends at the pill's edge, 13 + 52 from the stage's right, and
+   `GodviewMonitor` lends it a stage that wide. The swarm, lent the full stage,
+   steers around the pill instead. */
+.vf-godview:has(.vf-monitor-work > .vf-work-column) .vf-godview-monitor-stage:not(
+    [data-stage-allocation="full"]
+  )
+  > .vf-monitor-view-slot {
+  position: absolute;
+  inset: 0 calc(13px + 52px) 0 0;
+}
+
 /* …and the strip is chrome the same way the column is, so a view that lays out
    IN FLOW starts below it (GT-6a). The package reserves nothing for this strip
    because the reference host has no claims at all: `list.css` pins its toolbar
@@ -699,6 +757,13 @@
   flex-wrap: wrap;
   width: max-content;
   max-width: calc(100% - 96px);
+}
+
+/* WL-1 (2026-11-23) — while the work column stands, the claims strip, which
+   starts at 79 and ends 24 short of the stage's right, ends 24 short of the
+   pill instead, its moment row too */
+.vf-monitor-chrome-layer:has(> .vf-monitor-work > .vf-work-column) > .vf-monitor-claims {
+  max-width: calc(100% - 103px - 13px - 52px);
 }
 
 .vf-monitor-moment {

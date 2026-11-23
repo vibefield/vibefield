@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { type ColumnParts, dot } from "./column-parts";
 
 // UM-R1 (DESIGN.md §8 "Where the cards stand") — A CARD'S STAND: the popover or the add's card, handed to the cards
 // layer the stage holds beside itself (`.vf-monitor-cards`, z 30 after the CRT layers since 2026-11-16), because inside
@@ -16,14 +17,19 @@ import { createPortal } from "react-dom";
 // the vignette, which chrome never wears. It stands 16 right of the pill with its top 6 above its item's,
 // held between the layer's top and foot, and with no layer (the catalog, which has no terminals) it stands in place.
 // React's enter and leave walk the fiber through a portal, so its item's hover and keys need no change to reach it.
+// WL-1 (2026-11-23, §8 "Godview's work column"): the work column's cards stand the same way, 16 LEFT of its pill on
+// the stage's right, so the column names its own parts (`ColumnParts`) and the side its cards take.
 
-/** §8: "16 right of the pill". */
-const RIGHT_OF_PILL = 16;
+/** §8: "16 right of the pill" (16 left of it, for a pill on the stage's right). */
+const BESIDE_PILL = 16;
 /** §8: "its top 6 above the circle's (the pill's edge)". */
 const ABOVE_ITEM = 6;
 
 export interface CardPlacement {
-  left: number;
+  /** a card right of its pill: from the layer's left edge */
+  left?: number;
+  /** a card left of its pill: from the layer's right edge */
+  right?: number;
   top: number;
   maxWidth: number;
   maxHeight: number;
@@ -36,25 +42,26 @@ function placeCard(
   layer: HTMLElement,
   stand: HTMLElement,
   anchor: HTMLElement,
+  parts: ColumnParts,
 ): CardPlacement | null {
-  const item = anchor.closest(".vf-profiles-item");
-  const pill = item?.closest(".vf-profiles-column");
+  const item = anchor.closest(dot(parts.item));
+  const pill = item?.closest(dot(parts.column));
   if (!item || !pill) return null;
   const layerRect = layer.getBoundingClientRect();
   const width = layer.clientWidth || Math.round(layerRect.width);
   const height = layer.clientHeight || Math.round(layerRect.height);
   const sx = layerRect.width > 0 ? width / layerRect.width : 1;
   const sy = layerRect.height > 0 ? height / layerRect.height : 1;
-  const left =
-    Math.round((pill.getBoundingClientRect().right - layerRect.left) * sx) + RIGHT_OF_PILL;
+  const pillRect = pill.getBoundingClientRect();
   const natural = (item.getBoundingClientRect().top - layerRect.top) * sy - ABOVE_ITEM;
   const standHeight = stand.getBoundingClientRect().height * sy;
-  return {
-    left,
-    top: Math.round(Math.max(0, Math.min(natural, height - standHeight))),
-    maxWidth: Math.max(0, width - left - RIGHT_OF_PILL),
-    maxHeight: height,
-  };
+  const top = Math.round(Math.max(0, Math.min(natural, height - standHeight)));
+  if (parts.side === "left") {
+    const right = Math.round((layerRect.right - pillRect.left) * sx) + BESIDE_PILL;
+    return { right, top, maxWidth: Math.max(0, width - right - BESIDE_PILL), maxHeight: height };
+  }
+  const left = Math.round((pillRect.right - layerRect.left) * sx) + BESIDE_PILL;
+  return { left, top, maxWidth: Math.max(0, width - left - BESIDE_PILL), maxHeight: height };
 }
 
 const samePlacement = (a: CardPlacement | null, b: CardPlacement | null): boolean =>
@@ -62,22 +69,29 @@ const samePlacement = (a: CardPlacement | null, b: CardPlacement | null): boolea
   (a !== null &&
     b !== null &&
     a.left === b.left &&
+    a.right === b.right &&
     a.top === b.top &&
     a.maxWidth === b.maxWidth &&
     a.maxHeight === b.maxHeight);
 
 export function CardStand({
   layer,
+  parts,
   profile,
   card,
+  target,
   children,
 }: {
   /** the stage's cards layer; absent, the card stands in place */
   layer: HTMLElement | null | undefined;
+  /** the column whose card this is: its parts and the side its cards take */
+  parts: ColumnParts;
   /** the profile whose popover this holds */
   profile?: string;
   /** "add": the add's card */
   card?: "add";
+  /** WL-1 — the work column's target whose card this holds */
+  target?: string;
   children: ReactNode;
 }): ReactElement {
   const standRef = useRef<HTMLDivElement>(null);
@@ -87,9 +101,9 @@ export function CardStand({
     const stand = standRef.current;
     const anchor = anchorRef.current;
     if (!layer || !stand || !anchor) return;
-    const next = placeCard(layer, stand, anchor);
+    const next = placeCard(layer, stand, anchor, parts);
     setPlacement((current) => (samePlacement(current, next) ? current : next));
-  }, [layer]);
+  }, [layer, parts]);
   // measured as it stands and whenever the column renders, before it paints
   useLayoutEffect(place);
   // the room moves with the window, the deck's foot and the card's own contents
@@ -104,11 +118,11 @@ export function CardStand({
   // UM-R-F (c6; §8 "The pill"): the circles scroll inside the pill, so an open card follows its circle. A scroll does
   // not bubble, so the list itself is heard; the add's card stands outside it and has none.
   useEffect(() => {
-    const list = layer ? anchorRef.current?.closest(".vf-profiles-circles") : null;
+    const list = layer ? anchorRef.current?.closest(dot(parts.list)) : null;
     if (!list) return;
     list.addEventListener("scroll", place, { passive: true });
     return () => list.removeEventListener("scroll", place);
-  }, [layer, place]);
+  }, [layer, place, parts]);
   // UM-R-F (c4; §8 "Focus is pointing"): a card taken away while it holds the keyboard — a peek over it, after the
   // pointer's dwell — first hands the keyboard to its own circle, so the keyboard is never lost to the page and the
   // card it stood for comes back when the peek lets go. React runs a component's layout cleanup before it removes the
@@ -120,18 +134,19 @@ export function CardStand({
     return () => {
       if (!stand?.contains(document.activeElement)) return;
       (anchor ?? stand)
-        .closest(".vf-profiles-item")
-        ?.querySelector<HTMLElement>(".vf-profiles-circle")
+        .closest(dot(parts.item))
+        ?.querySelector<HTMLElement>(dot(parts.circle))
         ?.focus();
     };
-  }, [layer]);
+  }, [layer, parts]);
   const style: CSSProperties | undefined = placement === null ? undefined : placement;
   const stand = (
     <div
       ref={standRef}
-      className="vf-profiles-stand"
+      className={parts.stand}
       {...(profile !== undefined ? { "data-profile": profile } : {})}
       {...(card !== undefined ? { "data-card": card } : {})}
+      {...(target !== undefined ? { "data-target": target } : {})}
       style={style}
     >
       {children}

@@ -1,0 +1,314 @@
+/* WL-1 — Godview's work column (DESIGN.md §8 "Godview's work column", 2026-11-23): the profiles column's twin at the
+   stage's top right, its circles, its blocked dot and its cards. It is the stage's chrome in Godview's mode, so it wears
+   the profiles column's tones (profiles-column.css sets them on this pill and on the cards layer): the Line's glass
+   with its 24 blur for the pill, a menu's solid for the cards. Tokens only; the named easings and §6's breath. */
+
+/* ── the pill: 52 wide, padded 6, corners 26, 4 between circles ── */
+.vf-work-column {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 52px;
+  /* it may shrink below its circles, to its room in the slot; its list then scrolls */
+  min-height: 0;
+  padding: 6px;
+  border-radius: 26px;
+  background: var(--vf-profiles-line);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-profiles-line-ring),
+    var(--vf-profiles-line-shadow);
+  color: var(--vf-foreground);
+}
+
+.vf-work-item {
+  position: relative;
+  display: grid;
+}
+
+.vf-work-circles {
+  display: flex;
+  flex: 0 1 auto;
+  flex-direction: column;
+  align-items: center;
+  align-self: stretch;
+  gap: 4px;
+  min-height: 0;
+}
+
+/* In the stage the list scrolls inside the pill when it holds more than its room. It is the pill's only child, so its
+   edge is the pill's on every side: the pill's 6 kept around it and its corners the pill's 26, so a lens ring or the
+   focus ring is never cut. No scrollbar (§4). */
+.vf-work-column[data-cards="layer"] .vf-work-circles {
+  margin: -6px;
+  padding: 6px;
+  border-radius: 26px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+
+.vf-work-column[data-cards="layer"] .vf-work-circles::-webkit-scrollbar {
+  display: none;
+}
+
+/* …and while it holds more (`WorkColumnView` marks it), §4's fade, as the profiles pill's */
+.vf-work-column[data-cards="layer"] .vf-work-circles[data-overflow] {
+  padding-bottom: var(--vf-scroll-fade);
+  scroll-padding-bottom: var(--vf-scroll-fade);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--vf-scroll-fade)), transparent);
+}
+
+/* the projects, then the agents: 4 more between the groups, so 12 stand between them and no divider */
+.vf-work-gap {
+  flex: none;
+  height: 4px;
+}
+
+/* ── a circle: a 40 round button holding the project's folder mark (18) or the agent's mark (16) ── */
+.vf-work-circle {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+  transition:
+    background-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+/* an agent's mark in the secondary ink, the primary under the pointer, open or chosen */
+.vf-work-circle[data-group="agent"] {
+  color: var(--vf-text-secondary);
+}
+
+.vf-work-circle[data-group="agent"]:hover,
+.vf-work-circle[data-group="agent"][data-open],
+.vf-work-circle[data-group="agent"][aria-pressed="true"] {
+  color: var(--vf-text-primary);
+}
+
+.vf-work-circle:hover,
+.vf-work-circle[data-open] {
+  background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
+}
+
+/* a pinned card's circle: the ready fill, the ink at 8%, held under the pointer and while another circle peeks */
+.vf-work-circle[data-pinned] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+/* the lens ring: 2 in the pill's solid, then 1.5 in the ink, as the profiles column's */
+.vf-work-circle[aria-pressed="true"] {
+  box-shadow:
+    0 0 0 2px var(--vf-profiles-solid),
+    0 0 0 3.5px var(--vf-foreground);
+}
+
+.vf-work-circle:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* the blocked dot (§8 "The hot dot"'s place and size at 40): its centre 17 from the middle at −45° (12.02 right and up
+   of it), radius 3.6, in `--vf-orange`, ringed 1.6 in the pill's solid */
+.vf-work-blocked {
+  position: absolute;
+  top: 4.38px;
+  left: 28.42px;
+  width: 7.2px;
+  height: 7.2px;
+  border-radius: 50%;
+  background: var(--vf-orange);
+  box-shadow: 0 0 0 1.6px var(--vf-profiles-solid);
+  pointer-events: none;
+}
+
+/* ── the cards: 16 LEFT of the pill, its top 6 above its item's (§8 "Where the cards stand", mirrored) ── */
+/* A card's stand: placed in the layer by `CardStand`'s inline style, or, with no layer, here in place: the pill's
+   padding 6 plus 16, its top 6 above its item's */
+.vf-work-stand {
+  position: absolute;
+  right: calc(100% + 22px);
+  top: -6px;
+  z-index: 2;
+  pointer-events: auto;
+}
+
+/* §8 "The reach", mirrored: a bridge from the card to the item's edge, the same 22, so a level crossing never leaves
+   the hover zone */
+.vf-work-stand::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 100%;
+  width: 22px;
+  content: "";
+}
+
+/* the profiles popover's material: a menu's solid in Godview's mode, its ring and shadow, corners 20, 300 wide */
+.vf-work-card {
+  box-sizing: border-box;
+  display: grid;
+  gap: 8px;
+  width: 300px;
+  max-width: inherit;
+  max-height: inherit;
+  overflow-y: auto;
+  padding: 12px 14px 11px;
+  border-radius: 20px;
+  background: var(--vf-profiles-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-profiles-solid-ring),
+    var(--vf-profiles-solid-shadow);
+  color: var(--vf-foreground);
+  text-align: left;
+  cursor: default;
+}
+
+/* its head: the mark at 15, the name at 14/600, its sessions at 11.5 in t3 and those that wait in the attention ink */
+.vf-work-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.vf-work-card-name {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-work-card-count {
+  flex: none;
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 11.5px;
+  line-height: 1.2;
+  white-space: nowrap;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-work-card-count em {
+  font-style: normal;
+  color: var(--vf-monitor-ink-attention);
+}
+
+/* its rows: the state dot, the other group's mark at 14, the name over the state; padded 6 0, a hairline between */
+.vf-work-card-rows {
+  display: grid;
+}
+
+.vf-work-card-row {
+  display: grid;
+  grid-template-columns: 8px 14px minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  padding: 6px 0;
+  border-top: 1px solid var(--vf-profiles-solid-ring);
+}
+
+.vf-work-card-row > .vf-agent-mark,
+.vf-work-card-row > .vf-glyph {
+  color: var(--vf-text-secondary);
+}
+
+/* the dot as Live now's: working green, waiting orange, idle and a shell faint */
+.vf-work-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: var(--vf-text-faint);
+}
+
+.vf-work-dot[data-dot="working"] {
+  background: var(--vf-green);
+}
+
+.vf-work-dot[data-dot="blocked"] {
+  background: var(--vf-orange);
+}
+
+.vf-work-card-words {
+  display: grid;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.vf-work-card-words > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-work-card-words > span {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--vf-text-primary);
+}
+
+.vf-work-card-words > small {
+  font-size: 11.5px;
+  color: var(--vf-text-tertiary);
+}
+
+/* its foot, over a hairline: the click's own act at its end, on the ready fill (8%, 14% under the pointer) */
+.vf-work-card-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 10px;
+  border-top: 1px solid var(--vf-profiles-solid-ring);
+}
+
+.vf-work-card-act {
+  height: 32px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  color: var(--vf-text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 160ms ease;
+}
+
+.vf-work-card-act:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
+.vf-work-card-act:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* M6: with Godview's animations off, and under Reduce Motion, the ring and the fills change at once */
+.vf-godview[data-godview-animations="off"] .vf-work-circle,
+.vf-godview[data-godview-animations="off"] .vf-work-card-act {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-work-circle,
+  .vf-work-card-act {
+    transition: none;
+  }
+}

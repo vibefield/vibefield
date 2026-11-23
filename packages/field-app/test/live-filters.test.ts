@@ -2,8 +2,13 @@ import { agentViewFixture } from "@vibefield/puppeteer-view-sdk/testing";
 import type { ProfileTab } from "@vibefield/puppeteer-views";
 import { describe, expect, it } from "vitest";
 import type { DeviceChoice } from "../src/godview/monitor/device-filter";
-import { type LiveFiltersInput, liveFiltersOf } from "../src/godview/monitor/live-filters";
+import {
+  type LiveFiltersInput,
+  liveFiltersOf,
+  NO_COUNTED_ROWS,
+} from "../src/godview/monitor/live-filters";
 import type { MonitorAgent } from "../src/godview/monitor/types";
+import { NO_WORK, SHELL_AGENT, workFacets } from "../src/godview/monitor/work-facets";
 
 // SE-D1 A (2026-11-06; DESIGN.md §8 "Search — the Peek", the Filter menu and a
 // typed name's offer): the view's filters as search reads them — which desktops
@@ -68,6 +73,9 @@ const input = (patch: Partial<LiveFiltersInput> = {}): LiveFiltersInput => ({
   connect: false,
   agents: AGENTS,
   here: "here",
+  work: NO_WORK,
+  project: null,
+  agent: null,
   ...patch,
 });
 
@@ -110,6 +118,10 @@ describe("the view's filters as search carries them (`live-filters.ts`, SE-D1)",
         },
       ],
       profile: "work",
+      projects: [],
+      project: null,
+      agents: [],
+      agent: null,
       connect: false,
       sessions: 6,
     });
@@ -153,5 +165,75 @@ describe("the view's filters as search carries them (`live-filters.ts`, SE-D1)",
       2,
       2,
     ]);
+  });
+});
+
+// WL-1 (2026-11-23; DESIGN.md §8 "Godview's work column", "The Filter menu"): the
+// work column's projects and agents join Live now's filters, each group offered
+// while the column draws it (two values, or its choice standing). While nobody
+// reads the menu, only the chosen value stands, counted 0, so the button can
+// name it and a session that starts or ends moves nothing.
+describe("the work column's groups as search carries them (WL-1)", () => {
+  const row = (
+    id: string,
+    project: string,
+    provider: { id: string; label: string } | undefined,
+    extra: Partial<MonitorAgent> = {},
+  ): MonitorAgent =>
+    agentViewFixture({
+      id,
+      device: HERE,
+      project: { name: project, seq: project.length },
+      ...(provider === undefined ? { kind: "terminal" as const } : { provider }),
+      ...extra,
+    });
+  const ALPHA = { id: "alpha-agent", label: "Alpha" };
+  const BETA = { id: "beta-agent", label: "Beta" };
+  const rows: readonly MonitorAgent[] = [
+    row("r1", "vibe-field", ALPHA, { createdAt: 1 }),
+    row("r2", "vibe-field", BETA, { createdAt: 2, status: "blocked" }),
+    row("r3", "billing-api", ALPHA, { createdAt: 3 }),
+    row("r4", "billing-api", undefined, { createdAt: 4 }),
+  ];
+  const work = workFacets(rows);
+
+  it("offers each project and agent with its sessions and its waits, in the order each first came", () => {
+    const filters = liveFiltersOf(input({ agents: rows, work }));
+    expect(filters.projects).toEqual([
+      { id: "vibe-field", label: "vibe-field", seq: 10, waiting: true, sessions: 2 },
+      { id: "billing-api", label: "billing-api", seq: 11, waiting: false, sessions: 2 },
+    ]);
+    expect(filters.agents).toEqual([
+      { id: "alpha-agent", label: "Alpha", shell: false, waiting: false, sessions: 2 },
+      { id: "beta-agent", label: "Beta", shell: false, waiting: true, sessions: 1 },
+      { id: SHELL_AGENT, label: "Shell", shell: true, waiting: false, sessions: 1 },
+    ]);
+    expect(filters.project).toBeNull();
+    expect(filters.agent).toBeNull();
+  });
+
+  it("offers no group of one value, unless it is the chosen one", () => {
+    const one = workFacets([row("r1", "vibe-field", ALPHA)]);
+    expect(liveFiltersOf(input({ work: one })).projects).toEqual([]);
+    expect(liveFiltersOf(input({ work: one })).agents).toEqual([]);
+    const chosen = liveFiltersOf(input({ work: one, project: "vibe-field" }));
+    expect(chosen.projects.map((entry) => entry.id)).toEqual(["vibe-field"]);
+    expect(chosen.project).toBe("vibe-field");
+  });
+
+  it("holds only the chosen value, counted 0, while nobody reads the menu", () => {
+    const closed = liveFiltersOf(
+      input({ agents: NO_COUNTED_ROWS, work, project: "billing-api", agent: BETA.id }),
+    );
+    expect(closed.projects).toEqual([
+      { id: "billing-api", label: "billing-api", seq: 11, waiting: false, sessions: 0 },
+    ]);
+    expect(closed.agents).toEqual([
+      { id: "beta-agent", label: "Beta", shell: false, waiting: false, sessions: 0 },
+    ]);
+    // nothing chosen, nothing held: the door is the same object as sessions come and go
+    const none = liveFiltersOf(input({ agents: NO_COUNTED_ROWS, work }));
+    expect(none.projects).toEqual([]);
+    expect(none.agents).toEqual([]);
   });
 });

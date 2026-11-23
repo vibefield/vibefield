@@ -111,6 +111,8 @@ describe("the find door (`find-door.ts`)", () => {
     setDesk: vi.fn(),
     setProfile: vi.fn(),
     setPlan: vi.fn(),
+    setProject: vi.fn(),
+    setAgent: vi.fn(),
   });
 
   it("publishes, reads, and waits — bounded — for the monitor to publish", async () => {
@@ -154,7 +156,17 @@ describe("the find door (`find-door.ts`)", () => {
       { id: "native", label: "This Mac", sessions: 2 },
       { id: "work", label: "Work", sessions: 1 },
     ];
-    const none = { desks, desk: null, profiles, profile: null, sessions: 4 };
+    const none = {
+      desks,
+      desk: null,
+      profiles,
+      profile: null,
+      projects: [],
+      project: null,
+      agents: [],
+      agent: null,
+      sessions: 4,
+    };
     expect(filterToken(none)).toBeNull();
     expect(filterToken({ ...none, desk: "studio" })).toEqual({
       desk: desks[1],
@@ -169,8 +181,28 @@ describe("the find door (`find-door.ts`)", () => {
     expect(filterToken({ ...none, plan })).toEqual({ desk: null, profile: null, plan });
     // a choice the lists no longer hold names nothing (it fell back to all)
     expect(
-      filterToken({ desks: [], desk: "gone", profiles: [], profile: "gone", sessions: 0 }),
+      filterToken({
+        ...none,
+        desks: [],
+        desk: "gone",
+        profiles: [],
+        profile: "gone",
+        project: "gone",
+        agent: "gone",
+        sessions: 0,
+      }),
     ).toBeNull();
+    // WL-1: the work column's project and agent follow the plan on the token
+    const project = { id: "vibe-field", label: "vibe-field", seq: 2, waiting: false, sessions: 3 };
+    const agent = { id: "(shell)", label: "Shell", shell: true, waiting: false, sessions: 1 };
+    expect(
+      filterToken({ ...none, projects: [project], project: "vibe-field", agents: [agent] }),
+    ).toEqual({ desk: null, profile: null, project });
+    expect(filterToken({ ...none, agents: [agent], agent: "(shell)" })).toEqual({
+      desk: null,
+      profile: null,
+      agent,
+    });
   });
 });
 
@@ -613,6 +645,10 @@ describe("Live now's chrome pieces each stand alone (MV-8b)", () => {
       desk: "b",
       profiles: [],
       profile: null,
+      projects: [],
+      project: null,
+      agents: [],
+      agent: null,
       sessions: 1,
     };
     const state: PeekFilterState = {

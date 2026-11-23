@@ -1,6 +1,12 @@
 import { visibleCatalog } from "@vibefield/contracts";
 import type { HistoryPort, HistorySearchHit } from "@vibefield/puppeteer-views";
-import type { GodviewFindDoor, LiveFilters, LiveFindAgent } from "../frame/find-door";
+import type {
+  GodviewFindDoor,
+  LiveAgentChoice,
+  LiveFilters,
+  LiveFindAgent,
+} from "../frame/find-door";
+import { SHELL_AGENT, SHELL_LABEL } from "../godview/monitor/work-facets";
 
 // LIVE NOW'S FIXTURE ADAPTER (P2; docs/UI_SYSTEM.md "Catalog fidelity";
 // DESIGN.md §8 "Search — the Peek"). The catalog mounts the SHIPPING Peek
@@ -8,8 +14,9 @@ import type { GodviewFindDoor, LiveFilters, LiveFindAgent } from "../frame/find-
 // monitor publishes (`find-door.ts`): its live runs (this desktop's first
 // catalog agent at work and waiting under Work, the second waiting on studio,
 // a bare shell — this desktop's each saying its profile, SE-D1), rosetta's
-// port answering their words, and Godview's two filters with every count
-// (+ Filter's menu, the field's tokens). Never the Peek's markup.
+// port answering their words, and Godview's filters with every count
+// (+ Filter's menu, the field's tokens): since WL-1 (2026-11-23) the work
+// column's projects and agents too. Never the Peek's markup.
 
 const NOW = Date.parse("2026-10-09T15:42:00.000Z");
 const READY = { reachable: true, readiness: "ready" as const, checkedAt: "2026-10-09T15:42:00Z" };
@@ -113,6 +120,23 @@ const HISTORY: HistoryPort = {
   }),
 };
 
+/** The agent a fixture run runs, as the work column names it: its provider, or Shell. */
+const agentOfRun = (row: LiveFindAgent): string => row.agent?.provider.id ?? SHELL_AGENT;
+
+/** WL-1 — the work column's agents over the fixture's runs, in the order each first runs. */
+function fixtureAgents(): LiveAgentChoice[] {
+  return [...new Set(LIVE_FIXTURE_RUNS.map(agentOfRun))].map((id) => {
+    const runs = LIVE_FIXTURE_RUNS.filter((row) => agentOfRun(row) === id);
+    return {
+      id,
+      label: runs[0]?.agent?.provider.label ?? SHELL_LABEL,
+      shell: id === SHELL_AGENT,
+      waiting: runs.some((row) => row.status === "blocked"),
+      sessions: runs.length,
+    };
+  });
+}
+
 export const LIVE_FIXTURE_FILTERS: LiveFilters = {
   desks: [
     {
@@ -142,6 +166,17 @@ export const LIVE_FIXTURE_FILTERS: LiveFilters = {
     { id: "work", label: "Work", kind: "managed", glyph: "briefcase", blocked: true, sessions: 1 },
   ],
   profile: null,
+  // WL-1 — the work column's groups: each run's folder, then its agent, a bare shell as Shell
+  projects: LIVE_FIXTURE_RUNS.map((row, seq) => ({
+    id: row.project,
+    label: row.project,
+    seq,
+    waiting: row.status === "blocked",
+    sessions: 1,
+  })),
+  project: null,
+  agents: fixtureAgents(),
+  agent: null,
   sessions: 4,
 };
 
@@ -177,7 +212,9 @@ export function peekLiveFixtureDoor(
     (row) =>
       (filters.desk === null || row.desk.id === filters.desk) &&
       (filters.profile === null || row.profileSet === filters.profile) &&
-      (filters.connect !== true || row.desk.self),
+      (filters.connect !== true || row.desk.self) &&
+      (filters.project === null || row.project === filters.project) &&
+      (filters.agent === null || agentOfRun(row) === filters.agent),
   );
   return {
     rows: () => rows,
@@ -189,6 +226,8 @@ export function peekLiveFixtureDoor(
     setProfile: (profile) => onFilters({ ...filters, profile }),
     // the catalog's filters offer no plan: a plan is chosen on its meter
     setPlan: () => undefined,
+    setProject: (project) => onFilters({ ...filters, project }),
+    setAgent: (agent) => onFilters({ ...filters, agent }),
     holdKeys: () => () => undefined,
     viewHoldsKeys: () => false,
   };

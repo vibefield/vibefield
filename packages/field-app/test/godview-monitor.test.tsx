@@ -2939,16 +2939,17 @@ function closeGodview(): void {
 describe("the filters kept for the run (docket N4 (a))", () => {
   it("keeps a plan alone (UM-5a: with one profile it is the only filter there is), and an entry from before it reads none", () => {
     const key = "native/plan:anthropic";
-    storeGodviewFilters({ desk: null, profile: null, plan: key });
+    const none = { desk: null, profile: null, plan: null, project: null, agent: null };
+    storeGodviewFilters({ ...none, plan: key });
     expect(keptFilters()).toEqual({ desk: null, profile: null, plan: key });
-    expect(storedGodviewFilters()).toEqual({ desk: null, profile: null, plan: key });
-    storeGodviewFilters({ desk: null, profile: null, plan: null });
+    expect(storedGodviewFilters()).toEqual({ ...none, plan: key });
+    storeGodviewFilters(none);
     expect(sessionStorage.getItem(GODVIEW_FILTERS_STORAGE_KEY)).toBeNull();
     sessionStorage.setItem(
       GODVIEW_FILTERS_STORAGE_KEY,
       JSON.stringify({ desk: "studio", profile: "work" }),
     );
-    expect(storedGodviewFilters()).toEqual({ desk: "studio", profile: "work", plan: null });
+    expect(storedGodviewFilters()).toEqual({ ...none, desk: "studio", profile: "work" });
   });
 
   it("finds the chosen desktop and profile again when Godview opens after a close, and keeps nothing once both are cleared", async () => {
@@ -3040,6 +3041,15 @@ describe("the filters kept for the run (docket N4 (a))", () => {
 // ---- P2 — the find door: Live now's rows, the stage's keys --------------------
 
 describe("the find door (P2): Live now's rows made only while the Peek listens, held by content", () => {
+  const idleClaude = (): AgentSessionSummary =>
+    managedSummary({
+      runtimeRunId: "run-claude",
+      kind: "claude",
+      label: "Claude",
+      status: "idle",
+      profileSet: "work",
+      cwd: "/project/vibe-field",
+    });
   const blockedClaude = (): AgentSessionSummary =>
     managedSummary({
       runtimeRunId: "run-claude",
@@ -3081,14 +3091,28 @@ describe("the find door (P2): Live now's rows made only while the Peek listens, 
     await settle();
     expect(getGodviewFindDoor()?.rows()).toBe(first);
     expect(heard).toBe(told);
-    // a status moves: new rows, told — and the door is the same object throughout, as no count moved
-    await act(async () => door.push([blockedClaude(), ...TAB_ROWS.slice(1)]));
+    // a status moves: new rows, told — and the door is the same object throughout, as nothing its
+    // filters say moved: no count, and no "waiting" beside a profile, a project or an agent
+    await act(async () => door.push([idleClaude(), ...TAB_ROWS.slice(1)]));
     await settle();
     const next = getGodviewFindDoor()?.rows() ?? null;
     expect(next).not.toBe(first);
-    expect(next?.find((row) => row.project === "vibe-field")?.status).toBe("blocked");
+    expect(next?.find((row) => row.project === "vibe-field")?.status).toBe("idle");
     expect(heard).toBeGreaterThan(told);
     expect(getGodviewFindDoor()).toBe(listening);
+    // WL-1 (2026-11-23): a session that starts to wait moves what the menu says — "waiting" beside its
+    // project and its agent — so that publish is a new door, as a profile's waiting dot is
+    await act(async () => door.push([blockedClaude(), ...TAB_ROWS.slice(1)]));
+    await settle();
+    expect(
+      getGodviewFindDoor()
+        ?.rows()
+        ?.find((row) => row.project === "vibe-field")?.status,
+    ).toBe("blocked");
+    expect(getGodviewFindDoor()).not.toBe(listening);
+    expect(
+      getGodviewFindDoor()?.filters.projects.find((entry) => entry.id === "vibe-field")?.waiting,
+    ).toBe(true);
     // the last listener gone: no rows again
     await act(async () => stop?.());
     await settle();
@@ -4951,5 +4975,142 @@ describe("the screen's report follows the terminals, the outer light does not (L
     await renderStage(door, false);
     expect(board?.reports.at(-1)).toEqual([]);
     stop();
+  });
+});
+
+// WL-1 (2026-11-23; DESIGN.md §8 "Godview's work column"): what runs, by
+// project and by agent, at the stage's top right — each circle a lens, one
+// state with search's tokens (SE-D2, extended): a lens keeps its sessions and
+// recedes every other row in place; a project and an agent may stand
+// together; the choice is the run's, read where it stands.
+describe("the work column (WL-1)", () => {
+  const workCircles = (host: HTMLElement): { name: string; group: string; pressed: boolean }[] =>
+    [...host.querySelectorAll<HTMLButtonElement>(".vf-work-circle")].map((circle) => ({
+      name: (circle.getAttribute("aria-label") ?? "").split(",")[0] ?? "",
+      group: circle.dataset.group ?? "",
+      pressed: circle.getAttribute("aria-pressed") === "true",
+    }));
+  const chooseProject = async (id: string | null): Promise<void> => {
+    await act(async () => getGodviewFindDoor()?.setProject(id));
+  };
+  const chooseAgent = async (id: string | null): Promise<void> => {
+    await act(async () => getGodviewFindDoor()?.setAgent(id));
+  };
+
+  it("draws the stage's projects, then its agents, a bare shell as Shell, and marks each a session waits under", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const circles = workCircles(host);
+    const projects = circles.filter((circle) => circle.group === "project").map((c) => c.name);
+    const agents = circles.filter((circle) => circle.group === "agent").map((c) => c.name);
+    expect([...projects].sort()).toEqual(["jabali", "scratch", "vibe-field", "voyager"]);
+    expect([...agents].sort()).toEqual(["Claude", "Codex", "Grok", "Shell"]);
+    // the projects first, then the agents
+    expect(circles.slice(0, projects.length).every((circle) => circle.group === "project")).toBe(
+      true,
+    );
+    // Codex waits: its circle and its project's wear the blocked dot
+    const waiting = [...host.querySelectorAll(".vf-work-blocked")].map(
+      (dot) => dot.closest(".vf-work-circle")?.getAttribute("aria-label")?.split(",")[0],
+    );
+    expect(waiting.sort()).toEqual(["Codex", "voyager"]);
+    // search's Live now offers the same groups, counted while it listens
+    const filters = getGodviewFindDoor()?.filters;
+    expect(filters?.project).toBeNull();
+    expect(filters?.agent).toBeNull();
+  });
+
+  it("keeps a project's sessions and recedes every other row in place, and search's token is the same state", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const everything = latest().shownAgents;
+    await chooseProject("voyager");
+    expect(getGodviewFindDoor()?.filters.project).toBe("voyager");
+    expect(getGodviewFindDoor()?.filters.projects.map((entry) => entry.id)).toEqual(["voyager"]);
+    const rows = listRows(host);
+    expect(rows.filter((row) => !row.receded).map((row) => row.project)).toEqual(["voyager"]);
+    expect(rows.filter((row) => row.receded).length).toBe(rows.length - 1);
+    expect(latest().shownAgents).toBe(1);
+    expect(workCircles(host).find((circle) => circle.name === "voyager")?.pressed).toBe(true);
+
+    await chooseProject(null);
+    expect(listRows(host).some((row) => row.receded)).toBe(false);
+    expect(latest().shownAgents).toBe(everything);
+  });
+
+  it("keeps only the sessions a project and an agent both hold, and says so when none is", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    await chooseAgent("codex");
+    expect(
+      listRows(host)
+        .filter((row) => !row.receded)
+        .map((row) => row.project),
+    ).toEqual(["voyager"]);
+    await chooseProject("vibe-field");
+    expect(listRows(host).every((row) => row.receded)).toBe(true);
+    const empty = host.querySelector(".vf-monitor-profile-empty");
+    expect(empty?.textContent).toContain("No sessions on vibe-field · Codex");
+    expect(empty?.querySelector(".vf-project-mark")).not.toBeNull();
+  });
+
+  it("chooses on a circle's click and pins its card in the cards layer; a click on the chosen one shows them all", async () => {
+    const host = await mountMonitor("list", tabDoor());
+    const circle = (): HTMLButtonElement | undefined =>
+      [...host.querySelectorAll<HTMLButtonElement>(".vf-work-circle")].find((each) =>
+        each.getAttribute("aria-label")?.startsWith("jabali,"),
+      );
+    await act(async () => circle()?.click());
+    expect(getGodviewFindDoor()?.filters.project).toBe("jabali");
+    const card = host.querySelector(".vf-monitor-cards .vf-work-stand .vf-work-card");
+    expect(card?.querySelector(".vf-work-card-words")?.textContent).toBe("Grokidle");
+    expect(card?.querySelector(".vf-work-card-act")?.textContent).toBe("Show every project");
+    await act(async () => circle()?.click());
+    expect(getGodviewFindDoor()?.filters.project).toBeNull();
+    expect(host.querySelector(".vf-work-stand")).toBeNull();
+  });
+
+  it("keeps the lens for the run, and reads a kept project the stage no longer has as none until it returns", async () => {
+    const door = tabDoor();
+    await mountMonitor("list", door);
+    await chooseProject("voyager");
+    await chooseAgent("codex");
+    expect(keptFilters()).toEqual({
+      desk: null,
+      profile: null,
+      project: "voyager",
+      agent: "codex",
+    });
+    closeGodview();
+    await mountMonitor("list", door);
+    expect(getGodviewFindDoor()?.filters.project).toBe("voyager");
+    expect(getGodviewFindDoor()?.filters.agent).toBe("codex");
+    closeGodview();
+
+    sessionStorage.setItem(
+      GODVIEW_FILTERS_STORAGE_KEY,
+      JSON.stringify({ desk: null, profile: null, project: "atlas" }),
+    );
+    const later = tabDoor();
+    const host = await mountMonitor("list", later);
+    expect(getGodviewFindDoor()?.filters.project).toBeNull();
+    expect(listRows(host).some((row) => row.receded)).toBe(false);
+    // a session in it starts: it is chosen again
+    await act(async () =>
+      later.push([
+        ...TAB_ROWS,
+        managedSummary({
+          runtimeRunId: "run-atlas",
+          kind: "claude",
+          label: "Claude",
+          status: "working",
+          cwd: "/project/atlas",
+        }),
+      ]),
+    );
+    await settle();
+    expect(getGodviewFindDoor()?.filters.project).toBe("atlas");
+    expect(
+      listRows(host)
+        .filter((row) => !row.receded)
+        .map((row) => row.project),
+    ).toEqual(["atlas"]);
   });
 });

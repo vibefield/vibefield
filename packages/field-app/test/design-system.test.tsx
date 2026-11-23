@@ -9,6 +9,7 @@ import { DesignSystemPage } from "../src/design-system/DesignSystemPage";
 import { SPAWN_BLOOM_SETS, spawnBloomUsage } from "../src/design-system/godview-profiles-fixtures";
 import { OnboardingPreview } from "../src/design-system/OnboardingPreview";
 import { PaneLauncherPreview } from "../src/design-system/PaneLauncherPreview";
+import { LIVE_FIXTURE_FILTERS } from "../src/design-system/peek-live-fixtures";
 import { SpawnBloomPreview } from "../src/design-system/SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../src/design-system/SwarmBodiesPreview";
 import { StatusSection } from "../src/design-system/sections/StatusSection";
@@ -679,11 +680,27 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(offer?.querySelector(".vf-peek-title")?.textContent).toBe("Show only Work's sessions");
     expect(offer?.querySelector(".vf-peek-when")?.textContent).toBe("1 session");
     expect(suggest?.querySelector(".vf-peek-open")?.textContent).toBe("Add the filter⇥");
-    // + Filter open: Profiles before Desktops, each count every session's
+    // + Filter open: the work column's Projects and Agents (WL-1), then Profiles before Desktops, each count
+    // every session's; the agents are the fixture's own catalog rows (AR-L1: the test names no vendor)
     const menu = history("peek-filter-menu");
     expect(menu?.querySelector(".vf-peek-filter")?.getAttribute("aria-expanded")).toBe("true");
-    expect(words(menu, ".vf-peek-menu .vf-menu-eye")).toEqual(["Profiles", "Desktops"]);
+    expect(words(menu, ".vf-peek-menu .vf-menu-eye")).toEqual([
+      "Projects",
+      "Agents",
+      "Profiles",
+      "Desktops",
+    ]);
+    const [first, second] = LIVE_FIXTURE_FILTERS.agents;
     expect(words(menu, ".vf-peek-menu .vf-menu-row")).toEqual([
+      "Every project4 sessions",
+      "vibe-field1 session",
+      "billing-apiwaiting",
+      "deploywaiting",
+      "scratch1 session",
+      "Any agent4 sessions",
+      `${first?.label}waiting`,
+      `${second?.label}waiting`,
+      "Shell1 session",
       "Every profile4 sessions",
       "This Mac2 sessions",
       "Workwaiting",

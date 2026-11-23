@@ -1,9 +1,11 @@
 import { GHOST_ROW_ACT, GHOST_ROW_LABEL } from "../account/link";
 import {
   filterToken,
+  type LiveAgentChoice,
   type LiveDeskChoice,
   type LiveFilters,
   type LiveProfileChoice,
+  type LiveProjectChoice,
 } from "./find-door";
 import { type PeekListRow, type PeekLiveRow, plural } from "./peek-live";
 import { hasOpenQuote, type PeekFilters, type PeekKind, type PeekScope } from "./peek-model";
@@ -24,22 +26,33 @@ export const KIND_WORDS: Readonly<Record<PeekKind, string>> = {
   agent: "Replies only",
 };
 
-/** A filter of the Peek's: Live now's desktop, profile and plan (Godview's),
- * and Everything's project, what was said and agent (the popup's). */
-export type PeekFilterName = "desk" | "profile" | "plan" | "project" | "kind" | "agent";
+/** A filter of the Peek's: Live now's desktop, profile and plan (Godview's)
+ * and the work column's project and agent (WL-1, Godview's too: named apart
+ * from Everything's, so a pick in one scope never sets the other's), and
+ * Everything's project, what was said and agent (the popup's). */
+export type PeekFilterName =
+  | "desk"
+  | "profile"
+  | "plan"
+  | "live-project"
+  | "live-agent"
+  | "project"
+  | "kind"
+  | "agent";
 
 /** What a pick sets: one filter to one value — null, or `any` for what was
  * said, is every one. */
 export type PeekPick =
   | {
-      readonly filter: "desk" | "profile" | "plan" | "project" | "agent";
+      readonly filter: Exclude<PeekFilterName, "kind">;
       readonly value: string | null;
     }
   | { readonly filter: "kind"; readonly value: PeekKind };
 
 /** The mark a token, a menu row or an offer leads with (§8): the desktop's OS
  * mark, the profile's glyph (filled for the default), `folder`, `message`, the
- * agent's mark, or the ghost row's `plus`. */
+ * agent's mark, the ghost row's `plus`, and (WL-1) a live project's folder mark
+ * in its ink, or Shell's `terminal`. */
 export type PeekMark =
   | { readonly kind: "os"; readonly os: LiveDeskChoice["os"] }
   | {
@@ -48,8 +61,9 @@ export type PeekMark =
       readonly profileKind: LiveProfileChoice["kind"];
       readonly filled: boolean;
     }
-  | { readonly kind: "glyph"; readonly name: "folder" | "message" | "plus" }
-  | { readonly kind: "agent"; readonly id: string };
+  | { readonly kind: "glyph"; readonly name: "folder" | "message" | "plus" | "terminal" }
+  | { readonly kind: "agent"; readonly id: string }
+  | { readonly kind: "project"; readonly seq?: number | undefined };
 
 /** A filter that is on, as the field draws it: its mark, its name, its ×. */
 export interface PeekFieldToken {
@@ -84,9 +98,19 @@ const profileMark = (profile: LiveProfileChoice): PeekMark => ({
   filled: profile.isDefault === true,
 });
 
+/** WL-1 — a live project's mark: its folder in its bodies' hue, on the popup's own tone. */
+const liveProjectMark = (project: LiveProjectChoice): PeekMark => ({
+  kind: "project",
+  ...(project.seq !== undefined ? { seq: project.seq } : {}),
+});
+
+/** WL-1 — a live agent's mark: its own, or `terminal` for Shell. */
+const liveAgentMark = (agent: LiveAgentChoice): PeekMark =>
+  agent.shell ? { kind: "glyph", name: "terminal" } : { kind: "agent", id: agent.id };
+
 /** The field's tokens, in the order they read (§8 "A token"): Live now's the
- * desktop's, the profile's, then the plan's (UM-5a) — the button's token, the
- * same state (SE-D2) —
+ * desktop's, the profile's, then the plan's (UM-5a), then the work column's
+ * project's and agent's (WL-1) — the button's token, the same state (SE-D2) —
  * and Everything's the project's, what was said (only when it is not every
  * kind) and the agent's. A scope shows only its own: Everything shows no
  * profile or desktop, as it looks through every profile (UM-D28). A filter
@@ -105,6 +129,16 @@ export function peekFieldTokens(state: PeekFilterState): readonly PeekFieldToken
         label: on.plan.label,
         mark: { kind: "agent", id: on.plan.provider },
       });
+    }
+    if (on?.project) {
+      tokens.push({
+        filter: "live-project",
+        label: on.project.label,
+        mark: liveProjectMark(on.project),
+      });
+    }
+    if (on?.agent) {
+      tokens.push({ filter: "live-agent", label: on.agent.label, mark: liveAgentMark(on.agent) });
     }
     return tokens;
   }
@@ -188,11 +222,16 @@ function choosableDesks(live: LiveFilters): readonly LiveDeskChoice[] {
   return live.connect === true && live.desks.length === 1 ? [] : live.desks;
 }
 
+/** A project's name as words (WL-1): split at spaces, and at `-`, `_` and `.`
+ * as a folder's name is, so "canvas" begins a word of infinite-canvas-engine. */
+const projectWords = (name: string): readonly string[] => name.split(/[\s_.-]+/u);
+
 /** The offer the words typed make, in Live now only: when the last word, of
  * two letters or more and outside quotes (words in quotes still search as
  * words), begins a word of the name of a profile or a desktop that could be
- * chosen — while none of its kind is — a profile before a desktop. Its count
- * is every session's, as the menu's are. */
+ * chosen — while none of its kind is — a profile before a desktop; then
+ * (WL-1) a project the work column draws, then an agent. Its count is every
+ * session's, as the menu's are. */
 export function peekOffer(
   query: string,
   scope: PeekScope,
@@ -203,11 +242,9 @@ export function peekOffer(
   if (last === null || last.word.length < 2) return null;
   if (last.word.includes('"') || hasOpenQuote(query.slice(0, last.at))) return null;
   const typed = last.word.toLocaleLowerCase();
-  const begins = (name: string): boolean =>
-    name
-      .toLocaleLowerCase()
-      .split(/\s+/u)
-      .some((word) => word.startsWith(typed));
+  const beginsWord = (words: readonly string[]): boolean =>
+    words.some((word) => word.toLocaleLowerCase().startsWith(typed));
+  const begins = (name: string): boolean => beginsWord(name.split(/\s+/u));
   if (live.profile === null) {
     const profile = live.profiles.find((entry) => begins(entry.label));
     if (profile !== undefined) {
@@ -231,6 +268,32 @@ export function peekOffer(
         mark: deskMark(desk),
         title: `Show only what runs on ${desk.name}`,
         note: plural(desk.sessions, "session"),
+      };
+    }
+  }
+  if (live.project === null) {
+    const project = live.projects.find((entry) => beginsWord(projectWords(entry.label)));
+    if (project !== undefined) {
+      return {
+        kind: "offer",
+        id: `offer:live-project:${project.id}`,
+        pick: { filter: "live-project", value: project.id },
+        mark: liveProjectMark(project),
+        title: `Show only ${project.label}'s sessions`,
+        note: plural(project.sessions, "session"),
+      };
+    }
+  }
+  if (live.agent === null) {
+    const agent = live.agents.find((entry) => begins(entry.label));
+    if (agent !== undefined) {
+      return {
+        kind: "offer",
+        id: `offer:live-agent:${agent.id}`,
+        pick: { filter: "live-agent", value: agent.id },
+        mark: liveAgentMark(agent),
+        title: `Show only ${agent.label}'s sessions`,
+        note: plural(agent.sessions, "session"),
       };
     }
   }
@@ -276,7 +339,11 @@ function choice(
   return { mark: null, note: null, quiet: false, ...row };
 }
 
-/** Live now's groups (Godview's): Profiles, only while a profile besides This
+/** Live now's groups (Godview's): first the work column's (WL-1), each only
+ * while the column draws it — Projects (Every project with every session, then
+ * each, its folder mark in its ink) and Agents (Any agent, then each, its
+ * mark), "waiting" beside one a session waits in, else its sessions — then
+ * Profiles, only while a profile besides This
  * Mac exists — Every profile, then each, "waiting" beside one a session waits
  * in, else its sessions — then Desktops, only with a choice to make — All
  * desktops with its agents, then each, "name · here" beside this one, its note
@@ -284,6 +351,54 @@ function choice(
  * Mac alone stands for All desktops and TS-4's ghost row closes the group. */
 function liveGroups(live: LiveFilters): PeekMenuGroup[] {
   const groups: PeekMenuGroup[] = [];
+  if (live.projects.length > 0) {
+    groups.push({
+      eyebrow: "Projects",
+      rows: [
+        choice({
+          key: "every",
+          label: "Every project",
+          on: live.project === null,
+          pick: { filter: "live-project", value: null },
+          note: plural(live.sessions, "session"),
+        }),
+        ...live.projects.map((entry) =>
+          choice({
+            key: entry.id,
+            label: entry.label,
+            on: live.project === entry.id,
+            pick: { filter: "live-project", value: entry.id },
+            mark: liveProjectMark(entry),
+            note: entry.waiting ? "waiting" : plural(entry.sessions, "session"),
+          }),
+        ),
+      ],
+    });
+  }
+  if (live.agents.length > 0) {
+    groups.push({
+      eyebrow: "Agents",
+      rows: [
+        choice({
+          key: "any",
+          label: "Any agent",
+          on: live.agent === null,
+          pick: { filter: "live-agent", value: null },
+          note: plural(live.sessions, "session"),
+        }),
+        ...live.agents.map((entry) =>
+          choice({
+            key: entry.id,
+            label: entry.label,
+            on: live.agent === entry.id,
+            pick: { filter: "live-agent", value: entry.id },
+            mark: liveAgentMark(entry),
+            note: entry.waiting ? "waiting" : plural(entry.sessions, "session"),
+          }),
+        ),
+      ],
+    });
+  }
   if (live.profiles.length > 0) {
     groups.push({
       eyebrow: "Profiles",
@@ -354,8 +469,8 @@ function liveGroups(live: LiveFilters): PeekMenuGroup[] {
   return groups;
 }
 
-/** + Filter's menu (§8 "The Filter menu"): Live now's Profiles and Desktops
- * in Godview, Everything's Projects, Said by and Agents — empty when the scope
+/** + Filter's menu (§8 "The Filter menu"): Live now's Projects, Agents,
+ * Profiles and Desktops in Godview, Everything's Projects, Said by and Agents — empty when the scope
  * has nothing to filter (History's Live now; Godview with This Mac alone and
  * one profile), and + Filter is then not drawn. */
 export function filterMenu(state: PeekFilterState): readonly PeekMenuGroup[] {

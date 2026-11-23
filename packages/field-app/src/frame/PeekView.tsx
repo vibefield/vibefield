@@ -13,7 +13,15 @@ import {
   useId,
 } from "react";
 import { OS_LABEL, OsMark } from "../godview/os-marks";
-import type { LiveDeskChoice, LiveFilters, LivePlanChoice, LiveProfileChoice } from "./find-door";
+import { AgentMark, ProjectMark, projectInkOf } from "../godview/work-column/WorkMarks";
+import type {
+  LiveAgentChoice,
+  LiveDeskChoice,
+  LiveFilters,
+  LivePlanChoice,
+  LiveProfileChoice,
+  LiveProjectChoice,
+} from "./find-door";
 import {
   isOffer,
   liveHeadWords,
@@ -55,6 +63,10 @@ export interface PeekToken {
   readonly profile: LiveProfileChoice | null;
   /** UM-5a — the plan chosen on a meter: after the profile's, its agent's mark */
   readonly plan?: LivePlanChoice;
+  /** WL-1 — the work column's project: after the plan's, its folder mark in its ink */
+  readonly project?: LiveProjectChoice;
+  /** WL-1 — the work column's agent: last, its mark */
+  readonly agent?: LiveAgentChoice;
 }
 
 /** GV-D11 — the button's step between the terminals' bar and the head: the
@@ -98,9 +110,69 @@ export function PeekButtonView({
   const words =
     token === null
       ? null
-      : [token.desk?.name, token.profile?.label, token.plan?.label]
+      : [
+          token.desk?.name,
+          token.profile?.label,
+          token.plan?.label,
+          token.project?.label,
+          token.agent?.label,
+        ]
           .filter((part) => part !== undefined)
           .join(" · ");
+  // the parts the glass grows, in the tokens' order, each named by its filter
+  const parts: (readonly [string, ReactNode])[] = [];
+  if (token?.desk) {
+    parts.push([
+      "desk",
+      <>
+        <OsMark os={token.desk.os} size={12} />
+        {token.desk.name}
+      </>,
+    ]);
+  }
+  if (token?.profile) {
+    parts.push([
+      "profile",
+      <>
+        <ProfileGlyph
+          glyph={token.profile.glyph}
+          kind={token.profile.kind}
+          filled={token.profile.isDefault === true}
+          size={12}
+        />
+        {token.profile.label}
+      </>,
+    ]);
+  }
+  if (token?.plan) {
+    parts.push([
+      "plan",
+      <>
+        <span className="vf-peek-agent-mark" aria-hidden="true">
+          <AgentIcon providerId={token.plan.provider} />
+        </span>
+        {token.plan.label}
+      </>,
+    ]);
+  }
+  if (token?.project) {
+    parts.push([
+      "project",
+      <>
+        <ProjectMark ink={projectInkOf(token.project.seq)} size={12} />
+        {token.project.label}
+      </>,
+    ]);
+  }
+  if (token?.agent) {
+    parts.push([
+      "agent",
+      <>
+        <AgentMark id={token.agent.id} shell={token.agent.shell} size={12} />
+        {token.agent.label}
+      </>,
+    ]);
+  }
   return (
     <div
       ref={findRef}
@@ -129,42 +201,18 @@ export function PeekButtonView({
       </button>
       {token !== null && !bar && (
         <span className="vf-peek-token">
-          {token.desk !== null && (
-            <span className="vf-peek-token-part">
-              <OsMark os={token.desk.os} size={12} />
-              {token.desk.name}
-            </span>
-          )}
-          {token.desk !== null && token.profile !== null && (
-            <i className="vf-peek-token-sep" aria-hidden="true" />
-          )}
-          {token.profile !== null && (
-            <span className="vf-peek-token-part">
-              <ProfileGlyph
-                glyph={token.profile.glyph}
-                kind={token.profile.kind}
-                filled={token.profile.isDefault === true}
-                size={12}
-              />
-              {token.profile.label}
-            </span>
-          )}
-          {token.plan !== undefined && (token.desk !== null || token.profile !== null) && (
-            <i className="vf-peek-token-sep" aria-hidden="true" />
-          )}
-          {token.plan !== undefined && (
-            <span className="vf-peek-token-part">
-              <span className="vf-peek-agent-mark" aria-hidden="true">
-                <AgentIcon providerId={token.plan.provider} />
-              </span>
-              {token.plan.label}
-            </span>
-          )}
+          {parts.map(([filter, part], index) => (
+            // a hairline before each part but the first
+            <Fragment key={filter}>
+              {index > 0 && <i className="vf-peek-token-sep" aria-hidden="true" />}
+              <span className="vf-peek-token-part">{part}</span>
+            </Fragment>
+          ))}
           <button
             type="button"
             className="vf-peek-token-clear"
             aria-label="Clear the filters"
-            title="Every desktop and profile again"
+            title="Every session again"
             onClick={onClearToken}
           >
             <FieldGlyph name="close" size={10} />
@@ -216,6 +264,8 @@ function Mark({ mark, size }: { mark: PeekMark; size: number }): ReactElement {
           <AgentIcon providerId={mark.id} />
         </span>
       );
+    case "project":
+      return <ProjectMark ink={projectInkOf(mark.seq)} size={size} />;
   }
 }
 

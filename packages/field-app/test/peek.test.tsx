@@ -1192,6 +1192,10 @@ function godviewDoor(patch: Partial<LiveFilters> = {}): {
       },
     ],
     profile: null,
+    projects: [],
+    project: null,
+    agents: [],
+    agent: null,
     sessions: 2,
     ...patch,
   };
@@ -1228,6 +1232,14 @@ function godviewDoor(patch: Partial<LiveFilters> = {}): {
         const { plan: _gone, ...others } = filters;
         filters =
           key === null ? others : { ...others, plan: { key, label: key, provider: "claude" } };
+        act(() => republish());
+      },
+      setProject: (id) => {
+        filters = { ...filters, project: id };
+        act(() => republish());
+      },
+      setAgent: (id) => {
+        filters = { ...filters, agent: id };
         act(() => republish());
       },
     };

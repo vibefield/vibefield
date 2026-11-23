@@ -142,6 +142,9 @@ const T4_USES: Readonly<Record<string, number>> = {
   "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-limit-act:disabled": 1,
   "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-pop-open:disabled": 1,
   "packages/field-app/src/godview/profiles-column/profiles-column.css · .vf-profiles-pop-row-act:disabled": 1,
+  // WL-1 (§8 "Godview's work column", 2026-11-23): a card's state dot, idle or a shell, as Live now's — a mark, never a
+  // word
+  "packages/field-app/src/godview/work-column/work-column.css · .vf-work-dot": 1,
   "packages/field-app/src/panels/agents/agents-settings.css · .vf-agents-chevron": 1,
   "packages/field-app/src/panels/agents/extensions-settings.css · .vf-ext-cell": 1,
   "packages/field-app/src/panels/agents/extensions-settings.css · .vf-ext-chevron": 1,

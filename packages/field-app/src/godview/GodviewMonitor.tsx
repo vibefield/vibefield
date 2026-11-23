@@ -51,6 +51,7 @@ import { type MonitorAccountFacts, MonitorAccountFactsContext } from "./monitor/
 import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import type { DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
+import { useHeldWhileSame } from "./monitor/held-while-same";
 import { setMonitorHoldsKeys } from "./monitor/launcher-keys";
 import { liveFiltersOf, NO_COUNTED_ROWS } from "./monitor/live-filters";
 import { MonitorMomentRowsContext } from "./monitor/moment-rows";
@@ -64,9 +65,12 @@ import {
   type MonitorSourceCounts,
   useMonitorAgents,
 } from "./monitor/useMonitorAgents";
+import { agentOf, projectOf, workRecedes } from "./monitor/work-facets";
 import { OsMark } from "./os-marks";
 import { ProfilesColumn } from "./profiles-column/ProfilesColumn";
 import { useSpawnFuel } from "./profiles-column/useSpawnFuel";
+import { WorkColumn } from "./work-column/WorkColumn";
+import { AgentMark, ProjectMark } from "./work-column/WorkMarks";
 
 const ACKNOWLEDGEMENT_MS = 2_600;
 
@@ -267,14 +271,6 @@ const NO_TRANSCRIPTS: HistoryPort = {
  * memo holds; the theme reaches it as tokens, never as a render. */
 const MonitorHead = memo(GodviewHeadView);
 
-/** `value`, or the one held while `key` says nothing in it changed: a stable
- * identity for a value the window rebuilds on every publish. */
-function useHeldWhileSame<T>(value: T, key: string): T {
-  const held = useRef({ key, value });
-  if (held.current.key !== key) held.current = { key, value };
-  return held.current.value;
-}
-
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
 function reducedMotionQuery(): MediaQueryList | null {
@@ -411,7 +407,9 @@ export function GodviewMonitor({
   // (which unmounts this stage) wears the same filter. A catalog's stage reads
   // only its own `initialProfile`.
   const [opened] = useState<GodviewFilters>(() =>
-    publishesFind ? storedGodviewFilters() : { desk: null, profile: initialProfile, plan: null },
+    publishesFind
+      ? storedGodviewFilters()
+      : { desk: null, profile: initialProfile, plan: null, project: null, agent: null },
   );
   const [profileTab, setProfileTab] = useState<string | null>(opened.profile);
   // UM-5a (UM-D14; DESIGN.md §8 "Godview's profiles column") — THE PLAN FILTER, for everyone, with one profile too:
@@ -461,13 +459,25 @@ export function GodviewMonitor({
   // in search's Live now since P2 (GV-D3), which offers it only when there is
   // a choice to make — two desktops or more.
   const [deviceChoice, setDeviceChoice] = useState<string | null>(opened.desk);
+  // WL-1 (DESIGN.md §8 "Godview's work column") — THE WORK LENS: a project and an
+  // agent chosen on the work column or in search's Live now, one at a time in each
+  // group, kept as chosen and read where they stand (`standingWork`), as the
+  // desktop is. Every row off either recedes, as under a profile.
+  const [projectTab, setProjectTab] = useState<string | null>(opened.project);
+  const [agentTab, setAgentTab] = useState<string | null>(opened.agent);
   // Kept as chosen, never as standing: a desktop that left, or a profile
   // deleted, falls back where it is read, and a desktop that returns is chosen
   // again — as it was before the choice outlived the stage.
   useEffect(() => {
     if (!publishesFind) return;
-    storeGodviewFilters({ desk: deviceChoice, profile: profileTab, plan: planTab });
-  }, [publishesFind, deviceChoice, profileTab, planTab]);
+    storeGodviewFilters({
+      desk: deviceChoice,
+      profile: profileTab,
+      plan: planTab,
+      project: projectTab,
+      agent: agentTab,
+    });
+  }, [publishesFind, deviceChoice, profileTab, planTab, projectTab, agentTab]);
   /** P2 — whether the Peek listens for Live now's rows (the find door's
    * `subscribeRows`): the find join is made only while it does. */
   const [findWanted, setFindWanted] = useState(false);
@@ -527,6 +537,10 @@ export function GodviewMonitor({
     clearAcknowledgement,
     devices,
     deviceChosen,
+    work,
+    workSessions,
+    projectChosen,
+    agentChosen,
     tabs,
     here,
   } = useMonitorAgents({
@@ -541,6 +555,8 @@ export function GodviewMonitor({
     chosenProfile: chosenId,
     chosenPlanRuns: plan?.runs,
     device: deviceChoice,
+    project: projectTab,
+    agent: agentTab,
     find: findWanted,
   });
   const chromeRef = useRef<HTMLDivElement>(null);
@@ -559,6 +575,8 @@ export function GodviewMonitor({
     [still, limitMoment, accountFacts],
   );
   const claimsRef = useRef<HTMLDivElement>(null);
+  /** WL-1 — the work column's slot at the stage's top right: measured as the profiles column's is. */
+  const workRef = useRef<HTMLDivElement>(null);
   // M49 — the claims behind their own boundary, INSIDE the strip: the strip
   // stays measured (its rectangle is the stage's top inset and an obstacle),
   // and the acknowledgement keeps its voice. They try again for the facts they
@@ -586,7 +604,8 @@ export function GodviewMonitor({
   // the past is lent — and the chosen profile (the profiles column's ring, one
   // state with Live now's profile token, SE-D2) RECEDES, where a run whose
   // profile is unknown recedes; a chosen plan (UM-5a) recedes a lane off it, the
-  // same predicate as a live row's (`runRecedes`).
+  // same predicate as a live row's (`runRecedes`). WL-1: the work column's lens
+  // recedes a lane off its project or its agent (`workRecedes`), as a live row's.
   const wantsHistory = viewWantsHistory(view.view);
   const planRuns = plan?.runs;
   const pastPlanRuns = useMemo(
@@ -598,8 +617,12 @@ export function GodviewMonitor({
       runRecedes(
         { profile: chosenId, planRuns: pastPlanRuns },
         { self: lane.device.self, profileSet: lane.profileSet, provider: lane.provider?.id },
+      ) ||
+      workRecedes(
+        { project: projectChosen ?? undefined, agent: agentChosen ?? undefined },
+        { project: projectOf(lane), agent: agentOf({ kind: "agent", provider: lane.provider }) },
       ),
-    [chosenId, pastPlanRuns],
+    [chosenId, pastPlanRuns, projectChosen, agentChosen],
   );
   const history = useMonitorHistory({
     port: door?.pastLanes,
@@ -658,10 +681,20 @@ export function GodviewMonitor({
   );
   /** A profile or a plan chosen with no sessions under it says so over the
    * stage (a plan, the drawing's word, before a profile); with no sessions at
-   * all the view's own empty state speaks instead. */
+   * all the view's own empty state speaks instead. WL-1: the work column's
+   * project and agent follow, joined by " · " ("vibe-field · Codex"). */
+  const chosenProject = work.projects.find((entry) => entry.id === projectChosen);
+  const chosenAgent = work.agents.find((entry) => entry.id === agentChosen);
+  const lensOn =
+    chosen !== undefined ||
+    plan !== undefined ||
+    chosenProject !== undefined ||
+    chosenAgent !== undefined;
   const emptyUnder =
-    (chosen !== undefined || plan !== undefined) && agents.length > 0 && shown.length === 0
-      ? (plan?.label ?? chosen?.label)
+    lensOn && agents.length > 0 && shown.length === 0
+      ? [plan?.label ?? chosen?.label, chosenProject?.label, chosenAgent?.label]
+          .filter((part): part is string => part !== undefined)
+          .join(" · ")
       : undefined;
 
   // MV-D19 — the view host's stage: the chrome measured below, as plain data.
@@ -719,11 +752,21 @@ export function GodviewMonitor({
   // the reserve is its first obstacle — the band across the stage's top that
   // holds the head's row, the window's lights and the search button — and its
   // bodies keep below the head as they kept below the bar.
+  //
+  // WL-1 (DESIGN.md §8 "Godview's work column") — THE WORK COLUMN'S ROOM. The
+  // pill at the stage's right is chrome like the profiles column: the swarm
+  // steers around its rectangle (an obstacle) and hears its edge as the right
+  // inset. The views in flow read no right inset (their stylesheets pad the
+  // left and the top alone), so their slot ends at the pill's edge
+  // (godview.css) and the stage they are lent is that slot's: its width less
+  // the pill's room. While the column draws nothing it measures no height, and
+  // the stage is what it was.
   useEffect(() => {
     const stage = stageRef.current;
     const chrome = chromeRef.current;
     const claims = claimsRef.current;
-    if (!stage || !chrome || !claims || typeof ResizeObserver === "undefined") return;
+    const work = workRef.current;
+    if (!stage || !chrome || !claims || !work || typeof ResizeObserver === "undefined") return;
     const root = stage.closest<HTMLElement>(".vf-godview");
     const wall = fullStage ? root?.querySelector<HTMLElement>(".vf-godview-field-wall") : null;
     // UM-R4 — the limit card stands beside the add, outside the strip's measure; a Retry on the Profiles boundary
@@ -758,6 +801,9 @@ export function GodviewMonitor({
         observedMoment = moment;
       }
       const momentRect = moment?.getBoundingClientRect();
+      const workRect = work.getBoundingClientRect();
+      const workOn = workRect.width > 0 && workRect.height > 0;
+      const workRoom = workOn ? Math.max(0, Math.round((stageRect.right - workRect.left) * sx)) : 0;
       const bottom =
         claimsRect.height === 0
           ? HEAD_RESERVE
@@ -774,14 +820,20 @@ export function GodviewMonitor({
         height: box.height * sy,
       });
       const measured: StageGeometry = {
-        width,
+        width: fullStage ? width : Math.max(0, width - workRoom),
         height,
-        insets: { top: bottom, right: 0, bottom: Math.round(bottomInset), left: chromeRight },
+        insets: {
+          top: bottom,
+          right: fullStage ? workRoom : 0,
+          bottom: Math.round(bottomInset),
+          left: chromeRight,
+        },
         obstacles: [
           { x: 0, y: 0, width, height: HEAD_RESERVE },
           rect(chromeRect),
           ...(claimsRect.height === 0 ? [] : [rect(claimsRect)]),
           ...(momentRect !== undefined && momentRect.height > 0 ? [rect(momentRect)] : []),
+          ...(workOn ? [rect(workRect)] : []),
         ],
       };
       // M176 item 1: every tick measures a fresh object; one that measures the
@@ -796,6 +848,7 @@ export function GodviewMonitor({
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);
     observer.observe(claims);
+    observer.observe(work);
     // the stage itself too: a window that resizes moves the stage's size
     // without resizing the column or the strip
     observer.observe(stage);
@@ -955,6 +1008,10 @@ export function GodviewMonitor({
     connect: offersConnect,
     agents: findWanted ? agents : NO_COUNTED_ROWS,
     here,
+    // WL-1 — the work column's groups and its lens, one state with search's tokens (SE-D2)
+    work,
+    project: projectChosen,
+    agent: agentChosen,
   });
   const liveFilters = useHeldWhileSame<LiveFilters>(liveFiltersNow, JSON.stringify(liveFiltersNow));
   const transcripts = door?.transcripts ?? NO_TRANSCRIPTS;
@@ -968,6 +1025,8 @@ export function GodviewMonitor({
       setDesk: setDeviceChoice,
       setProfile: chooseProfile,
       setPlan: choosePlan,
+      setProject: setProjectTab,
+      setAgent: setAgentTab,
       holdKeys,
       viewHoldsKeys: readViewHoldsKeys,
     }),
@@ -1069,14 +1128,18 @@ export function GodviewMonitor({
               <span className="vf-monitor-profile-empty-ring" aria-hidden="true">
                 {plan !== undefined ? (
                   <AgentIcon providerId={plan.provider} />
-                ) : (
+                ) : chosen !== undefined ? (
                   <ProfileGlyph
-                    glyph={chosen?.glyph}
-                    kind={chosen?.kind}
-                    filled={chosen?.default === true}
+                    glyph={chosen.glyph}
+                    kind={chosen.kind}
+                    filled={chosen.default === true}
                     size={16}
                   />
-                )}
+                ) : chosenProject !== undefined ? (
+                  <ProjectMark ink={chosenProject.colour} size={16} />
+                ) : chosenAgent !== undefined ? (
+                  <AgentMark id={chosenAgent.id} shell={chosenAgent.shell} size={16} />
+                ) : null}
               </span>
               <b>No sessions on {emptyUnder}</b>
               <span>
@@ -1114,6 +1177,23 @@ export function GodviewMonitor({
               openNewProfile={openNewProfile}
               openProfile={openProfile}
               moment={columnMoment}
+              cardLayer={cardLayer}
+              covered={deckMaximized}
+            />
+          </ChromeBoundary>
+        </div>
+        {/* WL-1 — the work column at the stage's top right (DESIGN.md §8 "Godview's work column"): what runs, by
+            project and by agent, each circle a lens; the profiles column's twin, measured and steered around as it
+            is. Its slot measures no height while the column draws nothing. */}
+        <div ref={workRef} className="vf-monitor-work">
+          <ChromeBoundary name="Work">
+            <WorkColumn
+              work={work}
+              sessions={workSessions}
+              project={projectChosen}
+              agent={agentChosen}
+              onProject={setProjectTab}
+              onAgent={setAgentTab}
               cardLayer={cardLayer}
               covered={deckMaximized}
             />

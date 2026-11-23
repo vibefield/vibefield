@@ -1795,6 +1795,41 @@ describe("UI system ownership boundaries", () => {
     expect(monitor).not.toContain("UsageColumn");
   });
 
+  it("gives the work column's slot its rule — the profiles column's twin at the stage's top right, its room rule for rule (WL-1)", () => {
+    // DESIGN.md §8 "Godview's work column" (2026-11-23): 13 from the stage's right edge, 52 wide at y 64, the same
+    // room as the profiles slot in every state, measured and steered around as it is, behind its own boundary
+    const godview = source("godview/godview.css");
+    const rule = godview.match(/^\.vf-monitor-work \{([^}]*)\}/m)?.[1] ?? "";
+    expect(rule).toContain("position: absolute");
+    expect(rule).toContain("top: calc(var(--vf-godview-head-reserve) + 8px)");
+    expect(rule).toContain("right: 13px");
+    expect(rule).not.toContain("left:");
+    expect(rule).toContain("width: 52px");
+    expect(rule).toContain("z-index: 8");
+    expect(rule).not.toMatch(/(?<![-\w])height:/u);
+    // every room the profiles slot has, the work slot has: the same max-height under the same state, in the same order
+    const rules = [...godview.replace(/\/\*[\s\S]*?\*\//gu, "").matchAll(/([^{}]+)\{([^}]*)\}/gu)];
+    const rooms = (slot: string): string[] =>
+      rules.flatMap(([, selector = "", body = ""]) => {
+        const said = selector.replace(/\s+/gu, " ").trim();
+        const room = /max-height: ([^;]+);/u.exec(body)?.[1];
+        // the slot is the selector's last class; the chrome layer before it stays as said
+        return said.endsWith(`.${slot}`) && room !== undefined
+          ? [`${said.slice(0, -slot.length)}SLOT → ${room}`]
+          : [];
+      });
+    expect(rooms("vf-monitor-chrome").length).toBe(6);
+    expect(rooms("vf-monitor-work")).toEqual(rooms("vf-monitor-chrome"));
+    // a view in flow ends at the pill's edge while the column stands; the swarm steers around it instead
+    expect(godview).toMatch(
+      /\.vf-godview:has\(\.vf-monitor-work > \.vf-work-column\)\s+\.vf-godview-monitor-stage:not\(\s*\[data-stage-allocation="full"\]\s*\)\s+> \.vf-monitor-view-slot \{[^}]*inset: 0 calc\(13px \+ 52px\) 0 0;/u,
+    );
+    const monitor = source("godview/GodviewMonitor.tsx");
+    expect(monitor).toMatch(
+      /<div ref=\{workRef\} className="vf-monitor-work">\s*<ChromeBoundary name="Work">\s*<WorkColumn\s/u,
+    );
+  });
+
   it("stands the stage's chrome over the CRT layers, as the head does (DESIGN.md §8 'Where the chrome stands')", () => {
     // Asked 2026-11-16: "do not overlay the scanline pattern and the vagette on top of this, it should be same level
     // as all other chrome uis". The CRT layers are 30 and come first in the root; the chrome layer and the cards

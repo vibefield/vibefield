@@ -31,6 +31,7 @@ import { deviceFacet, useDeviceRoster } from "./devices";
 import { isFailedRow, keepsFailure } from "./failed-bodies";
 import { createFindAgents, findJoinKey } from "./find-agents";
 import { useMonitorFeed } from "./GodviewAgentsProvider";
+import { useHeldWhileSame } from "./held-while-same";
 import type { HeldModelRow } from "./model-board";
 import type { GodviewMonitorFeed, MonitorFeedState } from "./model-replica";
 import type { PaneTransitions } from "./pane-transitions";
@@ -60,6 +61,17 @@ import {
   type WindowRowFacts,
 } from "./window-rows";
 import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
+import {
+  agentOf,
+  projectOf,
+  standingWork,
+  type WorkFacets,
+  type WorkSession,
+  workFacets,
+  workRecedes,
+  workSessions,
+  workSessionsKey,
+} from "./work-facets";
 
 /**
  * THE WINDOW (MV-3b; MV-D18, MV-D22). What is left of the seam once the
@@ -134,6 +146,11 @@ export interface UseMonitorAgentsOptions {
   /** DS-3 — the chosen desktop's id, as the chip holds it; null is every
    * desktop, and a desktop that left the board falls back to all. */
   device?: string | null;
+  /** WL-1 — the project chosen on the work column, as chosen: every row off it
+   * recedes while a session of it is on the stage (`standingWork`); null is every project. */
+  project?: string | null;
+  /** WL-1 — the agent chosen on the work column, as chosen, by the same rule. */
+  agent?: string | null;
   /** P2 — whether Live now's rows are wanted (the Peek listens): the find
    * join is made only then, never for a closed Peek. Default true. */
   find?: boolean;
@@ -203,6 +220,15 @@ export interface MonitorAgentsResult {
   devices: readonly DeviceChoice[];
   /** DS-3 — the chosen desktop as the board still has it (null = all). */
   deviceChosen: string | null;
+  /** WL-1 — the work column's groups: the projects and agents of the rows on
+   * the stage (the chosen desktop's), the same object while what they say is. */
+  work: WorkFacets;
+  /** WL-1 — the rows on the stage as the work column's cards list them, the
+   * same array while every fact a card draws is. */
+  workSessions: readonly WorkSession[];
+  /** WL-1 — the chosen project and agent as the stage still has them (null = all). */
+  projectChosen: string | null;
+  agentChosen: string | null;
   /** AR-S5 — the tabs, in the feed's order, each with its orange dot. */
   tabs: readonly ProfileTab[];
   /** SB-3 — what a new terminal can be born under; undefined without a feed. */
@@ -340,6 +366,8 @@ export function useMonitorAgents({
   chosenProfile,
   chosenPlanRuns,
   device = null,
+  project = null,
+  agent = null,
   find = true,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
   // ── the replica and the board's own facts ────────────────────────────────
@@ -494,12 +522,25 @@ export function useMonitorAgents({
   const deviceChosen = standingChoice(devices, device);
   const narrow = useMemo(createNarrowing, []);
   const placed = narrow(agents, deviceChosen, here);
+  // WL-1 — the work column's groups, off the rows the stage places (the chosen
+  // desktop's, every profile's), held while what they say is the same: a row
+  // object moves with every token count, a group with a session's coming,
+  // going or waiting
+  const nextWork = useMemo(() => workFacets(placed), [placed]);
+  const work = useHeldWhileSame(nextWork, JSON.stringify(nextWork));
+  const nextSessions = useMemo(() => workSessions(placed), [placed]);
+  const sessions = useHeldWhileSame(nextSessions, workSessionsKey(nextSessions));
+  const projectChosen = standingWork(work.projects, project);
+  const agentChosen = standingWork(work.agents, agent);
   const shown = useMemo(
     () =>
-      chosenProfile === undefined && chosenPlanRuns === undefined
+      chosenProfile === undefined &&
+      chosenPlanRuns === undefined &&
+      projectChosen === null &&
+      agentChosen === null
         ? placed
         : placed.filter((row) => row.receded !== true),
-    [placed, chosenProfile, chosenPlanRuns],
+    [placed, chosenProfile, chosenPlanRuns, projectChosen, agentChosen],
   );
 
   // AR-S5 — the tabs and the spawn menu (SB-3), from the profiles feed and the rows; PU-R: each bud's fuel. A fuel
@@ -591,15 +632,25 @@ export function useMonitorAgents({
       (row.device.self && row.kind === "agent" && handoff.has(row.id)) ||
       keepsFailure(row, panesHere);
   }, [exitedKey, handoffKey, joins]);
+  // AR-S5, UM-5a, WL-1 — a row recedes unless the profile, the plan and the
+  // work column's lens all keep it
   const receded = useMemo(() => {
-    if (chosenProfile === undefined && chosenPlanRuns === undefined) return undefined;
+    if (
+      chosenProfile === undefined &&
+      chosenPlanRuns === undefined &&
+      projectChosen === null &&
+      agentChosen === null
+    ) {
+      return undefined;
+    }
     const planRuns = chosenPlanRuns === undefined ? undefined : planRunSet(chosenPlanRuns);
+    const lens = { project: projectChosen ?? undefined, agent: agentChosen ?? undefined };
     return (row: MonitorAgentRow): boolean =>
       runRecedes(
         { profile: chosenProfile, planRuns },
         { self: row.device.self, profileSet: row.profileSet, provider: row.provider?.id },
-      );
-  }, [chosenProfile, chosenPlanRuns]);
+      ) || workRecedes(lens, { project: projectOf(row), agent: agentOf(row) });
+  }, [chosenProfile, chosenPlanRuns, projectChosen, agentChosen]);
   const kindOf = useCallback(
     (id: string): MonitorAgentRow["kind"] | undefined =>
       model.byId.get(id)?.kind ?? feed?.held(id)?.row.kind,
@@ -942,7 +993,15 @@ export function useMonitorAgents({
   );
   useLayoutEffect(() => {
     viewReplica.refresh();
-  }, [viewReplica, placed, chosenProfile, deviceChosen, transitionRevision]);
+  }, [
+    viewReplica,
+    placed,
+    chosenProfile,
+    deviceChosen,
+    projectChosen,
+    agentChosen,
+    transitionRevision,
+  ]);
 
   // The view host reads its commands through the latest props; these reach the latest window too.
   const commands = useMemo<ViewSlotCommands>(
@@ -1008,6 +1067,10 @@ export function useMonitorAgents({
     clearAcknowledgement,
     devices,
     deviceChosen,
+    work,
+    workSessions: sessions,
+    projectChosen,
+    agentChosen,
     tabs,
     spawnMenu,
     feed: feedFacts.state,

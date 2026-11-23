@@ -1,22 +1,12 @@
 import type { AgentProfileSet } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import {
-  type KeyboardEvent,
-  type ReactElement,
-  type ReactNode,
-  type Ref,
-  type RefObject,
-  useCallback,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-} from "react";
+import { type ReactElement, type ReactNode, type Ref, useId, useRef } from "react";
 import { PROFILES_WORDS } from "../../setup/profiles-words";
 import { bandsGeometry, bandsLabel } from "../../usage/bands";
 import type { ProfileMeters } from "../../usage/meters";
 import { BandsCircle } from "./BandsCircle";
 import { CardStand } from "./CardStand";
+import { type ColumnParts, cardKeys, keepsKeyboard, useOverflowMark } from "./column-parts";
 import { ProfilePopoverView } from "./ProfilePopoverView";
 import "./profiles-column.css";
 
@@ -29,6 +19,19 @@ import "./profiles-column.css";
 
 /** The pointer's target for the add (its card), beside the profiles' ids. */
 export const ADD_TARGET = "\u0000add";
+
+/** The profiles column's own parts (`column-parts.ts`): its cards stand right of the pill, a profile's popover named by
+ * its profile and the add's card by `data-card`. */
+export const PROFILES_PARTS: ColumnParts = {
+  column: "vf-profiles-column",
+  list: "vf-profiles-circles",
+  item: "vf-profiles-item",
+  circle: "vf-profiles-circle",
+  stand: "vf-profiles-stand",
+  tabStops: ".vf-profiles-circle, .vf-profiles-add:not(:disabled)",
+  side: "right",
+  targetOf: (node) => (node.dataset.card === "add" ? ADD_TARGET : node.dataset.profile),
+};
 
 /** One circle: a profile and its meters (`planMeters`, UM-D15's order). */
 export interface ColumnCircle {
@@ -112,119 +115,6 @@ export function circleWords(circle: ColumnCircle, lens: boolean, chosen: boolean
   return `${circleState(circle)}${toggle}`;
 }
 
-/** Where Tab may land in the column after a card: a circle, or the add while it can act. */
-const TAB_STOPS = ".vf-profiles-circle, .vf-profiles-add:not(:disabled)";
-
-/** UM-R-F (c4; §8 "Focus is pointing"): whether the keyboard, going to `node`, stays with `target` — inside its item
- * (the circle, or the add's zone) or inside the stand that carries its card in the layer. Found by the stands' own
- * `dataset`, as `CSS.escape` is not ours to lean on under happy-dom. */
-function keepsKeyboard(node: EventTarget | null, item: HTMLElement, target: string): boolean {
-  if (!(node instanceof Element)) return false;
-  if (item.contains(node)) return true;
-  const stand = node.closest<HTMLElement>(".vf-profiles-stand");
-  if (!stand) return false;
-  return target === ADD_TARGET ? stand.dataset.card === "add" : stand.dataset.profile === target;
-}
-
-/** Tab across the portal (§8 "Pinned"): the card leaves the circle's DOM once it stands in the layer, so its Tab order
- * is carried by hand, forward from the circle onto the card's first control that can act, and back from that control.
- * Forward from its last control it goes on to the next circle, or the add while it can act, as if the card stood
- * after its circle (UM-R-F, c4: focus shows a card, so Tab on every circle enters its card, and the window's order
- * alone never reached a second circle). Key events bubble through the portal to the circle's item, which holds this.
- * No layer, the DOM's own order holds. */
-function tabAcrossPortal(
-  event: KeyboardEvent<HTMLElement>,
-  layer: HTMLElement | null | undefined,
-  id: string,
-): void {
-  if (event.key !== "Tab" || !layer) return;
-  let stand: HTMLElement | undefined;
-  for (const each of layer.querySelectorAll<HTMLElement>(".vf-profiles-stand")) {
-    if (each.dataset.profile === id) {
-      stand = each;
-      break;
-    }
-  }
-  const controls = [...(stand?.querySelectorAll<HTMLElement>("button:not(:disabled)") ?? [])];
-  const first = controls[0];
-  const last = controls[controls.length - 1];
-  const circle = event.currentTarget.querySelector<HTMLElement>(".vf-profiles-circle");
-  if (!first || !last || !circle) return;
-  if (!event.shiftKey && event.target === circle) {
-    event.preventDefault();
-    first.focus();
-  } else if (event.shiftKey && event.target === first) {
-    event.preventDefault();
-    circle.focus();
-  } else if (!event.shiftKey && event.target === last) {
-    const column = circle.closest(".vf-profiles-column");
-    const stops = [...(column?.querySelectorAll<HTMLElement>(TAB_STOPS) ?? [])];
-    const next = stops[stops.indexOf(circle) + 1];
-    if (!next) return;
-    event.preventDefault();
-    next.focus();
-  }
-}
-
-/** The keys an open card takes where the keyboard is: Esc closes a card the keyboard shows (UM-R-F, c4; a pinned
- * card's Esc is the window's, which takes it first), and Tab crosses the portal. With no card open there is no
- * handler, so Esc passes on to whatever holds it. */
-function cardKeys(
-  event: KeyboardEvent<HTMLElement>,
-  layer: HTMLElement | null | undefined,
-  id: string,
-  pinned: boolean,
-  onClose: () => void,
-): void {
-  if (event.key === "Escape") {
-    if (pinned) return;
-    event.preventDefault();
-    event.stopPropagation();
-    onClose();
-    return;
-  }
-  tabAcrossPortal(event, layer, id);
-}
-
-/** UM-R-F (c6; §8 "The pill", §4 `--vf-scroll-fade`): marks the circles' list `data-overflow` while it holds more than
- * its room, so the sheet gives it §4's fade. It is measured as the list would stand without the fade, whose 20 under
- * its end would otherwise keep a list that fits marked. In the stage only: the catalog's list never scrolls. The mark
- * is the DOM's own, set here and read by the sheet alone, so React never renders it.
- * It never changes the box to measure it (the review's F2): taking the mark off for a read laid the list out 16
- * shorter, and Chromium clamped a list scrolled to its end, which the mark's return did not undo. So the fade's extra
- * padding is read off instead: the list's own padding under its end, taken while it stands unmarked, against the
- * padding it wears marked. The mark moves only when the answer does. */
-function useOverflowMark(
-  list: RefObject<HTMLDivElement | null>,
-  measure: boolean,
-  count: number,
-): void {
-  const unmarkedPadding = useRef<number | null>(null);
-  const mark = useCallback((): void => {
-    const node = list.current;
-    if (!node) return;
-    const marked = node.hasAttribute("data-overflow");
-    const padding = Number.parseFloat(getComputedStyle(node).paddingBottom) || 0;
-    if (!marked) unmarkedPadding.current = padding;
-    const extra = marked ? Math.max(0, padding - (unmarkedPadding.current ?? padding)) : 0;
-    const over = measure && node.scrollHeight - extra > node.clientHeight;
-    if (over !== marked) node.toggleAttribute("data-overflow", over);
-  }, [list, measure]);
-  // measured as it stands and whenever a profile comes or goes, before it paints
-  useLayoutEffect(() => {
-    void count;
-    mark();
-  }, [mark, count]);
-  // …and whenever its room moves, with the window, the deck's edge and the cover's scale
-  useEffect(() => {
-    const node = list.current;
-    if (!measure || !node || typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(mark);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [list, measure, mark]);
-}
-
 export function ProfilesColumnView({
   circles,
   lens,
@@ -284,12 +174,14 @@ export function ProfilesColumnView({
               onPointerLeave={() => onPoint(null)}
               onFocus={() => onKeyboardTarget?.(id)}
               onBlur={(event) => {
-                if (!keepsKeyboard(event.relatedTarget, event.currentTarget, id)) {
+                if (!keepsKeyboard(event.relatedTarget, event.currentTarget, id, PROFILES_PARTS)) {
                   onKeyboardTarget?.(null);
                 }
               }}
               onKeyDown={
-                isOpen ? (event) => cardKeys(event, cardLayer, id, pinned, onClose) : undefined
+                isOpen
+                  ? (event) => cardKeys(event, cardLayer, id, pinned, onClose, PROFILES_PARTS)
+                  : undefined
               }
             >
               <button
@@ -312,7 +204,7 @@ export function ProfilesColumnView({
                 />
               </button>
               {isOpen ? (
-                <CardStand layer={cardLayer} profile={id}>
+                <CardStand layer={cardLayer} parts={PROFILES_PARTS} profile={id}>
                   <ProfilePopoverView
                     id={popoverId}
                     circle={circle}
@@ -344,7 +236,9 @@ export function ProfilesColumnView({
           onPointerLeave={() => onPoint(null)}
           onFocus={() => onKeyboardTarget?.(ADD_TARGET)}
           onBlur={(event) => {
-            if (!keepsKeyboard(event.relatedTarget, event.currentTarget, ADD_TARGET)) {
+            if (
+              !keepsKeyboard(event.relatedTarget, event.currentTarget, ADD_TARGET, PROFILES_PARTS)
+            ) {
               onKeyboardTarget?.(null);
             }
           }}
@@ -369,7 +263,7 @@ export function ProfilesColumnView({
             <FieldGlyph name="plus" size={17} />
           </button>
           {addOpen && canAdd ? (
-            <CardStand layer={cardLayer} card="add">
+            <CardStand layer={cardLayer} parts={PROFILES_PARTS} card="add">
               <div className="vf-profiles-addcard" role="tooltip">
                 <b>{PROFILES_WORDS.add}</b>
                 <p>{`${PROFILES_WORDS.offer} ${PROFILES_WORDS.fact}`}</p>

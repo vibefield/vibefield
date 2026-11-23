@@ -73,6 +73,10 @@ const LIVE: LiveFilters = {
     { id: "client", label: "Client Billing", kind: "managed", glyph: "folder", sessions: 1 },
   ],
   profile: null,
+  projects: [],
+  project: null,
+  agents: [],
+  agent: null,
   sessions: 7,
 };
 
@@ -488,5 +492,93 @@ describe("a live run's words (SE-D1, UM-D28)", () => {
     expect(everythingLensWords({ ...LIVE, profile: "work" })).toBe(
       " · every profile; Work comes back on Live now",
     );
+  });
+});
+
+// WL-1 (2026-11-23; DESIGN.md §8 "Godview's work column", "Search — the Peek"):
+// the work column's project and agent are Live now's filters too, Godview's
+// own and named apart from Everything's — tokens after the plan's, + Filter's
+// Projects and Agents leading the menu, and a typed name's offer after a
+// desktop's, a project's name read as words split at - _ and . too.
+describe("the work column's lenses in search (WL-1)", () => {
+  const WORK: LiveFilters = {
+    ...LIVE,
+    projects: [
+      { id: "vibe-field", label: "vibe-field", seq: 3, waiting: true, sessions: 3 },
+      {
+        id: "infinite-canvas-engine",
+        label: "infinite-canvas-engine",
+        waiting: false,
+        sessions: 1,
+      },
+    ],
+    agents: [
+      { id: AGENT_ID, label: AGENT_LABEL, shell: false, waiting: true, sessions: 3 },
+      { id: "(shell)", label: "Shell", shell: true, waiting: false, sessions: 1 },
+    ],
+  };
+
+  it("draws the project's token then the agent's, after the plan's, each with its own mark", () => {
+    const on = state({
+      live: { ...WORK, profile: "work", plan: PLAN, project: "vibe-field", agent: "(shell)" },
+    });
+    expect(words(peekFieldTokens(on))).toEqual([
+      ["profile", "Work", "profile"],
+      ["plan", "Claude Max", "agent"],
+      ["live-project", "vibe-field", "project"],
+      ["live-agent", "Shell", "glyph"],
+    ]);
+    const tokens = peekFieldTokens(on);
+    expect(tokens[2]?.mark).toEqual({ kind: "project", seq: 3 });
+    expect(tokens[3]?.mark).toEqual({ kind: "glyph", name: "terminal" });
+    // a token's × clears its one lens, never Everything's project or agent
+    expect(clearPick(tokens[2] as (typeof tokens)[number])).toEqual({
+      filter: "live-project",
+      value: null,
+    });
+    // Everything shows none of them
+    expect(peekFieldTokens({ ...on, scope: "everything" })).toEqual([]);
+  });
+
+  it("leads + Filter's menu with Projects and Agents, their waits and sessions said", () => {
+    const groups = filterMenu(state({ live: { ...WORK, agent: AGENT_ID } }));
+    expect(groups.map((group) => group.eyebrow)).toEqual([
+      "Projects",
+      "Agents",
+      "Profiles",
+      "Desktops",
+    ]);
+    const [projects, agents] = groups;
+    expect(projects?.rows.map((row) => [row.label, row.note, row.on])).toEqual([
+      ["Every project", "7 sessions", true],
+      ["vibe-field", "waiting", false],
+      ["infinite-canvas-engine", "1 session", false],
+    ]);
+    expect(projects?.rows[1]?.pick).toEqual({ filter: "live-project", value: "vibe-field" });
+    expect(projects?.rows[0]?.mark).toBeNull();
+    expect(projects?.rows[1]?.mark).toEqual({ kind: "project", seq: 3 });
+    expect(agents?.rows.map((row) => [row.label, row.note, row.on])).toEqual([
+      ["Any agent", "7 sessions", false],
+      [AGENT_LABEL, "waiting", true],
+      ["Shell", "1 session", false],
+    ]);
+    expect(agents?.rows[0]?.pick).toEqual({ filter: "live-agent", value: null });
+    // no group while the column draws none
+    expect(filterMenu(state()).map((group) => group.eyebrow)).toEqual(["Profiles", "Desktops"]);
+  });
+
+  it("offers a project by a word of its folder's name, then an agent, after a profile and a desktop", () => {
+    const canvas = peekOffer("dry run canv", "live", WORK);
+    expect(canvas?.pick).toEqual({ filter: "live-project", value: "infinite-canvas-engine" });
+    expect(canvas?.title).toBe("Show only infinite-canvas-engine's sessions");
+    expect(canvas?.note).toBe("1 session");
+    expect(canvas?.mark).toEqual({ kind: "project" });
+    const shell = peekOffer("she", "live", WORK);
+    expect(shell?.pick).toEqual({ filter: "live-agent", value: "(shell)" });
+    expect(shell?.title).toBe("Show only Shell's sessions");
+    // a profile's name comes first ("Work"), a chosen group offers nothing, Everything offers nothing
+    expect(peekOffer("wo", "live", WORK)?.pick.filter).toBe("profile");
+    expect(peekOffer("canv", "live", { ...WORK, project: "vibe-field" })).toBeNull();
+    expect(peekOffer("canv", "everything", WORK)).toBeNull();
   });
 });

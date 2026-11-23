@@ -15,22 +15,17 @@ import {
   useState,
 } from "react";
 import { hasCircle, planMeters } from "../../usage/meters";
-import { setMonitorHoldsKeys } from "../monitor/launcher-keys";
 import type { MonitorUsagePort } from "../monitor/remote-door";
-import { AIM_HISTORY, type AimPoint, headingInto } from "./aim";
+import { useCardAim, usePinHold, usePressedFocus } from "./column-hold";
+import { handFocusHome } from "./column-parts";
 import { readWords } from "./ProfilePopoverView";
-import { ADD_TARGET, type ColumnCircle, ProfilesColumnView } from "./ProfilesColumnView";
+import {
+  ADD_TARGET,
+  type ColumnCircle,
+  PROFILES_PARTS,
+  ProfilesColumnView,
+} from "./ProfilesColumnView";
 import { useColumnPointer } from "./useColumnPointer";
-
-/** The stand of what the column shows (a profile's popover or the add's card), in the cards layer or in place. */
-function standOf(root: ParentNode | null | undefined, target: string): HTMLElement | null {
-  for (const stand of root?.querySelectorAll<HTMLElement>(".vf-profiles-stand") ?? []) {
-    if (target === ADD_TARGET ? stand.dataset.card === "add" : stand.dataset.profile === target) {
-      return stand;
-    }
-  }
-  return null;
-}
 
 // UM-3 (DESIGN.md §8 "Godview's profiles column") — THE COLUMN'S CONTROLLER, the stage's own chrome. It reads what
 // the stage already holds — the profile filter's sets (`agents.profileSets.subscribe`), the usage rows through the
@@ -56,24 +51,11 @@ const THIS_MAC: AgentProfileSet = {
  * (`LimitMoment.tsx`). */
 export const ColumnAddPresses = createContext(0);
 
-/** The keyboard home when a deliberate act closes the card (§8 "Pinned"): if the card holds it, to that profile's circle.
- * The timers never call this: a grace or a dwell is the pointer's, and the circle is a live toggle. Since UM-R-F (c4)
- * a timer cannot close a card that holds the keyboard (focus is pointing, so the card stays), and a dwell that peeks
- * over it hands the keyboard to that card's circle from `CardStand` itself, never from here. Found by the items' own
- * `dataset`, as `CSS.escape` is not ours to lean on under happy-dom. */
-function handFocusHome(column: HTMLElement | null): void {
-  const id = document.activeElement?.closest<HTMLElement>(".vf-profiles-stand")?.dataset.profile;
-  if (!column || id === undefined) return;
-  for (const item of column.querySelectorAll<HTMLElement>(".vf-profiles-item")) {
-    if (item.dataset.profile === id) {
-      item.querySelector<HTMLElement>(".vf-profiles-circle")?.focus();
-      return;
-    }
-  }
-}
-
 /** How often the column's words read the clock again: a reset and a forecast move by the minute. */
 const CLOCK_MS = 60_000;
+
+/** What a press inside keeps a pinned card: the pill, or a stand of its cards. */
+const PROFILES_INSIDE = ".vf-profiles-column, .vf-profiles-stand";
 
 /** THE COLUMN'S READING: each profile that stands on a circle (ruling 7), in the feed's order, with its meters read at
  * `now` — This Mac alone, dashed, while there are no sets to read. Every circle that would read draws dashed while the
@@ -177,24 +159,9 @@ function ProfilesColumnController({
   // and the pin. It has no timers: the keyboard shows a card at once and takes it away at once.
   const [keyboardTarget, setKeyboardTarget] = useState<string | null>(null);
   // UM-R-F (fix, the review's F1; §8 "Focus is pointing"): only the keyboard's focus points. Chromium focuses a button
-  // the pointer presses, and the window hands that focus back when it returns. So after a press, focus is the
-  // pointer's until a key is pressed with no ⌘, ⌃ or ⌥ held (⌘Tab leaves the window; it is not a walk).
-  const pressed = useRef(false);
-  useEffect(() => {
-    const onPress = (): void => {
-      pressed.current = true;
-    };
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.metaKey || event.ctrlKey || event.altKey) return;
-      pressed.current = false;
-    };
-    window.addEventListener("pointerdown", onPress, true);
-    window.addEventListener("keydown", onKey, true);
-    return () => {
-      window.removeEventListener("pointerdown", onPress, true);
-      window.removeEventListener("keydown", onKey, true);
-    };
-  }, []);
+  // the pointer presses, and the window hands that focus back when it returns, so after a press focus is the pointer's
+  // until a key is pressed with no ⌘, ⌃ or ⌥ held (`column-hold.ts`).
+  const pressed = usePressedFocus();
   const [addPresses, setAddPresses] = useState(0);
   const pointedProfile = pointed !== null && pointed !== ADD_TARGET ? pointed : null;
   const keyboardProfile = keyboardTarget !== ADD_TARGET ? keyboardTarget : null;
@@ -205,46 +172,16 @@ function ProfilesColumnController({
   // §8 "The reach": the pointer's own hold, its grace and its dwell; the card shows as it always did from `pointed`
   const showing = addOpen && openNewProfile !== undefined ? ADD_TARGET : open;
   const columnRef = useRef<HTMLDivElement>(null);
-  // §8 "The reach" (2026-11-16): the pointer's last few points while a card shows, read as it crosses into a target
-  // (`pointerover` comes before the target's enter), so the column knows whether it is on its way into the card
-  const trail = useRef<AimPoint[]>([]);
-  useEffect(() => {
-    trail.current = [];
-    if (showing === null) return;
-    const note = (event: PointerEvent): void => {
-      const points = trail.current;
-      points.push({ x: event.clientX, y: event.clientY });
-      if (points.length > AIM_HISTORY) points.shift();
-    };
-    window.addEventListener("pointermove", note, { capture: true, passive: true });
-    window.addEventListener("pointerover", note, { capture: true, passive: true });
-    return () => {
-      window.removeEventListener("pointermove", note, { capture: true });
-      window.removeEventListener("pointerover", note, { capture: true });
-    };
-  }, [showing]);
-  const headingTo = useCallback(
-    (shownTarget: string): boolean => {
-      const points = trail.current;
-      const from = points[0];
-      const to = points[points.length - 1];
-      if (from === undefined || to === undefined || from === to) return false;
-      const stand = standOf(cardLayer ?? columnRef.current, shownTarget);
-      const card = stand?.firstElementChild ?? stand;
-      if (!card) return false;
-      const rect = card.getBoundingClientRect();
-      if (rect.width === 0 && rect.height === 0) return false;
-      return headingInto(from, to, rect);
-    },
-    [cardLayer],
-  );
+  // §8 "The reach" (2026-11-16): the pointer's last few points while a card shows tell whether it is on its way into
+  // the card (`column-hold.ts`)
+  const headingTo = useCardAim(showing, cardLayer, columnRef, PROFILES_PARTS);
   const { point, clear } = useColumnPointer(showing, setPointed, headingTo);
   // §8 "Pinned": CLOSING IS ONE ACT, wherever it comes from — the keyboard home if the card holds it, then the pin,
   // the keyboard's card and the pointer's hold. No new enter fires while the pointer sits still, and no new focus
   // while the keyboard does, so the card stays closed until one of them leaves and returns. The circle's own focus,
   // as the keyboard goes home, sets its target before the null that follows it here, so it does not reopen the card.
   const closeCard = useCallback((): void => {
-    handFocusHome(columnRef.current);
+    handFocusHome(columnRef.current, PROFILES_PARTS);
     setPinned(null);
     setKeyboardTarget(null);
     clear();
@@ -302,31 +239,8 @@ function ProfilesColumnController({
     }
   }, [circles, keyboardTarget]);
   // ruling 11: a pinned popover holds Godview's keys, so Esc closes it before a pane hears it; a click outside too
-  useEffect(() => {
-    if (pinned === null) return;
-    setMonitorHoldsKeys(true);
-    const onKey = (event: KeyboardEvent): void => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopPropagation();
-      closeCard();
-    };
-    const onPointer = (event: PointerEvent): void => {
-      const target = event.target;
-      // the cards stand in their own layer now, so "inside" is the pill or a stand
-      if (target instanceof Element && target.closest(".vf-profiles-column, .vf-profiles-stand")) {
-        return;
-      }
-      setPinned(null);
-    };
-    window.addEventListener("keydown", onKey, true);
-    document.addEventListener("pointerdown", onPointer, true);
-    return () => {
-      setMonitorHoldsKeys(false);
-      window.removeEventListener("keydown", onKey, true);
-      document.removeEventListener("pointerdown", onPointer, true);
-    };
-  }, [pinned, closeCard]);
+  const releasePin = useCallback((): void => setPinned(null), []);
+  usePinHold(pinned, closeCard, releasePin, PROFILES_INSIDE);
   // Settings opened some other way: a card does not float over it. Keyed to that flip alone, so a pin made while
   // Settings is open stands (`godview-monitor`'s Agent Profiles… disabled row).
   const settingsWas = useRef(openProfile !== undefined);

@@ -75,9 +75,37 @@ export interface LivePlanChoice {
   readonly provider: string;
 }
 
+/** WL-1 — a project the Filter menu's Projects offers: one of the work column's
+ * circles (DESIGN.md §8 "Godview's work column"), by its folder's name. */
+export interface LiveProjectChoice {
+  /** the folder's name, as the bodies are titled */
+  readonly id: string;
+  readonly label: string;
+  /** its colour's sequence: the menu's and the token's folder mark take its
+   * bodies' hue on the popup's own tone; absent, the neutral */
+  readonly seq?: number | undefined;
+  /** a session in it waits on you: "waiting" beside its name */
+  readonly waiting: boolean;
+  /** its sessions on the stage, whatever the other filters hold */
+  readonly sessions: number;
+}
+
+/** WL-1 — an agent the Filter menu's Agents offers: one of the work column's
+ * circles, by its provider's id, a bare terminal as Shell. */
+export interface LiveAgentChoice {
+  /** the provider's id, or the shell's (`SHELL_AGENT`) */
+  readonly id: string;
+  readonly label: string;
+  /** a bare terminal's: drawn with `terminal`, never an agent's mark */
+  readonly shell: boolean;
+  readonly waiting: boolean;
+  readonly sessions: number;
+}
+
 /** GV-D3 — the view's filters, which search's Live now carries (they filter
  * the view too). Each list is empty when there is no choice to make: one
- * desktop, or This Mac as the only profile. */
+ * desktop, or This Mac as the only profile; WL-1's, one project or one agent
+ * not chosen. */
 export interface LiveFilters {
   readonly desks: readonly LiveDeskChoice[];
   /** the chosen desktop's id; null is every desktop */
@@ -87,6 +115,16 @@ export interface LiveFilters {
   readonly profile: string | null;
   /** UM-5a — the plan chosen on a meter, with one profile too; absent while none stands */
   readonly plan?: LivePlanChoice;
+  /** WL-1 — the work column's projects, while it draws them. While nobody
+   * reads the menu (`subscribeRows`) only the chosen one stands here, counted 0,
+   * so the button can name it and a session that starts or ends moves nothing. */
+  readonly projects: readonly LiveProjectChoice[];
+  /** the chosen project's folder name as the stage still has it; null is every project */
+  readonly project: string | null;
+  /** WL-1 — the work column's agents, by the same rule as its projects */
+  readonly agents: readonly LiveAgentChoice[];
+  /** the chosen agent's id as the stage still has it; null is every agent */
+  readonly agent: string | null;
   /** TS-4 (TS-D7) — this Mac is not connected: the desktop filter ends on a
    * ghost row, Your other devices · Connect…; absent or false, no row */
   readonly connect?: boolean;
@@ -103,6 +141,10 @@ export const NO_LIVE_FILTERS: LiveFilters = Object.freeze({
   desk: null,
   profiles: Object.freeze([]),
   profile: null,
+  projects: Object.freeze([]),
+  project: null,
+  agents: Object.freeze([]),
+  agent: null,
   sessions: 0,
 });
 
@@ -127,6 +169,10 @@ export interface GodviewFindDoor {
   setProfile(id: string | null): void;
   /** UM-5a — a plan's key (`LivePlanChoice.key`), or null for every plan. */
   setPlan(key: string | null): void;
+  /** WL-1 — a project's folder name, or null for every project: the work column's lens. */
+  setProject(id: string | null): void;
+  /** WL-1 — an agent's id, or null for every agent: the work column's other lens. */
+  setAgent(id: string | null): void;
   /** QL-D2: while the Peek is open over Godview the stage holds the keys —
    * its Escape is the Peek's, never a fresh pane's launcher's. Answers the
    * release (idempotent). */
@@ -229,11 +275,13 @@ export type OpenLiveFeed = (client: LiveFeedClient) => LiveFeed;
 
 /** GV-D3 — the words the search button wears while a filter is on (the kit's
  * token: "studio · Work"), or null for none. A filtered view never looks
- * unfiltered. */
+ * unfiltered. WL-1: the work column's project and agent follow the plan. */
 export function filterToken(filters: LiveFilters): {
   desk: LiveDeskChoice | null;
   profile: LiveProfileChoice | null;
   plan?: LivePlanChoice;
+  project?: LiveProjectChoice;
+  agent?: LiveAgentChoice;
 } | null {
   const desk =
     filters.desk === null
@@ -244,6 +292,26 @@ export function filterToken(filters: LiveFilters): {
       ? null
       : (filters.profiles.find((entry) => entry.id === filters.profile) ?? null);
   const { plan } = filters;
-  if (desk === null && profile === null && plan === undefined) return null;
-  return { desk, profile, ...(plan !== undefined ? { plan } : {}) };
+  const project =
+    filters.project === null
+      ? undefined
+      : filters.projects.find((entry) => entry.id === filters.project);
+  const agent =
+    filters.agent === null ? undefined : filters.agents.find((entry) => entry.id === filters.agent);
+  if (
+    desk === null &&
+    profile === null &&
+    plan === undefined &&
+    project === undefined &&
+    agent === undefined
+  ) {
+    return null;
+  }
+  return {
+    desk,
+    profile,
+    ...(plan !== undefined ? { plan } : {}),
+    ...(project !== undefined ? { project } : {}),
+    ...(agent !== undefined ? { agent } : {}),
+  };
 }
