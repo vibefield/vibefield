@@ -9462,7 +9462,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     models."
   - Where the agent keeps a change as its own default, the list's last line says so, at 50%:
     "‹Agent› keeps this for its new sessions too."
-  - A run whose row offers no switch keeps the capsule as a readout: no chevron, no touch.
+  - A run whose row offers no switch keeps the capsule as a readout, with no chevron. *(Amended
+    2026-11-22, PF-12: this said "no chevron, no touch". James read the capsule as a button that
+    did nothing, twice: "the model effort pill button still not clickable".)* A press on it opens a
+    popover of one line under it, on the list's own glass and in its line's type (15pt at 66%):
+    "‹Agent›'s model can't be changed from here.", the agent as the catalog names it, and "This
+    agent's model can't be changed from here." where it names none. The line says what the phone
+    knows and no more: the row offers no switch, whether the agent's adapter names none, its turns
+    are not read, or its desktop is older than the switch.
   **The grid runs from the band's foot to the top of the home indicator's
   safe area** (34pt); the text's margins are the renderer's own padding, 10pt each
   side, 2pt above and 8pt below. **The closed input row is no longer a band**: its keyboard key and
