@@ -1006,7 +1006,8 @@ public struct HomeScreen: View {
         signIn: { performSignIn() },
         openReader: { macCodeReaderOpen = true },
         receive: { code, arrival in receive(code, arrival: arrival) },
-        // Use another account (Tailscale asking again, or no desktop answering): the corner's question first (WI-G3 A)
+        // Use another account (Tailscale asking again, no desktop answering, and since WI-5 no desktop yet or an
+        // approval awaited): the corner's question first (WI-G3 A)
         askSignOut: { wayInSignOutPending = true },
         // the question's Sign out: the corner's own (`confirmSignOut`: the account a desktop's code named is set
         // aside, then the full sign-out), since the link asks the corner's question (asked for 2026-11-14)

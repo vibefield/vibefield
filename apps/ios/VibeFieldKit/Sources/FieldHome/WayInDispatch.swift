@@ -27,7 +27,8 @@ extension FieldHomeModel {
     /// A desktop's code, by the reader or by a link: the account to expect.
     var receive: (PhoneCode, PhoneCodeExpectation.Arrival) -> Void
     /// WI-G3 A (asked for on the page The Way In, 2026-11-14) — Use another account, on Can’t reach your
-    /// computer. and on Sign in to Tailscale again.: the corner's own Sign out question, asked first. It moves nothing.
+    /// computer. and on Sign in to Tailscale again., and since WI-5 (2026-11-22) on No desktops yet. and on Waiting
+    /// for approval.: the corner's own Sign out question, asked first. It moves nothing.
     var askSignOut: () -> Void
     /// The question's Sign out, after Use another account: the corner's own Sign out, the full sign-out.
     var signOut: () -> Void

@@ -107,23 +107,29 @@ struct DemoActsTests {
     return nil
   }
 
-  /// WI-G3 A (2026-11-14) — the two links that sign this phone out are one act, and it asks first: on Can’t reach your
+  /// WI-G3 A (2026-11-14) — the links that sign this phone out are one act, and it asks first: on Can’t reach your
   /// computer., and on Sign in to Tailscale again., which has the same link and
   /// signs out at one tap, so it asks too (asked for in the same slice). Only the question's Sign out
-  /// signs out.
-  @Test("Use another account asks first on Can’t reach your computer. and on Sign in to Tailscale again.")
-  func bothLinksAsk() {
+  /// signs out. WI-5 (2026-11-22) — No desktops yet. and Waiting for approval., with a console and without, carry the
+  /// same link, so they ask the same way.
+  @Test("Use another account asks first on every page of the way in that carries it")
+  func everyLinkAsks() {
     let made = Made()
     let d = dispatch(.off, made)
-    let pages: [FieldHomeModel.DoorPage] = [.unreachable(desktop: "studio"), .signInAgain(note: nil)]
+    let console = URL(string: "https://login.tailscale.com/admin/machines")
+    let pages: [FieldHomeModel.DoorPage] = [
+      .unreachable(desktop: "studio"), .signInAgain(note: nil), .noDesktops(login: "me@example.com"),
+      .approval(machine: "iphone-17-pro", adminConsole: console), .approval(machine: nil, adminConsole: nil),
+    ]
     let links = pages.compactMap { linkAct(on: $0) }
     let outcomes = links.map { d.perform($0) }
-    #expect(links == [.useAnotherAccount, .useAnotherAccount])
-    #expect(outcomes == [.made, .made])
-    #expect(made.calls == ["askSignOut", "askSignOut"], "a question, never the sign-out at one tap")
+    let asked = Array(repeating: "askSignOut", count: pages.count)
+    #expect(links == Array(repeating: .useAnotherAccount, count: pages.count))
+    #expect(outcomes == Array(repeating: .made, count: pages.count))
+    #expect(made.calls == asked, "a question, never the sign-out at one tap")
     let confirmed = d.signOut()
     #expect(confirmed == .made)
-    #expect(made.calls == ["askSignOut", "askSignOut", "signOut"], "the question's Sign out is the sign-out")
+    #expect(made.calls == asked + ["signOut"], "the question's Sign out is the sign-out")
   }
 
   @Test("Another account?'s Sign in again, Keep this account and Start over move no account under a demo")

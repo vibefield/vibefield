@@ -191,6 +191,8 @@ extension FieldHomeModel {
     case .page(.approval(let machine, let console)):
       var acts: [WayInScreen.Act] = [.thisPhone(machine: machine)]
       if let console { acts.append(.secondary("Open the admin console", .openAdminConsole(console))) }
+      // WI-5 (2026-11-22): the way to another account, the glass's last slot. It asks first (`WayInDispatch`)
+      acts.append(.link(words.useAnotherAccount, .useAnotherAccount))
       return WayInScreen(
         steps: .step(1),
         words: .init(
@@ -243,10 +245,15 @@ extension FieldHomeModel {
           line: AttributedString("Open VibeField on your computer, signed in to Tailscale as \(login)."), hold: true))
 
     case .page(.noDesktops(let login)):
+      // WI-5 (2026-11-22): the link is the page's way to another account: the way in has no corner to sign out from,
+      // so a phone signed in to an account with no desktop stayed here. It asks first (`WayInDispatch`)
       return WayInScreen(
         steps: .step(2), picture: .art(.computerWaiting),
         words: .init(title: "No desktops yet.", line: noDesktopsLine(login: login)),
-        acts: [.computerWaiting, .share(words.sendTheLink, primary: false)])
+        acts: [
+          .computerWaiting, .share(words.sendTheLink, primary: false),
+          .link(words.useAnotherAccount, .useAnotherAccount),
+        ])
 
     // WI-L2 as amended 2026-11-13 — the gate's three screens: no step of the first way in, so no bars, and no found
     // beat after them (§9 "The way in"; where each stands is §8 "The phone's way in"). WI-G9 B (asked for 2026-11-14):

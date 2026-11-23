@@ -142,6 +142,12 @@ struct WayInScreenTests {
     // WI-L2 as amended 2026-11-13 — the gate: Try again and its link are a glass of two; its hold and You’re
     // offline. hold nothing
     #expect(height(.page(.unreachable(desktop: nil))) == 146)
+    // WI-5 (2026-11-22) — the link is a third slot under No desktops yet's row and its pill, and under approval's row
+    // and its console; with no console it is the glass's second
+    let console = URL(string: "https://login.tailscale.com/admin/machines")
+    #expect(height(.page(.noDesktops(login: login))) == 182)
+    #expect(height(.page(.approval(machine: "iphone-17-pro", adminConsole: console))) == 182)
+    #expect(height(.page(.approval(machine: "iphone-17-pro", adminConsole: nil))) == 146)
     #expect(height(.page(.reaching(quiet: false))) == 0)
     #expect(height(.page(.offline)) == 0, "no act brings a network back")
     // one act is the pill and the glass's two 18s: the pill the glass draws is the wide pill's own height
@@ -399,7 +405,9 @@ struct WayInScreenTests {
     #expect(boldRuns(fromCode) == [login])
   }
 
-  @Test("No desktops yet: TS-7's words with “computer”, its row, and the link to send")
+  /// WI-5 (2026-11-22) — the page ends with the way to another account: a phone signed in to an account with no
+  /// desktop had no way off it.
+  @Test("No desktops yet: TS-7's words with “computer”, its row, the link to send, and Use another account")
   func noDesktops() {
     let s = screen(.noDesktops(login: login))
     #expect(s.words.title == "No desktops yet.")
@@ -407,17 +415,26 @@ struct WayInScreenTests {
       line(s)
         == "Signed in as me@example.com. On your computer, open VibeField, click your face, then Connect your devices… with this same account.")
     #expect(s.picture == .art(.computerWaiting))
-    #expect(s.acts == [.computerWaiting, .share("Send the link to my computer", primary: false)])
+    #expect(
+      s.acts == [
+        .computerWaiting, .share("Send the link to my computer", primary: false),
+        .link("Use another account", .useAnotherAccount),
+      ])
   }
 
-  @Test("approval keeps TS-7's words, this phone's row, and the console when there is one")
+  /// WI-5 (2026-11-22) — and it ends with the way to another account, with the console or without.
+  @Test("approval keeps TS-7's words, this phone's row, the console when there is one, and Use another account")
   func approval() {
     let console = URL(string: "https://login.tailscale.com/admin/machines")!
     let s = screen(.approval(machine: "iphone-17-pro", adminConsole: console))
     #expect(s.words.title == "Waiting for approval.")
     #expect(line(s) == "You’re signed in. An admin of your Tailscale network approves new devices.")
-    #expect(s.acts == [.thisPhone(machine: "iphone-17-pro"), .secondary("Open the admin console", .openAdminConsole(console))])
-    #expect(screen(.approval(machine: nil, adminConsole: nil)).acts == [.thisPhone(machine: nil)])
+    let another = Screen.Act.link("Use another account", .useAnotherAccount)
+    #expect(
+      s.acts == [
+        .thisPhone(machine: "iphone-17-pro"), .secondary("Open the admin console", .openAdminConsole(console)), another,
+      ])
+    #expect(screen(.approval(machine: nil, adminConsole: nil)).acts == [.thisPhone(machine: nil), another])
   }
 
   @Test("Tailscale asking again: your face in the mark's place, Sign in again, Use another account (WI-D8 A)")
