@@ -66963,6 +66963,11 @@ light mode, the mobile terminal is not switching to day theme like desktop".
   written again, so the day starts on Daylight on every phone, a phone that had picked a light theme included.
 - **The mode is asked of every caller** (`presentationConfig(for:mode:)`, no default), and an attachment is told the
   mode of the place it is drawn in (`lookMode`), again when the phone's mode changes.
+  > **Errata (2026-11-23, PF-15):** an attachment made after the mode changed was told the mode the app STARTED in.
+  > The attach read the mode from its own task's environment, and the field's stage ran the touch handler of its
+  > first appearance for the app's whole life, so that environment was the first pass's. James, on his phone:
+  > "when i switch to light mode in app and open the terminal card, it stay as dark color theme". Only a card
+  > already open when the mode changed was re-dressed. Mended at M528.
 - **The kit's day colours are held to the desktop's** by a row in field-app's `godview-terminal-look.test.ts`
   (`TerminalLook.swift` against `terminal-look.ts` and the deck's theme).
 - **The night was left alone on purpose.** The desktop's night ground is the graphite `#282C34`; the phone's stays
@@ -67332,4 +67337,40 @@ was not watched.
 
 **Not seen:** a phone; a live terminal taking a change (the simulator shows a recorded picture); what the blur costs on
 a phone at any radius. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other suites.
+**Not done:** no push of its own.
+
+## Track PF — a terminal opened after the phone's mode changed is dressed for the mode it is in (M528)
+
+**2026-11-23 · on local main: `227e8d70a` (its subject says PF-14) and `a91e6be9f` PF-15 (the label).**
+James, 2026-11-23, on his phone: "somehow the terminal light mode stopped working again, when i switch to light mode
+in app and open the terminal card, it stay as dark color theme in the terminal, why?"
+
+- **The cause was PF-6's own** (M517, 2026-11-21), and no later change's. A new attachment was told its mode from the
+  attach task's own environment, and a SwiftUI environment value read in a closure is the value of the pass the
+  closure was made in. The field's stage was handed its touch handler once, at its first appearance, so every touch on
+  a body ran the first pass's handler: the terminal was dressed for the mode the app started in.
+- **Why it came and went:** a card already open when the mode changed was re-dressed, and an app started in the mode
+  it stayed in showed nothing. Every simulator still of PF-6 and after was shot that way.
+- **The mend, at both ends.** The home keeps the mode in state, which any closure reads true, and the attach reads
+  that. The field hands its stage the handlers of every pass, so a touch runs the pass that last drew the field; the
+  hold's hand-over rides the same call. The second also ends the same staleness for reduced motion.
+- **The label.** `227e8d70a` says PF-14, which the rail's item had taken a minute earlier (`6e88b51dc`, another
+  session in the same checkout). It is PF-15, and `a91e6be9f` moves its four comment lines to say so.
+
+**Measured**, on the iPhone 17 simulator (iOS 26.5), with two temporary probes that are in no commit (a touch on the
+first body through the stage's stored handler 8s after launch, and a line saying what the attach would read):
+- Before the stage's mend, started by night and turned to day at 3s: the handler's environment said dark, the state
+  light.
+- After it, the same run: light and light. Started by day and turned to night: dark and dark.
+
+**Proved, 2026-11-23, on the development Mac, on `227e8d70a`'s source:** `FieldTerminalTests` 201 in 36 suites,
+`FieldHomeTests` 876 in 103 suites and `FieldSwarmTests` 46 in 11 suites passed. No row was added: the fault is in what
+a closure captures, which no unit row here reaches. `node scripts/check-agent-catalog.mjs --literals` passes.
+
+**Installed and watched:** the Release build of `a91e6be9f` on James's phone, up 30 seconds under the console. It was
+built from a `git archive` export of that commit on the SSD, because the shared working tree held another session's
+unfinished edits and did not build.
+
+**Not seen:** a live terminal drawn by day after a change of mode. The simulator attaches nothing, so the sight is
+his phone's. **Not run:** `pnpm preflight` whole, `pnpm verify`, `pnpm gate:landing`, the kit's other suites.
 **Not done:** no push of its own.

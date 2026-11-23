@@ -366,7 +366,10 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   defined in §8 "The capsule is the switch"; unseen on a phone. **PF-13 LANDED 2026-11-23 (M527)**: the blur
   behind a card is a setting (24pt where nobody chose, where a fixed 40 stood; 24 is not his figure), a program's
   backgrounds take the glass as on the desk (a switch, on; not asked for by name), and the opacity moves by 1%;
-  defined in §8 "The card's glass is the field" and "The phone's Settings"; unseen on a phone.
+  defined in §8 "The card's glass is the field" and "The phone's Settings"; unseen on a phone. **PF-15 LANDED 2026-11-23
+  (M528)**: a terminal opened after the phone's mode changed is dressed for the mode it is in (PF-6's fault: the
+  attach read the mode of the app's first pass); no rule moved, §2.7's stands; its first commit's subject says PF-14,
+  which is the rail's.
 - **WI-5** — track WI, from James's look at the build (2026-11-22, a phone signed in to an account with no desktop:
   "we should provide a log in to another account option for users here so they don't get trapped here"): **No desktops
   yet.** and **Waiting for approval.** end their glass with *Use another account*, the way in's own link, which asks
