@@ -1081,11 +1081,12 @@ export async function runTerminalPerfLab(opts: {
     }>(win, "GODVIEW_COLD_OPEN ");
     const deck = new MarkerTail<DeckFacts>(win, "GODVIEW_DECK ");
     const monitor = new MarkerTail<{ agents: number }>(win, "GODVIEW_MONITOR ");
-    const direct = new MarkerTail<{ sessionId: string; inputAllowed: boolean }>(
-      win,
-      "GODVIEW_DIRECT_TERMINAL ",
-      (value) => value.sessionId,
-    );
+    const direct = new MarkerTail<{
+      sessionId: string;
+      activationId: string;
+      phase: string;
+      inputAllowed: boolean;
+    }>(win, "GODVIEW_DIRECT_TERMINAL ", (value) => value.sessionId);
     const inputReady = async (id: string): Promise<void> => {
       await direct.until(
         (value) => value.inputAllowed,
@@ -1220,6 +1221,11 @@ export async function runTerminalPerfLab(opts: {
           TerminalListResult.parse(await opts.handle.client.request("terminal.list", {})).terminals,
         monitorCount: () => monitor.current()?.agents,
         inputAllowed: (sessionId) => direct.current(sessionId)?.inputAllowed === true,
+        whenInputAllowed: inputReady,
+        activationId: (sessionId) => {
+          const current = direct.current(sessionId);
+          return current?.phase === "ended" ? undefined : current?.activationId;
+        },
       });
     }
 

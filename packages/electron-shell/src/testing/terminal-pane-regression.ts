@@ -3,6 +3,7 @@ import { writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { performance } from "node:perf_hooks";
 import type { BrowserWindow } from "electron";
+import { measurePaneSwitches } from "./terminal-pane-switches";
 import { pasteTerminalLine } from "./terminal-startup-benchmark";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -22,6 +23,8 @@ export async function measureTerminalPaneRegression(options: {
   floor(): Promise<readonly { sessionId: string }[]>;
   monitorCount(): number | undefined;
   inputAllowed(sessionId: string): boolean;
+  whenInputAllowed(sessionId: string): Promise<void>;
+  activationId(sessionId: string): string | undefined;
 }): Promise<void> {
   const { win, out } = options;
   const results: Record<string, unknown> = {};
@@ -499,28 +502,15 @@ export async function measureTerminalPaneRegression(options: {
       async () => read<boolean>("document.querySelectorAll('.vf-monitor-list-row').length === 2"),
       "monitor list",
     );
-    const switches: unknown[] = [];
-    results.attachSwitches = switches;
-    for (let i = 0; i < 8; i++) {
-      await read(`document.querySelectorAll('.vf-monitor-list-row')[${i % 2}].click()`);
-      const samples = await read<
-        Array<{ session: string; cssWidth: number; bitmapWidth: number; dpr: number }>
-      >(`new Promise(resolve => {
-        const samples = [];
-        function tick() {
-          const c = document.querySelector('.ghostty-pane canvas');
-          if (c) samples.push({session: c.getAttribute('aria-label'), cssWidth: c.clientWidth * new DOMMatrixReadOnly(getComputedStyle(c).transform).a, bitmapWidth: c.width, dpr: devicePixelRatio});
-          if (samples.length < 12) requestAnimationFrame(tick); else resolve(samples);
-        }
-        requestAnimationFrame(tick);
-      })`);
-      switches.push(samples);
-      check(
-        samples.every((s) => Math.abs(s.cssWidth - s.bitmapWidth / s.dpr) < 0.1),
-        "attach stretched the terminal bitmap",
-      );
-      await inputReady();
-    }
+    const [remaining] = await panes();
+    if (!remaining?.active || remaining.session === used.session)
+      throw Error("Expected one pane and a detached session");
+    const measured = await measurePaneSwitches({
+      ...options,
+      sessions: [remaining.session, used.session],
+    });
+    results.attachSwitches = measured.switches;
+    results.attachSwitchLatency = measured.latency;
     // A replacement is a detach even though the pane itself survives. The
     // unlinked row is the other retained session; clicking it must reap only
     // the untouched shell just created in the active split.
