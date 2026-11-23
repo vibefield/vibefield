@@ -343,7 +343,8 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   the desktop frame's capsules and the selected badge's label (PF-2), `agent.switchModel` and the phone's switch list
   (PF-3). Defined in `DESIGN.md` §2.7 "The pane frame's capsules" and §8 "The phone's live card is its terminal"; the
   door in `docs/agent-plane/api.html`. **LANDED 2026-11-21 (M515)**, unseen on a screen and unproved end to end (the
-  ledger's entry says what is owed).
+  ledger's entry says what is owed). Its phone fixture reddened wall R23b on main until **the mend of 2026-11-22
+  (M524)**.
 - **PF-4…PF-11** — track PF, from James's looks at the build (2026-11-21 and 22): a pane is one piece with its bands, on the
   desktop and the phone (PF-4); the phone's card as glass over the field (PF-5); the phone's terminal wears the look of
   the mode the phone is in, with a theme picked for each mode (PF-6); a terminal's card stands at 98% of full height

@@ -66850,6 +66850,10 @@ phone A.
   20 packages read back at 0.4.8 from the registry.
 - The pin: the one install and a frozen install exit 0; `pnpm preflight` OK; `pnpm check:deps`, `pnpm check:walls` and
   `pnpm check:ios-fixtures` exit 0; `tsc` for contracts, fieldd and field-app exit 0.
+  > **Errata (2026-11-22):** `pnpm preflight` OK was read at the pin's commit. `a996abbc0`, later the same day and
+  > part of this entry, added the switch list's fixture with one agent's id written as a string literal twice
+  > (`ModelSwitchList.swift`), which wall R23b refuses. Preflight was not run again after it, so it was red at this
+  > entry's tip and on main until the mend, `d0539cc47` (M524).
 - contracts: 79 files, 2283 tests passed. fieldd: the door's two rows on the real floor and the remote cut's row, then
   `agent-remote-cut`, `agent-field`, `agent-monitor-pin` and `agent-stop-key` whole, 71 passed. field-app: 36 files, 564
   tests passed (the deck, the pane frame, the design system, the tokens, the boundaries, the phone goldens).
@@ -67213,3 +67217,23 @@ hold no act, so a first way in that never finds its desktop still has no way to 
 offering another account after it (the sign-in sheet shares Safari's cookies, so what it offers is Tailscale's).
 
 **Not run:** `pnpm verify`, `pnpm gate:landing`, the kit's other targets. **Not done:** no push of its own.
+
+## Track PF — the switch list's fixture names no agent: wall R23b is green again (M524)
+
+**2026-11-22 · on local main: `d0539cc47` PF-3 (mend).**
+`pnpm preflight` was red on main at wall R23b from `a996abbc0` (2026-11-21, part of M515) until this commit: the DEBUG
+fixture door for the phone's switch list (`-vf-demo-model-switch`) wrote one agent's id as a string literal, twice, in
+the answer it invents. The QA stage's install read the two lines on 2026-11-23 at 02:46Z; nobody had run preflight
+after `a996abbc0`.
+
+- The fixture's answer now names the provider of the card it stands on, handed in by the card, as the real door asks
+  its desktop. No literal, and no allow-list row.
+- Nothing shipped changes: the fixture is `#if DEBUG`.
+
+**Proved, 2026-11-22, on the development Mac, in the checkout:** `node scripts/check-agent-catalog.mjs --literals`
+failed with the two lines before the mend and passes after it; `node scripts/check-retired-names.mjs` and
+`node scripts/check-ios-fixtures.mjs` exit 0; `FieldHomeTests` 876 in 103 suites passed. **Seen** on the iPhone 17
+simulator: the fixture's list opens over a card as before.
+
+**Not run:** the gate's `--enforce` half (R23) and `pnpm preflight` whole; `pnpm verify`; `pnpm gate:landing`.
+**Not done:** no push of its own.
