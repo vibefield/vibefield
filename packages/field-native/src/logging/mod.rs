@@ -1402,6 +1402,31 @@ pub fn new_boot_id() -> String {
     format!("field-native-{}", hex::encode(bytes))
 }
 
+/// VT-4a — how much of a panic's own words and of its backtrace one record keeps, in bytes.
+pub const PANIC_MESSAGE_MAX: usize = 512;
+pub const PANIC_BACKTRACE_MAX: usize = 8 * 1024;
+
+/// `text` cut to at most `max` bytes at a character's edge, saying how much it left out.
+pub fn bounded_text(text: &str, max: usize) -> String {
+    if text.len() <= max {
+        return text.to_owned();
+    }
+    let mut end = max;
+    while end > 0 && !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    format!("{}… ({} more bytes)", &text[..end], text.len() - end)
+}
+
+/// A panic's own words, where its payload is words: `panic!("…")` hands a `&str` or a `String`.
+pub fn panic_message(payload: &(dyn std::any::Any + Send)) -> Option<String> {
+    payload
+        .downcast_ref::<&str>()
+        .map(|message| (*message).to_owned())
+        .or_else(|| payload.downcast_ref::<String>().cloned())
+        .map(|message| bounded_text(&message, PANIC_MESSAGE_MAX))
+}
+
 pub fn install_panic_hook(logging: NativeLogging) {
     std::panic::set_hook(Box::new(move |panic_info| {
         let panic_type = if panic_info.payload().is::<&str>() {
@@ -1411,6 +1436,15 @@ pub fn install_panic_hook(logging: NativeLogging) {
         } else {
             "unknown"
         };
+        // VT-4a (2026-11-24) — nothing dies silently: the record says what the panic said and where it was
+        // called from. Until now it said the file and the line alone, and this hook replaces Rust's own print,
+        // so the panic's words and its stack reached nobody. Both are bounded, and both stay in this device's
+        // log. A build without symbols prints addresses; they still say which frames.
+        let message = panic_message(panic_info.payload()).unwrap_or_default();
+        let backtrace = bounded_text(
+            &std::backtrace::Backtrace::force_capture().to_string(),
+            PANIC_BACKTRACE_MAX,
+        );
         let (file, line) = panic_info.location().map_or(("<unknown>", 0), |location| {
             (
                 std::path::Path::new(location.file())
@@ -1426,6 +1460,8 @@ pub fn install_panic_hook(logging: NativeLogging) {
             panic_type,
             file,
             line,
+            panic_message = %message,
+            backtrace = %backtrace,
             "field-native panicked"
         );
         let _ = logging.flush(Duration::from_millis(500));
@@ -1438,6 +1474,42 @@ mod tests {
     use crate::contracts::{
         DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1, LogRecordV1, LoggingHealthV1,
     };
+
+    /// VT-4a — the panic record's own words: bounded at a character's edge, saying what it left out.
+    #[test]
+    fn a_panic_record_bounds_its_words_at_a_characters_edge() {
+        assert_eq!(bounded_text("short", 512), "short");
+        let cut = bounded_text(&"a".repeat(600), 512);
+        assert!(cut.starts_with(&"a".repeat(512)));
+        assert!(cut.ends_with("… (88 more bytes)"), "{cut}");
+        // "é" is two bytes: a cut that would land inside one steps back to its edge
+        let accented = "é".repeat(300);
+        let cut = bounded_text(&accented, 511);
+        assert!(cut.starts_with(&"é".repeat(255)));
+        assert!(cut.ends_with("… (90 more bytes)"), "{cut}");
+        assert_eq!(bounded_text("", 0), "");
+    }
+
+    /// VT-4a — a panic says its words when its payload is words, and nothing when it is not.
+    #[test]
+    fn a_panic_says_its_own_words_when_it_has_any() {
+        let literal = std::panic::catch_unwind(|| panic!("the meter lost its probe")).unwrap_err();
+        assert_eq!(
+            panic_message(literal.as_ref()).as_deref(),
+            Some("the meter lost its probe")
+        );
+        let formatted = std::panic::catch_unwind(|| panic!("cell {} went away", 7)).unwrap_err();
+        assert_eq!(
+            panic_message(formatted.as_ref()).as_deref(),
+            Some("cell 7 went away")
+        );
+        let long = std::panic::catch_unwind(|| panic!("{}", "x".repeat(2_000))).unwrap_err();
+        let said = panic_message(long.as_ref()).expect("words");
+        assert!(said.len() < PANIC_MESSAGE_MAX + 40, "{}", said.len());
+        assert!(said.ends_with("more bytes)"));
+        let other = std::panic::catch_unwind(|| std::panic::panic_any(42_u32)).unwrap_err();
+        assert_eq!(panic_message(other.as_ref()), None);
+    }
     use std::fs;
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::thread;

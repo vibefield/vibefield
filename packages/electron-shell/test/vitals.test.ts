@@ -665,6 +665,20 @@ describe("VT-2 — the Vitals window's preload", () => {
   });
 });
 
+describe("VT-4a — the Vitals window's own page does not die silently", () => {
+  it("says its page process's end in main's log, with the reason and the exit code", () => {
+    const host = source("main/vitals-window.ts");
+    const gone = host.slice(host.indexOf('next.webContents.on("render-process-gone"'));
+    const handler = gone.slice(0, gone.indexOf("installNavigationPolicy("));
+    expect(handler).toContain('"desktop.vitals.window_process_gone"');
+    expect(handler).toContain("reason: details.reason");
+    expect(handler).toContain("exitCode: details.exitCode");
+    // and it still lets go of the feed and tells the roster
+    expect(handler).toContain("closeFeed();");
+    expect(handler).toContain("opts.onChanged();");
+  });
+});
+
 describe("VT-2 — the Window menu's Vitals", () => {
   const state = { view: "canvas", deck: "away" } as unknown as Parameters<typeof buildAppMenu>[1];
   const find = (

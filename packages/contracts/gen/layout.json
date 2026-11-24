@@ -97,6 +97,10 @@
     "fieldd",
     "manager-exit.json"
   ],
+  "FIELDD_CRASH_NOTE": [
+    "fieldd",
+    "crash-note.json"
+  ],
   "SHELL_RELAUNCHES": [
     "fieldd",
     "shell-relaunches.json"

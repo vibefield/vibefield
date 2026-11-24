@@ -361,6 +361,7 @@ pub mod layout {
     pub const SHELL_LAST_EXIT: &[&str] = &["fieldd", "shell-last-exit.json"];
     pub const SHELL_EXIT: &[&str] = &["fieldd", "shell-exit.json"];
     pub const MANAGER_EXIT: &[&str] = &["fieldd", "manager-exit.json"];
+    pub const FIELDD_CRASH_NOTE: &[&str] = &["fieldd", "crash-note.json"];
     pub const SHELL_RELAUNCHES: &[&str] = &["fieldd", "shell-relaunches.json"];
     pub const TERMINAL_RELEASES_FILE: &[&str] = &["fieldd", "terminal-releases.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
@@ -461,6 +462,7 @@ pub mod layout {
         ("SHELL_LAST_EXIT", SHELL_LAST_EXIT),
         ("SHELL_EXIT", SHELL_EXIT),
         ("MANAGER_EXIT", MANAGER_EXIT),
+        ("FIELDD_CRASH_NOTE", FIELDD_CRASH_NOTE),
         ("SHELL_RELAUNCHES", SHELL_RELAUNCHES),
         ("TERMINAL_RELEASES_FILE", TERMINAL_RELEASES_FILE),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),

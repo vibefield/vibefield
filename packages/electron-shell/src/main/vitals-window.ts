@@ -128,8 +128,16 @@ export function createVitalsWindowHost(opts: {
       next.webContents.on("did-start-navigation", (_event, _url, isInPlace, isMainFrame) => {
         if (isMainFrame && !isInPlace) closeFeed();
       });
-      next.webContents.on("render-process-gone", () => {
+      next.webContents.on("render-process-gone", (_event, details) => {
         closeFeed();
+        // VT-4a — nothing dies silently, this window's page too: the product windows' crash line is said by
+        // their own logging, which a host window does not have
+        opts.logger.error(
+          "desktop.vitals.window_process_gone",
+          "The Vitals window's page process ended",
+          undefined,
+          { reason: details.reason, exitCode: details.exitCode },
+        );
         opts.onChanged();
       });
       installNavigationPolicy(next, opts.mode);

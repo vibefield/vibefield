@@ -2591,6 +2591,9 @@ export const LAYOUT = {
   /** AL-8a — how the PREVIOUS fieldd left this pair's floor, when it went without a goodbye (`ManagerExitRecord`):
    * written by the fieldd whose hello-ack said so, handed once to the next shell that claims the lease. */
   MANAGER_EXIT: ["fieldd", "manager-exit.json"],
+  /** VT-4a — the error that ended the PREVIOUS fieldd, when nobody caught it (`fieldd/src/crash-note.ts`): written in
+   * the turn the runtime reports it, read and removed by the next fieldd's boot, which says it in its log. */
+  FIELDD_CRASH_NOTE: ["fieldd", "crash-note.json"],
   /** AL-11 — when fieldd relaunched the app after an unplanned exit (`ShellRelaunchLog`), so AL-D8's cap of 3 per
    * 10 min holds across a fieldd restart. */
   SHELL_RELAUNCHES: ["fieldd", "shell-relaunches.json"],

@@ -6,6 +6,7 @@ import { BootRoot } from "./boot/BootRoot";
 import { createBootMachine } from "./boot/machine";
 import { type FieldHost, setHost } from "./host";
 import { setRendererLogger } from "./logging";
+import { hearPageFaults } from "./page-faults";
 import { mountFrameStatsOverlay } from "./perf/frame-stats-overlay";
 import type { ProductPresentationContextReporter } from "./presentation-context";
 import { stampInitialTheme } from "./theme";
@@ -27,6 +28,8 @@ export function mountFieldApp(opts: {
 }): void {
   setHost(opts.host);
   setRendererLogger(opts.host.logger);
+  // VT-4a — nothing dies silently: this page's uncaught errors and unhandled rejections reach the log
+  hearPageFaults(opts.host.logger);
   performance.mark("vf:renderer:entry");
 
   const machine = createBootMachine({

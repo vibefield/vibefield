@@ -147,6 +147,7 @@ import {
   shellIdentity,
   spawnPersonPathChild,
 } from "./login-shell";
+import { hearMainFaults } from "./main-faults";
 import {
   CHAT_NIGHT_FLAG,
   captureProbeHostResolverRules,
@@ -3537,6 +3538,8 @@ if (!hasInstanceLock) {
       mode: MODE,
       electronVersion: process.versions.electron ?? "unknown",
     });
+    // VT-4a — nothing dies silently: an error nobody caught and the runtime's own warnings reach main's log
+    hearMainFaults(logger);
     if (SMOKE_PROFILE !== null) {
       logger.info("desktop.smoke.profile", "A smoke-like run has its own Electron profile", {
         userData: SMOKE_PROFILE.userData,

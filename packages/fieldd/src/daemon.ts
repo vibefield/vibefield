@@ -291,6 +291,7 @@ import {
   noteSocketAliasParent,
   splitPathList,
 } from "./boot-env";
+import { keepCrashNote, takeCrashNote } from "./crash-note";
 import type { FielddCustody } from "./custody-handoff";
 import { CustodyMarks } from "./custody-marks";
 import { runStopSteps, type StopStep, stopFailure } from "./daemon-stop";
@@ -311,6 +312,7 @@ import { EgressRoutes, type EgressRoutesPort, FloorEgress, resolveEgressPath } f
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
+import { hearFloorExits } from "./floor-exit";
 import { platformOsWaits } from "./floor-os-waits";
 import {
   FREEWAY_SERVE_ID,
@@ -1095,6 +1097,49 @@ export async function bootstrap(
     return loggingClosePromise;
   };
   logger.info("fieldd.lifecycle.boot_started", "fieldd boot started");
+  // VT-4a — nothing dies silently (`crash-note.ts`, `floor-exit.ts`). The previous fieldd's last error, if nobody
+  // caught it, is said here once; this fieldd keeps a note the same way; and a floor this process starts has the
+  // way it ended recorded, which nothing read before.
+  const crashNotePath = join(config.dataDir, ...LAYOUT.FIELDD_CRASH_NOTE);
+  const previousCrash = takeCrashNote(crashNotePath);
+  if (previousCrash !== null) {
+    logger.error(
+      "fieldd.lifecycle.previous_crash",
+      "The previous fieldd ended on an error nobody caught",
+      undefined,
+      {
+        at: previousCrash.at,
+        previousPid: previousCrash.pid,
+        previousBootId: previousCrash.bootId,
+        origin: previousCrash.origin,
+        errorName: previousCrash.name,
+        errorMessage: previousCrash.message,
+        stack: previousCrash.stack,
+      },
+    );
+  }
+  const forgetCrashNote = keepCrashNote(crashNotePath, bootId);
+  const stopHearingFloor = hearFloorExits((exit) => {
+    const fields = { floorPid: exit.pid, code: exit.code, signal: exit.signal, at: exit.at };
+    if (exit.code === 0) {
+      logger.info(
+        "fieldd.native_supervisor.floor_exited",
+        "The native floor this fieldd started exited",
+        fields,
+      );
+    } else {
+      logger.warn(
+        "fieldd.native_supervisor.floor_exited",
+        "The native floor this fieldd started ended with a failure code or a signal",
+        fields,
+      );
+    }
+  });
+  /** A fieldd that stopped keeps no crash note and hears no more floors. */
+  const endDeathWatches = (): void => {
+    forgetCrashNote();
+    stopHearingFloor();
+  };
   // OB custody — each level says which it is, once per boot (and never what it was handed)
   logger.info(
     "fieldd.custody.level",
@@ -9593,6 +9638,7 @@ export async function bootstrap(
         plugins.dispose();
         diagnosticsService.dispose();
         vitalsService.dispose();
+        endDeathWatches();
         native.close();
         await artifactDrain;
         await madeAppsDrain;
@@ -9683,6 +9729,7 @@ export async function bootstrap(
       plugins.dispose();
       diagnosticsService.dispose();
       vitalsService.dispose();
+      endDeathWatches();
       native.close();
       await artifactDrain;
       await madeAppsDrain;
@@ -10447,7 +10494,14 @@ export async function bootstrap(
             ["settings", () => settings.dispose()],
             ["plugins", () => plugins.dispose()],
             ["diagnostics", () => diagnosticsService.dispose()],
-            ["vitals", () => vitalsService.dispose()],
+            [
+              "vitals",
+              () => {
+                vitalsService.dispose();
+                // VT-4a — a fieldd that stopped keeps no crash note and hears no more floors
+                endDeathWatches();
+              },
+            ],
             // AL-8a — the floor records this stop planned, never as a crash
             ["native-detach", () => native.detach()],
             ["native-close", () => native.close()],
@@ -10557,6 +10611,7 @@ export async function bootstrap(
     detachHealthSources?.();
     diagnostics?.dispose();
     vitals?.dispose();
+    endDeathWatches();
     await pluginUpdatesForCleanup?.dispose();
     native.close(); // rollback: release the mgmt client slot
     laneLinkForCleanup?.close(); // item 206's boot half — nor a link dialing on its back-off

@@ -23,6 +23,7 @@
   "SHELL_LAST_EXIT": ["fieldd", "shell-last-exit.json"],
   "SHELL_EXIT": ["fieldd", "shell-exit.json"],
   "MANAGER_EXIT": ["fieldd", "manager-exit.json"],
+  "FIELDD_CRASH_NOTE": ["fieldd", "crash-note.json"],
   "SHELL_RELAUNCHES": ["fieldd", "shell-relaunches.json"],
   "TERMINAL_BINDINGS_FILE": ["fieldd", "terminal-bindings.json"],
   "TERMINAL_RELEASES_FILE": ["fieldd", "terminal-releases.json"],

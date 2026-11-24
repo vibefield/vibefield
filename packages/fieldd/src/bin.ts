@@ -77,6 +77,8 @@ async function main(): Promise<void> {
   // must not carry it
   const { bootstrap } = await import("./daemon");
   const { exitAfterStop } = await import("./daemon-stop");
+  // VT-4a — a floor this entry starts is watched for how it ends (`floor-exit.ts`)
+  const { watchFloorExit } = await import("./floor-exit");
   // UA-1 — a supervisor-spawned fieldd receives the resolved USER root
   // explicitly; a standalone/headless run receives the VibeField ROOT (or the
   // platform default, mirroring config.rs default_data_dir() exactly — UA-0)
@@ -225,7 +227,11 @@ async function main(): Promise<void> {
               env: nativeEnv(),
               pairing: sealedFloor.pairing,
               verifyNativeChild: sealedFloor.verifyNativeChild,
-              spawn: (file, args, options) => spawn(file, args, options),
+              spawn: (file, args, options) => {
+                const child = spawn(file, args, options);
+                watchFloorExit(child);
+                return child;
+              },
             });
             handed = spawned.handed;
             void spawned.handed.then((outcome) => {
@@ -249,6 +255,7 @@ async function main(): Promise<void> {
             // the launch chain without making fieldd its collector.
             stdio: ["ignore", "ignore", "inherit"],
           });
+          watchFloorExit(child);
           child.unref();
           return child.pid;
         };
