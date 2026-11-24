@@ -25,6 +25,7 @@
   "MANAGER_EXIT": ["fieldd", "manager-exit.json"],
   "FIELDD_CRASH_NOTE": ["fieldd", "crash-note.json"],
   "VITALS_CAPTURES_DIR": ["vitals", "captures"],
+  "VITALS_INCIDENTS_DIR": ["fieldd", "vitals", "incidents"],
   "SHELL_RELAUNCHES": ["fieldd", "shell-relaunches.json"],
   "TERMINAL_BINDINGS_FILE": ["fieldd", "terminal-bindings.json"],
   "TERMINAL_RELEASES_FILE": ["fieldd", "terminal-releases.json"],

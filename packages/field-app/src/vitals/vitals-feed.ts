@@ -1,6 +1,13 @@
 import { DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1 } from "@vibefield/contracts/diagnostics";
 import { VitalsDeltaV1, VitalsSnapshotV1 } from "@vibefield/contracts/vitals";
 import type { VitalsCapturesDoor } from "./vitals-captures-door";
+import {
+  EMPTY_INCIDENTS,
+  type VitalsIncidentsState,
+  withIncidentList,
+  withIncidentMissing,
+  withIncidentWhole,
+} from "./vitals-incidents";
 import { applyDelta, EMPTY_VITALS, modelFromSnapshot, type VitalsModel } from "./vitals-model";
 
 // VT-2 (track VT, 2026-11-24) — THE VITALS WINDOW'S FEED, PURE. The window holds no daemon token and asks for
@@ -14,13 +21,18 @@ export type VitalsFeedEvent =
   | { kind: "vitals"; event: "snapshot" | "delta"; payload: unknown }
   | { kind: "vitals"; event: "down" }
   | { kind: "logs"; origin: VitalsLogOrigin; event: "snapshot" | "delta"; payload: unknown }
-  | { kind: "logs"; origin: VitalsLogOrigin; event: "down" };
+  | { kind: "logs"; origin: VitalsLogOrigin; event: "down" }
+  // VT-4b — one incident whole, read by main for the window, or the id it could not read
+  | { kind: "incident"; event: "snapshot"; payload: unknown }
+  | { kind: "incident"; event: "down"; id?: string };
 
 /** The door the window's host hands the view: one stream, and a way to stop hearing it. */
 export interface VitalsDoor {
   subscribe(handler: (event: VitalsFeedEvent) => void): () => void;
   /** VT-5 — the armed captures' door; absent where the host offers none (a plate, an older preload) */
   captures?: VitalsCapturesDoor;
+  /** VT-4b — ask main for one incident whole; its answer arrives on the stream. Absent, nothing is asked. */
+  openIncident?(id: string): void;
 }
 
 export interface VitalsLogLine {
@@ -44,9 +56,16 @@ export interface VitalsFeedState {
   logs: readonly VitalsLogLine[];
   /** frames dropped because they did not parse */
   rejected: number;
+  /** VT-4b — the kept incidents, and the few read whole */
+  incidents: VitalsIncidentsState;
 }
 
-export const EMPTY_FEED: VitalsFeedState = { model: EMPTY_VITALS, logs: [], rejected: 0 };
+export const EMPTY_FEED: VitalsFeedState = {
+  model: EMPTY_VITALS,
+  logs: [],
+  rejected: 0,
+  incidents: EMPTY_INCIDENTS,
+};
 
 interface RecordLike {
   time: number;
@@ -95,6 +114,12 @@ function mergeLines(
 
 export function reduceFeed(state: VitalsFeedState, event: VitalsFeedEvent): VitalsFeedState {
   const reject = (): VitalsFeedState => ({ ...state, rejected: state.rejected + 1 });
+  if (event.kind === "incident") {
+    if (event.event === "down")
+      return { ...state, incidents: withIncidentMissing(state.incidents, event.id) };
+    const incidents = withIncidentWhole(state.incidents, event.payload);
+    return incidents === null ? reject() : { ...state, incidents };
+  }
   if (event.kind === "vitals") {
     if (event.event === "down") {
       // what was measured stays drawn; the state line says the door is shut
@@ -102,10 +127,25 @@ export function reduceFeed(state: VitalsFeedState, event: VitalsFeedEvent): Vita
     }
     if (event.event === "snapshot") {
       const parsed = VitalsSnapshotV1.safeParse(event.payload);
-      return parsed.success ? { ...state, model: modelFromSnapshot(parsed.data) } : reject();
+      return parsed.success
+        ? {
+            ...state,
+            model: modelFromSnapshot(parsed.data),
+            // VT-4b — a fieldd before incidents carries none, and none are shown
+            incidents: withIncidentList(state.incidents, parsed.data.incidents ?? []),
+          }
+        : reject();
     }
     const parsed = VitalsDeltaV1.safeParse(event.payload);
-    return parsed.success ? { ...state, model: applyDelta(state.model, parsed.data) } : reject();
+    if (!parsed.success) return reject();
+    const incidents = parsed.data.incidents;
+    return {
+      ...state,
+      model: applyDelta(state.model, parsed.data),
+      ...(incidents !== undefined
+        ? { incidents: withIncidentList(state.incidents, incidents) }
+        : {}),
+    };
   }
   if (event.event === "down") return state;
   if (event.event === "snapshot") {

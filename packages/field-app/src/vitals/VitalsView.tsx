@@ -20,7 +20,15 @@ import {
   xOf,
 } from "./trace-geometry";
 import { VitalsCapture, type VitalsCaptureProps } from "./VitalsCapture";
+import {
+  IncidentLine,
+  IncidentList,
+  IncidentMarks,
+  IncidentsButton,
+  useIncidentLens,
+} from "./VitalsIncidents";
 import { lineTone, type VitalsLogLine } from "./vitals-feed";
+import { EMPTY_INCIDENTS, type VitalsIncidentsState } from "./vitals-incidents";
 import {
   groupRows,
   groupSeries,
@@ -80,6 +88,12 @@ export interface VitalsViewProps {
   initialWidth?: number;
   /** VT-5 — the capture control's state and intents; absent, the control is not drawn */
   capture?: VitalsCaptureProps;
+  /** VT-4b — the kept incidents, and the few main read whole; absent, none */
+  incidents?: VitalsIncidentsState;
+  /** VT-4b — ask the host for one incident whole (it answers through `incidents`) */
+  onOpenIncident?: (id: string) => void;
+  /** VT-4b — an incident opened, with its list, before anyone presses (the catalog's plate and the tests) */
+  initialIncident?: string;
 }
 
 interface Span {
@@ -104,11 +118,17 @@ function useMeasuredWidth(initial: number): [RefObject<HTMLDivElement | null>, n
 }
 
 export function VitalsView({
-  model,
+  model: live,
   logs,
   initialWidth = 720,
   capture,
+  incidents = EMPTY_INCIDENTS,
+  onOpenIncident,
+  initialIncident,
 }: VitalsViewProps): ReactElement {
+  // VT-4b — an opened incident holds the lanes at its moment, and one older than them draws its own minute
+  const lens = useIncidentLens(live, incidents, onOpenIncident, initialIncident);
+  const model = lens.model;
   const [held, setHeld] = useState<number | null>(null);
   const [span, setSpan] = useState<Span | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -116,10 +136,12 @@ export function VitalsView({
   const drag = useRef<{ x: number; time: number } | null>(null);
 
   const newest = model.samples.at(-1)?.time ?? null;
+  const kept = lens.span;
   const scale = useMemo<{ from: number; to: number } | null>(() => {
+    if (kept !== null) return kept;
     if (newest === null) return null;
     return { from: newest - VITALS.SNAPSHOT_SAMPLES * model.intervalMs, to: newest };
-  }, [newest, model.intervalMs]);
+  }, [kept, newest, model.intervalMs]);
 
   // a row that ended is let go: nothing stays chosen that the list no longer shows
   useEffect(() => {
@@ -136,7 +158,8 @@ export function VitalsView({
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const sample = sampleAt(model, held);
+  const moment = held ?? lens.moment;
+  const sample = sampleAt(model, moment);
   const groups = useMemo(() => groupRows(model, sample), [model, sample]);
   const total = vibeFieldTotal(groups);
   const cpuByKey = useMemo(() => processSeries(model, "cpu"), [model]);
@@ -207,7 +230,7 @@ export function VitalsView({
       <aside className="vf-vitals__list" aria-label={VITALS_WORDS.title}>
         <div className="vf-vitals__list-head">
           <span className="vf-vitals__when">
-            {held === null || sample === null
+            {moment === null || sample === null
               ? VITALS_WORDS.now
               : VITALS_WORDS.at(clockWords(sample.time))}
           </span>
@@ -249,11 +272,21 @@ export function VitalsView({
       <section className="vf-vitals__main">
         <div className="vf-vitals__top">
           {capture === undefined ? null : <VitalsCapture {...capture} />}
+          {/* VT-4b — the kept incidents' count, at the left of the state, never inside its words */}
+          <IncidentsButton
+            count={incidents.list.length}
+            open={lens.listOpen}
+            onToggle={lens.toggleList}
+          />
           <div className="vf-vitals__state">
             <span className="vf-vitals__dot" data-recording={state.recording ? "" : undefined} />
             <span>{state.words}</span>
           </div>
         </div>
+        {lens.listOpen ? (
+          <IncidentList list={incidents.list} opened={lens.opened?.id ?? null} onOpen={lens.open} />
+        ) : null}
+        <IncidentLine opened={lens.opened} fromKept={lens.fromKept} />
         <div
           className="vf-vitals__lanes"
           ref={lanesRef}
@@ -294,7 +327,8 @@ export function VitalsView({
             </span>
           </div>
           <LogStrip logs={logs} scale={scale} width={width} />
-          <Overlay scale={scale} width={width} held={held} span={span} />
+          <IncidentMarks list={incidents.list} scale={scale} width={width} />
+          <Overlay scale={scale} width={width} held={moment} span={span} />
         </div>
         <LogLines lines={shownLogs} />
       </section>

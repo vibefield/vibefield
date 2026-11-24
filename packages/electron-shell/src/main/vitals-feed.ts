@@ -1,5 +1,6 @@
 import { LOG_STREAMS } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import { VitalsIncidentAsks } from "./vitals-incidents";
 
 // VT-2 (track VT, 2026-11-24) — THE VITALS WINDOW'S FEED, main's half. The window holds no daemon token and asks
 // for nothing: while it is open, main hears fieldd's vitals door and the two log doors on its OWN connection and
@@ -21,7 +22,8 @@ export interface VitalsFeedPort {
   postMessage(message: string): void;
   start(): void;
   close(): void;
-  on(event: "close", listener: () => void): unknown;
+  /** `close`, and (VT-4b) `message`: the window's one ask, an incident to open. A `close` carries no event. */
+  on(event: "close" | "message", listener: (event?: { data: unknown }) => void): unknown;
 }
 
 type FeedEventKind = "snapshot" | "delta";
@@ -35,6 +37,8 @@ export interface VitalsFielddClient {
     params: unknown,
     onEvent: (payload: unknown, kind: FeedEventKind) => void,
   ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
+  /** VT-4b — one request, for an incident the window opened (`vitals.incidents.get`) */
+  request?(method: string, params?: unknown): Promise<unknown>;
 }
 
 /** What the feed reads of main's own log door (`ElectronLocalDiagnostics`). */
@@ -77,6 +81,12 @@ export class VitalsFeedSession {
   private shellDispose: (() => void) | null = null;
   private stopHearingFieldd: (() => void) | null = null;
   private retry: unknown = null;
+  /** VT-4b — the fieldd client now, which reads an incident the window opens */
+  private client: VitalsFielddClient | null = null;
+  private readonly asks = new VitalsIncidentAsks(
+    (id) => this.client?.request?.("vitals.incidents.get", { id }) ?? null,
+    (message) => this.post(message),
+  );
 
   constructor(
     private readonly port: VitalsFeedPort,
@@ -89,6 +99,7 @@ export class VitalsFeedSession {
   }
 
   start(): void {
+    this.port.on("message", (event) => this.asks.hear(event?.data));
     this.port.on("close", () => this.close());
     this.port.start();
     void this.attachShellLogs();
@@ -163,6 +174,7 @@ export class VitalsFeedSession {
     if (this.closed) return;
     this.generation += 1;
     const generation = this.generation;
+    this.client = client;
     this.releaseFieldd();
     if (client === null) {
       this.sayFielddDown();

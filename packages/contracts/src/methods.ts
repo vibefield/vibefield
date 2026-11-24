@@ -527,6 +527,22 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // VT-4b — incidents (`vitals-incidents.ts`): one kept incident whole, read by whoever reads the census; and what
+  // Electron main alone saw die or stop responding. Each report is one event, so a repeat is a second one.
+  defineMethod({
+    surface: "product",
+    method: "vitals.incidents.get",
+    scope: "vitals.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "vitals.incident.report",
+    scope: "vitals.report",
+    idempotent: false,
+    locality: "local",
+  }),
 
   // M2 — management channel (auth = D8 pairing hello; no scope system on this surface)
   defineMethod({

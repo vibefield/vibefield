@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { VITALS } from "./registries";
+import { VitalsIncidentSummaryV1 } from "./vitals-incidents";
 
 // VT-1 (track VT, 2026-11-24; `draft/thinking-vitals.md`, DESIGN.md §8 "Vitals") — how every process of VibeField is
 // doing. Three kinds of evidence, kept apart and joined by time (LOG-1: health and metrics are their own class, never
@@ -290,6 +291,12 @@ export const VitalsSnapshotV1 = z
     processes: z.array(VitalsProcessV1).max(VITALS.FLOOR_ROWS_MAX),
     samples: z.array(VitalsSampleV1).max(VITALS.SNAPSHOT_SAMPLES),
     observer: z.object({ meterCpu: z.number().nonnegative() }).passthrough(),
+    // VT-4b — the kept incidents' summaries, newest first (`vitals-incidents.ts`); left out by a fieldd before them.
+    // Lazy, as that file's references to this one are: the two load each other, whichever is imported first.
+    incidents: z
+      .array(z.lazy(() => VitalsIncidentSummaryV1))
+      .max(VITALS.INCIDENTS_MAX)
+      .optional(),
   })
   .passthrough();
 export type VitalsSnapshotV1 = z.infer<typeof VitalsSnapshotV1>;
@@ -303,6 +310,11 @@ export const VitalsDeltaV1 = z
     processes: z.array(VitalsProcessV1).max(VITALS.FLOOR_ROWS_MAX).optional(),
     gone: z.array(key()).max(VITALS.FLOOR_ROWS_MAX).optional(),
     sample: VitalsSampleV1.optional(),
+    // VT-4b — every kept incident's summary again, newest first, whenever one was kept, ended or aged out
+    incidents: z
+      .array(z.lazy(() => VitalsIncidentSummaryV1))
+      .max(VITALS.INCIDENTS_MAX)
+      .optional(),
   })
   .passthrough();
 export type VitalsDeltaV1 = z.infer<typeof VitalsDeltaV1>;
@@ -395,3 +407,5 @@ export function vitalsKey(pid: number, startedAt: number): string {
 
 // VT-5 — the armed captures, on this same subpath.
 export * from "./vitals-captures";
+// VT-4b — incidents ride the same subpath.
+export * from "./vitals-incidents";

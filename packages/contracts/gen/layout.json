@@ -105,6 +105,11 @@
     "vitals",
     "captures"
   ],
+  "VITALS_INCIDENTS_DIR": [
+    "fieldd",
+    "vitals",
+    "incidents"
+  ],
   "SHELL_RELAUNCHES": [
     "fieldd",
     "shell-relaunches.json"

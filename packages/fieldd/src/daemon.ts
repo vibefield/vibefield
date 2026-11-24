@@ -487,6 +487,7 @@ import { TRANSCRIPT_SERVE_ID, TranscriptServeDriver } from "./transcripts/serve"
 import { TranscriptHostSupervisor, type TranscriptHostTimings } from "./transcripts/supervisor";
 import { SparkTranscriptTickets } from "./transcripts/tickets";
 import { userMe } from "./user-me";
+import { VitalsIncidents } from "./vitals-incidents";
 import { VitalsProfiler } from "./vitals-profile";
 import { type VitalsNamedProcess, VitalsService } from "./vitals-service";
 import { mcpServerVitalsRows, pluginProcessVitalsRows, terminalVitalsRows } from "./vitals-sources";
@@ -1121,8 +1122,19 @@ export async function bootstrap(
       },
     );
   }
+  // VT-4b — the incident keeper (`vitals-incidents.ts`): read from disk now, so the previous crash and a floor's
+  // exit that come before the recorder are held for it; attached to the recorder once its switch is read.
+  const vitalsIncidents = new VitalsIncidents({
+    dir: join(config.dataDir, ...LAYOUT.VITALS_INCIDENTS_DIR),
+    logger: logger.child({ component: "vitals.incidents" }),
+  });
+  vitalsIncidents.load();
+  if (previousCrash !== null) vitalsIncidents.previousCrash(previousCrash);
+  /** VT-4b — what follows fieldd's supervised children for incidents, undone with the death watches */
+  const unfollowChildren: Array<() => void> = [];
   const forgetCrashNote = keepCrashNote(crashNotePath, bootId);
   const stopHearingFloor = hearFloorExits((exit) => {
+    vitalsIncidents.floorExited(exit);
     const fields = { floorPid: exit.pid, code: exit.code, signal: exit.signal, at: exit.at };
     if (exit.code === 0) {
       logger.info(
@@ -1142,6 +1154,8 @@ export async function bootstrap(
   const endDeathWatches = (): void => {
     forgetCrashNote();
     stopHearingFloor();
+    for (const unfollow of unfollowChildren.splice(0)) unfollow();
+    vitalsIncidents.stop();
   };
   // OB custody — each level says which it is, once per boot (and never what it was handed)
   logger.info(
@@ -1231,6 +1245,8 @@ export async function bootstrap(
     },
     ...(config.nativeSpawner !== undefined ? { spawnNative: config.nativeSpawner } : {}),
     killNative: (pid, signal) => {
+      // VT-4b — a floor this fieldd signals ends because it was asked to: not an incident
+      vitalsIncidents.noteSignalled(pid);
       try {
         return process.kill(pid, signal);
       } catch {
@@ -2769,6 +2785,12 @@ export async function bootstrap(
       logger: logger.child({ component: "vitals" }),
     });
     vitalsProfiler.register(api);
+    // VT-4b — incidents ride the recorder's doors, and fieldd's own children are followed for theirs
+    vitalsService.useIncidents(vitalsIncidents);
+    vitalsIncidents.register(api);
+    if (rosettad) unfollowChildren.push(vitalsIncidents.followChild(rosettad, "rosettad"));
+    unfollowChildren.push(vitalsIncidents.followChild(workspace.supervisor, "files-host"));
+    unfollowChildren.push(vitalsIncidents.followChild(transcriptHost, "transcripts-host"));
     // VT-2b (VT-D2) — the recorder's switch is an app preference (Settings → Diagnostics, "Record vitals"). It is
     // read before the first attach, so a recorder the person turned off never reads the floor's backlog, and again
     // at every change: a change made here, one merged from another of the person's desktops, and an undo of either
@@ -2790,6 +2812,8 @@ export async function bootstrap(
       if (event.section === "app" || event.section === "settings") void followVitalsSwitch();
     });
     await followVitalsSwitch();
+    // VT-4b — after the switch is read, so a recorder turned off keeps no incident held since the boot began
+    vitalsIncidents.attach(vitalsService);
     await vitalsService.start();
     shellApi = api;
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));

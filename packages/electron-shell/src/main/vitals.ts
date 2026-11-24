@@ -8,6 +8,7 @@ import {
   type VitalsFielddClient,
   type VitalsShellLogs,
 } from "./vitals-feed";
+import { ShellIncidentReporter } from "./vitals-incidents";
 import { MainOwnReporter } from "./vitals-own";
 import {
   type ShellRendererRole,
@@ -85,6 +86,18 @@ export function installVitals(opts: {
   });
 
   const own = new MainOwnReporter({ client: () => fieldd, logger });
+  // VT-4b — what main alone sees die or stop responding, said to fieldd as incidents (`vitals-incidents.ts`)
+  const incidents = new ShellIncidentReporter({ client: () => fieldd, logger });
+  const nameOf = (contents: WebContents) => (): { role: string; pid: number | null } => {
+    const pid = rendererPid(contents);
+    if (contents === opts.primary()?.webContents) return { role: "window", pid };
+    if (pid !== null && pid === windowHost.rendererPid()) return { role: "vitals-window", pid };
+    return { role: opts.isBrowserPane(contents) ? "browser-pane" : "other", pid };
+  };
+  const stopHearingMain = incidents.listen(process);
+  const leaving = (): void => incidents.leave();
+  const onChildGone = (_event: unknown, details: Electron.Details): void =>
+    incidents.childGone(details);
 
   const windowHost = createVitalsWindowHost({
     mode: opts.mode,
@@ -135,10 +148,15 @@ export function installVitals(opts: {
     contents.on("did-finish-load", poke);
     contents.on("render-process-gone", poke);
     contents.once("destroyed", poke);
+    incidents.watchContents(contents, nameOf(contents));
   };
   app.on("web-contents-created", onContents);
   app.on("child-process-gone", poke);
   app.on("browser-window-created", poke);
+  app.on("child-process-gone", onChildGone);
+  app.on("will-quit", leaving);
+  for (const contents of webContents.getAllWebContents())
+    incidents.watchContents(contents, nameOf(contents));
 
   return {
     open: () => {
@@ -150,11 +168,16 @@ export function installVitals(opts: {
       fieldd = client;
       for (const listener of fielddListeners) listener(client);
       if (client !== null) roster.fresh();
+      if (client !== null) incidents.flush();
     },
     dispose: () => {
       app.off("web-contents-created", onContents);
       app.off("child-process-gone", poke);
       app.off("browser-window-created", poke);
+      app.off("child-process-gone", onChildGone);
+      app.off("will-quit", leaving);
+      stopHearingMain();
+      incidents.leave();
       roster.dispose();
       own.stop();
       captures.dispose();

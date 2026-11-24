@@ -1,5 +1,11 @@
 import type { VitalsLogLine } from "../vitals/vitals-feed";
 import {
+  EMPTY_INCIDENTS,
+  type VitalsIncidentSummaryV1,
+  type VitalsIncidentsState,
+  type VitalsIncidentV1,
+} from "../vitals/vitals-incidents";
+import {
   modelFromSnapshot,
   type VitalsModel,
   type VitalsProcessV1,
@@ -238,4 +244,75 @@ export function vitalsFixtureUnavailable(): VitalsModel {
     samples: [],
     observer: { meterCpu: 0 },
   });
+}
+
+// -- VT-4b: incidents ----------------------------------------------------------------------------------------------
+
+/** The plates' kept incidents: fieldd's held loop in its bad ten seconds and the desk's window that stopped
+ * responding, both inside the lanes, and rosettad's exit two days before, read whole from the minute kept with it. */
+export const VITALS_FIXTURE_OLD_INCIDENT = "mwrfpleo-0b0e0d0a";
+
+export function vitalsFixtureIncidents(): VitalsIncidentsState {
+  const start = VITALS_FIXTURE_END - (COUNT - 1) * INTERVAL;
+  const at = (second: number): number => start + second * INTERVAL;
+  const oldAt = VITALS_FIXTURE_END - 2 * 24 * 60 * 60 * 1_000;
+  const snapshot = vitalsFixtureSnapshot();
+  const fieldd = snapshot.processes.find((process) => process.role === "fieldd");
+  const desk = snapshot.processes.find((process) => process.role === "window");
+  const rosettad = snapshot.processes.find((process) => process.role === "rosettad");
+  const list: VitalsIncidentSummaryV1[] = [
+    {
+      id: "mwtxk1q8-5c1e0a9b",
+      kind: "loop-held",
+      // the first held reading covers the second before it
+      at: at(PEAK.from - 1),
+      endedAt: at(PEAK.to),
+      subject: {
+        group: "fieldd",
+        role: "fieldd",
+        pid: 4212,
+        ...(fieldd ? { key: fieldd.key } : {}),
+      },
+      detail: { peak: 0.99 },
+      complete: true,
+    },
+    {
+      id: "mwtxj0c0-77aa00ff",
+      kind: "unresponsive",
+      at: at(150) + 300,
+      endedAt: at(150) + 4_500,
+      subject: { group: "shell", role: "window", pid: 4133, ...(desk ? { key: desk.key } : {}) },
+      complete: true,
+    },
+    {
+      id: VITALS_FIXTURE_OLD_INCIDENT,
+      kind: "exit",
+      at: oldAt,
+      subject: {
+        group: "fieldd",
+        role: "rosettad",
+        pid: 4244,
+        ...(rosettad ? { key: rosettad.key } : {}),
+      },
+      detail: { code: 101 },
+      complete: true,
+    },
+  ];
+  // the old one's minute: thirty seconds of the plate's readings on each side, moved to its own moment
+  const shift = oldAt - at(130);
+  const kept = snapshot.samples.slice(100, 161).map((sample) => ({
+    ...sample,
+    time: sample.time + shift,
+  }));
+  const keys = new Set(kept.flatMap((sample) => sample.points.map((point) => point.key)));
+  const old = list[2] as VitalsIncidentSummaryV1;
+  const whole: VitalsIncidentV1 = {
+    ...old,
+    v: 1,
+    intervalMs: INTERVAL,
+    memory: "footprint",
+    processes: snapshot.processes.filter((process) => keys.has(process.key)),
+    samples: kept,
+  };
+  return { ...EMPTY_INCIDENTS, list, wholes: new Map([[whole.id, whole]]) };
 }

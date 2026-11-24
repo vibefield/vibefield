@@ -78,8 +78,8 @@ declare global {
 
   interface Window {
     vibefieldStudio: StudioRendererApi;
-    /** VT-2 — the Vitals window's one door (its preload, `vitals/vitals-preload.ts`): a stream to read. Present in
-     * that window alone. */
+    /** VT-2 — the Vitals window's one door (its preload, `vitals/vitals-preload.ts`): a stream to read, (VT-5) the
+     * captures' door, and (VT-4b) an incident's id to open. Present in that window alone. */
     vibefieldVitals: VitalsDoor;
     vibefieldStudioAppearance: ProductAppearanceRendererApi;
     vibefield: {

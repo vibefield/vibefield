@@ -172,6 +172,13 @@ pub mod vitals {
     pub const LABEL_MAX: u64 = 80;
     pub const METER_BUDGET_US: u64 = 5000;
     pub const METHOD_MAX: u64 = 96;
+    pub const INCIDENTS_MAX: u64 = 50;
+    pub const INCIDENT_KEEP_MS: u64 = 1209600000;
+    pub const INCIDENT_SPAN_MS: u64 = 30000;
+    pub const INCIDENT_SAMPLES_MAX: u64 = 64;
+    pub const INCIDENT_MESSAGE_MAX: u64 = 240;
+    pub const LOOP_HELD_PERCENT: u64 = 95;
+    pub const LOOP_HELD_SAMPLES: u64 = 5;
 }
 
 /// AL-5 + AL-8a — the orphan bound: no session for IDLE_EXIT_MS, read every
@@ -363,6 +370,7 @@ pub mod layout {
     pub const MANAGER_EXIT: &[&str] = &["fieldd", "manager-exit.json"];
     pub const FIELDD_CRASH_NOTE: &[&str] = &["fieldd", "crash-note.json"];
     pub const VITALS_CAPTURES_DIR: &[&str] = &["vitals", "captures"];
+    pub const VITALS_INCIDENTS_DIR: &[&str] = &["fieldd", "vitals", "incidents"];
     pub const SHELL_RELAUNCHES: &[&str] = &["fieldd", "shell-relaunches.json"];
     pub const TERMINAL_RELEASES_FILE: &[&str] = &["fieldd", "terminal-releases.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
@@ -465,6 +473,7 @@ pub mod layout {
         ("MANAGER_EXIT", MANAGER_EXIT),
         ("FIELDD_CRASH_NOTE", FIELDD_CRASH_NOTE),
         ("VITALS_CAPTURES_DIR", VITALS_CAPTURES_DIR),
+        ("VITALS_INCIDENTS_DIR", VITALS_INCIDENTS_DIR),
         ("SHELL_RELAUNCHES", SHELL_RELAUNCHES),
         ("TERMINAL_RELEASES_FILE", TERMINAL_RELEASES_FILE),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),

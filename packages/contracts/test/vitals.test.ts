@@ -62,10 +62,12 @@ describe("VITALS — the census's bounds (first values)", () => {
 describe("the vitals doors are local, and the shell's alone", () => {
   const rows = METHODS.filter((m) => m.method.includes("vitals."));
 
-  it("names seven methods: five on fieldd's door, two on the floor's", () => {
+  it("names nine methods: seven on fieldd's door, two on the floor's", () => {
     expect(rows.map((m) => `${m.surface} ${m.method}`).sort()).toEqual([
       "mgmt native.vitals.subscribe",
       "mgmt native.vitals.watch.set",
+      "product vitals.incident.report",
+      "product vitals.incidents.get",
       "product vitals.own.report",
       "product vitals.profile.capture",
       "product vitals.query",
@@ -85,6 +87,9 @@ describe("the vitals doors are local, and the shell's alone", () => {
     expect(scopeOf("vitals.roster.set")).toBe("vitals.report");
     expect(scopeOf("vitals.own.report")).toBe("vitals.report");
     expect(scopeOf("vitals.profile.capture")).toBe("vitals.report");
+    // VT-4b — an incident is read as the census is, and reported by Electron main alone
+    expect(scopeOf("vitals.incidents.get")).toBe("vitals.read");
+    expect(scopeOf("vitals.incident.report")).toBe("vitals.report");
   });
 
   it("keeps both scopes from every phone, peer and plugin", () => {

@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "id": "mwtxk4b4-0a1b2c3d",
+  "kind": "exit",
+  "at": 1795478530000,
+  "subject": { "group": "fieldd", "role": "rosettad", "pid": 5230 },
+  "detail": { "code": 101 },
+  "complete": false,
+  "intervalMs": 1000,
+  "memory": "footprint",
+  "processes": [],
+  "samples": [],
+  "aNewerField": "kept by a tolerant reader"
+}

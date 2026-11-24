@@ -1590,7 +1590,14 @@ export const NATIVE_FLOOR_TICK = {
  *  - QUERY_MAX_POINTS / QUERY_PROCESSES_MAX — a query's bounds, steps a series and series an answer.
  *  - LABEL_MAX — a row's label, in characters.
  *  - METER_BUDGET_US — what one reading may cost before the floor says so in its log: half a percent of a core.
- *  - METHOD_MAX — VT-3: the longest method name a process's own vitals may carry as its slowest request. */
+ *  - METHOD_MAX — VT-3: the longest method name a process's own vitals may carry as its slowest request.
+ *  - INCIDENTS_MAX / INCIDENT_KEEP_MS — VT-4b (VT-D11 A): fieldd keeps the newest 50 incidents, for 14 days, on this
+ *    device alone (`vitals-incidents.ts`).
+ *  - INCIDENT_SPAN_MS — the readings an incident keeps on each side of its moment: the half minute before and the
+ *    half minute after. INCIDENT_SAMPLES_MAX bounds them, with room over one a second.
+ *  - INCIDENT_MESSAGE_MAX — an incident's bounded words (an error's message), in characters.
+ *  - LOOP_HELD_PERCENT / LOOP_HELD_SAMPLES — a loop "held": its busy share at or over 95% for five readings in a row,
+ *    one incident an episode. A percent and not a share, so the floor's generated twin stays an integer. */
 export const VITALS = {
   SAMPLE_INTERVAL_MS: 1_000,
   FLOOR_RING_SAMPLES: 300,
@@ -1606,6 +1613,13 @@ export const VITALS = {
   LABEL_MAX: 80,
   METER_BUDGET_US: 5_000,
   METHOD_MAX: 96,
+  INCIDENTS_MAX: 50,
+  INCIDENT_KEEP_MS: 1_209_600_000,
+  INCIDENT_SPAN_MS: 30_000,
+  INCIDENT_SAMPLES_MAX: 64,
+  INCIDENT_MESSAGE_MAX: 240,
+  LOOP_HELD_PERCENT: 95,
+  LOOP_HELD_SAMPLES: 5,
 } as const;
 
 /** VT-3c (track VT, 2026-11-24; VT-D10 A) — the desk window's long frames, said by the page straight to fieldd
@@ -2663,6 +2677,9 @@ export const LAYOUT = {
    * main, and a CPU profile of fieldd, written by fieldd, all under the user's own root. The newest
    * `VITALS_CAPTURES.KEEP` are kept; nothing here is sent anywhere or bundled by itself. */
   VITALS_CAPTURES_DIR: ["vitals", "captures"],
+  /** VT-4b — fieldd's kept incidents (`fieldd/src/vitals-incidents.ts`): one file an incident, 0600, written whole,
+   * the newest `VITALS.INCIDENTS_MAX` for `VITALS.INCIDENT_KEEP_MS`. This device's alone: never synced or sent. */
+  VITALS_INCIDENTS_DIR: ["fieldd", "vitals", "incidents"],
   /** AL-11 — when fieldd relaunched the app after an unplanned exit (`ShellRelaunchLog`), so AL-D8's cap of 3 per
    * 10 min holds across a fieldd restart. */
   SHELL_RELAUNCHES: ["fieldd", "shell-relaunches.json"],

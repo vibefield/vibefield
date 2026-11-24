@@ -1,0 +1,20 @@
+{
+  "incidents": [
+    {
+      "id": "mwtxk4b4-0a1b2c3d",
+      "kind": "exit",
+      "at": 1795478530000,
+      "subject": { "group": "fieldd", "role": "rosettad", "pid": 5230 },
+      "detail": { "code": 101 },
+      "complete": false
+    },
+    {
+      "id": "mwtxhc00-77aa00ff",
+      "kind": "unresponsive",
+      "at": 1795478400000,
+      "endedAt": 1795478404200,
+      "subject": { "group": "shell", "role": "window", "pid": 4133 },
+      "complete": true
+    }
+  ]
+}

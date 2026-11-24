@@ -433,6 +433,8 @@ import {
   NativeVitalsSnapshot,
   NativeVitalsWatchSetParams,
   VitalsDeltaV1,
+  VitalsIncidentReportParams,
+  VitalsIncidentV1,
   VitalsOwnReportParams,
   VitalsQueryResult,
   VitalsRosterSetParams,
@@ -526,6 +528,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "vitals-capture-state": VitalsCaptureState,
   "vitals-profile-capture-result": VitalsProfileCaptureResult,
   "vitals-frame-count-reply": VitalsFrameCountReply,
+  // VT-4b — an incident whole (`.valid`, and `.pending`: the half minute after not yet recorded) and what Electron
+  // main reports (`.valid`, a GPU process gone; `.unresponsive`). The delta's `.incidents` rides its prefix above.
+  "vitals-incident": VitalsIncidentV1,
+  "vitals-incident-report-params": VitalsIncidentReportParams,
   "native-link-health": NativeLinkHealth,
   "system-native-restart-params": SystemNativeRestartParams,
   "system-native-restart-result": SystemNativeRestartResult,

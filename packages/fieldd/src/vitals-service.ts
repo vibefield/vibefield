@@ -5,6 +5,7 @@ import {
   NativeVitalsSnapshot,
   type VitalsDeltaV1,
   type VitalsGroup,
+  type VitalsIncidentSummaryV1,
   VitalsOwnReportParams,
   VitalsOwnV1,
   type VitalsPointV1,
@@ -55,6 +56,22 @@ export interface VitalsServiceOptions {
 }
 
 type Emit = (payload: unknown, kind?: "delta" | "snapshot") => void;
+
+/** VT-4b — what the recorder tells the incident keeper (`vitals-incidents.ts`), and asks of it. */
+export interface VitalsIncidentsPort {
+  /** a sample was recorded; `processOf` names a key it carries */
+  recorded(sample: VitalsSampleV1, processOf: (key: string) => VitalsProcessV1 | undefined): void;
+  /** every kept incident's summary, newest first */
+  summaries(): VitalsIncidentSummaryV1[];
+}
+
+/** VT-4b — what the recorder's ring holds over a span: the readings oldest first and every process they name. */
+export interface VitalsKept {
+  intervalMs: number;
+  memory: "footprint" | "resident";
+  samples: VitalsSampleV1[];
+  processes: VitalsProcessV1[];
+}
 
 /** What the last reading of a process said, kept to make the next one a rate. */
 interface Previous {
@@ -138,6 +155,8 @@ export class VitalsService {
   private wanted = true;
   /** how the floor subscription in hand is ended */
   private floorSub: (() => void) | null = null;
+  /** VT-4b — the incident keeper, once it is attached (`useIncidents`) */
+  private incidents: VitalsIncidentsPort | null = null;
 
   private readonly onConnected = (): void => {
     // the floor forgets its watch list with its process, and a link that came back may be a new floor's
@@ -508,6 +527,7 @@ export class VitalsService {
       this.ring.splice(0, this.ring.length - VITALS.RECORDER_RING_SAMPLES);
       this.forgetUnnamed();
     }
+    this.incidents?.recorded(recorded, (key) => this.known.get(key));
 
     const wasRecording = this.state === "recording";
     this.state = "recording";
@@ -654,7 +674,42 @@ export class VitalsService {
       processes,
       samples: kept.map((entry) => entry.sample),
       observer: { meterCpu: spanUs === 0 ? 0 : round(spentUs / spanUs, 5) },
+      ...(this.incidents !== null ? { incidents: this.incidents.summaries() } : {}),
     };
+  }
+
+  // -- VT-4b: what the incident keeper reads and says ------------------------------------------------------------
+
+  /** Attach the incident keeper: it hears every recorded sample, and the snapshot carries its summaries. */
+  useIncidents(port: VitalsIncidentsPort | null): void {
+    this.incidents = port;
+  }
+
+  /** Whether the recorder is on: the person's switch, while this service lives. Off, no incident is kept. */
+  get on(): boolean {
+    return this.wanted && !this.disposed;
+  }
+
+  /** The ring's readings in `[from, to]`, oldest first, and every process they name. */
+  kept(from: number, to: number): VitalsKept {
+    const samples: VitalsSampleV1[] = [];
+    const keys = new Set<string>();
+    for (const { sample } of this.ring) {
+      if (sample.time < from || sample.time > to) continue;
+      samples.push(sample);
+      for (const point of sample.points) keys.add(point.key);
+    }
+    const processes: VitalsProcessV1[] = [];
+    for (const key of keys) {
+      const process = this.known.get(key);
+      if (process !== undefined) processes.push(process);
+    }
+    return { intervalMs: this.intervalMs, memory: this.memory, samples, processes };
+  }
+
+  /** Tell every subscriber the kept incidents changed: the whole list of summaries again, bounded. */
+  emitIncidents(summaries: VitalsIncidentSummaryV1[]): void {
+    this.emit({ incidents: summaries.slice(0, VITALS.INCIDENTS_MAX) });
   }
 
   private subscribe(emit: Emit): { snapshot: VitalsSnapshotV1; dispose: () => void } {

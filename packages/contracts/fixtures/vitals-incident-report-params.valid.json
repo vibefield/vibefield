@@ -1,0 +1,7 @@
+{
+  "kind": "exit",
+  "role": "gpu",
+  "pid": 4127,
+  "at": 1795478530000,
+  "detail": { "reason": "crashed", "code": 11 }
+}

@@ -7,6 +7,8 @@ import {
   vitalsCaptureFixture,
 } from "./vitals-capture-fixtures";
 import {
+  VITALS_FIXTURE_OLD_INCIDENT,
+  vitalsFixtureIncidents,
   vitalsFixtureLogs,
   vitalsFixtureModel,
   vitalsFixtureOff,
@@ -25,6 +27,7 @@ export const VITALS_PLATE_STATES = [
   "waiting",
   "unavailable",
   "off",
+  "incident",
   ...VITALS_CAPTURE_FIXTURE_STATES,
 ] as const;
 export type VitalsPlateState = (typeof VITALS_PLATE_STATES)[number];
@@ -34,21 +37,27 @@ const MODELS = {
   waiting: vitalsFixtureWaiting,
   unavailable: vitalsFixtureUnavailable,
   off: vitalsFixtureOff,
+  // VT-4b — the recording plate with its list open and an incident two days old opened, drawn from its own minute
+  incident: vitalsFixtureModel,
 } as const;
 
 const isCapture = (state: VitalsPlateState): state is VitalsCaptureFixtureState =>
   (VITALS_CAPTURE_FIXTURE_STATES as readonly string[]).includes(state);
 
+// VT-4b — the recording and incident plates carry the kept incidents: their marks, and the button that lists them
 export function VitalsPlate({ state }: { readonly state: VitalsPlateState }): ReactElement {
   const capture = isCapture(state) ? vitalsCaptureFixture(state) : undefined;
   const model = isCapture(state) ? vitalsFixtureModel() : MODELS[state]();
+  const withIncidents = state === "recording" || state === "incident";
   return (
     <div className="vf-ds-vitals-plate" data-state={state}>
       <VitalsView
         model={model}
-        logs={state === "recording" || capture !== undefined ? vitalsFixtureLogs() : []}
+        logs={withIncidents || capture !== undefined ? vitalsFixtureLogs() : []}
         initialWidth={620}
         {...(capture === undefined ? {} : { capture })}
+        {...(withIncidents ? { incidents: vitalsFixtureIncidents() } : {})}
+        {...(state === "incident" ? { initialIncident: VITALS_FIXTURE_OLD_INCIDENT } : {})}
       />
     </div>
   );

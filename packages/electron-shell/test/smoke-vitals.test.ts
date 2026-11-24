@@ -43,7 +43,7 @@ function green(): VitalsRowFacts {
     loopReading: "Main · 3% busy",
     sparks: 8,
     lines: 4,
-    door: ["subscribe", "captures"],
+    door: ["subscribe", "captures", "openIncident"],
     product: "undefined",
     node: "undefined undefined",
   };
@@ -126,7 +126,7 @@ describe("VT-2 — the Godview smoke's VITALS row, judged", () => {
         node: "function object",
       }),
     ).toEqual([
-      "the page's door holds [subscribe, captures, request], expected subscribe and captures alone",
+      "the page's door holds [subscribe, captures, request], expected subscribe, captures and openIncident alone",
       "the page holds the product window's bridge",
       "the page sees Node (function object)",
     ]);

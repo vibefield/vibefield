@@ -62,8 +62,9 @@ class FakePort implements VitalsFeedPort {
   close(): void {
     this.closed = true;
   }
-  on(_event: "close", listener: () => void): void {
-    this.closeListener = listener;
+  // VT-4b — the window's ask (`message`) is VT-4b's own test's; this port hears its close alone
+  on(event: "close" | "message", listener: () => void): void {
+    if (event === "close") this.closeListener = listener;
   }
   /** the window's document went away */
   hangUp(): void {
@@ -626,13 +627,20 @@ describe("VT-2 — the Vitals window's preload", () => {
     expect(port.closed).toBe(true);
   });
 
-  it("exposes the stream and the captures' door, and nothing else the page can send with", () => {
+  it("exposes the stream, the captures' door and one ask, an incident's id, and nothing else the page can send with", () => {
     const preload = source("vitals/vitals-preload.ts");
     const exposed = preload.slice(preload.indexOf("exposeInMainWorld"));
     expect(exposed).toContain('"vibefieldVitals"');
-    // VT-5: the stream, and the captures' door (three asks on contracts' channels, checked in main)
-    expect(exposed.match(/^\s+\w+:/gm)).toHaveLength(2);
+    // VT-5: the stream, and the captures' door (three asks on contracts' channels, checked in main); VT-4b: the id of
+    // an incident to open, which main reads for the page
+    expect(exposed.match(/^\s+\w+:/gm)?.map((line) => line.trim())).toEqual([
+      "subscribe:",
+      "captures:",
+      "openIncident:",
+    ]);
     expect(exposed).toContain("captures: vitalsCaptureBridge(ipcRenderer)");
+    // the page never holds ipcRenderer itself: its one mention is the argument the captures' bridge closes over
+    expect(exposed.match(/ipcRenderer/g)).toHaveLength(1);
     expect(exposed).not.toContain("postMessage");
     expect(preload).not.toMatch(/ipcRenderer\.(send|invoke|sendSync|postMessage)/);
     const captures = source("vitals/vitals-capture-preload.ts");
@@ -642,9 +650,12 @@ describe("VT-2 — the Vitals window's preload", () => {
       "ipc.invoke(VITALS_CAPTURE_CHANNELS.reveal",
     ]);
     expect(captures).not.toMatch(/\.(send|sendSync|postMessage)\(/);
-    // the bridge holds no way back either
+    // the bridge's one way back is the incident ask, and it sends nothing that is not an incident's id
     const bridge = source("vitals/vitals-preload-bridge.ts");
-    expect(bridge).not.toContain("postMessage");
+    expect(bridge.match(/postMessage\?\.\(/g)).toHaveLength(1);
+    expect(bridge.slice(bridge.indexOf("openIncident(id: unknown)"))).toMatch(
+      /^openIncident\(id: unknown\): void \{\n\s+if \(typeof id !== "string" \|\| !INCIDENT_ID\.test\(id\)\) return;/,
+    );
     // the channel is contracts' own name for it (wall R6: no channel string is written outside contracts)
     expect(preload).toContain("ipcRenderer.on(VITALS_PORT_CHANNEL,");
     expect(source("main/vitals-window.ts")).toContain(

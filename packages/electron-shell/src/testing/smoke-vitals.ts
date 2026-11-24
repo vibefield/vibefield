@@ -33,7 +33,7 @@ export interface VitalsRowFacts {
   readonly sparks: number;
   /** the log lines drawn under the lanes */
   readonly lines: number;
-  /** the keys of the page's one door (the stream and, since VT-5, the captures') */
+  /** the keys of the page's one door (the stream; since VT-5, the captures'; since VT-4b, an incident to open) */
   readonly door: readonly string[];
   /** `typeof` the product window's bridge and Node's two globals, as this page sees them */
   readonly product: string;
@@ -73,6 +73,8 @@ export const VITALS_ROW_READ = `(() => {
 
 /** The state line of a recording census (field-app's `stateWords`, restated: testing reads the page, not its code). */
 export const VITALS_RECORDING = "Recording · every second";
+/** The page's one door, key by key (the preload's `exposeInMainWorld`). */
+export const VITALS_DOOR = ["subscribe", "captures", "openIncident"] as const;
 /** What the list says for a figure that was not measured. */
 const NOT_MEASURED = "–";
 
@@ -126,10 +128,11 @@ export function vitalsRowProblems(facts: VitalsRowFacts): string[] {
     }
   }
   if (facts.lines < 1) problems.push("no log line under the lanes");
-  // VT-5 (2026-11-24): the stream, and the captures' door (main checks every ask against its closed lists)
-  if (facts.door.join(",") !== "subscribe,captures")
+  // VT-5 (2026-11-24): the stream, and the captures' door (main checks every ask against its closed lists);
+  // VT-4b: and one thing it may send, an incident's id to open
+  if (facts.door.join(",") !== VITALS_DOOR.join(","))
     problems.push(
-      `the page's door holds [${facts.door.join(", ")}], expected subscribe and captures alone`,
+      `the page's door holds [${facts.door.join(", ")}], expected ${VITALS_DOOR.slice(0, -1).join(", ")} and ${VITALS_DOOR.at(-1)} alone`,
     );
   if (facts.product !== "undefined") problems.push("the page holds the product window's bridge");
   if (facts.node !== "undefined undefined") problems.push(`the page sees Node (${facts.node})`);

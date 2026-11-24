@@ -1,0 +1,76 @@
+{
+  "v": 1,
+  "id": "mwtxjqf4-5c1e0a9b",
+  "kind": "loop-held",
+  "at": 1795478512000,
+  "endedAt": 1795478518000,
+  "subject": {
+    "group": "fieldd",
+    "role": "fieldd",
+    "pid": 4001,
+    "key": "4001:1795477990000"
+  },
+  "detail": { "peak": 0.9871 },
+  "complete": true,
+  "intervalMs": 1000,
+  "memory": "footprint",
+  "processes": [
+    {
+      "key": "4001:1795477990000",
+      "pid": 4001,
+      "startedAt": 1795477990000,
+      "group": "fieldd",
+      "role": "fieldd"
+    },
+    {
+      "key": "4102:1795478000123",
+      "pid": 4102,
+      "startedAt": 1795478000123,
+      "group": "floor",
+      "role": "field-native"
+    }
+  ],
+  "samples": [
+    {
+      "seq": 41,
+      "time": 1795478511000,
+      "points": [
+        {
+          "key": "4001:1795477990000",
+          "cpu": 0.0412,
+          "memBytes": 264241152,
+          "diskReadBps": 0,
+          "diskWriteBps": 4096,
+          "wakeupsPerSec": 38,
+          "powerMw": 11.2,
+          "own": { "loopBusy": 0.06 }
+        },
+        {
+          "key": "4102:1795478000123",
+          "cpu": 0.0051,
+          "memBytes": 5033164,
+          "diskReadBps": null,
+          "diskWriteBps": null,
+          "wakeupsPerSec": null,
+          "powerMw": null
+        }
+      ]
+    },
+    {
+      "seq": 42,
+      "time": 1795478512000,
+      "points": [
+        {
+          "key": "4001:1795477990000",
+          "cpu": 0.9902,
+          "memBytes": 291504128,
+          "diskReadBps": 0,
+          "diskWriteBps": 0,
+          "wakeupsPerSec": 4,
+          "powerMw": 310.5,
+          "own": { "loopBusy": 0.9871, "gcMs": 41.5, "gcMaxMs": 30.1 }
+        }
+      ]
+    }
+  ]
+}
