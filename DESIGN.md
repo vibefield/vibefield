@@ -591,20 +591,30 @@ and each pane's clock, and draws one chip of its own.
   its host gave it (a spark's), else by the title its session goes by, else by its project, as
   every row was until PF-20. A session's title is the one a person gave it (Claude Code's `-n`
   and `/rename`), else the one its agent wrote for it (Claude Code's own title, a Codex thread's
-  name). The rule is puppeteer's (`rowName`, from 0.4.11), and every Godview view that names a
-  row follows it:
+  name). A resumed session keeps its title (PF-22, 2026-11-24; James: "after resuming a codex
+  session, the title seems lost and it shows the project name as title again"): the Codex
+  adapter reads a resumed thread's name from the resume's own answer, from puppeteer 0.4.13;
+  until then a resumed Codex session had none until somebody renamed it. The rule is puppeteer's
+  (`rowName`, from 0.4.11), and every Godview view that names a row follows it:
   - the list sets the title as the row's name, and the small line under it reads
     `project · branch`;
   - a swarm body sets the title a size under a name (9.5 and 10.5 px against 12 and 14), on two
     rows broken between words where one does not hold it;
   - the timeline names a live lane by it, as it named an ended one;
+  - the spend view names a row by it (PF-22, 2026-11-24; James: "the spend view seems still
+    shows the project name as title"; puppeteer 0.4.13). The line a row with no task falls back
+    to, and its pointer words, read `model · project · branch`; two rows are told apart where
+    they share a name, as they were where they shared a project; a line's colour is still its
+    project's;
   - a pane's badge says it, and the badge's pointer words add the folder.
 
   VibeField draws none of this. It hands the title over: on the model's row, and to the pane
-  frame beside the folder. The rain and the spend view still say the project. A title is the
-  person's content: it crosses to a peer desktop cut at the desk's bound, as every text of a row
-  is, and the content-free `field` cut carries none. **Not built:** the phone's own views (the
-  kit's port) do not name a row by its title.
+  frame beside the folder. The rain's falling stream still spells where a session works (its
+  project, its branch, its model); its labels follow the title. *Corrected 2026-11-24 (PF-22):
+  this said "The rain and the spend view still say the project", true of the spend view until
+  puppeteer 0.4.13.* A title is the person's content: it crosses to a peer desktop cut at the
+  desk's bound, as every text of a row is, and the content-free `field` cut carries none.
+  **Not built:** the phone's own views (the kit's port) do not name a row by its title.
 - **The label on a filled badge is read, so it is held to 4.5:1.** A project tint is dealt at one
   lightness per Godview mode (§2.7's tints: 0.6 by day, 0.74 by night). White on the day tint is
   3.45:1 at its least (hue 191), so the day fill is shaded 12%, and white on it is 4.70:1 at its
