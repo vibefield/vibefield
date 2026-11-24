@@ -45,7 +45,7 @@ import {
   type WebContents,
   webContents,
 } from "electron";
-import { CLOSE_WINDOW_ITEM_ID, ZOOM_ITEM_IDS } from "../main/app-menu-model";
+import { CLOSE_WINDOW_ITEM_ID, VITALS_ITEM_ID, ZOOM_ITEM_IDS } from "../main/app-menu-model";
 import { APP_ORIGIN, APP_SCHEME, serveAppRequest } from "../main/app-protocol";
 import type { WindowRendererBoundary } from "../main/bootstrap";
 import type { LiveSurfaceSimulatorCensus } from "../main/live-surfaces/authority";
@@ -224,6 +224,13 @@ import {
   PAGE_VISIBILITY,
   type PageVisibility,
 } from "./smoke-visibility";
+import {
+  VITALS_DOCUMENT,
+  VITALS_ROW_READ,
+  type VitalsRowFacts,
+  vitalsRowProblems,
+  vitalsRowSummary,
+} from "./smoke-vitals";
 import { keepFromPerson, keepSmokeWindow, smokeWindow, smokeWindowsFocused } from "./smoke-window";
 import { timelinePastRungs } from "./timeline-past-rungs";
 import {
@@ -7556,6 +7563,88 @@ async function spendViewRow(ctx: {
   if (failure !== undefined) throw failure;
 }
 
+/** VT-2 — the Godview smoke's VITALS row, main's half: press the Window menu's Vitals, read the window it opens
+ * until it draws this run's census (smoke-vitals.ts judges it), then close it as a person does. The window is kept
+ * from the person (main shows it without the keys in a harness's run), and the row says so if it took them. */
+async function vitalsRow(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+): Promise<Record<string, unknown>> {
+  const item = Menu.getApplicationMenu()?.getMenuItemById(VITALS_ITEM_ID) ?? null;
+  if (item === null || !item.enabled) {
+    throw new Error("the Window menu holds no enabled Vitals item");
+  }
+  const isVitals = (candidate: BrowserWindow): boolean =>
+    !candidate.isDestroyed() && candidate.webContents.getURL().endsWith(VITALS_DOCUMENT);
+  if (BrowserWindow.getAllWindows().some(isVitals)) {
+    throw new Error("a Vitals window stood open before its item was pressed");
+  }
+  const deskHadKeys = win.isFocused();
+  const pressedAt = Date.now();
+  (item.click as (event: unknown, window: BrowserWindow, contents: WebContents) => void)(
+    undefined,
+    win,
+    win.webContents,
+  );
+  let vitals: BrowserWindow | undefined;
+  let facts: VitalsRowFacts | null = null;
+  let problems = ["the Vitals window never opened"];
+  const deadline = pressedAt + 60_000;
+  while (Date.now() < deadline) {
+    vitals ??= BrowserWindow.getAllWindows().find(isVitals);
+    if (vitals !== undefined) {
+      if (vitals.isDestroyed()) {
+        problems = ["the Vitals window closed by itself"];
+        break;
+      }
+      try {
+        facts = (await vitals.webContents.executeJavaScript(
+          VITALS_ROW_READ,
+          true,
+        )) as VitalsRowFacts;
+        problems = vitalsRowProblems(facts);
+      } catch (error) {
+        problems = [`the Vitals page could not be read: ${String(error)}`];
+      }
+      if (problems.length === 0) break;
+    }
+    await sleep(500);
+  }
+  const drawnMs = Date.now() - pressedAt;
+  if (vitals !== undefined && !vitals.isDestroyed()) {
+    if (problems.length === 0) {
+      if (!vitals.isVisible()) problems.push("the Vitals window is not shown");
+      if (vitals.isFocused()) problems.push("the Vitals window took the keys in a harness's run");
+      if (deskHadKeys && !win.isFocused()) {
+        problems.push("the desk's window lost the keys when Vitals opened");
+      }
+    }
+    if (shotDir !== undefined && shotDir !== "") {
+      try {
+        mkdirSync(shotDir, { recursive: true });
+        const still = await vitals.webContents.capturePage();
+        if (!still.isEmpty()) writeFileSync(join(shotDir, "vitals.png"), still.toPNG());
+      } catch {
+        // a still is evidence for a reader, never the row's verdict
+      }
+    }
+    const closed = new Promise<void>((resolve) => vitals?.once("closed", () => resolve()));
+    vitals.close();
+    await Promise.race([closed, sleep(5_000)]);
+    if (!vitals.isDestroyed()) problems.push("the Vitals window did not close when asked");
+  }
+  const summary = {
+    ...(facts === null ? {} : vitalsRowSummary(facts)),
+    drawnMs,
+    problems,
+  };
+  console.log(`SMOKE_GODVIEW_VITALS ${JSON.stringify(summary)}`);
+  if (problems.length > 0) {
+    throw new Error(`the Vitals window did not draw this run's census: ${problems.join(" · ")}`);
+  }
+  return summary;
+}
+
 /** GT-2/GT-2e: the product Godview, end to end, against the real pair.
  *
  * Everything the deck does here it does because a user asked: the overlay opens
@@ -7744,6 +7833,11 @@ export async function runSmokeGodview(opts: {
       )
       .then((facts) => facts.rendererBackend)
       .catch(() => opened.rendererBackend);
+
+    // VT-2 — THE VITALS ROW (track VT; smoke-vitals.ts): the Window menu's Vitals pressed as the native menu
+    // presses it, over this run's real pair, its desk window and its first terminal. Here, before the short proof's
+    // branch, so both runs of this smoke hold it.
+    verdict["vitals"] = await vitalsRow(win, process.env["VF_SMOKE_SHOT_DIR"]);
 
     if (opts.terminalDirectProof === true) {
       try {

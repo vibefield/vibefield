@@ -1,6 +1,6 @@
 import type { Logger } from "@vibefield/logging";
 import { app, type BrowserWindow, type WebContents, webContents } from "electron";
-import type { ShellMode } from "./modes";
+import { isSmokeLike, type ShellMode } from "./modes";
 import {
   type VitalsFeedPort,
   VitalsFeedSession,
@@ -99,6 +99,8 @@ export function installVitals(opts: {
     },
     onChanged: () => roster.poke(),
     quit: opts.quit,
+    // a harness's Vitals window never takes the person's keys or pointer (the Godview smoke's VITALS row)
+    quiet: isSmokeLike(opts.mode),
     logger,
   });
 

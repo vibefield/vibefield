@@ -48,12 +48,11 @@ mod macos {
     use super::Raw;
     use std::collections::HashMap;
 
-    /// What is read once per process and kept: its start on the wall clock and its name. Keyed by pid and held to
-    /// the process's Mach start, so a pid the OS reuses is read again.
+    /// What is read once per process and kept: its start on the wall clock. Keyed by pid and held to the
+    /// process's Mach start, so a pid the OS reuses is read again. Its name is never kept (`name`).
     struct Known {
         start_abstime: u64,
         started_at_ms: u64,
-        name: String,
     }
 
     /// `mach_timebase_info_data_t`, declared here: the `libc` crate's own binding is deprecated in favour of a
@@ -126,13 +125,12 @@ mod macos {
                 .get(&pid)
                 .is_none_or(|known| known.start_abstime != usage.ri_proc_start_abstime);
             if fresh {
-                let (started_at_ms, name) = bsd_info(pid)?;
+                let (started_at_ms, _) = bsd_info(pid)?;
                 self.known.insert(
                     pid,
                     Known {
                         start_abstime: usage.ri_proc_start_abstime,
                         started_at_ms,
-                        name,
                     },
                 );
             }
@@ -156,8 +154,14 @@ mod macos {
         }
 
         /// The name of a process `read` has answered for. Used for the floor's own children alone.
-        pub fn name(&self, pid: u32) -> Option<&str> {
-            self.known.get(&pid).map(|known| known.name.as_str())
+        ///
+        /// Read now, never kept: a child is listed from its fork, and until its exec lands it carries its
+        /// parent's name. *Corrected 2026-11-24 (VT-2's VITALS row): the name was read once with the start and
+        /// kept, so a terminal cell first read inside that window (a debug cell's exec is not short) was named
+        /// `field-native` for its whole life and its row said Other.* One call a child a reading.
+        pub fn name(&self, pid: u32) -> Option<String> {
+            self.known.get(&pid)?;
+            bsd_info(pid).map(|(_, name)| name)
         }
 
         pub fn children(&mut self, pid: u32) -> Vec<u32> {
@@ -184,7 +188,7 @@ mod macos {
                 .collect()
         }
 
-        /// Forget every process not in `live`, so the kept starts and names cannot grow without bound.
+        /// Forget every process not in `live`, so the kept starts cannot grow without bound.
         pub fn retain(&mut self, live: &std::collections::HashSet<u32>) {
             self.known.retain(|pid, _| live.contains(pid));
         }
@@ -343,8 +347,8 @@ mod linux {
             })
         }
 
-        pub fn name(&self, pid: u32) -> Option<&str> {
-            self.names.get(&pid).map(String::as_str)
+        pub fn name(&self, pid: u32) -> Option<String> {
+            self.names.get(&pid).cloned()
         }
 
         pub fn children(&mut self, pid: u32) -> Vec<u32> {
@@ -391,7 +395,7 @@ mod none {
         pub fn read(&mut self, _pid: u32) -> Option<Raw> {
             None
         }
-        pub fn name(&self, _pid: u32) -> Option<&str> {
+        pub fn name(&self, _pid: u32) -> Option<String> {
             None
         }
         pub fn children(&mut self, _pid: u32) -> Vec<u32> {
@@ -466,6 +470,40 @@ mod tests {
         // the same process read again is the same process
         let again = reader.read(pid).expect("still readable");
         assert_eq!(again.started_at_ms, raw.started_at_ms);
+    }
+
+    /// VT-2's VITALS row found it (2026-11-24): a child is listed from its fork and named by its exec, so a name
+    /// read once and kept can be its parent's for good. A process that execs AFTER its first reading stands in
+    /// for the fork window, which is too short to hold open in a test.
+    #[cfg(unix)]
+    #[test]
+    fn a_name_follows_the_process_through_an_exec() {
+        let mut child = std::process::Command::new("/bin/sh")
+            .args(["-c", "sleep 1; exec sleep 20"])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .spawn()
+            .expect("sh starts");
+        let pid = child.id();
+        let mut reader = Reader::new();
+        let before = reader.read(pid).expect("the shell is readable");
+        let first = reader.name(pid).expect("the shell has a name");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        let mut last = first.clone();
+        while last != "sleep" && std::time::Instant::now() < deadline {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let again = reader.read(pid).expect("still readable");
+            assert_eq!(
+                again.started_at_ms, before.started_at_ms,
+                "the same process"
+            );
+            last = reader.name(pid).expect("still named");
+        }
+        let _ = child.kill();
+        let _ = child.wait();
+        assert_eq!(first, "sh", "read before its exec, it is the shell");
+        assert_eq!(last, "sleep", "read after, it is what it became");
     }
 
     #[test]

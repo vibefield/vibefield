@@ -41,7 +41,7 @@ impl Probe for sys::Reader {
         sys::Reader::read(self, pid)
     }
     fn name(&self, pid: u32) -> Option<String> {
-        sys::Reader::name(self, pid).map(str::to_owned)
+        sys::Reader::name(self, pid)
     }
     fn children(&mut self, pid: u32) -> Vec<u32> {
         sys::Reader::children(self, pid)

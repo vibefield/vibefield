@@ -44,6 +44,9 @@ export function createVitalsWindowHost(opts: {
   /** the window was opened, loaded or closed: the shell's roster changed */
   onChanged(): void;
   quit(): void;
+  /** A test harness's run: the window is kept from the person at the desk, shown without taking the keys and
+   * passed through by the pointer, as the harness's own windows are. */
+  quiet?: boolean;
   logger: Logger;
 }): VitalsWindowHost {
   let window: BrowserWindow | null = null;
@@ -91,11 +94,20 @@ export function createVitalsWindowHost(opts: {
     throw new Error("the dev server never served the Vitals document");
   };
 
+  const present = (target: BrowserWindow): void => {
+    if (opts.quiet === true) {
+      target.setIgnoreMouseEvents(true);
+      target.showInactive();
+      return;
+    }
+    target.show();
+    target.focus();
+  };
+
   const open = async (): Promise<void> => {
     if (window !== null && !window.isDestroyed()) {
       if (window.isMinimized()) window.restore();
-      window.show();
-      window.focus();
+      present(window);
       return;
     }
     if (opening !== null) return opening;
@@ -126,8 +138,7 @@ export function createVitalsWindowHost(opts: {
       try {
         await load(next);
         if (next.isDestroyed()) throw new Error("the Vitals window closed before it loaded");
-        next.show();
-        next.focus();
+        present(next);
         opts.logger.info("desktop.vitals.window_opened", "The Vitals window opened");
       } catch (error) {
         closeFeed();
