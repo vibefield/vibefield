@@ -1628,9 +1628,10 @@
 
 /* THE BANDS ARE THE PANE'S OWN GROUND (PF-4, 2026-11-21; DESIGN.md §2.7 "The pane frame's
    capsules"). The frame keeps two bands clear of the grid (the package's `deck-frame.css`: the
-   pane's padding, 24 above and 30 below unless tuned), and the terminal paints its ground under its
-   rows alone. So each band showed what the pane stands on: since the glass (TL-3), the bare desk, a
-   dark bar above and under a pale pane. Both are painted here in the pane's own ground at the
+   pane's padding, 24 above and 8 below unless tuned; 30 below until PF-21, 2026-11-23, while the
+   context capsule stood at the foot), and the terminal paints its ground under its rows alone. So
+   each band showed what the pane stands on: since the glass (TL-3), the bare desk, a dark bar
+   above and under a pale pane. Both are painted here in the pane's own ground at the
    pane's own alpha (`--vf-godview-pane-ground`, `deck-theme.ts`: the colour the renderer clears
    to), so over the same backdrop a band composites to the colour under the rows and the pane is one
    piece. The pane's background, so it lies under everything the pane holds; two strips, never the
@@ -1643,7 +1644,17 @@
     linear-gradient(var(--pane-band), var(--pane-band)) top / 100% var(--vf-terminal-safe-top, 24px)
     no-repeat,
     linear-gradient(var(--pane-band), var(--pane-band)) bottom / 100%
-    var(--vf-terminal-safe-bottom, 30px) no-repeat;
+    var(--vf-terminal-safe-bottom, 8px) no-repeat;
+}
+
+/* A DEAD PANE KEEPS ITS FOOT (PF-21, 2026-11-23). The frame draws nothing at a pane's foot any
+   more, so a live pane's foot band is 8, its corner's own radius. The exit face below is this
+   host's, 18 tall and 4 up from the foot, and it stands in that band: a pane that wears it keeps
+   the 30 the band was, so the chip is never over a row of the terminal's last screen. The
+   tunable is set on the pane itself, where the package's padding and the band above both read
+   it. */
+.vf-godview-terminal-deck .vf-deck-framed .ghostty-pane:has(.ghostty-pane-badge) {
+  --vf-terminal-safe-bottom: 30px;
 }
 
 .vf-godview.theme-light .vf-godview-terminal-deck .ghostty-window {
@@ -1665,7 +1676,7 @@
 
 /* THE PANE'S OWN CHROME IS THE RECORD'S (GT-6, record §07), and it ships in
    the views package (`deck-frame.css`, PU-14): the badge growing out of the top
-   edge, the readout, the ghost verbs, the context meter, the safe areas, the
+   edge, the readout, the ghost verbs, the context ring and the clock, the safe areas, the
    selected pane's radius, and the line and glow on `[data-pane-accent]::before`.
    What used to stand here — this deck's own badge, its own glow and its own
    divider — was VibeField's reading of the same drawing, and two readings of one
@@ -1684,9 +1695,9 @@
    `describePane` says what became of a dead pane — "exited", "exited with an error", "ended" —
    through the one vocabulary ghosttea gives an embedder, its pane badge; the
    record has no field for it, and the frame's own badge now owns the top-right
-   corner that badge sits in. So the host's badge moves to the bottom-left,
-   opposite the context meter, and takes the frame's type rather than this
-   deck's old uppercase chip. Since PF-2 (2026-11-21; DESIGN.md §2.7 "The pane
+   corner that badge sits in. So the host's badge moves to the bottom-left
+   (opposite the context meter until PF-21 moved that to the top band), and
+   takes the frame's type rather than this deck's old uppercase chip. Since PF-2 (2026-11-21; DESIGN.md §2.7 "The pane
    frame's capsules") it is a capsule as the frame's own are: 4 in from the
    pane's edges, 18 tall, corners of 5. A pane that is alive carries no
    label at all (`pane-faces.ts`: quiet IS the honesty), so nothing is drawn here

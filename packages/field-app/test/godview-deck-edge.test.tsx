@@ -1118,7 +1118,7 @@ describe("the deck sheet's ground", () => {
       "linear-gradient(var(--pane-band), var(--pane-band)) top / 100% var(--vf-terminal-safe-top, 24px) no-repeat",
     );
     expect(flat).toContain(
-      "linear-gradient(var(--pane-band), var(--pane-band)) bottom / 100% var(--vf-terminal-safe-bottom, 30px) no-repeat",
+      "linear-gradient(var(--pane-band), var(--pane-band)) bottom / 100% var(--vf-terminal-safe-bottom, 8px) no-repeat",
     );
     // The heights are the frame's: the same tunables, the same fallbacks, read from the stylesheet
     // the app imports. A frame that moves a band moves this test before it moves a seam.
@@ -1127,8 +1127,21 @@ describe("the deck sheet's ground", () => {
       "utf8",
     ).replace(/\s+/g, " ");
     expect(frame).toContain(
-      "padding: var(--vf-terminal-safe-top, 24px) var(--vf-terminal-safe-right, 0px) var(--vf-terminal-safe-bottom, 30px) var(--vf-terminal-safe-left, 0px);",
+      "padding: var(--vf-terminal-safe-top, 24px) var(--vf-terminal-safe-right, 0px) var(--vf-terminal-safe-bottom, 8px) var(--vf-terminal-safe-left, 0px);",
     );
+    // PF-21 — the frame draws nothing at the foot now, so the band is the pane's corner (8); the
+    // exit chip is this host's and stands there, so a pane that wears it keeps the old 30, set on
+    // the pane itself where the padding and the band both read it
+    const dead =
+      godview.match(
+        /^\.vf-godview-terminal-deck \.vf-deck-framed \.ghostty-pane:has\(\.ghostty-pane-badge\) \{([^}]*)\}/m,
+      )?.[1] ?? "";
+    expect(dead.replace(/\s+/g, " ")).toContain("--vf-terminal-safe-bottom: 30px;");
+    const chip = godview.match(/^\.vf-deck-framed \.ghostty-pane-badge \{([^}]*)\}/m)?.[1] ?? "";
+    const px = (property: string): number =>
+      Number(new RegExp(`\\b${property}: (\\d+)px;`).exec(chip)?.[1] ?? Number.NaN);
+    expect(px("bottom") + px("height")).toBeLessThanOrEqual(30);
+    expect(px("bottom") + px("height")).toBeGreaterThan(8);
     // the wrappers under the rows stay clear, so the renderer's ground is the only one there
     expect(godview).toMatch(
       /\.vf-godview-terminal-deck \.ghostty-pane \{\s*background: transparent;\s*\}/,
