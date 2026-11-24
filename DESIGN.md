@@ -6366,6 +6366,77 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   disclosure read. While that read is out it says so, and when it fails, or the window can't read
   what fieldd sent, it says the runtime is unavailable, never a blank (EL5). The **Runtime +**
   disclosure left Settings → Plugins, and so did the folders that are not plugins, which it said.
+- **Vitals — how every process is doing, in a window of its own** (track VT; *added 2026-11-24*; VT-D1 A and
+  VT-D2…VT-D6 at their leans, ruled by James on the page *The Vitals Window*, 2026-11-24: "good, go with lean and land
+  this"; the record is `draft/thinking-vitals.md`). A second window, in every build, opened from the Window menu's
+  **Vitals** (⌥⌘V), which opens it or brings it forward and never closes it. It is the control room (§1): committed
+  dark in both themes, in Godview's instrument palette (§2.7), its ground the monitor ground `#0A0A0A`
+  (`--vf-godview-dark-monitor-bg`, projected into `electron-shell/src/main/windows.ts` for the window's pre-paint),
+  its one panel `#111111` behind a `#333333` hairline, and its words in Godview's dark chrome ramp (`#F5F5F7` at 85,
+  70, 54 and 38%). It is a window and not a sheet, because a sheet covers the desk it measures; its own cost is a
+  row of its own list. It closes with the desk's window and at a quit; a page that crashes or reloads closes no
+  window, so Vitals stays through those.
+  - **What it reads.** fieldd's vitals door (`vitals.subscribe`), which names what the floor measured once a second
+    (`packages/contracts/src/vitals.ts`), fieldd's log door for the daemons' lines, and Electron main's own for the
+    shell's. The window holds no key to fieldd: while it is open, main reads those doors and hands the window one
+    stream, and the window can send nothing back. It opens 1080 by 720 and is never narrower than 920 or shorter
+    than 420. It acts on nothing: no row has a button, and nothing in it stops,
+    restarts or changes a process.
+  - **The head** is the window's own title bar, "Vitals". At the top right of the lanes stands the state, in one
+    line: a 7 dot and its words, **Recording · every second** with the dot in `--vf-green`; **Waiting for the
+    floor's meter**, **Not measured on this computer** and **fieldd isn't answering** with the dot in the faint ink.
+    Orange and red are never a state of Vitals itself.
+  - **The list** stands at the left, 360 wide, on the panel. Its head row says when its figures are of: **Now**, or
+    **At 14:02:10** while the pointer holds a moment on the lanes (below); then **CPU**, **Memory**, and **5 min**
+    over the sparklines, as eyebrows (§3) in the faint ink. Then the groups, in a fixed order, each under its
+    eyebrow in the tertiary ink: **VibeField** (the shell's processes), **fieldd**, **The floor**, **Your
+    terminals**, **Vitals**. A row is 24 tall: its name (12/500, primary), its CPU as a share of one core in whole
+    percent (**14%**; under one percent, one decimal, **0.4%**), its memory (**611 MB**, **1.9 GB**; binary units,
+    said MB and GB as Activity Monitor says them), both Data small (§3) in mono, right-aligned, in the secondary ink;
+    then a sparkline of its CPU over the five minutes, 48 by 14, 1 wide in the secondary ink, scaled to its own peak
+    (or to a tenth of a core when it reaches less): it shows a shape, and the row's figure says the amount. A figure
+    that was not measured is an en dash, never a zero: a process's first second has memory and no CPU yet. A row never moves while its neighbours' numbers
+    change: rows keep the order of their roles, then of their pids. A terminal's row is the terminal's own process
+    and everything it runs, counted (**Terminal · 8 processes**), in the secondary ink; it says no title, folder or
+    command (VT-D4). The foot, over a hairline: **All of VibeField**, its CPU in cores once it passes one (**2.3
+    cores**) and its memory; and under it in the tertiary ink, "Your terminals aren't counted in it."
+  - **A row chosen.** A press chooses a row (its ground `#242424`, corners 6), and its own trace joins both lanes in
+    the primary ink while the groups' traces step back to the faint ink. A second press, or Escape, lets it go.
+  - **The lanes** fill the rest, one time axis under them all, the last five minutes, the newest at the right edge.
+    Each lane has a head (its name as an eyebrow at the left; its legend or its reading at the right, 11 mono, in
+    the secondary ink), a plot, and a hairline at its foot. **CPU · share of one core**, 96 tall; **Memory**, 72
+    tall. The axis below them says the clock at each whole minute, 11 mono, faint, each centred on its minute; one at
+    the axis's own edge is said inside it.
+  - **The traces: the first chart rules.** (The kit has no chart; these are the rules a second chart is held to.)
+    - One scale a lane, linear from zero, and the lane says its top in the faint ink at its top left: a round
+      figure a person can read (**50%**, **2 cores**, **512 MB**, **4 GB**), never the largest value itself.
+    - A reading is drawn where it was taken: by its time, never its place in a list, so a second that was missed is
+      a wider step.
+    - What was not measured is a gap. A trace lifts over it and never crosses it at zero.
+    - A peak is never smoothed or averaged away: readings are joined by straight lines, 1.4 wide, round joins.
+    - A trace is told apart by ink and stroke, never by hue: the shell in the primary ink, fieldd in the secondary,
+      the floor in the tertiary, a second trace of one ink dashed 3 3. Hue is state only (§2.5): `--vf-orange` for
+      what needs attention, `--vf-red` for a failure.
+    - Your terminals' CPU is an area and not a line, white at 6%, behind the traces: it is the weather VibeField
+      works in, not a part of it. The Memory lane draws VibeField's three groups alone.
+    - Every number is `tabular-nums`. Nothing eases: a new reading is drawn where it is, and the lanes do not
+      scroll between readings.
+  - **A moment held.** The pointer over the lanes draws a hairline at its time through every lane, white at 38%,
+    and the list reads that moment. A drag picks a span: its band white at 8% with a hairline at each edge. The
+    span stays until Escape or a press outside it, and the log lines below are the span's.
+  - **Logs.** Under the lanes: its head, **Logs** and what it shows at the right ("412 lines" or "14:02:09 –
+    14:02:13 · 37 lines"); a strip 16 tall on the same axis, one tick a line where it was written, an ordinary line
+    a short faint tick, a warning a whole tick in `--vf-orange`, an error a whole tick in `--vf-red`; then the lines
+    themselves, the newest last, each 20 tall in 11 mono: its time to the millisecond in the tertiary ink, the
+    process that wrote it in the secondary, its level (a warning's and an error's word in its ink, §2.5), and its
+    message in the primary, cut at the row's end. The list scrolls within itself and stays at its newest line until
+    a reader scrolls up. It shows fieldd's, the floor's and the shell's lines from `info` up, the last five minutes
+    of them or the span's, and draws the newest 500 of those; its head says how many the span holds.
+  - **When there is nothing to draw** the lanes stand empty, with no scale said, and the list holds one sentence in
+    the tertiary ink (§9 "Vitals' words"): never a zero, never a flat line.
+  - *Not drawn until built:* the frames and loop-delay lanes (VT-3), incidents and their marks on the lanes (VT-4),
+    armed traces (VT-5), the Settings switch that turns the recorder off, a door to Vitals from Settings →
+    Diagnostics, the plugins' log lines, and a span older than the lines the window holds.
 - **Settings → Plugins, until Plugins… holds every switch** (MK-5; *drawn and built 2026-11-14*,
   ‹draft› for James's eye, its words in §9 "Settings and Diagnostics"). MK-D10 has the page leave
   Settings. By VF-PM's ruling (2026-11-14 04:33Z, the inventory's A2 at its lean, over MK-5's ask
@@ -12845,6 +12916,17 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
     in or Development plugin's powers are said only on its page.
     *Gone 2026-11-17 (N18):* those rows left, and the pane with them: a plugin's powers are said on its page
     alone.
+- **Vitals' words** (track VT; *added 2026-11-24*; ‹draft› for James's eye). The window is for whoever is fixing
+  VibeField, so it may name VibeField's insides (§9, "What only someone fixing VibeField needs lives in
+  Diagnostics"): **fieldd**, **rosettad**, **field-native**, **Terminal cell**, **Mesh sidecar**, **Freeway host**,
+  **Files host**, **Transcripts host**, **Flows host**, **Plugin process**; the shell's own are **Main**, **Desk
+  window**, **GPU**, **Browser pane**, **Helper**, **Studio**, and Vitals' own window is **Vitals window**. A
+  terminal's row is **Terminal**, or the agent's name once fieldd says it. The groups: **VibeField**, **fieldd**,
+  **The floor**, **Your terminals**, **Vitals**. The states, each one line: "Recording · every second" · "Connecting
+  to fieldd…" · "Waiting for the floor's meter" · "Not measured on this computer" · "fieldd isn't answering". Under
+  an empty list, one sentence: "Nothing has been measured yet." while it waits, and the floor's own sentence when it
+  cannot measure. The foot: "All of VibeField" and "Your terminals aren't counted in it." It says "CPU" and
+  "Memory" as Activity Monitor does, and a share of one core as a percent: "14%", and from one core up "2.3 cores".
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
