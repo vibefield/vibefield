@@ -549,19 +549,30 @@ minimize and restore, 8 in, after a hairline. **The grip's hit in the maximized 
 
 **The pane frame's capsules** (track PF; PF-2, 2026-11-21; James, of the options on the page
 "Godview terminal pane": "I like desktop A and mobile A"; his reason for the pass: "the top and
-bottom notch is not looking good with our newly refined terminal look"). A pane's badge and its
-context meter are **capsules inside the pane**, never slabs grown from its edge. The frame is
-puppeteer-views' (`PaneFrame`, `deck-frame.css`, from 0.4.8); VibeField hands it two values per
-Godview mode and draws one chip of its own.
+bottom notch is not looking good with our newly refined terminal look"). A pane's badge is a
+**capsule inside the pane**, never a slab grown from its edge, and everything else the frame
+says stands in the same top band. The frame is puppeteer-views' (`PaneFrame`, `deck-frame.css`,
+from 0.4.8; the ring and the clock from 0.4.12); VibeField hands it two values per Godview mode
+and each pane's clock, and draws one chip of its own.
+
+> **Errata (2026-11-23, PF-21):** this said "A pane's badge and its context meter are capsules
+> inside the pane". From PF-2 until PF-21 the context share was a second capsule at the foot's
+> right, a 44 × 4 meter beside its figure. It is a ring in the top band now ("The context ring"
+> below), and nothing of the frame's is drawn at a pane's foot.
 
 | Role | Light | Dark |
 |---|---|---|
 | the selected badge's label | `--vf-godview-light-pane-badge-ink` `#ffffff` | `--vf-godview-dark-pane-badge-ink` the night terminal's ground, `--vf-godview-dark-terminal-bg` |
 | how far the selected badge's fill is taken from the pane colour toward black, in oklab | `--vf-godview-light-pane-badge-shade` 12% | `--vf-godview-dark-pane-badge-shade` 0% |
 
-- **The bands keep their heights**, 24 at the top and 30 at the foot, so no row of a terminal
-  moves. Each capsule is 18 tall with corners of 5, and stands 4 from the pane's edges: the badge
-  at the top right, the meter and its figure in one capsule at the foot's right.
+- **The top band is 24 and the foot band 8** (PF-21, 2026-11-23). The badge is 18 tall with
+  corners of 5 and stands 4 from the pane's top and right. The foot band was 30 while the
+  context capsule stood in it; with nothing of the frame's there it is the selected pane's own
+  corner radius, so a pane's last row clears the rounding and the line, and a terminal gains the
+  22 px the capsule's band held. **A dead pane keeps the 30**: the exit chip below is
+  VibeField's own and stands in that band, so a pane that wears it is given the old foot and the
+  chip is never over its last screen.
+  *(PF-2 kept both bands, 24 and 30, "so no row of a terminal moves". PF-21 moves the foot.)*
 - **The bands are the pane's own ground** (PF-4, 2026-11-21; James, on the first build: "both
   desktop and mobile terminal pane has the weird bar on top and bottom of the terminal edge that
   are not visually consistent with terminal background, make them one seamless piece"). A terminal
@@ -602,12 +613,41 @@ Godview mode and draws one chip of its own.
   outside sRGB clipped; none was measured on a display.
 - **The readout** in the top band is the terminal's ink at 70% (it was 50%, which is 3.08:1 on
   the day ground; 70% is 5.56:1), on the capsules' axis, 11 from the pane's left.
-- **The meter** is a 44 × 4 track in the ink at 14%, its fill at 46% and at 86% from the hot
-  share, with the figure beside it at 72% (the full ink and bold when hot). Under 220 wide a pane
-  drops the readout and the meter's track, and keeps the badge and the figure.
-- **The exit chip** (GT-6: what became of a dead pane, the host's own) takes the same capsule at
-  the foot's left, 4 in and 18 tall with corners of 5, opposite the meter. Its type and colours
-  are unchanged.
+- **The context ring** stands right after the readout (PF-21, 2026-11-23; James: "for context
+  window indicator in the pane, let's align with mobile's design, make it into the little ring
+  and place it right after the model effort line"). It is the phone card's ring (§8, "the context
+  ring") at the band's own size: 12 across and 2 wide, its track the ink at 18% and its arc at
+  72%, from twelve o'clock and clockwise with a square end, and the share beside it at 72% in the
+  band's 10 px figures. From the hot share (80%) the arc is 90% and the figure the full ink and
+  bold. Always grey, never orange. A run whose agent says no share draws no ring. Under 220 wide
+  a pane drops the readout and the ring, and keeps the badge and the figure.
+  *(Until PF-21 the share was a meter: a 44 × 4 track in the ink at 14%, its fill at 46% and at
+  86% when hot, in a capsule at the foot's right.)*
+- **The running time** follows the ring (PF-21, 2026-11-23; James: "for each terminal session,
+  i also want to monitor how long has it being running from the very start, and this time should
+  preserved so it survive app restart, and when the session resumed, the timer continue where it
+  was saved last time, this should show in the terminal pane header bar"). It is said to the
+  minute, in the readout's own type and ink: `12m`, then `1h 05m`, then `1d 02h`. It counts the
+  time the session was running:
+  - a shell counts from its own birth, and a shell made again after a Quit is a new shell and
+    starts from nothing;
+  - an agent's session goes on across a resume and an app restart from where the run it
+    continues stopped. fieldd keeps each run's time (`agents/run-ledger.json`, written twice a
+    minute, at an exit and at the daemon's stop) and hands it to the run that continues it; the
+    frame adds the time since this pane's terminal was born;
+  - a session that has ended stands at its whole time, at 50% of the ink, and an ended session
+    nobody kept the time of says none;
+  - another desktop's session says none here.
+
+  Under 300 wide a pane drops the clock before anything else. The same ledger keeps what a
+  session has used: a resumed session's estimated cost and tokens go on from where they stood,
+  so a swarm body keeps its size and the spend view its row across a restart. The spend view's
+  ten-minute series is still the run's own and starts flat after one. **Not built:** the phone
+  says no running time; a conversation resumed from History or the launcher (by its native id,
+  not its run) carries nothing.
+- **The exit chip** (GT-6: what became of a dead pane, the host's own) takes the badge's capsule
+  at the foot's left, 4 in and 18 tall with corners of 5 (opposite the meter until PF-21 moved
+  the share to the top band). Its type and colours are unchanged.
 
 *Until PF-2 (puppeteer-views 0.4.7 and before) the badge was a tab grown down from the pane's top
 edge with square upper corners, the meter a track along the whole foot, and the exit chip a tab
