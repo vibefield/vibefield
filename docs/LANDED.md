@@ -68271,7 +68271,7 @@ implement and land all these changes".
 
 ## VT-2b — the recorder's switch, and Vitals' off state (M546)
 
-**2026-11-24 · on local main: `2a5e349fe` (doc), `3421162f5` VT-2b (code).** VT-D2's second half (DECISIONS VT).
+**2026-11-24 · on local main: `8df337fb0` (doc), `e115c52fd` VT-2b (code). *Corrected at landing: the entry first cited `2a5e349fe` and `3421162f5`, the same commits before three rebases*.** VT-D2's second half (DECISIONS VT).
 **Record vitals** is an app preference (`diagnostics.recordVitals`, on from the first run, synced and undoable like
 its neighbours), drawn in Settings → Diagnostics in a section of its own, **Vitals**.
 
@@ -68303,7 +68303,7 @@ ran at a load near 280, which was wrong and is why three files went red:
   `-D warnings`; rustfmt. The real meter is tested stopping and reading again.
 - `check:walls`, the agent literal lint, `pnpm gen` (clean after it), biome on the changed files, `bundle:assert`,
   the census strict, `smoke:terminal-direct` green with `left: []`.
-- After the rebase onto `9498e7f6b` (M545, UM-6): tsc for the four packages, `pnpm gen` clean, walls, the literal
+- After the first rebase, onto `9498e7f6b` (M545, UM-6): tsc for the four packages, `pnpm gen` clean, walls, the literal
   lint, and the focused files around the switch (the result lines are in the landing's commit message). The whole
   suites were NOT rerun on the rebased tree.
 
@@ -68316,3 +68316,128 @@ stage's `CARGO_TARGET_DIR`. Any vitest in `packages/fieldd` runs `cargo build -p
 the STAGE's `debug/field-native` from the lane's sources. It happened at 04:59:51Z from a worktree of this lane
 (`rust/qa-stage`; the stage rebuilt its own afterwards). The class to mend is the stage's environment reaching its
 terminals; until then a lane exports its own target in every command that runs fieldd's tests.
+
+## VT-2c — Open Vitals from Settings, agents named on their rows, more of fieldd's processes (M547)
+
+**2026-11-24 · on local main: `7bd18485b` (doc), `164cb2b82` VT-2c (code).** Four owed pieces of track VT (DECISIONS
+VT), written by a subagent of the lane in a worktree of its own, read and checked in the lane.
+
+- **Open Vitals.** Settings → Diagnostics' Vitals section gains a button that opens the Vitals window or brings it
+  forward, the Window menu's own action. One IPC channel, no payload either way. Main refuses any sender that is not
+  a registered product window's own main frame holding the focus. A host with no main (the browser catalog) draws no
+  button.
+- **A terminal's row says the agent fieldd launched in it**, by the catalog's label, from fieldd's own launch record.
+  Nothing of the process is read (VT-D4); no id is compared to a literal (R23b). A plain shell, an exited run, a
+  remote run and an agent the catalog does not name stay "Terminal".
+- **Rows for a plugin's supervised process and for an MCP server fieldd starts itself**, each with everything under
+  it. An MCP server an agent starts is inside that terminal's tree and is not named. **The flows host is not named:**
+  this build's daemon composes no flow runner, so it starts none.
+- **`vitals.query` folds the rows' own vitals:** a step's loop share is its busiest second, pauses and long frames
+  add, the longest and the slowest are kept, and a figure nobody said stays absent.
+
+**Proved in the lane (light checks only, load 18 to 28):** `pnpm gen` clean, biome, tsc for the four packages,
+`check:walls`, the agent literal lint; contracts 925, fieldd 51 (1 skipped), field-app 119, electron-shell 49 passed
+in the focused files. **Not run:** any whole suite, a build, a smoke. No Electron was launched: nobody has pressed
+the button, and no window has drawn a labelled row.
+
+## VT-3c — the desk's window says its long frames (M548)
+
+**2026-11-24 · on local main: `2e608eaec` (doc), `9d1a665fb` VT-3c (code).** VT-D10 A, ruled 2026-11-24. Written by
+two subagents of the lane, read and checked in the lane.
+
+- The page hears long frames from the browser's own observer, with no frame callback and no interval at rest; a long
+  frame starts one timer of at most a second that sends one report. When fieldd is not recording, the page is quiet
+  for 30 s.
+- The desk window's token gains `vitals.report` and nothing else. fieldd takes from it only a long-frame count and
+  the longest frame; every other field is dropped, it names no process, a report is bounded, and at most four are
+  taken between two samples. The frames land on the roster row main names `window`.
+- **A change to VT-3b:** what was reported is cleared when a sample is made (a report for a row the sample did not
+  hold used to wait for a later one, against the contract's own words).
+- The Vitals window draws a tick a long-frame second at the foot of the Loop lane.
+
+**‹for James›, three readings:** a second desk window's frames count on the primary's row (fieldd cannot tell which
+window calls); same-uid code holding a window token can use up that row's four reports and starve or misstate its
+frames, and nothing more; long frames before the page has its fieldd client are not kept.
+
+**Proved in the lane (light checks only, load 13 to 20):** `pnpm gen` clean, biome, tsc ×4, walls, the literal lint;
+contracts 1,000, fieldd 40, field-app 143, electron-shell 62 passed in the focused files. **Not run:** any whole
+suite, a build, a smoke. No real page has sent a frame, and nobody has seen a tick drawn.
+
+## VT-5 — armed captures (M549)
+
+**2026-11-24 · on local main: `dbf1234ff` (doc), `b76a09a22` VT-5 (code).** VT-D5, VT-D9, VT-D12 A. Written by two
+subagents of the lane, read and checked in the lane.
+
+- Three captures of 10, 20 or 30 seconds, armed by hand in the Vitals window, one at a time, each switching itself
+  off and saved in the user's own captures folder (`LAYOUT.VITALS_CAPTURES_DIR`), the newest ten kept, sent nowhere.
+- **An app trace** by Electron's `contentTracing` (a `.json` Perfetto opens). **A profile of fieldd from inside it**
+  by `node:inspector`'s in-process session (a `.cpuprofile`): it never opens a debugging port, and Electron main
+  alone may ask; the desk window's `vitals.report` does not open that door. **A count of the desk window's frames**,
+  by its preload's `requestAnimationFrame`, only while armed (VT-D9); no page code runs and no script is injected.
+- Main's three doors answer the Vitals window's own main frame alone, and a file is shown in Finder by a name joined
+  to the captures folder, never by a path from the page.
+- DESIGN.md's sentence that the window "acts on nothing" is corrected at its source: capturing is the one thing it
+  does, and it changes no process. Its words say a trace holds the addresses and titles of the pages open.
+
+**‹for James›:** the frame count rides a channel of its own, outside the product bridge's closed list; the trace's
+16 categories and 64 MB buffer are a judgment; nothing stops a capture early, and a trace or a count cut short is not
+saved; a profile fieldd began is still saved when the window closes.
+
+**Proved in the lane (light checks only, load 19 to 36):** `pnpm gen` clean, biome, tsc ×4, walls, the literal lint;
+contracts 1,033, fieldd 59, field-app 165, electron-shell 90 passed in the focused files. fieldd's profiler ran a
+real inspector session on vitest's Node, **not on Electron's Node, which is how fieldd runs.** Main's and the
+preload's halves are proved with fakes. **Not run:** any whole suite, a build, a smoke, the Rust tests. No trace was
+recorded, no frame counted, no file shown. **Not built:** the baseline run on the packaged app; a smoke row for
+captures.
+
+## VT-4b — incidents (M550)
+
+**2026-11-24 · on local main: `a2f3af18c` (doc), `8af7700ee` VT-4b (code).** VT-D11 A, ruled 2026-11-24. Written by
+subagents of the lane, merged over VT-5 by another, read and checked in the lane.
+
+- **What an incident is:** a crash, an unplanned exit, a page that stops responding, or a loop held at 95% for five
+  readings in a row. Never about a terminal's processes. CPU and memory limits wait for VT-D6's week.
+- **fieldd keeps them:** one 0600 file an incident with the half minute before and after from the recorder's ring,
+  the newest 50 for 14 days, on this device. Sources: the previous fieldd's crash note; a floor this fieldd started
+  ending on a failure code or on a signal fieldd did not send; rosettad, the files host or the transcripts host dying
+  while ready; a held loop, one incident an episode; Electron main's reports.
+- **Electron main reports** a Chromium child gone, a page's process gone other than cleanly, a page unresponsive and
+  responsive again, and its own uncaught error (`vitals.incident.report`, main alone). It is silent from `will-quit`.
+- **The window** gains a count button, the list, marks on the lanes, and opening one holds the lanes at its moment;
+  an older one is drawn from its own kept minute. The window still holds no token: main relays its one ask.
+- **Merged over VT-5:** the window's door is `subscribe`, `captures` and `openIncident`, and the smoke's door check
+  says so. The incidents button stands after the capture control, outside the state line the smoke reads.
+
+**‹for James›:** main goes quiet at `will-quit`, not `before-quit` (a page killed between the two could be reported);
+while the recorder is off nothing new is kept, not even a crash, and "off drops what was kept" is read as the readings
+only; an incident's minute keeps the terminal rows' figures and catalog label for 14 days, though a terminal is never
+its subject; Studio's page reports as role `other`.
+
+**Proved in the lane (light checks only, load 18 to 31), on the full tree:** `pnpm gen` clean twice, biome, tsc ×4,
+walls, the literal lint; contracts 1,051, fieldd 78, field-app 179, electron-shell 102 passed in the focused files.
+Two things ran against a real fieldd over the mock floor: the crash note becoming an incident at boot, and main's
+report read back. Every Chromium event is proved with fakes. **Not run:** any whole suite. **Not built:** incidents
+in the support bundle (its exporter has its own selection and consent flow: a slice of its own).
+
+**The proof M547 to M550 share (2026-11-24).** VT-2c, VT-3c, VT-5 and VT-4b were proved together, as one branch:
+
+- **The whole verify, on the test Mac:** GREEN at the branch's tip before its last rebase, `93f0784d9` (run
+  `v-vitals`, read by the coordinator: `pnpm verify exit 0`, no FAIL line; cargo 716 passed, 15 ignored; vitest
+  18,236 passed, 22 skipped; the strict census assert passed, so the new LAYOUT rows and chunks did not redden it).
+  That tip sat on main `4dbe8f246`. The branch was then rebased over one more commit of main (`6a352e848`, a Godview
+  change that shares only DESIGN.md with it), with no conflict; the whole verify was NOT rerun on the rebased tip
+  `8af7700ee` and runs again at the push proof.
+- **On the rebased tip, in the lane, on the development Mac:** offline reinstall; `pnpm gen` clean; biome; tsc for
+  contracts, fieldd, field-app and electron-shell; `check:walls`; the agent literal lint; the focused files:
+  contracts 7 files 1,051 passed, fieldd 8 files 78, field-app 10 files 179, electron-shell 8 files 102.
+- **One physical run, on the rebased tip (06:32Z to 06:35Z, load 14.6 at its start):** the floor built; `build:all`;
+  `bundle:assert`; the census strict; `smoke:terminal-direct` green on a temp profile, `left: []`. Its VITALS row
+  read a real pair: "Recording · every second", the seven expected rows, the Loop lane reading "Main · 11% busy",
+  106 log lines, and the window's door as `subscribe`, `captures`, `openIncident`, no problem said. Its still shows
+  the capture control drawn on the top line beside the state.
+- **What that run did not do:** it armed no capture, made no incident, pressed no button and sent no long frame. So
+  a real trace, a real profile on Electron's Node, a real frame count, an incident's mark and list, the Open Vitals
+  button and the Settings section are each proved by their unit tests alone, and no person has seen any of them.
+- **Found along the way:** a subagent's fieldd test run rewrote the stage's `field-native` (the finding in M546's
+  entry). An app restart at 05:10Z ended the first four subagents mid-work; three were respawned from the files they
+  left and one had already committed.

@@ -459,6 +459,11 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   captures of 10 to 30 seconds (a Chromium trace, a CPU profile of fieldd taken from inside it with no debugging
   port, a frame count for the desk's window), each saved as a file. VT-2b's three readings above were on no page,
   so they stay ‹for James›.
+  **The rest LANDED 2026-11-24, built by a fan-out of subagents and integrated in the lane:** VT-2c (M547),
+  VT-3c (M548, VT-D10 A), VT-5 (M549, VT-D12 A) and VT-4b (M550, VT-D11 A). Each entry in
+  LANDED names the readings its builders made that were on no page; they are ‹for James›, not rulings. Not
+  built: incidents in the support bundle, a smoke row for captures and incidents, the baseline run on the
+  packaged app, and VT-D6's budgets.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the
