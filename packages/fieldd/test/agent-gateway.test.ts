@@ -818,7 +818,10 @@ interface UnitOptions {
   catalog?: readonly AgentCatalogEntry[];
   /** Item 372 — the executable each offered agent's launcher names, by provider id */
   executables?: ReadonlyMap<string, string>;
-  readExecutables?: () => Promise<ReadonlyMap<string, string>>;
+  readExecutables?: (
+    providers: readonly string[],
+    signal?: AbortSignal,
+  ) => Promise<ReadonlyMap<string, string>>;
 }
 
 async function unit(options: UnitOptions = {}): Promise<Unit> {
@@ -1606,6 +1609,44 @@ describe("the gateway's start, refresh and stop (AR-7b)", () => {
     expect(box.terminals.listeners()).toBe(0);
   });
 
+  it.skipIf(process.platform === "win32")(
+    "reaps the running launcher version probe before shutdown completes",
+    async () => {
+      const directory = realpathSync(mkdtempSync(join(tmpdir(), "vf-probe-")));
+      cleanup.push(() => rmSync(directory, { recursive: true, force: true }));
+      const marker = join(directory, "started");
+      writeFileSync(
+        join(directory, "node"),
+        [
+          `#!${process.execPath}`,
+          "process.on('SIGTERM', () => {});",
+          `require('node:fs').writeFileSync(${JSON.stringify(marker)}, String(process.pid));`,
+          "setTimeout(() => process.exit(0), 10_000);",
+        ].join("\n"),
+        { mode: 0o755 },
+      );
+      const box = await unit({
+        launcher: null,
+        runtimeFacts: { electron: "fixture", sea: false, path: directory },
+      });
+      const start = box.gateway.start();
+      const pid = await vi.waitFor(
+        () => {
+          const recorded = Number(readFileSync(marker, "utf8"));
+          expect(recorded).toBeGreaterThan(0);
+          return recorded;
+        },
+        { timeout: 4_000 },
+      );
+      const started = Date.now();
+      await box.gateway.stop();
+      await start;
+      expect(Date.now() - started).toBeLessThan(3_000);
+      expect(() => process.kill(pid, 0)).toThrowError(expect.objectContaining({ code: "ESRCH" }));
+      expect(box.kit.gateway).toEqual([]);
+    },
+  );
+
   it("releases shutdown while boot is still reading the shared install inventory", async () => {
     let entered!: () => void;
     const reading = new Promise<void>((resolve) => {
@@ -1615,8 +1656,10 @@ describe("the gateway's start, refresh and stop (AR-7b)", () => {
     const pending = new Promise<ReadonlyMap<string, string>>((resolve) => {
       finish = resolve;
     });
+    let discovery: AbortSignal | undefined;
     const box = await unit({
-      readExecutables: () => {
+      readExecutables: (_, signal) => {
+        discovery = signal;
         entered();
         return pending;
       },
@@ -1625,6 +1668,7 @@ describe("the gateway's start, refresh and stop (AR-7b)", () => {
     try {
       await reading;
       await box.gateway.stop();
+      expect(discovery?.aborted).toBe(true);
       await start;
     } finally {
       finish(new Map());
