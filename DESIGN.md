@@ -3884,6 +3884,44 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     2026-11-06, the model's review; ‹for James›.) Its numbers are a geometry module's, never
     read from the DOM (`packages/field-app/src/usage/bands.ts`, UM-1; its Swift twin is held to the same golden),
     and it is drawn as geometry, never as a glyph (§13).
+- **A meter line's end — its reset, and when it runs out** (track UM, UM-6; James, 2026-11-24, in session, on the
+  canvas *Profile meters — reset first, pace second*: "the primary info i really care is the reset date time, the out
+  pace estimate is a secondary info", then "yes, go with T9, now start implement and land all these changes"; UM-D29
+  A and UM-D32 T9, DECISIONS UM). Every C1 line ends in its reset, and only there: Settings' rows and plan cards,
+  Godview's popover and the phone's page alike (UM-L1, one meter).
+  - **The end cap** (T9). The track is the window's own time and its end is the reset, so the reset's time stands in
+    the line's last piece. The track runs square-ended into it, its right corners 0, with **2** between them. The cap
+    is a capsule a hair taller than the track (the track + 2: 14 beside a 12 track, 16 beside Settings' 14), its left
+    corners 2 and its right end round, in the ink at 15%. One width holds every cap, so a list's bars end together:
+    **64**, its column 66 with the 2, on the desktop and the phone alike; the label's column takes the 10 that stood
+    between it and the track. It holds the time at 9.5/650 in the primary ink with tabular figures, led 3 before it
+    by the day at 7.5/750 in capitals, tracked 0.07em, in the secondary ink. (Its widest day and time, "WED 23:59",
+    measure 52; the canvas drew 58 and 60, which "RESET 12:30" filled to its edges, and Segoe UI on Windows runs wider.)
+  - **What it says**, on a 24-hour clock in the reader's own zone and locale: a reset today, its time alone,
+    **15:00**; on one of the next six days, its weekday and time, **THU 12:00**; a week or more off, its date alone,
+    **DEC 4**. The line never says its reset as a length; how far off it is stays in the line's words, "resets at
+    15:00, in 1h" (§9 "The meters' words"), which are its tooltip too. A budget names no reset and has no cap: its
+    track keeps its round end, and so does a window that names no reset.
+  - **A window read before its reset** keeps its cap's place, empty and dashed (1, the ink at 28%, inside its edge),
+    saying when it reset, **RESET 12:30**, in the tertiary ink, its word set closer than a day's (tracked 0.02em, 2
+    before the time) so it stands clear of the dashes (58 at a day's spacing, with the time's tabular figures). Its fill
+    draws at 50% as before (§8 "The Bands circle"), and the age of its read stands under its bar, "as of 3h ago", at
+    10/500 in the tertiary ink from the track's start (each line its own read, item 274).
+  - **The out mark** (UM-D29 A). A window that runs out before its reset at this pace (UM-D4) is marked under its
+    bar, never in the cap: a tick 1.5 wide and 8 tall (9 on the phone), corners 1, in the attention ink, where the
+    window runs out on its own time (the time gone over the share used, of the track's width), hanging just under the
+    track, its top 1 below the track's foot; and its words beside it, "out in ~25m", at 10/600 (10.5 on the phone) in
+    the attention ink with tabular figures, ending 5 before the tick when they fit there, else starting 5 after it.
+    Its row is 11 tall (13 on the phone), drawn in the track's column alone, its top 2 below the track's foot, so it
+    rises into the gap above it (3 of a row's 5, 5 of a plan card's 7). A kept reading (a refresh that failed)
+    forecasts nothing, so it draws no mark.
+  - **The cap never turns orange.** A window that runs hot keeps its orange fill and figure, and its cap stays the
+    ink's, so orange says one thing at a line's end: running out (‹for James›).
+  - **No glyph leads a reset.** `reset` (§13) is the refresh's now (§8 "Godview's profiles column", the head; "The
+    Agent Profiles page"). *Before (2026-09-24 to 2026-11-23):* each line ended in words: its forecast while it ran
+    ahead, else `reset` 10 and the reset, as a length under a day ("2h 45m") and by its day and clock from a day on
+    ("Thu 12:00"), else the reading's age; and the phone kept a 58 slot and said the plan's forecast as a sentence
+    under its lines.
 - **A plan's tier — a badge after its name** (item 495, 2026-11-17; James, in session, 01:06:35Z: "my codex plan
   name should be ChatGPT Pro 200, maybe you design 200 as a badge so 100x, 500x use the same design, for claude 5hr,
   some ultra plan have removed it, while some new ultra plan still has it, so it should depends on each sign in's
@@ -4062,13 +4100,29 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       over a click outside that left the focus in place*).
     - **The head:** the profile's glyph (15) and its name at 14/600; a **default** tag when there are several
       profiles (10/600, padded 3 6, a capsule ringed by the strong hairline, in the secondary ink); the reading's
-      age at 11.5 in the tertiary ink; and × at the end, a 24 round on the ink at 6% holding `close` 11 in the
-      secondary ink; under the pointer its fill steps to the ready fill's 14% and its ink to the primary, at once
-      (*added 2026-11-09, UM-R's review: the build's values, written down here first*). The same tag, holding a
-      plan's tier, is the badge after a plan's title (§8 "A plan's tier"; *added 2026-11-17, item 495*).
+      age at 11.5 in the tertiary ink, pushed to the head's end; **↻**, the refresh, 8 after it; and × at the end, a
+      24 round on the ink at 6% holding `close` 11 in the secondary ink; under the pointer its fill steps to the ready
+      fill's 14% and its ink to the primary, at once (*added 2026-11-09, UM-R's review: the build's values, written
+      down here first*). The same tag, holding a plan's tier, is the badge after a plan's title (§8 "A plan's tier";
+      *added 2026-11-17, item 495*).
+      - **↻ reads the profile again** (*added 2026-11-24, UM-6; James, in session: "in the meter hover card, we
+        should also have a refresh button there", R1 on the canvas; UM-D30*). It is × made again, the same 24 round
+        and the same steps under the pointer, holding `reset` 12. A press reads the usage of the card's sign-ins
+        again, as Retry does (`agents.usage` with `refresh: true` and their `profileIds`). While the reading is out it
+        turns, a turn every 0.9s, linear, takes no press (`aria-busy`), and the age says "Reading usage…"; when the
+        batch lands the age is the new reading's, "Read just now". Under Reduce Motion, or with Godview's animations
+        off, it does not turn, and the words say it. It stands only where the usage door can read again and the card
+        holds a sign-in to read. Said "Refresh usage". *Before:* the age stood after the name, and only a plan that
+        could not be read offered to read again.
     - **The body:** the circle at **212** in a 212 column, its arcs answering the pointer (§8 "The Bands circle"),
-      with **the bands key** under it: each of its three words led by its band drawn small (16 × 11), at 10.5/500 in
-      the tertiary ink. **Its middle names the window its figure reads**, by that window's C1 label ("7D", "5H") at
+      with **the bands key** under it: each of its words led by its band drawn small (16 × 11), at 10.5/500 in the
+      tertiary ink, **on one line**, 5 between a band and its word and 10 between words. It names only what its circle draws (*amended 2026-11-24, UM-6;
+      James, in session: "make this design in one line, two line looks odd", K3 on the canvas; UM-D31*): the inside
+      band by its window's length ("5 hours"), the outside band by its ("7 days"), a budget by "credits" (both bands
+      lit), and the hairline by its group's own word, its label without " only" ("Opus", "Luna Reserve"), or "a
+      model's week" while the circle's groups have more than one name. It never takes a second line: the last word
+      gives way with an ellipsis. With nothing to name (no plan reads yet) there is no key. *Before:* the same three
+      words always, "5 hours · 7 days · a model's week", which wrapped onto two lines in the 212 column. **Its middle names the window its figure reads**, by that window's C1 label ("7D", "5H") at
       700 in the ink at 70%, where the agent's mark stood, over the figure; at full size the say line follows and no
       "of 7 days" line repeats the window. A plan with no reading keeps its mark. *(Corrected 2026-11-16; James, in
       chat: the agent icon in the middle "is too redundant … make it to show this current highlighted meter, for
@@ -4087,10 +4141,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       whole, its tooltip included — *added 2026-11-16; James, in chat: "show the sign-in email by the agent name in
       redacted form"*), and
       **Settings' C1 lines, one for every window the plan reads**,
-      at the row's width × 12, each saying at its end what Settings' line says: its forecast while it runs ahead,
-      else its reset, and the reading's age for a window read before its reset or a kept reading (which forecasts
-      nothing). A plan with no lines yet (a first read, one that needs you) says its right words at the row's end
-      (a reset led by `reset` 9; in the attention ink when hot). The key's bands each stand in their own 16 × 11
+      at the row's width × 12, each ending in its reset's cap, with its out mark under it while it would run out
+      first, and a window read before its reset its cap dashed and its read's age under it (§8 "A meter line's end";
+      *amended 2026-11-24, UM-6: each line said at its end its forecast while it ran ahead, else its reset, else the
+      reading's age*). A kept reading says its age once, at the head's end, in the tertiary ink, and forecasts
+      nothing. A plan with no lines yet (a first read, one that needs you) says its right words at the row's end
+      (no mark leads them; in the attention ink when hot). The key's bands each stand in their own 16 × 11
       box, before their words. *(Corrected 2026-11-16; James, in chat: the popover's meters "should show all the
       meters of this agent, not just showing one". This drew the tightest window's line alone, at 196 × 12, its
       words at the row's end. The same day: the key's three bands had left their words, drawn in no box of their
@@ -10245,9 +10301,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     Motion, as every Bands circle's does, and the menu keeps its own M6 form.
     The row stands while you are signed in; a home that does not share usage yet says so on the page (§9).
   - **The Agent Profiles page** (UM-D26 A) is a sheet of its own in Settings' materials (§8 "The phone's
-    Settings"): paper, the large title **Agent Profiles**, close only (iOS 26's `role: .close`), corners 40 as
+    Settings"): paper, the large title **Agent Profiles**, close (iOS 26's `role: .close`), corners 40 as
     Settings' sheet has. It rises as Settings' sheet does, the system's, which keeps the system's own Reduce Motion
-    (the drawing's 420ms rise is not taken). From the top:
+    (the drawing's 420ms rise is not taken). **↻, the refresh, stands before close** (*added 2026-11-24, UM-6;
+    James, in session, "1.yes" to the phone getting the card's refresh; UM-D33, which revisits UM-D8*): a toolbar
+    button holding the system's `arrow.clockwise`, said "Refresh usage". It asks the home to read its usage again
+    (`agents.usage` with `refresh: true`), and pulling the page down does the same, with the system's spinner. While
+    that reading is out ↻ turns (the symbol's own rotate, which Reduce Motion stills) and takes no press, and the
+    head's line says "Reading usage…"; when the batch lands the line says its age again, "Read just now, from
+    studio". The age stays the head's line under the circle, the page's one word of where its reading comes from:
+    the canvas drew it under the title, which wears no subtitle before iOS 26. A reading that fails leaves the last
+    batch standing, and a home that refuses `agent.usage` still says so (§9). *Before:* close only, and the phone
+    never asked for a fresh reading. From the top:
     - **the circle** at 214 (a tap on a plan focuses it), its middle naming the window its figure reads as the
       popover's does (§8 "The body": "7D" where the agent's mark stood; a plan with no reading keeps its mark; added
       2026-11-17), the bands key under it, and where the reading comes from: "Read a minute ago, from studio", or
@@ -10277,15 +10342,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       address whole; at 13 in the tertiary ink, giving way first when the line is tight; VoiceOver says it with "…"
       for the dots; added 2026-11-17), the age of a kept reading ("as of 5m ago") or of one taken before a window's
       reset that has since come (§8 "The Bands circle"; added 2026-11-06, ‹for James›), every window as Settings'
-      C1 line (*each passed line saying its own read's age; added 2026-11-10, item 274, UM-274-D2*), and "Runs out in
-      ~35m at this pace" while it would (UM-D4). While the field is live a plan's row adds
+      C1 line (*each passed line saying its own read's age; added 2026-11-10, item 274, UM-274-D2*), each ending in
+      its reset's cap at 64 with its out mark under it while it would run out first (§8 "A meter line's end";
+      *amended 2026-11-24, UM-6, UM-D29: this said "and 'Runs out in ~35m at this pace' while it would (UM-D4)", a
+      sentence under the plan's lines, and each line ended in a 58 slot holding its reset*). While the field is live a plan's row adds
       its sessions line ("3 sessions · 1 working · 1 waiting for you", or "no sessions"); a plan with sessions draws
       **Show**, **Showing** while it is the one chosen, for everyone, with one profile too (UM-D14, built 2026-11-09,
       UM-5b), and either closes the page. Under a lens a plan's row counts only the sessions in that profile, and draws
       **Show** only on those, so a twin's run under another profile never promises a session the filter would recede
       (2026-11-09, UM-5b's review). A plan that needs you says where it is fixed, "Not signed in · sign in on
       studio" or "Couldn't read · retry", and the
-      phone draws no act for either: it signs in on no desktop, and a phone's refresh spends no call (UM-D8). An
+      phone draws no act for either beside the page's ↻: it signs in on no desktop (*amended 2026-11-24, UM-6: this
+      said "and a phone's refresh spends no call (UM-D8)"; since UM-D33 the page's ↻ reads again*). An
       agent with no meter is a line of its own, "Codex shows no meter";
     - **the foot:** "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
     - *Wave 1 (2026-11-06, UM-D14's interim, the lead's ruling 23) ended 2026-11-09 at UM-5b:* the page draws
@@ -12076,6 +12144,15 @@ here.
   stands only where no age can be said. ‹for James›: the age keeps its own width, the line's track giving way to it,
   where a reset keeps the slot's 58.)* *(Added 2026-11-10, item 274, UM-274-D2: "its age" is the age of the window it
   names; a meter a later reading did not carry says its own read, §8 "A meter a later reading did not carry".)*
+  *(Amended 2026-11-24, UM-6, UM-D29 and UM-D32; §8 "A meter line's end": a line says its reset in its end cap, on the
+  clock, never as a length: **15:00** today, **THU 12:00** on another of the next six days, **DEC 4** from a week
+  on, and **RESET 12:30**, dashed, once it has come, the age of its read under its bar, "as of 3h ago". "out in ~35m"
+  stands under the bar beside its mark, and the phone's "Runs out in ~35m at this pace" retires. A line is said "5H:
+  91% used, resets at 15:00, in 1h, ahead of pace, out in ~25m"; on another day "resets Thu 12:00, in 2d 22h"; a
+  week on "resets Dec 4, in 9d 3h"; once it has come "reset at 12:30, as of 3h ago" (‹for James›: the words). So
+  "resets in 2h", "resets Thu 09:00" and "resets now" leave the lines, and the 58 slot with them; the circle's own
+  words, its spoken label and its middle from about 216, keep "resets in 2h". A kept reading says its age once, at
+  its plan's head on the desktop's popover and above its lines on the phone, never on each line.)*
 - **What needs you.** On the desktop, "not signed in" with **Sign in**, and "couldn't read" with **Retry**. On the
   phone, "Not signed in · sign in on ‹home›" and "Couldn't read · retry", with no act. A sign-in already under way
   says "signing in…" with no act, as Settings' row says "Signing in…" and offers only its cancel; it is said
@@ -12104,7 +12181,11 @@ here.
   "Read 3 hours ago"; and while the usage cannot be read the popover says the profile's one line, "‹profile›: usage
   unavailable", in place of a line per agent, an agent with no meter keeping its own.)* *(Added 2026-11-10, item 274,
   UM-274-D4: the head's age is the batch's newest read; a meter kept from an older reading says its own age on its line,
-  never in the head.)*
+  never in the head.)* *(Amended 2026-11-24, UM-6, UM-D30 and UM-D31: the head's ↻ is said "Refresh usage", and while
+  it reads the age says "Reading usage…" (‹for James›: the words). The bands key says only what its circle draws, by
+  the windows' own lengths and the hairline's group: "5 hours · 7 days · Opus", said "Inside, 5 hours; outside, 7
+  days; a hairline, Opus"; a budget's word is "credits", and the hairline of more than one group "a model's week".
+  The phone's page says its ↻ "Refresh usage" too.)*
 - **The add.** **Add a profile…**; AO-5's offer and fact, "Keep work, personal, or client accounts separate. Use
   accounts side by side without signing each other out."; and "Opens Settings → Agent Profiles on New profile…".
 - **The limit moment** keeps AO-6b's words (§8 "The moments"): **Another subscription?**, "92% · 7 days", **Add a
@@ -13486,7 +13567,9 @@ as the coin's marks (§2.8) and the crew card's ring are, so it is geometry: one
 allowlist, never an icon, and no glyph stands for usage. Its middle holds a profile's own glyph from puppeteer's
 `ProfileGlyph` set, kept outside this set as the vendor marks are (below). Everything else the column and the Peek
 wear is already among the 65: the add and **+ Filter** are `plus`; a token's × and the popover's are `close`; the
-add's card wears `gear`; a reset is led by `reset`; Everything's projects wear `folder` and what was said `message`.
+add's card wears `gear`; the popover's refresh is `reset` (*amended 2026-11-24, UM-6: this said "a reset is led by
+`reset`"; a reset time now stands in its line's end cap and wears no glyph, so `reset` means one thing in the card,
+read again, §8 "A meter line's end"*); Everything's projects wear `folder` and what was said `message`.
 On the desk **Every profile** wears no mark: in + Filter's menu it leads with nothing, as All desktops, Every project
 and Any agent do (round 4's `tokens` variant), and no token stands for it. *(Corrected 2026-11-06, the M-desk stack:
 this said "and **Every profile** keeps `person`", the retired scope row's dropdown's glyph; `peek-filters.test.ts`
