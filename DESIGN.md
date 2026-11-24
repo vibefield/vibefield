@@ -6455,7 +6455,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     that was not measured is an en dash, never a zero: a process's first second has memory and no CPU yet. A row never moves while its neighbours' numbers
     change: rows keep the order of their roles, then of their pids. A terminal's row is the terminal's own process
     and everything it runs, counted (**Terminal · 8 processes**), in the secondary ink; it says no title, folder or
-    command (VT-D4). The foot, over a hairline: **All of VibeField**, its CPU in cores once it passes one (**2.3
+    command (VT-D4). A terminal fieldd launched an agent in says that agent's name, the catalog's label, in the
+    word's place while the run stands (VT-2c, *added 2026-11-24*); a plain shell, a run whose agent has exited, and
+    an agent the person started by hand in a shell stay **Terminal**, because fieldd reads nothing typed there.
+    A process fieldd starts for a plugin, a **Plugin process** row named by the plugin's title, and an **MCP
+    server** fieldd started itself (a plugin's configured server) are each counted with everything under them, in
+    the fieldd group (VT-2c, *added 2026-11-24*). An MCP server an agent starts is inside its terminal's row. The foot, over a hairline: **All of VibeField**, its CPU in cores once it passes one (**2.3
     cores**) and its memory; and under it in the tertiary ink, "Your terminals aren't counted in it."
   - **A row chosen.** A press chooses a row (its ground `#242424`, corners 6), and its own trace joins both lanes in
     the primary ink while the groups' traces step back to the faint ink. A second press, or Escape, lets it go.
@@ -6514,10 +6519,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     itself, on the floor as well as in fieldd, and drops what was kept; the window, if open, says **Off · turned
     off in Settings**, its lanes stand empty and its list holds one sentence. On again starts from nothing: no
     reading from before the switch comes back. The section has no figures and no door of its own.
+    *Corrected 2026-11-24 (VT-2c):* it has one door now. Under the row, at its right, a quiet button, **Open
+    Vitals**, opens the window or brings it forward, exactly as the Window menu's item does, and closes nothing. A
+    page that has no desktop shell to ask (the browser-only catalog) does not draw it, so the button is never a
+    dead one. The row's line still ends "The window is under Window → Vitals.": the menu stays the window's other
+    way, and the only one with a key.
   - *Not drawn until built:* a window's long frames (VT-3c; the desk's window may not report today, and whether
     its token gains that is ‹for James›), frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
-    (VT-4), armed traces (VT-5), a door to Vitals from Settings →
-    Diagnostics, the plugins' log lines, and a span older than the lines the window holds.
+    (VT-4), armed traces (VT-5), the plugins' log lines, a span older than the lines the window holds, and a
+    **Flows host** row: the word stands, but this build's fieldd composes no flow runner, so it starts no flow host
+    to name (VT-2c, *added 2026-11-24*).
+    *Corrected 2026-11-24 (VT-2c):* this list named "a door to Vitals from Settings → Diagnostics". It is built
+    (the recorder's switch, above).
     *Corrected 2026-11-24 (VT-2b):* this list named "the Settings switch that turns the recorder off". It is built
     (above); the door from Settings is still not.
     *Corrected 2026-11-24 (VT-3):* this list said "the frames and loop-delay lanes (VT-3)". The loop's lane is a
@@ -13032,7 +13045,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
 - **Vitals' words** (track VT; *added 2026-11-24*; ‹draft› for James's eye). The window is for whoever is fixing
   VibeField, so it may name VibeField's insides (§9, "What only someone fixing VibeField needs lives in
   Diagnostics"): **fieldd**, **rosettad**, **field-native**, **Terminal cell**, **Mesh sidecar**, **Freeway host**,
-  **Files host**, **Transcripts host**, **Flows host**, **Plugin process**; the shell's own are **Main**, **Desk
+  **Files host**, **Transcripts host**, **Flows host**, **Plugin process**, **MCP server** (VT-2c, *added
+  2026-11-24*); the shell's own are **Main**, **Desk
   window**, **GPU**, **Browser pane**, **Helper**, **Studio**, and Vitals' own window is **Vitals window**. A
   terminal's row is **Terminal**, or the agent's name once fieldd says it. The groups: **VibeField**, **fieldd**,
   **The floor**, **Your terminals**, **Vitals**. The states, each one line: "Recording · every second" · "Connecting
@@ -13042,7 +13056,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   cannot measure, and "The recorder is off. Turn it on in Settings → Diagnostics." while it is off. The switch's
   words in Settings (VT-2b, *added 2026-11-24*): the section "Vitals", with "CPU and memory of VibeField's own
   processes, read once a second and kept for thirty minutes on this computer."; the row "Record vitals", with "Off
-  stops the measuring and drops what was kept. The window is under Window → Vitals." The foot: "All of VibeField" and "Your terminals aren't counted in it." It says "CPU" and
+  stops the measuring and drops what was kept. The window is under Window → Vitals."; and the section's door
+  (VT-2c, *added 2026-11-24*), the button "Open Vitals". The foot: "All of VibeField" and "Your terminals aren't counted in it." It says "CPU" and
   "Memory" as Activity Monitor does, and a share of one core as a percent: "14%", and from one core up "2.3 cores".
   The Loop lane (VT-3) is "Loop · share of each second busy", and its reading says "12% busy", "GC 3 ms" and
   "slowest terminal.list 41 ms": a method is said by its own name, because whoever reads this window is looking for
