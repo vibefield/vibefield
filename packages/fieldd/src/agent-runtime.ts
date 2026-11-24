@@ -117,6 +117,15 @@ import {
   type PersonaSessions,
 } from "./agent-profiles";
 import {
+  carriedFrom,
+  ownUsage,
+  RUN_LEDGER_WRITE_MS,
+  RunLedger,
+  type RunTotals,
+  recordedRanMs,
+  runTotals,
+} from "./agent-run-ledger";
+import {
   foldStatus,
   mirrorOf,
   mirrorShowsTurn,
@@ -128,15 +137,6 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
-import {
-  carriedFrom,
-  ownUsage,
-  recordedRanMs,
-  RUN_LEDGER_WRITE_MS,
-  RunLedger,
-  type RunTotals,
-  runTotals,
-} from "./agent-run-ledger";
 import { RESUMED_WHEN_IDLE, type StartedThrough, startedThrough } from "./agent-started-through";
 import {
   afterEscalation,
