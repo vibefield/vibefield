@@ -139,7 +139,10 @@ export function vitalsFixtureSnapshot(): VitalsSnapshotV1 {
                     Math.round(Math.max(0, 0.02 * (1 + 0.5 * wobble(9, second))) * 10_000) / 10_000,
                 },
               }
-            : {}),
+            : // VT-3c: the desk's window says its long frames, in the second its CPU rises and in no other
+              actor.role === "window" && second % 61 === 1
+              ? { own: { longFrames: 3, longFrameMaxMs: 182 } }
+              : {}),
       });
     }
     samples.push({ seq: second + 1, time: start + second * INTERVAL, points });

@@ -425,6 +425,10 @@ async function mint(
       "shell.dialog",
       // OB-3a — the desk's door: only a window token holds it, and fieldd holds each row to one
       "objects.window",
+      // VT-3c (track VT, 2026-11-24; VT-D10 A) — the window says its own long frames to fieldd
+      // (`vitals.own.report`). fieldd takes those two figures alone from a window token and never the roster, which
+      // stays main's; `vitals.read` stays out: the Vitals window reads through main.
+      "vitals.report",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

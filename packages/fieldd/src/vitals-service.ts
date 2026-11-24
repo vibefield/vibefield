@@ -1,4 +1,4 @@
-import { type CallerContext, VITALS } from "@vibefield/contracts";
+import { type CallerContext, VITALS, VITALS_FRAMES } from "@vibefield/contracts";
 import {
   type NativeVitalsReading,
   NativeVitalsSample,
@@ -82,6 +82,21 @@ interface Identity {
 
 const SHELL_GROUP_OF: Partial<Record<VitalsRole, VitalsGroup>> = { "vitals-window": "observer" };
 
+/** VT-3c (track VT, 2026-11-24; VT-D10 A) — the roster's role for the desk's window: where its own frames land. */
+const DESK_WINDOW_ROLE: VitalsRole = "window";
+
+/** VT-3c — a caller is the desk's window when it holds a renderer window grant the shell minted for one of its
+ * windows (`system.mintWindowToken`, which alone binds a renderer participant to a token), on this device, as a
+ * renderer. The binding is read from the bearer record, never from the call. */
+function isDeskWindow(ctx: CallerContext): boolean {
+  return (
+    ctx.transport === "ws-loopback" &&
+    ctx.principal.kind === "local-token" &&
+    ctx.principal.rendererParticipant !== undefined &&
+    ctx.clientKind === "renderer"
+  );
+}
+
 function round(value: number, places: number): number {
   const scale = 10 ** places;
   return Math.round(value * scale) / scale;
@@ -99,6 +114,8 @@ export class VitalsService {
   private roster: VitalsRosterEntry[] = [];
   /** VT-3b — what a reporter said of itself since the last sample, by its roster role; taken at the next sample */
   private readonly reported = new Map<string, VitalsOwnV1>();
+  /** VT-3c — how many reports the desk's window made since the last sample (`reportFrames`) */
+  private windowReports = 0;
   private state: string = "waiting";
   private detail: string | undefined = "the floor's meter has not answered yet";
   private intervalMs: number = VITALS.SAMPLE_INTERVAL_MS;
@@ -195,6 +212,8 @@ export class VitalsService {
       return this.setRoster(params);
     });
     api.register("vitals.own.report", (ctx, params) => {
+      // VT-3c — the desk's window says its long frames and nothing else; every other caller but main is refused
+      if (isDeskWindow(ctx)) return this.reportFrames(params);
       this.assertShell(ctx, true);
       return this.reportOwn("main", params);
     });
@@ -472,6 +491,11 @@ export class VitalsService {
       });
     }
 
+    // VT-3c — what was said since the last sample was this sample's to carry: a report for a row the census did
+    // not hold is kept for no one (`VitalsOwnReportParams`), never for a later row of that role
+    this.reported.clear();
+    this.windowReports = 0;
+
     const gone = [...this.live].filter((key) => !seen.has(key));
     for (const key of gone) this.previous.delete(key);
     this.live = seen;
@@ -519,9 +543,51 @@ export class VitalsService {
         issues: parsed.error.issues.length,
       });
     }
+    return this.keep(role, parsed.data.own);
+  }
+
+  /** VT-3c (VT-D10 A) — the desk's window says how many of its frames since its last report were long, and the
+   * longest. Only those two fields are kept: anything else the page puts in `own` is dropped, so a page can never
+   * say Main's loop, a pause or a slow request, and it names no process (it lands on the roster's `window` row,
+   * which main alone names). Same-uid code holding the window's token (EL7) can at most misstate that one row's
+   * frames: a report is bounded in its count and its longest frame, and fieldd takes REPORTS_PER_SAMPLE_MAX of them
+   * between two samples and refuses the rest, so what one interval carries is bounded too. */
+  private reportFrames(raw: unknown): { accepted: boolean } {
+    const parsed = VitalsOwnReportParams.safeParse(raw);
+    if (!parsed.success) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "expected { own: { longFrames?, longFrameMaxMs? } }",
+        false,
+        { issues: parsed.error.issues.length },
+      );
+    }
+    const { longFrames, longFrameMaxMs } = parsed.data.own;
+    if (
+      (longFrames !== undefined && longFrames > VITALS_FRAMES.FRAMES_PER_REPORT_MAX) ||
+      (longFrameMaxMs !== undefined && longFrameMaxMs > VITALS_FRAMES.FRAME_MS_MAX)
+    ) {
+      throw new RpcCallError("PRECONDITION_FAILED", "a frames report past its bounds", false);
+    }
+    if (this.state !== "recording") return { accepted: false };
+    if (this.windowReports >= VITALS_FRAMES.REPORTS_PER_SAMPLE_MAX) {
+      throw new RpcCallError(
+        "RESOURCE_EXHAUSTED",
+        "the window reported its frames too often since the last sample",
+        true,
+      );
+    }
+    this.windowReports += 1;
+    return this.keep(DESK_WINDOW_ROLE, {
+      ...(longFrames !== undefined ? { longFrames } : {}),
+      ...(longFrameMaxMs !== undefined ? { longFrameMaxMs } : {}),
+    });
+  }
+
+  /** Keep what a reporter said for its row's next sample, folded into what it already said since the last one. */
+  private keep(role: string, next: VitalsOwnV1): { accepted: boolean } {
     // nobody is listening for it while the recorder records nothing
     if (this.state !== "recording") return { accepted: false };
-    const next = parsed.data.own;
     const before = this.reported.get(role);
     if (before === undefined) {
       this.reported.set(role, { ...next });

@@ -343,6 +343,12 @@
   stroke: var(--vf-red);
 }
 
+/* VT-3c — a second with a long frame in the desk's window: a tick on the Loop lane's foot, in the primary ink */
+.vf-vitals__frame {
+  stroke: var(--vf-vitals-primary);
+  stroke-width: 1;
+}
+
 .vf-vitals__overlay {
   position: absolute;
   inset: 0;

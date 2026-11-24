@@ -1,7 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { SOCKETS, VITALS } from "@vibefield/contracts";
+import { SOCKETS, VITALS, VITALS_FRAMES } from "@vibefield/contracts";
 import {
   type VitalsDeltaV1,
   VitalsQueryResult,
@@ -546,7 +546,8 @@ describe("fieldd's vitals recorder (VT-1)", () => {
     // and never on another row
     expect("own" in (pointOf(1, desk) ?? {})).toBe(false);
 
-    // a window may not report, even holding the scope; a malformed report is refused
+    // a token the shell did not mint for one of its windows may not report, even holding the scope (VT-3c: the
+    // desk's window may, its frames alone, below); a malformed report is refused
     const windowGrant = fixture.daemon.tokens.mint(["vitals.report"], "desk-window");
     const window = await rpc(fixture, windowGrant.token, "renderer");
     expect((await window.callErr("vitals.own.report", { own: {} })).data?.kind).toBe(
@@ -555,6 +556,151 @@ describe("fieldd's vitals recorder (VT-1)", () => {
     expect((await client.callErr("vitals.own.report", { own: { loopBusy: 7 } })).data?.kind).toBe(
       "PRECONDITION_FAILED",
     );
+  });
+});
+
+// VT-3c (track VT, 2026-11-24; VT-D10 A) — the desk's window says its long frames straight to fieldd, under one scope
+// its token gains, and fieldd takes nothing else from it.
+describe("the desk's window says its own long frames (VT-3c)", () => {
+  /** A renderer holding the shell's window grant, as `system.mintWindowToken` makes it for the desk's window. */
+  async function deskWindow(fixture: Fixture, scopes: string[]): Promise<WsRpc> {
+    const shell = await rpc(fixture);
+    const minted = (await shell.call("system.mintWindowToken", {
+      scopes,
+      label: "window-1",
+      rendererParticipant: {
+        participantId: "renderer:desktop-test:window-1",
+        incarnation: "renderer:desktop-test:window-1:document-1",
+      },
+    })) as { token: string };
+    return await rpc(fixture, minted.token, "renderer");
+  }
+
+  it("lands its frames, and only its frames, on the Desk window's row, once; main's own stays main's", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    const mainProcess = { pid: 3900, startedAt: T0 - 120_000 };
+    const desk = { pid: 3911, startedAt: T0 - 60_000 };
+    await client.call("vitals.roster.set", {
+      processes: [
+        { pid: mainProcess.pid, role: "main" },
+        { pid: desk.pid, role: "window" },
+      ],
+    });
+    const window = await deskWindow(fixture, ["vitals.report"]);
+    // before the first reading nobody listens: said so, so the page stops for a while
+    expect(await window.call("vitals.own.report", { own: { longFrames: 1 } })).toEqual({
+      accepted: false,
+    });
+
+    const { subId } = await subscribe(client);
+    const rows = (cpuUs: number): unknown[] => [
+      ...floorRows(cpuUs),
+      reading(mainProcess, "watched", cpuUs, 150 * MIB),
+      reading(desk, "watched", cpuUs * 2, 400 * MIB),
+    ];
+    const pointOf = (index: number, who: { pid: number; startedAt: number }) =>
+      deltas(client, subId)
+        .filter((delta) => delta.sample)
+        [index]?.sample?.points.find(
+          (candidate) => candidate.key === vitalsKey(who.pid, who.startedAt),
+        );
+    const samples = (): number => deltas(client, subId).filter((delta) => delta.sample).length;
+
+    fixture.native.pushDelta("vitals.subscribe", sample(1, T0, rows(100_000)));
+    await until(() => samples() === 1);
+    // a page that tries to say more than its frames: the rest is dropped, never trusted
+    expect(
+      await window.call("vitals.own.report", {
+        own: {
+          longFrames: 2,
+          longFrameMaxMs: 120,
+          loopBusy: 0.99,
+          gcMs: 400,
+          gcMaxMs: 400,
+          slow: { method: "doc.list", ms: 9_000 },
+          pid: mainProcess.pid,
+        },
+        role: "main",
+      }),
+    ).toEqual({ accepted: true });
+    // two inside one interval fold: counted together, the longest kept
+    await window.call("vitals.own.report", { own: { longFrames: 1, longFrameMaxMs: 310.5 } });
+    await client.call("vitals.own.report", { own: { loopBusy: 0.2 } });
+    fixture.native.pushDelta("vitals.subscribe", sample(2, T0 + 1_000, rows(150_000)));
+    fixture.native.pushDelta("vitals.subscribe", sample(3, T0 + 2_000, rows(200_000)));
+    await until(() => samples() === 3);
+
+    expect(pointOf(1, desk)?.own).toEqual({ longFrames: 3, longFrameMaxMs: 310.5 });
+    expect(pointOf(1, mainProcess)?.own).toEqual({ loopBusy: 0.2 });
+    // said once: the next second says nothing of the window's frames
+    expect("own" in (pointOf(2, desk) ?? {})).toBe(false);
+    // and never on another row
+    expect("own" in (pointOf(0, desk) ?? {})).toBe(false);
+  });
+
+  it("is held to its bounds and its rate, never names a process, and reads nothing", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    await client.call("vitals.roster.set", { processes: [{ pid: 3911, role: "window" }] });
+    const window = await deskWindow(fixture, ["vitals.report"]);
+    const { subId } = await subscribe(client);
+    fixture.native.pushDelta("vitals.subscribe", sample(1, T0, floorRows(1_000)));
+    await until(() => deltas(client, subId).some((delta) => delta.sample?.seq === 1));
+
+    const refused = async (params: unknown): Promise<string | undefined> =>
+      (await window.callErr("vitals.own.report", params)).data?.kind;
+    expect(await refused({ own: { longFrames: VITALS_FRAMES.FRAMES_PER_REPORT_MAX + 1 } })).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(await refused({ own: { longFrameMaxMs: VITALS_FRAMES.FRAME_MS_MAX + 1 } })).toBe(
+      "PRECONDITION_FAILED",
+    );
+    expect(await refused({ own: { longFrames: -1 } })).toBe("PRECONDITION_FAILED");
+    // REPORTS_PER_SAMPLE_MAX between two samples, and the next is refused until a sample is made
+    for (let index = 0; index < VITALS_FRAMES.REPORTS_PER_SAMPLE_MAX; index++) {
+      expect(await window.call("vitals.own.report", { own: { longFrames: 1 } })).toEqual({
+        accepted: true,
+      });
+    }
+    expect(await refused({ own: { longFrames: 1 } })).toBe("RESOURCE_EXHAUSTED");
+    fixture.native.pushDelta("vitals.subscribe", sample(2, T0 + 1_000, floorRows(2_000)));
+    await until(() => deltas(client, subId).some((delta) => delta.sample?.seq === 2));
+    expect(await window.call("vitals.own.report", { own: { longFrames: 1 } })).toEqual({
+      accepted: true,
+    });
+
+    // the roster is main's alone, and the window holds no read of the census
+    expect((await window.callErr("vitals.roster.set", { processes: [] })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    expect((await window.callErr("vitals.subscribe", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
+    expect((await window.callErr("vitals.query", { from: 0, to: 1 })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    // a window grant without the scope is refused at the door
+    const bare = await deskWindow(fixture, ["doc.read"]);
+    expect((await bare.callErr("vitals.own.report", { own: { longFrames: 1 } })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+  });
+
+  it("keeps nothing while the recorder is off", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    await client.call("vitals.roster.set", { processes: [{ pid: 3911, role: "window" }] });
+    const window = await deskWindow(fixture, ["vitals.report"]);
+    const { subId } = await subscribe(client);
+    fixture.native.pushDelta("vitals.subscribe", sample(1, T0, floorRows(1_000)));
+    await until(() => deltas(client, subId).some((delta) => delta.sample?.seq === 1));
+    await client.call("storage.appPreferences.set", {
+      key: "diagnostics.recordVitals",
+      value: false,
+    });
+    await until(() => deltas(client, subId).some((delta) => delta.state === "off"));
+    expect(await window.call("vitals.own.report", { own: { longFrames: 2 } })).toEqual({
+      accepted: false,
+    });
   });
 });
 

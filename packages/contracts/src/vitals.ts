@@ -376,7 +376,12 @@ export type VitalsRosterSetResult = z.infer<typeof VitalsRosterSetResult>;
 /** `vitals.own.report` (VT-3b; scope `vitals.report`, Electron main alone) — what the caller says of itself since
  * its last report. fieldd carries it on the caller's own row at the next sample: Electron main's on the row its
  * roster names `main`. A report for a row the census does not hold is kept for no one. Main reports only while the
- * Vitals window is open, so this door adds no duty at rest. */
+ * Vitals window is open, so this door adds no duty at rest.
+ *
+ * *Amended 2026-11-24 (VT-3c, VT-D10 A):* this said "Electron main alone". The desk window reports too, its long
+ * frames only and only when one happens (`VITALS_FRAMES`): fieldd keeps `longFrames` and `longFrameMaxMs` from it,
+ * drops every other field, and carries them on the row the roster names `window`. Whose row a report lands on is
+ * read from the caller's token, never from the report. */
 export const VitalsOwnReportParams = z.object({ own: VitalsOwnV1 }).passthrough();
 export type VitalsOwnReportParams = z.infer<typeof VitalsOwnReportParams>;
 

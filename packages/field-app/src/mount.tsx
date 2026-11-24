@@ -7,6 +7,7 @@ import { createBootMachine } from "./boot/machine";
 import { type FieldHost, setHost } from "./host";
 import { setRendererLogger } from "./logging";
 import { hearPageFaults } from "./page-faults";
+import { LongFrameReporter } from "./page-frames";
 import { mountFrameStatsOverlay } from "./perf/frame-stats-overlay";
 import type { ProductPresentationContextReporter } from "./presentation-context";
 import { stampInitialTheme } from "./theme";
@@ -45,6 +46,13 @@ export function mountFieldApp(opts: {
     },
   });
 
+  // VT-3c — this window's long frames reach fieldd's census through the window's own client, once it has one.
+  // Nothing runs at rest: the platform's observer wakes it only when a frame was long.
+  const frames = new LongFrameReporter({
+    client: () => machine.client,
+    logger: opts.host.logger,
+  });
+
   opts.host.onPrepareClose((requestId) => {
     void (async () => {
       try {
@@ -52,6 +60,7 @@ export function mountFieldApp(opts: {
         // teardown. Cleanup may still need those host doors, so the exact renderer targets go first.
         await machine.closePlugins();
         await machine.ready?.manager.shutdown();
+        frames.dispose();
         machine.client?.close();
         opts.host.completeClose({ requestId, ok: true });
       } catch (error) {

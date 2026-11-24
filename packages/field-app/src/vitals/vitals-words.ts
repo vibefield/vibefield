@@ -152,6 +152,8 @@ export function ownWords(
     loopBusy?: number | undefined;
     gcMs?: number | undefined;
     slow?: { method: string; ms: number } | undefined;
+    longFrames?: number | undefined;
+    longFrameMaxMs?: number | undefined;
   } | null,
 ): string | null {
   if (own === null) return null;
@@ -160,6 +162,12 @@ export function ownWords(
   if (own.gcMs !== undefined && own.gcMs > 0) parts.push(`GC ${durationWords(own.gcMs)}`);
   if (own.slow !== undefined)
     parts.push(`slowest ${own.slow.method} ${durationWords(own.slow.ms)}`);
+  // VT-3c — the desk window's long frames: how many, and the longest
+  if (own.longFrames !== undefined && own.longFrames > 0) {
+    parts.push(own.longFrames === 1 ? "1 long frame" : `${own.longFrames} long frames`);
+    if (own.longFrameMaxMs !== undefined)
+      parts.push(`longest ${durationWords(own.longFrameMaxMs)}`);
+  }
   return parts.length === 0 ? null : [name, ...parts].join(" · ");
 }
 

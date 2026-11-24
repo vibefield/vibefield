@@ -241,6 +241,25 @@ describe("createBootstrapHandler (once per generation)", () => {
     expect(scopes).not.toContain("shell.open");
   });
 
+  it("VT-3c: the window may say its own long frames, and still reads no vitals", async () => {
+    const daemon = fakeDaemon();
+    const handler = createBootstrapHandler({
+      owns: () => true,
+      ensure: daemon.ensure,
+      desktopBootId: DESKTOP_BOOT_ID,
+    });
+    await handler({ sender: fakeSender(1).wc });
+    const mint = daemon.request.mock.calls.find(([method]) => method === "system.mintWindowToken");
+    const scopes = (mint?.[1] as { scopes: string[] } | undefined)?.scopes ?? [];
+    // read off the registry rows, so a door that moves scope moves this with it
+    const report = METHODS.find((method) => method.method === "vitals.own.report");
+    expect(report?.scope).toBe("vitals.report");
+    expect(scopes).toContain(report?.scope);
+    // the Vitals window reads through main (VT-2): the desk's window holds no read of it
+    for (const door of METHODS.filter((method) => method.scope === "vitals.read"))
+      expect(scopes, door.method).not.toContain(door.scope);
+  });
+
   it("distinct senders mint distinct tokens with their own labels", async () => {
     const daemon = fakeDaemon();
     const handler = createBootstrapHandler({

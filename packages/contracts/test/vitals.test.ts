@@ -10,6 +10,7 @@ import {
   STUDIO_PUBLISHER_PORT_CHANNEL,
   TAILNET_SCOPES,
   VITALS,
+  VITALS_FRAMES,
   VITALS_PORT_CHANNEL,
 } from "../src/registries";
 import {
@@ -341,6 +342,35 @@ describe("VT-3b — a process reports what it says of itself", () => {
 
   it("is not idempotent: each report is one interval's", () => {
     expect(METHODS.find((m) => m.method === "vitals.own.report")?.idempotent).toBe(false);
+  });
+});
+
+describe("VT-3c — the desk window's long frames", () => {
+  it("carries a count and the longest, and nothing that says whose they are", () => {
+    const report = VitalsOwnReportParams.parse(fixture("vitals-own-report-params.frames.json"));
+    expect(report.own).toEqual({ longFrames: 3, longFrameMaxMs: 182.4 });
+    expect(VitalsOwnV1.safeParse({ longFrames: -1 }).success).toBe(false);
+    expect(VitalsOwnV1.safeParse({ longFrames: 1.5 }).success).toBe(false);
+    expect(VitalsOwnV1.safeParse({ longFrameMaxMs: -1 }).success).toBe(false);
+  });
+
+  it("counts a frame over the platform's own 50 ms line, says it within a second, and backs off for thirty", () => {
+    expect(VITALS_FRAMES.LONG_FRAME_MS).toBe(50);
+    expect(VITALS_FRAMES.REPORT_DELAY_MS).toBeLessThanOrEqual(VITALS.SAMPLE_INTERVAL_MS);
+    expect(VITALS_FRAMES.BACKOFF_MS).toBe(30_000);
+    // a report waits out its bound before the next may leave, and that bound is shorter than the back-off
+    expect(VITALS_FRAMES.REPORT_TIMEOUT_MS).toBeLessThan(VITALS_FRAMES.BACKOFF_MS);
+  });
+
+  it("bounds what one interval can carry from a page", () => {
+    // a long frame is over 50 ms, so a second holds at most twenty: one report covers ten seconds of them
+    const perSecond = VITALS.SAMPLE_INTERVAL_MS / VITALS_FRAMES.LONG_FRAME_MS;
+    expect(VITALS_FRAMES.FRAMES_PER_REPORT_MAX).toBeGreaterThanOrEqual(10 * perSecond);
+    expect(VITALS_FRAMES.REPORTS_PER_SAMPLE_MAX).toBeGreaterThanOrEqual(2);
+    expect(
+      VITALS_FRAMES.REPORTS_PER_SAMPLE_MAX * VITALS_FRAMES.FRAMES_PER_REPORT_MAX,
+    ).toBeLessThanOrEqual(1_000);
+    expect(VITALS_FRAMES.FRAME_MS_MAX).toBeGreaterThan(VITALS_FRAMES.LONG_FRAME_MS);
   });
 });
 

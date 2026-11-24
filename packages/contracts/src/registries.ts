@@ -1608,6 +1608,27 @@ export const VITALS = {
   METHOD_MAX: 96,
 } as const;
 
+/** VT-3c (track VT, 2026-11-24; VT-D10 A) — the desk window's long frames, said by the page straight to fieldd
+ * (`vitals.own.report`, `VitalsOwnV1.longFrames`). TS-only: the floor never reads a frame. First values.
+ *  - LONG_FRAME_MS — a frame (or, where the page has no frame count, a task) longer than this is a long one: the
+ *    platform's own line for a long animation frame.
+ *  - REPORT_DELAY_MS — the page sends what it counted at most this long after the first long frame: one timer,
+ *    started by a long frame and by nothing else, so at rest the page holds no timer at all.
+ *  - REPORT_TIMEOUT_MS — a report's bound; the page never has two on their way.
+ *  - BACKOFF_MS — after fieldd says it is not recording (`accepted: false`) or refuses, the page counts nothing for
+ *    this long rather than report into nothing every second.
+ *  - REPORTS_PER_SAMPLE_MAX — the most page reports fieldd takes between two samples; one more is refused.
+ *  - FRAMES_PER_REPORT_MAX / FRAME_MS_MAX — one report's bounds: its count, and its longest frame. */
+export const VITALS_FRAMES = {
+  LONG_FRAME_MS: 50,
+  REPORT_DELAY_MS: 1_000,
+  REPORT_TIMEOUT_MS: 5_000,
+  BACKOFF_MS: 30_000,
+  REPORTS_PER_SAMPLE_MAX: 4,
+  FRAMES_PER_REPORT_MAX: 200,
+  FRAME_MS_MAX: 600_000,
+} as const;
+
 /** IL-D1 (`draft/thinking-inventory-latency.md` §2, ruled 2026-10-19) — how old the floor's
  * terminal inventory may be. Per cell, the inventory is as old as `now − as_of`, where `as_of` is
  * the moment the cell's last APPLIED reconcile began, before the client's writer lock: a
@@ -1989,6 +2010,8 @@ export const SCOPES = [
   // VT-1 (track VT, 2026-11-24) — how every process is doing. `vitals.read` is the Vitals window's and nobody
   // else's; `vitals.report` is Electron main's alone (the shell names its own processes). Local for ever, as the
   // diagnostics scopes are: in no tailnet preset and no plugin eligibility table.
+  // *Amended 2026-11-24 (VT-3c, VT-D10 A): the desk window's token holds `vitals.report` too, and fieldd takes ONE
+  // thing from it under that scope, the window's own long frames (`vitals.own.report`); the roster stays main's.*
   "vitals.read",
   "vitals.report",
   "settings.manage", // trusted desktop shell/renderer app-preference surface

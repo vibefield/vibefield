@@ -509,6 +509,8 @@ export const METHODS: MethodDef[] = [
   }),
   // VT-3b — what the caller says of itself (its loop's busy share) since its last report: Electron main alone,
   // and only while the Vitals window is open. Each report is one interval's, so a repeat is not the same call.
+  // VT-3c (2026-11-24, VT-D10 A) — and the desk window, which holds this scope for this door alone: fieldd takes
+  // only its long frames from it (`longFrames`, `longFrameMaxMs`), never another field and never the roster.
   defineMethod({
     surface: "product",
     method: "vitals.own.report",

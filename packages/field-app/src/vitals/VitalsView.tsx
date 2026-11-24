@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { type FrameMark, frameMarks } from "./frame-marks";
 import {
   niceBytesMax,
   niceMax,
@@ -53,6 +54,8 @@ import {
 const CPU_LANE_HEIGHT = 96;
 const MEMORY_LANE_HEIGHT = 72;
 const LOOP_LANE_HEIGHT = 48;
+/** VT-3c — a second with a long frame: a tick this tall standing on the Loop lane's foot */
+const FRAME_MARK_HEIGHT = 6;
 const STRIP_HEIGHT = 16;
 const SPARK = { width: 48, height: 14 } as const;
 /** a sparkline's scale never falls under a tenth of a core, so an idle process is a low line and not a tall one */
@@ -131,9 +134,12 @@ export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps)
   const cpuByKey = useMemo(() => processSeries(model, "cpu"), [model]);
   const memByKey = useMemo(() => processSeries(model, "memBytes"), [model]);
   const loopByKey = useMemo(() => loopSeries(model), [model]);
-  // the Loop lane reads one process: the chosen row's if it says its own, else the first in the list that does
+  // VT-3c — the seconds in which the desk's window said a long frame
+  const marks = useMemo(() => frameMarks(model), [model]);
+  // the Loop lane reads one process: the chosen row's if it says its own (its loop, or its long frames), else the
+  // first in the list that says its loop
   const loopKey =
-    chosen !== null && loopByKey.has(chosen)
+    chosen !== null && (loopByKey.has(chosen) || marks.some((mark) => mark.key === chosen))
       ? chosen
       : (groups.flatMap((group) => group.rows).find((row) => loopByKey.has(row.process.key))
           ?.process.key ?? null);
@@ -257,12 +263,13 @@ export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps)
             box={box(MEMORY_LANE_HEIGHT)}
             chosen={chosen === null ? null : (memByKey.get(chosen) ?? null)}
           />
-          {loopByKey.size === 0 ? null : (
+          {loopByKey.size === 0 && marks.length === 0 ? null : (
             <LoopLane
               model={model}
               scale={scale}
               box={box(LOOP_LANE_HEIGHT)}
               series={loopByKey}
+              marks={marks}
               reading={loopReading}
             />
           )}
@@ -461,9 +468,11 @@ function LoopLane(props: {
   scale: { from: number; to: number } | null;
   box: TraceBox;
   series: Map<string, VitalsSeries>;
+  /** VT-3c — the seconds in which the desk's window said a long frame */
+  marks: readonly FrameMark[];
   reading: string | null;
 }): ReactElement {
-  const { model, scale, box, series, reading } = props;
+  const { model, scale, box, series, marks, reading } = props;
   const traced: TraceScale | null = scale === null ? null : { ...scale, max: 1 };
   const height = box.bottom + 1;
   return (
@@ -493,6 +502,23 @@ function LoopLane(props: {
                   d={tracePath(own.times, own.values, box, traced)}
                 />
               ))}
+          {traced === null
+            ? null
+            : marks
+                .filter((mark) => mark.time >= traced.from && mark.time <= traced.to)
+                .map((mark) => {
+                  const x = Math.round(xOf(mark.time, box, traced) * 10) / 10;
+                  return (
+                    <line
+                      key={`${mark.key}@${mark.time}`}
+                      className="vf-vitals__frame"
+                      x1={x}
+                      x2={x}
+                      y1={height - FRAME_MARK_HEIGHT}
+                      y2={height}
+                    />
+                  );
+                })}
         </svg>
       </div>
     </div>
