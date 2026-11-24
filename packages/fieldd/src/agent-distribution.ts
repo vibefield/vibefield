@@ -253,9 +253,13 @@ export class AgentDistributionService {
    * agent's own version command — and only for an agent the catalog shows.
    * The inventory is the one puppeteer holds: the doors that change an
    * install (`update`, `setActive`) read the device again themselves. */
-  async launchExecutables(providers: readonly string[]): Promise<ReadonlyMap<string, string>> {
+  async launchExecutables(
+    providers: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<ReadonlyMap<string, string>> {
     const executables = new Map<string, string>();
     for (const provider of providers) {
+      if (signal?.aborted) break;
       if (!this.opts.catalog.isVisible(provider)) continue;
       const installations = await this.opts.runtime.inspectInstallations({
         providerId: provider,

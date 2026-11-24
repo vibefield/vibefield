@@ -228,6 +228,21 @@ describe("the inventory — read at boot, answered at once, read again when a pe
     expect(reads).toEqual([{ refresh: false }, { providerId: "claude", refresh: true }]);
   });
 
+  it("stops requesting more provider inventories when launcher discovery ends", async () => {
+    const discovery = new AbortController();
+    const asked: Array<string | undefined> = [];
+    const { distribution } = service({
+      installs: [install()],
+      onInspect: ({ providerId }) => {
+        asked.push(providerId);
+        discovery.abort();
+      },
+    });
+    await distribution.launchExecutables(["claude", "codex"], discovery.signal);
+    await distribution.launchExecutables(["codex"], discovery.signal);
+    expect(asked).toEqual(["claude"]);
+  });
+
   it("warms the inventory once at boot, and a read that fails there degrades nothing", async () => {
     const reads: Array<{ providerId?: string; refresh?: boolean }> = [];
     const { distribution } = service({

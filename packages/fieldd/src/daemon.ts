@@ -2578,7 +2578,8 @@ export async function bootstrap(
             runBriefing: (provider) => briefings.forRun(provider),
             // the install the runtime itself launches, read for the agents
             // that are given a launcher and no other
-            executables: (providers) => agents.distribution.launchExecutables(providers),
+            executables: (providers, signal) =>
+              agents.distribution.launchExecutables(providers, signal),
             // AR-7d — the seam: the service's answer once its home is
             // written, and nothing (a shell born as before) once it stops
             onShellIntegration: (integration) => {

@@ -243,14 +243,30 @@ export function firstNodeOnPath(
 
 /** `<node> -p process.versions.node`, run without a shell and bounded: the
  * version it reports, or undefined. */
-export function probeNodeVersion(command: string, timeoutMs = 5_000): Promise<string | undefined> {
+export function probeNodeVersion(
+  command: string,
+  timeoutMs = 5_000,
+  signal?: AbortSignal,
+): Promise<string | undefined> {
+  if (signal?.aborted) return Promise.resolve(undefined);
   return new Promise((answer) => {
-    execFile(
+    let version: string | undefined;
+    const child = execFile(
       command,
       ["-p", "process.versions.node"],
-      { encoding: "utf8", timeout: timeoutMs },
-      (error, stdout) => answer(error === null ? stdout.trim() || undefined : undefined),
+      { encoding: "utf8", timeout: timeoutMs, killSignal: "SIGKILL" },
+      (error, stdout) => {
+        if (error === null) version = stdout.trim() || undefined;
+      },
     );
+    // execFile's abort signal sends SIGTERM even when its timeout uses
+    // SIGKILL. Stop this owned probe explicitly and wait for it to exit.
+    const abort = () => child.kill("SIGKILL");
+    signal?.addEventListener("abort", abort, { once: true });
+    child.once("close", () => {
+      signal?.removeEventListener("abort", abort);
+      answer(version);
+    });
   });
 }
 
@@ -271,7 +287,7 @@ export interface LauncherRuntimeFacts {
   /** spawn-through shim directories: never searched */
   shimDirectories: readonly (string | undefined)[];
   /** asks a candidate for its version (default: run it, no shell, bounded) */
-  probe?: ((command: string) => Promise<string | undefined>) | undefined;
+  probe?: ((command: string, signal?: AbortSignal) => Promise<string | undefined>) | undefined;
   /** whether a file stands, readable, at a path (default: this machine's) —
    * what a single executable's sealed shim is looked for with */
   exists?: ((path: string) => boolean) | undefined;
@@ -326,6 +342,7 @@ export function sealedAgentShim(execPath: string): string {
  * `pnpm dev` (roles.ts `agentShimArgv` says what the role does not close). */
 export async function chooseLauncherRuntime(
   facts: LauncherRuntimeFacts,
+  signal?: AbortSignal,
 ): Promise<LauncherRuntimeChoice> {
   if (facts.configured !== undefined) {
     return isAbsolute(facts.configured.command)
@@ -368,7 +385,10 @@ export async function chooseLauncherRuntime(
       : "fieldd runs under Electron as Node, which is never the launcher's runtime";
   const node = firstNodeOnPath(facts.path, facts.shimDirectories);
   if (node === undefined) return { runtime: undefined, reason: `${under}; no node on PATH` };
-  const version = await (facts.probe ?? probeNodeVersion)(node);
+  const version =
+    facts.probe === undefined
+      ? await probeNodeVersion(node, undefined, signal)
+      : await facts.probe(node, signal);
   if (version === undefined || !NODE_VERSION.test(version)) {
     return { runtime: undefined, reason: `${under}; the node on PATH reported no version` };
   }
@@ -700,6 +720,7 @@ export interface AgentGatewayOptions {
    * that would get no launcher anyway. */
   executables: (
     providers: readonly string[],
+    signal?: AbortSignal,
   ) => ReadonlyMap<string, string> | Promise<ReadonlyMap<string, string>>;
   /** the bundled shim; default: `agent-shim.cjs` beside the daemon's bundle —
    * built from the kit the daemon was bundled with (the build's third step),
@@ -856,6 +877,22 @@ export class AgentGatewayService {
   /** launches that ran as typed, by code (no argument, no provider's words) */
   private readonly ranAsTyped = new Map<RanAsTypedCode, number>();
   private stopping: Promise<void> | undefined;
+  private readonly discovery = new AbortController();
+
+  private async untilStop<T>(read: Promise<T>): Promise<T | undefined> {
+    const { signal } = this.discovery;
+    let interrupt!: () => void;
+    const interrupted = new Promise<undefined>((resolve) => {
+      interrupt = () => resolve(undefined);
+      if (signal.aborted) interrupt();
+      else signal.addEventListener("abort", interrupt, { once: true });
+    });
+    try {
+      return await Promise.race([read, interrupted]);
+    } finally {
+      signal.removeEventListener("abort", interrupt);
+    }
+  }
 
   constructor(private readonly opts: AgentGatewayOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -897,6 +934,7 @@ export class AgentGatewayService {
    * launcher waits for the fieldd that comes next. */
   stop(): Promise<void> {
     this.stopping ??= (async () => {
+      this.discovery.abort();
       // a shell born from here on is born as before: nothing of this
       // gateway's will answer the launcher its PATH would lead with
       this.opts.onShellIntegration?.(null);
@@ -1025,7 +1063,7 @@ export class AgentGatewayService {
       );
       return;
     }
-    if (this.opts.hold !== undefined) await this.opts.hold;
+    if (this.opts.hold !== undefined) await this.untilStop(this.opts.hold);
     if (this.stopping !== undefined) return;
     const layout = spawnThroughLayout(this.home);
     // A2 — THE BOOT WINDOW. The integration is written FIRST, before anything
@@ -1062,11 +1100,17 @@ export class AgentGatewayService {
     // (`handOverIntegration`); `publish` hands it over for a home first
     // written there — a refresh after nothing was written at the start.
     if (await this.writeIntegration(layout)) this.handOverIntegration();
-    this.choice = await chooseLauncherRuntime({
-      ...ownRuntimeFacts([layout.shimDirectory, process.env["PUPPETEER_SHIM_DIR"]]),
-      ...this.opts.runtimeFacts,
-      ...(this.opts.launcher !== undefined ? { configured: this.opts.launcher } : {}),
-    });
+    if (this.stopping !== undefined) return;
+    const choice = await chooseLauncherRuntime(
+      {
+        ...ownRuntimeFacts([layout.shimDirectory, process.env["PUPPETEER_SHIM_DIR"]]),
+        ...this.opts.runtimeFacts,
+        ...(this.opts.launcher !== undefined ? { configured: this.opts.launcher } : {}),
+      },
+      this.discovery.signal,
+    );
+    if (this.stopping !== undefined) return;
+    this.choice = choice;
     if (this.choice.runtime === undefined) {
       this.logger.warn(
         "fieldd.agents.gateway_no_launcher_runtime",
@@ -1107,10 +1151,12 @@ export class AgentGatewayService {
     if (this.stopping !== undefined || !this.posix) return;
     const script = this.bundledShim();
     const runtime = this.choice?.runtime;
-    this.offered =
+    const offered =
       script === undefined || runtime === undefined
         ? { providers: [], names: [], withheld: [] }
-        : await this.offer();
+        : await this.untilStop(this.offer());
+    if (offered === undefined || this.stopping !== undefined) return;
+    this.offered = offered;
     this.sayWithheld();
     if (this.offered.names.length === 0 && !existsSync(this.home) && this.gateway === undefined) {
       return;
@@ -1253,7 +1299,7 @@ export class AgentGatewayService {
     let executables: ReadonlyMap<string, string> = new Map();
     if (asked.length > 0) {
       try {
-        executables = await this.opts.executables(asked);
+        executables = await this.opts.executables(asked, this.discovery.signal);
       } catch (error) {
         this.logger.warn(
           "fieldd.agents.gateway_installs_unread",
