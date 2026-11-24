@@ -90,6 +90,7 @@ import {
   FielddDaemonBootFence,
   FielddHandleCoordinator,
   type FielddRecoveryState,
+  FielddStoppingError,
 } from "./fieldd-handle-coordinator";
 import { FielddLink } from "./fieldd-link";
 import { HandPictures } from "./hand-pictures";
@@ -376,7 +377,7 @@ let liveSurfaceSupport: ProductionLiveSurfaceSupport | null = null;
 // supervisor is disposed in the same run as the shell (lifecycle.ts; the guard in test/lifecycle.test.ts).
 const ensureFieldd: FielddSupervisor["ensure"] = (options) => {
   if (fielddHandles !== null) return fielddHandles.ensure(options);
-  return Promise.reject(new Error("fieldd supervisor is unavailable"));
+  return Promise.reject(new FielddStoppingError("fieldd supervisor is unavailable"));
 };
 
 async function revealPrimaryWindow(): Promise<Electron.BrowserWindow> {
@@ -1807,7 +1808,9 @@ async function main(
 
   windowRendererBoundary = registerWindowBootstrap(
     registry,
-    (options) => fielddHandles!.ensure(options),
+    // the guarded road, never the coordinator itself: a window destroyed after teardown retires its token
+    // with none attached, and a bare `fielddHandles!` there was a TypeError at every quit (History QA, 2026-11-24)
+    ensureFieldd,
     DESKTOP_BOOT_ID,
     logger.child({ component: "ipc.bootstrap" }),
   );

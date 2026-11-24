@@ -58,6 +58,18 @@ export class FielddCrashLoopError extends Error {
   }
 }
 
+/** History QA (2026-11-24) — `ensure()` while the shell is letting go of its pair or has: held for a person's
+ * quit, the coordinator disposed, or none attached after teardown. Nothing was started and nothing will be. A
+ * caller that only wanted to tidy up behind a closing window (a window token's revocation) reads this as "the
+ * shell is stopping", never as a fault of its own: before this the last of the three was a TypeError on a null
+ * coordinator, logged as an error at every quit. */
+export class FielddStoppingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FielddStoppingError";
+  }
+}
+
 /** OB custody, C1 — what an attempt hands upstream: the caller's signal, as before, and
  * `person` when a person asked, and nothing else. In main the upstream is custody's gate over the supervisor's own
  * ensure: the gate alone reads `person` (only a person's ask reads an unavailable custody root again) and takes it
@@ -191,8 +203,8 @@ export class FielddHandleCoordinator {
   }
 
   async ensure(options?: FielddEnsureOptions): Promise<FielddHandle> {
-    if (this.disposed) throw new Error("fieldd handle coordinator is disposed");
-    if (this.held) throw new Error(HELD);
+    if (this.disposed) throw new FielddStoppingError("fieldd handle coordinator is disposed");
+    if (this.held) throw new FielddStoppingError(HELD);
     if (options?.person === true) return this.ask(options);
     // An incidental caller (the clipboard audit, the status item's preferences, doctor, the support bundle, a
     // revocation's retry, the update's census) never starts or counts an attempt inside a recovery: it joins the one
@@ -229,7 +241,7 @@ export class FielddHandleCoordinator {
     // RV #29: no spacing may fire after the hold, and whoever waited on it is told
     const spacing = this.takeSpacing();
     if (spacing !== null) {
-      const refusal = new Error(HELD);
+      const refusal = new FielddStoppingError(HELD);
       for (const waiter of spacing.waiters) waiter.reject(refusal);
     }
     return this.current;
@@ -268,7 +280,7 @@ export class FielddHandleCoordinator {
     this.clearReprobeTimer();
     const spacing = this.takeSpacing();
     if (spacing !== null) {
-      const refusal = new Error("fieldd handle coordinator is disposed");
+      const refusal = new FielddStoppingError("fieldd handle coordinator is disposed");
       for (const waiter of spacing.waiters) waiter.reject(refusal);
     }
     this.unwatchCurrent?.();

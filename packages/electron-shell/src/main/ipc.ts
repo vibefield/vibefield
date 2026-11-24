@@ -44,7 +44,7 @@ import {
   createClipboardDoor,
   createClipboardImageDoor,
 } from "./clipboard-door";
-import type { FielddEnsure } from "./fieldd-handle-coordinator";
+import { type FielddEnsure, FielddStoppingError } from "./fieldd-handle-coordinator";
 import { createHandFileDoor, createHandKeptDoor, createHandPictureDoor } from "./hand-pictures";
 import { shellIdentity } from "./login-shell";
 import { createPictureSaveDoor, type PictureSaveDoorOptions } from "./picture-save-door";
@@ -87,6 +87,19 @@ export function registerWindowBootstrap(
       ...shellIdentity(),
     },
     onRevokeError: (error, details) => {
+      // A window that closes as the shell stops (a quit destroys its windows after it let go of the pair)
+      // cannot have its revocation confirmed, and it is no fault: a stopped fieldd's grants died with it, and
+      // one left running has them swept by the next shell before it mints (`system.revokeStaleWindowTokens`).
+      // Said as what happened, so the error below stays a real failure's alone (History QA, 2026-11-24: it
+      // was logged as an error at every quit).
+      if (error instanceof FielddStoppingError) {
+        logger?.info(
+          "desktop.ipc.window_token_revoke_left",
+          "The shell stopped before a window's token revocation was confirmed; fieldd's stop or the next shell's sweep ends the grant",
+          details,
+        );
+        return;
+      }
       logger?.error(
         "desktop.ipc.window_token_revoke_failed",
         "Electron could not confirm renderer token revocation",

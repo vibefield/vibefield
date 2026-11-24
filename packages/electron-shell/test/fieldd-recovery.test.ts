@@ -5,6 +5,7 @@ import {
   FielddDaemonBootFence,
   FielddHandleCoordinator,
   type FielddRecoveryState,
+  FielddStoppingError,
 } from "../src/main/fieldd-handle-coordinator";
 import { RecoveringFielddObservers } from "../src/main/recovering-fieldd-observers";
 
@@ -134,6 +135,13 @@ describe("fieldd main-process recovery", () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     await expect(coordinator.ensure()).rejects.toThrow(/held for a stop/);
     expect(upstream).toHaveBeenCalledTimes(1); // no spawn was attempted
+    // History QA (2026-11-24): a stopping shell's refusals carry their type, so a closing window's token
+    // revocation reads them as the stop they are, never as a failure of its own
+    await expect(coordinator.ensure()).rejects.toBeInstanceOf(FielddStoppingError);
+    await expect(coordinator.ensure({ person: true })).rejects.toBeInstanceOf(FielddStoppingError);
+    coordinator.dispose();
+    await expect(coordinator.ensure()).rejects.toBeInstanceOf(FielddStoppingError);
+    await expect(coordinator.ensure()).rejects.toThrow(/disposed/);
   });
 
   it("an update that aborted BEFORE the stop releases the hold, and recovery works again", async () => {
