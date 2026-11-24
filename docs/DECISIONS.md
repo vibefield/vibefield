@@ -405,6 +405,21 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   the corner's Sign out question first (WI-G3 A). Waiting for approval was not asked for by name; it had the same trap.
   Defined in `DESIGN.md` §8 "The phone's way in" (its amendment of 2026-11-22) and §9 "The way in". **LANDED
   2026-11-22 (M523)**; unseen on a phone, and the holds still hold no act.
+- **VT** — track VT, Vitals (2026-11-23, the design page *The Vitals Window*: where it lives, A a window of its own
+  in every build, B a section of Studio, C a page of Settings, D a strip on the desk, and five smaller calls; James,
+  2026-11-24 00:03:36Z: "good, go with lean and land this"): **VT-D1 A**, a window of its own, in every build. **VT-D2**: the
+  recorder is always on, one reading a second, bounded and local, with a Settings switch to turn it off. **VT-D3**:
+  field-native measures every process one way, on a thread of its own, so the numbers add and the meter outlives
+  fieldd and the shell. **VT-D4**: a terminal's processes are a group of their own, never counted as VibeField's and
+  never the subject of an incident; a row is a pid, a role from a closed list, a label fieldd composed, and numbers,
+  never an argument, a folder, an environment or output. **VT-D5**: deep captures (a Chromium trace, a CPU profile)
+  are armed by hand. **VT-D6**: budgets start from design-03 PF8's five; the rest are measured for a week before a
+  number is set. Metrics stay their own class (LOG-1) and stay on this computer (LOG-25, LOG-36): the scopes
+  `vitals.read` and `vitals.report` are in no tailnet preset and no plugin table. Defined in
+  `packages/contracts/src/vitals.ts` (the wires and `VITALS`, the bounds) and `draft/thinking-vitals.md`.
+  **VT-1 LANDED 2026-11-24** (the census: the floor's meter and fieldd's recorder; no window yet, and nothing read on
+  a running daemon pair). *Mine, not his ruling, ‹for James›:* VT-D7, Electron main names the shell's processes for
+  fieldd when the list changes, which amends PF2's closed duty list when VT-2 lands.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the
