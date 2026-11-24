@@ -39,6 +39,8 @@ pub mod mesh;
 mod mesh_egress;
 /// OB custody (§8.1) — `native.terminal.startedFor.set`, what a terminal was started for.
 mod started_for;
+/// VT-1 — the vitals census: `native.vitals.*`.
+mod vitals;
 
 /// W3-20 — each connection's one file-transfer stream, by `conn_id`; `DaemonState` keeps it.
 pub(crate) use file_transfer::FileTransferStreams;
@@ -635,6 +637,13 @@ async fn handle_conn(stream: local_ipc::Stream, state: Arc<DaemonState>, mesh_qu
             }
             "native.diagnostics.lease.revoke" => {
                 send(&tx, diagnostics::lease_revoke(&state, &params, id));
+            }
+            // VT-1 — the vitals census (`crate::vitals`, `mgmt/vitals.rs`).
+            "native.vitals.subscribe" => {
+                vitals::subscribe(&state, &tx, &params, id);
+            }
+            "native.vitals.watch.set" => {
+                send(&tx, vitals::watch_set(&state, &params, id));
             }
             // F1 — the freeway unit (thinking-freeway.md v0.3 §4.3, §5.2).
             "native.freeway.declare" => {

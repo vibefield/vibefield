@@ -59,4 +59,5 @@ export * from "./trust-root";
 export * from "./update-policy";
 export * from "./user-face";
 export * from "./users";
+export * from "./vitals";
 export * from "./workspace";

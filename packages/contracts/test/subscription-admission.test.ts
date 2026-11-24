@@ -27,8 +27,9 @@ import { WorkspaceSubscribeParams } from "../src/workspace";
 // Item 476 (2026-11-16) — the product door admits a subscription by its KEY, and every product
 // subscription row declares its key, class and holders in `subscription-admission.ts`
 // (docs/DECISIONS.md, item 476). These rows hold the table to METHODS both ways, each class to its shape,
-// the key to one canonical form, and re-derive the plan's figures from the table: 35 closed
-// keys, 308 holders at most on one connection, 20 boards at the 16 ms tick. The value set of
+// the key to one canonical form, and re-derive the plan's figures from the table: 36 closed
+// keys, 316 holders at most on one connection, 20 boards at the 16 ms tick (35 and 308 until
+// VT-1 added `vitals.subscribe`, 2026-11-24). The value set of
 // every `variants` field is READ from its params schema (the enums' options, the workspace
 // literal), never restated here or in the table. Two facts the contracts cannot see are written
 // by hand below, each with its source.
@@ -191,7 +192,7 @@ const defaultHolders = (): number => resolve("no.such.subscribe", {}, {}).limit;
 
 describe("item 476 — every product subscription row declares its admission (the census)", () => {
   it("declares exactly the product subscription rows of METHODS, both ways", () => {
-    expect(PRODUCT_SUBSCRIPTIONS).toHaveLength(34);
+    expect(PRODUCT_SUBSCRIPTIONS).toHaveLength(35);
     // a product `.subscribe` row is a subscription row, and the other way round
     const named = METHODS.filter(
       (m) => m.surface === "product" && m.method.endsWith(".subscribe"),
@@ -200,7 +201,7 @@ describe("item 476 — every product subscription row declares its admission (th
     expect(Object.keys(SUBSCRIPTION_ADMISSION).sort()).toEqual([...PRODUCT_SUBSCRIPTIONS].sort());
   });
 
-  it("classes the 34 rows: 21 one, 5 variants, 6 things, 2 bounded", () => {
+  it("classes the 35 rows: 22 one, 5 variants, 6 things, 2 bounded", () => {
     const byClass = (cls: SubscriptionAdmission["class"]): string[] =>
       PRODUCT_SUBSCRIPTIONS.filter((method) => rowOf(method).class === cls).sort();
     // item 521 (2026-11-18): a board's intents are keyed by the board, which fieldd's handler must hold
@@ -224,7 +225,7 @@ describe("item 476 — every product subscription row declares its admission (th
         "workspace.subscribe",
       ].sort(),
     );
-    expect(byClass("one")).toHaveLength(21);
+    expect(byClass("one")).toHaveLength(22);
     // the schemas this file reads are the variants' and the things' rows, no more, no fewer
     expect(Object.keys(PARAMS).sort()).toEqual(
       [...byClass("variants"), ...byClass("things")].sort(),
@@ -480,28 +481,28 @@ describe("item 476 — what each ask is counted against", () => {
 });
 
 describe("item 476 — the figures, re-derived from the table (docs/DECISIONS.md)", () => {
-  it("35 closed keys: 20 one, 14 variants, 1 things (plugins.runtime naming no plugin)", () => {
+  it("36 closed keys: 21 one, 14 variants, 1 things (plugins.runtime naming no plugin)", () => {
     const keys = closedKeys();
     const count = (cls: string): number => keys.filter((k) => k.class === cls).length;
-    expect(count("one")).toBe(20);
+    expect(count("one")).toBe(21);
     expect(count("variants")).toBe(14);
     expect(count("things")).toBe(1);
     expect(count("bounded")).toBe(0);
-    expect(keys).toHaveLength(35);
+    expect(keys).toHaveLength(36);
     // the board's 7: four projections by two scopes, less full with mesh (hand-made fact 1)
     expect(keys.filter((k) => k.method === "agent.subscribe")).toHaveLength(7);
   });
 
-  it("308 holders at most on one connection: 28 × 8 + (4 + 8 + 8) + 4 × 16", () => {
+  it("316 holders at most on one connection: 29 × 8 + (4 + 8 + 8) + 4 × 16", () => {
     const keys = closedKeys();
     const board = keys.filter((k) => k.method === "agent.subscribe").map((k) => k.limit);
     const rest = keys.filter((k) => k.method !== "agent.subscribe").map((k) => k.limit);
-    expect(rest).toHaveLength(28);
+    expect(rest).toHaveLength(29);
     expect(new Set(rest)).toEqual(new Set([8]));
     expect([...board].sort((a, b) => a - b)).toEqual([4, 8, 8, 16, 16, 16, 16]);
-    expect(sum(rest)).toBe(28 * 8);
+    expect(sum(rest)).toBe(29 * 8);
     expect(sum(board)).toBe(4 + 8 + 8 + 4 * 16);
-    expect(sum(keys.map((k) => k.limit))).toBe(308);
+    expect(sum(keys.map((k) => k.limit))).toBe(316);
   });
 
   it("20 boards at the 16 ms tick on one connection: full 4 + model 8 × 2 scopes", () => {

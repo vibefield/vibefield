@@ -281,6 +281,8 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
       "diagnostics.read",
       "diagnostics.manage",
       "audit.append",
+      "vitals.read",
+      "vitals.report",
     ]);
     for (const m of METHODS.filter((m) => m.surface === "product")) {
       if (m.scope !== null && localForever.has(m.scope))
@@ -677,6 +679,8 @@ describe("logging registries (LOG-43/LOG-44)", () => {
       "diagnostics.manage",
       "audit.append",
       "settings.manage",
+      "vitals.read",
+      "vitals.report",
     ] as const) {
       expect(SCOPES).toContain(scope);
       expect(TAILNET_SCOPES).not.toContain(scope);

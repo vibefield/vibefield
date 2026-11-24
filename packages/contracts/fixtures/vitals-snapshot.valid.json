@@ -1,0 +1,84 @@
+{
+  "v": 1,
+  "state": "recording",
+  "intervalMs": 1000,
+  "memory": "footprint",
+  "processes": [
+    {
+      "key": "4001:1795477990000",
+      "pid": 4001,
+      "startedAt": 1795477990000,
+      "group": "fieldd",
+      "role": "fieldd"
+    },
+    {
+      "key": "4102:1795478000123",
+      "pid": 4102,
+      "startedAt": 1795478000123,
+      "group": "floor",
+      "role": "field-native"
+    },
+    {
+      "key": "4110:1795478001456",
+      "pid": 4110,
+      "startedAt": 1795478001456,
+      "group": "floor",
+      "role": "terminal-cell"
+    },
+    {
+      "key": "5230:1795478200789",
+      "pid": 5230,
+      "startedAt": 1795478200789,
+      "group": "agents",
+      "role": "terminal",
+      "label": "Claude Code",
+      "tree": true
+    }
+  ],
+  "samples": [
+    {
+      "seq": 41,
+      "time": 1795478530000,
+      "points": [
+        {
+          "key": "4001:1795477990000",
+          "cpu": 0.062,
+          "memBytes": 251658240,
+          "diskReadBps": 0,
+          "diskWriteBps": 4096,
+          "wakeupsPerSec": 38,
+          "powerMw": null
+        },
+        {
+          "key": "4102:1795478000123",
+          "cpu": 0.008,
+          "memBytes": 39845888,
+          "diskReadBps": 0,
+          "diskWriteBps": 0,
+          "wakeupsPerSec": 12,
+          "powerMw": 41.5
+        },
+        {
+          "key": "4110:1795478001456",
+          "cpu": 0.011,
+          "memBytes": 34603008,
+          "diskReadBps": 0,
+          "diskWriteBps": 0,
+          "wakeupsPerSec": 9,
+          "powerMw": null
+        },
+        {
+          "key": "5230:1795478200789",
+          "cpu": 0.88,
+          "memBytes": 1934413004,
+          "diskReadBps": null,
+          "diskWriteBps": null,
+          "wakeupsPerSec": null,
+          "powerMw": null,
+          "processes": 8
+        }
+      ]
+    }
+  ],
+  "observer": { "meterCpu": 0.0004 }
+}

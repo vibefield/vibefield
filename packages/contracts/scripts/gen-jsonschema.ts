@@ -46,6 +46,9 @@
 // stream are TS-only: the shell, the supervisor and fieldd are their sides. The floor's half rides the bundle: its
 // bootstrap line and the marks verb (src/mgmt.ts `NativeBootstrap`, `NativeMarksSet*`), `HelloAck.marks`, and
 // custody.ts's `CustodySecret` named beside them; `CUSTODY`'s scalar rows reach Rust through gen-registries-rs.ts.
+// Vitals (VT-1, src/vitals.ts) is split the same way. The floor's census (`NativeVitals*`: the reading, the sample,
+// the snapshot, the watch list) rides the bundle; fieldd's door (`Vitals*V1`, the roster) is TS-only, since fieldd
+// and the shell are its sides. `VITALS`'s rows reach Rust through gen-registries-rs.ts.
 // So does the started-for table (rule 6): its verb (src/mgmt.ts `NativeTerminalStartedForSet*`) and the four shapes
 // custody.ts holds for it, three of which `HelloAck.startedFor` embeds and so are BASE_SHARED.
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -218,6 +221,20 @@ import {
   UnitState,
   WhoIsIdentity,
 } from "../src/mgmt";
+import {
+  NativeVitalsChild,
+  NativeVitalsOrigin,
+  NativeVitalsReading,
+  NativeVitalsSample,
+  NativeVitalsSnapshot,
+  NativeVitalsState,
+  NativeVitalsSubscribeParams,
+  NativeVitalsSubscribeResult,
+  NativeVitalsTree,
+  NativeVitalsWatchEntry,
+  NativeVitalsWatchSetParams,
+  NativeVitalsWatchSetResult,
+} from "../src/vitals";
 
 const OUT = join(dirname(fileURLToPath(import.meta.url)), "..", "gen", "jsonschema");
 mkdirSync(OUT, { recursive: true });
@@ -537,6 +554,21 @@ const bundle = tightenLoggingWireSchema(
       TerminalStartedFor,
       NativeTerminalStartedForSetParams,
       NativeTerminalStartedForSetResult,
+      // VT-1 — the vitals census's floor seam (src/vitals.ts `NativeVitals*`). Bundle-only: no other
+      // seam's entry embeds them. The enums, the tree, the reading and the sample are named because
+      // the snapshot and the subscription frames both embed them.
+      NativeVitalsOrigin,
+      NativeVitalsChild,
+      NativeVitalsTree,
+      NativeVitalsReading,
+      NativeVitalsSample,
+      NativeVitalsState,
+      NativeVitalsSubscribeParams,
+      NativeVitalsSnapshot,
+      NativeVitalsSubscribeResult,
+      NativeVitalsWatchEntry,
+      NativeVitalsWatchSetParams,
+      NativeVitalsWatchSetResult,
     },
   }),
 );

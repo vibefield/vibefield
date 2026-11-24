@@ -1,0 +1,36 @@
+{
+  "processes": [
+    {
+      "key": "6120:1795478531200",
+      "pid": 6120,
+      "startedAt": 1795478531200,
+      "group": "fieldd",
+      "role": "flows-host"
+    }
+  ],
+  "gone": ["4110:1795478001456"],
+  "sample": {
+    "seq": 42,
+    "time": 1795478531000,
+    "points": [
+      {
+        "key": "4001:1795477990000",
+        "cpu": 0.99,
+        "memBytes": 251920384,
+        "diskReadBps": 0,
+        "diskWriteBps": 0,
+        "wakeupsPerSec": 4,
+        "powerMw": null
+      },
+      {
+        "key": "6120:1795478531200",
+        "cpu": 0,
+        "memBytes": 67108864,
+        "diskReadBps": null,
+        "diskWriteBps": null,
+        "wakeupsPerSec": null,
+        "powerMw": null
+      }
+    ]
+  }
+}

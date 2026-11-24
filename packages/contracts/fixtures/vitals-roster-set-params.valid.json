@@ -1,0 +1,9 @@
+{
+  "processes": [
+    { "pid": 3900, "role": "main" },
+    { "pid": 3911, "role": "window", "label": "Desk" },
+    { "pid": 3905, "role": "gpu" },
+    { "pid": 3940, "role": "browser-pane" },
+    { "pid": 3950, "role": "vitals-window" }
+  ]
+}

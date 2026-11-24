@@ -3215,6 +3215,303 @@
       "properties": {},
       "additionalProperties": true
     },
+    "NativeVitalsOrigin": {
+      "type": "string",
+      "enum": [
+        "floor",
+        "child",
+        "watched"
+      ]
+    },
+    "NativeVitalsChild": {
+      "type": "string",
+      "enum": [
+        "terminal-cell",
+        "mesh-sidecar",
+        "freeway-host",
+        "other"
+      ]
+    },
+    "NativeVitalsTree": {
+      "type": "object",
+      "properties": {
+        "processes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpuUs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "footprintBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "processes",
+        "cpuUs",
+        "footprintBytes"
+      ],
+      "additionalProperties": true
+    },
+    "NativeVitalsReading": {
+      "type": "object",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "startedAt": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "origin": {
+          "$ref": "#/definitions/NativeVitalsOrigin"
+        },
+        "child": {
+          "$ref": "#/definitions/NativeVitalsChild"
+        },
+        "cpuUserUs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "cpuSystemUs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "residentBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "footprintBytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diskReadBytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "diskWrittenBytes": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "wakeups": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "energyNj": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tree": {
+          "$ref": "#/definitions/NativeVitalsTree"
+        }
+      },
+      "required": [
+        "pid",
+        "startedAt",
+        "origin",
+        "cpuUserUs",
+        "cpuSystemUs",
+        "residentBytes",
+        "footprintBytes",
+        "diskReadBytes",
+        "diskWrittenBytes",
+        "wakeups",
+        "energyNj"
+      ],
+      "additionalProperties": true
+    },
+    "NativeVitalsSample": {
+      "type": "object",
+      "properties": {
+        "seq": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "time": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tookUs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NativeVitalsReading"
+          },
+          "maxItems": 512
+        }
+      },
+      "required": [
+        "seq",
+        "time",
+        "tookUs",
+        "rows"
+      ],
+      "additionalProperties": true
+    },
+    "NativeVitalsState": {
+      "type": "string",
+      "enum": [
+        "running",
+        "unavailable"
+      ]
+    },
+    "NativeVitalsSubscribeParams": {
+      "type": "object",
+      "properties": {
+        "sinceSeq": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": true
+    },
+    "NativeVitalsSnapshot": {
+      "type": "object",
+      "properties": {
+        "v": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1
+        },
+        "bootId": {
+          "type": "string"
+        },
+        "state": {
+          "$ref": "#/definitions/NativeVitalsState"
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "intervalMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "oldestSeq": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "samples": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NativeVitalsSample"
+          },
+          "maxItems": 120
+        }
+      },
+      "required": [
+        "v",
+        "bootId",
+        "state",
+        "intervalMs",
+        "oldestSeq",
+        "samples"
+      ],
+      "additionalProperties": true
+    },
+    "NativeVitalsSubscribeResult": {
+      "type": "object",
+      "properties": {
+        "subId": {
+          "type": "string"
+        },
+        "snapshot": {
+          "$ref": "#/definitions/NativeVitalsSnapshot"
+        }
+      },
+      "required": [
+        "subId",
+        "snapshot"
+      ],
+      "additionalProperties": true
+    },
+    "NativeVitalsWatchEntry": {
+      "type": "object",
+      "properties": {
+        "pid": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tree": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "pid",
+        "tree"
+      ],
+      "additionalProperties": true
+    },
+    "NativeVitalsWatchSetParams": {
+      "type": "object",
+      "properties": {
+        "watch": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/NativeVitalsWatchEntry"
+          },
+          "maxItems": 256
+        }
+      },
+      "required": [
+        "watch"
+      ],
+      "additionalProperties": true
+    },
+    "NativeVitalsWatchSetResult": {
+      "type": "object",
+      "properties": {
+        "watching": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "watching"
+      ],
+      "additionalProperties": true
+    },
     "Hello": {
       "type": "object",
       "properties": {

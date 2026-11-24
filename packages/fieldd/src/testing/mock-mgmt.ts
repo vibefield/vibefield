@@ -457,6 +457,20 @@ export class MockMgmtServer {
   diagnosticLeases = new Map<string, unknown>();
   diagnosticBootId = "mock-native-boot";
   diagnosticCursor = 0;
+  /** VT-1 — what `native.vitals.subscribe` answers: a floor whose meter runs and has read nothing yet. A test sets
+   * its own (a backfill, `unavailable`, another boot), then pushes samples with `pushDelta("vitals.subscribe", …)`. */
+  vitalsSnapshot: unknown = {
+    v: 1,
+    bootId: "mock-native-boot",
+    state: "running",
+    intervalMs: 1_000,
+    oldestSeq: 0,
+    samples: [],
+  };
+  /** VT-1 — every list `native.vitals.watch.set` was told, in order. */
+  readonly vitalsWatchSets: Array<Array<{ pid: number; tree: boolean }>> = [];
+  /** VT-1 — a floor that predates the meter: both vitals verbs answer `method not found`. */
+  vitalsAbsent = false;
   private storeVersion = 0;
   private nextSub = 1;
   private issued: Array<{ sock: Socket; subId: string; method: string; storeId?: string }> = [];
@@ -829,6 +843,41 @@ export class MockMgmtServer {
         );
         return;
       }
+    }
+    if (msg.method === "native.vitals.subscribe" || msg.method === "native.vitals.watch.set") {
+      if (this.vitalsAbsent) {
+        sock.write(
+          `${JSON.stringify({
+            jsonrpc: "2.0",
+            id: msg.id,
+            error: {
+              code: -32601,
+              message: "method not found",
+              data: { kind: "NOT_FOUND", retryable: false },
+            },
+          })}\n`,
+        );
+        return;
+      }
+      if (msg.method === "native.vitals.watch.set") {
+        const watch = (msg.params?.["watch"] ?? []) as Array<{ pid: number; tree: boolean }>;
+        this.vitalsWatchSets.push(watch);
+        sock.write(
+          `${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { watching: watch.length } })}\n`,
+        );
+        return;
+      }
+      const subId = `s${this.nextSub++}`;
+      this.subscriptionRequests.push(msg.method);
+      this.issued.push({ sock, subId, method: msg.method });
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { subId, snapshot: this.vitalsSnapshot },
+        })}\n`,
+      );
+      return;
     }
     if (msg.method === "native.diagnostics.query") {
       sock.write(

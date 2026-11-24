@@ -10457,6 +10457,777 @@ impl NativeTickParams {
         Default::default()
     }
 }
+#[doc = "`NativeVitalsChild`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"terminal-cell\","]
+#[doc = "    \"mesh-sidecar\","]
+#[doc = "    \"freeway-host\","]
+#[doc = "    \"other\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum NativeVitalsChild {
+    #[serde(rename = "terminal-cell")]
+    TerminalCell,
+    #[serde(rename = "mesh-sidecar")]
+    MeshSidecar,
+    #[serde(rename = "freeway-host")]
+    FreewayHost,
+    #[serde(rename = "other")]
+    Other,
+}
+impl ::std::fmt::Display for NativeVitalsChild {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::TerminalCell => f.write_str("terminal-cell"),
+            Self::MeshSidecar => f.write_str("mesh-sidecar"),
+            Self::FreewayHost => f.write_str("freeway-host"),
+            Self::Other => f.write_str("other"),
+        }
+    }
+}
+impl ::std::str::FromStr for NativeVitalsChild {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "terminal-cell" => Ok(Self::TerminalCell),
+            "mesh-sidecar" => Ok(Self::MeshSidecar),
+            "freeway-host" => Ok(Self::FreewayHost),
+            "other" => Ok(Self::Other),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeVitalsChild {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeVitalsChild {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeVitalsChild {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`NativeVitalsOrigin`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"floor\","]
+#[doc = "    \"child\","]
+#[doc = "    \"watched\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum NativeVitalsOrigin {
+    #[serde(rename = "floor")]
+    Floor,
+    #[serde(rename = "child")]
+    Child,
+    #[serde(rename = "watched")]
+    Watched,
+}
+impl ::std::fmt::Display for NativeVitalsOrigin {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Floor => f.write_str("floor"),
+            Self::Child => f.write_str("child"),
+            Self::Watched => f.write_str("watched"),
+        }
+    }
+}
+impl ::std::str::FromStr for NativeVitalsOrigin {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "floor" => Ok(Self::Floor),
+            "child" => Ok(Self::Child),
+            "watched" => Ok(Self::Watched),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeVitalsOrigin {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeVitalsOrigin {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeVitalsOrigin {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`NativeVitalsReading`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cpuSystemUs\","]
+#[doc = "    \"cpuUserUs\","]
+#[doc = "    \"diskReadBytes\","]
+#[doc = "    \"diskWrittenBytes\","]
+#[doc = "    \"energyNj\","]
+#[doc = "    \"footprintBytes\","]
+#[doc = "    \"origin\","]
+#[doc = "    \"pid\","]
+#[doc = "    \"residentBytes\","]
+#[doc = "    \"startedAt\","]
+#[doc = "    \"wakeups\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"child\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeVitalsChild\""]
+#[doc = "    },"]
+#[doc = "    \"cpuSystemUs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"cpuUserUs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"diskReadBytes\": {"]
+#[doc = "      \"anyOf\": ["]
+#[doc = "        {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        {"]
+#[doc = "          \"type\": \"null\""]
+#[doc = "        }"]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"diskWrittenBytes\": {"]
+#[doc = "      \"anyOf\": ["]
+#[doc = "        {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        {"]
+#[doc = "          \"type\": \"null\""]
+#[doc = "        }"]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"energyNj\": {"]
+#[doc = "      \"anyOf\": ["]
+#[doc = "        {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        {"]
+#[doc = "          \"type\": \"null\""]
+#[doc = "        }"]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"footprintBytes\": {"]
+#[doc = "      \"anyOf\": ["]
+#[doc = "        {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        {"]
+#[doc = "          \"type\": \"null\""]
+#[doc = "        }"]
+#[doc = "      ]"]
+#[doc = "    },"]
+#[doc = "    \"origin\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeVitalsOrigin\""]
+#[doc = "    },"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
+#[doc = "    \"residentBytes\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"startedAt\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"tree\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeVitalsTree\""]
+#[doc = "    },"]
+#[doc = "    \"wakeups\": {"]
+#[doc = "      \"anyOf\": ["]
+#[doc = "        {"]
+#[doc = "          \"type\": \"integer\","]
+#[doc = "          \"minimum\": 0.0"]
+#[doc = "        },"]
+#[doc = "        {"]
+#[doc = "          \"type\": \"null\""]
+#[doc = "        }"]
+#[doc = "      ]"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsReading {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub child: ::std::option::Option<NativeVitalsChild>,
+    #[serde(rename = "cpuSystemUs")]
+    pub cpu_system_us: u64,
+    #[serde(rename = "cpuUserUs")]
+    pub cpu_user_us: u64,
+    #[serde(rename = "diskReadBytes")]
+    pub disk_read_bytes: ::std::option::Option<u64>,
+    #[serde(rename = "diskWrittenBytes")]
+    pub disk_written_bytes: ::std::option::Option<u64>,
+    #[serde(rename = "energyNj")]
+    pub energy_nj: ::std::option::Option<u64>,
+    #[serde(rename = "footprintBytes")]
+    pub footprint_bytes: ::std::option::Option<u64>,
+    pub origin: NativeVitalsOrigin,
+    pub pid: ::std::num::NonZeroU64,
+    #[serde(rename = "residentBytes")]
+    pub resident_bytes: u64,
+    #[serde(rename = "startedAt")]
+    pub started_at: u64,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub tree: ::std::option::Option<NativeVitalsTree>,
+    pub wakeups: ::std::option::Option<u64>,
+}
+impl NativeVitalsReading {
+    pub fn builder() -> builder::NativeVitalsReading {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsSample`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"rows\","]
+#[doc = "    \"seq\","]
+#[doc = "    \"time\","]
+#[doc = "    \"tookUs\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"rows\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/NativeVitalsReading\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 512"]
+#[doc = "    },"]
+#[doc = "    \"seq\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
+#[doc = "    \"time\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"tookUs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsSample {
+    pub rows: ::std::vec::Vec<NativeVitalsReading>,
+    pub seq: ::std::num::NonZeroU64,
+    pub time: u64,
+    #[serde(rename = "tookUs")]
+    pub took_us: u64,
+}
+impl NativeVitalsSample {
+    pub fn builder() -> builder::NativeVitalsSample {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsSnapshot`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
+#[doc = "    \"intervalMs\","]
+#[doc = "    \"oldestSeq\","]
+#[doc = "    \"samples\","]
+#[doc = "    \"state\","]
+#[doc = "    \"v\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
+#[doc = "    \"detail\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 240"]
+#[doc = "    },"]
+#[doc = "    \"intervalMs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
+#[doc = "    \"oldestSeq\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"samples\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/NativeVitalsSample\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 120"]
+#[doc = "    },"]
+#[doc = "    \"state\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeVitalsState\""]
+#[doc = "    },"]
+#[doc = "    \"v\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"maximum\": 1.0,"]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsSnapshot {
+    #[serde(rename = "bootId")]
+    pub boot_id: ::std::string::String,
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub detail: ::std::option::Option<NativeVitalsSnapshotDetail>,
+    #[serde(rename = "intervalMs")]
+    pub interval_ms: ::std::num::NonZeroU64,
+    #[serde(rename = "oldestSeq")]
+    pub oldest_seq: u64,
+    pub samples: ::std::vec::Vec<NativeVitalsSample>,
+    pub state: NativeVitalsState,
+    pub v: ::std::num::NonZeroU64,
+}
+impl NativeVitalsSnapshot {
+    pub fn builder() -> builder::NativeVitalsSnapshot {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsSnapshotDetail`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 240"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct NativeVitalsSnapshotDetail(::std::string::String);
+impl ::std::ops::Deref for NativeVitalsSnapshotDetail {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<NativeVitalsSnapshotDetail> for ::std::string::String {
+    fn from(value: NativeVitalsSnapshotDetail) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for NativeVitalsSnapshotDetail {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 240usize {
+            return Err("longer than 240 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeVitalsSnapshotDetail {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeVitalsSnapshotDetail {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeVitalsSnapshotDetail {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for NativeVitalsSnapshotDetail {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`NativeVitalsState`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"enum\": ["]
+#[doc = "    \"running\","]
+#[doc = "    \"unavailable\""]
+#[doc = "  ]"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(
+    :: serde :: Deserialize,
+    :: serde :: Serialize,
+    Clone,
+    Copy,
+    Debug,
+    Eq,
+    Hash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+)]
+pub enum NativeVitalsState {
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "unavailable")]
+    Unavailable,
+}
+impl ::std::fmt::Display for NativeVitalsState {
+    fn fmt(&self, f: &mut ::std::fmt::Formatter<'_>) -> ::std::fmt::Result {
+        match *self {
+            Self::Running => f.write_str("running"),
+            Self::Unavailable => f.write_str("unavailable"),
+        }
+    }
+}
+impl ::std::str::FromStr for NativeVitalsState {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        match value {
+            "running" => Ok(Self::Running),
+            "unavailable" => Ok(Self::Unavailable),
+            _ => Err("invalid value".into()),
+        }
+    }
+}
+impl ::std::convert::TryFrom<&str> for NativeVitalsState {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for NativeVitalsState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for NativeVitalsState {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+#[doc = "`NativeVitalsSubscribeParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"sinceSeq\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsSubscribeParams {
+    #[serde(
+        rename = "sinceSeq",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub since_seq: ::std::option::Option<u64>,
+}
+impl ::std::default::Default for NativeVitalsSubscribeParams {
+    fn default() -> Self {
+        Self {
+            since_seq: Default::default(),
+        }
+    }
+}
+impl NativeVitalsSubscribeParams {
+    pub fn builder() -> builder::NativeVitalsSubscribeParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsSubscribeResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"snapshot\","]
+#[doc = "    \"subId\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"snapshot\": {"]
+#[doc = "      \"$ref\": \"#/definitions/NativeVitalsSnapshot\""]
+#[doc = "    },"]
+#[doc = "    \"subId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsSubscribeResult {
+    pub snapshot: NativeVitalsSnapshot,
+    #[serde(rename = "subId")]
+    pub sub_id: ::std::string::String,
+}
+impl NativeVitalsSubscribeResult {
+    pub fn builder() -> builder::NativeVitalsSubscribeResult {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsTree`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"cpuUs\","]
+#[doc = "    \"footprintBytes\","]
+#[doc = "    \"processes\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"cpuUs\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"footprintBytes\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    },"]
+#[doc = "    \"processes\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsTree {
+    #[serde(rename = "cpuUs")]
+    pub cpu_us: u64,
+    #[serde(rename = "footprintBytes")]
+    pub footprint_bytes: u64,
+    pub processes: u64,
+}
+impl NativeVitalsTree {
+    pub fn builder() -> builder::NativeVitalsTree {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsWatchEntry`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"pid\","]
+#[doc = "    \"tree\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"pid\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 1.0"]
+#[doc = "    },"]
+#[doc = "    \"tree\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsWatchEntry {
+    pub pid: ::std::num::NonZeroU64,
+    pub tree: bool,
+}
+impl NativeVitalsWatchEntry {
+    pub fn builder() -> builder::NativeVitalsWatchEntry {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsWatchSetParams`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"watch\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"watch\": {"]
+#[doc = "      \"type\": \"array\","]
+#[doc = "      \"items\": {"]
+#[doc = "        \"$ref\": \"#/definitions/NativeVitalsWatchEntry\""]
+#[doc = "      },"]
+#[doc = "      \"maxItems\": 256"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsWatchSetParams {
+    pub watch: ::std::vec::Vec<NativeVitalsWatchEntry>,
+}
+impl NativeVitalsWatchSetParams {
+    pub fn builder() -> builder::NativeVitalsWatchSetParams {
+        Default::default()
+    }
+}
+#[doc = "`NativeVitalsWatchSetResult`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"object\","]
+#[doc = "  \"required\": ["]
+#[doc = "    \"watching\""]
+#[doc = "  ],"]
+#[doc = "  \"properties\": {"]
+#[doc = "    \"watching\": {"]
+#[doc = "      \"type\": \"integer\","]
+#[doc = "      \"minimum\": 0.0"]
+#[doc = "    }"]
+#[doc = "  },"]
+#[doc = "  \"additionalProperties\": true"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
+pub struct NativeVitalsWatchSetResult {
+    pub watching: u64,
+}
+impl NativeVitalsWatchSetResult {
+    pub fn builder() -> builder::NativeVitalsWatchSetResult {
+        Default::default()
+    }
+}
 #[doc = "`ObservedStaleCell`"]
 #[doc = r""]
 #[doc = r" <details><summary>JSON schema</summary>"]
@@ -20389,6 +21160,735 @@ pub mod builder {
                 boot_id: Ok(value.boot_id),
                 seq: Ok(value.seq),
                 ts: Ok(value.ts),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsReading {
+        child: ::std::result::Result<
+            ::std::option::Option<super::NativeVitalsChild>,
+            ::std::string::String,
+        >,
+        cpu_system_us: ::std::result::Result<u64, ::std::string::String>,
+        cpu_user_us: ::std::result::Result<u64, ::std::string::String>,
+        disk_read_bytes: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+        disk_written_bytes:
+            ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+        energy_nj: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+        footprint_bytes: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+        origin: ::std::result::Result<super::NativeVitalsOrigin, ::std::string::String>,
+        pid: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+        resident_bytes: ::std::result::Result<u64, ::std::string::String>,
+        started_at: ::std::result::Result<u64, ::std::string::String>,
+        tree: ::std::result::Result<
+            ::std::option::Option<super::NativeVitalsTree>,
+            ::std::string::String,
+        >,
+        wakeups: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsReading {
+        fn default() -> Self {
+            Self {
+                child: Ok(Default::default()),
+                cpu_system_us: Err("no value supplied for cpu_system_us".to_string()),
+                cpu_user_us: Err("no value supplied for cpu_user_us".to_string()),
+                disk_read_bytes: Err("no value supplied for disk_read_bytes".to_string()),
+                disk_written_bytes: Err("no value supplied for disk_written_bytes".to_string()),
+                energy_nj: Err("no value supplied for energy_nj".to_string()),
+                footprint_bytes: Err("no value supplied for footprint_bytes".to_string()),
+                origin: Err("no value supplied for origin".to_string()),
+                pid: Err("no value supplied for pid".to_string()),
+                resident_bytes: Err("no value supplied for resident_bytes".to_string()),
+                started_at: Err("no value supplied for started_at".to_string()),
+                tree: Ok(Default::default()),
+                wakeups: Err("no value supplied for wakeups".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsReading {
+        pub fn child<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::NativeVitalsChild>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.child = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for child: {e}"));
+            self
+        }
+        pub fn cpu_system_us<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cpu_system_us = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cpu_system_us: {e}"));
+            self
+        }
+        pub fn cpu_user_us<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cpu_user_us = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cpu_user_us: {e}"));
+            self
+        }
+        pub fn disk_read_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.disk_read_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for disk_read_bytes: {e}"));
+            self
+        }
+        pub fn disk_written_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.disk_written_bytes = value.try_into().map_err(|e| {
+                format!("error converting supplied value for disk_written_bytes: {e}")
+            });
+            self
+        }
+        pub fn energy_nj<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.energy_nj = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for energy_nj: {e}"));
+            self
+        }
+        pub fn footprint_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.footprint_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for footprint_bytes: {e}"));
+            self
+        }
+        pub fn origin<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeVitalsOrigin>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.origin = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for origin: {e}"));
+            self
+        }
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
+            self
+        }
+        pub fn resident_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.resident_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for resident_bytes: {e}"));
+            self
+        }
+        pub fn started_at<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.started_at = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for started_at: {e}"));
+            self
+        }
+        pub fn tree<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::NativeVitalsTree>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.tree = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for tree: {e}"));
+            self
+        }
+        pub fn wakeups<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.wakeups = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for wakeups: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsReading> for super::NativeVitalsReading {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsReading,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                child: value.child?,
+                cpu_system_us: value.cpu_system_us?,
+                cpu_user_us: value.cpu_user_us?,
+                disk_read_bytes: value.disk_read_bytes?,
+                disk_written_bytes: value.disk_written_bytes?,
+                energy_nj: value.energy_nj?,
+                footprint_bytes: value.footprint_bytes?,
+                origin: value.origin?,
+                pid: value.pid?,
+                resident_bytes: value.resident_bytes?,
+                started_at: value.started_at?,
+                tree: value.tree?,
+                wakeups: value.wakeups?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsReading> for NativeVitalsReading {
+        fn from(value: super::NativeVitalsReading) -> Self {
+            Self {
+                child: Ok(value.child),
+                cpu_system_us: Ok(value.cpu_system_us),
+                cpu_user_us: Ok(value.cpu_user_us),
+                disk_read_bytes: Ok(value.disk_read_bytes),
+                disk_written_bytes: Ok(value.disk_written_bytes),
+                energy_nj: Ok(value.energy_nj),
+                footprint_bytes: Ok(value.footprint_bytes),
+                origin: Ok(value.origin),
+                pid: Ok(value.pid),
+                resident_bytes: Ok(value.resident_bytes),
+                started_at: Ok(value.started_at),
+                tree: Ok(value.tree),
+                wakeups: Ok(value.wakeups),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsSample {
+        rows: ::std::result::Result<
+            ::std::vec::Vec<super::NativeVitalsReading>,
+            ::std::string::String,
+        >,
+        seq: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+        time: ::std::result::Result<u64, ::std::string::String>,
+        took_us: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsSample {
+        fn default() -> Self {
+            Self {
+                rows: Err("no value supplied for rows".to_string()),
+                seq: Err("no value supplied for seq".to_string()),
+                time: Err("no value supplied for time".to_string()),
+                took_us: Err("no value supplied for took_us".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsSample {
+        pub fn rows<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::NativeVitalsReading>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.rows = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for rows: {e}"));
+            self
+        }
+        pub fn seq<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.seq = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for seq: {e}"));
+            self
+        }
+        pub fn time<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.time = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for time: {e}"));
+            self
+        }
+        pub fn took_us<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.took_us = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for took_us: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsSample> for super::NativeVitalsSample {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsSample,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                rows: value.rows?,
+                seq: value.seq?,
+                time: value.time?,
+                took_us: value.took_us?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsSample> for NativeVitalsSample {
+        fn from(value: super::NativeVitalsSample) -> Self {
+            Self {
+                rows: Ok(value.rows),
+                seq: Ok(value.seq),
+                time: Ok(value.time),
+                took_us: Ok(value.took_us),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsSnapshot {
+        boot_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+        detail: ::std::result::Result<
+            ::std::option::Option<super::NativeVitalsSnapshotDetail>,
+            ::std::string::String,
+        >,
+        interval_ms: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+        oldest_seq: ::std::result::Result<u64, ::std::string::String>,
+        samples: ::std::result::Result<
+            ::std::vec::Vec<super::NativeVitalsSample>,
+            ::std::string::String,
+        >,
+        state: ::std::result::Result<super::NativeVitalsState, ::std::string::String>,
+        v: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsSnapshot {
+        fn default() -> Self {
+            Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
+                detail: Ok(Default::default()),
+                interval_ms: Err("no value supplied for interval_ms".to_string()),
+                oldest_seq: Err("no value supplied for oldest_seq".to_string()),
+                samples: Err("no value supplied for samples".to_string()),
+                state: Err("no value supplied for state".to_string()),
+                v: Err("no value supplied for v".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsSnapshot {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
+        pub fn detail<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<super::NativeVitalsSnapshotDetail>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.detail = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for detail: {e}"));
+            self
+        }
+        pub fn interval_ms<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.interval_ms = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for interval_ms: {e}"));
+            self
+        }
+        pub fn oldest_seq<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.oldest_seq = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for oldest_seq: {e}"));
+            self
+        }
+        pub fn samples<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::NativeVitalsSample>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.samples = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for samples: {e}"));
+            self
+        }
+        pub fn state<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeVitalsState>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.state = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for state: {e}"));
+            self
+        }
+        pub fn v<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.v = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for v: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsSnapshot> for super::NativeVitalsSnapshot {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsSnapshot,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                boot_id: value.boot_id?,
+                detail: value.detail?,
+                interval_ms: value.interval_ms?,
+                oldest_seq: value.oldest_seq?,
+                samples: value.samples?,
+                state: value.state?,
+                v: value.v?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsSnapshot> for NativeVitalsSnapshot {
+        fn from(value: super::NativeVitalsSnapshot) -> Self {
+            Self {
+                boot_id: Ok(value.boot_id),
+                detail: Ok(value.detail),
+                interval_ms: Ok(value.interval_ms),
+                oldest_seq: Ok(value.oldest_seq),
+                samples: Ok(value.samples),
+                state: Ok(value.state),
+                v: Ok(value.v),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsSubscribeParams {
+        since_seq: ::std::result::Result<::std::option::Option<u64>, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsSubscribeParams {
+        fn default() -> Self {
+            Self {
+                since_seq: Ok(Default::default()),
+            }
+        }
+    }
+    impl NativeVitalsSubscribeParams {
+        pub fn since_seq<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<u64>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.since_seq = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for since_seq: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsSubscribeParams> for super::NativeVitalsSubscribeParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsSubscribeParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                since_seq: value.since_seq?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsSubscribeParams> for NativeVitalsSubscribeParams {
+        fn from(value: super::NativeVitalsSubscribeParams) -> Self {
+            Self {
+                since_seq: Ok(value.since_seq),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsSubscribeResult {
+        snapshot: ::std::result::Result<super::NativeVitalsSnapshot, ::std::string::String>,
+        sub_id: ::std::result::Result<::std::string::String, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsSubscribeResult {
+        fn default() -> Self {
+            Self {
+                snapshot: Err("no value supplied for snapshot".to_string()),
+                sub_id: Err("no value supplied for sub_id".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsSubscribeResult {
+        pub fn snapshot<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::NativeVitalsSnapshot>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.snapshot = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for snapshot: {e}"));
+            self
+        }
+        pub fn sub_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::string::String>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.sub_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for sub_id: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsSubscribeResult> for super::NativeVitalsSubscribeResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsSubscribeResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                snapshot: value.snapshot?,
+                sub_id: value.sub_id?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsSubscribeResult> for NativeVitalsSubscribeResult {
+        fn from(value: super::NativeVitalsSubscribeResult) -> Self {
+            Self {
+                snapshot: Ok(value.snapshot),
+                sub_id: Ok(value.sub_id),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsTree {
+        cpu_us: ::std::result::Result<u64, ::std::string::String>,
+        footprint_bytes: ::std::result::Result<u64, ::std::string::String>,
+        processes: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsTree {
+        fn default() -> Self {
+            Self {
+                cpu_us: Err("no value supplied for cpu_us".to_string()),
+                footprint_bytes: Err("no value supplied for footprint_bytes".to_string()),
+                processes: Err("no value supplied for processes".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsTree {
+        pub fn cpu_us<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.cpu_us = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for cpu_us: {e}"));
+            self
+        }
+        pub fn footprint_bytes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.footprint_bytes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for footprint_bytes: {e}"));
+            self
+        }
+        pub fn processes<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.processes = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for processes: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsTree> for super::NativeVitalsTree {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsTree,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                cpu_us: value.cpu_us?,
+                footprint_bytes: value.footprint_bytes?,
+                processes: value.processes?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsTree> for NativeVitalsTree {
+        fn from(value: super::NativeVitalsTree) -> Self {
+            Self {
+                cpu_us: Ok(value.cpu_us),
+                footprint_bytes: Ok(value.footprint_bytes),
+                processes: Ok(value.processes),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsWatchEntry {
+        pid: ::std::result::Result<::std::num::NonZeroU64, ::std::string::String>,
+        tree: ::std::result::Result<bool, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsWatchEntry {
+        fn default() -> Self {
+            Self {
+                pid: Err("no value supplied for pid".to_string()),
+                tree: Err("no value supplied for tree".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsWatchEntry {
+        pub fn pid<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::num::NonZeroU64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.pid = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for pid: {e}"));
+            self
+        }
+        pub fn tree<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<bool>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.tree = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for tree: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsWatchEntry> for super::NativeVitalsWatchEntry {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsWatchEntry,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                pid: value.pid?,
+                tree: value.tree?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsWatchEntry> for NativeVitalsWatchEntry {
+        fn from(value: super::NativeVitalsWatchEntry) -> Self {
+            Self {
+                pid: Ok(value.pid),
+                tree: Ok(value.tree),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsWatchSetParams {
+        watch: ::std::result::Result<
+            ::std::vec::Vec<super::NativeVitalsWatchEntry>,
+            ::std::string::String,
+        >,
+    }
+    impl ::std::default::Default for NativeVitalsWatchSetParams {
+        fn default() -> Self {
+            Self {
+                watch: Err("no value supplied for watch".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsWatchSetParams {
+        pub fn watch<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::vec::Vec<super::NativeVitalsWatchEntry>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.watch = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for watch: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsWatchSetParams> for super::NativeVitalsWatchSetParams {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsWatchSetParams,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                watch: value.watch?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsWatchSetParams> for NativeVitalsWatchSetParams {
+        fn from(value: super::NativeVitalsWatchSetParams) -> Self {
+            Self {
+                watch: Ok(value.watch),
+            }
+        }
+    }
+    #[derive(Clone, Debug)]
+    pub struct NativeVitalsWatchSetResult {
+        watching: ::std::result::Result<u64, ::std::string::String>,
+    }
+    impl ::std::default::Default for NativeVitalsWatchSetResult {
+        fn default() -> Self {
+            Self {
+                watching: Err("no value supplied for watching".to_string()),
+            }
+        }
+    }
+    impl NativeVitalsWatchSetResult {
+        pub fn watching<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<u64>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.watching = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for watching: {e}"));
+            self
+        }
+    }
+    impl ::std::convert::TryFrom<NativeVitalsWatchSetResult> for super::NativeVitalsWatchSetResult {
+        type Error = super::error::ConversionError;
+        fn try_from(
+            value: NativeVitalsWatchSetResult,
+        ) -> ::std::result::Result<Self, super::error::ConversionError> {
+            Ok(Self {
+                watching: value.watching?,
+            })
+        }
+    }
+    impl ::std::convert::From<super::NativeVitalsWatchSetResult> for NativeVitalsWatchSetResult {
+        fn from(value: super::NativeVitalsWatchSetResult) -> Self {
+            Self {
+                watching: Ok(value.watching),
             }
         }
     }

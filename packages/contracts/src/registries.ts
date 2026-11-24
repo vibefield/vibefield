@@ -1570,6 +1570,37 @@ export const NATIVE_FLOOR_TICK = {
   INTERVAL_MS: 1_000,
 } as const;
 
+/** VT-1 (track VT, 2026-11-24; `draft/thinking-vitals.md` §4) — the vitals census, ONE authority for the floor (Rust,
+ * by generation) and fieldd. First values: the meter's own row measures them, and a re-ruling is dated here.
+ *  - SAMPLE_INTERVAL_MS — how often the floor reads every process (VT-D2: always, once a second).
+ *  - FLOOR_RING_SAMPLES — what the floor keeps while no fieldd listens: five minutes, so a fieldd that comes back
+ *    reads the minutes it missed, its own death among them.
+ *  - FLOOR_BACKFILL_MAX — the most samples one subscribe's snapshot carries; a reader that wants more asks again.
+ *  - FLOOR_ROWS_MAX — the most rows one sample carries: the floor, its children and the watch list.
+ *  - WATCH_MAX — the most pids fieldd may ask for; ROSTER_MAX — the most the shell may name.
+ *  - TREE_SCAN_MAX — the most processes the floor walks to sum a watched pid's descendants; past it the reading
+ *    says no tree rather than a part of one.
+ *  - RECORDER_RING_SAMPLES — what fieldd keeps: thirty minutes at one a second.
+ *  - SNAPSHOT_SAMPLES — what a subscription opens with: five minutes.
+ *  - QUERY_MAX_POINTS / QUERY_PROCESSES_MAX — a query's bounds, steps a series and series an answer.
+ *  - LABEL_MAX — a row's label, in characters.
+ *  - METER_BUDGET_US — what one reading may cost before the floor says so in its log: half a percent of a core. */
+export const VITALS = {
+  SAMPLE_INTERVAL_MS: 1_000,
+  FLOOR_RING_SAMPLES: 300,
+  FLOOR_BACKFILL_MAX: 120,
+  FLOOR_ROWS_MAX: 512,
+  WATCH_MAX: 256,
+  ROSTER_MAX: 128,
+  TREE_SCAN_MAX: 8_192,
+  RECORDER_RING_SAMPLES: 1_800,
+  SNAPSHOT_SAMPLES: 300,
+  QUERY_MAX_POINTS: 600,
+  QUERY_PROCESSES_MAX: 512,
+  LABEL_MAX: 80,
+  METER_BUDGET_US: 5_000,
+} as const;
+
 /** IL-D1 (`draft/thinking-inventory-latency.md` §2, ruled 2026-10-19) — how old the floor's
  * terminal inventory may be. Per cell, the inventory is as old as `now − as_of`, where `as_of` is
  * the moment the cell's last APPLIED reconcile began, before the client's writer lock: a
@@ -1948,6 +1979,11 @@ export const SCOPES = [
   "diagnostics.read", // LOG §14 — trusted shell only; excluded from every federated preset
   "diagnostics.manage", // diagnostic leases/support mutations; trusted shell only
   "audit.append", // shell-originated audit actions; local-only
+  // VT-1 (track VT, 2026-11-24) — how every process is doing. `vitals.read` is the Vitals window's and nobody
+  // else's; `vitals.report` is Electron main's alone (the shell names its own processes). Local for ever, as the
+  // diagnostics scopes are: in no tailnet preset and no plugin eligibility table.
+  "vitals.read",
+  "vitals.report",
   "settings.manage", // trusted desktop shell/renderer app-preference surface
   "tokens.mint", // shell-main only: mint per-window renderer tokens (Track A bootstrap)
   // DT-D3 (thinking-devtools-pack.md) — the live-surface doors. Deliberately

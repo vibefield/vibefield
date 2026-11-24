@@ -483,6 +483,31 @@ export const METHODS: MethodDef[] = [
     locality: "local",
   }),
 
+  // VT-1 (track VT, 2026-11-24) — the vitals door (`vitals.ts`). Local for ever, the shell alone: `vitals.read` is
+  // minted for the Vitals window and `vitals.report` for Electron main, and neither is in any other preset.
+  defineMethod({
+    surface: "product",
+    method: "vitals.subscribe",
+    scope: "vitals.read",
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "vitals.query",
+    scope: "vitals.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "vitals.roster.set",
+    scope: "vitals.report",
+    idempotent: true,
+    locality: "local",
+  }),
+
   // M2 — management channel (auth = D8 pairing hello; no scope system on this surface)
   defineMethod({
     surface: "mgmt",
@@ -600,6 +625,23 @@ export const METHODS: MethodDef[] = [
   defineMethod({
     surface: "mgmt",
     method: "native.diagnostics.lease.revoke",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+  }),
+  // VT-1 — the floor's census (`vitals.ts`, `NativeVitals*`): fieldd says which pids to measure beside the
+  // floor's own, and reads every sample.
+  defineMethod({
+    surface: "mgmt",
+    method: "native.vitals.subscribe",
+    scope: null,
+    idempotent: true,
+    locality: "local",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "mgmt",
+    method: "native.vitals.watch.set",
     scope: null,
     idempotent: true,
     locality: "local",

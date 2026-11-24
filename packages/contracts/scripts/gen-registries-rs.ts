@@ -34,6 +34,7 @@ import {
   TERMINAL_PIPELINE,
   TERMINAL_PIPELINE_CLOSE_CODES,
   TERMINAL_SCROLLBACK_CLASS_BYTES,
+  VITALS,
 } from "../src/registries";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -167,6 +168,13 @@ const lines: string[] = [
   "/// cadence. One authority with fieldd; see registries.ts for the reasons.",
   "pub mod terminal_inventory {",
   ...Object.entries(TERMINAL_INVENTORY).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
+  "}",
+  "",
+  "/// VT-1 — the vitals census: the meter's pace, what the floor keeps while no fieldd",
+  "/// listens, and the bounds of a sample, a backfill and the watch list. One authority",
+  "/// with fieldd; see registries.ts for the reasons.",
+  "pub mod vitals {",
+  ...Object.entries(VITALS).map(([k, v]) => `    pub const ${k}: u64 = ${v};`),
   "}",
   "",
   "/// AL-5 + AL-8a — the orphan bound: no session for IDLE_EXIT_MS, read every",

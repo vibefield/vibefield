@@ -1,0 +1,3 @@
+{
+  "watch": [{ "pid": 4001, "tree": false }, { "pid": 5230, "tree": true }]
+}

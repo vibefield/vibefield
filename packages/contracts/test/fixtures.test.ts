@@ -430,6 +430,14 @@ import {
 } from "../src/update-policy";
 import { UserMeResult } from "../src/users";
 import {
+  NativeVitalsSnapshot,
+  NativeVitalsWatchSetParams,
+  VitalsDeltaV1,
+  VitalsQueryResult,
+  VitalsRosterSetParams,
+  VitalsSnapshotV1,
+} from "../src/vitals";
+import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
   WorkspaceFileActionParams,
@@ -496,6 +504,16 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // cell's (`error-data.terminal-unresponsive`). Their own rows: native-supervision.test.ts.
   "ping-ack": PingAck,
   "native-tick": NativeTickNotification,
+  // VT-1 — the vitals census: the floor's snapshot (running, and `.unavailable`) and the watch list fieldd sets,
+  // read in Rust too (fixture_parity.rs); then fieldd's door, TS-only: its snapshot (`.waiting` before the floor
+  // answers), a delta (a sample with a roster change, and `.state` alone), a query's answer and the shell's roster.
+  // Their own rows: vitals.test.ts.
+  "native-vitals-snapshot": NativeVitalsSnapshot,
+  "native-vitals-watch-set-params": NativeVitalsWatchSetParams,
+  "vitals-snapshot": VitalsSnapshotV1,
+  "vitals-delta": VitalsDeltaV1,
+  "vitals-query-result": VitalsQueryResult,
+  "vitals-roster-set-params": VitalsRosterSetParams,
   "native-link-health": NativeLinkHealth,
   "system-native-restart-params": SystemNativeRestartParams,
   "system-native-restart-result": SystemNativeRestartResult,

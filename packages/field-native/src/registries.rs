@@ -154,6 +154,25 @@ pub mod terminal_inventory {
     pub const SAMPLE_MS: u64 = 1000;
 }
 
+/// VT-1 — the vitals census: the meter's pace, what the floor keeps while no fieldd
+/// listens, and the bounds of a sample, a backfill and the watch list. One authority
+/// with fieldd; see registries.ts for the reasons.
+pub mod vitals {
+    pub const SAMPLE_INTERVAL_MS: u64 = 1000;
+    pub const FLOOR_RING_SAMPLES: u64 = 300;
+    pub const FLOOR_BACKFILL_MAX: u64 = 120;
+    pub const FLOOR_ROWS_MAX: u64 = 512;
+    pub const WATCH_MAX: u64 = 256;
+    pub const ROSTER_MAX: u64 = 128;
+    pub const TREE_SCAN_MAX: u64 = 8192;
+    pub const RECORDER_RING_SAMPLES: u64 = 1800;
+    pub const SNAPSHOT_SAMPLES: u64 = 300;
+    pub const QUERY_MAX_POINTS: u64 = 600;
+    pub const QUERY_PROCESSES_MAX: u64 = 512;
+    pub const LABEL_MAX: u64 = 80;
+    pub const METER_BUDGET_US: u64 = 5000;
+}
+
 /// AL-5 + AL-8a — the orphan bound: no session for IDLE_EXIT_MS, read every
 /// IDLE_POLL_MS, ends the floor with reason `idle` while no management client
 /// holds its slot. One authority with fieldd's bound; see registries.ts.

@@ -1,0 +1,57 @@
+{
+  "v": 1,
+  "bootId": "b1c2d3e4-5f60-7a8b-9c0d-e1f203a4b5c6",
+  "state": "running",
+  "intervalMs": 1000,
+  "oldestSeq": 1,
+  "samples": [
+    {
+      "seq": 2,
+      "time": 1795478530000,
+      "tookUs": 412,
+      "rows": [
+        {
+          "pid": 4102,
+          "startedAt": 1795478000123,
+          "origin": "floor",
+          "cpuUserUs": 1840000,
+          "cpuSystemUs": 920000,
+          "residentBytes": 41943040,
+          "footprintBytes": 39845888,
+          "diskReadBytes": 1048576,
+          "diskWrittenBytes": 524288,
+          "wakeups": 9120,
+          "energyNj": 81200000000
+        },
+        {
+          "pid": 4110,
+          "startedAt": 1795478001456,
+          "origin": "child",
+          "child": "terminal-cell",
+          "cpuUserUs": 620000,
+          "cpuSystemUs": 310000,
+          "residentBytes": 36700160,
+          "footprintBytes": 34603008,
+          "diskReadBytes": 0,
+          "diskWrittenBytes": 0,
+          "wakeups": 2210,
+          "energyNj": null
+        },
+        {
+          "pid": 5230,
+          "startedAt": 1795478200789,
+          "origin": "watched",
+          "cpuUserUs": 98200000,
+          "cpuSystemUs": 12100000,
+          "residentBytes": 734003200,
+          "footprintBytes": 645922816,
+          "diskReadBytes": null,
+          "diskWrittenBytes": null,
+          "wakeups": null,
+          "energyNj": null,
+          "tree": { "processes": 7, "cpuUs": 44100000, "footprintBytes": 1288490188 }
+        }
+      ]
+    }
+  ]
+}

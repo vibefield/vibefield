@@ -1677,3 +1677,149 @@ async fn the_self_answer_carries_the_sign_in_facts() {
     assert_eq!(identity.needs_signature, Some(false));
     daemon.shutdown().await;
 }
+
+/// VT-1 — the vitals census on the paired channel. The floor measures itself and what it started without being
+/// asked, a pid fieldd names with its tree beside them, and sends each reading as the subscription's own frame
+/// (`native.vitals.delta`), which is the name fieldd's link routes. Here the floor runs inside the test process, so
+/// "the floor" is this process, a `sleep` it starts is its child, and the watched pid is this process's parent,
+/// whose tree holds this process.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+#[tokio::test]
+async fn the_vitals_census_reads_the_floor_its_child_and_a_watched_tree() {
+    use field_native::contracts::{
+        NativeVitalsOrigin, NativeVitalsSample, NativeVitalsSnapshot, NativeVitalsState,
+    };
+
+    let (_dir, daemon) = boot().await;
+    let mut c = TestClient::connect(&daemon).await;
+    assert!(c.hello(&daemon, 1).await["result"].is_object());
+
+    // a pid of 0 names no process: the list is refused whole
+    c.send(
+        json!({"jsonrpc":"2.0","id":2,"method":"native.vitals.watch.set",
+        "params":{"watch":[{"pid":0,"tree":false}]}}),
+    )
+    .await;
+    let (refused, _) = reply(&mut c, 2).await;
+    assert_eq!(
+        refused["error"]["data"]["kind"], "PRECONDITION_FAILED",
+        "{refused}"
+    );
+
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .stdin(std::process::Stdio::null())
+        .spawn()
+        .expect("sleep starts");
+    let own = u64::from(std::process::id());
+    let parent = u64::from(std::os::unix::process::parent_id());
+    // the parent with its tree, and a pid that names nobody: counted in the list, and never a row
+    c.send(
+        json!({"jsonrpc":"2.0","id":3,"method":"native.vitals.watch.set",
+        "params":{"watch":[{"pid":parent,"tree":true},{"pid":3_999_999,"tree":false}]}}),
+    )
+    .await;
+    let (set, _) = reply(&mut c, 3).await;
+    assert_eq!(set["result"]["watching"], 2, "{set}");
+
+    c.send(
+        json!({"jsonrpc":"2.0","id":4,"method":"native.vitals.subscribe",
+        "params":{"sinceSeq":0}}),
+    )
+    .await;
+    let (opened, mut frames) = reply(&mut c, 4).await;
+    // oldest last, so `pop` hands them over in the order they came
+    frames.reverse();
+    let sub_id = opened["result"]["subId"]
+        .as_str()
+        .expect("a subId")
+        .to_owned();
+    let snapshot: NativeVitalsSnapshot =
+        serde_json::from_value(opened["result"]["snapshot"].clone())
+            .unwrap_or_else(|e| panic!("the snapshot is the contract's: {e}: {opened}"));
+    assert_eq!(snapshot.state, NativeVitalsState::Running);
+    assert_eq!(snapshot.boot_id, daemon.state.boot_id);
+    assert_eq!(
+        snapshot.interval_ms.get(),
+        field_native::registries::vitals::SAMPLE_INTERVAL_MS
+    );
+    let mut cursor = snapshot.samples.last().map_or(0, |sample| sample.seq.get());
+
+    // read frames until one reading holds all three kinds of row
+    let deadline = Instant::now() + Duration::from_secs(8);
+    let whole = loop {
+        let frame = match frames.pop() {
+            Some(frame) => frame,
+            None => {
+                assert!(
+                    Instant::now() < deadline,
+                    "no reading with the watched tree in 8 s"
+                );
+                c.recv().await
+            }
+        };
+        if frame["method"] != "native.vitals.delta" {
+            continue;
+        }
+        assert_eq!(frame["params"]["subId"], sub_id.as_str(), "{frame}");
+        let sample: NativeVitalsSample = serde_json::from_value(frame["params"]["payload"].clone())
+            .unwrap_or_else(|e| panic!("a frame's payload is one sample: {e}: {frame}"));
+        assert!(
+            sample.seq.get() > cursor,
+            "a frame is newer than what came before it"
+        );
+        cursor = sample.seq.get();
+        let watched = sample
+            .rows
+            .iter()
+            .any(|row| row.origin == NativeVitalsOrigin::Watched);
+        let has_child = sample
+            .rows
+            .iter()
+            .any(|row| row.pid.get() == u64::from(child.id()));
+        if watched && has_child {
+            break sample;
+        }
+    };
+
+    let floor = &whole.rows[0];
+    assert_eq!(
+        (floor.pid.get(), floor.origin),
+        (own, NativeVitalsOrigin::Floor)
+    );
+    assert!(floor.resident_bytes > 0 && floor.cpu_user_us + floor.cpu_system_us > 0);
+    assert!((whole.time as i64 - now_ms()).abs() < 60_000);
+
+    let started = whole
+        .rows
+        .iter()
+        .find(|row| row.pid.get() == u64::from(child.id()))
+        .expect("the child's row");
+    assert_eq!(started.origin, NativeVitalsOrigin::Child);
+    assert!(
+        started.child.is_some(),
+        "a child says what it is, from the closed list"
+    );
+
+    let watched: Vec<_> = whole
+        .rows
+        .iter()
+        .filter(|row| row.origin == NativeVitalsOrigin::Watched)
+        .collect();
+    assert_eq!(
+        watched.len(),
+        1,
+        "the pid that names nobody has no row: {watched:?}"
+    );
+    assert_eq!(watched[0].pid.get(), parent);
+    let tree = watched[0].tree.as_ref().expect("the tree was asked for");
+    assert!(
+        tree.processes >= 1,
+        "this process is under its parent: {tree:?}"
+    );
+    assert!(tree.footprint_bytes > 0);
+
+    child.kill().expect("the child is killed");
+    child.wait().expect("and reaped");
+    daemon.shutdown().await;
+}

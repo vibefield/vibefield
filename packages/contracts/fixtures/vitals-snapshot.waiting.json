@@ -1,0 +1,10 @@
+{
+  "v": 1,
+  "state": "waiting",
+  "detail": "the floor's meter has not answered yet",
+  "intervalMs": 1000,
+  "memory": "footprint",
+  "processes": [],
+  "samples": [],
+  "observer": { "meterCpu": 0 }
+}

@@ -18,12 +18,14 @@ use field_native::contracts::{
     NativeFileTransferRootsResult, NativeFileTransferSnapshot, NativeHealth, NativeMarksSetParams,
     NativeMarksSetResult, NativePrepareRestartParams, NativePrepareRestartResult,
     NativeShutdownParams, NativeShutdownResult, NativeTerminalStartedForSetParams,
-    NativeTerminalStartedForSetResult, NativeTickParams, ObservedState, PeerInfo, PingAck,
-    RpcNotification, RpcRequest, RpcResponse, ServeConfig, ServeEntry, StoreSnapshot,
-    TerminalRouteSnapshot, TerminalRoutesStreamPayload, TerminalStartedFor,
-    TerminalStartedForEntry,
+    NativeTerminalStartedForSetResult, NativeTickParams, NativeVitalsSnapshot,
+    NativeVitalsWatchSetParams, ObservedState, PeerInfo, PingAck, RpcNotification, RpcRequest,
+    RpcResponse, ServeConfig, ServeEntry, StoreSnapshot, TerminalRouteSnapshot,
+    TerminalRoutesStreamPayload, TerminalStartedFor, TerminalStartedForEntry,
 };
-use field_native::registries::{custody, mesh_file_transfer, native_refusals, terminal_inventory};
+use field_native::registries::{
+    custody, mesh_file_transfer, native_refusals, terminal_inventory, vitals,
+};
 use serde_json::Value;
 use std::{fs, path::PathBuf};
 
@@ -850,4 +852,36 @@ fn custody_started_for_fixtures() {
     nameless["sessionId"] = Value::String(String::new());
     assert!(serde_json::from_value::<NativeTerminalStartedForSetParams>(nameless).is_err());
     assert_eq!(custody::STARTED_FOR_MAX, 1024);
+}
+
+/// VT-1 — the vitals census. The floor WRITES the snapshot and each sample, so both rows are strict: what it emits
+/// is what fieldd's recorder reads. It READS the watch list. A figure the platform does not offer is null on the
+/// wire and must stay null, never become 0.
+#[test]
+fn vitals_fixtures() {
+    roundtrip::<NativeVitalsSnapshot>("native-vitals-snapshot.valid.json", true);
+    roundtrip::<NativeVitalsSnapshot>("native-vitals-snapshot.unavailable.json", true);
+    roundtrip::<NativeVitalsWatchSetParams>("native-vitals-watch-set-params.valid.json", true);
+
+    let snapshot = load("native-vitals-snapshot.valid.json");
+    let parsed: NativeVitalsSnapshot = serde_json::from_value(snapshot.clone()).unwrap();
+    let rows = &parsed.samples[0].rows;
+    assert!(rows[1].energy_nj.is_none() && rows[2].footprint_bytes.is_some());
+    assert!(rows[2].disk_read_bytes.is_none() && rows[2].wakeups.is_none());
+    assert_eq!(
+        snapshot["samples"][0]["rows"][2]["wakeups"],
+        Value::Null,
+        "an absent figure is written null"
+    );
+    assert_eq!(rows[2].tree.as_ref().map(|tree| tree.processes), Some(7));
+
+    // a pid of 0 names no process
+    let mut zero = load("native-vitals-watch-set-params.valid.json");
+    zero["watch"][0]["pid"] = Value::from(0);
+    assert!(serde_json::from_value::<NativeVitalsWatchSetParams>(zero).is_err());
+
+    assert_eq!(vitals::SAMPLE_INTERVAL_MS, 1_000);
+    // held at compile time: a backfill is a part of the ring, and the watch list fits a sample
+    const { assert!(vitals::FLOOR_BACKFILL_MAX <= vitals::FLOOR_RING_SAMPLES) };
+    const { assert!(vitals::WATCH_MAX < vitals::FLOOR_ROWS_MAX) };
 }

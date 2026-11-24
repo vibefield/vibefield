@@ -254,6 +254,10 @@ pub struct DaemonState {
     /// name. The floor's and not a connection's: they stand while no client is attached, ride every hello ack, and
     /// die with this process (`marks.rs`).
     pub marks: crate::marks::Marks,
+    /// VT-1 — the vitals meter (`vitals`): its ring, its watch list and its thread. The floor's and not a
+    /// connection's: it measures while no client is attached, so a fieldd that comes back reads what it missed.
+    /// Not started by `new`: the boot starts it, and an embedded unit daemon answers `unavailable`.
+    pub vitals: crate::vitals::Vitals,
     /// OB custody (§8.1) — what each terminal was started for (`started_for.rs`), on a floor that keeps the table:
     /// EMPTY on a floor that was not handed its pairing secret. Private, and set in one place (`keep_started_for`,
     /// which only the boot calls): nothing outside this crate can give a floor a table its boot did not.
@@ -304,6 +308,7 @@ impl DaemonState {
             restart: crate::restart::RestartControl::default(),
             manager: crate::orphan::ManagerPresence::new(std::time::Instant::now()),
             marks: crate::marks::Marks::default(),
+            vitals: crate::vitals::Vitals::default(),
             started_for: std::sync::OnceLock::new(),
             next_conn_id: AtomicU64::new(1),
             next_sub_id: AtomicU64::new(1),

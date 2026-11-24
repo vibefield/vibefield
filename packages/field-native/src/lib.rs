@@ -50,6 +50,8 @@ pub mod supervised_child;
 /// TP-S3a — the cell-side T1 door layer (terminal-pipeline-v3 §5.1/§8, TP-D26):
 /// grant verification, the transport ledger, the wire types and the WS doors.
 pub mod tp;
+/// VT-1 — the vitals census: every process of VibeField read the same way, once a second, by the floor.
+pub mod vitals;
 
 use anyhow::{Context, Result};
 use std::fs;
@@ -279,6 +281,9 @@ async fn boot(
         logging.clone(),
     );
     state.restart.configure(restart_intent_file, last_exit);
+    // VT-1 — the meter reads from the floor's first second, whether or not a fieldd ever asks. It cannot fail the
+    // boot: a platform with no reading leaves it `unavailable`.
+    state.vitals.start();
     // OB custody (§8.1, EL7) — only a floor that was handed its pairing secret keeps the table of what each terminal
     // was started for, and this is the one place a floor is given it: the same `sealed` that chose where the secret
     // came from. Where the secret is a file a pane can read, anyone can pair, so such a floor has no table, refuses

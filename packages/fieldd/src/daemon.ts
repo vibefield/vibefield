@@ -483,6 +483,7 @@ import { TRANSCRIPT_SERVE_ID, TranscriptServeDriver } from "./transcripts/serve"
 import { TranscriptHostSupervisor, type TranscriptHostTimings } from "./transcripts/supervisor";
 import { SparkTranscriptTickets } from "./transcripts/tickets";
 import { userMe } from "./user-me";
+import { type VitalsNamedProcess, VitalsService } from "./vitals-service";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
 import { WorkspacePicker } from "./workspace/picker";
@@ -1636,6 +1637,7 @@ export async function bootstrap(
     );
   }
   let diagnostics: DiagnosticsService | null = null;
+  let vitals: VitalsService | null = null;
   let pluginUpdatesForCleanup: PluginUpdateManager | null = null;
   let laneLinkForCleanup: MeshLaneLink | null = null;
   /** Set once supersession has ALREADY been reported through `onFatal`, so the
@@ -2670,6 +2672,37 @@ export async function bootstrap(
         : {}),
     });
     diagnosticsService.register(api);
+    // VT-1 — the vitals recorder (`vitals-service.ts`): the floor measures, and these are the processes fieldd can
+    // name because it started them or was told their pid. Each answers from memory. A terminal's process is named
+    // by its role alone: its title can hold a folder or a command, which never reaches a row (VT-D4).
+    const one = (
+      pid: number | null | undefined,
+      role: VitalsNamedProcess["role"],
+    ): VitalsNamedProcess[] =>
+      typeof pid === "number" && pid > 0 ? [{ pid, group: "fieldd", role }] : [];
+    const vitalsService = new VitalsService({
+      native,
+      logger: logger.child({ component: "vitals" }),
+      sources: [
+        () => one(process.pid, "fieldd"),
+        () => one(rosettad?.health().pid, "rosettad"),
+        () => one(workspace.supervisor.health().pid, "files-host"),
+        () => one(transcriptHost.health().pid, "transcripts-host"),
+        () =>
+          terminals.observation() === undefined
+            ? []
+            : terminals
+                .list()
+                .flatMap((terminal): VitalsNamedProcess[] =>
+                  typeof terminal.pid === "number" && terminal.pid > 0
+                    ? [{ pid: terminal.pid, group: "agents", role: "terminal", tree: true }]
+                    : [],
+                ),
+      ],
+    });
+    vitals = vitalsService;
+    vitalsService.register(api);
+    await vitalsService.start();
     shellApi = api;
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));
 
@@ -9553,6 +9586,7 @@ export async function bootstrap(
         settings.dispose();
         plugins.dispose();
         diagnosticsService.dispose();
+        vitalsService.dispose();
         native.close();
         await artifactDrain;
         await madeAppsDrain;
@@ -9642,6 +9676,7 @@ export async function bootstrap(
       settings.dispose();
       plugins.dispose();
       diagnosticsService.dispose();
+      vitalsService.dispose();
       native.close();
       await artifactDrain;
       await madeAppsDrain;
@@ -10406,6 +10441,7 @@ export async function bootstrap(
             ["settings", () => settings.dispose()],
             ["plugins", () => plugins.dispose()],
             ["diagnostics", () => diagnosticsService.dispose()],
+            ["vitals", () => vitalsService.dispose()],
             // AL-8a — the floor records this stop planned, never as a crash
             ["native-detach", () => native.detach()],
             ["native-close", () => native.close()],
@@ -10514,6 +10550,7 @@ export async function bootstrap(
   } catch (e) {
     detachHealthSources?.();
     diagnostics?.dispose();
+    vitals?.dispose();
     await pluginUpdatesForCleanup?.dispose();
     native.close(); // rollback: release the mgmt client slot
     laneLinkForCleanup?.close(); // item 206's boot half — nor a link dialing on its back-off

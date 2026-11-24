@@ -69,6 +69,7 @@ export const STOP_STEPS = [
   "settings",
   "plugins",
   "diagnostics",
+  "vitals",
   "native-detach",
   "native-close",
   "artifacts-drain",

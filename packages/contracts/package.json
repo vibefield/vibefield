@@ -13,7 +13,8 @@
     "./registries": "./src/registries.ts",
     "./setup": "./src/setup.ts",
     "./tools": "./gen/tools.ts",
-    "./user-face": "./src/user-face.ts"
+    "./user-face": "./src/user-face.ts",
+    "./vitals": "./src/vitals.ts"
   },
   "scripts": {
     "test": "vitest run",
