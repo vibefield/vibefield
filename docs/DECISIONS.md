@@ -425,6 +425,13 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   window carries none of it. *Mine, not his ruling, ‹for James›:* VT-D7, Electron main names the shell's processes
   for fieldd when the list changes (built at VT-2, `electron-shell/src/main/vitals-roster.ts`; events only, no timer
   of its own), which amends PF2's closed duty list; design-03 takes the amendment when he rules it.
+  **VT-3a LANDED 2026-11-24 (M542)** (fieldd's own vitals on its own row: its loop's busy share, its collections'
+  pauses, its slowest request; the window's Loop lane, DESIGN.md §8 "Vitals"). *Two readings of this lane's, not his
+  rulings, ‹for James›:* **VT-D8**, the loop is measured as a busy share (the runtime's event-loop utilization, two
+  counters read when a sample is made) and not as a delay, because a delay histogram is a timer that fires every few
+  milliseconds for as long as it is on, a steady wake the idle budget forbids; the page said "loop delay". **VT-D9**,
+  frames at rest are not counted: counting them needs a callback every frame, so a frame rate is a capture to arm
+  (VT-5), and what a window reports unarmed is its long frames, counted when they happen (VT-3b, not built).
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the

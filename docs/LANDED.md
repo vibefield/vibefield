@@ -68068,3 +68068,47 @@ it for.
 - A red run's home was kept by the smoke under `/private/tmp` (`vf-smoke-pFj6L2`), as a red run's is.
 - Everything M540 listed but its gate: the recorder's Settings switch, agent names on terminal rows, rows for flow
   hosts, plugin processes and MCP servers, the Windows meter, VT-3, VT-4, VT-5.
+
+## VT-3a — fieldd says how busy its own loop was, and Vitals draws it (M542)
+
+**2026-11-24 · on local main: `046a9bfd2` VT-3a (doc), `384ee9982` VT-3a (green).** The third slice's first half
+(DECISIONS VT): what a process says of itself, beside what the floor reads of it from outside.
+
+- **The wire.** A census point may carry `own` (`VitalsOwnV1`, `packages/contracts/src/vitals.ts`): `loopBusy`,
+  `gcMs`, `gcMaxMs`, `slow` (a method's name and a duration), and a window's `longFrames` and `longFrameMaxMs` for
+  the half that reports them. Every field is optional, and one left out was not measured.
+- **fieldd measures itself with no timer of its own** (`packages/fieldd/src/own-vitals.ts`), folded when the
+  recorder makes a sample:
+  - its loop as a busy share, the runtime's event-loop utilization, two counters read at the fold;
+  - its garbage collections' pauses, counted by the runtime's own observer when they happen;
+  - its slowest request, from `ProductApi.observeRequests`: a registered method's time from arrival to reply, by
+    its name alone.
+- **The Loop lane** (`DESIGN.md` §8 "Vitals", written in the doc commit first): under Memory, one trace a process
+  that says its loop, zero to 100%, and at the right of its head one process read at the moment the list reads:
+  "fieldd · 17% busy · slowest terminal.create 63 ms". It stands only while some process says its loop.
+- **A figure wider than its column grows toward the name.** The first real run's still showed the foot's "1.5
+  cores" running into "1019 MB".
+- **‹for James›, two readings of this lane's, not his rulings (DECISIONS VT):**
+  - **VT-D8.** The page said "loop delay". Built as a busy share: a delay histogram is a timer that fires every few
+    milliseconds while it is on, a steady wake the idle budget forbids. A second near 100% is a loop that answered
+    nobody. A delay can still be read while a capture is armed (VT-5).
+  - **VT-D9.** Frames at rest are not counted, because counting them needs a callback every frame. A frame rate is
+    a capture to arm (VT-5); unarmed, a window will report its long frames when they happen (VT-3b).
+
+**Proved, 2026-11-24, on the development Mac, in the lane:**
+- A real pair (`vitals-pair.e2e.test.ts`): fieldd's row carried its own loop, 5.1% busy and GC 0 ms; the floor's
+  row carried none.
+- `smoke:terminal-direct` on the lane's build, green: the VITALS row with seven traces, `left: []`. The still was
+  read by eye. The build it ran predates the wide-figure CSS line, which a scratch still showed mended.
+- contracts 2,322 passed. fieldd whole: 334 files, 5,124 passed, 34 skipped. field-app whole: 391 files, 5,716
+  passed, 3 skipped. electron-shell: `smoke-vitals` and `vitals`, 27 passed.
+- tsc for contracts, fieldd and field-app. `check:walls`, the agent literal lint, clippy at `-D warnings`,
+  `pnpm gen` (clean after it), biome on the changed files, `bundle:assert` and the census, strict.
+
+**Not this entry, and owed:**
+- VT-3b: Electron main's loop while the Vitals window is open, and the desk window's long frames. Both need a
+  report door (`vitals.own.report`) and its fixtures.
+- `vitals.query` does not fold own vitals. No mark on the lane for a bad second (VT-4).
+- "Slowest" is time to the reply, so a method that waits by design reads slow.
+- Not run: the whole electron-shell suite, the Rust tests, `smoke:godview` whole, `pnpm verify` whole.
+- A person's own look at the window is still owed (M540).
