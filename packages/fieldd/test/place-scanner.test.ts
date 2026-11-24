@@ -226,6 +226,58 @@ describe("the place scanner (PJ-1)", { timeout: 30_000 }, () => {
     expect(s.lastPass()).toMatchObject({ places: 5, skipped: 0 });
   });
 
+  // History QA (2026-11-24): after a first import the room filed every session under no project for 67 s, the
+  // length of a pass over 645 places of which 540 were worktrees no session ran in.
+  it("a row with no place yet gets its roots' places before the worktrees they name are read; a later pass publishes once", async () => {
+    const base = scratch();
+    const app = repo(base, "app", 2);
+    const side = join(base, "app-side");
+    git(app, "worktree", "add", "-q", "-b", "side", side);
+    const lib = repo(base, "lib", 1);
+    const { catalog, told, last } = catalogOf([
+      { projectId: "p-app", rootPaths: [app] },
+      { projectId: "p-lib", rootPaths: [lib] },
+    ]);
+    const { worker } = workerOf();
+    // the wave that reads the worktree waits for the test's word
+    let release = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const asker = worker as unknown as { request: PlaceFactsAsker["request"] };
+    const real = asker.request.bind(worker);
+    asker.request = (async (op: "placeFacts", args: Parameters<typeof readPlaces>[0]) => {
+      if (args.places.some((place) => place.path === side)) await held;
+      return real(op, args);
+    }) as PlaceFactsAsker["request"];
+    const s = scanner(catalog, worker);
+    s.start();
+    const pass = s.scanNow();
+    await until(() => told.length === 1, "the roots' places");
+    const early = told[0] ?? new Map<string, PlaceFacts[]>();
+    expect([...byPath(early, "p-app").keys()]).toEqual([app]);
+    expect([...byPath(early, "p-lib").keys()]).toEqual([lib]);
+    expect(
+      s
+        .places()
+        .get("p-app")
+        ?.map((place) => place.path),
+    ).toEqual([app]);
+    release();
+    await pass;
+    expect(told).toHaveLength(2);
+    expect([...byPath(last(), "p-app").keys()]).toEqual([app, side]);
+    // the pass's summary is the whole pass's, and a place the early publish said keeps its observedAt
+    expect(s.lastPass()).toMatchObject({ places: 3, changed: 3, skipped: 0 });
+    expect(byPath(last(), "p-app").get(app)?.observedAt).toBe(
+      byPath(early, "p-app").get(app)?.observedAt,
+    );
+    // every row is placed now: the next pass publishes once, at its end
+    await s.scanNow();
+    expect(told).toHaveLength(3);
+    expect(s.lastPass()).toMatchObject({ places: 3 });
+  });
+
   it("this desktop's places find each other's samples, then a peer's — and a peer's change asks for a pass", async () => {
     const base = scratch();
     const a = repo(base, "a", 4);

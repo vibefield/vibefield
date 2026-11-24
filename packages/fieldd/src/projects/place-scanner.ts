@@ -384,6 +384,7 @@ export class PlaceScanner {
         if (!owners.has(path) && owners.size < this.#max)
           owners.set(path, { projectId, discovered: false });
     const asked = new Set<string>();
+    let earlyChanged = 0;
     let wave = [...owners.keys()];
     // a wave, then the worktrees it named that nobody asked about, twice at most
     for (let round = 0; round < 3 && wave.length > 0; round += 1) {
@@ -416,12 +417,33 @@ export class PlaceScanner {
           named.push(worktree.path);
         }
       }
+      // History QA (2026-11-24) — the rows' own roots are read, and the worktrees they name are still to
+      // come: on James's Mac that second wave was 540 of 645 places and most of a 67 s pass, and until the
+      // pass published, the room filed every session of a first import under no project. A row that has no
+      // place published yet gets its roots' places now. They are the places its sessions ran in (a worktree
+      // somebody worked in is a root of its own), so the grouping this publishes is the one the whole pass
+      // will; the worktrees join their checkouts' rows when it ends. A pass that places no new row
+      // publishes once, as before.
+      if (round === 0 && named.length > 0 && this.#unplaced(owners)) {
+        const sofar: PlaceScanSummary = { ...summary, places: 0, changed: 0 };
+        const early = this.#assemble(owners, sofar, false);
+        earlyChanged = sofar.changed;
+        this.#published = early;
+        catalog.setPlaces(early);
+        this.#logger.info("fieldd.places.published_early", "The rows' roots are placed", {
+          places: sofar.places,
+          toCome: named.length,
+          ms: this.#now() - started,
+        });
+      }
       wave = named;
     }
     // what no row names any more is forgotten (a re-scan reads it afresh)
     for (const path of [...this.#entries.keys()]) if (!owners.has(path)) this.#entries.delete(path);
 
-    const published = this.#assemble(owners, summary);
+    const published = this.#assemble(owners, summary, true);
+    // what the early publish already said moved is this pass's too
+    summary.changed += earlyChanged;
     this.#published = published;
     catalog.setPlaces(published);
     // only a pass that published moves what the next change is compared with
@@ -490,6 +512,8 @@ export class PlaceScanner {
   #assemble(
     owners: ReadonlyMap<string, Owner>,
     summary: PlaceScanSummary,
+    /** false for a publish inside a pass: what it has not read yet is not forgotten */
+    whole: boolean,
   ): Map<string, PlaceFacts[]> {
     const device = this.#opts.deviceId();
     const now = this.#now();
@@ -530,9 +554,17 @@ export class PlaceScanner {
         summary.places += 1;
       }
     }
-    for (const placeId of [...this.#observed.keys()])
-      if (!seen.has(placeId)) this.#observed.delete(placeId);
+    if (whole)
+      for (const placeId of [...this.#observed.keys()])
+        if (!seen.has(placeId)) this.#observed.delete(placeId);
     return byProject;
+  }
+
+  /** A row whose roots were read and that has no place published yet. */
+  #unplaced(owners: ReadonlyMap<string, Owner>): boolean {
+    for (const [path, { projectId, discovered }] of owners)
+      if (!discovered && this.#entries.has(path) && !this.#published.has(projectId)) return true;
+    return false;
   }
 
   #facts(entry: Entry, asked: string, placeId: string, device: string): PlaceFacts {
