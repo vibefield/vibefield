@@ -67886,3 +67886,60 @@ circle at rest.
 The test Mac's V and kit are the push proof's.
 
 **Not done:** no push of its own.
+
+## VT-1 — the floor measures every process once a second, and fieldd names them (M539)
+
+**2026-11-24 · on local main: `9b73b02d9` VT-1 (doc), `603c87ff6` VT-1 (green).**
+James, 2026-11-23, asked for profiling and metrics for the final polish: the Electron app's and every daemon's memory,
+CPU, GPU and frame rate, graphed beside the logs, with bad peaks and crashes recorded. After the design page *The
+Vitals Window* (https://claude.ai/artifact/KbMBa2w6gR48AtBCxhgSD6, four options and five marks), 2026-11-24 00:03:36Z:
+"good, go with lean and land this". Every mark at its lean (DECISIONS VT). This is the first slice of five: the
+census, with no window.
+
+- **What was so.** VibeField measured nothing of itself outside one process at a time: the desk's frame-stats overlay,
+  the Godview perf lab, the soak scripts. No number said what fieldd, the floor, rosettad or a helper cost, nothing
+  kept a bad minute, and a figure for the whole app was Activity Monitor's.
+- **The floor's meter** (`packages/field-native/src/vitals`). Once a second, on a thread of its own, it reads
+  itself, what it started (the cells, the mesh sidecar, the freeway host) and the pids fieldd asks for: CPU time,
+  memory, disk, wake-ups, energy.
+  - macOS reads `proc_pid_rusage` flavor 4, which needs no privilege for the same user's processes and carries the
+    physical footprint (Activity Monitor's Memory). Its CPU times are Mach absolute-time units, scaled by
+    `mach_timebase_info`; a unit test holds the scale to `getrusage`.
+  - Linux reads `/proc`, with no footprint. Any other platform says `unavailable` in words.
+  - A watched pid may ask for its tree: its descendants summed, with a CPU figure that only rises.
+  - It keeps five minutes, so a fieldd that comes back reads what it missed. A reading that passes its 5 ms budget is
+    said in the log, at most once a minute. A fault in the meter ends its thread alone.
+- **fieldd's recorder** (`packages/fieldd/src/vitals-service.ts`) names rows, makes rates and keeps thirty minutes.
+  It names what it started: itself, rosettad, the files and transcripts hosts, and each observed terminal's process
+  with its tree. A terminal's row carries no title, folder or command (VT-D4).
+- **The wires** (`packages/contracts/src/vitals.ts`, its own subpath). The floor: `native.vitals.subscribe` and
+  `native.vitals.watch.set`, generated into Rust. fieldd: `vitals.subscribe`, `vitals.query` (a span folded to at
+  most 600 steps, each keeping its mean and its peak) and `vitals.roster.set`. Scopes `vitals.read` and
+  `vitals.report` are local for ever. `VITALS` holds every bound for both daemons. A figure the platform lacks is
+  null, never 0, and a process's first reading has no CPU rate.
+- **The admission census moved** with `vitals.subscribe` (class one): 35 product subscription rows, 36 closed keys,
+  316 holders at most on one connection (34, 35 and 308 before).
+
+**Proved, 2026-11-24, on the development Mac, in the lane, at nice 19:**
+- contracts: 80 files, 2,317 tests passed, before and after the rebase onto `235b26d53`. tsc clean.
+- field-native: the whole `cargo test -p field-native` ran once and failed one row, `custody_child_stdin` (two test
+  children of this slice named no stdin); mended, 3 passed. Rerun after the mends and again after the rebase: lib
+  vitals 10 passed, `mgmt_server` vitals 1 passed (a real floor, its child and a watched tree), `fixture_parity` 25
+  passed. clippy at `-D warnings` and `cargo fmt --check` clean.
+- fieldd: the whole suite, 337 files: 5,111 passed, 4 failed at a load average near 150 (`flows-host` H8,
+  `secret-store-child`, `agent-hermes-gateway`, `workspace-git-hardening`; none in a file this slice touches). Each
+  passed rerun alone. `vitals.test.ts` 10 passed. tsc clean.
+- `check:walls`, `check:deps`, `check:retired`, `check:ios-fixtures`, the agent literal lint and `preflight` pass.
+  biome clean on the changed files. `pnpm gen` leaves the generated files as committed.
+
+**Not this entry, and owed:**
+- No window (VT-2), no rows for the shell's own processes (main's roster is VT-2), no frames or loop delay (VT-3), no
+  incidents or crash records (VT-4), no armed traces or baseline run (VT-5).
+- Flow hosts, plugin child processes and MCP stdio servers have no row yet. A terminal's row is not yet labelled with
+  its agent.
+- Nothing was read on a running daemon pair, and the meter's own cost under load was not measured.
+- Windows has no reading. No whole-Mac GPU figure was probed.
+- Not run: `pnpm verify` whole, electron-shell's and field-app's suites, the bundle and census stages, any smoke, the
+  phone kit.
+- ‹for James›: VT-D7 is this lane's reading, not his ruling. Electron main will name the shell's processes for fieldd
+  when the list changes (VT-2), which amends PF2's closed duty list.

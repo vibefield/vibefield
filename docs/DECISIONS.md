@@ -417,7 +417,7 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   number is set. Metrics stay their own class (LOG-1) and stay on this computer (LOG-25, LOG-36): the scopes
   `vitals.read` and `vitals.report` are in no tailnet preset and no plugin table. Defined in
   `packages/contracts/src/vitals.ts` (the wires and `VITALS`, the bounds) and `draft/thinking-vitals.md`.
-  **VT-1 LANDED 2026-11-24** (the census: the floor's meter and fieldd's recorder; no window yet, and nothing read on
+  **VT-1 LANDED 2026-11-24 (M539)** (the census: the floor's meter and fieldd's recorder; no window yet, and nothing read on
   a running daemon pair). *Mine, not his ruling, ‹for James›:* VT-D7, Electron main names the shell's processes for
   fieldd when the list changes, which amends PF2's closed duty list when VT-2 lands.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
