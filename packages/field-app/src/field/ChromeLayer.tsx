@@ -31,6 +31,7 @@ import { installObjectsDoor } from "../frame/cards/hand-over";
 import { fieldServiceTeller } from "../frame/field-service-notice";
 import { type FrameSurface, foldSurface, type SheetShelf } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
+import { HistoryImportSign } from "../frame/HistoryImportSign";
 import { canvasHead } from "../frame/head-canvas";
 import { runChosenSession } from "../frame/line-door";
 import { needsNoticesPortOver, startNeedsNotices } from "../frame/needs-notices";
@@ -465,6 +466,11 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         openLiveFeed={openHistoryLiveFeed}
       />
+
+      {/* HISTORY'S IMPORT SIGN (track IM, IM-1; DESIGN.md §8 "History", the import's sign): the History circle,
+          one head gap left of the search button while History is the view shown, and its panel under it. The
+          room hands it the import (R11) through `import-sign-door.ts`; the frame draws it. */}
+      <HistoryImportSign shown={view === "history"} />
 
       {/* PLUGINS — THE FRAME'S SECOND POPUP (MK-4a; DESIGN.md §8 "Plugins —
           the frame's second popup"): drawn on the document's body over the

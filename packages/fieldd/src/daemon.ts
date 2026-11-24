@@ -3133,8 +3133,13 @@ export async function bootstrap(
     // no room) is not sent it on every read.
     const ownWindow = (ctx: CallerContext): boolean =>
       ctx.principal.kind === "local-token" || ctx.principal.kind === "shell-main";
+    // IM-1 — and what the index keeps on this machine and the memory it holds,
+    // for History's import sign: this desktop's own windows too, and never on
+    // the pushed feed below, where memory would move every frame
     api.register("index.status", (ctx) =>
-      index.status(ownWindow(ctx) ? { projects: (rows) => projectDoors.backfills(rows) } : {}),
+      index.status(
+        ownWindow(ctx) ? { projects: (rows) => projectDoors.backfills(rows), footprint: true } : {},
+      ),
     );
     // AO-4b — the same status pushed, for the desk's History cell and Setting
     // up: ONE poller while anyone listens (`IndexStatusFeed`), reading as this

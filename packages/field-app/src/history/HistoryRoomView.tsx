@@ -4,6 +4,7 @@ import {
   type KeyValueStore,
   type ReaderAddress,
   type RoomHostInputs,
+  type RoomImportSign,
   type RoomPorts,
   type RoomSelection,
   type RoomTarget,
@@ -156,6 +157,11 @@ export interface HistoryRoomViewProps {
    * room's first hold carries it when it had begun to show. Absent, or null,
    * the room's first hold is late. */
   opening?: { readonly current: number | null } | undefined;
+  /** IM-1 (DESIGN.md §8 "History", the import's sign) — the room hands the
+   * import to the frame's History circle (R11): the product's door
+   * (`import-sign-door.ts`), one object for the room's life. Absent, the room
+   * keeps its own import card, as the catalog's plates show it. */
+  importSign?: RoomImportSign | undefined;
 }
 
 export function HistoryRoomView({
@@ -171,6 +177,7 @@ export function HistoryRoomView({
   consent,
   shown = true,
   opening,
+  importSign,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
   // HG-W1, HG-W4 (DESIGN.md §8 "History"): the room's waits wear the living mark (`waitMark`, R10), and its first
@@ -225,6 +232,7 @@ export function HistoryRoomView({
           onSelect={onSelect}
           {...inputs}
           waitMark={waitMark}
+          importSign={importSign}
         />
       </div>
       {card !== null && (

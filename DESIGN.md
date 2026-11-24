@@ -7434,12 +7434,14 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     **it stays, at rest**: the glyph alone in the button's ink, no rim, no arc. Its words are the room's: rosetta reads
     the import and hands it out (R11, `importSign`, rosetta-room 0.1.9), and VibeField draws it, so the sign, the hold
     and what the card said are one reading. Its accessible name is the room's label ("Importing history · step 2 of 4:
-    Importing your newest conversations first"), which is its tooltip too.
+    Importing your newest conversations first"). *Corrected 2026-11-23 (IM-1, as built):* it has no tooltip; this said
+    the label was its tooltip too, and a tooltip would stand over the panel the same rest opens.
     - **Its panel** opens under the circle, right-aligned to the search button's end, 10 under the band: the solid
       menu (§5, corners 18), 392 wide, never past the reserve, scrolling inside. The pointer resting 120ms on the circle
       opens it, as do a press and Return or Space; leaving the circle and the panel closes it after 220ms, and Escape or
       a press outside closes it at once (a press opens it held, until a second press). It rises `.985 → 1` with its
-      opacity over 180ms on the island curve and leaves over 120ms on the retract curve; reduced motion fades it. In
+      opacity over 180ms on the island curve; reduced motion fades it in over 120ms. *Corrected 2026-11-23 (IM-1, as
+      built):* it goes at once when it closes; this said it leaves over 120ms on the retract curve. In
       order: the eyebrow in the menu's mono ("Importing history · step 2 of 4", "History · up to date") and the step's
       title at 15/600 with its count under it; **What you can do now**, the four steps, each what it opens ("Projects
       and sessions", "Open any conversation", "Charts and figures", "Search everything") and its figure at the row's end,
@@ -7448,7 +7450,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       "Ready to browse", with their marks; **On this Mac**, what was read from the agents and what is kept on disk, one
       bar of the four parts on one scale (the record, kept for good; the archive, hatched while it is still in memory;
       search; media) over their legend with each part's note, then the index's memory in use; and the foot, the step's
-      rate and the time it has taken.
+      rate and the time it has taken. The bar is colourless: 8 tall, corners 4, on the foreground at 6%, the parts the
+      foreground at **70, 45, 28 and 16%** (the record darkest), the archive's share in memory a 2px hatch at 135° of
+      its own 45%.
     - **The column card retires** (IM-D3): with the sign up the projects column draws no import card. The cold start's
       hold before the first project stays (HG-W1).
     - **The space is rosetta's own measure** (IM-D4): rosetta says its files and its memory on `/api/status` (`storage`,

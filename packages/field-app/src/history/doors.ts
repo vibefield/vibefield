@@ -43,6 +43,7 @@ import type {
   ParticipantColor,
   ProjectRow,
   RuntimeBackfill,
+  RuntimeIngestStatus,
   RuntimeRow,
   SearchBuildProgress,
   SearchHit,
@@ -451,7 +452,51 @@ export function catalogStatusOf(status: IndexStatus, now = Date.now()): CatalogS
     // (`health.rs`: now minus the start), so "elapsed" counts from the start
     startedAt: status.startedAt ?? null,
     uptimeMs: status.startedAt === undefined ? 0 : Math.max(0, now - status.startedAt),
+    // IM-1 — what the import's sign says of space and of each agent after the
+    // import (rosetta-room 0.1.9's R11), back in rosetta's spelling
+    storage:
+      status.storage === undefined
+        ? null
+        : {
+            record_bytes: status.storage.recordBytes,
+            archive_bytes: status.storage.archiveBytes,
+            search_bytes: status.storage.searchBytes,
+            media_bytes: status.storage.mediaBytes,
+            measured_at: status.storage.measuredAt,
+          },
+    memory:
+      status.memory === undefined
+        ? null
+        : {
+            footprint_bytes: status.memory.footprintBytes,
+            archive_bytes: status.memory.archiveBytes,
+          },
+    runtimes: liveRuntimesOf(status),
   };
+}
+
+/** IM-1 — each watched runtime's live counters in rosetta's spelling, for the
+ * sign's agents after the import. fieldd mirrors the three the room reads
+ * (`IndexRuntimeLive`); the counters it does not carry are 0, which the room
+ * never reads. */
+function liveRuntimesOf(status: IndexStatus): RuntimeIngestStatus[] {
+  const rows: RuntimeIngestStatus[] = [];
+  for (const runtime of status.runtimes) {
+    if (runtime.live === undefined || !runtime.watched) continue;
+    rows.push({
+      kind: runtime.kind,
+      runtime_id: runtime.runtimeId,
+      label: runtime.label ?? null,
+      ticks: 0,
+      events: runtime.live.events,
+      polls: 0,
+      rescans: 0,
+      admissions: 0,
+      live_rows: runtime.live.liveRows,
+      last_activity_ms: runtime.live.lastActivityMs,
+    });
+  }
+  return rows;
 }
 
 /** A search build's live work in rosetta's spelling, or null: none, or a stage

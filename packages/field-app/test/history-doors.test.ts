@@ -470,6 +470,22 @@ describe("the catalog port's rows (AR-8c; PJ-4 H1)", () => {
       },
       startedAt: null,
       uptimeMs: 0,
+      // IM-1 — an index that says no space, and each watched runtime's live counters
+      storage: null,
+      memory: null,
+      runtimes: [
+        expect.objectContaining({
+          runtime_id: "rt_5f0c9a2e1b7d4c3a",
+          events: 14,
+          live_rows: 31,
+          last_activity_ms: 1789232460000,
+        }),
+        expect.objectContaining({
+          runtime_id: "rt_0b7e2c4d9a1f3e58",
+          label: "Kim",
+          last_activity_ms: null,
+        }),
+      ],
     });
     expect(
       catalogStatusOf({
@@ -478,6 +494,36 @@ describe("the catalog port's rows (AR-8c; PJ-4 H1)", () => {
         rosettad: { ...STATUS.rosettad, phase: "starting" },
       }),
     ).toBeNull();
+  });
+
+  it("IM-1: hands the room's import sign what the index keeps and the memory it holds, back in rosetta's spelling", () => {
+    const measured = IndexStatus.parse(fixture("index-status.measured.json"));
+    const answer = catalogStatusOf(measured);
+    expect(answer?.storage).toEqual({
+      record_bytes: 1_180_000_000,
+      archive_bytes: 0,
+      search_bytes: 0,
+      media_bytes: 96_000_000,
+      measured_at: 1_793_092_410_000,
+    });
+    expect(answer?.memory).toEqual({
+      footprint_bytes: 2_410_000_000,
+      archive_bytes: 2_090_000_000,
+    });
+    // a runtime with no live counters yet (a cold start's) brings none
+    expect(answer?.runtimes).toEqual([]);
+    // an archive on disk holds no memory of its own
+    expect(
+      catalogStatusOf({ ...measured, memory: { footprintBytes: 440_000_000, archiveBytes: null } })
+        ?.memory,
+    ).toEqual({ footprint_bytes: 440_000_000, archive_bytes: null });
+    // a retired runtime's counters are not the sign's
+    expect(
+      catalogStatusOf({
+        ...STATUS,
+        runtimes: STATUS.runtimes.map((runtime) => ({ ...runtime, watched: false })),
+      })?.runtimes,
+    ).toEqual([]);
   });
 
   it("AO-4: feeds the room's first reading — the per-project fold keyed as the room keys projects, the search build's stage, the daemon's clock", () => {

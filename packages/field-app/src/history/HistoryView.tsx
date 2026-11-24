@@ -8,7 +8,12 @@ import {
   ProjectGetResult,
 } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
-import type { HistoryRoomHandle, RoomSelection, RoomTarget } from "@vibefield/rosetta-room";
+import type {
+  HistoryRoomHandle,
+  RoomImportSign,
+  RoomSelection,
+  RoomTarget,
+} from "@vibefield/rosetta-room";
 import {
   type ReactElement,
   useCallback,
@@ -20,6 +25,7 @@ import {
 } from "react";
 import { useOffersConnect } from "../account/use-link-door";
 import { requestShellPresentation } from "../field/shell-presentation";
+import { publishImportSign } from "../frame/import-sign-door";
 import {
   type JumpOutcome,
   jumpNote,
@@ -496,6 +502,12 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
       openAt={openAt}
       keys={keys}
       inputs={inputs}
+      importSign={HISTORY_IMPORT_SIGN}
     />
   );
 }
+
+/** IM-1 — the room hands the import to the frame's History circle through its
+ * door (DESIGN.md §8 "History", the import's sign): one object for the window's
+ * life, so the room never reads a new host. */
+const HISTORY_IMPORT_SIGN: RoomImportSign = { onSign: publishImportSign };

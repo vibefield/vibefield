@@ -161,6 +161,61 @@ describe("AO-4 — index.status feeds History's first reading", () => {
   });
 });
 
+describe("IM-1 — index.status carries what the index keeps and the memory it holds", () => {
+  const measured = {
+    storage: {
+      record_bytes: 3_700_000_000,
+      archive_bytes: 0,
+      search_bytes: 0,
+      media_bytes: 342_000_000,
+      measured_at: STARTED + 90_000,
+    },
+    memory: { footprint_bytes: 2_410_000_000, archive_bytes: 2_090_000_000 },
+  };
+
+  it("mirrors rosetta's storage and memory when asked, and nothing when not", async () => {
+    const asked = IndexStatus.parse(
+      await service(body({ daemon: measured })).status({ footprint: true }),
+    );
+    expect(asked.storage).toEqual({
+      recordBytes: 3_700_000_000,
+      archiveBytes: 0,
+      searchBytes: 0,
+      mediaBytes: 342_000_000,
+      measuredAt: STARTED + 90_000,
+    });
+    expect(asked.memory).toEqual({ footprintBytes: 2_410_000_000, archiveBytes: 2_090_000_000 });
+    // the pushed feed reads without it: a figure that moves every read stays out
+    const feed = IndexStatus.parse(await service(body({ daemon: measured })).status());
+    expect(feed).not.toHaveProperty("storage");
+    expect(feed).not.toHaveProperty("memory");
+  });
+
+  it("an archive on disk holds no memory of its own, and a daemon before 0.1.9 says nothing", async () => {
+    const onDisk = IndexStatus.parse(
+      await service(
+        body({ daemon: { memory: { footprint_bytes: 440_000_000, archive_bytes: null } } }),
+      ).status({ footprint: true }),
+    );
+    expect(onDisk.memory).toEqual({ footprintBytes: 440_000_000, archiveBytes: null });
+    expect(onDisk).not.toHaveProperty("storage");
+    const older = IndexStatus.parse(await service(body()).status({ footprint: true }));
+    expect(older).not.toHaveProperty("storage");
+    expect(older).not.toHaveProperty("memory");
+  });
+
+  it("leaves out a block whose figures are not counts, rather than refusing the whole status", async () => {
+    const odd = body({ daemon: measured });
+    const daemon = odd.daemon as unknown as Record<string, Record<string, unknown>>;
+    daemon.storage = { ...daemon.storage, media_bytes: -1 };
+    daemon.memory = { ...daemon.memory, footprint_bytes: "lots" };
+    const status = IndexStatus.parse(await service(odd).status({ footprint: true }));
+    expect(status).not.toHaveProperty("storage");
+    expect(status).not.toHaveProperty("memory");
+    expect(status.startedAt).toBe(STARTED);
+  });
+});
+
 /** A discovered runtime as `/api/runtimes` lists it. */
 const runtimeRow = (id: string, kind: string, root: string): RuntimeRow => ({
   id,

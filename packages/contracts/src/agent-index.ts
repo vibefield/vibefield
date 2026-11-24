@@ -443,6 +443,33 @@ export const IndexProjectBackfill = z
   .passthrough();
 export type IndexProjectBackfill = z.infer<typeof IndexProjectBackfill>;
 
+/** IM-1 — what the index keeps on this machine (rosetta `DaemonStorage`, 0.1.9,
+ * mirrored): bytes allocated on disk, by part — the record (the raw ledger, the
+ * one part kept for good), the archive (the projection; zero while a cold build
+ * holds it in memory), search and media — and when rosetta's walk measured them.
+ * History's import sign says them (DESIGN.md §8 "History", IM-D4). */
+export const IndexStorage = z
+  .object({
+    recordBytes: z.number().int().nonnegative(),
+    archiveBytes: z.number().int().nonnegative(),
+    searchBytes: z.number().int().nonnegative(),
+    mediaBytes: z.number().int().nonnegative(),
+    measuredAt: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type IndexStorage = z.infer<typeof IndexStorage>;
+
+/** IM-1 — the index process's memory (rosetta `DaemonMemory`, 0.1.9, mirrored):
+ * its footprint, and while a cold build keeps the archive in memory what SQLite
+ * holds there (null once the archive is on disk). */
+export const IndexMemory = z
+  .object({
+    footprintBytes: z.number().int().nonnegative(),
+    archiveBytes: z.number().int().nonnegative().nullable(),
+  })
+  .passthrough();
+export type IndexMemory = z.infer<typeof IndexMemory>;
+
 /** `index.status` — the whole honest picture in one read: the folded phase,
  * the daemon projection, the record, every runtime the daemon lists (empty
  * until the daemon is ready), and the search projection's own readiness.
@@ -465,6 +492,13 @@ export const IndexStatus = z
      * life after, and sent to this desktop's own windows only — never to the
      * phone, a plugin or a peer daemon. */
     projects: z.array(IndexProjectBackfill).optional(),
+    /** IM-1 — what the index keeps on this machine and the memory it holds
+     * (rosetta 0.1.9), for History's import sign: sent to this desktop's own
+     * windows only, as `projects` is, and never on the pushed feed, where a
+     * figure that moves with every read would send a frame every tick. Absent
+     * from a daemon that does not say. */
+    storage: IndexStorage.optional(),
+    memory: IndexMemory.optional(),
   })
   .passthrough();
 export type IndexStatus = z.infer<typeof IndexStatus>;

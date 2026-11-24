@@ -686,6 +686,21 @@ describe("UI system ownership boundaries", () => {
     expect(preview).toMatch(/<HistoryConsentCard\s/u);
   });
 
+  it("keeps the import sign's plates an ADAPTER — the room's own reading over the package's simulated cold import, drawn by the shipping circle beside the shipping search button, never its markup (IM-1)", () => {
+    // A host supplies the room's ports and what fieldd measures beside rosetta's status; the sign is what the
+    // shipping room hands out (R11) over the package's own simulator, and the circle that draws it is the frame's.
+    const plate = source("design-system/HistoryImportSignPreview.tsx");
+    const fixtures = source("design-system/history-fixtures.ts");
+    expect(plate).toMatch(/<HistoryRoomView\s/u);
+    expect(plate).toMatch(/<HistoryImportSignView\s/u);
+    expect(plate).toMatch(/<PeekButtonView\s/u);
+    expect(fixtures).toContain("createColdImport(");
+    expect(plate).not.toMatch(/className="(?:ah-|tr-|vf-history)/);
+    expect(plate).not.toContain("<style");
+    // the words are the room's: the plate writes no sign of its own
+    expect(plate).not.toMatch(/\b(?:eyebrow|label|steps):/u);
+  });
+
   it("keeps the Peek's fixture an ADAPTER — the shipping controller over a port drawn from the room's demo, never its markup (2026-10-08)", () => {
     // The catalog stands in for what the frame supplies — the Peek's port, the
     // open surface, the place a pick opens — and draws the plate's view by the

@@ -1,6 +1,7 @@
 import type { ReactElement } from "react";
 import { HistoryOpenFailedState, HistoryOpeningState } from "../../history/HistoryOpening";
 import { Section, Specimen } from "../catalog-ui";
+import { HistoryImportSignPlate } from "../HistoryImportSignPreview";
 import { HistoryPreview, HistoryResumePlate } from "../HistoryPreview";
 import { PeekPlate } from "../PeekPreview";
 
@@ -14,7 +15,8 @@ import { PeekPlate } from "../PeekPreview";
 // head (AO-6b) — and the two faces before the room (2026-10-04, the room's own
 // chunk): opening, and a room that could not open. Its search is the frame's Peek (2026-10-08;
 // §8 "Search — the Peek"): the shipping controller over a fixture port drawn
-// from the same demo — the button at rest, and the popup holding words.
+// from the same demo — the button at rest, and the popup holding words. IM-1: the import's sign beside it, the room
+// over the package's simulated cold import at three moments, the shipping circle drawing what the room hands out.
 
 /** A chunk refusal in the loader's own words, real-shaped. */
 const FIXTURE_OPEN_FAILURE =
@@ -73,6 +75,28 @@ export function HistorySection(): ReactElement {
         bleed
       >
         <PeekPlate state="open" />
+      </Specimen>
+
+      <Specimen
+        title="The import beside search — the History circle while it reads, its panel open: each step's opening, each agent, and what is read and kept on this Mac (IM-1)"
+        source="frame/HistoryImportSign.tsx"
+        bleed
+      >
+        <HistoryImportSignPlate moment="reading" />
+      </Specimen>
+      <Specimen
+        title="The import's last step — search building, the archive written to disk (IM-1)"
+        source="frame/HistoryImportSign.tsx"
+        bleed
+      >
+        <HistoryImportSignPlate moment="search" />
+      </Specimen>
+      <Specimen
+        title="After the import — the circle stays, at rest: the History glyph alone, its panel what each agent last brought in (IM-D2)"
+        source="frame/HistoryImportSign.tsx"
+        bleed
+      >
+        <HistoryImportSignPlate moment="rest" />
       </Specimen>
 
       <Specimen

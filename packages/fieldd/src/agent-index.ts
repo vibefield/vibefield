@@ -27,6 +27,7 @@ import {
   IndexEnrollmentRecord as IndexEnrollmentRecordSchema,
   type IndexEnrollmentSummary,
   IndexHeatmapResponse,
+  type IndexMemory,
   type IndexMutationResult,
   type IndexPhase,
   IndexPhase as IndexPhaseSchema,
@@ -56,6 +57,7 @@ import {
   IndexSessionsResponse,
   type IndexSessionsResult,
   type IndexStatus,
+  type IndexStorage,
   IndexTimelinePageResponse,
   type IndexTimelineResult,
   IndexUsageResponse,
@@ -447,6 +449,11 @@ export interface IndexStatusOptions {
   /** the first reading's per-project fold, keyed for this desktop's own
    * windows; absent, the answer carries no `projects` */
   readonly projects?: (rows: readonly RosettaProjectBackfill[]) => IndexProjectBackfill[];
+  /** IM-1 — carry what the index keeps on this machine and the memory it
+   * holds (`storage`, `memory`), for this desktop's own windows; absent or
+   * false, the answer carries neither (the pushed feed never does: memory
+   * moves with every read) */
+  readonly footprint?: boolean;
 }
 
 /** AC-D8 — the daemon's refusal of an enrolled root at start, as rosettad and
@@ -789,6 +796,8 @@ export class IndexService {
       ...(options.projects !== undefined
         ? { projects: options.projects(projectBackfillsOf(daemon)) }
         : {}),
+      // IM-1 — History's import sign: rosetta's own measure, from the same read
+      ...(options.footprint === true ? footprintOf(daemon) : {}),
     };
   }
 
@@ -2374,6 +2383,44 @@ function countOf(value: unknown): number | undefined {
 function startedAtOf(daemon: DaemonStatus | null): { startedAt?: number } {
   const at = daemon === null ? undefined : countOf(daemon.started_at);
   return at === undefined ? {} : { startedAt: at };
+}
+
+/** IM-1 — what the index keeps on this machine and the memory it holds
+ * (rosetta 0.1.9 `DaemonStatus.storage`, `.memory`), mirrored: a block whose
+ * figures are not counts is left out, and a daemon that does not measure (one
+ * before 0.1.9, or before its first walk lands) has none. */
+function footprintOf(daemon: DaemonStatus | null): {
+  storage?: IndexStorage;
+  memory?: IndexMemory;
+} {
+  const out: { storage?: IndexStorage; memory?: IndexMemory } = {};
+  const storage = daemon?.storage;
+  if (storage !== null && storage !== undefined) {
+    const recordBytes = countOf(storage.record_bytes);
+    const archiveBytes = countOf(storage.archive_bytes);
+    const searchBytes = countOf(storage.search_bytes);
+    const mediaBytes = countOf(storage.media_bytes);
+    const measuredAt = countOf(storage.measured_at);
+    if (
+      recordBytes !== undefined &&
+      archiveBytes !== undefined &&
+      searchBytes !== undefined &&
+      mediaBytes !== undefined &&
+      measuredAt !== undefined
+    )
+      out.storage = { recordBytes, archiveBytes, searchBytes, mediaBytes, measuredAt };
+  }
+  const memory = daemon?.memory;
+  if (memory !== null && memory !== undefined) {
+    const footprintBytes = countOf(memory.footprint_bytes);
+    const archiveBytes =
+      memory.archive_bytes === null || memory.archive_bytes === undefined
+        ? null
+        : countOf(memory.archive_bytes);
+    if (footprintBytes !== undefined && archiveBytes !== undefined)
+      out.memory = { footprintBytes, archiveBytes };
+  }
+  return out;
 }
 
 /** AO-4 — rosetta's per-project fold of the first reading, mirrored: a row
