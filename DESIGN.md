@@ -6438,6 +6438,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     stream, and the window can send nothing back. It opens 1080 by 720 and is never narrower than 920 or shorter
     than 420. It acts on nothing: no row has a button, and nothing in it stops,
     restarts or changes a process.
+    *Corrected 2026-11-24 (VT-5):* this said the window can send nothing back and acts on nothing. It asks for one
+    thing: a capture, armed by hand (below, "Captures"), which main holds to a closed list of three kinds and three
+    lengths, and the one file of its own it may show in Finder. A capture changes no process, starts none and stops
+    none, and a row still has no button.
   - **The head** is the window's own title bar, "Vitals". At the top right of the lanes stands the state, in one
     line: a 7 dot and its words, **Recording · every second** with the dot in `--vf-green`; **Waiting for the
     floor's meter**, **Not measured on this computer**, **fieldd isn't answering** and **Off · turned off in
@@ -6534,8 +6538,34 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     page that has no desktop shell to ask (the browser-only catalog) does not draw it, so the button is never a
     dead one. The row's line still ends "The window is under Window → Vitals.": the menu stays the window's other
     way, and the only one with a key.
-  - *Not drawn until built:* frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
-    (VT-4), armed traces (VT-5), the plugins' log lines, a span older than the lines the window holds, and a
+  - **Captures** (VT-5, *added 2026-11-24*; VT-D5, VT-D9 and VT-D12 A). The recorder is cheap on purpose: one
+    reading a second, no frame counted, no profiler. A person chasing something arms a deep capture by hand, and it
+    switches itself off at its time. The control stands at the left of the line the state stands on, small and
+    quiet, in the kit's dark ramp: a small segmented control (§8 "Segmented control") of what to capture, **App
+    trace** (a Chromium trace of the whole app), **fieldd profile** (a CPU profile of fieldd, taken from inside it:
+    no debugging port is opened) and **Desk frames** (the desk's window counts its own frames); a second of how
+    long, **10 s**, **20 s**, **30 s**; and the quiet pill, **Capture**. One capture runs at a time, for the whole
+    app.
+    - While one runs, the pill says **Capturing…** and keeps its look with its hits off (§7 "Off"), both segmented
+      controls are off, and the line under the controls says what runs and the seconds left, in the secondary ink:
+      "App trace · 12 s left". Nothing stops one early. It ends at its time, or when this window closes or the app
+      quits; a trace or a count cut short is not saved. A profile that fieldd began ends at its own time in fieldd
+      and is saved, window or none.
+    - After, that line says the file: its name in the secondary ink, then its size and one line of what it holds in
+      the tertiary, and beside them a quiet text press, **Show in Finder**, which shows that file and only a file of
+      the captures' own. The one line: a count says its rate, its longest frame and how many frames ran over a 60 Hz
+      frame (16.7 ms) and over 50 ms; a trace says how long it ran and that Perfetto opens it; a profile how long
+      and that Chrome's DevTools open it. A capture that could not be made says why, in one line in the secondary
+      ink, never in red: a tool that did not run is not a fault of the app.
+    - While **App trace** is chosen and none runs, a line in the tertiary ink says what a trace holds: the
+      addresses and titles of the pages open in VibeField, and that it stays on this computer.
+    - The files stay on this computer, in the user's own folder (`LAYOUT.VITALS_CAPTURES_DIR`, `vitals/captures`):
+      a `.json` trace for Perfetto or Chrome's tracing viewer, a `.cpuprofile` for Chrome's DevTools, a small
+      `.json` count. The newest ten are kept; they are sent nowhere and go in no support bundle by themselves.
+    - Frames are counted only while a count is armed: counting needs a callback every frame, which keeps a page
+      awake, so it is never left on (VT-D9).
+  - *Not drawn until built:* incidents and their marks on the lanes (VT-4), the plugins' log lines, a span older
+    than the lines the window holds, and a
     **Flows host** row: the word stands, but this build's fieldd composes no flow runner, so it starts no flow host
     to name (VT-2c, *added 2026-11-24*).
     *Corrected 2026-11-24 (VT-2c):* this list named "a door to Vitals from Settings → Diagnostics". It is built
@@ -6548,6 +6578,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Corrected 2026-11-24 (VT-3):* this list said "the frames and loop-delay lanes (VT-3)". The loop's lane is a
     busy share, as above, and frames at rest are not counted at all: counting them needs a callback every frame,
     which is a capture to arm, not a thing to leave on.
+    *Corrected 2026-11-24 (VT-5):* this list named "frames counted while a capture is armed" and "armed traces
+    (VT-5)". Both are built (above, "Captures"), with a profile of fieldd beside them.
 - **Settings → Plugins, until Plugins… holds every switch** (MK-5; *drawn and built 2026-11-14*,
   ‹draft› for James's eye, its words in §9 "Settings and Diagnostics"). MK-D10 has the page leave
   Settings. By VF-PM's ruling (2026-11-14 04:33Z, the inventory's A2 at its lean, over MK-5's ask
@@ -13075,6 +13107,15 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   "slowest terminal.list 41 ms": a method is said by its own name, because whoever reads this window is looking for
   it. The Desk window's long frames (VT-3c, *added 2026-11-24*) are said "3 long frames", "1 long frame" and
   "longest 180 ms".
+  The captures (VT-5, *added 2026-11-24*; §8 "Vitals", "Captures"): what, "App trace", "fieldd profile" and "Desk
+  frames" (the groups read "What to capture" and "How long"); how long, "10 s", "20 s" and "30 s"; the pill
+  "Capture", and "Capturing…" while one runs; the line while it runs, "App trace · 12 s left". After: the file's
+  name, its size as memory is said ("4 MB"), and one line: "58 frames a second · longest 41 ms · 12 over 16.7 ms ·
+  2 over 50 ms" (a count that saw no frame: "No frames: the desk's window drew none."), "20 s of the app · opens in
+  Perfetto", "20 s of fieldd · opens in Chrome's DevTools"; and "Show in Finder". A capture not made says its kind
+  and why: "Another capture is running." · "fieldd isn't answering." · "The desk's window isn't open." · "It
+  stopped before its time." · "It couldn't be saved." · "It couldn't be started." The trace's line: "A trace holds
+  the addresses and titles of the pages open in VibeField. It stays on this computer."
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
