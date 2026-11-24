@@ -1037,3 +1037,395 @@ index 259af54a7d5a4651fa492e5c730402f13d3adb81..e70d333d22c3b8349210f9b0d24806cf
 +    },
 +});
  //# sourceMappingURL=index.js.map
+diff --git a/dist/views/swarm/physics/contact-rest.js b/dist/views/swarm/physics/contact-rest.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1887d20c35e44fce7b7566e9cef2d319cb400bc0
+--- /dev/null
++++ b/dist/views/swarm/physics/contact-rest.js
+@@ -0,0 +1,111 @@
++import { PHYSICAL_GAP } from './spawn-clamp.js';
++
++// Compare consecutive windows in simulation time. A compressed contact can
++// alternate between two positions on every solve. Its mean stays put even
++// when its instantaneous speed is high. All bodies must agree before the
++// world rests, so a sleeper can never become a fixed obstacle to its peers.
++const WINDOW_MS = 300;
++const CONTACT_SPAN = 2.5 * PHYSICAL_GAP;
++const CONTACT_DRIFT = 0.75 * PHYSICAL_GAP;
++const FREE_SLOP = 0.05;
++
++// Internal contacts cannot support a whole group's net pull. Two bubbles
++// touching side by side can still be travelling together towards the centre.
++// Check connected groups only when the sampled positions otherwise look still.
++function groupsSupported(bodies, pairs, centerX, centerY) {
++    const neighbors = new Map();
++    for (const { body } of bodies.values())
++        neighbors.set(body, []);
++    for (const pair of pairs) {
++        if (!pair.isActive) continue;
++        neighbors.get(pair.bodyA)?.push(pair.bodyB);
++        neighbors.get(pair.bodyB)?.push(pair.bodyA);
++    }
++    for (const first of neighbors.keys()) {
++        const pending = [first];
++        let anchored = false, count = 0, sumX = 0, sumY = 0;
++        while (pending.length) {
++            const body = pending.pop();
++            const contacts = neighbors.get(body);
++            if (!contacts) continue;
++            neighbors.delete(body);
++            count++;
++            sumX += body.position.x;
++            sumY += body.position.y;
++            for (const other of contacts) {
++                if (other.isStatic) anchored = true;
++                else if (neighbors.has(other)) pending.push(other);
++            }
++        }
++        if (!anchored && Math.hypot(sumX / count - centerX, sumY / count - centerY) > FREE_SLOP)
++            return false;
++    }
++    return true;
++}
++
++export class ContactRest {
++    resting = false;
++    elapsed = 0;
++    frames = 0;
++    samples = [];
++    touching = new Set();
++
++    reset() {
++        this.resting = false;
++        this.elapsed = 0;
++        this.frames = 0;
++        this.samples.length = 0;
++        this.touching.clear();
++    }
++
++    observe(bodies, pairs, stepMs, centerX, centerY, parameters) {
++        this.touching.clear();
++        for (const pair of pairs) {
++            if (!pair.isActive) continue;
++            this.touching.add(pair.bodyA);
++            this.touching.add(pair.bodyB);
++        }
++        this.elapsed += stepMs;
++        this.frames++;
++        const end = this.elapsed + 1e-6 >= WINDOW_MS;
++        let quiet = end;
++        let index = 0;
++        for (const { body } of bodies.values()) {
++            const { x, y } = body.position;
++            const sample = this.samples[index] ??= { meanX: NaN, meanY: NaN };
++            index++;
++            if (this.frames === 1) {
++                sample.minX = sample.maxX = x;
++                sample.minY = sample.maxY = y;
++                sample.sumX = sample.sumY = sample.contacts = 0;
++            }
++            sample.minX = Math.min(sample.minX, x);
++            sample.maxX = Math.max(sample.maxX, x);
++            sample.minY = Math.min(sample.minY, y);
++            sample.maxY = Math.max(sample.maxY, y);
++            sample.sumX += x;
++            sample.sumY += y;
++            if (this.touching.has(body)) sample.contacts++;
++            if (!end) continue;
++            const supported = sample.contacts > this.frames / 2 && parameters.gravityPull !== 0;
++            const span = supported ? CONTACT_SPAN : FREE_SLOP;
++            const drift = supported ? CONTACT_DRIFT : FREE_SLOP;
++            const meanX = sample.sumX / this.frames;
++            const meanY = sample.sumY / this.frames;
++            // A tiny gravity setting can move a free body by less than a
++            // pixel per window for a long time. Let it finish its journey.
++            const freeToTravel = !supported && (parameters.gravityPull !== 0
++                ? Math.hypot(x - centerX, y - centerY) > FREE_SLOP
++                : body.speed > 1e-6);
++            const coasting = parameters.frictionAir === 0 && body.speed > 1e-6;
++            quiet &&= !freeToTravel && !coasting && sample.maxX - sample.minX <= span && sample.maxY - sample.minY <= span
++                && Math.abs(meanX - sample.meanX) <= drift && Math.abs(meanY - sample.meanY) <= drift;
++            sample.meanX = meanX;
++            sample.meanY = meanY;
++        }
++        if (end) {
++            this.resting = quiet && (parameters.gravityPull === 0 || groupsSupported(bodies, pairs, centerX, centerY));
++            this.elapsed = this.frames = 0;
++        }
++    }
++}
+diff --git a/dist/views/swarm/physics/host.js b/dist/views/swarm/physics/host.js
+index 1fcb20c487f464e5976ea82f07b5dacbea2d4a58..53c1927611a7739d6bbcdf4099e0972fd905d896 100644
+--- a/dist/views/swarm/physics/host.js
++++ b/dist/views/swarm/physics/host.js
+@@ -18,6 +18,7 @@ export function createSwarmPhysicsHost(options) {
+     let physics = null;
+     let free = [];
+     let capacity = 0;
++    let pendingFrame = false;
+     let disposed = false;
+     /** Told to hold still: pumps solve nothing until `resume`. */
+     let paused = false;
+@@ -46,6 +47,7 @@ export function createSwarmPhysicsHost(options) {
+         // Both buffers are out: the consumer has not read the last frame yet, so
+         // this one is DROPPED rather than allocated for. Back-pressure by
+         // construction — a slow main thread costs the swarm freshness, never memory.
++        pendingFrame = !buffer;
+         if (!buffer)
+             return;
+         physics.writeFrame(buffer);
+@@ -133,8 +135,13 @@ export function createSwarmPhysicsHost(options) {
+                 const returned = command.buffer;
+                 // Wrong size means it predates a growth; let it go rather than write a
+                 // frame into a buffer too short to hold it.
+-                if (returned.length === capacity && free.length < BUFFER_COUNT)
++                if (returned.length === capacity && free.length < BUFFER_COUNT) {
+                     free.push(returned);
++                    // The worker's timer has stopped. Deliver the final positions
++                    // even if both buffers were in flight when the crowd settled.
++                    if (physics?.resting && pendingFrame)
++                        publishFrame();
++                }
+                 return;
+             }
+             case 'dispose':
+@@ -143,7 +150,7 @@ export function createSwarmPhysicsHost(options) {
+         }
+     };
+     const pump = (at) => {
+-        if (disposed || paused || !physics)
++        if (disposed || paused || !physics || physics.resting)
+             return;
+         if (physics.advance(at) > 0)
+             publishFrame();
+@@ -159,12 +166,17 @@ export function createSwarmPhysicsHost(options) {
+         surface = null;
+     }
+     return {
+-        handle,
++        handle(command) {
++            const wasResting = physics?.resting;
++            handle(command);
++            if (wasResting && physics && !physics.resting)
++                physics.seed(now());
++        },
+         pump,
+         stepMs: () => physics?.stepMs ?? 1000 / 30,
+         renderSurface: () => surface,
+         get ticking() {
+-            return physics !== null && !paused && !disposed;
++            return physics !== null && !physics.resting && !paused && !disposed;
+         },
+         get disposed() {
+             return disposed;
+diff --git a/dist/views/swarm/physics/swarm-physics.worker.js b/dist/views/swarm/physics/swarm-physics.worker.js
+index 24f74524eafa55c81737e71db3ffd33cd55a8051..2a5aa0ac2389bf4b5b246747ee461adf5d074258 100644
+--- a/dist/views/swarm/physics/swarm-physics.worker.js
++++ b/dist/views/swarm/physics/swarm-physics.worker.js
+@@ -48,7 +48,11 @@ function reconcileClock() {
+     if (timer !== undefined)
+         clearInterval(timer);
+     timerPeriod = period;
+-    timer = setInterval(() => host.pump(performance.now()), period);
++    timer = setInterval(() => {
++        host.pump(performance.now());
++        if (!host.ticking)
++            stop();
++    }, period);
+ }
+ function stop() {
+     if (timer !== undefined)
+diff --git a/dist/views/swarm/physics/world.d.ts b/dist/views/swarm/physics/world.d.ts
+index 7e228aa16e2a61200de824fee8b18cbeadb1b364..9ca04389161bf13685d13c77c1f105cadff05917 100644
+--- a/dist/views/swarm/physics/world.d.ts
++++ b/dist/views/swarm/physics/world.d.ts
+@@ -89,6 +89,7 @@ export interface SwarmPhysicsInit {
+ }
+ export declare class SwarmPhysics {
+     private readonly engine;
++    private readonly contactRest;
+     private readonly walls;
+     private obstacles;
+     private readonly bodies;
+@@ -110,6 +111,9 @@ export declare class SwarmPhysics {
+     get generation(): number;
+     ids(): readonly string[];
+     get stepMs(): number;
++    /** All bodies are holding their settled positions until a physical input changes. */
++    get resting(): boolean;
++    private wake;
+     /**
+      * Seed the clock without solving anything.
+      *
+diff --git a/dist/views/swarm/physics/world.js b/dist/views/swarm/physics/world.js
+index 9db282b42328a7e2fae3b8f2a54fe630f833aca1..ed60fa177c60f99eac66e4aa9ccb08b22b7150be 100644
+--- a/dist/views/swarm/physics/world.js
++++ b/dist/views/swarm/physics/world.js
+@@ -1,4 +1,5 @@
+ import Matter from 'matter-js';
++import { ContactRest } from './contact-rest.js';
+ import { CHROME_OBSTACLE_PADDING, clampSpawnPosition, PHYSICAL_GAP } from './spawn-clamp.js';
+ // THE SWARM'S PHYSICS, with no view attached (GT-3c, GT-D16).
+ //
+@@ -98,6 +99,7 @@ function guardParameters(next) {
+ }
+ export class SwarmPhysics {
+     engine;
++    contactRest = new ContactRest();
+     walls;
+     obstacles = [];
+     bodies = new Map();
+@@ -148,6 +150,18 @@ export class SwarmPhysics {
+     get stepMs() {
+         return 1000 / this.parameters.physicsHz;
+     }
++    get resting() {
++        return this.contactRest.resting;
++    }
++    wake() {
++        if (this.resting) {
++            for (const { body } of this.bodies.values())
++                Matter.Sleeping.set(body, false);
++            this.previousTime = null;
++            this.accumulator = 0;
++        }
++        this.contactRest.reset();
++    }
+     /**
+      * Seed the clock without solving anything.
+      *
+@@ -159,7 +173,13 @@ export class SwarmPhysics {
+         this.previousTime = now;
+     }
+     setParameters(next) {
+-        this.parameters = guardParameters(next);
++        const guarded = guardParameters(next);
++        const previous = this.parameters;
++        if (guarded.physicsHz === previous.physicsHz && guarded.frictionAir === previous.frictionAir
++            && guarded.gravityPull === previous.gravityPull && guarded.restitution === previous.restitution)
++            return;
++        this.wake();
++        this.parameters = guarded;
+         for (const wrapper of this.bodies.values()) {
+             wrapper.body.restitution = this.parameters.restitution;
+             wrapper.body.frictionAir = this.parameters.frictionAir;
+@@ -170,6 +190,9 @@ export class SwarmPhysics {
+             obstacle.body.restitution = this.parameters.restitution;
+     }
+     setBounds(bounds) {
++        if (bounds.width === this.width && bounds.height === this.height)
++            return;
++        this.wake();
+         this.width = bounds.width;
+         this.height = bounds.height;
+         // Window resizing changes the viewport, never a body's coordinates.
+@@ -178,7 +201,10 @@ export class SwarmPhysics {
+     }
+     /** A pane moves over the world. Retarget its wall without touching bodies or spring velocity. */
+     setFloor(floor) {
+-        this.floorTarget = this.clampFloor(floor);
++        const target = this.clampFloor(floor);
++        if (target !== this.floorTarget)
++            this.wake();
++        this.floorTarget = target;
+         this.bottomInset = this.height - this.floorTarget;
+     }
+     clampFloor(floor) {
+@@ -216,6 +242,14 @@ export class SwarmPhysics {
+      * pretending the old bodies still stand for something.
+      */
+     setObstacles(rects) {
++        if (rects.length === this.obstacles.length && rects.every((rect, i) => {
++            const obstacle = this.obstacles[i];
++            return obstacle.width === Math.max(1, rect.width + CHROME_OBSTACLE_PADDING * 2)
++                && obstacle.height === Math.max(1, rect.height + CHROME_OBSTACLE_PADDING * 2)
++                && obstacle.body.position.x === rect.x + rect.width / 2
++                && obstacle.body.position.y === rect.y + rect.height / 2;
++        })) return;
++        this.wake();
+         if (rects.length !== this.obstacles.length) {
+             for (const obstacle of this.obstacles) {
+                 Matter.Composite.remove(this.engine.world, obstacle.body);
+@@ -256,6 +290,7 @@ export class SwarmPhysics {
+     syncAgents(specs) {
+         const wanted = new Set(specs.map((spec) => spec.id));
+         let changed = false;
++        let resized = false;
+         for (const [id, wrapper] of this.bodies) {
+             if (wanted.has(id))
+                 continue;
+@@ -267,6 +302,8 @@ export class SwarmPhysics {
+         for (const spec of specs) {
+             const existing = this.bodies.get(spec.id);
+             if (existing) {
++                if (existing.targetRadius !== spec.radius && Math.abs(existing.currentRadius - spec.radius) > 0.5)
++                    resized = true;
+                 existing.targetRadius = spec.radius;
+                 continue;
+             }
+@@ -291,6 +328,8 @@ export class SwarmPhysics {
+             Matter.Composite.add(this.engine.world, body);
+             changed = true;
+         }
++        if (changed || resized)
++            this.wake();
+         if (changed) {
+             this.order = [...this.bodies.keys()];
+             this.tableGeneration += 1;
+@@ -356,7 +395,7 @@ export class SwarmPhysics {
+      * publishing — a pump that solved nothing has nothing new to say.
+      */
+     advance(now) {
+-        if (this.previousTime === null) {
++        if (this.previousTime === null || this.resting) {
+             this.previousTime = now;
+             return 0;
+         }
+@@ -366,7 +405,7 @@ export class SwarmPhysics {
+         this.accumulator += Math.min(MAX_FRAME_MS, Math.max(0, now - this.previousTime));
+         this.previousTime = now;
+         let steps = 0;
+-        while (this.accumulator >= stepMs && steps < MAX_STEPS_PER_FRAME) {
++        while (this.accumulator >= stepMs && steps < MAX_STEPS_PER_FRAME && !this.resting) {
+             this.step(stepMs);
+             this.accumulator -= stepMs;
+             steps += 1;
+@@ -387,6 +426,14 @@ export class SwarmPhysics {
+                 this.moveFloor(stepMs / count / 1000);
+             this.solve(stepMs / count);
+         }
++        if (!moving && this.engine.world.constraints.length === 0) {
++            this.contactRest.observe(this.bodies, this.engine.pairs.list, stepMs,
++                this.width / 2, this.floor / 2, this.parameters);
++            if (this.resting) {
++                for (const { body } of this.bodies.values())
++                    Matter.Sleeping.set(body, true);
++            }
++        }
+     }
+     solve(stepMs) {
+         const { gravityPull } = this.parameters;
+@@ -439,6 +486,7 @@ export class SwarmPhysics {
+         const wrapper = this.bodies.get(id);
+         if (!wrapper)
+             return;
++        this.wake();
+         this.releaseDrag(wrapper);
+         wrapper.dragConstraint = Matter.Constraint.create({
+             pointA: { x: point.x, y: point.y },
+@@ -477,6 +525,7 @@ export class SwarmPhysics {
+         const wrapper = this.bodies.get(id);
+         if (!wrapper)
+             return;
++        this.wake();
+         Matter.Body.applyForce(wrapper.body, wrapper.body.position, {
+             x: (this.random() - 0.5) * CLICK_NUDGE,
+             y: (this.random() - 0.5) * CLICK_NUDGE,
+@@ -503,6 +552,7 @@ export class SwarmPhysics {
+         return hit;
+     }
+     dispose() {
++        this.contactRest.reset();
+         for (const wrapper of this.bodies.values())
+             this.releaseDrag(wrapper);
+         this.bodies.clear();

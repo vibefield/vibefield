@@ -661,7 +661,7 @@ describe("the monitor stage", () => {
     ];
     const settleCrowd = (
       obstacles: readonly SwarmObstacleRect[],
-    ): { solved: number; tops: { id: string; top: number }[] } => {
+    ): { id: string; top: number }[] => {
       let seed = 7;
       const physics = new SwarmPhysics({
         // the swarm's own defaults (`swarm-parameters.ts`)
@@ -674,27 +674,10 @@ describe("the monitor stage", () => {
           return seed / 4294967296;
         },
       });
-      // twenty seconds at the swarm's own rate. *Corrected 2026-10-29 (item
-      // 89):* not "long past settling", as this said. Traced frame by frame,
-      // the crowd under the reserve jostles at 0.3–1.5 px a step until about
-      // frame 570 and is still (every body under 0.01 px a step) from frame
-      // 593; without the reserve, from frame 521. Fewer frames would read a
-      // crowd still moving, so the 600 stay and the budget above pays for
-      // them. The loop solves 599 steps, not 600: the float sum of `1000 / 30`
-      // loses one (counting frames instead of summing time is item 90). The
-      // frame numbers here are the loop's frames, as the trace counted them.
-      // *Corrected 2026-10-29 (item 90):* the step is lost in the world's own
-      // accumulator, which subtracts a rounded `1000 / 30` each step, so a time
-      // counted from the frame number solves 599 as well. The loop counts the
-      // world's steps instead (`advance` answers how many it solved) and stops
-      // at 600, the twentieth second, which takes it 601 frames.
-      let now = 0;
-      let solved = 0;
-      physics.seed(now);
-      while (solved < 600) {
-        now += 1000 / 30;
-        solved += physics.advance(now);
-      }
+      // Sample after twenty simulated seconds. A resting world solves zero
+      // further steps until an input changes.
+      physics.seed(0);
+      for (let frame = 1; frame <= 600; frame++) physics.advance((frame * 1000) / 30);
       const ids = physics.ids();
       const frame = new Float32Array(frameFloatsFor(ids.length));
       physics.writeFrame(frame);
@@ -703,12 +686,11 @@ describe("the monitor stage", () => {
         return { id, top: (frame[at + 1] ?? 0) - (frame[at + 2] ?? 0) };
       });
       physics.dispose();
-      return { solved, tops };
+      return tops;
     };
     const held = settleCrowd(stage?.obstacles ?? []);
-    expect(held.solved, "the settle solves 600 steps: twenty seconds at 30 Hz").toBe(600);
-    expect(held.tops.length).toBe(crowd.length);
-    for (const body of held.tops) {
+    expect(held).toHaveLength(crowd.length);
+    for (const body of held) {
       expect(
         body.top,
         `${body.id} stands at ${body.top}, inside the head's reserve`,
@@ -717,8 +699,7 @@ describe("the monitor stage", () => {
     // …and it is the reserve that holds them: the same crowd on the same stage
     // without that one rectangle stands inside the top 56
     const loose = settleCrowd(stage?.obstacles.slice(1) ?? []);
-    expect(loose.solved).toBe(600);
-    expect(loose.tops.some((body) => body.top < 56)).toBe(true);
+    expect(loose.some((body) => body.top < 56)).toBe(true);
   });
 
   it("keeps the stage it holds when a tick measures the same: the monitor renders nothing, and a real resize still reaches the view (M176 item 1)", async () => {

@@ -6741,7 +6741,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   The wall and the centre's pull ease together on a critically damped spring (ω = 12 s⁻¹), keeping
   velocity when retargeted; collisions move bodies, never a translation of their coordinates.
   While the wall travels, physics solves at steps no longer than 1/120 s so it cannot jump through
-  the crowd at the low physics-rate setting. A held edge retargets as it moves. Actual window
+  the crowd at the low physics-rate setting. A held edge retargets as it moves. Once the wall
+  stops, a crowd that only jostles in place rests together. The next movement of the pane, a
+  bubble gesture, or a change to the bodies, obstacles or physics wakes it. Actual window
   resizing still resizes the backing store and draws in the same paint. Motion off freezes the
   simulation as before. The flow views retain their existing allocation: no smaller than rest,
   and measured once on release. This replaces the swarm's 2026-10-19 minimum-height rule.
