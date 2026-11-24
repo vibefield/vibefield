@@ -33,7 +33,7 @@ export interface VitalsRowFacts {
   readonly sparks: number;
   /** the log lines drawn under the lanes */
   readonly lines: number;
-  /** the keys of the page's one door */
+  /** the keys of the page's one door (the stream and, since VT-5, the captures') */
   readonly door: readonly string[];
   /** `typeof` the product window's bridge and Node's two globals, as this page sees them */
   readonly product: string;
@@ -126,8 +126,11 @@ export function vitalsRowProblems(facts: VitalsRowFacts): string[] {
     }
   }
   if (facts.lines < 1) problems.push("no log line under the lanes");
-  if (facts.door.join(",") !== "subscribe")
-    problems.push(`the page's door holds [${facts.door.join(", ")}], expected subscribe alone`);
+  // VT-5 (2026-11-24): the stream, and the captures' door (main checks every ask against its closed lists)
+  if (facts.door.join(",") !== "subscribe,captures")
+    problems.push(
+      `the page's door holds [${facts.door.join(", ")}], expected subscribe and captures alone`,
+    );
   if (facts.product !== "undefined") problems.push("the page holds the product window's bridge");
   if (facts.node !== "undefined undefined") problems.push(`the page sees Node (${facts.node})`);
   return problems;

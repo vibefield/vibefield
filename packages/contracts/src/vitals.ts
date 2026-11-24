@@ -392,3 +392,6 @@ export type VitalsOwnReportResult = z.infer<typeof VitalsOwnReportResult>;
 export function vitalsKey(pid: number, startedAt: number): string {
   return `${pid}:${startedAt}`;
 }
+
+// VT-5 — the armed captures, on this same subpath.
+export * from "./vitals-captures";

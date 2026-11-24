@@ -43,7 +43,7 @@ function green(): VitalsRowFacts {
     loopReading: "Main · 3% busy",
     sparks: 8,
     lines: 4,
-    door: ["subscribe"],
+    door: ["subscribe", "captures"],
     product: "undefined",
     node: "undefined undefined",
   };
@@ -121,12 +121,12 @@ describe("VT-2 — the Godview smoke's VITALS row, judged", () => {
     expect(
       vitalsRowProblems({
         ...green(),
-        door: ["subscribe", "request"],
+        door: ["subscribe", "captures", "request"],
         product: "object",
         node: "function object",
       }),
     ).toEqual([
-      "the page's door holds [subscribe, request], expected subscribe alone",
+      "the page's door holds [subscribe, captures, request], expected subscribe and captures alone",
       "the page holds the product window's bridge",
       "the page sees Node (function object)",
     ]);

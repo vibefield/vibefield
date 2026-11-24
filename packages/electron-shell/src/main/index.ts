@@ -321,6 +321,9 @@ let pluginModuleClient: FielddHandle["client"] | null = null;
  * (`vitals.ts`). `vitalsFieldd` is the live client, kept here so a host installed after the pair still hears it. */
 let vitals: VitalsHost | null = null;
 let vitalsFieldd: FielddHandle["client"] | null = null;
+/** VT-5 — the attached pair's user root, where Vitals' armed captures are kept (main's trace and count, fieldd's
+ * profile: one folder, `LAYOUT.VITALS_CAPTURES_DIR`). Set as each attachment is wired. */
+let vitalsUserRoot: string | null = null;
 let logging: ElectronLogging | null = null;
 let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
@@ -1395,6 +1398,7 @@ async function main(
       pluginModuleClient = handle.client;
     });
     // VT-2: Vitals follows the LIVE client the same way, for the same reason.
+    vitalsUserRoot = userRoot;
     const stopVitalsClient = bundle.handles.onHandle((handle) => {
       vitalsFieldd = handle.client;
       vitals?.setFieldd(handle.client);
@@ -2389,6 +2393,7 @@ async function main(
         isArtifactPreviewSession(contents.session) ||
         isGuardedBrowserSurfaceSession(contents.session),
       shellLogs: () => localDiagnostics,
+      userRoot: () => vitalsUserRoot,
       quit: () => app.quit(),
       logger,
     });

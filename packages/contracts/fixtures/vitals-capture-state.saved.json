@@ -1,0 +1,16 @@
+{
+  "state": "saved",
+  "kind": "frames",
+  "seconds": 10,
+  "name": "frames-20261124T140700000Z.json",
+  "bytes": 214,
+  "frames": {
+    "frames": 581,
+    "seconds": 10.02,
+    "meanFps": 58,
+    "longestMs": 41.2,
+    "slowFrames": 12,
+    "longFrames": 0,
+    "gaps": 0
+  }
+}

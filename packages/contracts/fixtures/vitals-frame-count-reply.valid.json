@@ -1,0 +1,12 @@
+{
+  "requestId": "vitals-frames:3",
+  "count": {
+    "frames": 1190,
+    "seconds": 20.01,
+    "meanFps": 59.5,
+    "longestMs": 33.4,
+    "slowFrames": 4,
+    "longFrames": 0,
+    "gaps": 0
+  }
+}

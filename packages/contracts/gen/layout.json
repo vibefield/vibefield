@@ -101,6 +101,10 @@
     "fieldd",
     "crash-note.json"
   ],
+  "VITALS_CAPTURES_DIR": [
+    "vitals",
+    "captures"
+  ],
   "SHELL_RELAUNCHES": [
     "fieldd",
     "shell-relaunches.json"

@@ -439,6 +439,11 @@ import {
   VitalsSnapshotV1,
 } from "../src/vitals";
 import {
+  VitalsCaptureState,
+  VitalsFrameCountReply,
+  VitalsProfileCaptureResult,
+} from "../src/vitals-captures";
+import {
   WorkspaceCloseTicketParams,
   WorkspaceCloseTicketResult,
   WorkspaceFileActionParams,
@@ -516,6 +521,11 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "vitals-query-result": VitalsQueryResult,
   "vitals-own-report-params": VitalsOwnReportParams,
   "vitals-roster-set-params": VitalsRosterSetParams,
+  // VT-5 — the armed captures (TS-only): the state the Vitals window hears (`.running`, `.saved` a frame count,
+  // `.failed`), fieldd's profile answer and the desk window's frame count. Their own rows: vitals-captures.test.ts.
+  "vitals-capture-state": VitalsCaptureState,
+  "vitals-profile-capture-result": VitalsProfileCaptureResult,
+  "vitals-frame-count-reply": VitalsFrameCountReply,
   "native-link-health": NativeLinkHealth,
   "system-native-restart-params": SystemNativeRestartParams,
   "system-native-restart-result": SystemNativeRestartResult,

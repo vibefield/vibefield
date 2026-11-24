@@ -518,6 +518,15 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "local",
   }),
+  // VT-5 — a CPU profile of fieldd, taken from inside it for 10, 20 or 30 s and written to the captures folder
+  // (`vitals-captures.ts`): Electron main alone, armed by hand from the Vitals window. Each call is a new profile.
+  defineMethod({
+    surface: "product",
+    method: "vitals.profile.capture",
+    scope: "vitals.report",
+    idempotent: false,
+    locality: "local",
+  }),
 
   // M2 — management channel (auth = D8 pairing hello; no scope system on this surface)
   defineMethod({

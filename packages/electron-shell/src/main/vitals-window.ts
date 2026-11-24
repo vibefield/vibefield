@@ -1,6 +1,6 @@
 import { VITALS_PORT_CHANNEL } from "@vibefield/contracts/registries";
 import type { Logger } from "@vibefield/logging";
-import { type BrowserWindow, MessageChannelMain } from "electron";
+import { type BrowserWindow, MessageChannelMain, type WebContents } from "electron";
 import { APP_ORIGIN } from "./app-origin";
 import type { ShellMode } from "./modes";
 import { installNavigationPolicy } from "./security";
@@ -31,6 +31,8 @@ export interface VitalsWindowHost {
   close(): void;
   /** The window's renderer process, for the shell's roster; null while it has none. */
   rendererPid(): number | null;
+  /** VT-5 — the window's own WebContents, the one sender its capture doors answer; null while it is closed. */
+  contents(): WebContents | null;
 }
 
 export function createVitalsWindowHost(opts: {
@@ -182,6 +184,11 @@ export function createVitalsWindowHost(opts: {
       if (contents.isDestroyed() || contents.isCrashed()) return null;
       const pid = contents.getOSProcessId();
       return pid > 0 ? pid : null;
+    },
+    contents: () => {
+      const current = window;
+      if (current === null || current.isDestroyed()) return null;
+      return current.webContents.isDestroyed() ? null : current.webContents;
     },
   };
 }

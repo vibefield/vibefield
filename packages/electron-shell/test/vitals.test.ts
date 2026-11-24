@@ -626,14 +626,22 @@ describe("VT-2 — the Vitals window's preload", () => {
     expect(port.closed).toBe(true);
   });
 
-  it("exposes one function and nothing the page can send with", () => {
+  it("exposes the stream and the captures' door, and nothing else the page can send with", () => {
     const preload = source("vitals/vitals-preload.ts");
     const exposed = preload.slice(preload.indexOf("exposeInMainWorld"));
     expect(exposed).toContain('"vibefieldVitals"');
-    expect(exposed.match(/^\s+\w+:/gm)).toHaveLength(1);
-    expect(exposed).not.toContain("ipcRenderer");
+    // VT-5: the stream, and the captures' door (three asks on contracts' channels, checked in main)
+    expect(exposed.match(/^\s+\w+:/gm)).toHaveLength(2);
+    expect(exposed).toContain("captures: vitalsCaptureBridge(ipcRenderer)");
     expect(exposed).not.toContain("postMessage");
     expect(preload).not.toMatch(/ipcRenderer\.(send|invoke|sendSync|postMessage)/);
+    const captures = source("vitals/vitals-capture-preload.ts");
+    expect(captures.match(/ipc\.invoke\(VITALS_CAPTURE_CHANNELS\.\w+/g)).toEqual([
+      "ipc.invoke(VITALS_CAPTURE_CHANNELS.current",
+      "ipc.invoke(VITALS_CAPTURE_CHANNELS.arm",
+      "ipc.invoke(VITALS_CAPTURE_CHANNELS.reveal",
+    ]);
+    expect(captures).not.toMatch(/\.(send|sendSync|postMessage)\(/);
     // the bridge holds no way back either
     const bridge = source("vitals/vitals-preload-bridge.ts");
     expect(bridge).not.toContain("postMessage");

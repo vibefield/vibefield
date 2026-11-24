@@ -487,6 +487,7 @@ import { TRANSCRIPT_SERVE_ID, TranscriptServeDriver } from "./transcripts/serve"
 import { TranscriptHostSupervisor, type TranscriptHostTimings } from "./transcripts/supervisor";
 import { SparkTranscriptTickets } from "./transcripts/tickets";
 import { userMe } from "./user-me";
+import { VitalsProfiler } from "./vitals-profile";
 import { type VitalsNamedProcess, VitalsService } from "./vitals-service";
 import { mcpServerVitalsRows, pluginProcessVitalsRows, terminalVitalsRows } from "./vitals-sources";
 import type { BrowseFacts } from "./workspace/browse-exports";
@@ -2762,6 +2763,12 @@ export async function bootstrap(
     });
     vitals = vitalsService;
     vitalsService.register(api);
+    // VT-5 — a CPU profile of fieldd taken from inside it, armed by hand in the Vitals window (`vitals-profile.ts`)
+    const vitalsProfiler = new VitalsProfiler({
+      dir: join(config.dataDir, ...LAYOUT.VITALS_CAPTURES_DIR),
+      logger: logger.child({ component: "vitals" }),
+    });
+    vitalsProfiler.register(api);
     // VT-2b (VT-D2) — the recorder's switch is an app preference (Settings → Diagnostics, "Record vitals"). It is
     // read before the first attach, so a recorder the person turned off never reads the floor's backlog, and again
     // at every change: a change made here, one merged from another of the person's desktops, and an undo of either
@@ -9675,6 +9682,7 @@ export async function bootstrap(
         plugins.dispose();
         diagnosticsService.dispose();
         vitalsService.dispose();
+        vitalsProfiler.dispose();
         endDeathWatches();
         native.close();
         await artifactDrain;
@@ -9766,6 +9774,7 @@ export async function bootstrap(
       plugins.dispose();
       diagnosticsService.dispose();
       vitalsService.dispose();
+      vitalsProfiler.dispose();
       endDeathWatches();
       native.close();
       await artifactDrain;
@@ -10535,6 +10544,7 @@ export async function bootstrap(
               "vitals",
               () => {
                 vitalsService.dispose();
+                vitalsProfiler.dispose();
                 // VT-4a — a fieldd that stopped keeps no crash note and hears no more floors
                 endDeathWatches();
               },

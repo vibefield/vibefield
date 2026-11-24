@@ -163,6 +163,14 @@
   padding: 0 16px;
 }
 
+/* VT-5 — the line the state stands on: the capture control at its left (`vitals-capture.css`), the state at its right */
+.vf-vitals__top {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  min-width: 0;
+}
+
 .vf-vitals__state {
   display: flex;
   gap: 7px;
@@ -171,6 +179,12 @@
   height: 36px;
   color: var(--vf-vitals-secondary);
   font-size: 11px;
+}
+
+/* VT-5 — beside the capture control, the state keeps its width at the line's right */
+.vf-vitals__top > .vf-vitals__state {
+  flex: none;
+  margin-left: auto;
 }
 
 .vf-vitals__dot {

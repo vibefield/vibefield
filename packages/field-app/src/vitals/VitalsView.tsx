@@ -19,6 +19,7 @@ import {
   tracePath,
   xOf,
 } from "./trace-geometry";
+import { VitalsCapture, type VitalsCaptureProps } from "./VitalsCapture";
 import { lineTone, type VitalsLogLine } from "./vitals-feed";
 import {
   groupRows,
@@ -77,6 +78,8 @@ export interface VitalsViewProps {
   logs: readonly VitalsLogLine[];
   /** the lanes' width before the page is measured (the catalog's plate and the tests) */
   initialWidth?: number;
+  /** VT-5 — the capture control's state and intents; absent, the control is not drawn */
+  capture?: VitalsCaptureProps;
 }
 
 interface Span {
@@ -100,7 +103,12 @@ function useMeasuredWidth(initial: number): [RefObject<HTMLDivElement | null>, n
   return [ref, width];
 }
 
-export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps): ReactElement {
+export function VitalsView({
+  model,
+  logs,
+  initialWidth = 720,
+  capture,
+}: VitalsViewProps): ReactElement {
   const [held, setHeld] = useState<number | null>(null);
   const [span, setSpan] = useState<Span | null>(null);
   const [chosen, setChosen] = useState<string | null>(null);
@@ -239,9 +247,12 @@ export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps)
       </aside>
 
       <section className="vf-vitals__main">
-        <div className="vf-vitals__state">
-          <span className="vf-vitals__dot" data-recording={state.recording ? "" : undefined} />
-          <span>{state.words}</span>
+        <div className="vf-vitals__top">
+          {capture === undefined ? null : <VitalsCapture {...capture} />}
+          <div className="vf-vitals__state">
+            <span className="vf-vitals__dot" data-recording={state.recording ? "" : undefined} />
+            <span>{state.words}</span>
+          </div>
         </div>
         <div
           className="vf-vitals__lanes"

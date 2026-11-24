@@ -1,6 +1,7 @@
 import type { Logger } from "@vibefield/logging";
 import { app, type BrowserWindow, type WebContents, webContents } from "electron";
 import { isSmokeLike, type ShellMode } from "./modes";
+import { installVitalsCaptures } from "./vitals-capture-host";
 import {
   type VitalsFeedPort,
   VitalsFeedSession,
@@ -44,6 +45,8 @@ export function installVitals(opts: {
   isBrowserPane(contents: WebContents): boolean;
   /** main's own log door, read when a feed opens; null in a mode that keeps none */
   shellLogs(): VitalsShellLogs | null;
+  /** VT-5 — the attached user's root, where the armed captures are kept; null while there is none */
+  userRoot(): string | null;
   quit(): void;
   logger: Logger;
 }): VitalsHost {
@@ -105,10 +108,24 @@ export function installVitals(opts: {
       // VT-3b: main says its own loop only while the window is open (`vitals-own.ts`)
       if (windowHost.rendererPid() === null) own.stop();
       else own.start();
+      // VT-5: a trace or a count armed from a window that went is stopped and not saved
+      if (windowHost.rendererPid() === null) captures.cut();
     },
     quit: opts.quit,
     // a harness's Vitals window never takes the person's keys or pointer (the Godview smoke's VITALS row)
     quiet: isSmokeLike(opts.mode),
+    logger,
+  });
+
+  // VT-5 — the armed captures (`vitals-capture-host.ts`): a trace, a profile of fieldd, the desk's frames
+  const captures = installVitalsCaptures({
+    userRoot: opts.userRoot,
+    vitalsContents: () => windowHost.contents(),
+    deskContents: () => {
+      const desk = opts.primary();
+      return desk === null || desk.isDestroyed() ? null : desk.webContents;
+    },
+    fieldd: () => fieldd,
     logger,
   });
 
@@ -140,6 +157,7 @@ export function installVitals(opts: {
       app.off("browser-window-created", poke);
       roster.dispose();
       own.stop();
+      captures.dispose();
       windowHost.close();
       fielddListeners.clear();
       fieldd = null;

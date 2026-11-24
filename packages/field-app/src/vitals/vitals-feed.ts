@@ -1,5 +1,6 @@
 import { DiagnosticLogDeltaV1, DiagnosticLogSnapshotV1 } from "@vibefield/contracts/diagnostics";
 import { VitalsDeltaV1, VitalsSnapshotV1 } from "@vibefield/contracts/vitals";
+import type { VitalsCapturesDoor } from "./vitals-captures-door";
 import { applyDelta, EMPTY_VITALS, modelFromSnapshot, type VitalsModel } from "./vitals-model";
 
 // VT-2 (track VT, 2026-11-24) — THE VITALS WINDOW'S FEED, PURE. The window holds no daemon token and asks for
@@ -18,6 +19,8 @@ export type VitalsFeedEvent =
 /** The door the window's host hands the view: one stream, and a way to stop hearing it. */
 export interface VitalsDoor {
   subscribe(handler: (event: VitalsFeedEvent) => void): () => void;
+  /** VT-5 — the armed captures' door; absent where the host offers none (a plate, an older preload) */
+  captures?: VitalsCapturesDoor;
 }
 
 export interface VitalsLogLine {

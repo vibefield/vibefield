@@ -1629,6 +1629,48 @@ export const VITALS_FRAMES = {
   FRAME_MS_MAX: 600_000,
 } as const;
 
+/** VT-5 (track VT, 2026-11-24; VT-D5, VT-D9, VT-D12 A) — the armed captures' bounds (`vitals-captures.ts`). A capture
+ * is armed by hand, runs one length from a closed list and switches itself off. TS-only: no Rust reader.
+ *  - SECONDS — the lengths a person may pick.
+ *  - KEEP — how many capture files the folder keeps, the newest; older ones are removed by the one rule
+ *    (`vitalsCapturesToRemove`) whoever wrote the newest.
+ *  - REPLY_GRACE_MS — how long past a capture's own length main waits for its answer (fieldd's profile written, the
+ *    desk's count said) before it calls it lost.
+ *  - TRACE_BUFFER_KB — the trace's buffer, every process together; a trace that fills it stops recording more.
+ *  - PROFILE_SAMPLING_US — the profile's sampling interval (V8's own default).
+ *  - FRAME_BUDGET_MS / FRAME_LONG_MS — a count's two thresholds: a 60 Hz frame, and the platform's long frame.
+ *  - FRAME_GAP_MS — an interval this long is a window that was not drawing (hidden, asleep), not a frame.
+ *  - FRAMES_MAX — the most frames a count may say (30 s at 240 Hz is 7,200).
+ *  - REQUEST_ID_MAX — a frame count's request id, in characters. */
+export const VITALS_CAPTURES = {
+  SECONDS: [10, 20, 30],
+  KEEP: 10,
+  REPLY_GRACE_MS: 15_000,
+  TRACE_BUFFER_KB: 65_536,
+  PROFILE_SAMPLING_US: 1_000,
+  FRAME_BUDGET_MS: 16.7,
+  FRAME_LONG_MS: 50,
+  FRAME_GAP_MS: 1_000,
+  FRAMES_MAX: 100_000,
+  REQUEST_ID_MAX: 64,
+} as const;
+
+/** VT-5 — the captures' Electron channels. Like `VITALS_PORT_CHANNEL`, none is a member of `IPC_CHANNELS` (the
+ * product window's closed bridge):
+ *  - arm / reveal / current — the Vitals window → main (invoke): arm a kind for a length; show one of the
+ *    captures' own files in Finder; the capture's state now. Main answers the Vitals window's main frame alone.
+ *  - state — main → the Vitals window: the capture's state, at every change.
+ *  - frameCount — main → the desk window's preload: count your frames for N seconds.
+ *  - frameCountResult — the desk window's preload → main: what it counted. Main takes it from that window alone. */
+export const VITALS_CAPTURE_CHANNELS = {
+  arm: "vibefield:vitals:capture-arm:v1",
+  reveal: "vibefield:vitals:capture-reveal:v1",
+  current: "vibefield:vitals:capture-current:v1",
+  state: "vibefield:vitals:capture-state:v1",
+  frameCount: "vibefield:vitals:frame-count:v1",
+  frameCountResult: "vibefield:vitals:frame-count-result:v1",
+} as const;
+
 /** IL-D1 (`draft/thinking-inventory-latency.md` §2, ruled 2026-10-19) — how old the floor's
  * terminal inventory may be. Per cell, the inventory is as old as `now − as_of`, where `as_of` is
  * the moment the cell's last APPLIED reconcile began, before the client's writer lock: a
@@ -2617,6 +2659,10 @@ export const LAYOUT = {
   /** VT-4a — the error that ended the PREVIOUS fieldd, when nobody caught it (`fieldd/src/crash-note.ts`): written in
    * the turn the runtime reports it, read and removed by the next fieldd's boot, which says it in its log. */
   FIELDD_CRASH_NOTE: ["fieldd", "crash-note.json"],
+  /** VT-5 — the armed captures (`vitals-captures.ts`): a Chromium trace and a desk's frame count, written by Electron
+   * main, and a CPU profile of fieldd, written by fieldd, all under the user's own root. The newest
+   * `VITALS_CAPTURES.KEEP` are kept; nothing here is sent anywhere or bundled by itself. */
+  VITALS_CAPTURES_DIR: ["vitals", "captures"],
   /** AL-11 — when fieldd relaunched the app after an unplanned exit (`ShellRelaunchLog`), so AL-D8's cap of 3 per
    * 10 min holds across a fieldd restart. */
   SHELL_RELAUNCHES: ["fieldd", "shell-relaunches.json"],

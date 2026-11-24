@@ -1,0 +1,89 @@
+/* VT-5 (track VT, 2026-11-24) — the capture control (DESIGN.md §8 "Vitals", "Captures"): small and quiet, at the left
+   of the line the state stands on. The kit's small segmented controls and its quiet pill, in the kit's dark ramp (the
+   `dark` class on the control's root: the window is committed dark). Hue is state only (§2.5), and a capture that was
+   not made is never red. */
+
+.vf-vitals-capture {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 3px 0 6px;
+}
+
+.vf-vitals-capture__controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.vf-vitals-capture__controls .vf-ui-segmented {
+  flex: none;
+}
+
+/* the quiet pill at the small segmented control's height */
+.vf-vitals-capture__controls .vf-ui-button.vf-vitals-capture__go {
+  flex: none;
+  height: 26px;
+  padding: 0 12px;
+  border-radius: 13px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.vf-vitals-capture__line,
+.vf-vitals-capture__note {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+
+.vf-vitals-capture__line {
+  color: var(--vf-vitals-secondary);
+}
+
+.vf-vitals-capture__file {
+  flex: none;
+  font-family: var(--vf-font-mono);
+}
+
+.vf-vitals-capture__holds {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vf-vitals-tertiary);
+  text-overflow: ellipsis;
+}
+
+.vf-vitals-capture__reveal {
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--vf-vitals-secondary);
+  font: inherit;
+  text-decoration: underline;
+  text-decoration-color: var(--vf-vitals-faint);
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.vf-vitals-capture__reveal:hover {
+  color: var(--vf-vitals-primary);
+}
+
+.vf-vitals-capture__reveal:focus-visible {
+  outline: 1px solid var(--vf-godview-dark-control-hover-border);
+  outline-offset: 2px;
+}
+
+.vf-vitals-capture__note {
+  color: var(--vf-vitals-tertiary);
+  white-space: normal;
+}

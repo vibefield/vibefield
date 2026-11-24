@@ -90,6 +90,7 @@ import { PreloadScreenshotResultBridge } from "./screenshot-result";
 import { PreloadShellCommandBridge } from "./shell-commands";
 import { PreloadThemeStateBridge } from "./theme";
 import { PreloadViewStateBridge, PreloadZoomActBridge } from "./view";
+import { installVitalsFrameCountInPreload } from "./vitals-frame-count";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -357,6 +358,8 @@ sharedTexture.setSharedTextureReceiver(async (received, ...args) => {
     args[0],
   );
 });
+// VT-5 — the desk window counts its own frames while a Vitals capture is armed, and only then (main asks)
+installVitalsFrameCountInPreload(ipcRenderer);
 ipcRenderer.on(IPC_CHANNELS.shellCommand, (_event, raw: unknown) => {
   shellCommands.accept(raw);
 });
