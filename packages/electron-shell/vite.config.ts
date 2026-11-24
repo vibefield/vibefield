@@ -24,6 +24,7 @@ const repoRoot = join(import.meta.dirname, "..", "..");
 const siblingEntries = Object.values(readLock(repoRoot)?.siblings ?? {});
 const siblingRoots = siblingEntries.map((entry) => siblingDir(repoRoot, entry));
 const linkedIce = linkedPackages(repoRoot).has("@vibecook/ice");
+const linkedMille = milleAliases(repoRoot).length > 0;
 // AR-8c's second list — the checkouts a LINKED package links in turn (rosetta's
 // room took `@vibecook/mille*` as `link:` rows of its own) — retired at RD-5a
 // (2026-10-14): the room is a registry package, its mille dependencies take this
@@ -127,6 +128,13 @@ export default defineConfig(({ mode }) => ({
       // worker's import with it. Dev-only by construction: the production build bundles matter
       // into the worker.
       "@vibefield/field-app > @vibefield/puppeteer-views > matter-js",
+      // History QA (2026-11-24): the files relay's worker (`field-app/src/workspace/worker.ts`) is the one importer
+      // of mille's remote client, and the scanner follows no `new Worker(new URL(...))`. On a cold cache Vite met
+      // the import when the first session opened, optimized it and reloaded the whole page ("optimized
+      // dependencies changed. reloading"): the desk went back to its splash under the person's click. It has been
+      // so since mille became a registry package (the EL8 to 0.3.6, 2026-11-17); linked, the alias serves its
+      // source and there is nothing to pre-bundle.
+      ...(linkedMille ? [] : ["@vibefield/field-app > @vibecook/mille/remote"]),
     ],
     // AR-0 sibling mode, corrected 2026-09-13: the optimizer registry is keyed
     // by the BARE specifier, so the whole graph gets ONE `zod` entry — and
