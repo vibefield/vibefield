@@ -6440,8 +6440,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     restarts or changes a process.
   - **The head** is the window's own title bar, "Vitals". At the top right of the lanes stands the state, in one
     line: a 7 dot and its words, **Recording · every second** with the dot in `--vf-green`; **Waiting for the
-    floor's meter**, **Not measured on this computer** and **fieldd isn't answering** with the dot in the faint ink.
-    Orange and red are never a state of Vitals itself.
+    floor's meter**, **Not measured on this computer**, **fieldd isn't answering** and **Off · turned off in
+    Settings** (VT-2b, *added 2026-11-24*) with the dot in the faint ink. Orange and red are never a state of Vitals
+    itself.
   - **The list** stands at the left, 360 wide, on the panel. Its head row says when its figures are of: **Now**, or
     **At 14:02:10** while the pointer holds a moment on the lanes (below); then **CPU**, **Memory**, and **5 min**
     over the sparklines, as eyebrows (§3) in the faint ink. Then the groups, in a fixed order, each under its
@@ -6507,10 +6508,18 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     of them or the span's, and draws the newest 500 of those; its head says how many the span holds.
   - **When there is nothing to draw** the lanes stand empty, with no scale said, and the list holds one sentence in
     the tertiary ink (§9 "Vitals' words"): never a zero, never a flat line.
+  - **The recorder's switch** (VT-2b, *added 2026-11-24*; VT-D2's second half) is in Settings → Diagnostics, in a
+    section of its own, **Vitals**, under System status: one row, **Record vitals**, with the page's switch, on from
+    the first run. It is an app preference like the page's others (synced, undoable). Off stops the measuring
+    itself, on the floor as well as in fieldd, and drops what was kept; the window, if open, says **Off · turned
+    off in Settings**, its lanes stand empty and its list holds one sentence. On again starts from nothing: no
+    reading from before the switch comes back. The section has no figures and no door of its own.
   - *Not drawn until built:* a window's long frames (VT-3c; the desk's window may not report today, and whether
     its token gains that is ‹for James›), frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
-    (VT-4), armed traces (VT-5), the Settings switch that turns the recorder off, a door to Vitals from Settings →
+    (VT-4), armed traces (VT-5), a door to Vitals from Settings →
     Diagnostics, the plugins' log lines, and a span older than the lines the window holds.
+    *Corrected 2026-11-24 (VT-2b):* this list named "the Settings switch that turns the recorder off". It is built
+    (above); the door from Settings is still not.
     *Corrected 2026-11-24 (VT-3):* this list said "the frames and loop-delay lanes (VT-3)". The loop's lane is a
     busy share, as above, and frames at rest are not counted at all: counting them needs a callback every frame,
     which is a capture to arm, not a thing to leave on.
@@ -13027,9 +13036,13 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   window**, **GPU**, **Browser pane**, **Helper**, **Studio**, and Vitals' own window is **Vitals window**. A
   terminal's row is **Terminal**, or the agent's name once fieldd says it. The groups: **VibeField**, **fieldd**,
   **The floor**, **Your terminals**, **Vitals**. The states, each one line: "Recording · every second" · "Connecting
-  to fieldd…" · "Waiting for the floor's meter" · "Not measured on this computer" · "fieldd isn't answering". Under
-  an empty list, one sentence: "Nothing has been measured yet." while it waits, and the floor's own sentence when it
-  cannot measure. The foot: "All of VibeField" and "Your terminals aren't counted in it." It says "CPU" and
+  to fieldd…" · "Waiting for the floor's meter" · "Not measured on this computer" · "fieldd isn't answering" · "Off
+  · turned off in Settings". Under
+  an empty list, one sentence: "Nothing has been measured yet." while it waits, the floor's own sentence when it
+  cannot measure, and "The recorder is off. Turn it on in Settings → Diagnostics." while it is off. The switch's
+  words in Settings (VT-2b, *added 2026-11-24*): the section "Vitals", with "CPU and memory of VibeField's own
+  processes, read once a second and kept for thirty minutes on this computer."; the row "Record vitals", with "Off
+  stops the measuring and drops what was kept. The window is under Window → Vitals." The foot: "All of VibeField" and "Your terminals aren't counted in it." It says "CPU" and
   "Memory" as Activity Monitor does, and a share of one core as a percent: "14%", and from one core up "2.3 cores".
   The Loop lane (VT-3) is "Loop · share of each second busy", and its reading says "12% busy", "GC 3 ms" and
   "slowest terminal.list 41 ms": a method is said by its own name, because whoever reads this window is looking for
