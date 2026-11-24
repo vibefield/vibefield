@@ -68268,3 +68268,44 @@ implement and land all these changes".
   58 and 60; the phone's age under its circle, not under the title; the words.
 - Not run: fieldd's whole suite and the Rust tests (field-native unchanged), `pnpm verify` whole, the smokes and
   `pnpm gate:landing`, the light theme's render.
+
+## VT-2b — the recorder's switch, and Vitals' off state (M546)
+
+**2026-11-24 · on local main: `2a5e349fe` (doc), `3421162f5` VT-2b (code).** VT-D2's second half (DECISIONS VT).
+**Record vitals** is an app preference (`diagnostics.recordVitals`, on from the first run, synced and undoable like
+its neighbours), drawn in Settings → Diagnostics in a section of its own, **Vitals**.
+
+- **Off stops the measuring, not only the keeping.** `native.vitals.watch.set` gains an optional `recording`; while
+  it is false the floor's meter reads no process (its thread wakes once a beat to see the switch). No new verb. A
+  floor before this ignores the field and goes on measuring, and fieldd keeps none of it.
+- **Off drops what was kept**, on the floor (its ring) and in fieldd (the half hour and every name). On again starts
+  from nothing: the first reading is a baseline, never a rate over the gap, and sample numbers go on so none is said
+  twice.
+- **fieldd follows the preference** before its first attach (a recorder turned off never reads the floor's backlog),
+  at every change, at a merge from another desktop, and at an undo. It keeps its one floor subscription across the
+  switch: the floor has no verb that ends one.
+- **The window** says "Off · turned off in Settings", drops what it drew, and its list says where the switch is. The
+  catalog gains the plate.
+
+**The same commit records James's ruling of 2026-11-24** ("all go with lean, fanout opus agents to work on rest, get
+it done", after the page *Vitals After Five Landings*): VT-D7, D8 and D9 stand as built; VT-D10 A, VT-D11 A and
+VT-D12 A are ruled and not yet built (DECISIONS VT). Three readings inside VT-2b were on no page and stay ‹for
+James›: off drops what was kept; off stops the floor's meter by a field, not a verb; the switch syncs to the person's
+other desktops.
+
+**Proved, 2026-11-24, on the development Mac, in the lane.** The whole run was launched with no load read first and
+ran at a load near 280, which was wrong and is why three files went red:
+- Before the rebase: contracts whole 2,326 passed; electron-shell whole 3,254 passed, 3 skipped; fieldd whole 5,140
+  passed and 1 failed (`flows-host.test.ts`, H8); field-app whole 5,720 passed and 10 failed (`godview-monitor.test.tsx`
+  9, `peek.test.tsx` 1). None of the three files is touched here and each failed on timing. **Rerun alone at a load of
+  18.89: `flows-host` 43 passed; `godview-monitor` and `peek` 177 passed.**
+- field-native: lib 394 passed, 1 ignored; `fixture_parity`, `layout_vector`, `mgmt_server` 33; clippy at
+  `-D warnings`; rustfmt. The real meter is tested stopping and reading again.
+- `check:walls`, the agent literal lint, `pnpm gen` (clean after it), biome on the changed files, `bundle:assert`,
+  the census strict, `smoke:terminal-direct` green with `left: []`.
+- After the rebase onto `9498e7f6b` (M545, UM-6): tsc for the four packages, `pnpm gen` clean, walls, the literal
+  lint, and the focused files around the switch (the result lines are in the landing's commit message). The whole
+  suites were NOT rerun on the rebased tree.
+
+**Not this entry, and owed:** a door to Vitals from Settings → Diagnostics; nobody has seen the Settings row or the
+off plate drawn (no still was taken); `smoke:godview` whole, `pnpm verify` whole and the test Mac's run.

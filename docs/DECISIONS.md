@@ -443,6 +443,22 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   in their logs, the floor's panic with its words and a backtrace). Every one of these only listens: none changes
   what the runtime does with the error. Incidents (VT-4b: a broken budget or a death frozen with the minute around
   it) are not built, and their shape wants a page for James first.
+  **VT-2b LANDED 2026-11-24 (M546)**: VT-D2's second half, the recorder's switch. It is an app preference
+  (`diagnostics.recordVitals`, on from the first run, synced and undoable like its neighbours), drawn in Settings →
+  Diagnostics. Three readings in it are mine, ‹for James›: off **drops what was kept** as well as stopping (the
+  floor's ring and fieldd's half hour); off stops the **floor's** meter and not only fieldd's keeping, by a
+  `recording` field on `native.vitals.watch.set` (no new verb; a floor before it ignores the field and goes on
+  measuring, unkept); and the switch **syncs** to the person's other desktops, as every app preference does.
+  **RULED 2026-11-24 (James, typed in the lane's session after the page *Vitals After Five Landings*,
+  `8uStQghrxAVPdAR8cP5hMh`: "all go with lean, fanout opus agents to work on rest, get it done"):** the six marks
+  that page asked. **VT-D7**, **VT-D8** and **VT-D9** stand as built and are his now. **VT-D10 A**: the desk
+  window's token gains one scope and reports its long frames straight to fieldd, which accepts only its own frames
+  from it, never the process list. **VT-D11 A**: an incident is a crash, an unplanned exit, a page that stops
+  responding, or a loop held near 100% for several seconds; CPU and memory limits wait for VT-D6's week; the newest
+  50 are kept for 14 days, on this device, and none is ever about a terminal's processes. **VT-D12 A**: three armed
+  captures of 10 to 30 seconds (a Chromium trace, a CPU profile of fieldd taken from inside it with no debugging
+  port, a frame count for the desk's window), each saved as a file. VT-2b's three readings above were on no page,
+  so they stay ‹for James›.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the
