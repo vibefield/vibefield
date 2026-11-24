@@ -7,6 +7,7 @@ import {
   type VitalsFielddClient,
   type VitalsShellLogs,
 } from "./vitals-feed";
+import { MainOwnReporter } from "./vitals-own";
 import {
   type ShellRendererRole,
   shellRoster,
@@ -80,6 +81,8 @@ export function installVitals(opts: {
     logger,
   });
 
+  const own = new MainOwnReporter({ client: () => fieldd, logger });
+
   const windowHost = createVitalsWindowHost({
     mode: opts.mode,
     viteUrl: opts.viteUrl,
@@ -97,7 +100,12 @@ export function installVitals(opts: {
         logger,
       });
     },
-    onChanged: () => roster.poke(),
+    onChanged: () => {
+      roster.poke();
+      // VT-3b: main says its own loop only while the window is open (`vitals-own.ts`)
+      if (windowHost.rendererPid() === null) own.stop();
+      else own.start();
+    },
     quit: opts.quit,
     // a harness's Vitals window never takes the person's keys or pointer (the Godview smoke's VITALS row)
     quiet: isSmokeLike(opts.mode),
@@ -131,6 +139,7 @@ export function installVitals(opts: {
       app.off("child-process-gone", poke);
       app.off("browser-window-created", poke);
       roster.dispose();
+      own.stop();
       windowHost.close();
       fielddListeners.clear();
       fieldd = null;

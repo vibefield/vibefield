@@ -131,7 +131,15 @@ export function vitalsFixtureSnapshot(): VitalsSnapshotV1 {
                     : {}),
               },
             }
-          : {}),
+          : // VT-3b: the Vitals window is open in every plate, so Main says its own loop too
+            actor.role === "main"
+            ? {
+                own: {
+                  loopBusy:
+                    Math.round(Math.max(0, 0.02 * (1 + 0.5 * wobble(9, second))) * 10_000) / 10_000,
+                },
+              }
+            : {}),
       });
     }
     samples.push({ seq: second + 1, time: start + second * INTERVAL, points });

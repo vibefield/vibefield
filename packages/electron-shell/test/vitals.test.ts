@@ -14,6 +14,7 @@ import {
   VitalsFeedSession,
   type VitalsFielddClient,
 } from "../src/main/vitals-feed";
+import { MainOwnReporter } from "../src/main/vitals-own";
 import {
   shellRoster,
   VITALS_ROSTER_SETTLE_MS,
@@ -400,6 +401,163 @@ describe("VT-2 — the shell's roster", () => {
     r.instance.dispose();
     r.instance.poke();
     expect(r.timers).toHaveLength(0);
+  });
+});
+
+describe("VT-3b — main says its own loop, only while the Vitals window is open", () => {
+  function reporter(measured = true) {
+    // the main thread's CPU time and a monotonic clock, both in microseconds, moved by the test
+    let cpuUs = 0;
+    let atUs = 0;
+    const timers: Array<{ fn: () => void; ms: number }> = [];
+    let cleared = 0;
+    const sent: Array<{ method: string; params: unknown }> = [];
+    let hasClient = true;
+    let settleRequest: (() => void) | null = null;
+    let hold = false;
+    const instance = new MainOwnReporter({
+      client: () =>
+        hasClient
+          ? {
+              request: (method, params) => {
+                sent.push({ method, params });
+                return hold
+                  ? new Promise<void>((resolve) => {
+                      settleRequest = resolve;
+                    })
+                  : Promise.resolve({ accepted: true });
+              },
+            }
+          : null,
+      logger: silent,
+      threadCpu: measured ? () => ({ user: cpuUs * 0.75, system: cpuUs * 0.25 }) : null,
+      clockUs: () => atUs,
+      setTimer: (fn, ms) => {
+        timers.push({ fn, ms });
+        return timers.length;
+      },
+      clearTimer: () => {
+        cleared += 1;
+      },
+    });
+    return {
+      instance,
+      timers,
+      sent,
+      cleared: () => cleared,
+      /** a span of `wallMs` in which main's thread ran for `busyMs` */
+      spend: (wallMs: number, busyMs: number) => {
+        atUs += wallMs * 1_000;
+        cpuUs += busyMs * 1_000;
+      },
+      tick: () => timers.at(-1)?.fn(),
+      client: (next: boolean) => {
+        hasClient = next;
+      },
+      holdRequests: (next: boolean) => {
+        hold = next;
+      },
+      settleRequest: () => settleRequest?.(),
+    };
+  }
+
+  it("is not running until started, and starts one timer at the census's own interval", () => {
+    const own = reporter();
+    expect(own.instance.running).toBe(false);
+    expect(own.timers).toHaveLength(0);
+    own.instance.start();
+    own.instance.start();
+    expect(own.instance.running).toBe(true);
+    expect(own.timers.map((timer) => timer.ms)).toEqual([VITALS.SAMPLE_INTERVAL_MS]);
+  });
+
+  it("says the share of the second its own thread was running, one report a tick, to the report door", async () => {
+    const own = reporter();
+    own.spend(10_000, 9_000); // before the window opened: never counted
+    own.instance.start();
+    own.spend(1_000, 100);
+    own.tick();
+    await settle();
+    own.spend(1_000, 750);
+    own.tick();
+    await settle();
+    expect(own.sent).toEqual([
+      { method: "vitals.own.report", params: { own: { loopBusy: 0.1 } } },
+      { method: "vitals.own.report", params: { own: { loopBusy: 0.75 } } },
+    ]);
+  });
+
+  it("says nothing at all where the runtime cannot read its thread's time: never a zero", () => {
+    const own = reporter(false);
+    own.instance.start();
+    expect(own.instance.running).toBe(false);
+    expect(own.timers).toHaveLength(0);
+    expect(own.sent).toHaveLength(0);
+  });
+
+  it("does not read the loop's own counters, which stand still in Electron's main process", () => {
+    // measured 2026-11-24 on Electron 43.1.1: eventLoopUtilization read 0 through idle and held seconds alike
+    const own = source("main/vitals-own.ts");
+    expect(own).not.toContain("performance.eventLoopUtilization(");
+    expect(own).toContain("threadCpuUsage");
+  });
+
+  it("leaves an interval open while nobody can be told, and the next fold covers it", async () => {
+    const own = reporter();
+    own.instance.start();
+    own.client(false);
+    own.spend(1_000, 1_000);
+    own.tick();
+    expect(own.sent).toHaveLength(0);
+    own.client(true);
+    own.spend(1_000, 0);
+    own.tick();
+    await settle();
+    expect(own.sent).toEqual([{ method: "vitals.own.report", params: { own: { loopBusy: 0.5 } } }]);
+  });
+
+  it("never stacks reports: with one on its way the tick sends none", async () => {
+    const own = reporter();
+    own.instance.start();
+    own.holdRequests(true);
+    own.spend(1_000, 500);
+    own.tick();
+    own.spend(1_000, 500);
+    own.tick();
+    expect(own.sent).toHaveLength(1);
+    own.settleRequest();
+    await settle();
+    own.holdRequests(false);
+    own.spend(1_000, 0);
+    own.tick();
+    await settle();
+    // the held interval and the next, folded: 500 of 2,000 busy
+    expect(own.sent.at(-1)?.params).toEqual({ own: { loopBusy: 0.25 } });
+  });
+
+  it("stops with the window: the timer is cleared, and a later tick says nothing", () => {
+    const own = reporter();
+    own.instance.start();
+    own.instance.stop();
+    own.instance.stop();
+    expect(own.instance.running).toBe(false);
+    expect(own.cleared()).toBe(1);
+    own.spend(1_000, 1_000);
+    own.tick();
+    expect(own.sent).toHaveLength(0);
+  });
+
+  it("is started and stopped by the window alone: no other event of main's runs it", () => {
+    const composed = source("main/vitals.ts");
+    const changed = composed.slice(
+      composed.indexOf("onChanged: () => {"),
+      composed.indexOf("quit: opts.quit,"),
+    );
+    expect(changed).toContain("if (windowHost.rendererPid() === null) own.stop();");
+    expect(changed).toContain("else own.start();");
+    expect(composed.match(/own\.start\(\)/g)).toHaveLength(1);
+    // and leaving stops it
+    expect(composed.slice(composed.indexOf("dispose: () => {"))).toContain("own.stop();");
   });
 });
 

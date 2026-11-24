@@ -384,7 +384,9 @@ describe("VT-3 — what a process says of itself, in the model and the words", (
 
   it("gives a series to each process that says its loop, and to no other", () => {
     const series = loopSeries(model);
-    expect([...series.keys()]).toEqual([fieldd.key]);
+    const main = snapshot.processes.find((process) => process.role === "main");
+    // the plates' window is open, so Main says its own beside fieldd (VT-3b)
+    expect([...series.keys()].sort()).toEqual([fieldd.key, main?.key].sort());
     const values = series.get(fieldd.key)?.values ?? [];
     expect(values).toHaveLength(model.samples.length);
     expect(values.every((value) => value !== null && value >= 0 && value <= 1)).toBe(true);
@@ -408,7 +410,9 @@ describe("VT-3 — what a process says of itself, in the model and the words", (
     const peak = model.samples[209] ?? null;
     expect(ownAt(peak, fieldd.key)?.slow).toEqual({ method: "index.catalog.subscribe", ms: 2_210 });
     const main = snapshot.processes.find((process) => process.role === "main");
-    expect(ownAt(peak, main?.key ?? "")).toBeNull();
+    expect(Object.keys(ownAt(peak, main?.key ?? "") ?? {})).toEqual(["loopBusy"]);
+    const gpu = snapshot.processes.find((process) => process.role === "gpu");
+    expect(ownAt(peak, gpu?.key ?? "")).toBeNull();
     expect(ownAt(null, fieldd.key)).toBeNull();
   });
 
@@ -518,24 +522,35 @@ describe("VT-2 — the view", () => {
     );
     expect(text('[data-lane="loop"] .vf-vitals__scale')).toEqual(["100%"]);
     const traces = [...(lane?.querySelectorAll("path.vf-vitals__trace") ?? [])];
-    expect(traces.map((path) => path.getAttribute("data-group"))).toEqual(["fieldd"]);
-    expect(traces[0]?.getAttribute("d")).toMatch(/^M/);
-    // the quiet newest second: a share, and no pause or request to say
+    expect(traces.map((path) => path.getAttribute("data-group")).sort()).toEqual([
+      "fieldd",
+      "shell",
+    ]);
+    for (const trace of traces) expect(trace.getAttribute("d")).toMatch(/^M/);
+    // unchosen, it reads the first in the list that says its own: Main, a share and nothing else
+    expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(/^Main · \d+(\.\d)?% busy$/);
+    const row = (name: string): HTMLButtonElement | undefined =>
+      [...host.querySelectorAll<HTMLButtonElement>("button.vf-vitals__row")].find((button) =>
+        button.textContent?.startsWith(name),
+      );
+    // a row that says nothing of itself is chosen: the lane still reads the first that does
+    act(() => row("rosettad")?.click());
+    expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(/^Main · /);
+    // a row that says its own is chosen: the lane reads that one
+    act(() => row("fieldd")?.click());
     expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(
       /^fieldd · \d+(\.\d)?% busy$/,
     );
-    // a row that says nothing of itself is chosen: the lane still reads the one that does
-    const rosettad = [...host.querySelectorAll<HTMLButtonElement>("button.vf-vitals__row")].find(
-      (button) => button.textContent?.startsWith("rosettad"),
-    );
-    act(() => rosettad?.click());
-    expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(/^fieldd · /);
   });
 
   it("reads fieldd's bad second in the Loop lane's head: the share, the pauses, the slowest request (VT-3)", () => {
     const snapshot = vitalsFixtureSnapshot();
     const during = modelFromSnapshot({ ...snapshot, samples: snapshot.samples.slice(0, 210) });
     render(createElement(VitalsView, { model: during, logs: [] }));
+    const fielddRow = [...host.querySelectorAll<HTMLButtonElement>("button.vf-vitals__row")].find(
+      (button) => button.textContent?.startsWith("fieldd"),
+    );
+    act(() => fielddRow?.click());
     expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(
       /^fieldd · 9\d% busy · GC 39 ms · slowest index\.catalog\.subscribe 2\.2 s$/,
     );

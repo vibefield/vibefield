@@ -131,9 +131,12 @@ export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps)
   const cpuByKey = useMemo(() => processSeries(model, "cpu"), [model]);
   const memByKey = useMemo(() => processSeries(model, "memBytes"), [model]);
   const loopByKey = useMemo(() => loopSeries(model), [model]);
-  // the Loop lane reads one process: the chosen row's if it says its own, else the first that does
+  // the Loop lane reads one process: the chosen row's if it says its own, else the first in the list that does
   const loopKey =
-    chosen !== null && loopByKey.has(chosen) ? chosen : (loopByKey.keys().next().value ?? null);
+    chosen !== null && loopByKey.has(chosen)
+      ? chosen
+      : (groups.flatMap((group) => group.rows).find((row) => loopByKey.has(row.process.key))
+          ?.process.key ?? null);
   const loopProcess = loopKey === null ? undefined : model.processes.get(loopKey);
   const loopReading =
     loopKey === null || loopProcess === undefined

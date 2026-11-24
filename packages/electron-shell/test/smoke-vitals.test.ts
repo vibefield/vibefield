@@ -38,7 +38,9 @@ function green(): VitalsRowFacts {
       { group: "observer", rows: [["Vitals window", "3%", "90 MB"]] },
     ],
     total: ["15%", "1.3 GB"],
-    traces: 6,
+    traces: 8,
+    loop: ["shell", "fieldd"],
+    loopReading: "Main · 3% busy",
     sparks: 8,
     lines: 4,
     door: ["subscribe"],
@@ -102,6 +104,16 @@ describe("VT-2 — the Godview smoke's VITALS row, judged", () => {
       "4 lane trace(s) drawn, expected at least 6",
       "0 sparkline(s) drawn, expected at least 4",
       "no log line under the lanes",
+    ]);
+  });
+
+  it("holds the Loop lane to fieldd's loop and to main's, which the open window makes it say (VT-3)", () => {
+    expect(vitalsRowProblems({ ...green(), loop: ["fieldd"] })).toEqual([
+      "the Loop lane draws no trace for shell (it draws: fieldd)",
+    ]);
+    expect(vitalsRowProblems({ ...green(), loop: [] })).toEqual([
+      "the Loop lane draws no trace for fieldd (it draws: none)",
+      "the Loop lane draws no trace for shell (it draws: none)",
     ]);
   });
 

@@ -25,6 +25,10 @@ export interface VitalsRowFacts {
   readonly total: readonly [cpu: string, memory: string] | null;
   /** the lanes' group traces that hold a drawn path */
   readonly traces: number;
+  /** VT-3 — the groups whose processes the Loop lane draws a trace for: who said its own loop */
+  readonly loop: readonly string[];
+  /** VT-3 — the Loop lane's own reading at this moment ("Main · 3% busy"); printed for a reader, never judged */
+  readonly loopReading: string;
   /** the sparklines that hold a drawn path */
   readonly sparks: number;
   /** the log lines drawn under the lanes */
@@ -55,6 +59,10 @@ export const VITALS_ROW_READ = `(() => {
     groups,
     total: foot === null ? null : figures(foot).slice(0, 2),
     traces: drawn("path.vf-vitals__trace[data-group]"),
+    loop: [...document.querySelectorAll('[data-lane="loop"] path.vf-vitals__trace[data-group]')]
+      .filter((path) => (path.getAttribute("d") ?? "") !== "")
+      .map((path) => path.getAttribute("data-group") ?? ""),
+    loopReading: text(document.querySelector('[data-lane="loop"] .vf-vitals__reading')),
     sparks: drawn("path.vf-vitals__trace--spark"),
     lines: document.querySelectorAll(".vf-vitals__line").length,
     door: Object.keys(globalThis.vibefieldVitals ?? {}),
@@ -79,6 +87,9 @@ export const VITALS_ROW_EXPECTED: readonly (readonly [group: string, name: strin
   ["agents", "Terminal"],
   ["observer", "Vitals window"],
 ];
+
+/** VT-3 — whose loop the Loop lane must draw in a run with the window open: fieldd's group and the shell's (Main). */
+export const VITALS_LOOP_EXPECTED: readonly string[] = ["fieldd", "shell"];
 
 /** Every way the facts fall short of a drawn, live census: empty when the row is green. Each problem names what was
  * read, so a red run says what the window showed. */
@@ -105,6 +116,15 @@ export function vitalsRowProblems(facts: VitalsRowFacts): string[] {
   // one trace a group in each lane: VibeField, fieldd and the floor in CPU and in Memory
   if (facts.traces < 6) problems.push(`${facts.traces} lane trace(s) drawn, expected at least 6`);
   if (facts.sparks < 4) problems.push(`${facts.sparks} sparkline(s) drawn, expected at least 4`);
+  // VT-3: fieldd says its own loop from its first sample, and main says its own once the window is open (its
+  // reporter, the report door and the row that carries it, end to end)
+  for (const group of VITALS_LOOP_EXPECTED) {
+    if (!facts.loop.includes(group)) {
+      problems.push(
+        `the Loop lane draws no trace for ${group} (it draws: ${facts.loop.join(", ") || "none"})`,
+      );
+    }
+  }
   if (facts.lines < 1) problems.push("no log line under the lanes");
   if (facts.door.join(",") !== "subscribe")
     problems.push(`the page's door holds [${facts.door.join(", ")}], expected subscribe alone`);
@@ -128,6 +148,8 @@ export function vitalsRowSummary(facts: VitalsRowFacts): Record<string, unknown>
     ),
     total: facts.total,
     traces: facts.traces,
+    loop: facts.loop,
+    loopReading: facts.loopReading,
     sparks: facts.sparks,
     lines: facts.lines,
     door: facts.door,

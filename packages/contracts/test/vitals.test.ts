@@ -20,6 +20,7 @@ import {
   VITALS_GROUPS,
   VITALS_ROLES,
   VitalsDeltaV1,
+  VitalsOwnReportParams,
   VitalsOwnV1,
   VitalsQueryResult,
   VitalsRosterSetParams,
@@ -60,10 +61,11 @@ describe("VITALS — the census's bounds (first values)", () => {
 describe("the vitals doors are local, and the shell's alone", () => {
   const rows = METHODS.filter((m) => m.method.includes("vitals."));
 
-  it("names five methods: three on fieldd's door, two on the floor's", () => {
+  it("names six methods: four on fieldd's door, two on the floor's", () => {
     expect(rows.map((m) => `${m.surface} ${m.method}`).sort()).toEqual([
       "mgmt native.vitals.subscribe",
       "mgmt native.vitals.watch.set",
+      "product vitals.own.report",
       "product vitals.query",
       "product vitals.roster.set",
       "product vitals.subscribe",
@@ -79,6 +81,7 @@ describe("the vitals doors are local, and the shell's alone", () => {
     expect(scopeOf("vitals.subscribe")).toBe("vitals.read");
     expect(scopeOf("vitals.query")).toBe("vitals.read");
     expect(scopeOf("vitals.roster.set")).toBe("vitals.report");
+    expect(scopeOf("vitals.own.report")).toBe("vitals.report");
   });
 
   it("keeps both scopes from every phone, peer and plugin", () => {
@@ -279,6 +282,20 @@ describe("VT-3 — what a process says of itself", () => {
     expect(Object.keys(VitalsOwnV1.shape.slow.unwrap().shape).sort()).toEqual(["method", "ms"]);
     expect(METHODS.some((entry) => entry.method === "index.sessions")).toBe(true);
     expect(METHODS.every((entry) => entry.method.length <= VITALS.METHOD_MAX)).toBe(true);
+  });
+});
+
+describe("VT-3b — a process reports what it says of itself", () => {
+  it("carries one fold and nothing that says whose it is: fieldd reads that from the caller", () => {
+    const report = VitalsOwnReportParams.parse(fixture("vitals-own-report-params.valid.json"));
+    expect(report.own).toEqual({ loopBusy: 0.0312 });
+    expect(Object.keys(VitalsOwnReportParams.shape)).toEqual(["own"]);
+    expect(VitalsOwnReportParams.safeParse({}).success).toBe(false);
+    expect(VitalsOwnReportParams.safeParse({ own: { loopBusy: 2 } }).success).toBe(false);
+  });
+
+  it("is not idempotent: each report is one interval's", () => {
+    expect(METHODS.find((m) => m.method === "vitals.own.report")?.idempotent).toBe(false);
   });
 });
 

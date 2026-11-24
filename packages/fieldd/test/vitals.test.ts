@@ -486,4 +486,74 @@ describe("fieldd's vitals recorder (VT-1)", () => {
     });
     expect(unknownRole.data?.kind).toBe("PRECONDITION_FAILED");
   });
+
+  it("carries what Electron main says of itself on Main's row, once, and takes it from main alone (VT-3b)", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    const mainProcess = { pid: 3900, startedAt: T0 - 120_000 };
+    const desk = { pid: 3911, startedAt: T0 - 60_000 };
+    await client.call("vitals.roster.set", {
+      processes: [
+        { pid: mainProcess.pid, role: "main" },
+        { pid: desk.pid, role: "window" },
+      ],
+    });
+    // before the first reading nobody listens: said so, never kept for a later sample
+    expect(await client.call("vitals.own.report", { own: { loopBusy: 0.9 } })).toEqual({
+      accepted: false,
+    });
+
+    const { subId } = await subscribe(client);
+    const rows = (cpuUs: number): unknown[] => [
+      ...floorRows(cpuUs),
+      reading(mainProcess, "watched", cpuUs, 150 * MIB),
+      reading(desk, "watched", cpuUs * 2, 400 * MIB),
+    ];
+    const pointOf = (index: number, who: { pid: number; startedAt: number }) =>
+      deltas(client, subId)
+        .filter((delta) => delta.sample)
+        [index]?.sample?.points.find(
+          (candidate) => candidate.key === vitalsKey(who.pid, who.startedAt),
+        );
+    const samples = (): number => deltas(client, subId).filter((delta) => delta.sample).length;
+
+    fixture.native.pushDelta("vitals.subscribe", sample(1, T0, rows(100_000)));
+    await until(() => samples() === 1);
+    // two reports inside one interval fold: the newest share, the pauses summed, the longest and slowest kept
+    expect(
+      await client.call("vitals.own.report", {
+        own: { loopBusy: 0.2, gcMs: 4, gcMaxMs: 3, slow: { method: "doc.list", ms: 80 } },
+      }),
+    ).toEqual({ accepted: true });
+    await client.call("vitals.own.report", {
+      own: { loopBusy: 0.31, gcMs: 1.5, gcMaxMs: 1.5, slow: { method: "doc.open", ms: 12 } },
+    });
+    fixture.native.pushDelta("vitals.subscribe", sample(2, T0 + 1_000, rows(150_000)));
+    fixture.native.pushDelta("vitals.subscribe", sample(3, T0 + 2_000, rows(200_000)));
+    await until(() => samples() === 3);
+
+    expect(pointOf(0, mainProcess) !== undefined && "own" in (pointOf(0, mainProcess) ?? {})).toBe(
+      false,
+    );
+    expect(pointOf(1, mainProcess)?.own).toEqual({
+      loopBusy: 0.31,
+      gcMs: 5.5,
+      gcMaxMs: 3,
+      slow: { method: "doc.list", ms: 80 },
+    });
+    // said once: the next second, with no report, says nothing of Main's own
+    expect("own" in (pointOf(2, mainProcess) ?? {})).toBe(false);
+    // and never on another row
+    expect("own" in (pointOf(1, desk) ?? {})).toBe(false);
+
+    // a window may not report, even holding the scope; a malformed report is refused
+    const windowGrant = fixture.daemon.tokens.mint(["vitals.report"], "desk-window");
+    const window = await rpc(fixture, windowGrant.token, "renderer");
+    expect((await window.callErr("vitals.own.report", { own: {} })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    expect((await client.callErr("vitals.own.report", { own: { loopBusy: 7 } })).data?.kind).toBe(
+      "PRECONDITION_FAILED",
+    );
+  });
 });

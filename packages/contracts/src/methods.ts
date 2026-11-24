@@ -507,6 +507,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // VT-3b — what the caller says of itself (its loop's busy share) since its last report: Electron main alone,
+  // and only while the Vitals window is open. Each report is one interval's, so a repeat is not the same call.
+  defineMethod({
+    surface: "product",
+    method: "vitals.own.report",
+    scope: "vitals.report",
+    idempotent: false,
+    locality: "local",
+  }),
 
   // M2 — management channel (auth = D8 pairing hello; no scope system on this surface)
   defineMethod({

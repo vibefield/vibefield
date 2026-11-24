@@ -5,6 +5,7 @@ import {
   NativeVitalsSnapshot,
   type VitalsDeltaV1,
   type VitalsGroup,
+  VitalsOwnReportParams,
   VitalsOwnV1,
   type VitalsPointV1,
   type VitalsProcessV1,
@@ -95,6 +96,8 @@ function rate(now: number | null, before: number | null, seconds: number): numbe
 export class VitalsService {
   private readonly sources: readonly VitalsSource[];
   private roster: VitalsRosterEntry[] = [];
+  /** VT-3b — what a reporter said of itself since the last sample, by its roster role; taken at the next sample */
+  private readonly reported = new Map<string, VitalsOwnV1>();
   private state: string = "waiting";
   private detail: string | undefined = "the floor's meter has not answered yet";
   private intervalMs: number = VITALS.SAMPLE_INTERVAL_MS;
@@ -145,6 +148,10 @@ export class VitalsService {
     api.register("vitals.roster.set", (ctx, params) => {
       this.assertShell(ctx, true);
       return this.setRoster(params);
+    });
+    api.register("vitals.own.report", (ctx, params) => {
+      this.assertShell(ctx, true);
+      return this.reportOwn("main", params);
     });
   }
 
@@ -262,6 +269,8 @@ export class VitalsService {
     if (this.state === state && this.detail === detail) return;
     this.state = state;
     this.detail = detail;
+    // what was said to a recorder that has stopped recording is not carried into a later sample
+    if (state !== "recording") this.reported.clear();
     const delta: VitalsDeltaV1 = { state, ...(detail !== undefined ? { detail } : {}) };
     this.emit(delta);
   }
@@ -387,8 +396,8 @@ export class VitalsService {
             )
           : null,
         ...(tree !== undefined ? { processes: 1 + tree.processes } : {}),
-        // fieldd's own row is the one its own source names by this role
-        ...(identity.role === "fieldd" ? this.ownPoint() : {}),
+        // fieldd's own row is the one its own source names by this role; a reporter's is the one its roster names
+        ...(identity.role === "fieldd" ? this.ownPoint() : this.reportedPoint(identity.role)),
       });
       this.previous.set(key, {
         time: sample.time,
@@ -435,6 +444,54 @@ export class VitalsService {
     } catch {
       return {};
     }
+  }
+
+  /** VT-3b — a process said what it measured of itself since its last report: kept for its row's next sample. A
+   * second report before that sample is folded into the first, so nothing said is lost and nothing is said twice:
+   * the newest share stands, pauses and long frames add, and the longest and slowest are kept. */
+  private reportOwn(role: string, raw: unknown): { accepted: boolean } {
+    const parsed = VitalsOwnReportParams.safeParse(raw);
+    if (!parsed.success) {
+      throw new RpcCallError("PRECONDITION_FAILED", "expected { own: { loopBusy?, … } }", false, {
+        issues: parsed.error.issues.length,
+      });
+    }
+    // nobody is listening for it while the recorder records nothing
+    if (this.state !== "recording") return { accepted: false };
+    const next = parsed.data.own;
+    const before = this.reported.get(role);
+    if (before === undefined) {
+      this.reported.set(role, { ...next });
+      return { accepted: true };
+    }
+    const sum = (a: number | undefined, b: number | undefined): number | undefined =>
+      a === undefined ? b : b === undefined ? a : a + b;
+    const most = (a: number | undefined, b: number | undefined): number | undefined =>
+      a === undefined ? b : b === undefined ? a : Math.max(a, b);
+    const folded: VitalsOwnV1 = { ...before, ...next };
+    const set = <K extends "gcMs" | "gcMaxMs" | "longFrames" | "longFrameMaxMs">(
+      key: K,
+      value: number | undefined,
+    ): void => {
+      if (value !== undefined) folded[key] = value;
+    };
+    set("gcMs", sum(before.gcMs, next.gcMs));
+    set("gcMaxMs", most(before.gcMaxMs, next.gcMaxMs));
+    set("longFrames", sum(before.longFrames, next.longFrames));
+    set("longFrameMaxMs", most(before.longFrameMaxMs, next.longFrameMaxMs));
+    if (before.slow !== undefined && (next.slow === undefined || before.slow.ms > next.slow.ms)) {
+      folded.slow = before.slow;
+    }
+    this.reported.set(role, folded);
+    return { accepted: true };
+  }
+
+  /** What a reporter said since the last sample, as its row's field: taken once, so a second of silence is silence. */
+  private reportedPoint(role: string): { own?: VitalsOwnV1 } {
+    const own = this.reported.get(role);
+    if (own === undefined) return {};
+    this.reported.delete(role);
+    return Object.keys(own).length > 0 ? { own } : {};
   }
 
   /** Drop every process no kept sample names any more, so the names cannot outgrow the ring. */
