@@ -1526,6 +1526,38 @@ describe("406 — the door's refusals are read before the door listens", () => {
 // node down with it, so a reader with only the tailnet's `online` reads it `asleep`. The desktop writes the SAME
 // object as its local `restartScheduled` on its own slice BEFORE the stop, and every roster holds it `restarting` for
 // the reader's TTL. Nothing a person reads names it: a desktop held so is drawn as it was just before.
+// History QA (2026-11-24): fieldd's wiring and its subscribers hold more than ten `changed` listeners on an
+// ordinary boot, and node warned of a leak on fieldd's emergency stderr at every start.
+describe("the roster's listeners", () => {
+  it("takes a listener for every reader without node's leak warning", async () => {
+    const mesh = Object.assign(new EventEmitter(), {
+      getSlice: async () => ({ deviceId: "dev-self" }),
+      subscribePeers: async () => ({ snapshot: undefined, dispose: () => undefined }),
+      peers: async () => [],
+      subscribeStoreManaged: async () => ({ snapshot: { slices: {} }, dispose: () => undefined }),
+      setSlice: async () => undefined,
+    }) as unknown as MeshClient;
+    const devices = new DeviceService({
+      dataDir: makeDataDir(),
+      mesh,
+      bootId: "boot-1",
+      fielddVersion: "0.0.0",
+      contractsVersion: CONTRACTS_VERSION,
+      productEndpoint: () => ({ serve: "product" }),
+    });
+    cleanup.push(() => devices.dispose());
+    const warned: Error[] = [];
+    const onWarning = (warning: Error) => warned.push(warning);
+    process.on("warning", onWarning);
+    const readers = Array.from({ length: 24 }, () => () => undefined);
+    for (const reader of readers) devices.on("changed", reader);
+    await new Promise((resolve) => setImmediate(resolve)); // node says it on the next tick
+    process.off("warning", onWarning);
+    for (const reader of readers) devices.off("changed", reader);
+    expect(warned.filter((warning) => warning.name === "MaxListenersExceededWarning")).toEqual([]);
+  });
+});
+
 describe("DS — the restart announcement", () => {
   it("the roster's own timer moves an announced peer to asleep when the hold lapses, and leaves nothing armed", async () => {
     // a DeviceService over a fake mesh on a FAKE clock: no daemon racing a real window

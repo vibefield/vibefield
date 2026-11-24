@@ -262,6 +262,11 @@ export class SettingsDocService extends EventEmitter {
 
   constructor(private readonly cfg: SettingsDocConfig) {
     super();
+    // One `changed` listener per standing reader of the daemon's wiring and one per live subscriber (each
+    // removed when its subscription ends), so the count passes node's default of 10 on an ordinary boot and
+    // node warned of a leak there was not, on fieldd's emergency stderr, at every start (History QA,
+    // 2026-11-24). As the index's mesh emitters say it: no cap.
+    this.setMaxListeners(0);
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.settings.doc" });
     this.docPath = join(cfg.dataDir, ...LAYOUT.SETTINGS_DOC);
     this.file = new SystemDocFile({

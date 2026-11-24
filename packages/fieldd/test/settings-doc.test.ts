@@ -54,6 +54,21 @@ describe("the system settings doc (D29′)", () => {
     expect(await b.appValues()).toEqual({ theme: "dark" });
   });
 
+  // History QA (2026-11-24): the daemon's wiring and its subscribers hold more than ten `changed`
+  // listeners on an ordinary boot, and node warned of a leak on fieldd's emergency stderr at every start.
+  it("takes a listener for every reader without node's leak warning", async () => {
+    const svc = make(tempDataDir());
+    const warned: Error[] = [];
+    const onWarning = (warning: Error) => warned.push(warning);
+    process.on("warning", onWarning);
+    const readers = Array.from({ length: 24 }, () => () => undefined);
+    for (const reader of readers) svc.on("changed", reader);
+    await new Promise((resolve) => setImmediate(resolve)); // node says it on the next tick
+    process.off("warning", onWarning);
+    for (const reader of readers) svc.off("changed", reader);
+    expect(warned.filter((warning) => warning.name === "MaxListenersExceededWarning")).toEqual([]);
+  });
+
   it("publishes app writes and generic user undo so desktop subscribers refresh", async () => {
     const svc = make(tempDataDir());
     const sections: string[] = [];
