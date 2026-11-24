@@ -532,6 +532,13 @@ function figures(row: {
   };
 }
 
+/** History QA (2026-11-24) — the room's id for its own bucket of the sessions no project holds (rosetta-room's
+ * `UNASSIGNED_PROJECT_ID`, which its index does not export). It is no key of fieldd's, and `project.figures` has no
+ * door for it (project-doors.ts `figuresPlan`): asked, fieldd answers NOT_FOUND, and the room draws any refusal as
+ * "figures failed · retrying" for as long as the bucket is shown. So the port answers the bucket's figures as none,
+ * and asks nobody. */
+export const ROOM_UNASSIGNED_PROJECT = "__rosetta_unassigned__";
+
 /** `project.figures`' heatmap and contribution (H2: summed over every
  * desktop and rosetta project the project's sessions are filed under): the
  * room's `projectStats`. */
@@ -1529,16 +1536,19 @@ export function catalogPortOver(
     // project's merged ones, every desktop and rosetta project it holds
     // (item 385: each settled first — a wait is a wait, and the room is handed only a refusal that is true)
     async projectStats(key, window, signal) {
+      if (key === ROOM_UNASSIGNED_PROJECT) return { heat: [], contribution: [] };
       return projectStatsOf(
         await settled(key, signal, () => projectFigures(key, window), letGoFigures),
       );
     },
 
     async usage(key, window, signal) {
+      if (key === ROOM_UNASSIGNED_PROJECT) return { models: [], hours: [] };
       return usageOf(await settled(key, signal, () => projectFigures(key, window), letGoFigures));
     },
 
     async dayUsage(key, day, offsetMinutes, signal) {
+      if (key === ROOM_UNASSIGNED_PROJECT) return { day, models: [] };
       const ask = () =>
         client
           .request("project.figuresDay", {

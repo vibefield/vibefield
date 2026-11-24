@@ -68,6 +68,7 @@ import {
   pingParts,
   projectRowOf,
   projectStatsOf,
+  ROOM_UNASSIGNED_PROJECT,
   selfOf,
   sessionHomeOf,
   sessionRowOf,
@@ -2323,6 +2324,36 @@ describe("item 385: a figure's wait is a wait", () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(two.done).toBe(true);
     expect(asks(malformed)).toBe(1);
+  });
+
+  // History QA (2026-11-24): on a fresh desktop the room listed its unassigned bucket alone for a minute, asked
+  // `project.figures` for it and was refused NOT_FOUND (renderer.history.figures_failed, twice in six minutes).
+  it("the room's own unassigned bucket has no figures door: its figures are none, and fieldd is asked nothing", async () => {
+    const d = client({
+      "project.figures": () => {
+        throw Object.assign(new Error("no project holds that key or anchor"), {
+          kind: "NOT_FOUND",
+          retryable: false,
+        });
+      },
+      "project.figuresDay": () => {
+        throw new Error("never asked");
+      },
+    });
+    const port = catalogPortOver(d);
+    await expect(port.projectStats(ROOM_UNASSIGNED_PROJECT, WINDOW)).resolves.toEqual({
+      heat: [],
+      contribution: [],
+    });
+    await expect(port.usage(ROOM_UNASSIGNED_PROJECT, WINDOW)).resolves.toEqual({
+      models: [],
+      hours: [],
+    });
+    await expect(port.dayUsage(ROOM_UNASSIGNED_PROJECT, "2026-11-24", -420)).resolves.toEqual({
+      day: "2026-11-24",
+      models: [],
+    });
+    expect(d.calls).toEqual([]);
   });
 
   it("W4: the room's signal ends the wait at once, and nothing is asked after", async () => {
