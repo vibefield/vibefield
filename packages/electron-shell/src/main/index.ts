@@ -157,6 +157,7 @@ import {
   keepsFramesWhenCovered,
   keepsGpu,
   mintsOnboarded,
+  opensVitalsWithDesk,
   parseMode,
   rendererPolicyMode,
   smokeSimctlDeveloperDir,
@@ -2399,9 +2400,13 @@ async function main(
     });
     vitals = vitalsHost;
     vitalsHost.setFieldd(vitalsFieldd);
+    // VT-6: under `pnpm dev` it opens by itself with the desk's window, this desk and each later one
+    const vitalsWithDesk = opensVitalsWithDesk(MODE, process.env);
     const stopVitalsWithDesk = registry.onPrimaryChanged((open) => {
       if (!open) vitalsHost.closeWindow();
+      else if (vitalsWithDesk) vitalsHost.openWithDesk();
     });
+    if (vitalsWithDesk) vitalsHost.openWithDesk();
     shellDisposers.add(() => {
       stopVitalsWithDesk();
       vitalsHost.dispose();

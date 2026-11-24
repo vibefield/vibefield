@@ -16,7 +16,7 @@ import {
   type VitalsRosterClient,
   VitalsRosterReporter,
 } from "./vitals-roster";
-import { createVitalsWindowHost } from "./vitals-window";
+import { afterDeskShown, createVitalsWindowHost } from "./vitals-window";
 
 // VT-2 (track VT, 2026-11-24) — Vitals in Electron main, composed in one place: the window (`vitals-window.ts`), the
 // feed it reads while open (`vitals-feed.ts`) and the shell's roster for fieldd (`vitals-roster.ts`). `index.ts`
@@ -27,6 +27,9 @@ type VitalsClient = VitalsFielddClient & VitalsRosterClient;
 export interface VitalsHost {
   /** The Window menu's Vitals: open the window, or bring it forward. */
   open(): void;
+  /** VT-6 — the desk's window is open: open Vitals beside it, unasked, once the desk is shown. `pnpm dev` alone
+   * calls this (`opensVitalsWithDesk`). */
+  openWithDesk(): void;
   /** Close the window: the desk's window closed, or the app is quitting. */
   closeWindow(): void;
   /** Main's fieldd client changed (a first attach, a daemon bounce, a user switch), or went away. */
@@ -158,9 +161,19 @@ export function installVitals(opts: {
   for (const contents of webContents.getAllWebContents())
     incidents.watchContents(contents, nameOf(contents));
 
+  let disposed = false;
   return {
     open: () => {
       void windowHost.open().catch(() => undefined); // said in the log by the window host
+    },
+    openWithDesk: () => {
+      const desk = opts.primary();
+      if (desk === null) return;
+      // after the desk is shown and holds the keys, so this window is in front of it and never takes them
+      afterDeskShown(desk, () => {
+        if (disposed) return;
+        void windowHost.openBeside().catch(() => undefined); // said in the log by the window host
+      });
     },
     closeWindow: () => windowHost.close(),
     setFieldd: (client) => {
@@ -171,6 +184,7 @@ export function installVitals(opts: {
       if (client !== null) incidents.flush();
     },
     dispose: () => {
+      disposed = true;
       app.off("web-contents-created", onContents);
       app.off("child-process-gone", poke);
       app.off("browser-window-created", poke);

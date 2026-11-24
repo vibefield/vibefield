@@ -24,9 +24,26 @@ export function vitalsRendererUrl(mode: ShellMode, viteUrl: string): string {
     : `${APP_ORIGIN}${VITALS_DOCUMENT}`;
 }
 
+/** VT-6 — run once the desk's window is shown: now if it already is, else at its next `show`, and never for a
+ * window that went first. What runs then finds the desk in front and holding the keys. */
+export function afterDeskShown(
+  desk: Pick<BrowserWindow, "isDestroyed" | "isVisible" | "once">,
+  run: () => void,
+): void {
+  if (desk.isDestroyed()) return;
+  const once = (): void => {
+    if (!desk.isDestroyed()) run();
+  };
+  if (desk.isVisible()) once();
+  else desk.once("show", once);
+}
+
 export interface VitalsWindowHost {
   /** Open the window, or bring the open one forward. */
   open(): Promise<void>;
+  /** VT-6 — open it beside the desk's window without being asked: shown, and the keys stay where they are. An open
+   * one is left as the person put it, minimized or behind another window. */
+  openBeside(): Promise<void>;
   /** Close it, if open. A quit calls this first, so the app never waits on it. */
   close(): void;
   /** The window's renderer process, for the shell's roster; null while it has none. */
@@ -96,9 +113,14 @@ export function createVitalsWindowHost(opts: {
     throw new Error("the dev server never served the Vitals document");
   };
 
-  const present = (target: BrowserWindow): void => {
+  const present = (target: BrowserWindow, asked: boolean): void => {
     if (opts.quiet === true) {
       target.setIgnoreMouseEvents(true);
+      target.showInactive();
+      return;
+    }
+    if (!asked) {
+      // VT-6: nobody asked for it, so the keys stay with the window that has them
       target.showInactive();
       return;
     }
@@ -106,13 +128,15 @@ export function createVitalsWindowHost(opts: {
     target.focus();
   };
 
-  const open = async (): Promise<void> => {
-    if (window !== null && !window.isDestroyed()) {
+  const open = async (asked = true): Promise<void> => {
+    if (window !== null && !window.isDestroyed() && opening === null) {
+      if (!asked) return;
       if (window.isMinimized()) window.restore();
-      present(window);
+      present(window, true);
       return;
     }
-    if (opening !== null) return opening;
+    // a person's ask that meets an unasked opening still ends with the window in front, holding the keys
+    if (opening !== null) return asked ? opening.then(() => open(true)) : opening;
     const attempt = (async () => {
       const next = createVitalsWindow({ preloadPath: opts.preloadPath, show: false });
       const lifetime = opts.adopt(next);
@@ -148,8 +172,8 @@ export function createVitalsWindowHost(opts: {
       try {
         await load(next);
         if (next.isDestroyed()) throw new Error("the Vitals window closed before it loaded");
-        present(next);
-        opts.logger.info("desktop.vitals.window_opened", "The Vitals window opened");
+        present(next, asked);
+        opts.logger.info("desktop.vitals.window_opened", "The Vitals window opened", { asked });
       } catch (error) {
         closeFeed();
         lifetime.dispose();
@@ -170,7 +194,8 @@ export function createVitalsWindowHost(opts: {
   };
 
   return {
-    open,
+    open: () => open(true),
+    openBeside: () => open(false),
     close: () => {
       const current = window;
       if (current === null || current.isDestroyed()) return;

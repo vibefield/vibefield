@@ -90,6 +90,17 @@ export function smokeSimctlDeveloperDir(
   return isSmokeLike(mode) ? env["VF_SMOKE_SIMCTL_DEVELOPER_DIR"] : undefined;
 }
 
+/** VT-6 (track VT, 2026-11-24; DESIGN.md §8 "Vitals") — whether the Vitals window opens by itself each time the
+ * desk's window is shown: under `pnpm dev` alone, where the person at the desk is measuring what they build. A
+ * packaged app opens it when asked. So does every harness: a smoke-like mode, and a MARKED run (`VF_SMOKE_RUN`,
+ * which `smoke:studio` sets on a dev-mode shell), whose windows are the harness's own to count. */
+export function opensVitalsWithDesk(
+  mode: ShellMode,
+  env: Readonly<Record<string, string | undefined>>,
+): boolean {
+  return mode === "dev" && env["VF_SMOKE_RUN"] === undefined;
+}
+
 /** ES-6 (desk-gates, `smoke:chat-night`) — Godview's launcher run for Chat's night alone: it stages the typed agent, so
  * New spark is live, and it keeps the GPU the launcher otherwise drops, for the night and its portal are what it witnesses. */
 export const CHAT_NIGHT_FLAG = "--chat-night";

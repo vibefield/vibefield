@@ -7,6 +7,7 @@ import {
   keepsFramesWhenCovered,
   keepsGpu,
   mintsOnboarded,
+  opensVitalsWithDesk,
   parseMode,
   rendererPolicyMode,
   type ShellMode,
@@ -296,5 +297,22 @@ describe("item 415 — row 38's host-resolver-rules", () => {
     expect(
       firstHostAddress({ lo0: [{ family: "IPv4", internal: true, address: "127.0.0.1" }] }),
     ).toBeUndefined();
+  });
+});
+
+describe("VT-6: the Vitals window opens by itself with the desk under `pnpm dev` alone", () => {
+  it("dev opens it, and a packaged app waits to be asked", () => {
+    expect(opensVitalsWithDesk("dev", {})).toBe(true);
+    expect(opensVitalsWithDesk("production", {})).toBe(false);
+  });
+
+  it("a marked run never opens it, a dev-mode shell's included (smoke:studio)", () => {
+    expect(opensVitalsWithDesk("dev", { VF_SMOKE_RUN: "run-1" })).toBe(false);
+    expect(opensVitalsWithDesk("dev", { VF_SMOKE_RUN: "" })).toBe(false);
+  });
+
+  it.each(ALL_MODES)("%s opens it exactly when it is dev", (mode) => {
+    expect(opensVitalsWithDesk(mode, {})).toBe(mode === "dev");
+    if (isSmokeLike(mode)) expect(opensVitalsWithDesk(mode, {})).toBe(false);
   });
 });
