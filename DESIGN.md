@@ -6435,7 +6435,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   - **What it reads.** fieldd's vitals door (`vitals.subscribe`), which names what the floor measured once a second
     (`packages/contracts/src/vitals.ts`), fieldd's log door for the daemons' lines, and Electron main's own for the
     shell's. The window holds no key to fieldd: while it is open, main reads those doors and hands the window one
-    stream, and the window can send nothing back. It opens 1080 by 720 and is never narrower than 920 or shorter
+    stream, and the window can send nothing back but one thing: the id of an incident to open (VT-4b, below),
+    which main reads for it. *Corrected 2026-11-24 (VT-4b):* this said the window can send nothing back. It opens 1080 by 720 and is never narrower than 920 or shorter
     than 420. It acts on nothing: no row has a button, and nothing in it stops,
     restarts or changes a process.
     *Corrected 2026-11-24 (VT-5):* this said the window can send nothing back and acts on nothing. It asks for one
@@ -6564,8 +6565,35 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       `.json` count. The newest ten are kept; they are sent nowhere and go in no support bundle by themselves.
     - Frames are counted only while a count is armed: counting needs a callback every frame, which keeps a page
       awake, so it is never left on (VT-D9).
-  - *Not drawn until built:* incidents and their marks on the lanes (VT-4), the plugins' log lines, a span older
-    than the lines the window holds, and a
+  - **Incidents** (VT-4b, *added 2026-11-24*; VT-D11 A). An incident is a bad moment fieldd keeps on this computer
+    with the minute around it: a process that ended on an error nobody caught, one that exited when nothing asked it
+    to, an error main lived through, a page that stopped responding, or a loop held at 95% or more for five readings
+    in a row. Each says who (the process's row name, never anything it ran), what, and when, and keeps the readings
+    of the half minute before and the half minute after, so it can still be read after the lanes have moved on.
+    fieldd keeps the newest 50, for 14 days. A terminal's processes are never the subject of one (VT-D4), and a
+    person's Quit, a restart they asked for and an update's restart are not incidents. While the recorder is off,
+    nothing new is kept as an incident; the ones already kept stay until they age out (the switch's "drops what was
+    kept" is the readings').
+    - **The marks.** An incident inside the lanes' five minutes is a hairline through every lane at its moment, 1
+      wide, in its hue (§2.5): `--vf-red` for a process that ended or an error nobody caught (a failure),
+      `--vf-orange` for a page that stopped responding or a loop held (it needs attention). One that lasted (a page
+      that answered again, a loop that let go) also lays a band from its start to its end, its hue at 12%. These are
+      the only hues in the window, and they mark what happened to a process, never a state of Vitals itself. A mark
+      takes no press; the list is where an incident is opened.
+    - **The list.** At the left of the state line (after the capture control, VT-5), while fieldd keeps any, a
+      button in the secondary ink says how many (**3 incidents**), and opens the list under the state line, on the panel behind a hairline, newest first: each
+      row 24 tall, a 7 dot in the incident's hue, its moment in 11 mono in the tertiary ink (**22 Nov 14:02:10**), the
+      process's row name (12/500, primary) and what happened (secondary, cut at the row's end). A second press of the
+      button, or Escape, closes it. With none kept, the button is not there: no empty list is offered.
+    - **One opened.** A press on a row opens it (its ground `#242424`, corners 6), and the lanes hold its moment as
+      the pointer holds one: the hairline at its time, the list's head **At 14:02:10**, the figures of that second.
+      Over the lanes one line says what happened in the track's voice, in the primary ink: "Desk window stopped
+      responding · for 4.2 s". An incident older than the lanes' five minutes is drawn from the readings kept with
+      it: the lanes span its minute alone, and after the line the tertiary ink says "Drawn from the minute kept with
+      it." A second press, Escape, or closing the list lets it go, and the lanes return to now. The window still
+      sends fieldd nothing but this: an opened incident's id, which main reads for it (`vitals.incidents.get`).
+  - *Not drawn until built:* the plugins' log lines, a span older than the lines the window holds, an incident's log
+    lines once the window's own have moved on, incidents in the support bundle, and a
     **Flows host** row: the word stands, but this build's fieldd composes no flow runner, so it starts no flow host
     to name (VT-2c, *added 2026-11-24*).
     *Corrected 2026-11-24 (VT-2c):* this list named "a door to Vitals from Settings → Diagnostics". It is built
@@ -6573,6 +6601,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     *Corrected 2026-11-24 (VT-3c):* this list named "a window's long frames (VT-3c; the desk's window may not report
     today, and whether its token gains that is ‹for James›)". VT-D10 A ruled it: the desk window's token gains
     `vitals.report`, fieldd takes only its long frames from it, and the Loop lane marks them (above).
+    *Corrected 2026-11-24 (VT-4b):* this list named "incidents and their marks on the lanes (VT-4)". They are built
+    (above); their log lines and the support bundle are not.
     *Corrected 2026-11-24 (VT-2b):* this list named "the Settings switch that turns the recorder off". It is built
     (above); the door from Settings is still not.
     *Corrected 2026-11-24 (VT-3):* this list said "the frames and loop-delay lanes (VT-3)". The loop's lane is a
@@ -13116,6 +13146,13 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   and why: "Another capture is running." · "fieldd isn't answering." · "The desk's window isn't open." · "It
   stopped before its time." · "It couldn't be saved." · "It couldn't be started." The trace's line: "A trace holds
   the addresses and titles of the pages open in VibeField. It stays on this computer."
+  Incidents (VT-4b, *added 2026-11-24*): the button says "1 incident" or "3 incidents". An incident is said as its
+  process's row name and what happened, each kind one phrase: "ended on an error nobody caught" (then the error's
+  name and message, "· TypeError: x is not a function"), "exited unexpectedly" (then how, "· code 1", "· SIGKILL", or
+  Chromium's own reason, "· crashed", "· oom"), "met an error nobody caught" (then the error), "stopped responding"
+  (then "· for 4.2 s" once it answered again), and "held its loop near 100%" (then "· for 6 s"). A kind this build
+  does not know is "had an incident". Its moment is "22 Nov 14:02:10" in the person's own zone. An incident drawn
+  from its own readings adds "Drawn from the minute kept with it."
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
