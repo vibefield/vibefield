@@ -68160,3 +68160,46 @@ it for.
 - Not run: the whole suites again (M542's runs stand for fieldd and field-app), the Rust tests, `smoke:godview`
   whole, `pnpm verify` whole.
 - A person's own look at the window is still owed (M540).
+
+## VT-4a — nothing dies silently (M544)
+
+**2026-11-24 · on local main: `fb11712c7` VT-4a (green).** The fourth slice's first half (DECISIONS VT). A survey
+of what already records a crash, an uncaught error or an exit named the places that recorded nothing. Each of these
+now says so, and every one of them only listens: none changes what the runtime does with the error.
+
+- **fieldd, an error nobody caught** (`packages/fieldd/src/crash-note.ts`). The only trace was Node's own print on a
+  stderr that has no reader once the shell is gone, and the log's writer is asynchronous, so a process that is ending
+  cannot write through it. The error's name, message and stack, bounded, are written to one file in the same turn
+  (`LAYOUT.FIELDD_CRASH_NOTE`, in the user's own root, 0600). The next fieldd reads it at boot, says it once
+  (`fieldd.lifecycle.previous_crash`) and removes it. A promise nobody handled reaches the same record.
+- **The floor's exit** (`packages/fieldd/src/floor-exit.ts`). fieldd starts the floor detached, and nothing ever read
+  how it ended: the next floor's boot says only planned or unplanned. A floor this process started now has its exit
+  code or its signal in fieldd's log (`fieldd.native_supervisor.floor_exited`).
+- **Electron main** (`electron-shell/src/main/main-faults.ts`): an error nobody caught, at fatal, and the runtime's
+  own warnings, twenty a run and then one line that it went on.
+- **The product page** (`field-app/src/page-faults.ts`): a script error nobody caught and a promise nobody handled,
+  through the host's logger, twenty a page and then one line. React reports a render error no boundary caught to the
+  same event, so it is heard too.
+- **The Vitals window's own page process** ending is said in main's log.
+- **The floor's panic record** gains the panic's own words (512 bytes) and a backtrace (8 KiB). It said the file and
+  the line alone, and the hook replaces Rust's own print, so the words and the stack reached nobody.
+
+**Proved, 2026-11-24, on the development Mac, in the lane:**
+- fieldd's note: the runtime's event said by hand writes the note; a real boot over a note says it once in its log
+  and removes it; a stopped daemon keeps none. **No real crash was caused**, in fieldd or anywhere else.
+- Whole suites: fieldd 335 files, 5,136 passed, 34 skipped. field-app 392 files, 5,722 passed, 3 skipped. contracts
+  2,325 passed. electron-shell 213 files: 3,253 passed and 1 failed, `updates/release-scripts.test.ts`, a 5 s timeout
+  at a load average over 40 in a file this slice does not touch; it passed rerun.
+- field-native: lib 392 passed, 1 ignored; `layout_vector` and `fixture_parity`; clippy at `-D warnings`; rustfmt.
+- tsc for the four packages. `check:walls`, the agent literal lint, `pnpm gen` (clean after it), biome on the changed
+  files, `bundle:assert` and the census, strict. `smoke:terminal-direct` on the lane's build, green, `left: []`.
+
+**Not this entry, and owed:**
+- **VT-4b, incidents**: a broken budget or a death frozen with the minute around it, kept on disk and marked on the
+  lanes. Its shape wants a page for James first: what breaks a budget (VT-D6 has most budgets measured for a week
+  before a number is set), where an incident is kept, how the window marks one.
+- Still unrecorded, named by the survey: a terminal cell's exit status as fields of its own, a stopped fieldd's exit
+  code in the supervisor, an adopted fieldd's exit, the signal that stopped fieldd, and any crash dump for fieldd or
+  the floor (Crashpad covers Electron's processes alone). A floor an earlier fieldd started is read only as the link
+  going down.
+- Not run: `smoke:godview` whole, `pnpm verify` whole.

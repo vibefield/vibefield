@@ -438,6 +438,11 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   window to say its long frames, either its token gains `vitals.report` (this lane's lean: one scope, and the door
   maps a window's report to the window's row and nothing else) or main relays them over a new channel of the
   product bridge. Neither is built: both widen what a window may do, which is his to rule.
+  **VT-4a LANDED 2026-11-24 (M544)** (nothing dies silently: fieldd's crash note and the next boot saying it, the
+  floor's exit status as the fieldd that started it saw it, Electron main's and the product page's uncaught errors
+  in their logs, the floor's panic with its words and a backtrace). Every one of these only listens: none changes
+  what the runtime does with the error. Incidents (VT-4b: a broken budget or a death frozen with the minute around
+  it) are not built, and their shape wants a page for James first.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the
