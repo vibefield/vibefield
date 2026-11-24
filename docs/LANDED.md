@@ -68153,6 +68153,10 @@ it for.
 - Not checked: that fieldd's own utilization follows a held loop as the app runs it. It read 17% and 6% in real
   runs and over 50% for a held loop under plain Node; the app starts fieldd on Electron's Node, and no run there
   held its loop on purpose.
+  > **Since (2026-11-24, the same day):** checked. A scratch probe under Electron 43.1.1's Node, run as the
+  > supervisor runs fieldd (`ELECTRON_RUN_AS_NODE`), read 0.25, 0.50 and 0.90 for seconds held 250, 500 and 900 ms,
+  > and under 0.001 at rest. fieldd's measure follows a held loop there; only Electron's main process does not keep
+  > the counters.
 - Not run: the whole suites again (M542's runs stand for fieldd and field-app), the Rust tests, `smoke:godview`
   whole, `pnpm verify` whole.
 - A person's own look at the window is still owed (M540).
