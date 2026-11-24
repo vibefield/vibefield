@@ -67902,6 +67902,10 @@ census, with no window.
 - **The floor's meter** (`packages/field-native/src/vitals`). Once a second, on a thread of its own, it reads
   itself, what it started (the cells, the mesh sidecar, the freeway host) and the pids fieldd asks for: CPU time,
   memory, disk, wake-ups, energy.
+  > **Errata (2026-11-24, VT-2a, M541):** on macOS it did not name the cells. It read a child's name once, with its
+  > start, and kept it; a child is listed from its fork and named by its exec, so a cell first read in between kept
+  > `field-native`'s name and its row said Other. The first run against a real pair with a terminal showed both
+  > cells so. The name is read at each reading now (`sys.rs`, `a_name_follows_the_process_through_an_exec`).
   - macOS reads `proc_pid_rusage` flavor 4, which needs no privilege for the same user's processes and carries the
     physical footprint (Activity Monitor's Memory). Its CPU times are Mach absolute-time units, scaled by
     `mach_timebase_info`; a unit test holds the scale to `getrusage`.
@@ -68012,6 +68016,8 @@ with lean and land this"). VT-D1 A: a window of its own, in every build. Rebased
 - **Nobody has opened the window in a running app.** Main's own glue in `index.ts` (the menu's click, the live fieldd
   client, the roster on a real shell, the dev server's document) ran in no test and no smoke. A physical gate for it,
   `smoke:vitals` and its row in `docs/desk-gates.md`, is owed.
+  > **Since (2026-11-24, VT-2a, M541):** a run has. The gate is a row of `smoke:godview` and
+  > `smoke:terminal-direct`, not a smoke of its own. The dev server's document and a person's own look are still owed.
 - The Settings switch that turns the recorder off (VT-D2's second half), a door from Settings → Diagnostics, the
   plugins' log lines, a span older than the lines the window holds, agent names on terminal rows.
 - Rows for flow hosts, plugin child processes and MCP stdio servers. The Windows meter. A whole-Mac GPU figure.
@@ -68020,3 +68026,45 @@ with lean and land this"). VT-D1 A: a window of its own, in every build. Rebased
 - **The checkout that takes this needs `pnpm install`** (two manifests change: the shell's build line and field-app's
   `./vitals` entry; every `pnpm` script refuses until then), and a running `pnpm dev` needs a restart to build the
   new preload.
+
+## VT-2a — a real run opens Vitals, and the floor names its cells (M541)
+
+**2026-11-24 · on local main: `f0b8b94fc` VT-2a (green).** The follow-up M540 owed: the Vitals window's first
+physical proof, and the fault its first run found.
+
+- **The VITALS row** of `smoke:godview` and `smoke:terminal-direct` (`electron-shell/src/testing/smoke-vitals.ts`,
+  `smoke.ts` `vitalsRow`; `docs/desk-gates.md` rows 23 and 25). It presses the Window menu's own Vitals item as the
+  native menu does, then reads the window that opens until it draws the run's census: Main, the desk's window,
+  fieldd, field-native, a terminal cell, the terminal and the Vitals window itself, each with a memory figure; the
+  foot; six lane traces; a log line; `subscribe` as the page's one door, no product bridge, no Node. It then closes
+  it. This is main's glue run for the first time: the menu's click, the live fieldd client, the roster on a real
+  shell, the feed down the port.
+- **A harness's Vitals window is kept from the person**: shown without the keys, passed through by the pointer
+  (`vitals-window.ts` `quiet`, from `isSmokeLike`). The row is red if it took the keys.
+- **The fault it found, in VT-1's meter.** On macOS the floor read a child's name once, with its start, and kept it.
+  A child is listed from its fork and named by its exec, so a cell first read in between kept `field-native`'s name
+  and its row said Other. The first run showed both cells so. The name is read at each reading now, one call a child,
+  as the Linux reader already did; `a_name_follows_the_process_through_an_exec` holds it. M539's entry carries the
+  dated correction.
+
+**Proved, 2026-11-24, on the development Mac, in the lane:**
+- `smoke:terminal-direct` with `--use-mock-keychain`, on the lane's own build and floor. First run red at the VITALS
+  row: "no Terminal cell row under floor (it lists: field-native, Freeway host, Other, Other)". After the mend,
+  green: the row drawn 1.5 s after the press, fifteen-odd rows in five groups, 100 log lines, `left: []`. One
+  reading from it, a debug build at a load average near 20: Main 124 MB, the desk's window 350 MB, fieldd 140 MB,
+  field-native 5 MB, a terminal cell 6 MB, the Vitals window 69 MB, all of VibeField 1.0 GB.
+- The window's still from the run, read by eye.
+- field-native: lib 390 passed, 1 ignored; clippy at `-D warnings`; rustfmt. electron-shell: tsc, and 85 passed in
+  `smoke-vitals`, `vitals`, `smoke-window` and `app-menu-model`. `check:walls`. biome on the changed files.
+
+**Found and not mended:** in that run fieldd printed Node's listener warning to its emergency stderr ("11 changed
+listeners added to [DeviceService]. MaxListeners is 10"), which the desktop log records at error and the Vitals
+window showed in red. It is not from this track, and it is the first thing the window showed that nobody had asked
+it for.
+
+**Not this entry, and owed:**
+- A person's own look at the window, and the dev server's document (`pnpm dev`), which no run loaded.
+- `smoke:godview` whole was not run with the row, nor any other smoke, nor `pnpm verify` whole.
+- A red run's home was kept by the smoke under `/private/tmp` (`vf-smoke-pFj6L2`), as a red run's is.
+- Everything M540 listed but its gate: the recorder's Settings switch, agent names on terminal rows, rows for flow
+  hosts, plugin processes and MCP servers, the Windows meter, VT-3, VT-4, VT-5.
