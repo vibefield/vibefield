@@ -6491,7 +6491,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     second its own thread was running, because Electron's main process keeps no loop counters to read (they read
     zero held or idle, measured 2026-11-24), and a zero that was not measured is never drawn. Its scale never moves: zero to **100%**, said at its top as the others say theirs. A second near the top
     is a second in which that process could answer nobody. The lane stands only while some process in the window
-    says its loop; a fieldd that says none has no lane, never an empty one.
+    says its loop (or, since VT-3c, the Desk window says a long frame, below); a fieldd that says none has no lane,
+    never an empty one.
     - At the right of its head, in the secondary ink, the lane reads one process at the moment the list reads: the
       chosen row's if that row says its own, else the first in the list that does. Its name, then what it said, each
       part only where it was said: "fieldd · 12% busy · GC 3 ms · slowest terminal.list 41 ms". GC is the second's garbage
@@ -6500,6 +6501,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - It measures a busy share and not a delay, and that is deliberate: a delay is read by a timer that never
       rests, and nothing in this window may cost the product a wake at rest (design-03 PF). A share is two
       counters read when the sample is made.
+    - **Long frames** (VT-3c, *added 2026-11-24*; VT-D10 A). The desk's window says its own frames that took over
+      50 ms, as the page's platform counts them (a long animation frame, or a long task where it has no such
+      count), straight to fieldd, and only when one happens: at rest it says nothing and costs nothing. fieldd takes
+      nothing else from the page, never a loop, a pause or a process. Each second in which the Desk window had a long
+      frame is a mark in this lane at its time, a tick 6 tall standing on the lane's foot, 1 wide in the primary
+      ink; a second without one has no mark. The lane stands while some process says its loop or the Desk window
+      says a long frame. With the Desk window's row chosen, the reading reads it: "Desk window · 3 long frames ·
+      longest 180 ms", and nothing at a moment it said none. The marks are the one row the shell names Desk window;
+      a second desk window, were there one, would be counted on that row too.
   - **A moment held.** The pointer over the lanes draws a hairline at its time through every lane, white at 38%,
     and the list reads that moment. A drag picks a span: its band white at 8% with a hairline at each edge. The
     span stays until Escape or a press outside it, and the log lines below are the span's.
@@ -6524,13 +6534,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     page that has no desktop shell to ask (the browser-only catalog) does not draw it, so the button is never a
     dead one. The row's line still ends "The window is under Window → Vitals.": the menu stays the window's other
     way, and the only one with a key.
-  - *Not drawn until built:* a window's long frames (VT-3c; the desk's window may not report today, and whether
-    its token gains that is ‹for James›), frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
+  - *Not drawn until built:* frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
     (VT-4), armed traces (VT-5), the plugins' log lines, a span older than the lines the window holds, and a
     **Flows host** row: the word stands, but this build's fieldd composes no flow runner, so it starts no flow host
     to name (VT-2c, *added 2026-11-24*).
     *Corrected 2026-11-24 (VT-2c):* this list named "a door to Vitals from Settings → Diagnostics". It is built
     (the recorder's switch, above).
+    *Corrected 2026-11-24 (VT-3c):* this list named "a window's long frames (VT-3c; the desk's window may not report
+    today, and whether its token gains that is ‹for James›)". VT-D10 A ruled it: the desk window's token gains
+    `vitals.report`, fieldd takes only its long frames from it, and the Loop lane marks them (above).
     *Corrected 2026-11-24 (VT-2b):* this list named "the Settings switch that turns the recorder off". It is built
     (above); the door from Settings is still not.
     *Corrected 2026-11-24 (VT-3):* this list said "the frames and loop-delay lanes (VT-3)". The loop's lane is a
@@ -13061,7 +13073,8 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   "Memory" as Activity Monitor does, and a share of one core as a percent: "14%", and from one core up "2.3 cores".
   The Loop lane (VT-3) is "Loop · share of each second busy", and its reading says "12% busy", "GC 3 ms" and
   "slowest terminal.list 41 ms": a method is said by its own name, because whoever reads this window is looking for
-  it.
+  it. The Desk window's long frames (VT-3c, *added 2026-11-24*) are said "3 long frames", "1 long frame" and
+  "longest 180 ms".
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
