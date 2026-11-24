@@ -415,6 +415,18 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   not drawn, a choice that leaves falls back and is chosen again, the choice is the run's). Four readings of the lead's
   are marked for his eye. Defined in `DESIGN.md` §8 "Godview's work column" and "Search — the Peek". **LANDED
   2026-11-23 (M535)**; unseen in a running Godview.
+- **IM-1** — track IM, the import beside search (2026-11-23, the design page *The Import Beside Search*
+  (https://claude.ai/artifact/MYUtK1TEYMLktu16hroDUU): four options for History's head, A the History circle, B a
+  capsule, C four beads, D the step ladder, and six marks; James: "i do like your lean design, now start implemetation
+  and land this directly in local main, and for rosetta, land this new design and cut new release"): **A, the History
+  circle**, one head gap left of search, its panel on hover: what each step opens, each agent, what is read and kept on
+  this Mac. The marks at their leans: **IM-D1** A · **IM-D2** the circle stays after the import, at rest · **IM-D3** the
+  room's import card retires under it, the cold-start hold stays · **IM-D4** rosetta measures what it keeps and holds
+  (`/api/status`'s `storage` and `memory`, rosetta 0.1.9) · **IM-D5** no Pause in this slice · **IM-D6** a reading's
+  share counts the sizes it knows and names the agent whose size it does not. Upstream rosetta #60 (the room's R11
+  `importSign`, the daemon's `storage` and `memory`), its release #61 (0.1.9), and #62 (#60's pace sentences
+  corrected). Defined in `DESIGN.md` §8 "History" (the import's sign), §6 (the arc) and §8
+  "The head". **LANDED 2026-11-23 (M538)**; unseen in a running History.
 
 ## Petitions
 

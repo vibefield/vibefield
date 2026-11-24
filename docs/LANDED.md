@@ -67797,3 +67797,92 @@ merge), `SKIP_VERIFY=1` on `v-657b` and `kit-657b` at that forty; read back by t
   environment, as they do for `FIELD_*`. They run Apple's tools, never an agent or a shell.
 - Claude Code may add a session name outside both shapes; a names-only read of a session finds it.
 - Not run: every smoke and `pnpm gate:landing`.
+
+## EL8: rosetta 0.1.9, and IM-1 — History's import sign stands beside search (M538)
+
+**2026-11-23 · on local main: `f24c4eeda` IM-1 (doc), `8b29e1919` (EL8: rosetta 0.1.9), `0a429ba31` IM-1
+(green). Upstream: vibefield/rosetta #60 (`f2809e3`), the release #61 (v0.1.9 = `c5eaded1d`, published
+2026-11-23T23:37Z on npm and 2026-11-24T00:03Z on GitHub, rosettad's four archives on it), and #62 (`ecc92b1`,
+docs).**
+James, 2026-11-23, after the design page *The Import Beside Search* (https://claude.ai/artifact/MYUtK1TEYMLktu16hroDUU,
+four options and six marks): "i do like your lean design, now start implemetation and land this directly in local main,
+and for rosetta, land this new design and cut new release". Every mark at its lean (DECISIONS IM-1).
+
+- **What was so.** A cold import was told by the card at the head of History's projects column and by the arc over
+  the views track's History glyph. Nothing said what each step opens, which agent was still reading, or what the
+  import keeps on disk and holds in memory. A step whose agent had no known size (a database or a document store)
+  drew no fraction at all.
+- **Upstream, rosetta 0.1.9 (#60).**
+  - `/api/status` carries `storage` (the record, the archive, search and media, in allocated bytes, with when they
+    were measured) and `memory` (the daemon's footprint, and what SQLite holds while a fresh build keeps the archive
+    in memory). Both are additive and null from an older daemon; no protocol version or store schema moves.
+  - rosettad measures them on one utility-QoS thread, only while someone asks. A walk waits fifty times its own
+    duration behind the last, never less than 5 s nor more than 60 s. #60's docs said that wait was never more than
+    fifty times the walk, so at most 2% of a thread; it is more for a walk under 0.1 s, and a walk over 1.2 s costs
+    more than 2%. #62 corrects both sentences at their source (no code moves).
+  - The room's R11 host input `importSign` hands a host its reading of the import (`ImportSign`, plain data: the
+    tone, the step, the step's own fraction, the card's words, the four steps with what each opens, each agent, the
+    space). With it the projects column draws no card, and the cold start's hold stays.
+  - While reading, a step's fraction counts the agents whose size is known and names the ones whose size is not.
+- **Here.**
+  - The contract's `IndexStatus` gains `storage` and `memory` (`IndexStorage`, `IndexMemory`). fieldd's
+    `index.status` mirrors them for this desktop's own windows, never on the pushed `index.status.subscribe` feed,
+    where memory would move with every read.
+  - History's doors hand them to the room in rosetta's spelling, with each watched runtime's live counters. The room
+    publishes its sign through `frame/import-sign-door.ts`.
+  - `frame/HistoryImportSign.tsx` draws it while History is the view shown:
+    - the 40 glass circle one head gap left of search, following `--vf-peek-find-width`;
+    - the `history` glyph at a third of its ink under the turning arc;
+    - a rim of four quarters, each step's own, never summed;
+    - a dot for a stopped import or a failed search;
+    - the glyph alone after the import.
+  - Its panel, the solid menu, opens on 120 ms of rest, a press holds it, and Escape or a press outside closes it.
+  - The catalog draws it at three moments (reading, search, at rest): the shipping room over the package's own
+    simulated cold import, the shipping circle drawing what the room hands out.
+- **DESIGN.md** §8 "History" gained "The import's sign stands beside search" in the doc commit. The green commit
+  corrects two of its sentences to the build (no tooltip; the panel goes at once) and says the bar's inks.
+- **The pin** is the EL8's usual set: the lock's rosetta `sha` and `release.npm`, the two override rows and their
+  release-age rows, preflight's two expectations, pnpm's lock, and ROADMAP's pin row. ROADMAP's row is *corrected*: it
+  still said 0.1.7 after M495. The kit's Swift row stays 0.1.6: 0.1.9 changes no Swift path.
+
+**Proved, 2026-11-23, on the development Mac:**
+- Upstream: #60's CI and #61's, every job green (Rust tests on macOS and Ubuntu, Rust quality, the Swift client,
+  ground truth, npm packages and the app, workflow lint). Before the PR, in the lane's clone: the protocol, server
+  and rosettad tests (the footprint's four, the 24 enrolled-serve), `npm test` (660 in the app suite), the docs
+  check, `check:packages`, clippy at `-D warnings`, `cargo fmt`.
+- The pin:
+  - the one install exit 0 (668 resolved, +2 −2, the supply-chain check passed), and a second install after the
+    @0.1.8 rows were cut changed nothing;
+  - rosettad built once from `../rosetta-pin` at `c5eaded1d`;
+  - wall R23 with rosetta's half required passes (10 rows; one warning, puppeteer's `acp` candidate);
+  - `render --prod --check`.
+- The pin step ran by hand. `pnpm siblings:pin` reads every sibling checkout on this Mac (`git rev-parse HEAD`),
+  refused on five released ones, and rewrote siblings.lock.json whole. That file's three lines were edited from HEAD
+  instead.
+- pnpm's lock was staged by hunk, its nine rosetta hunks, around the working tree's uncommitted puppeteer-views
+  0.4.11 patch, which neither commit carries.
+- IM-1, vitest at 4 workers:
+  - field-app on 0.1.9: the sign's file 12 passed, three of them over the room's own simulated cold import. 17
+    History, Peek, head, boundary and catalog files: 364 passed, 3 skipped. On 0.1.8, the 13 other files that reach
+    ChromeLayer: 266 passed, 3 skipped.
+  - fieldd: its index files 167 passed, 4 skipped; their real-daemon rows against the 0.1.9 rosettad, 35 passed.
+  - contracts, whole: 2288.
+  - `tsc` for contracts, fieldd and field-app. Biome on the 19 files, with one standing warning (ChromeLayer.tsx:414,
+    a line from 2026-07-22). `node scripts/check-agent-catalog.mjs --literals`.
+
+**Not seen:** the circle over a real cold import in a running History. No product daemon and no app were started
+from this checkout; the plates and the tests draw the room's own simulator. A History whose import is done shows the
+circle at rest.
+
+**Not built:** IM-D5's Pause.
+
+**Not run:**
+- `pnpm verify` whole;
+- `pnpm preflight` (it reads every sibling checkout);
+- `pnpm gen:check` (none of its generators reads rosetta);
+- a frozen install of the committed yaml and lock;
+- the Rust tests, the kit, every smoke and `pnpm gate:landing`.
+
+The test Mac's V and kit are the push proof's.
+
+**Not done:** no push of its own.
