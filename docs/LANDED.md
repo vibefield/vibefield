@@ -68309,3 +68309,10 @@ ran at a load near 280, which was wrong and is why three files went red:
 
 **Not this entry, and owed:** a door to Vitals from Settings → Diagnostics; nobody has seen the Settings row or the
 off plate drawn (no still was taken); `smoke:godview` whole, `pnpm verify` whole and the test Mac's run.
+
+**Found along the way, not mended here (2026-11-24):** a session started inside the stage's terminal inherits the
+stage's `CARGO_TARGET_DIR`. Any vitest in `packages/fieldd` runs `cargo build -p field-native` first
+(`test/global-setup.ts`), into that variable when it is set, so a lane's fieldd test run from such a shell rewrites
+the STAGE's `debug/field-native` from the lane's sources. It happened at 04:59:51Z from a worktree of this lane
+(`rust/qa-stage`; the stage rebuilt its own afterwards). The class to mend is the stage's environment reaching its
+terminals; until then a lane exports its own target in every command that runs fieldd's tests.
