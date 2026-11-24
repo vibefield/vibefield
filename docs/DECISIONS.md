@@ -418,8 +418,13 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   `vitals.read` and `vitals.report` are in no tailnet preset and no plugin table. Defined in
   `packages/contracts/src/vitals.ts` (the wires and `VITALS`, the bounds) and `draft/thinking-vitals.md`.
   **VT-1 LANDED 2026-11-24 (M539)** (the census: the floor's meter and fieldd's recorder; no window yet, and nothing read on
-  a running daemon pair). *Mine, not his ruling, ‹for James›:* VT-D7, Electron main names the shell's processes for
-  fieldd when the list changes, which amends PF2's closed duty list when VT-2 lands.
+  a running daemon pair). **VT-2 LANDED 2026-11-24 (M540)** (the window, DESIGN.md §8 "Vitals" and §9 "Vitals'
+  words"; the Window menu's Vitals, ⌥⌘V). Built narrower than the page drew it: the window holds no key to fieldd;
+  while it is open Electron main reads fieldd's vitals door and the log doors and hands the window one read-only
+  stream. The vitals wire left the contracts root for its own subpath, `@vibefield/contracts/vitals`, so the desk's
+  window carries none of it. *Mine, not his ruling, ‹for James›:* VT-D7, Electron main names the shell's processes
+  for fieldd when the list changes (built at VT-2, `electron-shell/src/main/vitals-roster.ts`; events only, no timer
+  of its own), which amends PF2's closed duty list; design-03 takes the amendment when he rules it.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the

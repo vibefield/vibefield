@@ -67943,3 +67943,80 @@ census, with no window.
   phone kit.
 - ‹for James›: VT-D7 is this lane's reading, not his ruling. Electron main will name the shell's processes for fieldd
   when the list changes (VT-2), which amends PF2's closed duty list.
+
+## VT-2 — Vitals is a window of its own, reading what the floor measured (M540)
+
+**2026-11-24 · on local main: `bc44d002c` VT-2 (doc), `84bdc4270` VT-2 (green).**
+The second slice of track VT (DECISIONS VT; James, 2026-11-24 00:03:36Z, on the page *The Vitals Window*: "good, go
+with lean and land this"). VT-D1 A: a window of its own, in every build. Rebased onto `167c49765` before the land.
+
+- **What was so.** After VT-1 the floor measured every process and fieldd named them, and nothing drew it. The
+  shell's own processes had no rows, because only Electron main knows which Chromium process is which.
+- **The window.** The Window menu's **Vitals** (⌥⌘V) opens it or brings it forward. `DESIGN.md` §8 "Vitals" is its
+  law, written in the doc commit before the code, with the first chart rules and §9 "Vitals' words".
+  - The list: every process under its group (VibeField, fieldd, The floor, Your terminals, Vitals), its CPU as a
+    share of one core, its memory, and a sparkline of five minutes. A terminal's row is counted and says no title,
+    folder or command. The foot says all of VibeField, the terminals apart from it.
+  - Two lanes on one time axis, CPU and Memory, one trace a group, told apart by ink and stroke; the terminals' CPU
+    is an area behind them. A scale's top is a round figure said in words.
+  - The pointer holds a moment and the list reads it. A drag picks a span. A press chooses a row, and its own trace
+    joins both lanes.
+  - The log lines of fieldd, the floor and the shell under the lanes, each marked on the same axis, a warning and
+    an error in their own ink.
+  - What was not measured is a gap and an en dash, never a zero. With nothing measured the lanes stand empty and the
+    list says one sentence.
+- **It holds no key to fieldd.** The page drew a window with a token of its own. Built narrower: while the window is
+  open, Electron main reads fieldd's `vitals.subscribe` and `diagnostics.subscribe` on its own connection, and its
+  own log door, and hands the window one stream down a MessagePort (`electron-shell/src/main/vitals-feed.ts`). The
+  window's preload exposes one function. A second token flavor would have touched the one window bootstrap and made
+  fieldd count the Vitals window as a person at the desk.
+- **A host window**, on the app's own session (`createVitalsWindow`, the hardened preferences), with no product
+  IPC. It closes with the desk's window and first at a quit, so nothing that waits for the last window to close
+  waits on it. A page that crashes or reloads closes no window, so Vitals stays through those.
+- **The shell's roster** (`vitals-roster.ts`). Main names its own processes for fieldd when the list changes: events
+  only, folded by one 400 ms wait, no timer of its own. ‹for James›: this is VT-D7, a reading of this lane's and one
+  more steady-state duty for main, an amendment to PF2's closed list that design-03 takes when he rules it.
+- **The vitals wire left the contracts root** for its own subpath, `@vibefield/contracts/vitals`. *Corrected at its
+  source:* VT-1 exported it from the root index, and the renderer build showed its schemas in the desk window's
+  bundle. Only fieldd and the Vitals window read it now.
+- **The build** carries a second production document (`vitals.html`, one 31 KB chunk and its sheet) and a second
+  preload (`preload/vitals.cjs`): the Vite inputs, the build line, the dev runner's watch, snapshot and shell plane,
+  both production verifiers, the stage plan, the builder's allowlist, the notices rows. The package census goes
+  from 136 files to 142; the product's initial graph gains `registries-[hash].js`, which both documents load, carved
+  from `src-[hash].js`.
+- **Found on the way.** `glyphs.test.tsx` was red on main since IM-1 landed (`0a429ba31`):
+  `frame/HistoryImportSign.tsx` draws two inline meters with no row in the allowlist. Its two rows are written here,
+  beside the Vitals view's four charts.
+
+**Proved, 2026-11-24, on the development Mac, in the lane, at nice 19:**
+- The census on a real pair (`packages/fieldd/test/vitals-pair.e2e.test.ts`, which VT-1 owed): the built floor and
+  an in-process fieldd, three readings. It read fieldd at 252.2 MB and 2.1% of a core, field-native at 4.8 MB and
+  0.5%, five rows, and the meter's own cost at 0.019% of a core.
+- The window's own road, hidden (a scratch harness, not a test in the tree): the real window host and feed session,
+  the real app protocol and production content policy, the built `vitals.html` and the built preload, with fieldd
+  stood in by fixture readings. The page loaded `vibefield-app://shell/vitals.html`, said "Recording · every second",
+  listed five groups and fifteen rows, drew six traces and three log lines (two from the snapshot, one from a
+  delta), exposed `subscribe` alone, had no product bridge and no Node, logged no console error and no refused
+  request, and closed clean.
+- Stills of the view over its fixtures at 1080 by 720, 900 by 520 and both empty states, read by eye. Three faults
+  were found in them and mended: the foot's row sat 16 px off its columns, the axis's edge labels were cut, and a
+  terminal's name was cut short.
+- Suites: contracts 80 files, 2,317 passed. electron-shell 211 files, 3,228 passed, 3 skipped. dev-runner 525 passed.
+  field-app 391 files: 5,692 passed and 2 failed on the first whole run, `glyphs.test.tsx` (the allowlist, mended as
+  above) and `card-bloom.test.tsx` (a 90 ms timing row, at a load average over 100); both passed rerun. The focused
+  files after the last edits: field-app 118, contracts 93, electron-shell 16, fieldd 14.
+- tsc clean for contracts, fieldd, electron-shell (both programs) and field-app. `check:walls`, `check:deps`,
+  `check:retired`, the agent literal lint, biome on the changed files, `bundle:assert` and the census, strict.
+
+**Not this entry, and owed:**
+- **Nobody has opened the window in a running app.** Main's own glue in `index.ts` (the menu's click, the live fieldd
+  client, the roster on a real shell, the dev server's document) ran in no test and no smoke. A physical gate for it,
+  `smoke:vitals` and its row in `docs/desk-gates.md`, is owed.
+- The Settings switch that turns the recorder off (VT-D2's second half), a door from Settings → Diagnostics, the
+  plugins' log lines, a span older than the lines the window holds, agent names on terminal rows.
+- Rows for flow hosts, plugin child processes and MCP stdio servers. The Windows meter. A whole-Mac GPU figure.
+- VT-3 (loop delay, frames, GC), VT-4 (incidents, and nothing dies silently), VT-5 (armed traces, the baseline run).
+- Not run: `pnpm verify` whole, the whole fieldd and Rust suites again (VT-1's runs stand), any smoke, the phone kit.
+- **The checkout that takes this needs `pnpm install`** (two manifests change: the shell's build line and field-app's
+  `./vitals` entry; every `pnpm` script refuses until then), and a running `pnpm dev` needs a restart to build the
+  new preload.
