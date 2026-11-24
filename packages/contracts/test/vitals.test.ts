@@ -4,7 +4,14 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { METHODS } from "../src/methods";
 import { PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
-import { SCOPES, TAILNET_SCOPES, VITALS } from "../src/registries";
+import {
+  IPC_CHANNELS,
+  SCOPES,
+  STUDIO_PUBLISHER_PORT_CHANNEL,
+  TAILNET_SCOPES,
+  VITALS,
+  VITALS_PORT_CHANNEL,
+} from "../src/registries";
 import {
   NativeVitalsReading,
   NativeVitalsSnapshot,
@@ -231,5 +238,14 @@ describe("fieldd's door", () => {
       walk(fixture(name));
       for (const key of keys) expect(key, `${name}: ${key}`).not.toMatch(forbidden);
     }
+  });
+});
+
+describe("VT-2 — the Vitals window's port channel", () => {
+  it("is its own name, apart from the product window's closed bridge and from Studio's", () => {
+    expect(VITALS_PORT_CHANNEL).toBe("vibefield:vitals:host-port:v1");
+    // the product window's contextBridge surface is a closed table, and this is not a row of it
+    expect(Object.values(IPC_CHANNELS) as string[]).not.toContain(VITALS_PORT_CHANNEL);
+    expect(VITALS_PORT_CHANNEL).not.toBe(STUDIO_PUBLISHER_PORT_CHANNEL);
   });
 });

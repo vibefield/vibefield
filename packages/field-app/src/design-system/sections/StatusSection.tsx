@@ -7,6 +7,7 @@ import { fieldServiceNotice } from "../../frame/field-service-notice";
 import { needsNoticeStatus } from "../../frame/needs-notices";
 import { StatusLineView } from "../../frame/StatusLine";
 import { Icon, Section, Specimen } from "../catalog-ui";
+import { VITALS_PLATE_STATES, VitalsPlate } from "../VitalsPreview";
 
 // ICE's own words, as its desk layer composes them (`${what}: ${error.message}`) — fixtures for the
 // shipping card, which reads them verbatim (DESIGN.md §8 "When the desk can't draw", R18).
@@ -214,6 +215,20 @@ export function StatusSection(): ReactElement {
           <strong>Export failed</strong>
           <small>Choose a writable folder and retry.</small>
         </div>
+      </div>
+      {/* track VT — the Vitals window: the shipping view over five minutes of fixture readings, one plate a state */}
+      <div className="vf-ds-vitals-plates">
+        {VITALS_PLATE_STATES.map((state) => (
+          <Specimen
+            key={state}
+            title={`Vitals · ${state}`}
+            source="DESIGN.md §8 Vitals"
+            bleed
+            darkStage
+          >
+            <VitalsPlate state={state} />
+          </Specimen>
+        ))}
       </div>
     </Section>
   );

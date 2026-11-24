@@ -1561,6 +1561,28 @@ describe("UI system ownership boundaries", () => {
     expect(workbench).not.toContain("useState");
   });
 
+  it("keeps the Vitals plates an ADAPTER — the shipping view over fixture readings, never its markup or CSS (track VT)", () => {
+    const preview = source("design-system/VitalsPreview.tsx");
+    expect(preview).toContain('import { VitalsView } from "../vitals/VitalsView";');
+    expect(preview).toContain("<VitalsView");
+    // the plate sizes the view; it draws nothing of the view's own
+    expect(preview).not.toContain("vf-vitals__");
+    expect(preview).not.toContain("<svg");
+    for (const sheet of ["scenes.css", "catalog-shell.css", "foundations.css", "tweaks.css"]) {
+      expect(source(`design-system/styles/${sheet}`), sheet).not.toMatch(/\.vf-vitals\b/);
+    }
+    // the fixture is readings, made by arithmetic: no clock and no randomness, so a plate is the same every run
+    const fixtures = source("design-system/vitals-fixtures.ts");
+    expect(fixtures).not.toMatch(/Date\.now|Math\.random|new Date\(\)/);
+    // the window is not the product: its entry mounts no desk and imports none of the product's rooms
+    const mount = source("vitals/mount.tsx");
+    for (const line of mount.split("\n").filter((entry) => entry.startsWith("import "))) {
+      expect(line, line).toMatch(
+        /react-dom\/client|design-kit\/tokens\.css|"\.\/vitals|"\.\/Vitals"/,
+      );
+    }
+  });
+
   it("keeps static component styling out of embedded style tags", () => {
     for (const component of [
       "boot/BootRoot.tsx",
@@ -1623,6 +1645,9 @@ describe("UI system ownership boundaries", () => {
       "godview/profiles-column/ProfilesColumn.tsx",
       "godview/profiles-column/ProfilesColumnView.tsx",
       "godview/profiles-column/ProfilePopoverView.tsx",
+      // track VT — the Vitals window
+      "vitals/Vitals.tsx",
+      "vitals/VitalsView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -1671,6 +1696,8 @@ describe("UI system ownership boundaries", () => {
       "chat/needs-card.css",
       "chat/crew-card.css",
       "godview/profiles-column/profiles-column.css",
+      // track VT — the Vitals window
+      "vitals/vitals.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

@@ -1,14 +1,13 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SOCKETS, VITALS } from "@vibefield/contracts";
 import {
-  SOCKETS,
-  VITALS,
   type VitalsDeltaV1,
   VitalsQueryResult,
   VitalsSnapshotV1,
   vitalsKey,
-} from "@vibefield/contracts";
+} from "@vibefield/contracts/vitals";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";

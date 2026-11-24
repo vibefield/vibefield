@@ -78,7 +78,10 @@ files:
   # SD-2: the sound renders' thread, which main starts from beside its own bundle
   - shell/main/sound-worker.cjs
   - shell/preload/index.cjs
+  # VT-2: the Vitals window's own preload and document (a production window of its own)
+  - shell/preload/vitals.cjs
   - shell/renderer/index.html
+  - shell/renderer/vitals.html
   - shell/renderer/assets/**/*
   - "!**/*.map"
   - "!**/*.{ts,tsx,cts,mts}"

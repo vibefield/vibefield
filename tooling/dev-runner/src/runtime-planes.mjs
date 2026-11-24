@@ -14,6 +14,8 @@ export function shellPlaneInputs(paths) {
     paths.soundWorkerOutput,
     paths.preloadOutput,
     paths.studioPreloadOutput,
+    // VT-2 — the Vitals window's preload is the shell's: a rebuilt one restarts Electron alone
+    paths.vitalsPreloadOutput,
   ];
 }
 

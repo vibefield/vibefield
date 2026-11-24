@@ -225,6 +225,24 @@
    view's own ground (Godview's stage, History's room, the terminals
    maximized), the shipping circle at its own place, x 96 at the head's left.
    These only stage it: its selectors are the product's. */
+/* track VT — the Vitals plates: a window's size for the shipping view, and nothing of its own */
+.vf-ds-vitals-plates {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.vf-ds-vitals-plate {
+  position: relative;
+  height: 560px;
+  overflow: hidden;
+}
+
+.vf-ds-vitals-plate[data-state="waiting"],
+.vf-ds-vitals-plate[data-state="unavailable"] {
+  height: 240px;
+}
+
 .vf-ds-package-plates {
   display: grid;
   gap: 12px;

@@ -15,6 +15,7 @@ async function fixture(t) {
     soundWorkerOutput: join(root, "sound-worker.cjs"),
     preloadOutput: join(root, "preload.cjs"),
     studioPreloadOutput: join(root, "studio.cjs"),
+    vitalsPreloadOutput: join(root, "vitals.cjs"),
     fielddOutput: join(root, "bin.cjs"),
     serviceHarnessOutput: join(root, "service-harness.mjs"),
     fielddWasm: join(root, "loro_wasm_bg.wasm"),
@@ -61,7 +62,12 @@ test("a rebuilt sound worker restarts the shell and never the pair (SD-2)", asyn
   // adopts the running pair.
   const { paths, daemonIdentity } = await fixture(t);
   const shellIdentity = () => computeBuildId(paths.repoRoot, shellPlaneInputs(paths));
-  for (const file of [paths.mainOutput, paths.preloadOutput, paths.studioPreloadOutput]) {
+  for (const file of [
+    paths.mainOutput,
+    paths.preloadOutput,
+    paths.studioPreloadOutput,
+    paths.vitalsPreloadOutput,
+  ]) {
     await writeFile(file, "shell");
   }
   await writeFile(paths.soundWorkerOutput, "worker-one");

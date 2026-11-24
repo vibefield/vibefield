@@ -105,7 +105,7 @@ export default defineConfig(({ mode }) => ({
     entries:
       mode === "live-surfaces-lab"
         ? ["spike-live-surfaces-lab.html"]
-        : ["index.html", "studio-product.html", "studio.html", "design-system.html"],
+        : ["index.html", "vitals.html", "studio-product.html", "studio.html", "design-system.html"],
     // Linked ICE stays entirely in Vite's source graph. Prebundling only its
     // desk entries duplicates their shared core beside the raw index/react
     // entries and registers components such as PrefabId twice on first load.
@@ -195,6 +195,10 @@ export default defineConfig(({ mode }) => ({
               }
             : {
                 main: mainEntry,
+                // VT-2 (track VT) — the Vitals window's document, a second production entry: a window of its
+                // own in every build (DESIGN.md §8 "Vitals"). It mounts field-app's Vitals view and nothing of
+                // the product.
+                vitals: join(import.meta.dirname, "src", "renderer-host", "vitals.html"),
                 // §11.6 — one entry per host singleton, so each has an address the
                 // import map can name (see src/vite/host-singletons.ts).
                 ...singletonInputs(),

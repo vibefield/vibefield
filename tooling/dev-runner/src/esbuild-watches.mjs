@@ -58,6 +58,15 @@ export function esbuildDefinitions(paths) {
       external: ["electron"],
     },
     {
+      // VT-2 — the Vitals window's preload, beside the product's (main loads it from `../preload/vitals.cjs`)
+      name: "electron-vitals-preload",
+      entry: paths.vitalsPreloadEntry,
+      outfile: paths.vitalsPreloadOutput,
+      cwd: dirname(dirname(dirname(paths.vitalsPreloadEntry))),
+      format: "cjs",
+      external: ["electron"],
+    },
+    {
       name: "fieldd",
       entry: paths.fielddEntry,
       outfile: paths.fielddOutput,

@@ -73,6 +73,25 @@ export function createHostAuxiliaryWindow(opts: {
   });
 }
 
+/** VT-2 (track VT, 2026-11-24) — the Vitals window (DESIGN.md §8 "Vitals"): a second window of the app's own, in
+ * every build. It stands on the app's own session, where the app's origin and its content policy are served; what
+ * it may do comes from its preload alone, which hands it one read-only stream and no daemon token. */
+export function createVitalsWindow(opts: { preloadPath: string; show: boolean }): BrowserWindow {
+  return new BrowserWindow({
+    title: "Vitals",
+    width: 1080,
+    height: 720,
+    // the list is 360 wide, and the lanes' heads need the rest to say their legend on one line
+    minWidth: 920,
+    minHeight: 420,
+    show: opts.show,
+    // The pre-paint is `--vf-godview-dark-monitor-bg` (DESIGN.md §2.7, #0A0A0A), the control room's ground; main
+    // can't read CSS, so this is its named projection (UI_SYSTEM.md), held equal by field-app's vitals.test.tsx.
+    backgroundColor: "#0a0a0a",
+    webPreferences: assertSecurePreferences(webPreferences(opts.preloadPath)),
+  });
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** Production loads the app's OWN origin; dev polls the Vite server up.

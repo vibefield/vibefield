@@ -57,7 +57,8 @@ for (const absolute of files) {
 
 const extraDocuments = files
   .map((absolute) => relative(rendererRoot, absolute).split("\\").join("/"))
-  .filter((path) => path.endsWith(".html") && path !== "index.html");
+  // VT-2: vitals.html is the Vitals window's document, a production window of its own (DESIGN.md §8 "Vitals")
+  .filter((path) => path.endsWith(".html") && path !== "index.html" && path !== "vitals.html");
 for (const path of extraDocuments) leaks.push(`${path} is an unexpected production document`);
 
 if (leaks.length > 0) {

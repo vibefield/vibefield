@@ -322,15 +322,24 @@ describe("the glyph set", () => {
     // DESIGN.md §8 "A plan's tier": a tier not read is the badge's capsule
     // empty and dashed, the Bands' empty dash on the badge's own box — geometry,
     // one view, one <svg>; the badge itself is words.
+    // IM-1 (DESIGN.md §8 "History", the import's sign): the circle's rim of four quarters and a step's own ring
+    // are a meter's geometry, a track and a stroke each (§13, a meter is never a glyph) — one file, two <svg>;
+    // its history and importing marks stay FieldGlyph. (The rows were owed since IM-1 landed, 2026-11-23, and are
+    // written here at VT-2, 2026-11-24, the next change to this list.)
+    // VT-2 (DESIGN.md §8 "Vitals", the first chart rules): the Vitals window's traces are charts, readings drawn
+    // against time on a scale — a row's sparkline, the CPU lane, the Memory lane and the log strip, one <svg>
+    // each in one view. It draws no icon.
     const allow = new Map<string, number>([
       // TS-D4 (DESIGN.md §13): Tailscale's logomark, a vendor mark kept exact
       ["account/tailscale-mark.tsx", 1],
       ["chat/CrewCardView.tsx", 1],
       ["field/desk/bar/KindGlyph.tsx", 1],
       ["field/desk/peers/PeersView.tsx", 1],
+      ["frame/HistoryImportSign.tsx", 2],
       ["godview/os-marks.tsx", 1],
       ["godview/profiles-column/BandsCircle.tsx", 1],
       ["panels/agents/PlanTierMark.tsx", 1],
+      ["vitals/VitalsView.tsx", 4],
     ]);
     const found = new Map<string, number>();
     const visit = (base: string, relativeDir: string, skip: (rel: string) => boolean): void => {

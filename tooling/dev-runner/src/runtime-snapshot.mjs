@@ -58,6 +58,8 @@ export async function stageRuntimeSnapshot({
       copyFile(paths.soundWorkerOutput, join(layout.appRoot, "main", "sound-worker.cjs")),
       copyFile(paths.preloadOutput, join(layout.appRoot, "preload", "index.cjs")),
       copyFile(paths.studioPreloadOutput, join(layout.appRoot, "preload", "studio.cjs")),
+      // VT-2 — the Vitals window's preload rides beside the product's
+      copyFile(paths.vitalsPreloadOutput, join(layout.appRoot, "preload", "vitals.cjs")),
       copyFile(paths.fielddOutput, layout.fielddOutput),
       copyFile(paths.serviceHarnessOutput, join(temporary, "fieldd", "service-harness.mjs")),
       copyFile(paths.fielddWasm, join(temporary, "fieldd", "loro_wasm_bg.wasm")),

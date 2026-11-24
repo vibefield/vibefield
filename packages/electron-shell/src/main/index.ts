@@ -214,6 +214,7 @@ import { readUpdateIdentity } from "./updates/identity";
 import { createElectronApplyPort, installUpdateController } from "./updates/install";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { ViewRegistry } from "./view";
+import { installVitals, type VitalsHost } from "./vitals";
 import { installWindowChords } from "./window-chords";
 import { hasInsetLights, LightsRegistry } from "./window-lights";
 import { WindowRegistry } from "./window-policy";
@@ -285,6 +286,8 @@ if (captureProbeRules !== undefined) {
 }
 const VITE_URL = process.env["VITE_DEV_SERVER_URL"] ?? "http://localhost:5173";
 const PRELOAD_PATH = join(__dirname, "..", "preload", "index.cjs");
+/** VT-2 — the Vitals window's own preload, the narrowest in the app (`vitals/vitals-preload.ts`). */
+const VITALS_PRELOAD_PATH = join(__dirname, "..", "preload", "vitals.cjs");
 const DESKTOP_BOOT_ID = `desktop-${randomBytes(8).toString("hex")}`;
 /** AL-5 (AL-D8) — fieldd relaunched this app after an unplanned exit that left sessions: the menu bar alone (macOS). */
 const BACKGROUND_RELAUNCH =
@@ -312,6 +315,10 @@ let quitKeepsRunning: (() => boolean) | null = null;
  * until the pair is up, which is the honest state: with no authority reachable,
  * no plugin module is servable. */
 let pluginModuleClient: FielddHandle["client"] | null = null;
+/** VT-2 (track VT) — Vitals in main: its window, the feed it reads while open, and the shell's roster for fieldd
+ * (`vitals.ts`). `vitalsFieldd` is the live client, kept here so a host installed after the pair still hears it. */
+let vitals: VitalsHost | null = null;
+let vitalsFieldd: FielddHandle["client"] | null = null;
 let logging: ElectronLogging | null = null;
 let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
@@ -1385,6 +1392,11 @@ async function main(
     const stopPluginModuleClient = bundle.handles.onHandle((handle) => {
       pluginModuleClient = handle.client;
     });
+    // VT-2: Vitals follows the LIVE client the same way, for the same reason.
+    const stopVitalsClient = bundle.handles.onHandle((handle) => {
+      vitalsFieldd = handle.client;
+      vitals?.setFieldd(handle.client);
+    });
     const daemonBootFence = new FielddDaemonBootFence();
     const stopDaemonBootFence = bundle.handles.onHandle((handle) => {
       const transition = daemonBootFence.observe(handle);
@@ -1668,6 +1680,9 @@ async function main(
         stopDaemonBootFence();
         stopPluginModuleClient();
         pluginModuleClient = null;
+        stopVitalsClient();
+        vitalsFieldd = null;
+        vitals?.setFieldd(null);
       },
     };
   };
@@ -2353,6 +2368,32 @@ async function main(
   // for nobody, and the first-run smoke's is pressed by its own walk alone,
   // which types a name and presses no chord.
   if (MODE !== "smoke-canvas" && MODE !== "smoke-plugin-restart" && MODE !== "smoke-first-run") {
+    // VT-2 (track VT; DESIGN.md §8 "Vitals") — Vitals, where somebody can press a key: its window opens from the
+    // Window menu, and while a fieldd is attached main names the shell's processes for it. It closes with the
+    // desk's window, so nothing that waits for the last window to close ever waits on it.
+    const vitalsHost = installVitals({
+      mode: MODE,
+      viteUrl: VITE_URL,
+      preloadPath: VITALS_PRELOAD_PATH,
+      adoptHostAuxiliary: (hostWindow) => registry.adoptHostAuxiliary(hostWindow),
+      primary: () => registry.primary(),
+      isBrowserPane: (contents) =>
+        isArtifactPreviewSession(contents.session) ||
+        isGuardedBrowserSurfaceSession(contents.session),
+      shellLogs: () => localDiagnostics,
+      quit: () => app.quit(),
+      logger,
+    });
+    vitals = vitalsHost;
+    vitalsHost.setFieldd(vitalsFieldd);
+    const stopVitalsWithDesk = registry.onPrimaryChanged((open) => {
+      if (!open) vitalsHost.closeWindow();
+    });
+    shellDisposers.add(() => {
+      stopVitalsWithDesk();
+      vitalsHost.dispose();
+      if (vitals === vitalsHost) vitals = null;
+    });
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
       setView,
       closeWindow,
@@ -2360,6 +2401,7 @@ async function main(
       // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
       ...(screenshotHelperAvailable ? { takeScreenshot } : {}),
       openSettings: () => openSettingsFromMenu?.(),
+      openVitals: () => vitalsHost.open(),
     });
   }
 
@@ -3292,6 +3334,7 @@ async function main(
     statusItemForced = true;
     controller.update({ showTray: true, inBackground: true });
     app.dock?.hide();
+    vitals?.closeWindow();
     registry.primary()?.close();
     return true;
   };
@@ -3517,6 +3560,8 @@ if (!hasInstanceLock) {
       },
       keepAliveWithoutWindows: staysResident,
       onQuitRequested: () => {
+        // VT-2: the Vitals window goes first, so the quit never waits on a window that holds nothing
+        vitals?.closeWindow();
         registry.beginShutdown();
         trayController?.update({ quitting: true });
         redrawUpdateMenu?.();

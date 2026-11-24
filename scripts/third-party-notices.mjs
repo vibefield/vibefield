@@ -1980,6 +1980,12 @@ export const NODE_BUNDLES = [
     base: "packages/electron-shell",
     role: "the app's preload",
   },
+  // VT-2: the Vitals window's preload, a bundle of its own beside the product's (app/shell/preload/vitals.cjs).
+  {
+    file: "packages/electron-shell/dist/preload/vitals.cjs",
+    base: "packages/electron-shell",
+    role: "the Vitals window's preload",
+  },
   // SD-2: the sound renders' worker thread, a bundle of its own beside main's (app/shell/main/sound-worker.cjs).
   {
     file: "packages/electron-shell/dist/main/sound-worker.cjs",

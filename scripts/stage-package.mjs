@@ -214,8 +214,20 @@ const PLAN = [
     kind: "file",
   },
   {
+    // VT-2 — the Vitals window's own preload, beside the product's (main loads it from app.asar/shell/preload/)
+    stage: "app/shell/preload/vitals.cjs",
+    from: "packages/electron-shell/dist/preload/vitals.cjs",
+    kind: "file",
+  },
+  {
     stage: "app/shell/renderer/index.html",
     from: "packages/electron-shell/dist/renderer/index.html",
+    kind: "file",
+  },
+  {
+    // VT-2 — the Vitals window's document, the second the app serves from its own origin
+    stage: "app/shell/renderer/vitals.html",
+    from: "packages/electron-shell/dist/renderer/vitals.html",
     kind: "file",
   },
   {

@@ -109,7 +109,8 @@ test("item 178: dropping any one row of any of the three tables reads red, namin
   }
   // ten notices rows, the ten stage rows that carry or embed them, eight sidecars (CP-4a2a, 2026-11-05: the flow
   // host's bundle, flows-host.cjs, joins each table; RV #1, item 203: the agents' forwarder, agent-forwarder.cjs)
-  assert.equal(dropped.length, 10 + 10 + 8, `rows dropped one at a time: ${dropped.length}`);
+  // VT-2 (2026-11-24): the Vitals window's preload, preload/vitals.cjs, is an eleventh notices row and stage row.
+  assert.equal(dropped.length, 11 + 11 + 8, `rows dropped one at a time: ${dropped.length}`);
 });
 
 test("item 178: each sidecar declares ONE source for its notices, and only JavaScript can be a bundle", () => {

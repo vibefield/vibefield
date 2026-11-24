@@ -32,6 +32,7 @@ async function fixture(t) {
     soundWorkerOutput: join(source, "sound-worker.cjs"),
     preloadOutput: join(source, "preload.cjs"),
     studioPreloadOutput: join(source, "studio-preload.cjs"),
+    vitalsPreloadOutput: join(source, "vitals-preload.cjs"),
     fielddOutput: join(source, "fieldd.cjs"),
     serviceHarnessOutput: join(source, "service-harness.mjs"),
     fielddWasm: join(source, "loro.wasm"),
@@ -49,6 +50,7 @@ async function fixture(t) {
     writeFile(paths.soundWorkerOutput, "sound-worker-one"),
     writeFile(paths.preloadOutput, "preload-one"),
     writeFile(paths.studioPreloadOutput, "studio-preload-one"),
+    writeFile(paths.vitalsPreloadOutput, "vitals-preload-one"),
     writeFile(paths.fielddOutput, "fieldd-one"),
     writeFile(paths.serviceHarnessOutput, "harness-one"),
     writeFile(paths.fielddWasm, "wasm-one"),
@@ -91,6 +93,11 @@ test("publishes one immutable, executable runtime generation", async (t) => {
   assert.equal(
     await readFile(join(runtime.appRoot, "preload", "studio.cjs"), "utf8"),
     "studio-preload-one",
+  );
+  // VT-2 — the Vitals window's preload rides beside the product's
+  assert.equal(
+    await readFile(join(runtime.appRoot, "preload", "vitals.cjs"), "utf8"),
+    "vitals-preload-one",
   );
   assert.equal(await readFile(runtime.fielddOutput, "utf8"), "fieldd-one");
   assert.equal(

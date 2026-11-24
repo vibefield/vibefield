@@ -90,6 +90,16 @@ export const workspacePaths = Object.freeze({
   ),
   preloadOutput: join(devBuildRoot, "electron-shell", "preload", "index.cjs"),
   studioPreloadOutput: join(devBuildRoot, "electron-shell", "preload", "studio.cjs"),
+  // VT-2 — the Vitals window's own preload (a production window; dev builds it beside the others)
+  vitalsPreloadEntry: join(
+    repoRoot,
+    "packages",
+    "electron-shell",
+    "src",
+    "vitals",
+    "vitals-preload.ts",
+  ),
+  vitalsPreloadOutput: join(devBuildRoot, "electron-shell", "preload", "vitals.cjs"),
   fielddEntry: join(repoRoot, "packages", "fieldd", "src", "bin.ts"),
   fielddOutput: join(repoRoot, "packages", "fieldd", "dist", "bin.cjs"),
   serviceHarnessEntry: join(repoRoot, "packages", "fieldd", "src", "service-worker-harness.mjs"),

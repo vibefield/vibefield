@@ -59,6 +59,9 @@ export interface AppMenuActions {
    * page's ⌘, does). Undefined in modes with no window: the item stays,
    * disabled, its key still said. */
   openSettings?: () => void;
+  /** VT-2 (DESIGN.md §8 "Vitals") — Vitals: open the Vitals window, or bring it forward. Undefined in a mode with
+   * no window: the item stays, disabled, its key still said. */
+  openVitals?: () => void;
 }
 
 export interface AppMenuState {
@@ -331,6 +334,21 @@ function appMenuSection(state: AppMenuState, actions: AppMenuActions): AppMenuIt
   };
 }
 
+export const VITALS_ITEM_ID = "vitals";
+
+/** VT-2 (DESIGN.md §8 "Vitals") — the Window menu's Vitals: the window of its own that shows how every process is
+ * doing. ⌥⌘V; it opens the window or brings the open one forward, and never closes it. */
+function vitalsItem(actions: AppMenuActions): AppMenuItem {
+  const open = actions.openVitals;
+  return {
+    id: VITALS_ITEM_ID,
+    label: "Vitals",
+    accelerator: "Alt+CommandOrControl+V",
+    enabled: open !== undefined,
+    ...(open !== undefined ? { click: open } : {}),
+  };
+}
+
 /** The whole template. Roles carry every standard section; the items this
  * shell owns are the app menu's Settings… and update item (darwin), the four
  * views, Take Screenshot, the zoom's three and the conditional close. */
@@ -367,8 +385,20 @@ export function buildAppMenu(
       label: "Window",
       submenu:
         platform === "darwin"
-          ? [{ role: "minimize" }, { role: "zoom" }, { type: "separator" }, { role: "front" }]
-          : [{ role: "minimize" }, { role: "zoom" }, closeWindowItem(state, actions)],
+          ? [
+              { role: "minimize" },
+              { role: "zoom" },
+              { type: "separator" },
+              vitalsItem(actions),
+              { type: "separator" },
+              { role: "front" },
+            ]
+          : [
+              { role: "minimize" },
+              { role: "zoom" },
+              vitalsItem(actions),
+              closeWindowItem(state, actions),
+            ],
     },
   ];
 }

@@ -53,6 +53,8 @@ test("product, Studio, and browser catalog share one dependency optimizer graph"
   for (const config of configs) {
     assert.deepEqual(config.optimizeDeps.entries, [
       "index.html",
+      // VT-2: the Vitals window's document, a production window of its own
+      "vitals.html",
       "studio-product.html",
       "studio.html",
       "design-system.html",
@@ -102,7 +104,12 @@ test("the production renderer and browser catalog have disjoint build outputs", 
   const productionInputs = Object.keys(production.build.rollupOptions.input);
   const singletonInputs = productionInputs.filter((name) => name.startsWith("singleton-"));
   assert.ok(singletonInputs.length > 0, "the production renderer emits host singleton chunks");
-  assert.deepEqual(productionInputs, ["main", ...singletonInputs]);
+  // VT-2: and the Vitals window's document, the second the product build carries
+  assert.deepEqual(productionInputs, ["main", "vitals", ...singletonInputs]);
+  assert.equal(
+    production.build.rollupOptions.input.vitals,
+    join(workspacePaths.repoRoot, "packages/electron-shell/src/renderer-host/vitals.html"),
+  );
   assert.equal(
     production.build.rollupOptions.input.main,
     join(workspacePaths.repoRoot, "packages/electron-shell/src/renderer-host/index.html"),

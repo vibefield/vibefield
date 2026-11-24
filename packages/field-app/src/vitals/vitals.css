@@ -1,0 +1,411 @@
+/* VT-2 (track VT, 2026-11-24) — the Vitals window (DESIGN.md §8 "Vitals"). The control room: committed dark in both
+   themes, in Godview's instrument palette (§2.7). Hue is state only (§2.5); a trace is told apart by ink and stroke. */
+
+/* the window's own root: the view fills it. A plate sizes the view itself. */
+.vf-vitals-root {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+}
+
+.vf-vitals {
+  --vf-vitals-ink: var(--vf-godview-dark-chrome-ink);
+  --vf-vitals-primary: var(--vf-godview-dark-chrome-text-primary);
+  --vf-vitals-secondary: var(--vf-godview-dark-chrome-text-secondary);
+  --vf-vitals-tertiary: var(--vf-godview-dark-chrome-text-tertiary);
+  --vf-vitals-faint: var(--vf-godview-dark-chrome-text-faint);
+  --vf-vitals-line: var(--vf-godview-dark-panel-border);
+
+  display: grid;
+  grid-template-columns: 360px minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  background: var(--vf-godview-dark-monitor-bg);
+  color: var(--vf-vitals-primary);
+  font-family: var(--vf-font-sans);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+}
+
+/* ── the list ── */
+
+.vf-vitals__list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--vf-godview-dark-panel-bg);
+  border-right: 1px solid var(--vf-vitals-line);
+}
+
+.vf-vitals__list-head,
+.vf-vitals__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px 60px 48px;
+  column-gap: 10px;
+  align-items: center;
+}
+
+.vf-vitals__list-head {
+  padding: 12px 14px 8px;
+  color: var(--vf-vitals-faint);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-vitals__when {
+  color: var(--vf-vitals-tertiary);
+}
+
+.vf-vitals__col {
+  text-align: right;
+}
+
+.vf-vitals__rows {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 6px 8px;
+}
+
+.vf-vitals__group-head {
+  padding: 12px 8px 4px;
+  color: var(--vf-vitals-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-vitals__row {
+  /* a button and the foot's row are one box: the padding is inside the width for both */
+  box-sizing: border-box;
+  width: 100%;
+  height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: default;
+}
+
+.vf-vitals__row[aria-pressed="true"] {
+  background: var(--vf-godview-dark-control-hover-bg);
+}
+
+.vf-vitals__row:focus-visible {
+  outline: 1px solid var(--vf-godview-dark-control-hover-border);
+  outline-offset: -1px;
+}
+
+.vf-vitals__name {
+  overflow: hidden;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-vitals__group[data-group="agents"] .vf-vitals__name {
+  color: var(--vf-vitals-secondary);
+}
+
+.vf-vitals__num {
+  color: var(--vf-vitals-secondary);
+  font-family: var(--vf-font-mono);
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.vf-vitals__spark {
+  display: block;
+  width: 48px;
+  height: 14px;
+}
+
+.vf-vitals__foot {
+  padding: 8px 6px 12px;
+  border-top: 1px solid var(--vf-vitals-line);
+}
+
+.vf-vitals__row--total .vf-vitals__name {
+  font-weight: 600;
+}
+
+.vf-vitals__note {
+  margin: 2px 8px 0;
+  color: var(--vf-vitals-tertiary);
+  font-size: 11px;
+}
+
+.vf-vitals__empty {
+  margin: 0;
+  padding: 16px 8px;
+  color: var(--vf-vitals-tertiary);
+  line-height: 1.45;
+}
+
+/* ── the lanes ── */
+
+.vf-vitals__main {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 16px;
+}
+
+.vf-vitals__state {
+  display: flex;
+  gap: 7px;
+  align-items: center;
+  justify-content: flex-end;
+  height: 36px;
+  color: var(--vf-vitals-secondary);
+  font-size: 11px;
+}
+
+.vf-vitals__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--vf-vitals-faint);
+}
+
+.vf-vitals__dot[data-recording] {
+  background: var(--vf-green);
+}
+
+.vf-vitals__lanes {
+  position: relative;
+  cursor: crosshair;
+}
+
+.vf-vitals__lane {
+  border-bottom: 1px solid var(--vf-vitals-line);
+}
+
+.vf-vitals__lane-head {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  height: 22px;
+  padding-top: 6px;
+  white-space: nowrap;
+}
+
+.vf-vitals__eyebrow {
+  flex: none;
+  color: var(--vf-vitals-tertiary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-vitals__legend,
+.vf-vitals__reading {
+  display: flex;
+  gap: 12px;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--vf-vitals-secondary);
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+}
+
+.vf-vitals__key {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.vf-vitals__key::before {
+  width: 10px;
+  height: 0;
+  border-top: 1.4px solid var(--vf-vitals-primary);
+  content: "";
+}
+
+.vf-vitals__key[data-group="fieldd"]::before {
+  border-top-color: var(--vf-vitals-secondary);
+}
+
+.vf-vitals__key[data-group="floor"]::before {
+  border-top-color: var(--vf-vitals-tertiary);
+  border-top-style: dashed;
+}
+
+.vf-vitals__key[data-group="agents"]::before {
+  height: 7px;
+  border-top: 0;
+  background: color-mix(in srgb, var(--vf-vitals-ink) 12%, transparent);
+}
+
+.vf-vitals__plot {
+  position: relative;
+}
+
+.vf-vitals__plot svg,
+.vf-vitals__strip {
+  display: block;
+}
+
+.vf-vitals__scale {
+  position: absolute;
+  top: 2px;
+  left: 0;
+  color: var(--vf-vitals-faint);
+  font-family: var(--vf-font-mono);
+  font-size: 10px;
+  pointer-events: none;
+}
+
+.vf-vitals__trace {
+  fill: none;
+  stroke: var(--vf-vitals-primary);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.vf-vitals__trace[data-group="fieldd"] {
+  stroke: var(--vf-vitals-secondary);
+}
+
+.vf-vitals__trace[data-group="floor"] {
+  stroke: var(--vf-vitals-tertiary);
+  stroke-dasharray: 3 3;
+}
+
+.vf-vitals__trace--spark {
+  stroke: var(--vf-vitals-secondary);
+  stroke-width: 1;
+}
+
+/* a row chosen: its own trace in the primary ink, the groups stepped back */
+.vf-vitals__lane[data-chosen] .vf-vitals__trace[data-group] {
+  stroke: var(--vf-vitals-faint);
+}
+
+.vf-vitals__trace--chosen {
+  stroke: var(--vf-vitals-primary);
+}
+
+.vf-vitals__area {
+  fill: color-mix(in srgb, var(--vf-vitals-ink) 6%, transparent);
+  stroke: none;
+}
+
+.vf-vitals__axis {
+  position: relative;
+  height: 18px;
+  color: var(--vf-vitals-faint);
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+}
+
+.vf-vitals__tick {
+  position: absolute;
+  top: 3px;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+/* a minute at the axis's own edge is said inside the lane, never cut by it */
+.vf-vitals__tick[data-edge="start"] {
+  transform: none;
+}
+
+.vf-vitals__tick[data-edge="end"] {
+  transform: translateX(-100%);
+}
+
+.vf-vitals__mark {
+  stroke: var(--vf-vitals-faint);
+  stroke-width: 1;
+}
+
+.vf-vitals__mark[data-tone="warning"] {
+  stroke: var(--vf-orange);
+}
+
+.vf-vitals__mark[data-tone="error"] {
+  stroke: var(--vf-red);
+}
+
+.vf-vitals__overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vf-vitals__held {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--vf-vitals-faint);
+}
+
+.vf-vitals__span {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-right: 1px solid var(--vf-vitals-faint);
+  border-left: 1px solid var(--vf-vitals-faint);
+  background: color-mix(in srgb, var(--vf-vitals-ink) 8%, transparent);
+}
+
+/* ── the log lines ── */
+
+.vf-vitals__lines {
+  flex: 1;
+  min-height: 0;
+  margin-top: 6px;
+  overflow-y: auto;
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+  user-select: text;
+}
+
+.vf-vitals__line {
+  display: grid;
+  grid-template-columns: 92px 92px 44px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: center;
+  height: 20px;
+  white-space: nowrap;
+}
+
+.vf-vitals__line-time {
+  color: var(--vf-vitals-tertiary);
+}
+
+.vf-vitals__line-who,
+.vf-vitals__line-level {
+  overflow: hidden;
+  color: var(--vf-vitals-secondary);
+  text-overflow: ellipsis;
+}
+
+.vf-vitals__line[data-tone="warning"] .vf-vitals__line-level {
+  color: var(--vf-orange);
+}
+
+.vf-vitals__line[data-tone="error"] .vf-vitals__line-level {
+  color: var(--vf-red);
+}
+
+.vf-vitals__line-msg {
+  overflow: hidden;
+  color: var(--vf-vitals-primary);
+  text-overflow: ellipsis;
+}

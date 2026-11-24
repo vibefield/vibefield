@@ -59,5 +59,7 @@ export * from "./trust-root";
 export * from "./update-policy";
 export * from "./user-face";
 export * from "./users";
-export * from "./vitals";
+// VT-2 (2026-11-24): the vitals wire is NOT re-exported here. Only fieldd and the Vitals window read it, through the
+// `@vibefield/contracts/vitals` subpath, so the desk's window carries none of its schemas (as it carries none of
+// `./diagnostics`). VT-1 exported it from this root for a day; the renderer build showed its cost.
 export * from "./workspace";

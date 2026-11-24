@@ -41,6 +41,7 @@ import type {
   SupportBundlePreviewV1,
   SupportBundleSelectionV1,
 } from "@vibefield/contracts/diagnostics";
+import type { VitalsDoor } from "@vibefield/field-app/vitals";
 import type { ProductAppearanceRendererApi } from "../studio/product-preload-bridge";
 import type { StudioRendererApi } from "../studio/studio-preload-bridge";
 
@@ -77,6 +78,9 @@ declare global {
 
   interface Window {
     vibefieldStudio: StudioRendererApi;
+    /** VT-2 — the Vitals window's one door (its preload, `vitals/vitals-preload.ts`): a stream to read. Present in
+     * that window alone. */
+    vibefieldVitals: VitalsDoor;
     vibefieldStudioAppearance: ProductAppearanceRendererApi;
     vibefield: {
       readonly platform: ShellPlatform;

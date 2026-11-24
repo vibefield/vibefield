@@ -103,10 +103,12 @@ for (const e of [...entries, ...preloads, ...styles]) walk(e);
 // (2026-07-23 review finding); --assert now fails on a missing shell bundle.
 const shellFiles = {};
 // SD-2: main/sound-worker.cjs, the sound renders' thread main starts from beside its own bundle
+// VT-2: preload/vitals.cjs, the Vitals window's own preload
 for (const rel of [
   "main/index.cjs",
   "main/sound-worker.cjs",
   "preload/index.cjs",
+  "preload/vitals.cjs",
   "testing/smoke.cjs",
 ]) {
   try {
@@ -240,7 +242,12 @@ if (args.includes("--assert")) {
   if (settingsCode === undefined) {
     problems.push(`no lazy ${SETTINGS_CHUNK} chunk carries the panel — the split did not happen`);
   }
-  for (const rel of ["main/index.cjs", "main/sound-worker.cjs", "preload/index.cjs"]) {
+  for (const rel of [
+    "main/index.cjs",
+    "main/sound-worker.cjs",
+    "preload/index.cjs",
+    "preload/vitals.cjs",
+  ]) {
     if (!shellFiles[rel]) {
       problems.push(`${rel}: shell bundle missing under ${distDir} (stale report path?)`);
     }

@@ -1,9 +1,8 @@
+import { type CallerContext, VITALS } from "@vibefield/contracts";
 import {
-  type CallerContext,
   type NativeVitalsReading,
   NativeVitalsSample,
   NativeVitalsSnapshot,
-  VITALS,
   type VitalsDeltaV1,
   type VitalsGroup,
   type VitalsPointV1,
@@ -17,7 +16,7 @@ import {
   type VitalsSeriesV1,
   type VitalsSnapshotV1,
   vitalsKey,
-} from "@vibefield/contracts";
+} from "@vibefield/contracts/vitals";
 import type { Logger } from "@vibefield/logging";
 import { type NativeLink, RpcCallError } from "./native-link";
 import type { ProductApi } from "./product-api";
