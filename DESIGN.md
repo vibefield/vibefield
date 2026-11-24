@@ -6475,7 +6475,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
 - **Vitals — how every process is doing, in a window of its own** (track VT; *added 2026-11-24*; VT-D1 A and
   VT-D2…VT-D6 at their leans, ruled by James on the page *The Vitals Window*, 2026-11-24: "good, go with lean and land
   this"; the record is `draft/thinking-vitals.md`). A second window, in every build, opened from the Window menu's
-  **Vitals** (⌥⌘V), which opens it or brings it forward and never closes it. It is the control room (§1): committed
+  **Vitals** (⌥⌘V), which opens it or brings it forward and never closes it. Under `pnpm dev` it also opens by itself
+  (VT-6, *added 2026-11-24*): each time the desk's window is shown, once, in front of it and without taking the
+  keys, and an open one is left where the person put it. A packaged build opens it only when asked, and so does
+  every test harness's run, a marked one under `pnpm dev` included. It is the control room (§1): committed
   dark in both themes, in Godview's instrument palette (§2.7), its ground the monitor ground `#0A0A0A`
   (`--vf-godview-dark-monitor-bg`, projected into `electron-shell/src/main/windows.ts` for the window's pre-paint),
   its one panel `#111111` behind a `#333333` hairline, and its words in Godview's dark chrome ramp (`#F5F5F7` at 85,
