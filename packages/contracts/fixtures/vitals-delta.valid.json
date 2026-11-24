@@ -20,7 +20,13 @@
         "diskReadBps": 0,
         "diskWriteBps": 0,
         "wakeupsPerSec": 4,
-        "powerMw": null
+        "powerMw": null,
+        "own": {
+          "loopBusy": 0.9731,
+          "gcMs": 41.5,
+          "gcMaxMs": 28.25,
+          "slow": { "method": "index.sessions", "ms": 912.4 }
+        }
       },
       {
         "key": "6120:1795478531200",

@@ -34,7 +34,9 @@ import {
   EMPTY_VITALS,
   groupRows,
   groupSeries,
+  loopSeries,
   modelFromSnapshot,
+  ownAt,
   processSeries,
   sampleAt,
   seriesPeak,
@@ -44,9 +46,11 @@ import {
   clockWords,
   cpuScaleWords,
   cpuWords,
+  durationWords,
   groupWord,
   memoryScaleWords,
   memoryWords,
+  ownWords,
   rowName,
   stateWords,
 } from "../src/vitals/vitals-words";
@@ -372,6 +376,68 @@ describe("VT-2 — the feed", () => {
   });
 });
 
+describe("VT-3 — what a process says of itself, in the model and the words", () => {
+  const snapshot = vitalsFixtureSnapshot();
+  const model = modelFromSnapshot(snapshot);
+  const fieldd = snapshot.processes.find((process) => process.role === "fieldd");
+  if (fieldd === undefined) throw new Error("the fixture names fieldd");
+
+  it("gives a series to each process that says its loop, and to no other", () => {
+    const series = loopSeries(model);
+    expect([...series.keys()]).toEqual([fieldd.key]);
+    const values = series.get(fieldd.key)?.values ?? [];
+    expect(values).toHaveLength(model.samples.length);
+    expect(values.every((value) => value !== null && value >= 0 && value <= 1)).toBe(true);
+    // its bad ten seconds hold the loop
+    expect(Math.min(...(values.slice(206, 217) as number[]))).toBeGreaterThan(0.9);
+    expect(Math.max(...(values.slice(0, 200) as number[]))).toBeLessThan(0.1);
+  });
+
+  it("has no series, and so no lane, for readings in which nobody says its own", () => {
+    const silent = modelFromSnapshot({
+      ...snapshot,
+      samples: snapshot.samples.map((sample) => ({
+        ...sample,
+        points: sample.points.map(({ own: _own, ...point }) => point),
+      })),
+    });
+    expect(loopSeries(silent).size).toBe(0);
+  });
+
+  it("reads what one process said in one sample, and null for one that said nothing", () => {
+    const peak = model.samples[209] ?? null;
+    expect(ownAt(peak, fieldd.key)?.slow).toEqual({ method: "index.catalog.subscribe", ms: 2_210 });
+    const main = snapshot.processes.find((process) => process.role === "main");
+    expect(ownAt(peak, main?.key ?? "")).toBeNull();
+    expect(ownAt(null, fieldd.key)).toBeNull();
+  });
+
+  it("says a duration in whole milliseconds, a decimal under ten, and seconds from one up", () => {
+    expect(durationWords(0)).toBe("0 ms");
+    expect(durationWords(2.44)).toBe("2.4 ms");
+    expect(durationWords(41.3)).toBe("41 ms");
+    expect(durationWords(999.4)).toBe("999 ms");
+    expect(durationWords(2_210)).toBe("2.2 s");
+  });
+
+  it("says each part only where it was said, and nothing for a process that said nothing", () => {
+    expect(
+      ownWords("fieldd", {
+        loopBusy: 0.12,
+        gcMs: 3,
+        slow: { method: "terminal.list", ms: 41 },
+      }),
+    ).toBe("fieldd · 12% busy · GC 3 ms · slowest terminal.list 41 ms");
+    // a second with no collection says no GC, and one with no request no slowest
+    expect(ownWords("fieldd", { loopBusy: 0.004, gcMs: 0 })).toBe("fieldd · 0.4% busy");
+    expect(ownWords("Desk window", { slow: { method: "doc.list", ms: 1_500 } })).toBe(
+      "Desk window · slowest doc.list 1.5 s",
+    );
+    expect(ownWords("fieldd", {})).toBeNull();
+    expect(ownWords("fieldd", null)).toBeNull();
+  });
+});
+
 describe("VT-2 — the view", () => {
   let host: HTMLDivElement;
   let root: Root;
@@ -444,6 +510,51 @@ describe("VT-2 — the view", () => {
     expect(tones).toHaveLength(vitalsFixtureLogs().length);
   });
 
+  it("stands the Loop lane while a process says its loop: one trace each, a scale that never moves (VT-3)", () => {
+    render(createElement(VitalsView, { model: vitalsFixtureModel(), logs: [] }));
+    const lane = host.querySelector('[data-lane="loop"]');
+    expect(lane?.querySelector(".vf-vitals__eyebrow")?.textContent).toBe(
+      "Loop · share of each second busy",
+    );
+    expect(text('[data-lane="loop"] .vf-vitals__scale')).toEqual(["100%"]);
+    const traces = [...(lane?.querySelectorAll("path.vf-vitals__trace") ?? [])];
+    expect(traces.map((path) => path.getAttribute("data-group"))).toEqual(["fieldd"]);
+    expect(traces[0]?.getAttribute("d")).toMatch(/^M/);
+    // the quiet newest second: a share, and no pause or request to say
+    expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(
+      /^fieldd · \d+(\.\d)?% busy$/,
+    );
+    // a row that says nothing of itself is chosen: the lane still reads the one that does
+    const rosettad = [...host.querySelectorAll<HTMLButtonElement>("button.vf-vitals__row")].find(
+      (button) => button.textContent?.startsWith("rosettad"),
+    );
+    act(() => rosettad?.click());
+    expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(/^fieldd · /);
+  });
+
+  it("reads fieldd's bad second in the Loop lane's head: the share, the pauses, the slowest request (VT-3)", () => {
+    const snapshot = vitalsFixtureSnapshot();
+    const during = modelFromSnapshot({ ...snapshot, samples: snapshot.samples.slice(0, 210) });
+    render(createElement(VitalsView, { model: during, logs: [] }));
+    expect(text('[data-lane="loop"] .vf-vitals__reading')[0]).toMatch(
+      /^fieldd · 9\d% busy · GC 39 ms · slowest index\.catalog\.subscribe 2\.2 s$/,
+    );
+  });
+
+  it("has no Loop lane when nobody says its own: never an empty one (VT-3)", () => {
+    const snapshot = vitalsFixtureSnapshot();
+    const silent = modelFromSnapshot({
+      ...snapshot,
+      samples: snapshot.samples.map((sample) => ({
+        ...sample,
+        points: sample.points.map(({ own: _own, ...point }) => point),
+      })),
+    });
+    render(createElement(VitalsView, { model: silent, logs: [] }));
+    expect(host.querySelector('[data-lane="loop"]')).toBeNull();
+    expect(host.querySelectorAll("[data-lane]")).toHaveLength(2);
+  });
+
   it("chooses a row on a press: its own trace joins both lanes, and a second press lets it go", () => {
     render(createElement(VitalsView, { model: vitalsFixtureModel(), logs: [] }));
     const row = [...host.querySelectorAll<HTMLButtonElement>("button.vf-vitals__row")].find(
@@ -469,7 +580,9 @@ describe("VT-2 — the view", () => {
     render(createElement(VitalsView, { model: vitalsFixtureModel(), logs: vitalsFixtureLogs() }));
     const lines = [...host.querySelectorAll(".vf-vitals__line")];
     expect(lines).toHaveLength(vitalsFixtureLogs().length);
-    expect(text(".vf-vitals__reading")).toEqual([`${lines.length} lines`]);
+    expect(text(".vf-vitals__lanes > .vf-vitals__lane-head .vf-vitals__reading")).toEqual([
+      `${lines.length} lines`,
+    ]);
     const error = lines.find((line) => line.getAttribute("data-tone") === "error");
     expect(error?.querySelector(".vf-vitals__line-msg")?.textContent).toContain("did not answer");
     expect(error?.querySelector(".vf-vitals__line-level")?.textContent).toBe("error");
@@ -547,6 +660,16 @@ describe("VT-2 — the view", () => {
     // and the view's own ground is that token, so the pre-paint and the page are one colour
     const sheet = readFileSync(join(here, "..", "src", "vitals", "vitals.css"), "utf8");
     expect(sheet).toContain("background: var(--vf-godview-dark-monitor-bg);");
+  });
+
+  it("lets a figure wider than its column grow toward the name, never over the figure beside it", () => {
+    // found in the first real run's still (VT-3a): the foot's "1.5 cores" ran into "1019 MB"
+    const here = dirname(fileURLToPath(import.meta.url));
+    const sheet = readFileSync(join(here, "..", "src", "vitals", "vitals.css"), "utf8");
+    const num = sheet.slice(sheet.indexOf(".vf-vitals__num {"));
+    const rule = num.slice(0, num.indexOf("}"));
+    expect(rule).toContain("justify-self: end;");
+    expect(rule).toContain("white-space: nowrap;");
   });
 
   it("stands the catalog's plates on the shipping view", () => {

@@ -121,6 +121,8 @@
   font-weight: 500;
   text-align: right;
   white-space: nowrap;
+  /* a figure wider than its column ("1.5 cores") grows toward the name, never over the figure beside it */
+  justify-self: end;
 }
 
 .vf-vitals__spark {

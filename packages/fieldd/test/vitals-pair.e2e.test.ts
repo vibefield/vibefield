@@ -123,12 +123,21 @@ describe("VT — the census on a real pair", () => {
       expect(fresh.observer.meterCpu).toBeGreaterThanOrEqual(0);
       expect(fresh.observer.meterCpu).toBeLessThan(0.25);
 
+      // VT-3: fieldd says its own loop on its own row, from the real runtime; the floor's row is read from outside
+      const own = fieldd?.point.own;
+      expect(own?.loopBusy).toBeGreaterThanOrEqual(0);
+      expect(own?.loopBusy).toBeLessThanOrEqual(1);
+      expect(own?.gcMs).toBeGreaterThanOrEqual(0);
+      expect(native !== undefined && "own" in native.point).toBe(false);
+
       const mb = (bytes: number | undefined): string =>
         bytes === undefined ? "?" : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
       console.info(
         `[vitals pair] fieldd ${mb(fieldd?.point.memBytes)} cpu ${fieldd?.point.cpu?.toFixed(4)} · ` +
           `field-native ${mb(native?.point.memBytes)} cpu ${native?.point.cpu?.toFixed(4)} · ` +
-          `meter ${(fresh.observer.meterCpu * 100).toFixed(4)}% of a core · rows ${last.points.length}`,
+          `meter ${(fresh.observer.meterCpu * 100).toFixed(4)}% of a core · rows ${last.points.length} · ` +
+          `fieldd's loop ${((own?.loopBusy ?? 0) * 100).toFixed(1)}% busy, GC ${own?.gcMs} ms` +
+          (own?.slow === undefined ? "" : `, slowest ${own.slow.method} ${own.slow.ms} ms`),
       );
     },
     60_000,

@@ -1589,7 +1589,8 @@ export const NATIVE_FLOOR_TICK = {
  *  - SNAPSHOT_SAMPLES — what a subscription opens with: five minutes.
  *  - QUERY_MAX_POINTS / QUERY_PROCESSES_MAX — a query's bounds, steps a series and series an answer.
  *  - LABEL_MAX — a row's label, in characters.
- *  - METER_BUDGET_US — what one reading may cost before the floor says so in its log: half a percent of a core. */
+ *  - METER_BUDGET_US — what one reading may cost before the floor says so in its log: half a percent of a core.
+ *  - METHOD_MAX — VT-3: the longest method name a process's own vitals may carry as its slowest request. */
 export const VITALS = {
   SAMPLE_INTERVAL_MS: 1_000,
   FLOOR_RING_SAMPLES: 300,
@@ -1604,6 +1605,7 @@ export const VITALS = {
   QUERY_PROCESSES_MAX: 512,
   LABEL_MAX: 80,
   METER_BUDGET_US: 5_000,
+  METHOD_MAX: 96,
 } as const;
 
 /** IL-D1 (`draft/thinking-inventory-latency.md` §2, ruled 2026-10-19) — how old the floor's

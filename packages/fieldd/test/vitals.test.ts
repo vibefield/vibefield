@@ -259,6 +259,37 @@ describe("fieldd's vitals recorder (VT-1)", () => {
     expect(at(FLOOR)?.powerMw).toBeNull();
   });
 
+  it("carries what fieldd says of itself on fieldd's own row, and on no other (VT-3)", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    const { subId } = await subscribe(client);
+    const self = { pid: process.pid, startedAt: T0 - 90_000 };
+    const rows = (cpuUs: number): unknown[] => [
+      ...floorRows(cpuUs),
+      reading(self, "watched", cpuUs * 4, 240 * MIB),
+    ];
+    fixture.native.pushDelta("vitals.subscribe", sample(1, T0, rows(100_000)));
+    // a request between two readings: the recorder's next sample names the slowest of them
+    await client.call("vitals.query", { from: T0 - 1_000, to: T0 });
+    fixture.native.pushDelta("vitals.subscribe", sample(2, T0 + 1_000, rows(150_000)));
+    await until(() => deltas(client, subId).filter((delta) => delta.sample).length === 2);
+
+    const last = deltas(client, subId).at(-1)?.sample;
+    const point = (who: { pid: number; startedAt: number }) =>
+      last?.points.find((candidate) => candidate.key === vitalsKey(who.pid, who.startedAt));
+    const own = point(self)?.own;
+    expect(own?.loopBusy).toBeGreaterThanOrEqual(0);
+    expect(own?.loopBusy).toBeLessThanOrEqual(1);
+    expect(own?.gcMs).toBeGreaterThanOrEqual(0);
+    // the query finished inside the interval; the subscribe before it may have too, and either is a method's name
+    expect(["vitals.query", "vitals.subscribe"]).toContain(own?.slow?.method);
+    expect(own?.slow?.ms).toBeGreaterThanOrEqual(0);
+    // the floor's rows are measured from outside alone
+    expect(point(FLOOR)).toBeDefined();
+    expect("own" in (point(FLOOR) ?? {})).toBe(false);
+    expect("own" in (point(CELL) ?? {})).toBe(false);
+  });
+
   it("folds a terminal's tree into its row, says who left, and keeps a reused pid apart", async () => {
     const fixture = await setup();
     // a terminal fieldd observed is watched with its tree; here the roster stands in for that source

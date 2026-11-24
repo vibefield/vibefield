@@ -171,6 +171,7 @@ pub mod vitals {
     pub const QUERY_PROCESSES_MAX: u64 = 512;
     pub const LABEL_MAX: u64 = 80;
     pub const METER_BUDGET_US: u64 = 5000;
+    pub const METHOD_MAX: u64 = 96;
 }
 
 /// AL-5 + AL-8a — the orphan bound: no session for IDLE_EXIT_MS, read every

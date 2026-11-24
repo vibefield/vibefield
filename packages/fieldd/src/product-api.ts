@@ -451,6 +451,8 @@ export class ProductApi extends EventEmitter {
   private readonly forwardHooks = new Map<string, ForwardHook>();
   private dynamicRouter: DynamicRouterLike | null = null;
   private readonly shellProvider = new ShellProviderBroker();
+  /** VT-3 — hears each registered method's time from arrival to reply (`observeRequests`); null until asked */
+  private requestObserver: ((method: string, ms: number) => void) | null = null;
   /** live authed connections — the §15.4 revocation path closes by principal */
   private readonly liveConns = new Set<{ ws: WebSocket; state: ConnState }>();
   /** PG-1c — per connection, its phone subscriptions that can resync */
@@ -852,6 +854,13 @@ export class ProductApi extends EventEmitter {
     });
   }
 
+  /** VT-3 — fieldd's own vitals hear how long each request took to its reply: the method's registered name and a
+   * duration, nothing of its parameters or its caller. One observer; a name no handler is registered for is never
+   * passed on (it is the caller's text). */
+  observeRequests(observer: ((method: string, ms: number) => void) | null): void {
+    this.requestObserver = observer;
+  }
+
   register(method: string, handler: Handler): void {
     const def = this.lookup(method);
     if (def.subscription)
@@ -1033,8 +1042,19 @@ export class ProductApi extends EventEmitter {
     const id = msg["id"];
     const method = String(msg["method"] ?? "");
     const params = msg["params"];
+    const arrivedAt = performance.now();
     const reply = (v: unknown, track?: WriteTrack) => {
-      if (id !== undefined && id !== null) this.sendBounded(ws, v, track);
+      if (id !== undefined && id !== null) {
+        const observer = this.requestObserver;
+        if (observer !== null && (this.handlers.has(method) || this.subHandlers.has(method))) {
+          try {
+            observer(method, performance.now() - arrivedAt);
+          } catch {
+            // a measure never costs a caller its reply
+          }
+        }
+        this.sendBounded(ws, v, track);
+      }
     };
 
     if (method === "system.hello") {

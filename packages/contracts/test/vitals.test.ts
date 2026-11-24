@@ -20,6 +20,7 @@ import {
   VITALS_GROUPS,
   VITALS_ROLES,
   VitalsDeltaV1,
+  VitalsOwnV1,
   VitalsQueryResult,
   VitalsRosterSetParams,
   VitalsSnapshotV1,
@@ -238,6 +239,46 @@ describe("fieldd's door", () => {
       walk(fixture(name));
       for (const key of keys) expect(key, `${name}: ${key}`).not.toMatch(forbidden);
     }
+  });
+});
+
+describe("VT-3 — what a process says of itself", () => {
+  it("rides its own row's point, and a row that reports nothing carries none", () => {
+    const delta = VitalsDeltaV1.parse(fixture("vitals-delta.valid.json"));
+    const [fieldd, host] = delta.sample?.points ?? [];
+    expect(fieldd?.own).toEqual({
+      loopBusy: 0.9731,
+      gcMs: 41.5,
+      gcMaxMs: 28.25,
+      slow: { method: "index.sessions", ms: 912.4 },
+    });
+    expect(host !== undefined && "own" in host).toBe(false);
+  });
+
+  it("every field is optional: one left out was not measured, never zero", () => {
+    expect(VitalsOwnV1.parse({})).toEqual({});
+    expect(VitalsOwnV1.parse({ longFrames: 3, longFrameMaxMs: 180.5 })).toEqual({
+      longFrames: 3,
+      longFrameMaxMs: 180.5,
+    });
+  });
+
+  it("a busy share is a share, and nothing is negative", () => {
+    expect(VitalsOwnV1.safeParse({ loopBusy: 1.01 }).success).toBe(false);
+    expect(VitalsOwnV1.safeParse({ loopBusy: -0.1 }).success).toBe(false);
+    expect(VitalsOwnV1.safeParse({ gcMs: -1 }).success).toBe(false);
+    expect(VitalsOwnV1.safeParse({ longFrames: 1.5 }).success).toBe(false);
+  });
+
+  it("names the slowest request by a bounded method and a duration, and by nothing else it could leak", () => {
+    expect(
+      VitalsOwnV1.safeParse({ slow: { method: "m".repeat(VITALS.METHOD_MAX + 1), ms: 1 } }).success,
+    ).toBe(false);
+    expect(VitalsOwnV1.safeParse({ slow: { method: "", ms: 1 } }).success).toBe(false);
+    // a known method's name is in the registry; the shape itself has no place for parameters
+    expect(Object.keys(VitalsOwnV1.shape.slow.unwrap().shape).sort()).toEqual(["method", "ms"]);
+    expect(METHODS.some((entry) => entry.method === "index.sessions")).toBe(true);
+    expect(METHODS.every((entry) => entry.method.length <= VITALS.METHOD_MAX)).toBe(true);
   });
 });
 

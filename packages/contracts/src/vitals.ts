@@ -199,6 +199,32 @@ export const VitalsProcessV1 = z
   .passthrough();
 export type VitalsProcessV1 = z.infer<typeof VitalsProcessV1>;
 
+/** What only a process can say of itself over one interval (VT-3): the census reads a process from outside, and
+ * these are read from inside it, by it. Every field is optional: a process says what it measures, and a field left
+ * out was not measured, never zero. Nothing here costs a wake at rest: a share is read when a sample is made, and a
+ * pause, a slow request or a long frame is counted when it happens.
+ *  - `loopBusy` — the share of the interval its event loop was running something, 0 to 1 (Node's event-loop
+ *    utilization). Near 1 for a whole second is a loop that could answer nobody.
+ *  - `gcMs` / `gcMaxMs` — garbage collection's pauses in the interval: their sum and the longest.
+ *  - `slow` — the request that took longest to its reply, of those that finished in the interval: a product method's
+ *    name from the registry and nothing of its parameters.
+ *  - `longFrames` / `longFrameMaxMs` — a window's frames that took over 50 ms (the platform's long animation
+ *    frame), and the longest. */
+export const VitalsOwnV1 = z
+  .object({
+    loopBusy: z.number().min(0).max(1).optional(),
+    gcMs: z.number().nonnegative().optional(),
+    gcMaxMs: z.number().nonnegative().optional(),
+    slow: z
+      .object({ method: z.string().min(1).max(VITALS.METHOD_MAX), ms: z.number().nonnegative() })
+      .passthrough()
+      .optional(),
+    longFrames: count().optional(),
+    longFrameMaxMs: z.number().nonnegative().optional(),
+  })
+  .passthrough();
+export type VitalsOwnV1 = z.infer<typeof VitalsOwnV1>;
+
 /** A process over one interval, as rates.
  *  - `cpu` — its share of one core: 1 is one core held for the whole interval, 2.5 two and a half. null on a
  *    process's first reading: a rate needs two.
@@ -206,7 +232,8 @@ export type VitalsProcessV1 = z.infer<typeof VitalsProcessV1>;
  *    says which this device reports).
  *  - `diskReadBps` / `diskWriteBps` — bytes a second.
  *  - `wakeupsPerSec`, `powerMw` — null where the platform does not say.
- *  - `processes` — for a tree row, how many processes the figures cover. */
+ *  - `processes` — for a tree row, how many processes the figures cover.
+ *  - `own` — what the process said of itself over the interval (VT-3); absent for a process that reports nothing. */
 export const VitalsPointV1 = z
   .object({
     key: key(),
@@ -217,6 +244,7 @@ export const VitalsPointV1 = z
     wakeupsPerSec: z.number().nonnegative().nullable(),
     powerMw: z.number().nonnegative().nullable(),
     processes: z.number().int().min(1).optional(),
+    own: VitalsOwnV1.optional(),
   })
   .passthrough();
 export type VitalsPointV1 = z.infer<typeof VitalsPointV1>;

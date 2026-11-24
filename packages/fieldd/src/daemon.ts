@@ -373,6 +373,7 @@ import { boardKnownIn, registerObjectDoors } from "./objects/doors";
 import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
 import { SparkStarts } from "./objects/spark-starts";
 import { ObjectsStore } from "./objects/store";
+import { OwnVitals } from "./own-vitals";
 import { PeerLink } from "./peer-link";
 import { placeFolderOf } from "./place-folder";
 import { PluginCatalogService } from "./plugin-catalog";
@@ -2680,9 +2681,14 @@ export async function bootstrap(
       role: VitalsNamedProcess["role"],
     ): VitalsNamedProcess[] =>
       typeof pid === "number" && pid > 0 ? [{ pid, group: "fieldd", role }] : [];
+    // VT-3 — what fieldd says of itself (`own-vitals.ts`): its loop's busy share, its collections' pauses and its
+    // slowest request, folded when the recorder makes a sample. No timer of its own.
+    const ownVitals = new OwnVitals();
+    api.observeRequests((method, ms) => ownVitals.noteRequest(method, ms));
     const vitalsService = new VitalsService({
       native,
       logger: logger.child({ component: "vitals" }),
+      own: ownVitals,
       sources: [
         () => one(process.pid, "fieldd"),
         () => one(rosettad?.health().pid, "rosettad"),

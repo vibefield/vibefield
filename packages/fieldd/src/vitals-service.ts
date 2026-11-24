@@ -5,6 +5,7 @@ import {
   NativeVitalsSnapshot,
   type VitalsDeltaV1,
   type VitalsGroup,
+  VitalsOwnV1,
   type VitalsPointV1,
   type VitalsProcessV1,
   VitalsQueryParams,
@@ -46,6 +47,9 @@ export interface VitalsServiceOptions {
   native: NativeLink;
   logger: Logger;
   sources: readonly VitalsSource[];
+  /** VT-3 — what fieldd says of itself (`own-vitals.ts`): folded once a recorded sample and carried on fieldd's
+   * own row; stopped with the recorder. Absent, the row carries the census alone. */
+  own?: { fold(): VitalsOwnV1; dispose(): void };
 }
 
 type Emit = (payload: unknown, kind?: "delta" | "snapshot") => void;
@@ -150,6 +154,11 @@ export class VitalsService {
     this.options.native.off("connected", this.onConnected);
     this.options.native.off("closed", this.onClosed);
     this.subscribers.clear();
+    try {
+      this.options.own?.dispose();
+    } catch {
+      // an observer that will not stop ends with the process
+    }
   }
 
   /** The scope names the door; this holds it to the shell on this device, as the diagnostics doors are held. The
@@ -378,6 +387,8 @@ export class VitalsService {
             )
           : null,
         ...(tree !== undefined ? { processes: 1 + tree.processes } : {}),
+        // fieldd's own row is the one its own source names by this role
+        ...(identity.role === "fieldd" ? this.ownPoint() : {}),
       });
       this.previous.set(key, {
         time: sample.time,
@@ -411,6 +422,19 @@ export class VitalsService {
       ...(gone.length > 0 ? { gone } : {}),
       sample: recorded,
     });
+  }
+
+  /** fieldd's own vitals for the sample being recorded, as a point's field. A fold that throws or does not parse
+   * says nothing: the census row stands without it. */
+  private ownPoint(): { own?: VitalsOwnV1 } {
+    const source = this.options.own;
+    if (source === undefined) return {};
+    try {
+      const own = VitalsOwnV1.safeParse(source.fold());
+      return own.success && Object.keys(own.data).length > 0 ? { own: own.data } : {};
+    } catch {
+      return {};
+    }
   }
 
   /** Drop every process no kept sample names any more, so the names cannot outgrow the ring. */

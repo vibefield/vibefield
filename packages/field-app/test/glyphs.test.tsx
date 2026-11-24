@@ -328,7 +328,7 @@ describe("the glyph set", () => {
     // written here at VT-2, 2026-11-24, the next change to this list.)
     // VT-2 (DESIGN.md §8 "Vitals", the first chart rules): the Vitals window's traces are charts, readings drawn
     // against time on a scale — a row's sparkline, the CPU lane, the Memory lane and the log strip, one <svg>
-    // each in one view. It draws no icon.
+    // each in one view. It draws no icon. VT-3: the Loop lane is its fifth.
     const allow = new Map<string, number>([
       // TS-D4 (DESIGN.md §13): Tailscale's logomark, a vendor mark kept exact
       ["account/tailscale-mark.tsx", 1],
@@ -339,7 +339,7 @@ describe("the glyph set", () => {
       ["godview/os-marks.tsx", 1],
       ["godview/profiles-column/BandsCircle.tsx", 1],
       ["panels/agents/PlanTierMark.tsx", 1],
-      ["vitals/VitalsView.tsx", 4],
+      ["vitals/VitalsView.tsx", 5],
     ]);
     const found = new Map<string, number>();
     const visit = (base: string, relativeDir: string, skip: (rel: string) => boolean): void => {

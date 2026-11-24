@@ -57,6 +57,8 @@ export const VITALS_WORDS = {
   totalNote: "Your terminals aren't counted in it.",
   cpuLane: "CPU · share of one core",
   memoryLane: "Memory",
+  loopLane: "Loop · share of each second busy",
+  loopScale: "100%",
   logs: "Logs",
   nothingYet: "Nothing has been measured yet.",
   noLines: "No lines in this span.",
@@ -127,6 +129,33 @@ export function clockWords(
   return precision === "second"
     ? seconds
     : `${seconds}.${date.getMilliseconds().toString().padStart(3, "0")}`;
+}
+
+/** A duration as the Loop lane's reading says it: whole milliseconds, a decimal under ten where there is one, and
+ * seconds from one up. */
+export function durationWords(ms: number): string {
+  if (ms >= 1_000) return `${(ms / 1_000).toFixed(1)} s`;
+  if (ms < 9.95) return `${trim(ms)} ms`;
+  return `${Math.round(ms)} ms`;
+}
+
+/** What a process said of itself at one moment (DESIGN.md §8 "Vitals", the Loop lane): its name, then each part
+ * only where it was said. Null when it said nothing: the lane's head then reads nothing. */
+export function ownWords(
+  name: string,
+  own: {
+    loopBusy?: number | undefined;
+    gcMs?: number | undefined;
+    slow?: { method: string; ms: number } | undefined;
+  } | null,
+): string | null {
+  if (own === null) return null;
+  const parts: string[] = [];
+  if (own.loopBusy !== undefined) parts.push(`${cpuWords(own.loopBusy)} busy`);
+  if (own.gcMs !== undefined && own.gcMs > 0) parts.push(`GC ${durationWords(own.gcMs)}`);
+  if (own.slow !== undefined)
+    parts.push(`slowest ${own.slow.method} ${durationWords(own.slow.ms)}`);
+  return parts.length === 0 ? null : [name, ...parts].join(" · ");
 }
 
 export function lineCountWords(count: number): string {

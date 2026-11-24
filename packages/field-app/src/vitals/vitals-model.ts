@@ -1,6 +1,7 @@
 import { VITALS } from "@vibefield/contracts/registries";
 import type {
   VitalsDeltaV1,
+  VitalsOwnV1,
   VitalsPointV1,
   VitalsProcessV1,
   VitalsSampleV1,
@@ -9,7 +10,7 @@ import type {
 
 // The wire's shapes a fixture adapter needs, said from here: the catalog composes this view through its own
 // modules, never through another package's internal path (ui-system-boundaries.test.ts).
-export type { VitalsProcessV1, VitalsSampleV1, VitalsSnapshotV1 };
+export type { VitalsOwnV1, VitalsProcessV1, VitalsSampleV1, VitalsSnapshotV1 };
 
 // VT-2 (track VT, 2026-11-24; DESIGN.md §8 "Vitals") — THE VITALS WINDOW'S MODEL, PURE: fieldd's snapshot and its
 // deltas folded into what the window draws. No DOM, no clock and no colour: rows, sums and series are numbers, and a
@@ -215,6 +216,31 @@ export function processSeries(model: VitalsModel, measure: Measure): Map<string,
     }
   });
   return byKey;
+}
+
+/** VT-3 — each process that says how busy its own loop was, over the window: its busy share at each sample, null
+ * where it said none. A process that never says its own has no series, and with none the Loop lane does not stand. */
+export function loopSeries(model: VitalsModel): Map<string, VitalsSeries> {
+  const times = model.samples.map((sample) => sample.time);
+  const byKey = new Map<string, VitalsSeries>();
+  model.samples.forEach((sample, index) => {
+    for (const point of sample.points) {
+      const busy = point.own?.loopBusy;
+      if (busy === undefined) continue;
+      let series = byKey.get(point.key);
+      if (series === undefined) {
+        series = { times, values: new Array<number | null>(times.length).fill(null) };
+        byKey.set(point.key, series);
+      }
+      series.values[index] = busy;
+    }
+  });
+  return byKey;
+}
+
+/** What one process said of itself in one sample, or null where it said nothing. */
+export function ownAt(sample: VitalsSampleV1 | null, key: string): VitalsOwnV1 | null {
+  return sample?.points.find((point) => point.key === key)?.own ?? null;
 }
 
 /** One group over the window: the sum of its processes at each sample, null where none of them was measured. */

@@ -22,6 +22,8 @@ import { lineTone, type VitalsLogLine } from "./vitals-feed";
 import {
   groupRows,
   groupSeries,
+  loopSeries,
+  ownAt,
   processSeries,
   sampleAt,
   seriesPeak,
@@ -38,6 +40,7 @@ import {
   lineCountWords,
   memoryScaleWords,
   memoryWords,
+  ownWords,
   rowName,
   stateWords,
   VITALS_WORDS,
@@ -49,6 +52,7 @@ import {
 
 const CPU_LANE_HEIGHT = 96;
 const MEMORY_LANE_HEIGHT = 72;
+const LOOP_LANE_HEIGHT = 48;
 const STRIP_HEIGHT = 16;
 const SPARK = { width: 48, height: 14 } as const;
 /** a sparkline's scale never falls under a tenth of a core, so an idle process is a low line and not a tall one */
@@ -126,6 +130,15 @@ export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps)
   const total = vibeFieldTotal(groups);
   const cpuByKey = useMemo(() => processSeries(model, "cpu"), [model]);
   const memByKey = useMemo(() => processSeries(model, "memBytes"), [model]);
+  const loopByKey = useMemo(() => loopSeries(model), [model]);
+  // the Loop lane reads one process: the chosen row's if it says its own, else the first that does
+  const loopKey =
+    chosen !== null && loopByKey.has(chosen) ? chosen : (loopByKey.keys().next().value ?? null);
+  const loopProcess = loopKey === null ? undefined : model.processes.get(loopKey);
+  const loopReading =
+    loopKey === null || loopProcess === undefined
+      ? null
+      : ownWords(rowName(loopProcess), ownAt(sample, loopKey));
   const state = stateWords(model.state);
 
   const box = (height: number): TraceBox => ({ x: 0, width, top: 1, bottom: height - 1 });
@@ -239,6 +252,15 @@ export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps)
             box={box(MEMORY_LANE_HEIGHT)}
             chosen={chosen === null ? null : (memByKey.get(chosen) ?? null)}
           />
+          {loopByKey.size === 0 ? null : (
+            <LoopLane
+              model={model}
+              scale={scale}
+              box={box(LOOP_LANE_HEIGHT)}
+              series={loopByKey}
+              reading={loopReading}
+            />
+          )}
           <Axis scale={scale} width={width} />
           <div className="vf-vitals__lane-head">
             <span className="vf-vitals__eyebrow">{VITALS_WORDS.logs}</span>
@@ -421,6 +443,51 @@ function MemoryLane({ model, scale, box, chosen }: LaneProps): ReactElement {
               d={tracePath(chosen.times, chosen.values, box, traced)}
             />
           )}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+/** VT-3 — the Loop lane: one trace for each process that says how busy its own loop was, on a scale that never
+ * moves (a share has a whole). Its head reads one process at the moment the list reads. */
+function LoopLane(props: {
+  model: VitalsModel;
+  scale: { from: number; to: number } | null;
+  box: TraceBox;
+  series: Map<string, VitalsSeries>;
+  reading: string | null;
+}): ReactElement {
+  const { model, scale, box, series, reading } = props;
+  const traced: TraceScale | null = scale === null ? null : { ...scale, max: 1 };
+  const height = box.bottom + 1;
+  return (
+    <div className="vf-vitals__lane" data-lane="loop">
+      <div className="vf-vitals__lane-head">
+        <span className="vf-vitals__eyebrow">{VITALS_WORDS.loopLane}</span>
+        {reading === null ? null : <span className="vf-vitals__reading">{reading}</span>}
+      </div>
+      <div className="vf-vitals__plot">
+        {traced === null ? null : (
+          <span className="vf-vitals__scale">{VITALS_WORDS.loopScale}</span>
+        )}
+        <svg
+          width={box.width}
+          height={height}
+          viewBox={`0 0 ${box.width} ${height}`}
+          aria-hidden="true"
+        >
+          {traced === null
+            ? null
+            : [...series].map(([key, own]) => (
+                <path
+                  key={key}
+                  className="vf-vitals__trace"
+                  data-own="loop"
+                  data-group={model.processes.get(key)?.group}
+                  d={tracePath(own.times, own.values, box, traced)}
+                />
+              ))}
         </svg>
       </div>
     </div>

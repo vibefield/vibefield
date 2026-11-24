@@ -104,6 +104,7 @@ export function vitalsFixtureSnapshot(): VitalsSnapshotV1 {
         mem += 120 * MB;
       }
       if (actor.role === "window" && second % 61 < 3) cpu += 0.3;
+      const peak = second >= PEAK.from && second <= PEAK.to;
       points.push({
         key: keyOf(actor, start),
         cpu: first ? null : Math.round(cpu * 10_000) / 10_000,
@@ -113,6 +114,24 @@ export function vitalsFixtureSnapshot(): VitalsSnapshotV1 {
         wakeupsPerSec: null,
         powerMw: null,
         ...(actor.processes === undefined ? {} : { processes: actor.processes }),
+        // VT-3: fieldd says its own loop, its collections and its slowest request; in its bad ten seconds the
+        // loop is held and one request waits out the index's rebuild
+        ...(actor.role === "fieldd"
+          ? {
+              own: {
+                loopBusy: peak
+                  ? Math.round((0.95 + 0.04 * wobble(3, second)) * 10_000) / 10_000
+                  : Math.round(Math.max(0, 0.04 * (1 + 0.6 * wobble(5, second))) * 10_000) / 10_000,
+                gcMs: peak ? 38.5 : second % 9 === 0 ? 2.4 : 0,
+                gcMaxMs: peak ? 26 : second % 9 === 0 ? 2.4 : 0,
+                ...(peak
+                  ? { slow: { method: "index.catalog.subscribe", ms: 2_210 } }
+                  : second % 4 === 0
+                    ? { slow: { method: "terminal.list", ms: 6.2 } }
+                    : {}),
+              },
+            }
+          : {}),
       });
     }
     samples.push({ seq: second + 1, time: start + second * INTERVAL, points });
