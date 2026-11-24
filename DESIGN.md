@@ -6421,6 +6421,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       works in, not a part of it. The Memory lane draws VibeField's three groups alone.
     - Every number is `tabular-nums`. Nothing eases: a new reading is drawn where it is, and the lanes do not
       scroll between readings.
+  - **The Loop lane** (VT-3; *added 2026-11-24*), under Memory and 48 tall: **Loop · share of each second busy**.
+    The first two lanes are read from outside a process; this one is what a process says of itself. It draws one
+    trace for each process that says how busy its event loop was, in its group's stroke, and today that is fieldd
+    alone. Its scale never moves: zero to **100%**, said at its top as the others say theirs. A second near the top
+    is a second in which that process could answer nobody. The lane stands only while some process in the window
+    says its loop; a fieldd that says none has no lane, never an empty one.
+    - At the right of its head, in the secondary ink, the lane reads one process at the moment the list reads: the
+      chosen row's if that row says its own, else the first that does. Its name, then what it said, each part only
+      where it was said: "fieldd · 12% busy · GC 3 ms · slowest terminal.list 41 ms". GC is the second's garbage
+      collection pauses summed; the slowest is the request that took longest to its reply, by its method's name
+      alone. A duration from a second up is said in seconds: "1.2 s".
+    - It measures a busy share and not a delay, and that is deliberate: a delay is read by a timer that never
+      rests, and nothing in this window may cost the product a wake at rest (design-03 PF). A share is two
+      counters read when the sample is made.
   - **A moment held.** The pointer over the lanes draws a hairline at its time through every lane, white at 38%,
     and the list reads that moment. A drag picks a span: its band white at 8% with a hairline at each edge. The
     span stays until Escape or a press outside it, and the log lines below are the span's.
@@ -6434,9 +6448,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     of them or the span's, and draws the newest 500 of those; its head says how many the span holds.
   - **When there is nothing to draw** the lanes stand empty, with no scale said, and the list holds one sentence in
     the tertiary ink (§9 "Vitals' words"): never a zero, never a flat line.
-  - *Not drawn until built:* the frames and loop-delay lanes (VT-3), incidents and their marks on the lanes (VT-4),
-    armed traces (VT-5), the Settings switch that turns the recorder off, a door to Vitals from Settings →
+  - *Not drawn until built:* Main's and the desk window's own traces on the Loop lane and a window's long frames
+    (VT-3, its second half), frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
+    (VT-4), armed traces (VT-5), the Settings switch that turns the recorder off, a door to Vitals from Settings →
     Diagnostics, the plugins' log lines, and a span older than the lines the window holds.
+    *Corrected 2026-11-24 (VT-3):* this list said "the frames and loop-delay lanes (VT-3)". The loop's lane is a
+    busy share, as above, and frames at rest are not counted at all: counting them needs a callback every frame,
+    which is a capture to arm, not a thing to leave on.
 - **Settings → Plugins, until Plugins… holds every switch** (MK-5; *drawn and built 2026-11-14*,
   ‹draft› for James's eye, its words in §9 "Settings and Diagnostics"). MK-D10 has the page leave
   Settings. By VF-PM's ruling (2026-11-14 04:33Z, the inventory's A2 at its lean, over MK-5's ask
@@ -12927,6 +12945,9 @@ plugins a new VibeField would leave incompatible); and "consent" is never on scr
   an empty list, one sentence: "Nothing has been measured yet." while it waits, and the floor's own sentence when it
   cannot measure. The foot: "All of VibeField" and "Your terminals aren't counted in it." It says "CPU" and
   "Memory" as Activity Monitor does, and a share of one core as a percent: "14%", and from one core up "2.3 cores".
+  The Loop lane (VT-3) is "Loop · share of each second busy", and its reading says "12% busy", "GC 3 ms" and
+  "slowest terminal.list 41 ms": a method is said by its own name, because whoever reads this window is looking for
+  it.
 - **Settings and Diagnostics** (MK-D10; MK-E5, MK-E12). A plugin's settings are said on its page, under **Settings**,
   as Settings says its own; the page carries Settings' Undo and Redo, so the form's foot no longer sends you to the
   window toolbar ("Synced user settings can be undone from the window toolbar.", `panels/PluginSettingsForm.tsx`) and
