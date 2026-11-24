@@ -352,7 +352,7 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   ledger's entry says what is owed). Its phone fixture reddened wall R23b on main until **the mend of 2026-11-22
   (M524)**. Since **the EL8 to puppeteer 0.4.9 (2026-11-22, M526)** a Codex run's row offers the switch too, its
   adapter's own (`session`: Codex's saved configuration is not written); no source here changed for it.
-- **PF-4…PF-20** — track PF, from James's looks at the build (2026-11-21 to 23): a pane is one piece with its bands, on the
+- **PF-4…PF-22** — track PF, from James's looks at the build (2026-11-21 to 24): a pane is one piece with its bands, on the
   desktop and the phone (PF-4); the phone's card as glass over the field (PF-5); the phone's terminal wears the look of
   the mode the phone is in, with a theme picked for each mode (PF-6); a terminal's card stands at 98% of full height
   on the sheet's own glass (PF-7, "98 is good"); the phone's input card is one row in each of its two modes, with a
@@ -399,6 +399,17 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   puppeteer"); the rule is puppeteer's (`rowName`: the host's mark, the title, the project), VibeField hands the
   title over (the contract's row, fieldd's host title, the peer's bound, the pane frame's fact); defined in §2.7
   "A badge says the session's own title"; the phone's own views not built; unseen on a running desktop.
+  **PF-21 and PF-22 LANDED 2026-11-24 (M551)** with **the EL8 to puppeteer 0.4.13** (carrying 0.4.12). PF-21: a
+  pane's context share is a small ring right after the readout and its session's running time stands after it, to
+  the minute ("monitor how long has it being running from the very start … survive app restart"; "make it into the
+  little ring"; "the token burn and spend does not seem to be persisted"); fieldd keeps a run ledger, and a resumed
+  session carries its clock, its cost and its tokens (`AgentSessionCarried`, `local.ran`,
+  `MonitorHostRun.carried`); the clock counts time actually running; defined in §2.7 "The context ring" and "The
+  running time". PF-22: the spend view names a row by its title too, and a resumed Codex session keeps its title
+  ("the spend view seems still shows the project name as title"; "after resuming a codex session, the title seems
+  lost"); both are puppeteer's mends, and §2.7 "A badge says the session's own title" says them, with its dated
+  correction. Not built: the phone's clock, a conversation resumed by its native id, the ten-minute spend series
+  kept. Unseen on a running desktop.
 - **WI-5** — track WI, from James's look at the build (2026-11-22, a phone signed in to an account with no desktop:
   "we should provide a log in to another account option for users here so they don't get trapped here"): **No desktops
   yet.** and **Waiting for approval.** end their glass with *Use another account*, the way in's own link, which asks

@@ -68441,3 +68441,80 @@ in the support bundle (its exporter has its own selection and consent flow: a sl
 - **Found along the way:** a subagent's fieldd test run rewrote the stage's `field-native` (the finding in M546's
   entry). An app restart at 05:10Z ended the first four subagents mid-work; three were respawned from the files they
   left and one had already committed.
+
+## EL8: puppeteer 0.4.13, PF-21 and PF-22 — a pane says how long its session has run, and a resume keeps its clock, its spend and its title (M551)
+
+**2026-11-24 · on local main: `2b5c3e1d3` PF-21 (doc), `a6628ac0c` PF-22 (doc), `f618b6bf7` (EL8: puppeteer
+0.4.13), `9eea3df0a` PF-21 (green), `0a237ed57` and `4176e85f0` PF-21 (mend). Upstream: vibefield/puppeteer #116
+(`9a43abfe`), #117 (`cda0a5a9`) and the release #118 (v0.4.12 = `36bb7a98`); #119 (`cd3dc45b`), #120 (`eed7794e`)
+and the release #121 (v0.4.13 = `105ebadd`).**
+James, 2026-11-23: "for each terminal session, i also want to monitor how long has it being running from the very
+start, and this time should preserved so it survive app restart, and when the session resumed, the timer continue
+where it was saved last time, this should show in the terminal pane header bar"; "for context window indicator in
+the pane, let's align with mobile's design, make it into the little ring and place it right after the model effort
+line"; "the token burn and spend does not seem to be persisted, after app restart and session resumed, all the
+bubbles restored to same original size, and there is nothing in the spend view". 2026-11-24: "the spend view seems
+still shows the project name as title"; "after resuming a codex session, the title seems lost and it shows the
+project name as title again". Both releases were his picks ("Release both"; "Release 0.4.13 now", then "Add it to
+0.4.13").
+
+- **What was so.** A pane said its context share in a capsule at its foot and said nothing of time. A resumed run
+  is a new run in a new terminal, the monitor counts a run's own live usage alone, and its totals lived in memory:
+  after an app restart every resumed body in the swarm came back the same size and the spend view listed nothing.
+  The spend view named a row by its project while every other view named it by its session's title (DESIGN.md
+  §2.7 said so). A resumed Codex session lost its title until somebody renamed the thread: Codex says a thread's
+  name when it begins and when it is renamed, never when it is resumed, and the adapter read it nowhere else.
+- **Upstream, puppeteer 0.4.12 (#117, #116).** The pane frame's context share is a ring right after the readout;
+  `PaneFrame` and `DeckFrames` take a clock per session (`PaneFrameClock`, `clocksBySession`) and say it to the
+  minute; nothing is drawn at a pane's foot and its band's fallback is 8. The monitor's backend adds a run's own
+  cost and tokens to what its host hands it as carried (`MonitorHostRun.carried`). The Grok adapter says a
+  session's title and its rename.
+- **Upstream, puppeteer 0.4.13 (#119, #120).** The spend view names a row by `rowName`, and its project moves
+  beside the model. The Codex adapter reads a resumed thread's name from the resume's own answer.
+- **Here, the pin.** The EL8's usual set at 0.4.13, carrying 0.4.12, which no commit pinned: the lock, the seven
+  override rows and their 20 release-age rows, preflight's expectations, pnpm's lock, 8 phone goldens and their 9
+  kit mirrors, two hand strings, the ROADMAP row. The deck's own foot band follows the frame's (8), and an ended
+  pane keeps 30 for its exit chip. Seven goldens move by their version lines; the spend golden's names also gain
+  0.4.13's three fields (`spoken`, `place`, `run`), and no word that was there moved.
+- **The swarm patch is carried.** The local patch of `@vibefield/puppeteer-views` (`167c49765`, amended by
+  `6a352e848`) is re-keyed from 0.4.11 to 0.4.13 by its key and file name alone, from the file as committed on
+  main. The sixteen published files it changes are byte for byte the same in the published 0.4.11 and 0.4.13, the
+  one file it adds is in neither, and pnpm applies it under the same hash.
+- **Here, PF-21.** fieldd keeps a run ledger (`<dataDir>/agents/run-ledger.json`, mode 0600): per run, the time
+  its session has been running and what it has used, written every 30 s, at a run's exit and at a person's Quit.
+  A resume carries the figures of the run it continues; a run met again after a fieldd restart keeps its own. The
+  signed record and the summary carry them (`AgentSessionCarried`), the monitor's host run hands the usage to the
+  backend, and the chrome's fact `local.ran` gives the pane its clock (`paneFrameClocks`, the deck's
+  `clocksBySession`). The clock counts time actually running: the time between a session's end and its resume is
+  not added.
+- **Here, PF-22.** No code: DESIGN.md §2.7 says the spend view's line and that a resumed session keeps its title,
+  and corrects in place its own sentence "The rain and the spend view still say the project". The pin brings both.
+
+**Proved, 2026-11-24:**
+- Upstream: #116, #117, #119, #120 and both release PRs, each with its six CI jobs on three systems green. The
+  Codex mend was also read live in the adapter's isolated rig with a loopback model, on codex-cli 0.171.0: a
+  thread is named, renamed by another client, resumed, and the resumed session starts with the name. All 20
+  `@vibefield/puppeteer-*` tarballs of 0.4.13 answered before the one install.
+- On the test Mac, at `4176e85f0` (the tip that landed, before this entry): `pnpm verify` exit 0, whole: cargo
+  716 passed, 0 failed, 15 ignored; vitest 18,270 passed, 0 failed, 22 skipped; the generated files clean, which
+  holds the layout registry's rows where this landing and the Vitals track both wrote. The kit, every suite, by
+  xcodebuild: 3,260 passed, 3 skipped, 0 failed. Its fill installed the 20 puppeteer 0.4.13 packages alone.
+- In the lane's own worktree on the development Mac: the one install and the frozen install; `siblings render
+  --prod --check`; the goldens' one writer; `check-ios-fixtures`; `check-agent-catalog --literals`.
+
+**Two reds before the green, and their mends.** The first verify, at `9eea3df0a`, stopped in lint: one
+`assist/source/organizeImports` error in `packages/fieldd/src/agent-runtime.ts`, PF-21's new import out of order.
+The files had been run through `biome format` and `biome lint`, and the import sort is neither; `0a237ed57` sorts
+it. The second, at `0a237ed57`, stopped in the TS tests on ten rows, none a fault of the product: six were readers
+of a run's local facts that PF-21 (green) had not updated for `local.ran` (the catalog's fixture copy of fieldd's
+mapping, the three committed model streams, two fieldd expectations), and two were PF-21's own rows written wrong
+(a token sum that forgot the fixture run's own count; scripted events on a box not set up to observe).
+`4176e85f0` mends them, the model streams by their own generator.
+
+**Not seen:** a running Godview after an app restart. No clock, ring, swarm size, spend row or resumed Codex title
+was looked at in the product; a desktop shows any of it only once it runs `4176e85f0` or later. **Not built:** the
+phone says no running time, and its own views do not name a row by its title; a conversation opened again by its
+native id (History, the launcher) carries nothing; the ten-minute spend series is not kept (the totals return, the
+series starts again); a bare shell recreated after a Quit starts from zero; a pending run moves its clock alone,
+and its usage stays at its last line. **Not run:** every smoke and `pnpm gate:landing`; the verify did not run on
+the development Mac. **Not done:** no push of its own; a push needs its own proof at main's tip.
