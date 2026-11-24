@@ -68518,3 +68518,26 @@ native id (History, the launcher) carries nothing; the ten-minute spend series i
 series starts again); a bare shell recreated after a Quit starts from zero; a pending run moves its clock alone,
 and its usage stays at its last line. **Not run:** every smoke and `pnpm gate:landing`; the verify did not run on
 the development Mac. **Not done:** no push of its own; a push needs its own proof at main's tip.
+
+## VT-6 — under `pnpm dev` the Vitals window opens by itself with the desk (M552)
+
+**2026-11-24 · on local main: `8436ffab4` (doc), `0e4919fff` VT-6 (code).** James, 2026-11-24, in the lane's
+session: "can you make it automatically launch when in dev mode?" (track VT; DECISIONS VT).
+
+- **What it does.** Under `pnpm dev` the Vitals window opens each time the desk's window is shown, once, in front of
+  it and without taking the keys (`showInactive`). An open one is left as the person put it. It still closes with
+  the desk's window.
+- **Who never gets it unasked:** a packaged build, every smoke-like mode, and a marked run on a dev-mode shell
+  (`VF_SMOKE_RUN`, which `smoke:studio` sets). `opensVitalsWithDesk` in `electron-shell/src/main/modes.ts` is the one
+  answer.
+- **A person's ask is unchanged** (the Window menu, ⌥⌘V, Settings' Open Vitals): shown and focused. One change in
+  it: an ask that meets an opening still loading now waits for the load, where it used to show the window before
+  its document had loaded.
+- **Proof:** electron-shell alone, on the lane's tree at `0e4919fff`: tsc, biome on the changed files, vitest 217
+  files / 3,324 passed / 3 skipped (a new `vitals-window.test.ts`, 14 tests on a fake window; `modes.test.ts` for
+  every mode).
+- **Not run:** any smoke, the whole verify, and a real `pnpm dev`: no person and no harness has seen the window
+  open by itself.
+- **Readings ‹for James›, on no page:** it comes back at every start of the shell under `pnpm dev`, a restart after
+  a main or preload edit included, even if it was closed before; there is no switch for it. It opens at Electron's
+  default place (the centre of the screen) each time, because the window does not remember where it was put.

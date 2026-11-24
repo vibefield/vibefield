@@ -475,6 +475,9 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   LANDED names the readings its builders made that were on no page; they are ‹for James›, not rulings. Not
   built: incidents in the support bundle, a smoke row for captures and incidents, the baseline run on the
   packaged app, and VT-D6's budgets.
+  **VT-6 LANDED 2026-11-24 (M552):** under `pnpm dev` the Vitals window opens by itself with the desk's window
+  (James, 2026-11-24: "can you make it automatically launch when in dev mode?"). Its two readings ‹for James›
+  are in LANDED: it returns at every start with no switch, and it does not remember its place.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the
