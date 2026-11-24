@@ -187,6 +187,9 @@ describe("MV-3a — the model board through the door, and the report of what a w
     expect(AgentModelDeskRow.parse(rows.run).local).toEqual({
       nativeSessionId: "native-1",
       exited: true,
+      // PF-21 — the chrome's clock fact: the run carried nothing in, and the whole of it is its record's birth to
+      // the exit fieldd saw, which this fixture stamps at one instant
+      ran: { beforeMs: 0, totalMs: 0 },
     });
     // …which no other board carries: not the remote cut a peer and the phone read
     // (PG-2; the desk cut before it), nor the field row

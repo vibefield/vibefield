@@ -122,11 +122,11 @@ describe("hostRunFromSummary — the fold's row as the backend's host record", (
     expect(hostRunFromSummary(working).carried).toBeUndefined();
     // a clock alone is no usage: the backend is handed nothing
     expect(hostRunFromSummary({ ...working, carried: { ranMs: 60_000 } }).carried).toBeUndefined();
-    const carried = { ranMs: 60_000, usd: 4.5, coverage: "complete", tokens: 900 };
+    const carried = { ranMs: 60_000, usd: 4.5, coverage: "complete", tokens: 250 };
     expect(hostRunFromSummary({ ...working, carried }).carried).toEqual({
       usd: 4.5,
       coverage: "complete",
-      tokens: 900,
+      tokens: 250,
     });
     // a cost with no coverage said reads complete, and any word but `complete` a floor (the contract's word is open)
     expect(hostRunFromSummary({ ...working, carried: { usd: 1 } }).carried).toEqual({
@@ -141,14 +141,16 @@ describe("hostRunFromSummary — the fold's row as the backend's host record", (
       hostRunFromSummary({ ...working, carried: { tokens: 7, coverage: "partial" } }).carried,
     ).toEqual({ tokens: 7 });
 
-    // the backend's row: a run that has counted nothing of its own already stands at what it carried
+    // the backend's row: a run that has priced nothing of its own already stands at the cost it carried, and its
+    // tokens are its own count (the fixture's 900) on top of the 250 it carried
     const resumed = await testMonitor({ summaries: [{ ...working, carried }] });
     const row = resumed.row("run-working");
     expect(row.cost?.usd).toBe(4.5);
-    expect(row.tokens?.total).toBe(900);
+    expect(row.tokens?.total).toBe(1150);
     resumed.service.dispose();
     const fresh = await testMonitor({ summaries: [working] });
     expect(fresh.row("run-working").cost?.usd).not.toBe(4.5);
+    expect(fresh.row("run-working").tokens?.total).toBe(900);
     fresh.service.dispose();
   });
 

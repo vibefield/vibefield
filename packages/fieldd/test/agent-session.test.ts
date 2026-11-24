@@ -5707,7 +5707,8 @@ describe("PF-21 — a session's clock and totals go on across a resume (the real
   }
 
   it("a resumed run carries what the run it continues ran and used: on its record, its row and the model's row", async () => {
-    const box = await setup({ floor: "real" });
+    // observed: the run's adapter says events of its own (`scriptedEvent`), as a hook would say a token count
+    const box = await setup({ floor: "real", observed: true });
     const { daemon, dataDir, envOut } = box;
     const win = await window(daemon, DECK, "pf21");
     const spawned = (await born(win, "agent.spawn", {

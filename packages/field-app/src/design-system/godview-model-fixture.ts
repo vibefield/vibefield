@@ -405,6 +405,12 @@ function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts {
     ...(cwd !== "" ? { cwd } : {}),
     ...(summary.spawnedBy !== undefined ? { spawnedBy: summary.spawnedBy } : {}),
     ...(summary.continuation?.exited === true ? { exited: true } : {}),
+    // PF-21 — the pane frame's clock, as fieldd says it: the time before this run's terminal, and the whole of it
+    // once the run has ended
+    ran: {
+      beforeMs: Math.floor(summary.carried?.ranMs ?? 0),
+      ...(summary.ranMs !== undefined ? { totalMs: summary.ranMs } : {}),
+    },
     ...(monitor !== undefined
       ? {
           mirror: {

@@ -493,6 +493,8 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
       nativeSessionId: "run-typed-native",
       cwd: "/Users/me/src/vibe-field",
       spawnedBy: "user-shell",
+      // PF-21 — the chrome's clock fact rides every row of this desktop, spoken or not
+      ran: { beforeMs: 0 },
       mirror: {
         alive: true,
         startedAt: "2026-09-13T09:58:00.000Z",
