@@ -31,6 +31,8 @@ export const DEFAULT_APP_PREFERENCES: Readonly<AppPreferences> = {
   sounds: true,
   // MK-2a (S3; MK-D6, TD-17) — community plugins are off until the person turns them on.
   communityPlugins: false,
+  // VT-2b (VT-D2) — the vitals recorder records from the first run, until the person turns it off.
+  recordVitals: true,
 };
 
 /** MK-2c (2026-11-11; D4, VF-PM 08:48:07Z, 10:08:59Z): whether this build draws the Community plugins switch. The
@@ -56,6 +58,7 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
   const quietUntil = values[APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL];
   const communityPlugins = values[APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS];
   const deskLight = readDeskLight(values[APP_PREFERENCE_KEYS.DESK_LIGHT]);
+  const recordVitals = values[APP_PREFERENCE_KEYS.RECORD_VITALS];
   return {
     showTray: typeof showTray === "boolean" ? showTray : DEFAULT_APP_PREFERENCES.showTray,
     backgroundShell:
@@ -79,6 +82,9 @@ export function effectiveAppPreferences(values: Readonly<Record<string, unknown>
     // MK-2a (S3) — only a stored true is on: absent, or any value that is not a boolean, reads as
     // off, so a guess never turns community plugins on.
     communityPlugins: communityPlugins === true,
+    // VT-2b — only a stored false is off: absent, or a value that is not a boolean, records.
+    recordVitals:
+      typeof recordVitals === "boolean" ? recordVitals : DEFAULT_APP_PREFERENCES.recordVitals,
     // SD-2 (SD-D22) — Turn sounds back on writes null; the doc keeps the key and the snapshot drops it. Anything that
     // is not a moment (a newer build's word, a corrupted value) is no Quiet: sounds are never held back by a guess.
     ...(isQuietMoment(quietUntil) ? { soundsQuietUntil: quietUntil } : {}),

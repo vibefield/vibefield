@@ -1721,6 +1721,8 @@ async fn the_vitals_census_reads_the_floor_its_child_and_a_watched_tree() {
     .await;
     let (set, _) = reply(&mut c, 3).await;
     assert_eq!(set["result"]["watching"], 2, "{set}");
+    // VT-2b — a list that does not say the switch leaves the meter as it is: recording, from the floor's start
+    assert_eq!(set["result"]["recording"], true, "{set}");
 
     c.send(
         json!({"jsonrpc":"2.0","id":4,"method":"native.vitals.subscribe",
@@ -1818,6 +1820,23 @@ async fn the_vitals_census_reads_the_floor_its_child_and_a_watched_tree() {
         "this process is under its parent: {tree:?}"
     );
     assert!(tree.footprint_bytes > 0);
+
+    // VT-2b — the recorder's switch on the same verb: off and on, each echoed as the meter now stands
+    c.send(
+        json!({"jsonrpc":"2.0","id":20,"method":"native.vitals.watch.set",
+        "params":{"watch":[],"recording":false}}),
+    )
+    .await;
+    let (off, _) = reply(&mut c, 20).await;
+    assert_eq!(off["result"]["recording"], false, "{off}");
+    assert_eq!(off["result"]["watching"], 0, "{off}");
+    c.send(
+        json!({"jsonrpc":"2.0","id":21,"method":"native.vitals.watch.set",
+        "params":{"watch":[],"recording":true}}),
+    )
+    .await;
+    let (on, _) = reply(&mut c, 21).await;
+    assert_eq!(on["result"]["recording"], true, "{on}");
 
     child.kill().expect("the child is killed");
     child.wait().expect("and reaped");

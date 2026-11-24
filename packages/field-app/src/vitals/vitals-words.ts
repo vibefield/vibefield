@@ -61,6 +61,8 @@ export const VITALS_WORDS = {
   loopScale: "100%",
   logs: "Logs",
   nothingYet: "Nothing has been measured yet.",
+  /** VT-2b — under the empty list while the recorder is off */
+  off: "The recorder is off. Turn it on in Settings → Diagnostics.",
   noLines: "No lines in this span.",
   notMeasured: "–",
   legend: { shell: "VibeField", fieldd: "fieldd", floor: "the floor", agents: "your terminals" },
@@ -78,6 +80,8 @@ export function stateWords(state: string): { words: string; recording: boolean }
       return { words: "Not measured on this computer", recording: false };
     case "unreachable":
       return { words: "fieldd isn't answering", recording: false };
+    case "off":
+      return { words: "Off · turned off in Settings", recording: false };
     default:
       return { words: "Waiting for the floor's meter", recording: false };
   }

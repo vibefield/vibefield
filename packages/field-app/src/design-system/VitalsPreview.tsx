@@ -4,6 +4,7 @@ import { VitalsView } from "../vitals/VitalsView";
 import {
   vitalsFixtureLogs,
   vitalsFixtureModel,
+  vitalsFixtureOff,
   vitalsFixtureUnavailable,
   vitalsFixtureWaiting,
 } from "./vitals-fixtures";
@@ -13,13 +14,14 @@ import {
 // fieldd's snapshot and the lines the window keeps. The markup, the words and the CSS are the product's; the plate
 // gives the view a window's size and nothing else.
 
-export const VITALS_PLATE_STATES = ["recording", "waiting", "unavailable"] as const;
+export const VITALS_PLATE_STATES = ["recording", "waiting", "unavailable", "off"] as const;
 export type VitalsPlateState = (typeof VITALS_PLATE_STATES)[number];
 
 const MODELS = {
   recording: vitalsFixtureModel,
   waiting: vitalsFixtureWaiting,
   unavailable: vitalsFixtureUnavailable,
+  off: vitalsFixtureOff,
 } as const;
 
 export function VitalsPlate({ state }: { readonly state: VitalsPlateState }): ReactElement {

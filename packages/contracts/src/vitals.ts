@@ -133,13 +133,24 @@ export const NativeVitalsWatchEntry = z.object({ pid: pid(), tree: z.boolean() }
 export type NativeVitalsWatchEntry = z.infer<typeof NativeVitalsWatchEntry>;
 
 /** `native.vitals.watch.set`'s params: the whole list, replacing the last one (a desired state, never a diff). The
- * floor's own process and its children are measured without being asked. */
+ * floor's own process and its children are measured without being asked.
+ *
+ * `recording` (VT-2b) is the recorder's switch as the floor hears it: `false` stops the meter's readings and drops
+ * the samples the floor kept; `true` starts them again from nothing. Left out, the floor stays as it is: a floor
+ * records from its start, and a fieldd before VT-2b never says the field. A floor before VT-2b ignores it and goes
+ * on measuring, which its answer shows by not echoing it. */
 export const NativeVitalsWatchSetParams = z
-  .object({ watch: z.array(NativeVitalsWatchEntry).max(VITALS.WATCH_MAX) })
+  .object({
+    watch: z.array(NativeVitalsWatchEntry).max(VITALS.WATCH_MAX),
+    recording: z.boolean().optional(),
+  })
   .passthrough();
 export type NativeVitalsWatchSetParams = z.infer<typeof NativeVitalsWatchSetParams>;
 
-export const NativeVitalsWatchSetResult = z.object({ watching: count() }).passthrough();
+/** `recording` is whether the floor's meter reads now; a floor before VT-2b leaves it out. */
+export const NativeVitalsWatchSetResult = z
+  .object({ watching: count(), recording: z.boolean().optional() })
+  .passthrough();
 export type NativeVitalsWatchSetResult = z.infer<typeof NativeVitalsWatchSetResult>;
 
 // ---------------------------------------------------------------------------------------------------------------

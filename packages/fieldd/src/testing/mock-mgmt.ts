@@ -469,6 +469,8 @@ export class MockMgmtServer {
   };
   /** VT-1 — every list `native.vitals.watch.set` was told, in order. */
   readonly vitalsWatchSets: Array<Array<{ pid: number; tree: boolean }>> = [];
+  /** VT-2b — what each `native.vitals.watch.set` said of the recorder's switch, in order (`undefined`: not said). */
+  readonly vitalsRecordingSets: Array<boolean | undefined> = [];
   /** VT-1 — a floor that predates the meter: both vitals verbs answer `method not found`. */
   vitalsAbsent = false;
   private storeVersion = 0;
@@ -862,8 +864,17 @@ export class MockMgmtServer {
       if (msg.method === "native.vitals.watch.set") {
         const watch = (msg.params?.["watch"] ?? []) as Array<{ pid: number; tree: boolean }>;
         this.vitalsWatchSets.push(watch);
+        const recording = msg.params?.["recording"];
+        this.vitalsRecordingSets.push(typeof recording === "boolean" ? recording : undefined);
         sock.write(
-          `${JSON.stringify({ jsonrpc: "2.0", id: msg.id, result: { watching: watch.length } })}\n`,
+          `${JSON.stringify({
+            jsonrpc: "2.0",
+            id: msg.id,
+            result: {
+              watching: watch.length,
+              ...(typeof recording === "boolean" ? { recording } : {}),
+            },
+          })}\n`,
         );
         return;
       }

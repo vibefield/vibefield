@@ -115,15 +115,20 @@ export class VitalsService {
   private attached = false;
   private attaching: Promise<void> | null = null;
   private disposed = false;
+  /** VT-2b — the recorder's switch (`setRecording`). While false nothing is asked of the floor but to stop, nothing
+   * is kept, and the state is `off`. */
+  private wanted = true;
+  /** how the floor subscription in hand is ended */
+  private floorSub: (() => void) | null = null;
 
   private readonly onConnected = (): void => {
     // the floor forgets its watch list with its process, and a link that came back may be a new floor's
     this.watchSent = null;
     if (!this.attached) void this.attach();
-    else this.pushWatch();
+    else this.pushWatch(); // while off, this tells a new floor to stop its meter
   };
   private readonly onClosed = (): void => {
-    this.setState("waiting", "the floor is not answering");
+    if (this.wanted) this.setState("waiting", "the floor is not answering");
   };
 
   constructor(private readonly options: VitalsServiceOptions) {
@@ -134,6 +139,45 @@ export class VitalsService {
 
   async start(): Promise<void> {
     await this.attach();
+  }
+
+  /** VT-2b (VT-D2) — the recorder's switch, as the person set it in Settings → Diagnostics. Off tells the floor to
+   * stop its meter and drops everything kept: a later On starts from nothing. Saying what already stands does
+   * nothing. The floor subscription is kept across both: the floor has no verb that ends one, a stopped meter sends
+   * nothing down it, and a second subscription would have the floor send every sample twice. */
+  setRecording(on: boolean): void {
+    if (this.disposed || this.wanted === on) return;
+    this.wanted = on;
+    this.options.logger.info(
+      "fieldd.vitals.recording_set",
+      "The vitals recorder was turned on or off",
+      { recording: on },
+    );
+    if (on) {
+      this.setState("waiting", "the floor's meter has not answered yet");
+      if (this.attached) this.pushWatch();
+      else void this.attach();
+      return;
+    }
+    this.ring.length = 0;
+    this.previous.clear();
+    this.known.clear();
+    this.live = new Set();
+    this.floorSeq = 0;
+    this.floorBootId = null;
+    this.setState("off", undefined);
+    this.pushWatch();
+  }
+
+  private endFloorSubscription(): void {
+    const end = this.floorSub;
+    this.floorSub = null;
+    this.attached = false;
+    try {
+      end?.();
+    } catch {
+      // a link that is already gone has nothing to end
+    }
   }
 
   register(api: ProductApi): void {
@@ -161,6 +205,7 @@ export class VitalsService {
     this.options.native.off("connected", this.onConnected);
     this.options.native.off("closed", this.onClosed);
     this.subscribers.clear();
+    this.endFloorSubscription();
     try {
       this.options.own?.dispose();
     } catch {
@@ -194,22 +239,32 @@ export class VitalsService {
         // `sinceSeq: 0` asks for what the floor kept while no fieldd listened: the minutes before this fieldd
         // began, an earlier fieldd's last ones among them. A replay after a reconnect asks the same, and
         // `applySnapshot` drops what it already holds.
-        const { snapshot } = await this.options.native.subscribe(
+        const { snapshot, dispose } = await this.options.native.subscribe(
           "native.vitals.subscribe",
           { sinceSeq: 0 },
           (payload, kind) => {
-            if (this.disposed) return;
+            if (this.disposed || !this.wanted) return;
             if (kind === "snapshot") this.applySnapshot(payload);
             else this.applySample(payload);
           },
         );
+        if (this.disposed) {
+          dispose();
+          return;
+        }
+        this.floorSub = dispose;
         this.attached = true;
+        if (!this.wanted) {
+          // turned off while the floor was answering: its snapshot is not read, and it is told to stop
+          this.pushWatch();
+          return;
+        }
         this.applySnapshot(snapshot);
         this.pushWatch();
       } catch (error) {
         // A floor that predates the meter answers METHOD_NOT_FOUND; a floor that is down answers nothing. Either
         // way nothing is drawn as zero, and the next "connected" asks again.
-        this.setState("waiting", "the floor's meter is not answering");
+        if (this.wanted) this.setState("waiting", "the floor's meter is not answering");
         this.options.logger.info(
           "fieldd.vitals.meter_unavailable",
           "The floor's vitals meter did not answer; fieldd will ask again when the link returns",
@@ -307,15 +362,22 @@ export class VitalsService {
   }
 
   /** Tell the floor whom to measure beside its own, when the list changed. */
-  private pushWatch(named: Map<number, VitalsNamedProcess> = this.named()): void {
+  private pushWatch(named?: Map<number, VitalsNamedProcess>): void {
     if (this.disposed || !this.attached) return;
-    const watch = [...named.values()]
-      .slice(0, VITALS.WATCH_MAX)
-      .map((row) => ({ pid: row.pid, tree: row.tree === true }));
-    const fingerprint = watch.map((row) => `${row.pid}${row.tree ? "t" : ""}`).join(",");
+    // VT-2b — while the recorder is off the floor is asked for nobody and told to stop its meter; while it is on
+    // every list says so, which is what starts a stopped meter again. A floor before VT-2b ignores the field.
+    const watch = this.wanted
+      ? [...(named ?? this.named()).values()]
+          .slice(0, VITALS.WATCH_MAX)
+          .map((row) => ({ pid: row.pid, tree: row.tree === true }))
+      : [];
+    const fingerprint = this.wanted
+      ? `on:${watch.map((row) => `${row.pid}${row.tree ? "t" : ""}`).join(",")}`
+      : "off";
     if (fingerprint === this.watchSent) return;
     this.watchSent = fingerprint;
-    this.options.native.request("native.vitals.watch.set", { watch }).catch((error: unknown) => {
+    const params = { watch, recording: this.wanted };
+    this.options.native.request("native.vitals.watch.set", params).catch((error: unknown) => {
       // said once per list: the next change, or the next "connected", sends again
       this.watchSent = null;
       this.options.logger.info(

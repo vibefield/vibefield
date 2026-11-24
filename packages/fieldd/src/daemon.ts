@@ -2755,6 +2755,27 @@ export async function bootstrap(
     });
     vitals = vitalsService;
     vitalsService.register(api);
+    // VT-2b (VT-D2) — the recorder's switch is an app preference (Settings → Diagnostics, "Record vitals"). It is
+    // read before the first attach, so a recorder the person turned off never reads the floor's backlog, and again
+    // at every change: a change made here, one merged from another of the person's desktops, and an undo of either
+    // (which the settings doc says under its own section name).
+    const followVitalsSwitch = async (): Promise<void> => {
+      try {
+        vitalsService.setRecording(
+          effectiveAppPreferences(await settingsDoc.appValues()).recordVitals,
+        );
+      } catch (error) {
+        logger.warn(
+          "fieldd.vitals.switch_unreadable",
+          "The vitals recorder's switch could not be read; the recorder stays as it is",
+          { error },
+        );
+      }
+    };
+    settingsDoc.on("changed", (event: { section: string }) => {
+      if (event.section === "app" || event.section === "settings") void followVitalsSwitch();
+    });
+    await followVitalsSwitch();
     await vitalsService.start();
     shellApi = api;
     api.register("audit.append", (ctx, params) => audit.appendFromCaller(ctx, params));

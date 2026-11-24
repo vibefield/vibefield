@@ -626,6 +626,10 @@ export const APP_PREFERENCE_KEYS = {
    * mirror and its five sliders, as ONE value (`DeskLightSet`), so a slider let go is one write and one undo step.
    * The person's: it rides the settings doc, so a desk looks the same on each of their desktops. null clears it. */
   DESK_LIGHT: "desk.light",
+  /** VT-2b (VT-D2; DESIGN.md §8 "Vitals", the recorder's switch) — Record vitals: on from the first run. Off stops
+   * the census on the floor as well as in fieldd and drops what was kept. fieldd reads it; absent, or anything that
+   * is not a boolean, is on. */
+  RECORD_VITALS: "diagnostics.recordVitals",
 } as const;
 
 /** MK-1 (MK-E3): the preferences no undo may ever change. This is a LIST: fieldd reads it and commits these outside
@@ -647,6 +651,7 @@ export const AppPreferenceKey = z.enum([
   APP_PREFERENCE_KEYS.SOUNDS_QUIET_UNTIL,
   APP_PREFERENCE_KEYS.COMMUNITY_PLUGINS,
   APP_PREFERENCE_KEYS.DESK_LIGHT,
+  APP_PREFERENCE_KEYS.RECORD_VITALS,
 ]);
 export type AppPreferenceKey = z.infer<typeof AppPreferenceKey>;
 
@@ -794,6 +799,8 @@ export const AppPreferences = z
     // Item 583: OPTIONAL, never required — absent is every row at its rest (`deskLightValues`), as an older daemon's
     // snapshot says and as a person who never opened Settings → Canvas has it.
     deskLight: DeskLight.optional(),
+    // VT-2b (VT-D2): on by default, including snapshots from an older daemon (which records and has no switch).
+    recordVitals: z.boolean().default(true),
   })
   .passthrough();
 export type AppPreferences = z.infer<typeof AppPreferences>;

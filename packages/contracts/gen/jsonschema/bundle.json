@@ -3492,6 +3492,9 @@
             "$ref": "#/definitions/NativeVitalsWatchEntry"
           },
           "maxItems": 256
+        },
+        "recording": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -3505,6 +3508,9 @@
         "watching": {
           "type": "integer",
           "minimum": 0
+        },
+        "recording": {
+          "type": "boolean"
         }
       },
       "required": [

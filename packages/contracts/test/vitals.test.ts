@@ -134,6 +134,12 @@ describe("the floor's wire", () => {
       watch: Array.from({ length: count }, (_, index) => ({ pid: index + 1, tree: false })),
     });
     expect(NativeVitalsWatchSetParams.safeParse(watch(VITALS.WATCH_MAX)).success).toBe(true);
+    // VT-2b — the recorder's switch rides the same desired state: left out by an older fieldd, a boolean when said
+    expect(NativeVitalsWatchSetParams.parse({ watch: [] }).recording).toBeUndefined();
+    expect(NativeVitalsWatchSetParams.parse({ watch: [], recording: false }).recording).toBe(false);
+    expect(NativeVitalsWatchSetParams.safeParse({ watch: [], recording: "off" }).success).toBe(
+      false,
+    );
     expect(NativeVitalsWatchSetParams.safeParse(watch(VITALS.WATCH_MAX + 1)).success).toBe(false);
     expect(NativeVitalsWatchSetParams.safeParse({ watch: [{ pid: 0, tree: false }] }).success).toBe(
       false,

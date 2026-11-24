@@ -211,6 +211,19 @@ export function vitalsFixtureWaiting(): VitalsModel {
   });
 }
 
+/** VT-2b — the model while the recorder is off: fieldd's own snapshot of that state, which names nobody. */
+export function vitalsFixtureOff(): VitalsModel {
+  return modelFromSnapshot({
+    v: 1,
+    state: "off",
+    intervalMs: INTERVAL,
+    memory: "footprint",
+    processes: [],
+    samples: [],
+    observer: { meterCpu: 0 },
+  });
+}
+
 export function vitalsFixtureUnavailable(): VitalsModel {
   return modelFromSnapshot({
     v: 1,

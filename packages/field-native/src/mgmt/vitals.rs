@@ -20,7 +20,7 @@ fn refused(id: Option<Value>, message: &str) -> Value {
 
 pub fn watch_set(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) -> Value {
     let Ok(parsed) = serde_json::from_value::<NativeVitalsWatchSetParams>(params.clone()) else {
-        return refused(id, "expected { watch: [{ pid, tree }] }");
+        return refused(id, "expected { watch: [{ pid, tree }], recording? }");
     };
     if parsed.watch.len() as u64 > limits::WATCH_MAX {
         return refused(id, "the watch list is longer than its bound");
@@ -36,7 +36,21 @@ pub fn watch_set(state: &Arc<DaemonState>, params: &Value, id: Option<Value>) ->
         });
     }
     let watching = state.vitals.set_watch(entries);
-    ok(id, json!({ "watching": watching }))
+    // VT-2b — the recorder's switch. Left out, the meter stays as it is.
+    if let Some(recording) = parsed.recording {
+        if state.vitals.set_recording(recording) {
+            tracing::info!(
+                event = "field_native.vitals.recording_set",
+                component = "vitals",
+                recording,
+                "The vitals meter was turned on or off"
+            );
+        }
+    }
+    ok(
+        id,
+        json!({ "watching": watching, "recording": state.vitals.recording() }),
+    )
 }
 
 pub fn subscribe(state: &Arc<DaemonState>, tx: &MgmtOutbox, params: &Value, id: Option<Value>) {

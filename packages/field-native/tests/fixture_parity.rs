@@ -862,6 +862,8 @@ fn vitals_fixtures() {
     roundtrip::<NativeVitalsSnapshot>("native-vitals-snapshot.valid.json", true);
     roundtrip::<NativeVitalsSnapshot>("native-vitals-snapshot.unavailable.json", true);
     roundtrip::<NativeVitalsWatchSetParams>("native-vitals-watch-set-params.valid.json", true);
+    // VT-2b — the recorder's switch as the floor hears it
+    roundtrip::<NativeVitalsWatchSetParams>("native-vitals-watch-set-params.off.json", true);
 
     let snapshot = load("native-vitals-snapshot.valid.json");
     let parsed: NativeVitalsSnapshot = serde_json::from_value(snapshot.clone()).unwrap();

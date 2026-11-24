@@ -557,3 +557,148 @@ describe("fieldd's vitals recorder (VT-1)", () => {
     );
   });
 });
+
+// VT-2b (track VT, 2026-11-24; VT-D2's second half) — the recorder's switch: an app preference fieldd follows.
+describe("fieldd's vitals recorder follows its switch (VT-2b)", () => {
+  const setSwitch = async (client: WsRpc, value: boolean): Promise<void> => {
+    await client.call("storage.appPreferences.set", { key: "diagnostics.recordVitals", value });
+  };
+
+  it("turned off: tells the floor to stop, drops what it kept, says off, and keeps nothing a floor still sends", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    const { subId } = await subscribe(client);
+    await until(() => fixture.native.vitalsWatchSets.length > 0, 4000, "the first watch list");
+    // while it records, every list says so: that is what starts a stopped meter again
+    expect(fixture.native.vitalsRecordingSets.at(-1)).toBe(true);
+    fixture.native.pushDelta("vitals.subscribe", sample(1, T0, floorRows(1_000)));
+    fixture.native.pushDelta("vitals.subscribe", sample(2, T0 + 1_000, floorRows(2_000)));
+    await until(() => deltas(client, subId).some((delta) => delta.sample?.seq === 2), 4000, "two");
+
+    await setSwitch(client, false);
+    await until(
+      () => fixture.native.vitalsRecordingSets.at(-1) === false,
+      4000,
+      "the floor is told to stop",
+    );
+    expect(fixture.native.vitalsWatchSets.at(-1)).toEqual([]);
+    await until(
+      () => deltas(client, subId).some((delta) => delta.state === "off"),
+      4000,
+      "the window is told",
+    );
+    const off = deltas(client, subId).find((delta) => delta.state === "off");
+    expect(off).toEqual({ state: "off" });
+
+    // a floor before VT-2b goes on measuring: what it sends is not kept and not said
+    const said = deltas(client, subId).length;
+    fixture.native.pushDelta("vitals.subscribe", sample(3, T0 + 2_000, floorRows(3_000)));
+    const fresh = await rpc(fixture);
+    const { snapshot } = await subscribe(fresh);
+    expect(snapshot.state).toBe("off");
+    expect(snapshot.samples).toEqual([]);
+    expect(snapshot.processes).toEqual([]);
+    expect(deltas(client, subId)).toHaveLength(said);
+    const kept = VitalsQueryResult.parse(
+      await client.call("vitals.query", { from: T0 - 60_000, to: T0 + 60_000 }),
+    );
+    expect(kept.series).toEqual([]);
+    // main's own report has nowhere to go while nothing records
+    expect(await client.call("vitals.own.report", { own: { loopBusy: 0.2 } })).toEqual({
+      accepted: false,
+    });
+    // one floor subscription, kept across the switch
+    expect(
+      fixture.native.subscriptionRequests.filter((method) => method === "native.vitals.subscribe"),
+    ).toHaveLength(1);
+  });
+
+  it("turned on again: tells the floor to read, and starts from nothing", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    const { subId } = await subscribe(client);
+    await until(() => fixture.native.vitalsWatchSets.length > 0, 4000, "the first watch list");
+    fixture.native.pushDelta("vitals.subscribe", sample(1, T0, floorRows(1_000)));
+    await until(
+      () => deltas(client, subId).some((delta) => delta.sample !== undefined),
+      4000,
+      "one",
+    );
+    await setSwitch(client, false);
+    await until(() => fixture.native.vitalsRecordingSets.at(-1) === false, 4000, "off");
+
+    const before = deltas(client, subId).length;
+    const later = (): VitalsDeltaV1[] => deltas(client, subId).slice(before);
+    await setSwitch(client, true);
+    await until(() => fixture.native.vitalsRecordingSets.at(-1) === true, 4000, "on");
+    expect(fixture.native.vitalsWatchSets.at(-1)).toContainEqual({
+      pid: process.pid,
+      tree: false,
+    });
+    await until(() => later().some((delta) => delta.state === "waiting"), 4000, "waiting again");
+    // the floor's numbers go on; the first reading after the switch is a baseline, never a rate over the gap
+    fixture.native.pushDelta("vitals.subscribe", sample(9, T0 + 60_000, floorRows(900_000)));
+    await until(() => later().some((delta) => delta.sample !== undefined), 4000, "recording again");
+    const first = later().find((delta) => delta.sample !== undefined);
+    expect(first?.state).toBe("recording");
+    expect(first?.sample?.points.every((point) => point.cpu === null)).toBe(true);
+    expect(first?.processes?.map((process) => process.role).sort()).toEqual([
+      "field-native",
+      "terminal-cell",
+    ]);
+    const fresh = await rpc(fixture);
+    expect((await subscribe(fresh)).snapshot.samples).toHaveLength(1);
+    expect(
+      fixture.native.subscriptionRequests.filter((method) => method === "native.vitals.subscribe"),
+    ).toHaveLength(1);
+  });
+
+  it("a recorder turned off before fieldd starts never reads the floor's backlog", async () => {
+    const first = await setup();
+    const client = await rpc(first);
+    await setSwitch(client, false);
+    await until(() => first.native.vitalsRecordingSets.at(-1) === false, 4000, "off");
+    // the same data root under a new fieldd, with a floor that kept minutes while nobody listened
+    for (const socket of first.sockets) socket.close();
+    await first.daemon.stop();
+    await first.native.stop();
+    fixtures.splice(fixtures.indexOf(first), 1);
+    const dataDir = join(first.root, "data");
+    const native = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    native.vitalsSnapshot = {
+      v: 1,
+      bootId: "mock-native-boot",
+      state: "running",
+      intervalMs: 1_000,
+      oldestSeq: 1,
+      samples: [sample(1, T0, floorRows(1_000)), sample(2, T0 + 1_000, floorRows(2_000))],
+    };
+    await native.start();
+    const daemon = await bootstrap({
+      dataDir,
+      logRoot: join(first.root, "logs"),
+      controlPort: 0,
+      dataPort: 0,
+    });
+    const second: Fixture = { root: first.root, daemon, native, sockets: [] };
+    fixtures.push(second);
+    const again = await rpc(second);
+    const { snapshot } = await subscribe(again);
+    expect(snapshot.state).toBe("off");
+    expect(snapshot.samples).toEqual([]);
+    await until(() => native.vitalsRecordingSets.length > 0, 4000, "the new floor is told");
+    expect(native.vitalsRecordingSets).toEqual([false]);
+    expect(native.vitalsWatchSets).toEqual([[]]);
+  });
+
+  it("an undo of the switch is followed like the switch", async () => {
+    const fixture = await setup();
+    const client = await rpc(fixture);
+    await until(() => fixture.native.vitalsWatchSets.length > 0, 4000, "the first watch list");
+    await setSwitch(client, false);
+    await until(() => fixture.native.vitalsRecordingSets.at(-1) === false, 4000, "off");
+    expect(await client.call("storage.settings.undo", {})).toMatchObject({ applied: true });
+    await until(() => fixture.native.vitalsRecordingSets.at(-1) === true, 4000, "on by undo");
+    expect((await subscribe(client)).snapshot.state).not.toBe("off");
+  });
+});

@@ -67,6 +67,8 @@ export function applyDelta(model: VitalsModel, delta: VitalsDeltaV1): VitalsMode
   if (delta.state !== undefined) {
     state = delta.state;
     detail = delta.detail ?? null;
+    // VT-2b — the recorder was turned off: fieldd dropped what it kept, and the window draws none of it either
+    if (state === "off") return { ...model, state, detail, processes: new Map(), samples: [] };
   }
   if (delta.sample === undefined && delta.processes === undefined) {
     return state === model.state && detail === model.detail ? model : { ...model, state, detail };

@@ -61,6 +61,7 @@ import { TerminalSettings } from "./terminal/TerminalSettings";
 import { UpdatesDevicesSection } from "./UpdatesDevicesSection";
 import { UpdatesDoctorSection, UpdatesSection } from "./UpdatesSection";
 import { updateWaits } from "./update-words";
+import { VitalsRecorderSection } from "./VitalsRecorderSection";
 
 const LazyDiagnosticsSection = lazy(() =>
   import("./DiagnosticsSection").then((module) => ({
@@ -670,6 +671,8 @@ export function SettingsPanel({
     pageContent = (
       <div className="space-y-4">
         <SystemSection />
+        {/* VT-2b (VT-D2) — the vitals recorder's switch */}
+        <VitalsRecorderSection onSettingsChanged={markSettingsChanged} />
         {/* WP12d (L3c-ii, §13 C4) — the updater's doctor lines, the same a support bundle carries */}
         <UpdatesDoctorSection />
         {/* MK-5 (MK-D10, MK-E12) — each plugin's runtime, moved from Settings → Plugins */}

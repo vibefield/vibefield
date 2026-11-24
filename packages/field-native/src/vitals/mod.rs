@@ -288,6 +288,9 @@ struct Inner {
     newest: watch::Sender<u64>,
     state: Mutex<(NativeVitalsState, Option<String>)>,
     started: AtomicBool,
+    /// VT-2b — the recorder's switch as the floor hears it (`native.vitals.watch.set`'s `recording`). A floor
+    /// records from its start; while this is false the meter reads nothing and the ring holds nothing.
+    recording: AtomicBool,
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -318,6 +321,7 @@ impl Default for Vitals {
                     Some("the meter has not started".to_owned()),
                 )),
                 started: AtomicBool::new(false),
+                recording: AtomicBool::new(true),
             }),
         }
     }
@@ -371,6 +375,24 @@ impl Vitals {
         let count = list.len();
         *lock(&self.inner.watch) = list;
         count
+    }
+
+    /// VT-2b — turn the meter's readings off or on. Off drops every sample the floor kept: a person who turned the
+    /// recorder off is not handed back the minutes before it. Sample numbers go on from where they were, so a
+    /// reader's cursor never sees a number twice. Returns whether it changed.
+    pub fn set_recording(&self, on: bool) -> bool {
+        let changed = self.inner.recording.swap(on, Ordering::SeqCst) != on;
+        if !on {
+            // After the flag: a reading in flight sees the flag inside the ring's lock and is not kept (`record`),
+            // or was kept before this lock and is dropped here.
+            lock(&self.inner.ring).samples.clear();
+        }
+        changed
+    }
+
+    /// Whether the meter reads now.
+    pub fn recording(&self) -> bool {
+        self.inner.recording.load(Ordering::SeqCst)
     }
 
     /// Wakes with the newest sample's `seq`. Subscribe before reading `snapshot`, so a sample that races the
@@ -431,6 +453,10 @@ impl Vitals {
 fn record(inner: &Inner, time: u64, took: Duration, rows: Vec<NativeVitalsReading>) {
     let seq = {
         let mut ring = lock(&inner.ring);
+        // VT-2b — read inside the lock, so a reading that raced the switch going off is not kept
+        if !inner.recording.load(Ordering::SeqCst) {
+            return;
+        }
         let seq = ring.next_seq;
         ring.next_seq += 1;
         ring.samples.push_back(Arc::new(NativeVitalsSample {
@@ -456,11 +482,27 @@ fn run(inner: Weak<Inner>) {
     let mut meter = Meter::new(sys::Reader::new(), std::process::id());
     let mut next = Instant::now();
     let mut said_slow: Option<Instant> = None;
+    let mut paused = false;
     loop {
         // The handle is gone (a test's floor, or the process ending): the thread ends with it.
         let Some(inner) = inner.upgrade() else {
             return;
         };
+        // VT-2b — the recorder is off: nothing is read. The thread wakes once a beat to see the switch, and reads
+        // no process while it waits.
+        if !inner.recording.load(Ordering::SeqCst) {
+            paused = true;
+            drop(inner);
+            std::thread::sleep(interval);
+            next = Instant::now();
+            continue;
+        }
+        if paused {
+            // On again starts from nothing: every counter is a baseline, so the span it was off is never said as
+            // one long reading.
+            paused = false;
+            meter = Meter::new(sys::Reader::new(), std::process::id());
+        }
         let watch = lock(&inner.watch).clone();
         let time = now_ms();
         let began = Instant::now();
@@ -729,6 +771,63 @@ mod tests {
         // unwatched, the tree is forgotten
         meter.read(&[], 22_000);
         assert!(meter.trees.is_empty());
+    }
+
+    /// VT-2b — the recorder's switch: off keeps nothing and drops what was kept; on goes on from the next number.
+    #[test]
+    fn a_meter_turned_off_keeps_nothing_and_goes_on_from_the_next_number() {
+        let vitals = Vitals::default();
+        assert!(vitals.recording(), "a floor records from its start");
+        for index in 0..3 {
+            vitals.record(1_000 + index, Duration::from_micros(100), Vec::new());
+        }
+        assert_eq!(vitals.samples_after(0).len(), 3);
+
+        assert!(vitals.set_recording(false), "it changed");
+        assert!(!vitals.set_recording(false), "said twice, it changed once");
+        assert!(!vitals.recording());
+        assert!(
+            vitals.samples_after(0).is_empty(),
+            "what was kept is dropped"
+        );
+        // a reading that raced the switch is not kept, and wakes nobody
+        vitals.record(2_000, Duration::from_micros(100), Vec::new());
+        assert!(vitals.samples_after(0).is_empty());
+        assert_eq!(*vitals.subscribe().borrow(), 3);
+        assert!(vitals.snapshot("boot", Some(0)).samples.is_empty());
+
+        assert!(vitals.set_recording(true));
+        vitals.record(3_000, Duration::from_micros(100), Vec::new());
+        let kept = vitals.samples_after(0);
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].seq.get(), 4, "a number is never said twice");
+    }
+
+    /// VT-2b — the real meter: turned off it reads nothing, and turned on it reads again.
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
+    #[test]
+    fn the_started_meter_stops_reading_while_off_and_reads_again_when_on() {
+        let vitals = Vitals::default();
+        vitals.start();
+        let wait_for_a_sample = |vitals: &Vitals| {
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while vitals.samples_after(0).is_empty() {
+                assert!(Instant::now() < deadline, "no reading within five seconds");
+                std::thread::sleep(Duration::from_millis(50));
+            }
+        };
+        wait_for_a_sample(&vitals);
+        vitals.set_recording(false);
+        // longer than two beats: a meter still reading would have kept one
+        std::thread::sleep(Duration::from_millis(2 * limits::SAMPLE_INTERVAL_MS + 300));
+        assert!(
+            vitals.samples_after(0).is_empty(),
+            "nothing is read while off"
+        );
+        vitals.set_recording(true);
+        wait_for_a_sample(&vitals);
+        let first = &vitals.samples_after(0)[0];
+        assert_eq!(first.rows[0].pid.get(), u64::from(std::process::id()));
     }
 
     #[test]

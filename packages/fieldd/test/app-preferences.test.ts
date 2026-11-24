@@ -31,6 +31,8 @@ describe("app preferences", () => {
       keepRunningOnQuit: false,
       sounds: true,
       communityPlugins: false,
+      // VT-2b: the vitals recorder records until the person turns it off
+      recordVitals: true,
     });
   });
 
@@ -164,5 +166,17 @@ describe("app preferences", () => {
     expect(resolveSyncIntent("sync", "opt-in")).toBe("sync");
     expect(resolveSyncIntent(undefined, "opt-in")).toBe("local");
     expect(resolveSyncIntent(undefined, "automatic")).toBe("sync");
+  });
+});
+
+// VT-2b (VT-D2) — Record vitals: on unless a stored boolean says off.
+describe("the vitals recorder's switch as a preference (VT-2b)", () => {
+  it("is on by default, off only for a stored false, and on for anything that is not a boolean", () => {
+    expect(effectiveAppPreferences({}).recordVitals).toBe(true);
+    expect(effectiveAppPreferences({ "diagnostics.recordVitals": false }).recordVitals).toBe(false);
+    expect(effectiveAppPreferences({ "diagnostics.recordVitals": true }).recordVitals).toBe(true);
+    for (const odd of ["false", 0, null, {}]) {
+      expect(effectiveAppPreferences({ "diagnostics.recordVitals": odd }).recordVitals).toBe(true);
+    }
   });
 });

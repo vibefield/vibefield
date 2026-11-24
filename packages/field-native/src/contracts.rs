@@ -11178,6 +11178,9 @@ impl NativeVitalsWatchEntry {
 #[doc = "    \"watch\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"recording\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"watch\": {"]
 #[doc = "      \"type\": \"array\","]
 #[doc = "      \"items\": {"]
@@ -11192,6 +11195,8 @@ impl NativeVitalsWatchEntry {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct NativeVitalsWatchSetParams {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub recording: ::std::option::Option<bool>,
     pub watch: ::std::vec::Vec<NativeVitalsWatchEntry>,
 }
 impl NativeVitalsWatchSetParams {
@@ -11210,6 +11215,9 @@ impl NativeVitalsWatchSetParams {
 #[doc = "    \"watching\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"recording\": {"]
+#[doc = "      \"type\": \"boolean\""]
+#[doc = "    },"]
 #[doc = "    \"watching\": {"]
 #[doc = "      \"type\": \"integer\","]
 #[doc = "      \"minimum\": 0.0"]
@@ -11221,6 +11229,8 @@ impl NativeVitalsWatchSetParams {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct NativeVitalsWatchSetResult {
+    #[serde(default, skip_serializing_if = "::std::option::Option::is_none")]
+    pub recording: ::std::option::Option<bool>,
     pub watching: u64,
 }
 impl NativeVitalsWatchSetResult {
@@ -21811,6 +21821,7 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct NativeVitalsWatchSetParams {
+        recording: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         watch: ::std::result::Result<
             ::std::vec::Vec<super::NativeVitalsWatchEntry>,
             ::std::string::String,
@@ -21819,11 +21830,22 @@ pub mod builder {
     impl ::std::default::Default for NativeVitalsWatchSetParams {
         fn default() -> Self {
             Self {
+                recording: Ok(Default::default()),
                 watch: Err("no value supplied for watch".to_string()),
             }
         }
     }
     impl NativeVitalsWatchSetParams {
+        pub fn recording<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.recording = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for recording: {e}"));
+            self
+        }
         pub fn watch<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<::std::vec::Vec<super::NativeVitalsWatchEntry>>,
@@ -21841,6 +21863,7 @@ pub mod builder {
             value: NativeVitalsWatchSetParams,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                recording: value.recording?,
                 watch: value.watch?,
             })
         }
@@ -21848,22 +21871,35 @@ pub mod builder {
     impl ::std::convert::From<super::NativeVitalsWatchSetParams> for NativeVitalsWatchSetParams {
         fn from(value: super::NativeVitalsWatchSetParams) -> Self {
             Self {
+                recording: Ok(value.recording),
                 watch: Ok(value.watch),
             }
         }
     }
     #[derive(Clone, Debug)]
     pub struct NativeVitalsWatchSetResult {
+        recording: ::std::result::Result<::std::option::Option<bool>, ::std::string::String>,
         watching: ::std::result::Result<u64, ::std::string::String>,
     }
     impl ::std::default::Default for NativeVitalsWatchSetResult {
         fn default() -> Self {
             Self {
+                recording: Ok(Default::default()),
                 watching: Err("no value supplied for watching".to_string()),
             }
         }
     }
     impl NativeVitalsWatchSetResult {
+        pub fn recording<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<bool>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.recording = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for recording: {e}"));
+            self
+        }
         pub fn watching<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<u64>,
@@ -21881,6 +21917,7 @@ pub mod builder {
             value: NativeVitalsWatchSetResult,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                recording: value.recording?,
                 watching: value.watching?,
             })
         }
@@ -21888,6 +21925,7 @@ pub mod builder {
     impl ::std::convert::From<super::NativeVitalsWatchSetResult> for NativeVitalsWatchSetResult {
         fn from(value: super::NativeVitalsWatchSetResult) -> Self {
             Self {
+                recording: Ok(value.recording),
                 watching: Ok(value.watching),
             }
         }

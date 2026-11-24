@@ -203,7 +203,9 @@ export function VitalsView({ model, logs, initialWidth = 720 }: VitalsViewProps)
         </div>
         <div className="vf-vitals__rows">
           {groups.length === 0 ? (
-            <p className="vf-vitals__empty">{model.detail ?? VITALS_WORDS.nothingYet}</p>
+            <p className="vf-vitals__empty">
+              {model.state === "off" ? VITALS_WORDS.off : (model.detail ?? VITALS_WORDS.nothingYet)}
+            </p>
           ) : (
             groups.map((group) => (
               <GroupBlock

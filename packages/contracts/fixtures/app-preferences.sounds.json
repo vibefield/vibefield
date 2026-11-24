@@ -8,5 +8,6 @@
   "keepRunningOnQuit": false,
   "sounds": true,
   "communityPlugins": false,
+  "recordVitals": true,
   "soundsQuietUntil": 1793980800000
 }

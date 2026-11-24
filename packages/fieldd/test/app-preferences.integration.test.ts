@@ -89,6 +89,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       keepRunningOnQuit: false,
       sounds: true,
       communityPlugins: false,
+      recordVitals: true,
     });
 
     await shell.call("storage.appPreferences.set", {
@@ -113,6 +114,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       keepRunningOnQuit: false,
       sounds: true,
       communityPlugins: false,
+      recordVitals: true,
     });
 
     const rendererGrant = daemon.tokens.mint(["settings.manage"], "test-window");
@@ -127,6 +129,7 @@ describe("trusted app preferences (D29′ desktop surface)", () => {
       keepRunningOnQuit: false,
       sounds: true,
       communityPlugins: false,
+      recordVitals: true,
     });
     await renderer.call("storage.appPreferences.set", {
       key: "desktop.screenshotHotkey",
