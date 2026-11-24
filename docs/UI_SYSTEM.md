@@ -341,6 +341,10 @@ mounts the product `GodviewMonitor` with `godview-model-fixture.ts` supplying th
 replaces the data source, never the view or host markup. `SwarmBodiesPreview` mounts the same
 `swarmMonitorView` over SDK fixtures to show the state matrix. The view owns its physics worker,
 canvas, accessibility and lifecycle; field-app no longer supplies a physics context or circle CSS.
+Each Godview window and catalog stage keeps its own Swarm layout in memory. On return, surviving
+bubbles resume at their last drawn positions and new agents animate in. Closing the stage releases
+the worker and renderer. While Swarm is visible, the GPU positions cached bitmap labels relative
+to their bubbles. New label text and decoded icons update the affected atlas region.
 Each view's sheet is scoped to `.mv-<id>` and reads only its own custom properties and the finite
 SDK `MONITOR_SKIN` (DESIGN §8). Host CSS names no view class. The head reads marks and focus keys
 from manifests (`godview/GodviewHeadView.tsx`, its sheet beside it; DESIGN §8 "Godview's head —

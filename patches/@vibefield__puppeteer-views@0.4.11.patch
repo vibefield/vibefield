@@ -1,0 +1,1039 @@
+diff --git a/dist/views/swarm/AgentSwarm.js b/dist/views/swarm/AgentSwarm.js
+index baae83aa8b9a468afe68bcb3b06ce7273a807e77..ba26f3f580325311464404d176fea6fc62be9e98 100644
+--- a/dist/views/swarm/AgentSwarm.js
++++ b/dist/views/swarm/AgentSwarm.js
+@@ -112,7 +112,33 @@ function measured(stage) {
+ function bodyProfile(menu, agent) {
+     return !agent.device.self ? undefined : profileLineFor(menu, agent.profileSet);
+ }
+-export function AgentSwarm({ input, commands }) {
++/** The list and field read the same immutable row. A new board often reuses
++ * nearly all of its rows. Only a running terminal has a live clock in its copy. */
++function bubbleModelsFor(parameters, menu) {
++    const rows = new WeakMap();
++    return (agent, workingShare, nowMs, scale = 1, runningSinceMs) => {
++        let held = rows.get(agent);
++        if (!held || held.workingShare !== workingShare) {
++            const profile = bodyProfile(menu, agent);
++            const input = { agent, parameters, unread: agent.unread, workingShare, ...(profile ? { profile } : {}) };
++            const base = bubbleModel({ ...input, nowMs });
++            held = { input, workingShare, base, scale: 1, fitted: base };
++            rows.set(agent, held);
++        }
++        if (runningSinceMs !== undefined && held.base.state === 'terminal-running')
++            return bubbleModel({ ...held.input, scale, nowMs, runningSinceMs });
++        if (scale === 1)
++            return held.base;
++        // The crowd fit scales the base radius. bodyLayout fits the copy to
++        // the resulting eased radius independently on the frame it draws.
++        if (held.scale !== scale) {
++            held.scale = scale;
++            held.fitted = { ...held.base, radius: held.base.radius * scale };
++        }
++        return held.fitted;
++    };
++}
++export function AgentSwarm({ input, commands, layout }) {
+     const { model, theme, stage, parameters, capabilities } = input;
+     const palette = theme.tokens;
+     const spawnMenu = capabilities.spawn;
+@@ -120,6 +146,9 @@ export function AgentSwarm({ input, commands }) {
+     const motionOn = motionAllowed(theme);
+     const swarm = useMemo(() => normalizeSwarmParameters(parameters), [parameters]);
+     const agents = useMemo(() => drawnRows(model.agents), [model.agents]);
++    const shares = useMemo(() => workingShares(agents), [agents]);
++    const rowModel = useMemo(() => bubbleModelsFor(swarm, spawnMenu), [swarm, spawnMenu]);
++    const [returning] = useState(() => layout && new Map(layout.bodies));
+     /**
+      * What the hidden list and the tooltip say, from the input this render was handed: the frame loop's models
+      * (`modelsRef`) are rebuilt only after the commit, so a render that read them would say the input before it. No
+@@ -127,21 +156,11 @@ export function AgentSwarm({ input, commands }) {
+      */
+     const listModels = useMemo(() => {
+         const nowMs = Date.now();
+-        const shares = workingShares(agents);
+         const byId = new Map();
+-        for (const agent of agents) {
+-            const profile = bodyProfile(spawnMenu, agent);
+-            byId.set(bodyIdOf(agent), bubbleModel({
+-                agent,
+-                parameters: swarm,
+-                nowMs,
+-                unread: agent.unread,
+-                workingShare: shares.get(agent.id) ?? 0,
+-                ...(profile ? { profile } : {}),
+-            }));
+-        }
++        for (const agent of agents)
++            byId.set(bodyIdOf(agent), rowModel(agent, shares.get(agent.id) ?? 0, nowMs));
+         return byId;
+-    }, [agents, swarm, spawnMenu]);
++    }, [agents, shares, rowModel]);
+     const containerRef = useRef(null);
+     const canvasRef = useRef(null);
+     const driverRef = useRef(undefined);
+@@ -159,6 +178,9 @@ export function AgentSwarm({ input, commands }) {
+     const rendererRef = useRef(undefined);
+     const parametersRef = useRef(swarm);
+     const agentsRef = useRef(agents);
++    const sharesRef = useRef(shares);
++    const rowModelRef = useRef(rowModel);
++    const sentRadiiRef = useRef(new Map());
+     /** Which bodies the host has receded, and whether that is all of them; read by the render loop. */
+     const recedeRef = useRef({ ids: new Set(), every: false });
+     const modelsRef = useRef({ byId: new Map(), at: 0, agents: [] });
+@@ -272,13 +294,17 @@ export function AgentSwarm({ input, commands }) {
+     /** A bloom held open, or the keys door's, has the keyboard: the host's own keys stand aside (`report`). */
+     const holdsKeys = blooming && (bloom.state?.mode === 'keys' || bloom.state?.mode === 'sticky');
+     const keysHeldRef = useRef(false);
++    useEffect(() => {
++        rowModelRef.current = rowModel;
++    }, [rowModel]);
+     useEffect(() => {
+         agentsRef.current = agents;
++        sharesRef.current = shares;
+         recedeRef.current = {
+             ids: new Set(agents.filter((agent) => agent.receded).map(bodyIdOf)),
+             every: everyReceded(agents),
+         };
+-    }, [agents]);
++    }, [agents, shares]);
+     useEffect(() => {
+         parametersRef.current = swarm;
+         modelsRef.current.at = 0;
+@@ -406,11 +432,10 @@ export function AgentSwarm({ input, commands }) {
+         if (width <= 0 || height <= 0)
+             return fitRef.current;
+         const parameters = parametersRef.current;
+-        const shares = workingShares(agentsRef.current);
+         return fitScale({
+             field: { width, height },
+             obstacles: stageRef.current.obstacles,
+-            radii: agentsRef.current.map((agent) => baseRadius(agent, parameters, shares.get(agent.id) ?? 0)),
++            radii: agentsRef.current.map((agent) => baseRadius(agent, parameters, sharesRef.current.get(agent.id) ?? 0)),
+             smallestBase: Math.min(parameters.radiusIdle, parameters.radiusWorking, parameters.radiusBlocked),
+         }, fitRef.current);
+     };
+@@ -426,26 +451,15 @@ export function AgentSwarm({ input, commands }) {
+         const models = modelsRef.current;
+         const nowMs = Date.now();
+         const byId = new Map();
+-        const shares = workingShares(agentsRef.current);
+         for (const agent of agentsRef.current) {
+-            const runningSince = runningSinceRef.current.get(bodyIdOf(agent));
+-            const profile = bodyProfile(spawnMenuRef.current, agent);
+-            byId.set(bodyIdOf(agent), bubbleModel({
+-                agent,
+-                parameters: parametersRef.current,
+-                nowMs,
+-                unread: agent.unread,
+-                workingShare: shares.get(agent.id) ?? 0,
+-                scale,
+-                ...(runningSince === undefined ? {} : { runningSinceMs: runningSince }),
+-                ...(profile ? { profile } : {}),
+-            }));
++            const id = bodyIdOf(agent);
++            byId.set(id, rowModelRef.current(agent, sharesRef.current.get(agent.id) ?? 0, nowMs, scale, runningSinceRef.current.get(id)));
+         }
+         models.byId = byId;
+         models.at = now;
+         models.agents = agentsRef.current;
+         if (refitted && initialisedRef.current)
+-            driverRef.current?.post({ type: 'updateAgents', agents: agentSpecs() });
++            syncAgents();
+     };
+     /** The field or its chrome moved: refit, and where the scale moved, remodel (held still, ask for a frame). */
+     const refitIfMoved = () => {
+@@ -459,20 +473,45 @@ export function AgentSwarm({ input, commands }) {
+      * every body still leaving, at the size it had: it keeps its place until it has gone, so the field closes over the
+      * gap after it, never under it (DESIGN §6, the departure).
+      */
+-    const agentSpecs = () => [
+-        ...agentsRef.current.map((agent) => {
++    const physicsRadius = (id) => modelsRef.current.byId.get(id)?.radius ?? parametersRef.current.radiusIdle * fitRef.current;
++    const agentSpecs = () => {
++        const specs = agentsRef.current.map((agent) => {
+             const id = bodyIdOf(agent);
+-            const model = modelsRef.current.byId.get(id);
+-            const spec = {
+-                id,
+-                radius: model?.radius ?? parametersRef.current.radiusIdle * fitRef.current,
+-            };
+-            if (agent.spawnHint)
+-                spec.spawnHint = agent.spawnHint;
++            const spec = { id, radius: physicsRadius(id) };
++            const position = returning?.get(id)?.position ?? agent.spawnHint;
++            if (position)
++                spec.spawnHint = position;
+             return spec;
+-        }),
+-        ...[...departingRef.current].map(([id, departure]) => ({ id, radius: departure.model.radius })),
+-    ];
++        });
++        for (const [id, departure] of departingRef.current)
++            specs.push({ id, radius: departure.model.radius });
++        const sent = sentRadiiRef.current;
++        sent.clear();
++        for (const spec of specs)
++            sent.set(spec.id, spec.radius);
++        return specs;
++    };
++    // The world reads a position only when adding a body. Titles, row order and
++    // consumed spawn hints leave its roster unchanged. Avoid even allocating the
++    // outbound records until a radius or membership changes.
++    const samePhysicsRoster = () => {
++        const sent = sentRadiiRef.current;
++        if (sent.size !== agentsRef.current.length + departingRef.current.size)
++            return false;
++        for (const agent of agentsRef.current) {
++            const id = bodyIdOf(agent);
++            if (sent.get(id) !== physicsRadius(id))
++                return false;
++        }
++        for (const [id, departure] of departingRef.current)
++            if (sent.get(id) !== departure.model.radius)
++                return false;
++        return true;
++    };
++    const syncAgents = () => {
++        if (initialisedRef.current && !samePhysicsRoster())
++            driverRef.current?.post({ type: 'updateAgents', agents: agentSpecs() });
++    };
+     /**
+      * A row back while its body was leaving (a close refused; a hand-over's second row a frame late): the body pops
+      * back where it stands, from the size its shrink had reached, on the arrival's own curve (M4's spring pop), never a
+@@ -573,6 +612,7 @@ export function AgentSwarm({ input, commands }) {
+         };
+         let dpr = window.devicePixelRatio || 1;
+         const started = performance.now();
++        let lastPainted;
+         const render = (time, deltaMs) => {
+             // Layout may have changed before rAF, or afterwards before ResizeObserver. In either case the backing
+             // store, projection and bodies must agree before the browser presents this paint.
+@@ -639,7 +679,7 @@ export function AgentSwarm({ input, commands }) {
+                 departed = true;
+             }
+             if (departed)
+-                driver.post({ type: 'updateAgents', agents: agentSpecs() });
++                syncAgents();
+             // Held still for reduced motion the loop draws nothing, so a fade (M6) asks for one still frame after another,
+             // only while a body is leaving: the field is still again the moment the last has gone (MV-W4).
+             if (departing.size > 0)
+@@ -670,11 +710,13 @@ export function AgentSwarm({ input, commands }) {
+                     arrivalCounterRef.current += 1;
+                     // The host's row for a birth continues the birth's own arrival: no second one.
+                     const born = takeovers.get(id);
++                    const saved = returning?.get(id);
++                    returning?.delete(id);
+                     visual = {
+                         visualRadius: model.radius,
+                         visualVelocity: 0,
+-                        spawnedAt: born ? born.birth.bornAt : time,
+-                        seed: born ? born.seed : Math.random() * Math.PI * 2,
++                        spawnedAt: born ? born.birth.bornAt : saved ? time - SPAWN_DURATION_MS : time,
++                        seed: born?.seed ?? saved?.seed ?? Math.random() * Math.PI * 2,
+                         arrival: arrivalCounterRef.current,
+                         recede: recedeTo,
+                         ...(born ? { from: born.birth.from, aboveUntil: born.birth.bornAt + SPAWN_DURATION_MS + 400 } : {}),
+@@ -825,6 +867,8 @@ export function AgentSwarm({ input, commands }) {
+                         ? { hold: hub }
+                         : {}),
+             });
++            if (layout && (bodies.length || lastPainted))
++                lastPainted = bodies;
+         };
+         // The toolkit's loop: the display's frames while motion is on, no frame at all while it is off or the stage is out
+         // of sight (MV-W4). The physics pause with it and start again fresh, so the time held still is never stepped
+@@ -861,6 +905,13 @@ export function AgentSwarm({ input, commands }) {
+             motionSyncRef.current = null;
+             initRef.current = null;
+             resizeObserver?.disconnect();
++            // Only positions actually drawn, keyed by visual identity. An intervening
++            // mount that closed while waiting for its board or GPU cannot erase them.
++            if (lastPainted) {
++                layout.bodies = new Map(lastPainted.map(({ model, x, y, seed }) => [
++                    model.id, { position: { x, y }, seed },
++                ]));
++            }
+             statesRef.current.clear();
+             visualsRef.current.clear();
+             departingRef.current = new Map();
+@@ -884,20 +935,12 @@ export function AgentSwarm({ input, commands }) {
+         for (const id of [...runningSinceRef.current.keys()])
+             if (!ids.has(id))
+                 runningSinceRef.current.delete(id);
+-        const shares = workingShares(agents);
+         for (const agent of agents) {
+             const id = bodyIdOf(agent);
+-            const model = bubbleModel({
+-                agent,
+-                parameters: swarm,
+-                nowMs,
+-                unread: agent.unread,
+-                workingShare: shares.get(agent.id) ?? 0,
+-            });
+             // The clock starts at the first sight of a foreground job and survives
+             // an `unknown` observation; only the shell's idle prompt, or an agent
+             // claiming the terminal, stops it.
+-            if (model.state === 'terminal-running') {
++            if (listModels.get(id)?.state === 'terminal-running') {
+                 if (!runningSinceRef.current.has(id))
+                     runningSinceRef.current.set(id, nowMs);
+             }
+@@ -921,8 +964,8 @@ export function AgentSwarm({ input, commands }) {
+             endDrag();
+         modelsRef.current.at = 0;
+         refreshModels(performance.now(), true);
+-        driverRef.current?.post({ type: 'updateAgents', agents: agentSpecs() });
+-    }, [agents, swarm]);
++        syncAgents();
++    }, [agents, swarm, listModels]);
+     // The host's chrome moved (MV-D19): the physics keep bodies off its new rectangles. Until the stage is
+     // measured, this is where the first world waits.
+     useEffect(() => {
+diff --git a/dist/views/swarm/gpu/glyph-atlas.d.ts b/dist/views/swarm/gpu/glyph-atlas.d.ts
+index 920feefb51006b339c21880b8ca94e3cad8276d9..42f2daf8571bb0af9d5290e78736d21e7c9a8a1f 100644
+--- a/dist/views/swarm/gpu/glyph-atlas.d.ts
++++ b/dist/views/swarm/gpu/glyph-atlas.d.ts
+@@ -28,13 +28,15 @@ export declare class GlyphAtlas {
+     private readonly canvas;
+     private readonly context;
+     private readonly regions;
++    private readonly glyphFonts;
++    private lastFont;
+     private readonly metrics;
+     private readonly pendingSprites;
+     private readonly spriteImages;
+     private shelfX;
+     private shelfY;
+     private shelfHeight;
+-    private dirty;
++    private damage;
+     private generation;
+     dpr: number;
+     constructor(device: GPUDevice, dpr: number, size?: number, 
+@@ -70,9 +72,7 @@ export declare class GlyphAtlas {
+     private place;
+     /** Decodes an image once, keyed; the owner hears when it lands, since a field held still asks for no frame. */
+     private decode;
+-    /** Upload what changed since the last frame. One copy of the whole canvas:
+-     * additions are rare after the first seconds, and a partial copy is not
+-     * cheaper than a whole one on this path. */
++    /** Copy the same rectangle from the canvas to the atlas, including any gaps between new slots. */
+     flush(): void;
+     destroy(): void;
+ }
+diff --git a/dist/views/swarm/gpu/glyph-atlas.js b/dist/views/swarm/gpu/glyph-atlas.js
+index 75cdcef209743dfef1af2f31ff227b4d7a150025..d4eb2627bdf647dddc7b4c689a1b69ee93c8854b 100644
+--- a/dist/views/swarm/gpu/glyph-atlas.js
++++ b/dist/views/swarm/gpu/glyph-atlas.js
+@@ -15,13 +15,15 @@ export class GlyphAtlas {
+     canvas;
+     context;
+     regions = new Map();
++    glyphFonts = new Map();
++    lastFont;
+     metrics = new Map();
+     pendingSprites = new Set();
+     spriteImages = new Map();
+     shelfX = PADDING;
+     shelfY = PADDING;
+     shelfHeight = 0;
+-    dirty = false;
++    damage;
+     generation = 0;
+     dpr;
+     constructor(device, dpr, size = 2048, 
+@@ -36,14 +38,13 @@ export class GlyphAtlas {
+         this.dpr = dpr;
+         if (typeof OffscreenCanvas === 'function')
+             this.canvas = new OffscreenCanvas(size, size);
+-        else if (createCanvas)
++        else if (createCanvas) {
+             this.canvas = createCanvas();
+-        else
+-            throw new Error('glyph atlas: no OffscreenCanvas and no canvas to draw in');
+-        if (!(this.canvas instanceof OffscreenCanvas)) {
+             this.canvas.width = size;
+             this.canvas.height = size;
+         }
++        else
++            throw new Error('glyph atlas: no OffscreenCanvas and no canvas to draw in');
+         const context = this.canvas.getContext('2d', { willReadFrequently: false });
+         if (!context)
+             throw new Error('glyph atlas: no 2D context');
+@@ -68,12 +69,15 @@ export class GlyphAtlas {
+     reset() {
+         this.context.clearRect(0, 0, this.size, this.size);
+         this.regions.clear();
++        this.glyphFonts.clear();
++        this.lastFont = undefined;
+         this.metrics.clear();
+         this.shelfX = PADDING;
+         this.shelfY = PADDING;
+         this.shelfHeight = 0;
+         this.generation += 1;
+-        this.dirty = true;
++        // Clear the old shelves and their filtering gutters on the GPU as well.
++        this.damage = { x: 0, y: 0, right: this.size, bottom: this.size };
+     }
+     allocate(width, height) {
+         if (this.shelfX + width + PADDING > this.size) {
+@@ -86,6 +90,17 @@ export class GlyphAtlas {
+         const slot = { x: this.shelfX, y: this.shelfY };
+         this.shelfX += width + PADDING;
+         this.shelfHeight = Math.max(this.shelfHeight, height);
++        // New slots are appended in shelf order. One enclosing copy covers all
++        // additions in this frame and leaves the surrounding texture resident.
++        if (this.damage) {
++            this.damage.x = Math.min(this.damage.x, slot.x);
++            this.damage.y = Math.min(this.damage.y, slot.y);
++            this.damage.right = Math.max(this.damage.right, slot.x + width);
++            this.damage.bottom = Math.max(this.damage.bottom, slot.y + height);
++        }
++        else {
++            this.damage = { x: slot.x, y: slot.y, right: slot.x + width, bottom: slot.y + height };
++        }
+         return slot;
+     }
+     fontMetrics(style) {
+@@ -105,8 +120,20 @@ export class GlyphAtlas {
+     }
+     /** The glyph, rasterised on first sight. Undefined only when the atlas is full. */
+     glyph(character, style) {
+-        const key = `g|${styleKey(style)}|${character}`;
+-        const known = this.regions.get(key);
++        // Text is drawn a line at a time. Reuse its character map for the whole run,
++        // including equivalent style objects produced by layout.
++        let font = this.lastFont;
++        const italic = Boolean(style.italic);
++        if (!font || font.weight !== style.weight || font.size !== style.size || font.italic !== italic) {
++            const key = styleKey(style);
++            font = this.glyphFonts.get(key);
++            if (!font) {
++                font = { weight: style.weight, size: style.size, italic, characters: new Map() };
++                this.glyphFonts.set(key, font);
++            }
++            this.lastFont = font;
++        }
++        const known = font.characters.get(character);
+         if (known)
+             return known;
+         const context = this.context;
+@@ -136,8 +163,7 @@ export class GlyphAtlas {
+             top: (-ascent - 1) / this.dpr,
+             advance: measured.width / this.dpr,
+         };
+-        this.regions.set(key, region);
+-        this.dirty = true;
++        font.characters.set(character, region);
+         return region;
+     }
+     /** CSS `letter-spacing` semantics: spacing follows every character. */
+@@ -211,7 +237,6 @@ export class GlyphAtlas {
+             advance: devicePx / this.dpr,
+         };
+         this.regions.set(regionKey, region);
+-        this.dirty = true;
+         return region;
+     }
+     /** Decodes an image once, keyed; the owner hears when it lands, since a field held still asks for no frame. */
+@@ -229,14 +254,14 @@ export class GlyphAtlas {
+         element.onerror = () => this.pendingSprites.delete(key);
+         element.src = src;
+     }
+-    /** Upload what changed since the last frame. One copy of the whole canvas:
+-     * additions are rare after the first seconds, and a partial copy is not
+-     * cheaper than a whole one on this path. */
++    /** Copy the same rectangle from the canvas to the atlas, including any gaps between new slots. */
+     flush() {
+-        if (!this.dirty)
++        if (!this.damage)
+             return;
+-        this.dirty = false;
+-        this.device.queue.copyExternalImageToTexture({ source: this.canvas }, { texture: this.texture, premultipliedAlpha: true }, { width: this.size, height: this.size });
++        const { x, y, right, bottom } = this.damage;
++        const origin = { x, y };
++        this.device.queue.copyExternalImageToTexture({ source: this.canvas, origin }, { texture: this.texture, origin, premultipliedAlpha: true }, { width: right - x, height: bottom - y });
++        this.damage = undefined;
+     }
+     destroy() {
+         this.texture.destroy();
+diff --git a/dist/views/swarm/gpu/glyph-pack.d.ts b/dist/views/swarm/gpu/glyph-pack.d.ts
+index 5dac79f297c6060bbcf21b6686b487c5674ed9ea..de641344564cce89d025342c05b9efe63a3b51e1 100644
+--- a/dist/views/swarm/gpu/glyph-pack.d.ts
++++ b/dist/views/swarm/gpu/glyph-pack.d.ts
+@@ -24,6 +24,10 @@ export interface PackedGlyph {
+     mode: GlyphMode;
+     /** The field's px range on screen, for `field` alone. */
+     pxRange?: number;
++    /** Body buffer index plus one, or zero for a mark in field coordinates. */
++    owner?: number;
++    /** Zero for static ink, -1 for a working watermark, positive for a flame's alpha swing. */
++    pulse?: number;
+ }
+ /** Writes one glyph instance at `offset` (in floats). */
+ export declare function packGlyph(target: Float32Array, offset: number, glyph: PackedGlyph): void;
+diff --git a/dist/views/swarm/gpu/glyph-pack.js b/dist/views/swarm/gpu/glyph-pack.js
+index 7425baba32eaec4d092c5f7508375ab7e7276242..bc8eae366aaa34e4d16b7b3c8380b6d992b0c275 100644
+--- a/dist/views/swarm/gpu/glyph-pack.js
++++ b/dist/views/swarm/gpu/glyph-pack.js
+@@ -26,8 +26,8 @@ export function packGlyph(target, offset, glyph) {
+     target[offset + 11] = glyph.colour[3] * glyph.alpha;
+     target[offset + 12] = glyph.mode;
+     target[offset + 13] = glyph.mode === GLYPH_MODE.field ? (glyph.pxRange ?? 0) : 0;
+-    target[offset + 14] = 0;
+-    target[offset + 15] = 0;
++    target[offset + 14] = glyph.owner ?? 0;
++    target[offset + 15] = glyph.pulse ?? 0;
+ }
+ /** A host's stencil picture as the atlas's sprites are written: its path in the marks' 24-unit box, `currentColor`. */
+ export function stencilSvg(path) {
+diff --git a/dist/views/swarm/gpu/shaders/common.wgsl.d.ts b/dist/views/swarm/gpu/shaders/common.wgsl.d.ts
+index 48e120feb84120cf1aeaae158b8cd5e501e60a86..8f989d2ef4ea3d5ca9a0e511ca37a53639d4a46b 100644
+--- a/dist/views/swarm/gpu/shaders/common.wgsl.d.ts
++++ b/dist/views/swarm/gpu/shaders/common.wgsl.d.ts
+@@ -1,3 +1,3 @@
+-declare const _default: "// Shared by every swarm pipeline; the renderer prepends this to each shader.\n//\n// All geometry is in CSS px with y down, the same space the physics and the\n// pointer use; the device pixel ratio only enters through `cov`, the one-pixel\n// box filter, so edges are one device pixel wide at any ratio. Colours are\n// straight-alpha sRGB in the buffers and premultiplied on output, composited\n// over the window's glass with (one, one-minus-src-alpha).\n\n// One of the spawn bloom's clearings (erase.wgsl).\nstruct Clearing {\n  // a circle's centre and radius (w: 0), or a rect's centre and half extents (CSS px)\n  shape: vec4f,\n  // feather (px), kind (0 circle, 1 rect), opacity (0..1), unused\n  edge: vec4f,\n};\n\nconst MAX_CLEARINGS: u32 = 4u;\n\nstruct Frame {\n  // width, height (CSS px), device pixel ratio, time (s, wrapped at 42; frozen when motion is off)\n  viewport: vec4f,\n  // body fill opacity, motion (0/1), grid pitch (px), the veil (0..1: the grid\n  // is drawn at 1 \u2212 veil while the spawn bloom is open)\n  params: vec4f,\n  grid: vec4f,\n  // the theme's shadow colour; `a` is the resting alpha, `shadowPeak.a` the peak's\n  shadow: vec4f,\n  shadowPeak: vec4f,\n  // hold-to-create, and the spawn bloom's hub: x, y, progress 0..1, opacity (0: none)\n  pointer: vec4f,\n  orange: vec4f,\n  holdRim: vec4f,\n  holdFill: vec4f,\n  holdInk: vec4f,\n  // the ring's rim width and dot radius (px): 1 and 2 while a hold is in flight,\n  // 1.5 and 2.5 once it is the spawn bloom's hub; z/w unused\n  holdShape: vec4f,\n  // the state glow's shape: where it begins, where it is full, its strength, unused\n  glowBand: vec4f,\n  // and its motion: crests across the radius, their phase (turns, 0..1), trough depth, unused\n  glowWave: vec4f,\n  // the spawn bloom's clearings: how many of `clearings` are set; y/z/w unused\n  clearing: vec4f,\n  clearings: array<Clearing, 4>,\n};\n\nstruct Body {\n  // x, y, radius, visual scale (arrival curve)\n  posRadius: vec4f,\n  fill: vec4f,\n  ink: vec4f,\n  // the inner light's colour \u2014 the STATE's, never the project's (see body.wgsl)\n  core: vec4f,\n  rim: vec4f,\n  // x: flag bits; y/z/w unused\n  flags: vec4u,\n  // context ring: fraction 0..1, the weight it starts its climb at, the track's\n  // weight, the weight a full ring would reach\n  ring: vec4f,\n  // the outer light: reach (px), strength, breath (0..1), phase seed\n  glow: vec4f,\n  // a pending body's dash turn (radians, clockwise), phase seed, stale mix (0/1), opacity\n  motion: vec4f,\n  link: vec4f,\n};\n\nconst F_HOLLOW: u32 = 1u;\nconst F_RUNNING: u32 = 2u;\nconst F_GLOW: u32 = 8u;\nconst F_RIM: u32 = 16u;\nconst F_STALE: u32 = 32u;\nconst F_LINKED: u32 = 64u;\nconst F_FOCUS: u32 = 128u;\nconst F_RING_HOT: u32 = 512u;\nconst F_RING: u32 = 1024u;\nconst F_SHADOW: u32 = 2048u;\nconst F_CORE: u32 = 4096u;\nconst F_WAVES: u32 = 8192u;\nconst F_PENDING: u32 = 16384u;\n\nconst TAU: f32 = 6.28318530718;\n\n// The context gauge's width and the light's gutter follow the body's radius:\n// 5px and 2px on the 60px working body, thicker on a bigger one.\nconst GAUGE_WIDTH_RATIO: f32 = 5.0 / 60.0;\nconst LIGHT_GUTTER_RATIO: f32 = 2.0 / 60.0;\n\n@group(0) @binding(0) var<uniform> frame: Frame;\n@group(0) @binding(1) var<storage, read> bodies: array<Body>;\n\nfn has(flags: u32, bit: u32) -> bool {\n  return (flags & bit) != 0u;\n}\n\nfn cssToClip(p: vec2f) -> vec4f {\n  return vec4f(p.x / frame.viewport.x * 2.0 - 1.0, 1.0 - p.y / frame.viewport.y * 2.0, 0.0, 1.0);\n}\n\nfn quadCorner(vertex: u32) -> vec2f {\n  var corners = array<vec2f, 6>(\n    vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),\n    vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),\n  );\n  return corners[vertex];\n}\n\nfn premul(c: vec4f) -> vec4f {\n  return vec4f(c.rgb * c.a, c.a);\n}\n\n/** Source-over of premultiplied `src` on premultiplied `dst`. */\nfn over(dst: vec4f, src: vec4f) -> vec4f {\n  return src + dst * (1.0 - src.a);\n}\n\n/** Coverage of a signed distance (CSS px) under a one-device-pixel box filter. */\nfn cov(d: f32) -> f32 {\n  return clamp(0.5 - d * frame.viewport.z, 0.0, 1.0);\n}\n\n/** Coverage of a stroke of width `w` centred on the iso-line `d = 0`. */\nfn stroke(d: f32, w: f32) -> f32 {\n  return cov(abs(d) - w * 0.5);\n}\n\n// Abramowitz\u2013Stegun 7.1.26: enough for a shadow.\nfn erfA(x: f32) -> f32 {\n  let s = sign(x);\n  let a = abs(x);\n  let t = 1.0 / (1.0 + 0.3275911 * a);\n  let y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-a * a);\n  return s * y;\n}\n\n/** The disc blurred by a gaussian of `sigma`: what CSS `box-shadow` paints,\n * with sigma half the blur radius. */\nfn occupancy(d: f32, sigma: f32) -> f32 {\n  return 0.5 - 0.5 * erfA(d / max(sigma * 1.4142136, 0.0001));\n}\n\nfn luma(c: vec3f) -> f32 {\n  return dot(c, vec3f(0.2126, 0.7152, 0.0722));\n}\n\n/** Angle from twelve o'clock, clockwise, 0..1. */\nfn clockwise(p: vec2f) -> f32 {\n  return fract(atan2(p.x, -p.y) / TAU + 1.0);\n}\n\nstruct BodyVertex {\n  @builtin(position) position: vec4f,\n  @location(0) local: vec2f,\n  @location(1) @interpolate(flat) index: u32,\n};\n\nfn bodyQuad(vertex: u32, instance: u32, margin: f32, enabled: bool) -> BodyVertex {\n  let body = bodies[instance];\n  let radius = body.posRadius.z * body.posRadius.w;\n  let extent = select(0.0, radius + margin, enabled);\n  let corner = quadCorner(vertex);\n  var out: BodyVertex;\n  out.local = corner * extent;\n  out.position = cssToClip(body.posRadius.xy + out.local);\n  out.index = instance;\n  return out;\n}\n";
++declare const _default: "// Shared by every swarm pipeline; the renderer prepends this to each shader.\n//\n// All geometry is in CSS px with y down, the same space the physics and the\n// pointer use; the device pixel ratio only enters through `cov`, the one-pixel\n// box filter, so edges are one device pixel wide at any ratio. Colours are\n// straight-alpha sRGB in the buffers and premultiplied on output, composited\n// over the window's glass with (one, one-minus-src-alpha).\n\n// One of the spawn bloom's clearings (erase.wgsl).\nstruct Clearing {\n  // a circle's centre and radius (w: 0), or a rect's centre and half extents (CSS px)\n  shape: vec4f,\n  // feather (px), kind (0 circle, 1 rect), opacity (0..1), unused\n  edge: vec4f,\n};\n\nconst MAX_CLEARINGS: u32 = 4u;\n\nstruct Frame {\n  // width, height (CSS px), device pixel ratio, time (s, wrapped at 42; frozen when motion is off)\n  viewport: vec4f,\n  // body fill opacity, motion (0/1), grid pitch (px), the veil (0..1: the grid\n  // is drawn at 1 − veil while the spawn bloom is open)\n  params: vec4f,\n  grid: vec4f,\n  // the theme's shadow colour; `a` is the resting alpha, `shadowPeak.a` the peak's\n  shadow: vec4f,\n  shadowPeak: vec4f,\n  // hold-to-create, and the spawn bloom's hub: x, y, progress 0..1, opacity (0: none)\n  pointer: vec4f,\n  orange: vec4f,\n  holdRim: vec4f,\n  holdFill: vec4f,\n  holdInk: vec4f,\n  // the ring's rim width and dot radius (px): 1 and 2 while a hold is in flight,\n  // 1.5 and 2.5 once it is the spawn bloom's hub; z/w unused\n  holdShape: vec4f,\n  // the state glow's shape: where it begins, where it is full, its strength, unused\n  glowBand: vec4f,\n  // and its motion: crests across the radius, their phase (turns, 0..1), trough depth, unused\n  glowWave: vec4f,\n  // the spawn bloom's clearings: how many of `clearings` are set; y/z/w unused\n  clearing: vec4f,\n  clearings: array<Clearing, 4>,\n};\n\nstruct Body {\n  // x, y, radius, visual scale (arrival curve)\n  posRadius: vec4f,\n  fill: vec4f,\n  ink: vec4f,\n  // the inner light's colour — the STATE's, never the project's (see body.wgsl)\n  core: vec4f,\n  rim: vec4f,\n  // x: flag bits; y/z: watermark/flame breath as f32 bits; w unused\n  flags: vec4u,\n  // context ring: fraction 0..1, the weight it starts its climb at, the track's\n  // weight, the weight a full ring would reach\n  ring: vec4f,\n  // the outer light: reach (px), strength, breath (0..1), phase seed\n  glow: vec4f,\n  // a pending body's dash turn (radians, clockwise), phase seed, stale mix (0/1), opacity\n  motion: vec4f,\n  link: vec4f,\n};\n\nconst F_HOLLOW: u32 = 1u;\nconst F_RUNNING: u32 = 2u;\nconst F_GLOW: u32 = 8u;\nconst F_RIM: u32 = 16u;\nconst F_STALE: u32 = 32u;\nconst F_LINKED: u32 = 64u;\nconst F_FOCUS: u32 = 128u;\nconst F_RING_HOT: u32 = 512u;\nconst F_RING: u32 = 1024u;\nconst F_SHADOW: u32 = 2048u;\nconst F_CORE: u32 = 4096u;\nconst F_WAVES: u32 = 8192u;\nconst F_PENDING: u32 = 16384u;\n\nconst TAU: f32 = 6.28318530718;\n\n// The context gauge's width and the light's gutter follow the body's radius:\n// 5px and 2px on the 60px working body, thicker on a bigger one.\nconst GAUGE_WIDTH_RATIO: f32 = 5.0 / 60.0;\nconst LIGHT_GUTTER_RATIO: f32 = 2.0 / 60.0;\n\n@group(0) @binding(0) var<uniform> frame: Frame;\n@group(0) @binding(1) var<storage, read> bodies: array<Body>;\n\nfn has(flags: u32, bit: u32) -> bool {\n  return (flags & bit) != 0u;\n}\n\nfn cssToClip(p: vec2f) -> vec4f {\n  return vec4f(p.x / frame.viewport.x * 2.0 - 1.0, 1.0 - p.y / frame.viewport.y * 2.0, 0.0, 1.0);\n}\n\nfn quadCorner(vertex: u32) -> vec2f {\n  var corners = array<vec2f, 6>(\n    vec2f(-1.0, -1.0), vec2f(1.0, -1.0), vec2f(-1.0, 1.0),\n    vec2f(-1.0, 1.0), vec2f(1.0, -1.0), vec2f(1.0, 1.0),\n  );\n  return corners[vertex];\n}\n\nfn premul(c: vec4f) -> vec4f {\n  return vec4f(c.rgb * c.a, c.a);\n}\n\n/** Source-over of premultiplied `src` on premultiplied `dst`. */\nfn over(dst: vec4f, src: vec4f) -> vec4f {\n  return src + dst * (1.0 - src.a);\n}\n\n/** Coverage of a signed distance (CSS px) under a one-device-pixel box filter. */\nfn cov(d: f32) -> f32 {\n  return clamp(0.5 - d * frame.viewport.z, 0.0, 1.0);\n}\n\n/** Coverage of a stroke of width `w` centred on the iso-line `d = 0`. */\nfn stroke(d: f32, w: f32) -> f32 {\n  return cov(abs(d) - w * 0.5);\n}\n\n// Abramowitz–Stegun 7.1.26: enough for a shadow.\nfn erfA(x: f32) -> f32 {\n  let s = sign(x);\n  let a = abs(x);\n  let t = 1.0 / (1.0 + 0.3275911 * a);\n  let y = 1.0 - (((((1.061405429 * t - 1.453152027) * t) + 1.421413741) * t - 0.284496736) * t + 0.254829592) * t * exp(-a * a);\n  return s * y;\n}\n\n/** The disc blurred by a gaussian of `sigma`: what CSS `box-shadow` paints,\n * with sigma half the blur radius. */\nfn occupancy(d: f32, sigma: f32) -> f32 {\n  return 0.5 - 0.5 * erfA(d / max(sigma * 1.4142136, 0.0001));\n}\n\nfn luma(c: vec3f) -> f32 {\n  return dot(c, vec3f(0.2126, 0.7152, 0.0722));\n}\n\n/** Angle from twelve o'clock, clockwise, 0..1. */\nfn clockwise(p: vec2f) -> f32 {\n  return fract(atan2(p.x, -p.y) / TAU + 1.0);\n}\n\nstruct BodyVertex {\n  @builtin(position) position: vec4f,\n  @location(0) local: vec2f,\n  @location(1) @interpolate(flat) index: u32,\n};\n\nfn bodyQuad(vertex: u32, instance: u32, margin: f32, enabled: bool) -> BodyVertex {\n  let body = bodies[instance];\n  let radius = body.posRadius.z * body.posRadius.w;\n  let extent = select(0.0, radius + margin, enabled);\n  let corner = quadCorner(vertex);\n  var out: BodyVertex;\n  out.local = corner * extent;\n  out.position = cssToClip(body.posRadius.xy + out.local);\n  out.index = instance;\n  return out;\n}\n";
+ export default _default;
+ //# sourceMappingURL=common.wgsl.d.ts.map
+\ No newline at end of file
+diff --git a/dist/views/swarm/gpu/shaders/common.wgsl.js b/dist/views/swarm/gpu/shaders/common.wgsl.js
+index bca2393efa7d5688fd2a418f28a585fd102e5a98..ba4efdc2f9b5bf71015bf7ba2be974681005f595 100644
+--- a/dist/views/swarm/gpu/shaders/common.wgsl.js
++++ b/dist/views/swarm/gpu/shaders/common.wgsl.js
+@@ -55,7 +55,7 @@ struct Body {
+   // the inner light's colour — the STATE's, never the project's (see body.wgsl)
+   core: vec4f,
+   rim: vec4f,
+-  // x: flag bits; y/z/w unused
++  // x: flag bits; y/z: watermark/flame breath as f32 bits; w unused
+   flags: vec4u,
+   // context ring: fraction 0..1, the weight it starts its climb at, the track's
+   // weight, the weight a full ring would reach
+diff --git a/dist/views/swarm/gpu/shaders/text.wgsl.d.ts b/dist/views/swarm/gpu/shaders/text.wgsl.d.ts
+index 2c7c65b38d92f260e3dffac95c55fc4255cdd8f0..5b9ac30cc709645c490d1c34d61ed9363ec46da4 100644
+--- a/dist/views/swarm/gpu/shaders/text.wgsl.d.ts
++++ b/dist/views/swarm/gpu/shaders/text.wgsl.d.ts
+@@ -1,3 +1,3 @@
+-declare const _default: "// Glyphs and marks, one quad each, tinted by the instance. Type comes from the\n// rasterised atlas as coverage; vendor marks come from the signed-distance\n// atlas and are reconstructed at any size from the field; a host's colour\n// picture keeps its own colours from the rasterised atlas.\n\nstruct Glyph {\n  // x, y, width, height (CSS px)\n  rect: vec4f,\n  uv: vec4f,\n  color: vec4f,\n  // x: 0 = coverage from the glyph atlas, 1 = signed distance from the marks,\n  //    2 = the glyph atlas's own colours (a host's colour picture);\n  // y: the field's px range on screen (pxRange \u00D7 quad px / tile texels)\n  params: vec4f,\n};\n\n@group(1) @binding(0) var<storage, read> glyphs: array<Glyph>;\n@group(1) @binding(1) var atlas: texture_2d<f32>;\n@group(1) @binding(2) var atlasSampler: sampler;\n@group(1) @binding(3) var marks: texture_2d<f32>;\n\nstruct GlyphVertex {\n  @builtin(position) position: vec4f,\n  @location(0) uv: vec2f,\n  @location(1) @interpolate(flat) index: u32,\n};\n\n@vertex\nfn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> GlyphVertex {\n  let glyph = glyphs[instance];\n  let corner = quadCorner(vertex) * 0.5 + 0.5;\n  var out: GlyphVertex;\n  out.position = cssToClip(glyph.rect.xy + corner * glyph.rect.zw);\n  out.uv = mix(glyph.uv.xy, glyph.uv.zw, corner);\n  out.index = instance;\n  return out;\n}\n\n@fragment\nfn fs(in: GlyphVertex) -> @location(0) vec4f {\n  let glyph = glyphs[in.index];\n  // Both taps stay in uniform control flow; the selects pick one.\n  let texel = textureSample(atlas, atlasSampler, in.uv);\n  let field = textureSample(marks, atlasSampler, in.uv).r;\n  let fromField = clamp(glyph.params.y * (field - 0.5) + 0.5, 0.0, 1.0);\n  let coverage = select(texel.a, fromField, glyph.params.x > 0.5);\n  // The atlas is uploaded premultiplied, so a picture's own colours need only the instance's alpha.\n  return select(premul(glyph.color) * coverage, texel * glyph.color.a, glyph.params.x > 1.5);\n}\n";
++declare const _default: "// Glyphs and marks, one quad each, tinted by the instance. Type comes from the\n// rasterised atlas as coverage; vendor marks come from the signed-distance\n// atlas and are reconstructed at any size from the field; a host's colour\n// picture keeps its own colours from the rasterised atlas.\n\nstruct Glyph {\n  // x, y, width, height (CSS px, relative to the owning body)\n  rect: vec4f,\n  uv: vec4f,\n  color: vec4f,\n  // x: 0 = coverage from the glyph atlas, 1 = signed distance from the marks,\n  //    2 = the glyph atlas's own colours (a host's colour picture);\n  // y: the field's px range on screen; z: body index + 1, or 0 for field marks;\n  // w: 0 for static ink, -1 for a working watermark, a positive alpha swing for a flame\n  params: vec4f,\n};\n\n@group(1) @binding(0) var<storage, read> glyphs: array<Glyph>;\n@group(1) @binding(1) var atlas: texture_2d<f32>;\n@group(1) @binding(2) var atlasSampler: sampler;\n@group(1) @binding(3) var marks: texture_2d<f32>;\n\nstruct GlyphVertex {\n  @builtin(position) position: vec4f,\n  @location(0) uv: vec2f,\n  @location(1) @interpolate(flat) tint: vec4f,\n  @location(2) @interpolate(flat) sampling: vec2f,\n};\n\n@vertex\nfn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> GlyphVertex {\n  let glyph = glyphs[instance];\n  let corner = quadCorner(vertex) * 0.5 + 0.5;\n  var position = glyph.rect.xy + corner * glyph.rect.zw;\n  var color = glyph.color;\n  var pxRange = glyph.params.y;\n  if (glyph.params.z > 0.0) {\n    let body = bodies[u32(glyph.params.z) - 1u];\n    position += body.posRadius.xy;\n    color.a *= body.motion.w * mix(1.0, 0.58, body.motion.z);\n    if (glyph.params.w < 0.0) {\n      let breath = bitcast<f32>(body.flags.y);\n      color.a *= 0.08 + 0.16 * breath;\n      if (glyph.params.x == 1.0) {\n        let scale = 0.92 + 0.16 * breath;\n        position += (corner - 0.5) * glyph.rect.zw * (scale - 1.0);\n        pxRange *= scale;\n      }\n    } else if (glyph.params.w > 0.0) {\n      color.a *= 1.0 - glyph.params.w * (1.0 - bitcast<f32>(body.flags.z));\n    }\n  }\n  var out: GlyphVertex;\n  out.position = cssToClip(position);\n  out.uv = mix(glyph.uv.xy, glyph.uv.zw, corner);\n  out.tint = premul(color);\n  out.sampling = vec2f(glyph.params.x, pxRange);\n  return out;\n}\n\n@fragment\nfn fs(in: GlyphVertex) -> @location(0) vec4f {\n  // Both atlases have one mip level. Each quad samples only the atlas it uses.\n  if (in.sampling.x == 1.0) {\n    let field = textureSampleLevel(marks, atlasSampler, in.uv, 0.0).r;\n    return in.tint * clamp(in.sampling.y * (field - 0.5) + 0.5, 0.0, 1.0);\n  }\n  let texel = textureSampleLevel(atlas, atlasSampler, in.uv, 0.0);\n  return select(in.tint * texel.a, texel * in.tint.a, in.sampling.x == 2.0);\n}\n";
+ export default _default;
+ //# sourceMappingURL=text.wgsl.d.ts.map
+\ No newline at end of file
+diff --git a/dist/views/swarm/gpu/shaders/text.wgsl.js b/dist/views/swarm/gpu/shaders/text.wgsl.js
+index 513da3a1dc9592a20377e72533495b25ad5d45e1..8ac56ebdc9029133d36cc73969f013fe46b9690a 100644
+--- a/dist/views/swarm/gpu/shaders/text.wgsl.js
++++ b/dist/views/swarm/gpu/shaders/text.wgsl.js
+@@ -7,13 +7,14 @@ export default `// Glyphs and marks, one quad each, tinted by the instance. Type
+ // picture keeps its own colours from the rasterised atlas.
+ 
+ struct Glyph {
+-  // x, y, width, height (CSS px)
++  // x, y, width, height (CSS px, relative to the owning body)
+   rect: vec4f,
+   uv: vec4f,
+   color: vec4f,
+   // x: 0 = coverage from the glyph atlas, 1 = signed distance from the marks,
+   //    2 = the glyph atlas's own colours (a host's colour picture);
+-  // y: the field's px range on screen (pxRange × quad px / tile texels)
++  // y: the field's px range on screen; z: body index + 1, or 0 for field marks;
++  // w: 0 for static ink, -1 for a working watermark, a positive alpha swing for a flame
+   params: vec4f,
+ };
+ 
+@@ -25,30 +26,50 @@ struct Glyph {
+ struct GlyphVertex {
+   @builtin(position) position: vec4f,
+   @location(0) uv: vec2f,
+-  @location(1) @interpolate(flat) index: u32,
++  @location(1) @interpolate(flat) tint: vec4f,
++  @location(2) @interpolate(flat) sampling: vec2f,
+ };
+ 
+ @vertex
+ fn vs(@builtin(vertex_index) vertex: u32, @builtin(instance_index) instance: u32) -> GlyphVertex {
+   let glyph = glyphs[instance];
+   let corner = quadCorner(vertex) * 0.5 + 0.5;
++  var position = glyph.rect.xy + corner * glyph.rect.zw;
++  var color = glyph.color;
++  var pxRange = glyph.params.y;
++  if (glyph.params.z > 0.0) {
++    let body = bodies[u32(glyph.params.z) - 1u];
++    position += body.posRadius.xy;
++    color.a *= body.motion.w * mix(1.0, 0.58, body.motion.z);
++    if (glyph.params.w < 0.0) {
++      let breath = bitcast<f32>(body.flags.y);
++      color.a *= 0.08 + 0.16 * breath;
++      if (glyph.params.x == 1.0) {
++        let scale = 0.92 + 0.16 * breath;
++        position += (corner - 0.5) * glyph.rect.zw * (scale - 1.0);
++        pxRange *= scale;
++      }
++    } else if (glyph.params.w > 0.0) {
++      color.a *= 1.0 - glyph.params.w * (1.0 - bitcast<f32>(body.flags.z));
++    }
++  }
+   var out: GlyphVertex;
+-  out.position = cssToClip(glyph.rect.xy + corner * glyph.rect.zw);
++  out.position = cssToClip(position);
+   out.uv = mix(glyph.uv.xy, glyph.uv.zw, corner);
+-  out.index = instance;
++  out.tint = premul(color);
++  out.sampling = vec2f(glyph.params.x, pxRange);
+   return out;
+ }
+ 
+ @fragment
+ fn fs(in: GlyphVertex) -> @location(0) vec4f {
+-  let glyph = glyphs[in.index];
+-  // Both taps stay in uniform control flow; the selects pick one.
+-  let texel = textureSample(atlas, atlasSampler, in.uv);
+-  let field = textureSample(marks, atlasSampler, in.uv).r;
+-  let fromField = clamp(glyph.params.y * (field - 0.5) + 0.5, 0.0, 1.0);
+-  let coverage = select(texel.a, fromField, glyph.params.x > 0.5);
+-  // The atlas is uploaded premultiplied, so a picture's own colours need only the instance's alpha.
+-  return select(premul(glyph.color) * coverage, texel * glyph.color.a, glyph.params.x > 1.5);
++  // Both atlases have one mip level. Each quad samples only the atlas it uses.
++  if (in.sampling.x == 1.0) {
++    let field = textureSampleLevel(marks, atlasSampler, in.uv, 0.0).r;
++    return in.tint * clamp(in.sampling.y * (field - 0.5) + 0.5, 0.0, 1.0);
++  }
++  let texel = textureSampleLevel(atlas, atlasSampler, in.uv, 0.0);
++  return select(in.tint * texel.a, texel * in.tint.a, in.sampling.x == 2.0);
+ }
+ `;
+ //# sourceMappingURL=text.wgsl.js.map
+diff --git a/dist/views/swarm/gpu/swarm-renderer.js b/dist/views/swarm/gpu/swarm-renderer.js
+index cf2b7be52a29778a596c72ec4fddb108ad03fb26..15db9fc4a8745b1d9f76feec21eeba690d2e29f6 100644
+--- a/dist/views/swarm/gpu/swarm-renderer.js
++++ b/dist/views/swarm/gpu/swarm-renderer.js
+@@ -245,7 +245,11 @@ async function buildRenderer(canvas, device, context, format, options) {
+         usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
+     });
+     const sampler = device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
+-    const atlas = new GlyphAtlas(device, Math.max(1, window.devicePixelRatio || 1), undefined, () => canvas.ownerDocument.createElement('canvas'), options.onSpriteReady);
++    let spriteRevision = 0;
++    const atlas = new GlyphAtlas(device, Math.max(1, window.devicePixelRatio || 1), undefined, () => canvas.ownerDocument.createElement('canvas'), () => {
++        spriteRevision += 1;
++        options.onSpriteReady?.();
++    });
+     const marks = await loadMarks(device);
+     let bodyCapacity = INITIAL_BODIES;
+     let glyphCapacity = INITIAL_GLYPHS;
+@@ -256,6 +260,7 @@ async function buildRenderer(canvas, device, context, format, options) {
+     let bodyData = new Float32Array(0);
+     let bodyFlags = new Uint32Array(0);
+     let glyphData = new Float32Array(0);
++    let uploadAllGlyphs = true;
+     const frameData = new Float32Array(FRAME_FLOATS);
+     const allocateBodies = (capacity) => {
+         bodyCapacity = capacity;
+@@ -284,6 +289,7 @@ async function buildRenderer(canvas, device, context, format, options) {
+             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+         });
+         glyphData = new Float32Array(capacity * GLYPH_FLOATS);
++        uploadAllGlyphs = true;
+         textBindGroup = device.createBindGroup({
+             layout: textLayout,
+             entries: [
+@@ -301,6 +307,13 @@ async function buildRenderer(canvas, device, context, format, options) {
+     let dpr = atlas.dpr;
+     let heldTime = 0;
+     let glyphCount = 0;
++    let glyphOwner = 0;
++    let missingSprite = false;
++    // Coalesce up to 1 KiB between edits and cap queue calls on a scattered
++    // refresh. Bounds are in glyph instances, inclusive start/exclusive end.
++    const changedRanges = new Uint32Array(16);
++    let changedBounds = 0;
++    const nextGlyph = new Float32Array(GLYPH_FLOATS);
+     let destroyed = false;
+     // When each pending body began to turn, on the held clock, by body id: its
+     // dashes start from where they stood, and stand still with the motion.
+@@ -334,43 +347,54 @@ async function buildRenderer(canvas, device, context, format, options) {
+                 return ink;
+         }
+     };
+-    const pushGlyph = (x, y, w, h, u0, v0, u1, v1, colour, alpha, mode = GLYPH_MODE.coverage, pxRange = 0) => {
++    const pushGlyph = (x, y, w, h, u0, v0, u1, v1, colour, alpha, mode = GLYPH_MODE.coverage, pxRange = 0, pulse = 0) => {
+         if (glyphCount >= glyphCapacity) {
+             const previous = glyphData;
+             allocateGlyphs(glyphCapacity * 2);
+             glyphData.set(previous);
+         }
+-        packGlyph(glyphData, glyphCount * GLYPH_FLOATS, {
++        packGlyph(nextGlyph, 0, {
+             rect: [x, y, w, h],
+             uv: [u0, v0, u1, v1],
+             colour,
+             alpha,
+             mode,
+             pxRange,
++            owner: glyphOwner,
++            pulse,
+         });
++        const offset = glyphCount * GLYPH_FLOATS;
++        // A fresh model can still draw exactly the same label. Compare the packed
++        // float32 values only when a run was rebuilt. Retained runs skip this loop.
++        for (let i = 0; i < GLYPH_FLOATS; i += 1) {
++            if (glyphData[offset + i] !== nextGlyph[i]) {
++                glyphData.set(nextGlyph, offset);
++                if (changedBounds === 0 || (changedBounds < changedRanges.length &&
++                    glyphCount - changedRanges[changedBounds - 1] > 16)) {
++                    changedRanges[changedBounds++] = glyphCount;
++                    changedBounds += 1;
++                }
++                changedRanges[changedBounds - 1] = glyphCount + 1;
++                break;
++            }
++        }
+         glyphCount += 1;
+     };
+     /** A tile from the signed-distance atlas, `size` CSS px, centred on (cx, cy). */
+-    const pushTile = (tile, size, cx, cy, colour, alpha) => {
++    const pushTile = (tile, size, cx, cy, colour, alpha, pulse = 0) => {
+         const { width, height, tile: texels, pxRange } = AGENT_MARK_ATLAS;
+         const screenPxRange = (pxRange * size * dpr) / texels;
+-        pushGlyph(cx - size / 2, cy - size / 2, size, size, tile.x / width, tile.y / height, (tile.x + texels) / width, (tile.y + texels) / height, colour, alpha, GLYPH_MODE.field, screenPxRange);
++        pushGlyph(cx - size / 2, cy - size / 2, size, size, tile.x / width, tile.y / height, (tile.x + texels) / width, (tile.y + texels) / height, colour, alpha, GLYPH_MODE.field, screenPxRange, pulse);
+     };
+-    /** A provider's mark, or false when it has only a letter. */
+-    const pushMark = (providerId, size, cx, cy, colour, alpha) => {
+-        const tile = agentMarkTile(providerId);
+-        if (!tile)
+-            return false;
+-        pushTile(tile, size, cx, cy, colour, alpha);
+-        return true;
+-    };
+-    const pushSprite = (key, svg, size, cx, cy, colour, alpha) => {
++    const pushSprite = (key, svg, size, cx, cy, colour, alpha, pulse = 0) => {
+         if (!svg)
+             return;
+         const region = atlas.sprite(key, svg, size);
+-        if (!region)
++        if (!region) {
++            missingSprite = true;
+             return;
+-        pushGlyph(cx - region.width / 2, cy - region.height / 2, region.width, region.height, region.u0, region.v0, region.u1, region.v1, colour, alpha);
++        }
++        pushGlyph(cx - region.width / 2, cy - region.height / 2, region.width, region.height, region.u0, region.v0, region.u1, region.v1, colour, alpha, GLYPH_MODE.coverage, 0, pulse);
+     };
+     /**
+      * A host's picture (`HostMark`), `size` CSS px, centred on (cx, cy): a stencil is a sprite tinted like any mark, a
+@@ -382,8 +406,10 @@ async function buildRenderer(canvas, device, context, format, options) {
+             return;
+         }
+         const region = atlas.picture(picture.key, picture.image, size);
+-        if (!region)
++        if (!region) {
++            missingSprite = true;
+             return;
++        }
+         pushGlyph(cx - region.width / 2, cy - region.height / 2, region.width, region.height, region.u0, region.v0, region.u1, region.v1, colour, alpha, GLYPH_MODE.colour);
+     };
+     const pushText = (text, style, x, baseline, colour, alpha) => {
+@@ -399,22 +425,10 @@ async function buildRenderer(canvas, device, context, format, options) {
+             pen += region.advance + spacing;
+         }
+     };
+-    // Each body's layout (what it keeps, and where: `body-layout.ts`), held while its model, its eased radius and
+-    // its arrival scale all stand still. A settled body is laid out once per model, and models are rebuilt about
+-    // once a second, so the ladder's extra layouts cost only bodies in motion, never a frame of a settled field.
+-    const layouts = new Map();
+-    const laidOutThisFrame = new Set();
++    // Indexed in the same painter's order as the body buffer. Movement, fading
++    // and pulsing use that buffer without visiting the glyphs in a retained run.
++    const textRuns = [];
+     const measure = (text, style) => atlas.measure(text, style);
+-    const layoutOf = (body) => {
+-        const id = body.model.id;
+-        laidOutThisFrame.add(id);
+-        const held = layouts.get(id);
+-        if (held && held.model === body.model && held.radius === body.radius && held.scale === body.scale)
+-            return held.layout;
+-        const layout = bodyLayout(body.model, { radius: body.radius, scale: body.scale, measure });
+-        layouts.set(id, { model: body.model, radius: body.radius, scale: body.scale, layout });
+-        return layout;
+-    };
+     /**
+      * The burn ladder: as many flames as the rate has lit, and no empty slots
+      * (2026-09-18). A calm session draws nothing at all, which is the honest thing
+@@ -424,29 +438,28 @@ async function buildRenderer(canvas, device, context, format, options) {
+      * bucket's rhythm, as the newest column used to. Ink only — a colour here would
+      * collide with the states' own (record §10).
+      */
+-    const emitBurn = (body, ink, time, motion, layout, dim, rung) => {
++    const emitBurn = (body, ink, layout, rung) => {
+         const burn = body.model.burn;
+         const drawn = burnFlamesDrawn(body.model);
+         if (!burn || drawn === 0 || layout.burn === undefined)
+             return;
+-        const rowY = body.y + layout.burn;
++        const rowY = layout.burn;
+         const span = drawn * FLAME_SIZE + (drawn - 1) * FLAME_GAP;
+-        const breath = motion ? 0.5 - 0.5 * Math.cos((time * 2 * Math.PI) / 1.6 + body.seed) : 0.5;
+         for (let slot = 0; slot < drawn; slot += 1) {
+-            const x = body.x - span / 2 + FLAME_SIZE / 2 + slot * (FLAME_SIZE + FLAME_GAP);
++            const x = -span / 2 + FLAME_SIZE / 2 + slot * (FLAME_SIZE + FLAME_GAP);
+             // Each flame climbs the range the gauge climbs: the first sits low, the
+             // fourth reaches the title's own weight, because a body burning that hard is
+             // the most important thing on the stage. The last one breathes.
+-            const alpha = burn.priced
+-                ? climb(slot / 3) * (slot === burn.lit - 1 ? 0.82 + 0.18 * breath : 1)
+-                : SWARM_WEIGHT.absent;
+-            pushSprite(burn.priced ? 'flame' : 'flame-hollow', burn.priced ? FLAME_SVG : FLAME_HOLLOW_SVG, FLAME_SIZE, x, rowY, ink, rung(alpha) * dim);
++            const weight = burn.priced ? climb(slot / 3) : SWARM_WEIGHT.absent;
++            const alpha = rung(weight);
++            const pulse = burn.priced && slot === burn.lit - 1 ? 1 - rung(0.82 * weight) / alpha : 0;
++            pushSprite(burn.priced ? 'flame' : 'flame-hollow', burn.priced ? FLAME_SVG : FLAME_HOLLOW_SVG, FLAME_SIZE, x, rowY, ink, alpha, pulse);
+         }
+     };
+-    const emitBodyText = (body, ink, theme, time, motion, layout) => {
++    const emitBodyText = (body, theme, motion, layout, tile, letterSize) => {
+         const { model } = body;
++        const ink = theme.ink;
+         const radius = body.radius * body.scale;
+-        const dim = body.opacity * (model.stale ? 0.58 : 1);
+         // A coloured ground gives the ink less room, so the ladder starts higher on it.
+         const rung = stateGroundOf(theme, model.light) === undefined ? (weight) => weight : onField;
+         if (radius < 12)
+@@ -456,24 +469,23 @@ async function buildRenderer(canvas, device, context, format, options) {
+             // 0.92 to 1.08 and brightens from 8% to 24% every 1.5s. A small body, or
+             // one whose words have stepped down, wears the small mark.
+             const breathing = motion && model.appearance === 'working';
+-            const k = breathing ? 0.5 - 0.5 * Math.cos((time * 2 * Math.PI) / 1.5 + body.seed) : 0.5;
+-            const size = layout.watermark * (breathing ? 0.92 + 0.16 * k : 1);
+-            const opacity = (breathing ? 0.08 + 0.16 * k : model.watermark.opacity) * dim;
+-            const cx = body.x;
++            const opacity = breathing ? 1 : model.watermark.opacity;
++            const pulse = breathing ? -1 : 0;
+             // Lifted above the copy's centre so the branch line clears its densest part.
+-            const cy = body.y - 0.27 * radius;
+-            if (!pushMark(model.watermark.sprite, size, cx, cy, ink, opacity)) {
+-                pushSprite(`mark:${model.watermark.sprite}`, agentMarkSvg(model.watermark.sprite), Math.round(size), cx, cy, ink, opacity);
+-            }
++            const cy = -0.27 * radius;
++            if (tile)
++                pushTile(tile, layout.watermark, 0, cy, ink, opacity, pulse);
++            else
++                pushSprite(`mark:${model.watermark.sprite}`, agentMarkSvg(model.watermark.sprite), letterSize, 0, cy, ink, opacity, pulse);
+         }
+         for (const line of layout.copy.lines) {
+             const colour = toneColour(line.tone, body, ink, theme);
+-            const alpha = rung(line.opacity) * dim;
+-            const lineY = body.y + line.y;
+-            let pen = body.x - line.width / 2;
++            const alpha = rung(line.opacity);
++            const lineY = line.y;
++            let pen = -line.width / 2;
+             const mark = (lead) => {
+                 const leadColour = toneColour(lead.tone ?? line.tone, body, ink, theme);
+-                const leadAlpha = rung(lead.opacity ?? line.opacity) * dim;
++                const leadAlpha = rung(lead.opacity ?? line.opacity);
+                 const leadCentreX = pen + leadAdvance(lead) / 2;
+                 if (lead.kind === 'dot')
+                     pushSprite('dot', DOT_SVG, lead.size, leadCentreX, lineY - 0.5, leadColour, leadAlpha);
+@@ -494,29 +506,29 @@ async function buildRenderer(canvas, device, context, format, options) {
+         if (model.rim) {
+             // On the rim at its 45° point, over the context ring: the theme's shadow, a ring in its ink, a disc in its
+             // surface, then the host's picture. Nothing of it is the host's but the picture.
+-            const at = rimPlacement(body.x, body.y, radius);
+-            pushSprite('dot', DOT_SVG, at.disc + 3, at.x, at.y + 1, theme.shadow, dim);
+-            pushSprite('dot', DOT_SVG, at.disc + 2, at.x, at.y, ink, SWARM_WEIGHT.edge * dim);
+-            pushSprite('dot', DOT_SVG, at.disc, at.x, at.y, theme.surface, dim);
+-            pushPicture(model.rim, at.picture, at.x, at.y, ink, dim);
++            const at = rimPlacement(0, 0, radius);
++            pushSprite('dot', DOT_SVG, at.disc + 3, at.x, at.y + 1, theme.shadow, 1);
++            pushSprite('dot', DOT_SVG, at.disc + 2, at.x, at.y, ink, SWARM_WEIGHT.edge);
++            pushSprite('dot', DOT_SVG, at.disc, at.x, at.y, theme.surface, 1);
++            pushPicture(model.rim, at.picture, at.x, at.y, ink, 1);
+         }
+         const figure = (item, centreY) => {
+             // The gauge's own climb already says a context is nearly spent; the figure
+             // beside it needs no second alarm, and orange now means one thing only.
+             const colour = ink;
+-            const alpha = rung(item.none ? SWARM_WEIGHT.absent : SWARM_WEIGHT.secondary) * dim;
++            const alpha = rung(item.none ? SWARM_WEIGHT.absent : SWARM_WEIGHT.secondary);
+             const textWidth = atlas.measure(item.text, FIGURE_STYLE);
+             const metrics = atlas.fontMetrics(FIGURE_STYLE);
+-            pushText(item.text, FIGURE_STYLE, body.x - textWidth / 2, centreY + (metrics.ascent - metrics.descent) / 2, colour, alpha);
++            pushText(item.text, FIGURE_STYLE, -textWidth / 2, centreY + (metrics.ascent - metrics.descent) / 2, colour, alpha);
+         };
+         // The context figure on the top chord and the total on the bottom one,
+         // under the burn row, each the same distance in from the rim: where the
+         // body keeps them (clear of its copy, inside its circle).
+         if (model.figures?.top && layout.top !== undefined)
+-            figure(model.figures.top, body.y + layout.top);
++            figure(model.figures.top, layout.top);
+         if (model.figures?.bottom && layout.bottom !== undefined)
+-            figure(model.figures.bottom, body.y + layout.bottom);
+-        emitBurn(body, ink, time, motion, layout, dim, rung);
++            figure(model.figures.bottom, layout.bottom);
++        emitBurn(body, ink, layout, rung);
+     };
+     const packBody = (index, body, frame) => {
+         const { model } = body;
+@@ -586,8 +598,13 @@ async function buildRenderer(canvas, device, context, format, options) {
+         writeRgba(bodyData, offset + 12, lightColour, body.opacity);
+         writeRgba(bodyData, offset + 16, colours.rim, body.opacity);
+         bodyFlags[offset + 20] = flags;
+-        bodyFlags[offset + 21] = 0;
+-        bodyFlags[offset + 22] = 0;
++        // The text vertices read these two words as floats from the existing
++        // body record. Every quad on the body shares its clock and opacity.
++        const watermarkBreath = frame.motion && model.watermark && model.appearance === 'working'
++            ? 0.5 - 0.5 * Math.cos((heldTime * 2 * Math.PI) / 1.5 + body.seed) : 0.5;
++        bodyData[offset + 21] = watermarkBreath;
++        bodyData[offset + 22] = frame.motion && model.burn?.priced && model.burn.lit > 0
++            ? 0.5 - 0.5 * Math.cos((heldTime * 2 * Math.PI) / 1.6 + body.seed) : 0.5;
+         bodyFlags[offset + 23] = 0;
+         bodyData[offset + 24] = model.ring ? model.ring.percent / 100 : 0;
+         // The gauge climbs as it goes round; the track behind it stays the faintest rung.
+@@ -604,7 +621,7 @@ async function buildRenderer(canvas, device, context, format, options) {
+         bodyData[offset + 34] = model.stale ? 1 : 0;
+         bodyData[offset + 35] = body.opacity;
+         writeRgba(bodyData, offset + 36, body.link ?? [0, 0, 0, 0], body.opacity);
+-        return colours.ink;
++        return watermarkBreath;
+     };
+     const lost = device.lost;
+     const renderer = {
+@@ -619,9 +636,10 @@ async function buildRenderer(canvas, device, context, format, options) {
+                 canvas.width = pixelWidth;
+             if (canvas.height !== pixelHeight)
+                 canvas.height = pixelHeight;
+-            atlas.setDpr(dpr);
+-            // Glyph advances are measured at the device's pixels: a new ratio lays every body out afresh.
+-            layouts.clear();
++            if (atlas.dpr !== dpr) {
++                atlas.setDpr(dpr);
++                textRuns.length = 0;
++            }
+         },
+         measure(text, style) {
+             return atlas.measure(text, style);
+@@ -643,17 +661,47 @@ async function buildRenderer(canvas, device, context, format, options) {
+             // Two groups, each one instance range in painter's order: the field's
+             // bodies, then the bodies being born, which are drawn over the clearings.
+             glyphCount = 0;
++            changedBounds = 0;
+             let packed = 0;
+             const pack = (body) => {
+-                const layout = layoutOf(body);
+-                const ink = packBody(packed, body, frame);
+-                emitBodyText(body, ink, theme, time, frame.motion, layout);
++                const watermarkBreath = packBody(packed, body, frame);
++                const { model, radius, scale } = body;
++                let run = textRuns[packed];
++                if (!run || run.model !== model || run.radius !== radius || run.scale !== scale) {
++                    const layout = bodyLayout(model, { radius, scale, measure });
++                    const tile = model.watermark && agentMarkTile(model.watermark.sprite);
++                    run = { model, radius, scale, layout, tile, first: -1 };
++                    textRuns[packed] = run;
++                }
++                // A provider's letter fallback is rasterised at integral CSS sizes.
++                // Preserve its exact hinting as a working watermark changes size.
++                const letterSize = model.watermark && !run.tile
++                    ? Math.round(run.layout.watermark * (0.92 + 0.16 * watermarkBreath)) : 0;
++                if (run.first === glyphCount && run.theme === theme && run.accent === body.accent &&
++                    run.motion === frame.motion && run.letterSize === letterSize &&
++                    (!run.missingSprite || run.spriteRevision === spriteRevision)) {
++                    glyphCount += run.count;
++                }
++                else {
++                    glyphOwner = packed + 1;
++                    missingSprite = false;
++                    run.first = glyphCount;
++                    emitBodyText(body, theme, frame.motion, run.layout, run.tile, letterSize);
++                    run.count = glyphCount - run.first;
++                    run.theme = theme;
++                    run.accent = body.accent;
++                    run.motion = frame.motion;
++                    run.letterSize = letterSize;
++                    run.missingSprite = missingSprite;
++                    run.spriteRevision = spriteRevision;
++                }
+                 packed += 1;
+             };
+             for (const body of bodies)
+                 if (!body.aboveClearings)
+                     pack(body);
+             const bodiesBelow = packed;
++            glyphOwner = 0;
+             for (const mark of frame.marks ?? [])
+                 pushTile(mark.tile, mark.size, mark.x, mark.y, mark.colour, mark.alpha);
+             const glyphsBelow = glyphCount;
+@@ -666,18 +714,23 @@ async function buildRenderer(canvas, device, context, format, options) {
+                 if (!turnedThisFrame.has(id))
+                     turnStarts.delete(id);
+             turnedThisFrame.clear();
+-            // A body gone from the frame lets its layout go with it.
+-            for (const id of layouts.keys())
+-                if (!laidOutThisFrame.has(id))
+-                    layouts.delete(id);
+-            laidOutThisFrame.clear();
++            textRuns.length = packed;
+             packFrame(frameData, frame, { width, height, dpr, time });
+             device.queue.writeBuffer(frameBuffer, 0, frameData);
+             if (bodies.length > 0) {
+                 device.queue.writeBuffer(bodyBuffer, 0, bodyData, 0, bodies.length * BODY_FLOATS);
+             }
+-            if (glyphCount > 0)
+-                device.queue.writeBuffer(glyphBuffer, 0, glyphData, 0, glyphCount * GLYPH_FLOATS);
++            if (uploadAllGlyphs && glyphCount > 0) {
++                changedRanges[0] = 0;
++                changedRanges[1] = glyphCount;
++                changedBounds = 2;
++                uploadAllGlyphs = false;
++            }
++            for (let i = 0; i < changedBounds; i += 2) {
++                const offset = changedRanges[i] * GLYPH_FLOATS;
++                const length = (changedRanges[i + 1] - changedRanges[i]) * GLYPH_FLOATS;
++                device.queue.writeBuffer(glyphBuffer, offset * Float32Array.BYTES_PER_ELEMENT, glyphData, offset, length);
++            }
+             const encoder = device.createCommandEncoder({ label: 'swarm frame' });
+             const pass = encoder.beginRenderPass({
+                 colorAttachments: [
+diff --git a/dist/views/swarm/index.d.ts b/dist/views/swarm/index.d.ts
+index 2cbea4eb4720c037561aefcc9dcf16a51ffd658f..c206d5f16d1a38e5ff4a1f39e1fa807526d6c66f 100644
+--- a/dist/views/swarm/index.d.ts
++++ b/dist/views/swarm/index.d.ts
+@@ -5,5 +5,8 @@ import './bloom/spawn-bloom.css';
+ export declare const SWARM_ROOT_CLASS = "mv-swarm";
+ export declare const SWARM_MANIFEST: MonitorViewManifest;
+ /** The swarm: the matter.js agent field drawn by WebGPU (RFC 005), as an SDK view (MV-5). */
+-export declare const swarmMonitorView: import("@vibefield/puppeteer-view-sdk/react").ReactMonitorView;
++export declare const swarmMonitorView: import("@vibefield/puppeteer-view-sdk/react").ReactMonitorView & {
++    /** A swarm that remembers the last drawn positions across mounts in one sequential view slot. */
++    createInstance(): import("@vibefield/puppeteer-view-sdk/react").ReactMonitorView;
++};
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+diff --git a/dist/views/swarm/index.js b/dist/views/swarm/index.js
+index 259af54a7d5a4651fa492e5c730402f13d3adb81..e70d333d22c3b8349210f9b0d24806cfa25323e3 100644
+--- a/dist/views/swarm/index.js
++++ b/dist/views/swarm/index.js
+@@ -1,5 +1,6 @@
+ import { MONITOR_VIEW_SDK_MAJOR } from '@vibefield/puppeteer-view-sdk';
+ import { reactMonitorView } from '@vibefield/puppeteer-view-sdk/react';
++import { createElement } from 'react';
+ import { MARK_VIEW_BOX, ringOutline } from '@vibefield/puppeteer-view-sdk/toolkit';
+ import { AgentSwarm } from './AgentSwarm.js';
+ import { SWARM_PARAMETER_GROUPS } from './swarm-parameters.js';
+@@ -37,5 +38,13 @@ export const SWARM_MANIFEST = {
+     motion: { loops: true },
+ };
+ /** The swarm: the matter.js agent field drawn by WebGPU (RFC 005), as an SDK view (MV-5). */
+-export const swarmMonitorView = reactMonitorView(SWARM_MANIFEST, AgentSwarm, { rootClass: SWARM_ROOT_CLASS });
++export const swarmMonitorView = Object.assign(reactMonitorView(SWARM_MANIFEST, AgentSwarm, { rootClass: SWARM_ROOT_CLASS }), {
++    /** Keep spatial memory for one sequential view slot. The shared view stays independent of every slot. */
++    createInstance() {
++        const layout = { bodies: new Map() };
++        return reactMonitorView(SWARM_MANIFEST, (props) => createElement(AgentSwarm, { ...props, layout }), {
++            rootClass: SWARM_ROOT_CLASS,
++        });
++    },
++});
+ //# sourceMappingURL=index.js.map

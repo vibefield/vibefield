@@ -9,6 +9,9 @@ packages:
   - "tooling/*"
   - "apps/*"
   - "services/*"
+patchedDependencies:
+  # Resume each Swarm at its last drawn positions and avoid redundant physics and text work.
+  "@vibefield/puppeteer-views@0.4.11": patches/@vibefield__puppeteer-views@0.4.11.patch
 allowBuilds:
   esbuild: true
   electron: true

@@ -1,6 +1,7 @@
 import type { AgentAccountUsageEntry, AgentProfileSet } from "@vibefield/contracts";
 import type {
   MonitorCapabilities,
+  MonitorHistory,
   MonitorTheme,
   StageGeometry,
   ViewReport,
@@ -26,6 +27,7 @@ import {
   memo,
   type ReactElement,
   type ReactNode,
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -34,7 +36,11 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
+import {
+  emitGodviewMonitorMarker,
+  type GodviewMonitorRunFacts,
+  godviewMarkersEnabled,
+} from "../development-console";
 import { useGodviewDeckMaximized } from "../frame/deck-door";
 import {
   type GodviewFindDoor,
@@ -43,6 +49,7 @@ import {
   publishGodviewFindDoor,
 } from "../frame/find-door";
 import { planChoice, planInProfile, planRunSet, runRecedes } from "../usage/plan-sessions";
+import { isHidden, onVisibilityChange } from "../visibility";
 import { type GodviewFilters, storedGodviewFilters, storeGodviewFilters } from "./filter-state";
 import { GodviewHeadView } from "./GodviewHeadView";
 import type { GodviewTheme } from "./GodviewTuningPanel";
@@ -61,6 +68,7 @@ import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
 import type { MonitorViewEntry } from "./monitor/types";
 import {
+  type MonitorAgentsResult,
   type MonitorPaneFacts,
   type MonitorSourceCounts,
   useMonitorAgents,
@@ -315,6 +323,8 @@ export interface GodviewMonitorProps {
    * Off, a ported view's loop holds still, as the stage's CSS loops do under
    * the attribute the stage writes from the same value. */
   animations?: boolean;
+  /** A maximized deck covers this view. A covered view can skip even still frames. */
+  covered?: boolean;
   /** P2 — whether this stage lends the frame's Peek its Live now
    * (`find-door.ts`): the window's own Godview does; a catalog's stages, of
    * which a page mounts several, do not. */
@@ -371,6 +381,7 @@ export function GodviewMonitor({
   panes,
   terminalsUp = true,
   animations = true,
+  covered = false,
   publishesFind = false,
   initialProfile = null,
   onSelectView,
@@ -392,6 +403,9 @@ export function GodviewMonitor({
   }, []);
   const palette = useMonitorPalette(godviewRootRef);
   const reducedMotion = usePrefersReducedMotion();
+  const pageHidden = useSyncExternalStore(onVisibilityChange, isHidden, () => false);
+  const hidden = covered || pageHidden;
+  const [markersEnabled] = useState(godviewMarkersEnabled);
 
   // AR-S5 — THE PROFILE FILTER (the agents-settings record's T3; GV-D3 moved
   // its tabs into search's Live now, P2). The feed is the one Settings reads,
@@ -649,36 +663,7 @@ export function GodviewMonitor({
     () => (still ? STILL_COMMANDS : { ...commands, openEnded: openEndedLane }),
     [commands, still],
   );
-  /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
-  const swarmRenderer =
-    viewReport.renderer ?? (viewReport.physics !== undefined ? "starting" : "none");
-  /** GT-3c: where its physics runs — `worker`, the honest `inline`, or `none` for a view with none. */
-  const swarmPhysics = viewReport.physics ?? "none";
   const viewHoldsKeys = viewReport.keysHeld === true;
-  /** UM-3: the profiles column's circles, counted off the chrome slot (AR-5's way); -1 unmounted. */
-  const [profileCircles, setProfileCircles] = useState(-1);
-  // AR-7 — this desktop's runs for the marker, handed on as the SAME object
-  // until a fact the marker states moves: a working agent's row moves several
-  // times a second, and a token count is no news to this line (the identity
-  // rule the deck's frame facts follow in `GodviewAgentsProvider`). MV-3d: the
-  // runs are the chrome's (`chrome-facts.ts`), and the stage hears them only
-  // when the marker's own key moves. `drawn` is asked of the runs behind the
-  // agent rows the stage shows, through the board's join (`runByRow`) —
-  // observed or not.
-  const chrome = useMonitorFeed()?.chrome ?? null;
-  const markerKey = useChromeKey(chrome, markerRunsKey);
-  const drawnRunIds = shown.flatMap((row) => {
-    const run = row.kind !== "agent" ? undefined : runByRow.get(row.id);
-    return run === undefined ? [] : [run];
-  });
-  const drawnKey = JSON.stringify(drawnRunIds);
-  // Row objects move with token counts; membership does not. Reuse the join
-  // until either the drawn ids or a fact the marker actually states changes.
-  const drawnRuns = useMemo(() => new Set(drawnRunIds), [drawnKey]);
-  const runs = useMemo(
-    () => monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns),
-    [chrome, markerKey, drawnRuns],
-  );
   /** A profile or a plan chosen with no sessions under it says so over the
    * stage (a plan, the drawing's word, before a profile); with no sessions at
    * all the view's own empty state speaks instead. WL-1: the work column's
@@ -716,8 +701,14 @@ export function GodviewMonitor({
   // its physics). Both are known at the first render, so a view mounted under
   // a still stage never starts its loop.
   const monitorTheme = useMemo<MonitorTheme>(
-    () => ({ scheme: theme, tokens: palette, reducedMotion, animations: animations && !still }),
-    [theme, palette, reducedMotion, animations, still],
+    () => ({
+      scheme: theme,
+      tokens: palette,
+      reducedMotion,
+      animations: animations && !still,
+      hidden,
+    }),
+    [theme, palette, reducedMotion, animations, still, hidden],
   );
 
   // Views that lay out in flow clear the chrome with these two insets — the
@@ -878,63 +869,11 @@ export function GodviewMonitor({
     return () => setMonitorHoldsKeys(false);
   }, [viewHoldsKeys]);
 
-  // The profiles column's circles, counted off the chrome slot the same way:
-  // its sets arrive on the feed's schedule, and a harness wants the count as a
-  // fact rather than a screenshot (the marker's `profileCircles`).
-  useEffect(() => {
-    const chrome = chromeRef.current;
-    if (!chrome || typeof MutationObserver === "undefined") return;
-    const read = (): void => {
-      const column = chrome.querySelector(".vf-profiles-column");
-      setProfileCircles(column ? column.querySelectorAll(".vf-profiles-circle").length : -1);
-    };
-    const observer = new MutationObserver(read);
-    observer.observe(chrome, { subtree: true, childList: true });
-    read();
-    return () => observer.disconnect();
-  }, []);
-
   useEffect(() => {
     if (acknowledgement === null) return;
     const timer = window.setTimeout(clearAcknowledgement, ACKNOWLEDGEMENT_MS);
     return () => window.clearTimeout(timer);
   }, [acknowledgement, clearAcknowledgement]);
-
-  useEffect(() => {
-    emitGodviewMonitorMarker({
-      viewId: view.id,
-      agents: agents.length,
-      agentBacked: agents.filter((agent) => agent.kind === "agent").length,
-      localClaim: localClaim(sources),
-      localAgents: sources.local,
-      terminals: sources.terminals,
-      localState: sources.localState,
-      ...(sources.localReason !== undefined ? { localReason: sources.localReason } : {}),
-      remoteSessions: sources.remote,
-      remoteHosts: sources.hosts,
-      remoteState: sources.remoteState,
-      ...(sources.remoteReason !== undefined ? { remoteReason: sources.remoteReason } : {}),
-      swarmPhysics,
-      swarmRenderer,
-      profileCircles,
-      profileTab: chosenId ?? "all",
-      shownAgents: shown.length,
-      history: history?.state ?? "absent",
-      endedLanes: history?.ended.length ?? 0,
-      runs,
-    });
-  }, [
-    agents,
-    view.id,
-    sources,
-    swarmPhysics,
-    swarmRenderer,
-    profileCircles,
-    chosenId,
-    shown,
-    history,
-    runs,
-  ]);
 
   // The stage binds no key of its own any more. FC-D18 (ruled 2026-10-01)
   // removed the counters' ⌘1–⌘3 (⌘1–⌘4 are the frame's views, One Frame FR-1);
@@ -1081,6 +1020,19 @@ export function GodviewMonitor({
 
   return (
     <>
+      {markersEnabled && (
+        <MonitorMarker
+          viewId={view.id}
+          agents={agents}
+          shown={shown}
+          runByRow={runByRow}
+          sources={sources}
+          viewReport={viewReport}
+          profileTab={chosenId ?? "all"}
+          history={history}
+          chromeRef={chromeRef}
+        />
+      )}
       {/* The head's slot: the frame's head row, over the stage (godview-head.css).
           A head that fails says so here, where the row stood. */}
       <div className="vf-stories-slot">
@@ -1258,4 +1210,93 @@ export function GodviewMonitor({
       <div ref={setCardLayer} className="vf-monitor-cards" inert={still} />
     </>
   );
+}
+
+/** Only instrumented windows subscribe to marker facts or observe the profiles DOM. */
+function MonitorMarker({
+  viewId,
+  agents,
+  shown,
+  runByRow,
+  sources,
+  viewReport,
+  profileTab,
+  history,
+  chromeRef,
+}: Pick<MonitorAgentsResult, "agents" | "shown" | "runByRow" | "sources"> & {
+  viewId: string;
+  viewReport: ViewReport;
+  profileTab: string;
+  history: MonitorHistory | undefined;
+  chromeRef: RefObject<HTMLDivElement | null>;
+}): null {
+  const swarmRenderer =
+    viewReport.renderer ?? (viewReport.physics === undefined ? "none" : "starting");
+  const swarmPhysics = viewReport.physics ?? "none";
+  const chrome = useMonitorFeed()?.chrome ?? null;
+  const markerKey = useChromeKey(chrome, markerRunsKey);
+  const drawnRunIds = shown.flatMap((row) => {
+    const run = row.kind !== "agent" ? undefined : runByRow.get(row.id);
+    return run === undefined ? [] : [run];
+  });
+  const drawnKey = JSON.stringify(drawnRunIds);
+  const drawnRuns = useMemo(() => new Set(drawnRunIds), [drawnKey]);
+  const runs = useMemo(
+    () => monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns),
+    [chrome, markerKey, drawnRuns],
+  );
+  const [profileCircles, setProfileCircles] = useState(-1);
+  // The profiles column's circles, counted off the chrome slot the same way:
+  // its sets arrive on the feed's schedule, and a harness wants the count as a
+  // fact rather than a screenshot (the marker's `profileCircles`).
+  useEffect(() => {
+    const chrome = chromeRef.current;
+    if (!chrome || typeof MutationObserver === "undefined") return;
+    const read = (): void => {
+      const column = chrome.querySelector(".vf-profiles-column");
+      setProfileCircles(column ? column.querySelectorAll(".vf-profiles-circle").length : -1);
+    };
+    const observer = new MutationObserver(read);
+    observer.observe(chrome, { subtree: true, childList: true });
+    read();
+    return () => observer.disconnect();
+  }, [chromeRef]);
+
+  useEffect(() => {
+    emitGodviewMonitorMarker({
+      viewId,
+      agents: agents.length,
+      agentBacked: agents.filter((agent) => agent.kind === "agent").length,
+      localClaim: localClaim(sources),
+      localAgents: sources.local,
+      terminals: sources.terminals,
+      localState: sources.localState,
+      ...(sources.localReason !== undefined ? { localReason: sources.localReason } : {}),
+      remoteSessions: sources.remote,
+      remoteHosts: sources.hosts,
+      remoteState: sources.remoteState,
+      ...(sources.remoteReason !== undefined ? { remoteReason: sources.remoteReason } : {}),
+      swarmPhysics,
+      swarmRenderer,
+      profileCircles,
+      profileTab,
+      shownAgents: shown.length,
+      history: history?.state ?? "absent",
+      endedLanes: history?.ended.length ?? 0,
+      runs,
+    });
+  }, [
+    agents,
+    viewId,
+    sources,
+    swarmPhysics,
+    swarmRenderer,
+    profileCircles,
+    profileTab,
+    shown,
+    history,
+    runs,
+  ]);
+
+  return null;
 }

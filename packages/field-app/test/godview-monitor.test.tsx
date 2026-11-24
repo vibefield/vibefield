@@ -1126,6 +1126,24 @@ describe("the monitor stage", () => {
     expect(latest().localAgents).toBe(3);
   });
 
+  it("opens an ordinary window without observing the profiles DOM for diagnostics", async () => {
+    const url = window.location.href;
+    const observe = vi.spyOn(MutationObserver.prototype, "observe");
+    try {
+      window.history.replaceState(null, "", "/");
+      const host = await mountMonitor("list");
+      const chrome = host.querySelector(".vf-monitor-chrome");
+      expect(chrome).not.toBeNull();
+      expect(
+        observe.mock.calls.some(([target, options]) => target === chrome && options?.childList),
+      ).toBe(false);
+      expect(markers).toHaveLength(0);
+    } finally {
+      window.history.replaceState(null, "", url);
+      observe.mockRestore();
+    }
+  });
+
   it("names every run of the fold on the marker — its pane, whose doing it is, drawn or not (AR-7)", async () => {
     // A name typed at a pane's prompt is a run like any other: its row joins
     // the pane its shell is (an INTERACTIVE cell's session, not the agent
@@ -4220,12 +4238,14 @@ describe("MV-W4 — the motion a ported view may make", () => {
     entry: MonitorViewEntry,
     door: MonitorDoor,
     animations?: boolean,
+    covered = false,
   ): Promise<void> {
     await act(async () => {
       root?.render(
         <GodviewAgentsProvider door={door}>
           <GodviewMonitor
             view={entry}
+            covered={covered}
             parameters={{}}
             door={door}
             panes={PANES}
@@ -4290,6 +4310,29 @@ describe("MV-W4 — the motion a ported view may make", () => {
     const { entry, recording } = recordingEntry();
     await mountUnder(entry);
     expect(recording.inputs[0]?.theme).toMatchObject({ animations: true, reducedMotion: false });
+  });
+
+  it("pauses the mounted view while the document is hidden or the deck covers it", async () => {
+    reducedMotionQuery(false);
+    const hidden = vi.spyOn(document, "hidden", "get").mockReturnValue(false);
+    const { entry, recording } = recordingEntry();
+    const door = await mountUnder(entry);
+    expect(recording.lastInput?.theme.hidden).toBe(false);
+    hidden.mockReturnValue(true);
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(recording.lastInput?.theme.hidden).toBe(true);
+    await renderUnder(entry, door, false, true);
+    hidden.mockReturnValue(false);
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(recording.lastInput?.theme.hidden).toBe(true);
+    await renderUnder(entry, door, true);
+    expect(recording.lastInput?.theme.hidden).toBe(false);
+    expect(recording.mounts).toBe(1);
+    hidden.mockRestore();
   });
 
   it("NAMED (MV-W4): the swarm holds still under reduced motion and moves again when it is let go — where the old swarm ran regardless", async () => {

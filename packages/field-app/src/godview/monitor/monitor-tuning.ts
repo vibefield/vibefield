@@ -4,9 +4,11 @@ import {
   type MonitorParameters,
   type MonitorViewEntry,
   monitorParameterDefaults,
+  monitorViewEntry,
   monitorViewFor,
   normalizeMonitorParameters,
   saveMonitorParameters,
+  swarmMonitorView,
 } from "@vibefield/puppeteer-views";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { STAGE_PARAMETER_GROUPS } from "./stage-parameters";
@@ -84,9 +86,24 @@ export interface MonitorTuning {
   resetParameters(): void;
 }
 
+/** Scope the last swarm layout to this window or catalog specimen, above the stage that navigation unmounts. */
+export function useMonitorView(viewId: string): MonitorViewEntry {
+  const [swarm] = useState(() => {
+    // A linked development checkout can predate the pinned view's spatial memory.
+    const view = swarmMonitorView;
+    return monitorViewEntry(
+      "createInstance" in view && typeof view.createInstance === "function"
+        ? view.createInstance()
+        : view,
+    );
+  });
+  const view = monitorViewFor(viewId);
+  return view.id === swarm.id ? swarm : view;
+}
+
 export function useMonitorTuning(): MonitorTuning {
   const [viewId, setViewId] = useState(storedViewId);
-  const view = monitorViewFor(viewId);
+  const view = useMonitorView(viewId);
   const [parametersByView, setParametersByView] = useState<Record<string, MonitorParameters>>(
     () => ({ [view.id]: loadTunables(viewParametersKey(view), view.parameterGroups) }),
   );

@@ -60,6 +60,9 @@ overrides:
   '@vibecook/mille': 0.3.6
   '@vibecook/mille-ui': 0.3.6
 
+patchedDependencies:
+  '@vibefield/puppeteer-views@0.4.11': 56bffe0ad06efabae9a36e36712644d8af7925fa61d9048183e03d907ec3a86c
+
 importers:
 
   .:
@@ -434,7 +437,7 @@ importers:
         version: 0.4.11(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/puppeteer-views':
         specifier: 0.4.11
-        version: 0.4.11(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+        version: 0.4.11(patch_hash=56bffe0ad06efabae9a36e36712644d8af7925fa61d9048183e03d907ec3a86c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/rosetta-protocol':
         specifier: 0.1.9
         version: 0.1.9
@@ -5565,7 +5568,7 @@ snapshots:
       react-dom: 19.2.7(react@19.2.7)
       vitest: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(supports-color@7.2.0)(tsx@4.23.1)(yaml@2.9.0)
 
-  '@vibefield/puppeteer-views@0.4.11(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vibefield/puppeteer-views@0.4.11(patch_hash=56bffe0ad06efabae9a36e36712644d8af7925fa61d9048183e03d907ec3a86c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
       '@vibefield/puppeteer-core': 0.4.11
       '@vibefield/puppeteer-react': 0.4.11(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))

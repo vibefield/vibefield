@@ -370,6 +370,7 @@ export function GodviewOverlay({
                 // MV-W4: the same switch, for a ported view's own loop — and
                 // under a maximized deck the view's bodies rest (GV-D11)
                 animations={labSwitches.animations && deckState !== "maximized"}
+                covered={deckState === "maximized"}
                 // P2: the window's Godview lends the frame's Peek its Live now
                 publishesFind
                 onSelectView={monitor.selectView}

@@ -1,5 +1,5 @@
 import { UiButton } from "@vibefield/design-kit/primitives";
-import { monitorParameterDefaults, monitorViewFor } from "@vibefield/puppeteer-views";
+import { monitorParameterDefaults } from "@vibefield/puppeteer-views";
 import { type CSSProperties, type ReactElement, type ReactNode, useMemo, useState } from "react";
 import type { GodviewDeckState } from "../frame/deck-door";
 import { useDeckAppearance } from "../godview/deck-appearance";
@@ -16,6 +16,7 @@ import {
 import { LastRunCurtain } from "../godview/LastRunCurtain";
 import type { LastRunState } from "../godview/last-run";
 import { GodviewAgentsProvider } from "../godview/monitor/GodviewAgentsProvider";
+import { useMonitorView } from "../godview/monitor/monitor-tuning";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
 
@@ -89,7 +90,7 @@ export function GodviewPreview({
     setTuning(defaultGodviewTuning(theme));
   }
   const appearance = useDeckAppearance();
-  const view = monitorViewFor(viewId);
+  const view = useMonitorView(viewId);
   const parameters = useMemo(() => monitorParameterDefaults(view.parameterGroups), [view]);
 
   const screenStyle = {
@@ -129,6 +130,7 @@ export function GodviewPreview({
               parameters={parameters}
               // the stage's switch above (MV-W4): a ported view's loop holds still too
               animations={false}
+              covered={deckState === "maximized"}
               door={door}
               {...(panes !== undefined ? { panes } : {})}
               initialProfile={initialProfile}
