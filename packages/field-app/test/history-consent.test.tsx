@@ -426,9 +426,13 @@ describe("History's consent slot (AO-3, AO-D9)", () => {
     await mountSlot(refusing, refused);
     await act(async () => button("Bring in history").click());
     await answered();
+    // DESIGN.md §9 (IS-282-1; swept 2026-11-24): the page says the act, never the daemon's words, and the
+    // button stays to try again
     expect(container?.querySelector('[role="alert"]')?.textContent).toBe(
-      "the index refused the set",
+      "Couldn't bring in your history.",
     );
+    expect(container?.textContent).not.toContain("the index refused the set");
+    expect(button("Bring in history").disabled).toBe(false);
     expect(refused).not.toHaveBeenCalled();
   });
 });

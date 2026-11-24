@@ -17,6 +17,9 @@ export const HISTORY_WORDS = {
   unavailableHere: "History isn't available right now.",
   /** HG-D6 — the act, named while its press runs (§7's running press) */
   bringingIn: "Bringing in…",
+  /** DESIGN.md §9, IS-282-1 — a Bring in history that failed: the act alone. The button beside it tries again; what
+   * failed goes to the log, never the page */
+  couldnt: "Couldn't bring in your history.",
   /** HG-D4 — under the act, while the room behind the card is the sample */
   sample: "The room behind this card is a sample. Yours takes its place.",
   /** HG-D4, with nothing to bring in: there is no "yours" to take its place yet */

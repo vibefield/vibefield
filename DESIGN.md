@@ -11315,6 +11315,12 @@ while a start goes well the bar alone speaks, and the steps' words go to the log
 *Insides on Screen*, 02:35:35Z to 03:32:49Z):
 - **A failure says the act and its next step** ("Couldn't resume this session." and **Try again**), and what failed
   goes to the log, as a start's does (IS-282-1).
+  *Swept 2026-11-24 (History QA):* History's consent pane (the Setup Assistant's History step, History's own consent
+  slot and Finish setting up's sheet: one pane, `setup/HistoryConsentPane.tsx`) still said a refused Bring in history
+  "in the daemon's words" (AO-3, 2026-10, before this rule), so a fault inside read on the page as it was thrown
+  (seen in the QA desktop: "invalid token" under the rows). It says **"Couldn't bring in your history."**, the act
+  alone; its next step is the pane's own button, which stays **Bring in history** and tries again, with Not now
+  beside it where the host has one. What failed is logged (`renderer.history.enroll_failed`, `system/renderer`).
 - **VibeField is named, never one of its parts** (IS-282-2). A part that stopped is VibeField that stopped or
   restarted, and what a person can do is the same either way.
 - **History speaks as History** (IS-282-3): it is opening, isn't answering, is updating, or stopped, with **Try again**.

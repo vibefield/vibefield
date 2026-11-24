@@ -1,5 +1,6 @@
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, type ReactNode, useEffect, useState } from "react";
+import { peekHost } from "../host";
 import { bringInHistory, bringInLater } from "./consent-act";
 import { HistoryConsentBody } from "./HistoryConsentView";
 import type { HistoryAgentRow } from "./history-consent";
@@ -31,7 +32,7 @@ export interface HistoryPaneParts {
   readonly onPrimary: () => void;
   /** Not now — nothing is read, and the step waits under Finish setting up */
   readonly onLater: () => void;
-  /** a refusal, in the daemon's words */
+  /** Bring in history failed: the act's sentence (`HISTORY_WORDS.couldnt`), never the daemon's words */
   readonly error: string | null;
 }
 
@@ -113,7 +114,14 @@ export function HistoryConsentPane({
         () => onDone("answered"),
         (cause: unknown) => {
           setBusy(false);
-          setError(cause instanceof Error ? cause.message : String(cause));
+          // DESIGN.md §9 (IS-282-1): the page says the act; what failed is the log's (bounded, as every
+          // reader-failure line). Until 2026-11-24 the page said the daemon's own words ("invalid token").
+          peekHost()
+            ?.logger.child({ component: "history_consent" })
+            .warn("renderer.history.enroll_failed", "Bring in history was refused", {
+              cause: (cause instanceof Error ? cause.message : String(cause)).slice(0, 512),
+            });
+          setError(HISTORY_WORDS.couldnt);
         },
       );
     },
