@@ -6423,13 +6423,16 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       scroll between readings.
   - **The Loop lane** (VT-3; *added 2026-11-24*), under Memory and 48 tall: **Loop · share of each second busy**.
     The first two lanes are read from outside a process; this one is what a process says of itself. It draws one
-    trace for each process that says how busy its event loop was, in its group's stroke, and today that is fieldd
-    alone. Its scale never moves: zero to **100%**, said at its top as the others say theirs. A second near the top
+    trace for each process that says how busy its event loop was, in its group's stroke: fieldd always, and Main
+    while this window is open (VT-3b: main says its own only then, so the window costs main nothing closed, and
+    Main's trace begins where the window opened). fieldd's share is its event loop's; Main's is the share of the
+    second its own thread was running, because Electron's main process keeps no loop counters to read (they read
+    zero held or idle, measured 2026-11-24), and a zero that was not measured is never drawn. Its scale never moves: zero to **100%**, said at its top as the others say theirs. A second near the top
     is a second in which that process could answer nobody. The lane stands only while some process in the window
     says its loop; a fieldd that says none has no lane, never an empty one.
     - At the right of its head, in the secondary ink, the lane reads one process at the moment the list reads: the
-      chosen row's if that row says its own, else the first that does. Its name, then what it said, each part only
-      where it was said: "fieldd · 12% busy · GC 3 ms · slowest terminal.list 41 ms". GC is the second's garbage
+      chosen row's if that row says its own, else the first in the list that does. Its name, then what it said, each
+      part only where it was said: "fieldd · 12% busy · GC 3 ms · slowest terminal.list 41 ms". GC is the second's garbage
       collection pauses summed; the slowest is the request that took longest to its reply, by its method's name
       alone. A duration from a second up is said in seconds: "1.2 s".
     - It measures a busy share and not a delay, and that is deliberate: a delay is read by a timer that never
@@ -6448,8 +6451,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     of them or the span's, and draws the newest 500 of those; its head says how many the span holds.
   - **When there is nothing to draw** the lanes stand empty, with no scale said, and the list holds one sentence in
     the tertiary ink (§9 "Vitals' words"): never a zero, never a flat line.
-  - *Not drawn until built:* Main's and the desk window's own traces on the Loop lane and a window's long frames
-    (VT-3, its second half), frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
+  - *Not drawn until built:* a window's long frames (VT-3c; the desk's window may not report today, and whether
+    its token gains that is ‹for James›), frames counted while a capture is armed (VT-5), incidents and their marks on the lanes
     (VT-4), armed traces (VT-5), the Settings switch that turns the recorder off, a door to Vitals from Settings →
     Diagnostics, the plugins' log lines, and a span older than the lines the window holds.
     *Corrected 2026-11-24 (VT-3):* this list said "the frames and loop-delay lanes (VT-3)". The loop's lane is a
