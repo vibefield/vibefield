@@ -68203,3 +68203,68 @@ now says so, and every one of them only listens: none changes what the runtime d
   the floor (Crashpad covers Electron's processes alone). A floor an earlier fieldd started is read only as the link
   going down.
 - Not run: `smoke:godview` whole, `pnpm verify` whole.
+
+## UM-6 — a meter line ends in its reset, and the phone can read again (M545)
+
+**2026-11-24 · on local main: `ca3c7c689` UM-6 (doc), `1b6965db7` UM-6 (green).** James's picks on the canvas *Profile
+meters — reset first, pace second* (https://claude.ai/artifact/546wBVJQvCco2bfevdhkeD; DECISIONS UM, UM-D29…UM-D33).
+His ask: "the primary info i really care is the reset date time, the out pace estimate is a secondary info"; a
+refresh in the card; the key on one line. Then "1.yes" to the phone's own refresh, and "yes, go with T9, now start
+implement and land all these changes".
+
+- **The end cap** (UM-D32 T9; DESIGN.md §8 "A meter line's end", written first). Every C1 line ends in its reset on
+  the clock: "15:00" today, "THU 12:00" within six days, "DEC 4" a week on, in the reader's zone and locale. The track
+  runs square into a capsule a hair taller than it, one width for every cap (64, its column 66), so a list's bars end
+  together. A window read before its reset keeps the cap's place dashed, "RESET 12:30", and its read's age stands
+  under its bar. The cap never turns orange. The clock is computed beside each window (`resetClockOf`, the Swift twin
+  `MeterRules.resetClock`) and never recorded by the usage bands golden, which stays zone-free and unchanged.
+- **The out mark** (UM-D29 A). A window that runs out before its reset is marked under its bar: a tick where it runs
+  out on its own time (the time gone over the share used) and "out in ~25m" beside it. The phone's "Runs out in ~35m
+  at this pace" sentence retires.
+- **One line everywhere** (UM-L1). The line is Settings' own (`UsageTimeline`), so Settings' rows and plan cards,
+  Godview's popover and the phone's page change together. Its words, its label and its tooltip: "5H: 91% used, resets
+  at 15:00, in 1h, ahead of pace, out in ~25m"; "reset at 12:30, as of 3h ago" once it has come.
+- **↻ in the card** (UM-D30 R1). The popover's head holds the age at its end, then ↻, then ×. ↻ reads the card's
+  sign-ins again through the port's `refresh`, as Retry does; while it reads it turns, takes no press and the age says
+  "Reading usage…". A kept reading says its age once, at its plan's head.
+- **The key on one line** (UM-D31 K3): only the bands its circle draws, the hairline by its group's word ("Opus"),
+  on the desk and the phone. This is the key by the bands drawn, item 495's other half.
+- **The phone reads again** (UM-D33, which revisits UM-D8). Agent Profiles' ↻ before close and pull to refresh ask
+  `agents.usage` with `refresh: true`, and fieldd now reads for the owner's own phone (a self tailnet principal) as
+  for a window; every other caller's refresh is still answered from the cache. UM-L4 stands: the phone asks only on a
+  person's act, and the monitor's cooldown, backoff and repeated-click guard hold it as they hold a window. The
+  contracts' comments, `api.html` and `usage-meters.md` carry dated corrections.
+- **The catalog** draws ↻ on the popover plate and has a new plate, the card mid-refresh.
+
+**Proved, 2026-11-24, on the development Mac, in the lane:**
+- field-app's whole suite: 391 files passed, 1 skipped; 5,732 tests passed, 3 skipped. Again on the final tree:
+  5,731 passed and one red, `design-system.test.tsx`'s whole-catalog render timing out at its 120 s hook at a load
+  average near 175; alone it passed, 10 of 10.
+- fieldd: `agent-usage` and `agent-usage-tailnet` over the mock floor, 31 passed and 1 skipped (neither spawns
+  field-native; a lane-only config skipped the native build): the phone's refresh takes a reading of its own.
+- tsc for contracts, fieldd and field-app; preflight, `check:walls`, `check:retired`, `check:web-markers`,
+  `icons:check`, `check:ios-fixtures`, the agent literal lint, `gen:check` (clean), `bundle:assert` and the census;
+  biome on the changed files (four warnings, each older than this slice).
+- After the rebase onto M544: tsc for fieldd and field-app, the six meter files (280 passed), the fieldd usage rows,
+  the literal lint and `check:walls`.
+- The kit, on a simulator of the lane's own (never James's): BUILD SUCCEEDED for generic iOS. FieldHomeTests and
+  FieldProductTests, three runs: 892 of 892 and 382 of 382 with the cap at 60; then 892 of 892, and 17 FieldProduct
+  transport rows timed out waiting for ready at a load of 160 to 260 (each green in the first run, not rerun alone);
+  on the final tree every UM-6 row passed, with 12 issues in two suites this slice does not touch
+  (`NewSparkCreateTests`' 30 s bound across a ten-minute stall, one `RosterDialTests` row) at a load near 180, both
+  green rerun alone.
+- Rendered from the catalog build in a hidden Electron window and measured, dark theme only: the popover's caps
+  ("14:30", "FRI 08:00", "MON 10:00"), "out in ~1h 15m" ending before its tick, the tick 8 tall with its top 1 under
+  the track's foot; Settings' plan card with "RESET 11:50" inside its dashed cap (57.8 of 64) and its age under the
+  bar; the key on one line; the head's ↻ at rest and turning beside "Reading usage…".
+
+**Closed by it:** item 495's key by the bands drawn. Its tier badge is M382's, drawn once a puppeteer that sends
+`planTier` is pinned.
+
+**Not this entry, and owed:**
+- James's eye on the running app and on his phone. Nothing here was installed on the phone, and no smoke ran.
+- ‹for James›, the lead's readings (DECISIONS UM): clock times on every line, "in 1h" only in the words and the
+  tooltip (the canvas also put it in the circle's middle, which at 212 has no room); the cap at 64, not the canvas's
+  58 and 60; the phone's age under its circle, not under the title; the words.
+- Not run: fieldd's whole suite and the Rust tests (field-native unchanged), `pnpm verify` whole, the smokes and
+  `pnpm gate:landing`, the light theme's render.
