@@ -68112,3 +68112,47 @@ it for.
 - "Slowest" is time to the reply, so a method that waits by design reads slow.
 - Not run: the whole electron-shell suite, the Rust tests, `smoke:godview` whole, `pnpm verify` whole.
 - A person's own look at the window is still owed (M540).
+
+## VT-3b — main says its own loop while Vitals is open (M543)
+
+**2026-11-24 · on local main: `80b85d33c` VT-3b (doc), `c9d8e3282` VT-3b (green).** The third slice's second half
+(DECISIONS VT): a door for a process to report what it measures of itself, and its first caller.
+
+- **The door.** `vitals.own.report` (product, `vitals.report`, local, not idempotent). The report is one fold and
+  says nothing of whose it is: fieldd reads that from the caller. It takes one from Electron main alone, as the
+  roster's door does, and carries it on the row main's roster names `main` at the next sample, once. A second report
+  inside one interval folds into the first. Nothing is kept while the recorder is not recording.
+- **Main reports only while the Vitals window is open** (`electron-shell/src/main/vitals-own.ts`): one fold a second
+  and one request, started by the window's open and stopped by its close. Closed, main does nothing for it, so the
+  window adds no duty at rest (PF2).
+- **What main reads is its own thread's CPU time, not the loop's counters.** *Found before this landed, and corrected
+  at its source:* the first build read the event-loop utilization in main, as fieldd does, and drew "Main · 0% busy".
+  In Electron's main process those counters stand still. A scratch probe on Electron 43.1.1 read 0 through idle
+  seconds and through seconds held for 250, 500 and 900 ms; `process.threadCpuUsage` read 0.25, 0.50 and 0.88 for
+  the same seconds and under 0.01 at rest. Main's share is therefore the share of the second its own thread was
+  running. It does not count a second spent asleep in a blocking call, which the loop's counters would have. A
+  runtime that cannot read its thread's time says nothing at all.
+- **The Loop lane** reads the first process in the list that says its own, Main while the window is open, unless a
+  row that says its own is chosen (`DESIGN.md` §8 "Vitals", written first).
+- **The smoke's VITALS row** holds the Loop lane to both traces, fieldd's and Main's: main's reporter, the door and
+  the row, end to end (`docs/desk-gates.md` row 23).
+- **‹for James›, an open mark (DECISIONS VT): VT-D10, a window's long frames.** The door refuses a window. For the
+  desk's window to say its long frames, either its token gains `vitals.report` (this lane's lean) or main relays
+  them over a new channel of the product bridge. Both widen what a window may do. Neither is built.
+
+**Proved, 2026-11-24, on the development Mac, in the lane:**
+- `smoke:terminal-direct` on the lane's build, green: the Loop lane drew fieldd's and Main's traces and read
+  "Main · 5% busy" beside Main's 5% of a core in the list; `left: []`.
+- contracts 2,325 passed. fieldd: `own-vitals`, `vitals`, `vitals-pair` and `product-api`, 46 passed. field-app:
+  `vitals` and `ui-system-boundaries`, 102 passed. electron-shell: `vitals` and `smoke-vitals`, 36 passed.
+- tsc for contracts, fieldd, field-app and electron-shell. `check:walls`, the agent literal lint, clippy at
+  `-D warnings`, `pnpm gen` (clean after it), biome on the changed files, `bundle:assert` and the census, strict.
+
+**Not this entry, and owed:**
+- A window's long frames (VT-D10). Frames counted while a capture is armed (VT-5).
+- Not checked: that fieldd's own utilization follows a held loop as the app runs it. It read 17% and 6% in real
+  runs and over 50% for a held loop under plain Node; the app starts fieldd on Electron's Node, and no run there
+  held its loop on purpose.
+- Not run: the whole suites again (M542's runs stand for fieldd and field-app), the Rust tests, `smoke:godview`
+  whole, `pnpm verify` whole.
+- A person's own look at the window is still owed (M540).

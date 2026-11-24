@@ -432,6 +432,12 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   milliseconds for as long as it is on, a steady wake the idle budget forbids; the page said "loop delay". **VT-D9**,
   frames at rest are not counted: counting them needs a callback every frame, so a frame rate is a capture to arm
   (VT-5), and what a window reports unarmed is its long frames, counted when they happen (VT-3b, not built).
+  **VT-3b LANDED 2026-11-24 (M543)** (the report door `vitals.own.report`, and Electron main saying its own loop
+  only while the Vitals window is open, so it adds no duty at rest). *‹for James›, an open mark:* **VT-D10**, a
+  window's long frames. The door takes a report from Electron main alone, as the roster's does. For the desk's
+  window to say its long frames, either its token gains `vitals.report` (this lane's lean: one scope, and the door
+  maps a window's report to the window's row and nothing else) or main relays them over a new channel of the
+  product bridge. Neither is built: both widen what a window may do, which is his to rule.
 - **WL-1** — track WL, the work lens (2026-11-23, the design page *The Work Lens*: four options on one live Godview
   window, A search's + Filter, B a lens row, C the work column, D the swarm sorting itself, and five smaller calls;
   James: "lets go with the lean, i pick C. now start implementation and land it directly on local main"): **C, the
