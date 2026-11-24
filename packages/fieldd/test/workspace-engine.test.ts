@@ -97,6 +97,38 @@ describe("the worker's engines (one per export, bounded)", () => {
     expect((await list(e, b)).path).toBe(b);
   });
 
+  // History QA (2026-11-24): a pane rooted at a home directory left the worker at a full core for minutes
+  // after it had moved on, because the engine and its recursive watcher were kept for HOST_IDLE_MS.
+  it("an engine a tree was attached to goes ATTACHED_IDLE_MS after its last attachment, a listed one keeps HOST_IDLE_MS", async () => {
+    const paned = base();
+    const listed = base();
+    mkdirSync(join(listed, "x"));
+    let clock = 1_000;
+    const e = engines({ idleMs: 5_000, attachedIdleMs: 100, now: () => clock });
+    await list(e, listed);
+    const first = await e.attach(paned);
+    const second = await e.attach(paned);
+    expect(e.count).toBe(2);
+    first.release();
+    clock += 500;
+    await e.sweep();
+    expect(e.count, "an attachment still holds it").toBe(2);
+    second.release();
+    clock += 99;
+    await e.sweep();
+    expect(e.count, "inside the lease: a pane that comes back finds it").toBe(2);
+    const back = await e.attach(paned);
+    back.release();
+    clock += 99;
+    await e.sweep();
+    expect(e.count).toBe(2);
+    clock += 2;
+    await e.sweep();
+    expect(e.count, "the paned engine went; the listed one keeps the long lease").toBe(1);
+    expect((await list(e, listed)).path).toBe(listed);
+    expect(WORKSPACE_LIMITS.ATTACHED_IDLE_MS).toBeLessThan(WORKSPACE_LIMITS.HOST_IDLE_MS);
+  });
+
   it("disposes an engine idle past its lease", async () => {
     const dir = base();
     mkdirSync(join(dir, "x"));

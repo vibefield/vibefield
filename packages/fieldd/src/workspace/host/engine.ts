@@ -173,6 +173,10 @@ interface Slot {
   /** fix7 — out of the table: a list found it held past LIST_ENGINE_MS (or a
    * search lane's last search ended); disposed once nothing holds it */
   retired: boolean;
+  /** live tree attachments (`attach`), and whether it ever had one: such an
+   * engine's idle lease is the short one (ATTACHED_IDLE_MS) */
+  attachments: number;
+  attached: boolean;
 }
 
 /** fix7 — what a bounded wait answers when the call did not come back in time
@@ -210,6 +214,8 @@ export interface EnginesOptions {
   /** test seams; production: WORKSPACE_LIMITS.HOST_IDLE_MS / HOSTS_MAX /
    * SEARCH_WALK_ENTRIES / SEARCH_WALK_MS / LIST_ENGINE_MS / SEARCH_RESOLVE_MS */
   idleMs?: number;
+  /** the lease of an engine a tree was attached to; production: ATTACHED_IDLE_MS */
+  attachedIdleMs?: number;
   hostsMax?: number;
   walkEntries?: number;
   walkMs?: number;
@@ -302,6 +308,7 @@ export async function assertRoot(rootPath: string): Promise<void> {
 export class Engines {
   readonly #slots = new Map<string, Slot>();
   readonly #idleMs: number;
+  readonly #attachedIdleMs: number;
   readonly #hostsMax: number;
   readonly #walkEntries: number;
   readonly #walkMs: number;
@@ -325,6 +332,7 @@ export class Engines {
 
   constructor(opts: EnginesOptions = {}) {
     this.#idleMs = opts.idleMs ?? WORKSPACE_LIMITS.HOST_IDLE_MS;
+    this.#attachedIdleMs = opts.attachedIdleMs ?? WORKSPACE_LIMITS.ATTACHED_IDLE_MS;
     this.#hostsMax = Math.max(1, opts.hostsMax ?? WORKSPACE_LIMITS.HOSTS_MAX);
     this.#walkEntries = opts.walkEntries ?? WORKSPACE_LIMITS.SEARCH_WALK_ENTRIES;
     this.#walkMs = opts.walkMs ?? WORKSPACE_LIMITS.SEARCH_WALK_MS;
@@ -395,6 +403,8 @@ export class Engines {
         lastUsed: this.#now(),
         active: 0,
         retired: false,
+        attachments: 0,
+        attached: false,
       };
       slot = made;
       this.#slots.set(key, made);
@@ -498,13 +508,21 @@ export class Engines {
     if ((await this.#rootReal(rootPath)) !== rootPath)
       throw new WorkerFailure("not-found", "the exported folder changed");
     const slot = await this.#acquire(rootPath);
+    slot.attachments += 1;
+    slot.attached = true;
     let released = false;
     return {
       host: slot.host,
       release: () => {
         if (released) return;
         released = true;
+        slot.attachments -= 1;
         this.#release(slot);
+        // the short lease's own sweep: the sweeper's period is a minute
+        if (slot.attachments === 0) {
+          const timer = setTimeout(() => void this.sweep(), this.#attachedIdleMs + 50);
+          timer.unref();
+        }
       },
     };
   }
@@ -741,7 +759,9 @@ export class Engines {
   async sweep(): Promise<void> {
     const now = this.#now();
     for (const slot of [...this.#slots.values()]) {
-      if (slot.host === null || slot.active > 0 || now - slot.lastUsed < this.#idleMs) continue;
+      // an engine a tree was attached to keeps its watcher only as long as a pane may come back to it
+      const lease = slot.attached ? Math.min(this.#attachedIdleMs, this.#idleMs) : this.#idleMs;
+      if (slot.host === null || slot.active > 0 || now - slot.lastUsed < lease) continue;
       if (this.#slots.get(slot.key) !== slot) continue;
       this.#slots.delete(slot.key);
       await slot.host.dispose().catch(() => undefined);

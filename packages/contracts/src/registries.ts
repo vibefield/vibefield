@@ -1239,7 +1239,14 @@ export const PROJECT_GROUPING = {
  * folder's honest `timed-out`. A search resolves its hits in an engine of its
  * OWN, never the rows' (the folders it hydrates are a build's busiest), for at
  * most SEARCH_RESOLVE_MS: hits left unresolved by then are left out and the
- * answer says `complete: false`. */
+ * answer says `complete: false`.
+ *
+ * ATTACHED_IDLE_MS (History QA, 2026-11-24): an engine a live tree was attached to is disposed that long
+ * after its last attachment let go, not HOST_IDLE_MS after. Its watcher is the cost: a pane rooted at a
+ * folder something writes to all day (a home directory) held the worker at a full core, and kept it there
+ * for minutes after the pane had moved on, measured on the QA desktop (1.0 cores for 50 s after a 30 s
+ * attach). The lease is long enough for a pane that re-attaches the same folder at once (a reader clicking
+ * between two sessions of one project) to find its engine still there. */
 export const WORKSPACE_LIMITS = {
   LIST_PAGE: 200,
   TAILNET_PAGE: 100,
@@ -1260,6 +1267,7 @@ export const WORKSPACE_LIMITS = {
   SEARCH_RESOLVE_MS: 2_000,
   LIST_ENGINE_MS: 4_000,
   HOST_IDLE_MS: 300_000,
+  ATTACHED_IDLE_MS: 10_000,
   HOSTS_MAX: 16,
   TICKETS_MAX: 256,
   SOCKETS_MAX: 128,
