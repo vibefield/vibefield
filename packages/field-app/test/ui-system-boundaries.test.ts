@@ -601,6 +601,28 @@ describe("UI system ownership boundaries", () => {
     expect(source("history/HistoryOpening.tsx")).not.toContain("history-room-glass.css");
   });
 
+  it("lays no slab on the glass: the Files rail's root row and a conversation's wait wear no ground (History QA, 2026-11-24)", () => {
+    // DESIGN.md §8 "History is rosetta's room, on the cover's glass", "Its ground", as amended
+    // 2026-11-24. The room painted two opaque grounds over the view's glass: the tree's root row
+    // (the sheet's material, for a row that would stay while rows scroll under it, which in the
+    // room's tree it does not) and the cover over the reading column while a session loads (the
+    // cover's raw colour whole). Both are cleared in the room's glass sheet, in the fade's scope.
+    // vitest loads no CSS: the rules' text is held here, and their look is for a person's eye.
+    const rules = source("history/history-room-glass.css").replace(/\/\*[\s\S]*?\*\//gu, "");
+    const blockOf = (selector: string): string => {
+      const at = rules.indexOf(`${selector} {`);
+      return at === -1 ? "" : rules.slice(at + selector.length + 2, rules.indexOf("}", at));
+    };
+    const scope = '.vf-history .ah-frame[data-ah-surface="host"]';
+    expect(blockOf(`${scope} .ah-railtree[data-mille-theme]`).trim()).toBe(
+      "--mille-sticky-root-bg: transparent;",
+    );
+    expect(blockOf(`${scope} .tr-loading`).trim()).toBe("background: none;");
+    // never the sheet's material or the cover's raw colour as a ground in this sheet
+    expect(rules).not.toContain("--vf-sheet-surface");
+    expect(rules).not.toMatch(/background:\s*var\(--vf-chrome-solid\)/u);
+  });
+
   it("draws the transcript's top fade on glass in the glass's own colour, the squares of 8 down to 0 over 96px (item 394)", () => {
     // DESIGN.md §8 "History is rosetta's room, on the cover's glass", "Its ground", as amended
     // 2026-11-13 (item 394). Until then the override painted the cover's raw colour whole under the

@@ -7564,6 +7564,26 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     blurred), the fade pulls that patch toward the mat's glass, by 64% at the hairline and less
     below. Paint cannot do better: a line dissolves exactly only under a mask on the rows, and a mask
     on the scroller fades the room's pinned chrome with them (above), which is the room's to change.
+    *Amended 2026-11-24 (History QA; James, in the QA desktop, with two screenshots by night: "this solid
+    black background color in the project entry looks ba[d], fix the design" of the Files rail's first row, and
+    "during session loading, the session background became solid filled, which looks bad, it should remain
+    tran[s]parent blur as all other area"):* **on the glass the room lays no slab.** Two of the room's surfaces
+    still painted an opaque ground of their own over the view's glass, and each is cleared here, in
+    `history/history-room-glass.css`, the same sheet and the same scope as the fade above.
+    **The Files rail's root row wears no ground.** The tree's theme gave a root row the sheet's own material
+    (`--vf-sheet-surface`, the cover's raw colour at 96%), "or rows read through it": a ground for a row that
+    stays while the rows scroll under it. In the room's tree it does not stay (the tree lays every row out by
+    its own offset, the root among them, and it scrolls away with the rest), so nothing ever passes beneath it
+    and the ground was only a bar, darker than the glass by night and whiter by day. Its ground is
+    `transparent`; its weight (500) and its place are the tree's, unchanged. If the tree comes to pin it, its
+    ground is the fade's colour above (the glass as it reads over the bare mat), never the sheet's and never a
+    backdrop filter.
+    **A conversation's wait stands on the glass.** While a session's messages load, the room covered the
+    reading column with the cover's raw colour whole (`--vf-chrome-solid`), which is the paper under its own
+    app and a slab under a cover. The wait's ground is `none`: the mark and its line (HG-W1) stand on the
+    view's glass as every other part of the room does. Nothing shows through that should not: the room keeps
+    the messages it is laying out at no opacity until the wait ends, so the cover hid nothing. A load that
+    failed keeps the same ground, with its words and Try again.
   - **Its edges are the frame's.** The columns end at **692** — the reserve of 88 above the window's
     foot (FC-D15) — and run to the window's sides (built at HN-8, 2026-10-30: they kept **8** clear
     at each side for the notches' slivers until the edges left the frame); the top band, 0–52, is

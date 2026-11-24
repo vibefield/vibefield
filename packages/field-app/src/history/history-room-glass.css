@@ -48,3 +48,24 @@
     transparent 96px
   );
 }
+
+/* ON THE GLASS THE ROOM LAYS NO SLAB (History QA, 2026-11-24; DESIGN.md §8 "History is rosetta's room, on
+   the cover's glass", "Its ground", as amended that day). Two of the room's surfaces painted an opaque ground
+   of their own over the view's glass.
+
+   The Files rail's root row. The tree's theme hands a root row the sheet's material
+   (`--mille-sticky-root-bg`, `--vf-sheet-surface`), a ground for a row that stays while the rows scroll under
+   it. In the room's tree it does not stay: every row is laid out by its own offset, the root among them, and
+   it scrolls away with the rest. So the ground was only a bar across the rail, darker than the glass by
+   night and whiter by day. The tree reads the property on the row, so it is cleared on the rail. */
+.vf-history .ah-frame[data-ah-surface="host"] .ah-railtree[data-mille-theme] {
+  --mille-sticky-root-bg: transparent;
+}
+
+/* A conversation's wait. While a session's messages load the room covers the reading column with the
+   cover's raw colour whole, its paper under its own app. Here the wait stands on the view's glass, as the
+   rest of the room does. The cover hid nothing: the room keeps the messages it is laying out at no opacity
+   until the wait ends (`.tr-surface`, its own sheet). */
+.vf-history .ah-frame[data-ah-surface="host"] .tr-loading {
+  background: none;
+}
