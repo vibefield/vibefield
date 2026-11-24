@@ -17,7 +17,7 @@
 import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join } from "node:path";
 // a type alone: nothing of the daemon's is imported here at run time (the header's rule; `import type` is erased)
 import type { FielddConfig } from "./daemon";
 import {
@@ -122,6 +122,16 @@ async function main(): Promise<void> {
   // ignores it (item 354: "production: the probe is wanted"), so a person's Homebrew agents stay
   // listed; the shell leaves it out of a package's environment as well (`main/fieldd.ts`).
   const agentBrewPrefixList = isSea() ? undefined : agentBrewPrefixes(process.env);
+  // History QA (2026-11-24) — a harness's seam, never the product's: the home rosettad's discovery
+  // scans (`FielddConfig.rosettadHome`, rosettad `--home`; unset = the OS user's own home, topology
+  // R7). A QA desktop points it at a cut of a real home, so its History reads `~/.claude` and
+  // `~/.codex` from there while every other reader of the home (agents, sign-ins, terminals) keeps
+  // the person's own. A packaged fieldd ignores it. It must name an absolute path: a relative one
+  // would be read against fieldd's cwd, and a wrong home is an empty History with no reason given.
+  const rosettadHomeEnv = isSea() ? undefined : process.env["FIELDD_ROSETTAD_HOME"] || undefined;
+  if (rosettadHomeEnv !== undefined && !isAbsolute(rosettadHomeEnv)) {
+    throw new Error("FIELDD_ROSETTAD_HOME must be an absolute path");
+  }
   const allowedOrigins = [
     "file://",
     ...(process.env["FIELDD_ALLOWED_ORIGINS"]?.split(",").filter(Boolean) ?? []),
@@ -299,6 +309,7 @@ async function main(): Promise<void> {
     ...(nativePid !== undefined ? { nativePid } : {}),
     ...(spawnNative !== undefined ? { nativeSpawner: spawnNative } : {}),
     ...(rosettadBin !== undefined ? { rosettadBin } : {}),
+    ...(rosettadHomeEnv !== undefined ? { rosettadHome: rosettadHomeEnv } : {}),
     ...(agentSearchPath !== undefined ? { agentSearchPath } : {}),
     ...(agentBrewPrefixList !== undefined ? { agentBrewPrefixes: agentBrewPrefixList } : {}),
     ...(debugSwarmCorpus !== undefined ? { debugSwarmCorpus } : {}),
