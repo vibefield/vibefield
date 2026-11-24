@@ -3098,6 +3098,10 @@ export const IPC_CHANNELS = {
   /** renderer → main invoke, no payload → SoundPlayerState — whether this Mac can play the sounds, and if not
    * why: Settings → Sound says it in the switch's own line (§8). */
   soundState: "vibefield:sound:state",
+  /** renderer → main invoke, no payload → nothing — Settings → Diagnostics' Open Vitals (VT-2c, 2026-11-24): main
+   * opens the Vitals window or brings it forward, as the Window menu's item does. A registered product window's own
+   * page alone may ask; nothing crosses either way, and the Vitals window still holds no fieldd token. */
+  vitalsOpen: "vibefield:vitals:open",
 } as const;
 
 /** HN-4 (2026-10-29) — a retained still's read cap: the most a still may weigh when

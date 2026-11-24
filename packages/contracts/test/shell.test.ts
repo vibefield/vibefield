@@ -249,7 +249,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   // meet at it in a merge and conflict out loud, where a number in the title
   // went stale in silence (item 102, found at HN's rebase rehearsal).
   it("exposes exactly its channel keys, in order", () => {
-    expect(Object.keys(IPC_CHANNELS)).toHaveLength(48);
+    expect(Object.keys(IPC_CHANNELS)).toHaveLength(49);
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "zoomHaptic",
       "windowBootstrap",
@@ -305,6 +305,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "soundAttention",
       "soundPreview",
       "soundState",
+      "vitalsOpen", // VT-2c — Settings → Diagnostics' Open Vitals: main opens or focuses the Vitals window
     ]);
   });
 
@@ -358,6 +359,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       soundAttention: "vibefield:sound:attention",
       soundPreview: "vibefield:sound:preview",
       soundState: "vibefield:sound:state",
+      vitalsOpen: "vibefield:vitals:open",
     });
   });
 

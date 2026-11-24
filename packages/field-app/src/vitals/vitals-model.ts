@@ -155,6 +155,7 @@ const ROLE_ORDER: readonly string[] = [
   "flows-host",
   "rosettad",
   "plugin-process",
+  "mcp-server", // VT-2c (2026-11-24)
   "field-native",
   "terminal-cell",
   "mesh-sidecar",

@@ -218,6 +218,45 @@ describe("fieldd's door", () => {
     });
   });
 
+  it("folds what a process said of itself per step, and leaves it out where nothing was said (VT-3)", () => {
+    const result = VitalsQueryResult.parse(fixture("vitals-query-result.valid.json"));
+    const [fieldd, flows] = result.series;
+    expect(fieldd?.own).toHaveLength(result.times.length);
+    // the held second survives the fold as the step's busiest
+    expect(fieldd?.own?.[1]).toMatchObject({ loopBusy: 0.97, slow: { method: "terminal.list" } });
+    // a step it said nothing in is null; a process that said nothing has no own at all
+    expect(fieldd?.own?.[2]).toBeNull();
+    expect(flows).not.toHaveProperty("own");
+    // left out is not measured, never zero
+    expect(fieldd?.own?.[0]).not.toHaveProperty("longFrames");
+    const tooLong = {
+      ...record("vitals-query-result.valid.json"),
+      series: [
+        {
+          key: "4001:1795477990000",
+          cpuMean: [],
+          cpuPeak: [],
+          memPeak: [],
+          own: new Array(VITALS.QUERY_MAX_POINTS + 1).fill(null),
+        },
+      ],
+    };
+    expect(VitalsQueryResult.safeParse(tooLong).success).toBe(false);
+    const outOfRange = {
+      ...record("vitals-query-result.valid.json"),
+      series: [
+        {
+          key: "4001:1795477990000",
+          cpuMean: [],
+          cpuPeak: [],
+          memPeak: [],
+          own: [{ loopBusy: 2 }],
+        },
+      ],
+    };
+    expect(VitalsQueryResult.safeParse(outOfRange).success).toBe(false);
+  });
+
   it("takes the shell's roster from its closed roles, and no more than its bound", () => {
     const roster = VitalsRosterSetParams.parse(fixture("vitals-roster-set-params.valid.json"));
     expect(roster.processes.map((entry) => entry.role)).toContain("vitals-window");

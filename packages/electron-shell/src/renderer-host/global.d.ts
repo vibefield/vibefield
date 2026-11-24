@@ -161,6 +161,10 @@ declare global {
       browserData: {
         clear(): Promise<BrowserDataClearResult>;
       };
+      /** VT-2c — Settings → Diagnostics' Open Vitals (main opens or focuses the window; nothing crosses). */
+      vitals: {
+        open(): Promise<void>;
+      };
       /** Item 102 — a paste's read through main (design-03 §5.1's
        * `shell.clipboard.*`): the focused product window only; a refusal rejects. */
       clipboard: {

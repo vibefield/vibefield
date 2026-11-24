@@ -100,6 +100,13 @@ export interface FieldBrowserDataHost {
   clear(): Promise<BrowserDataClearResult>;
 }
 
+/** VT-2c (track VT, 2026-11-24) — Settings → Diagnostics' Open Vitals: main opens the Vitals window or brings it
+ * forward, as the Window menu's item does. Nothing is sent and nothing answered. Absent in browser harnesses (the
+ * catalog), which have no main to open a window, and the button is then not drawn. */
+export interface FieldVitalsHost {
+  open(): Promise<void>;
+}
+
 /** Item 102 — the clipboard's read through main (design-03 §5.1's `shell.clipboard.*`):
  * the shell session grants no Chromium permission (ESP §7.4), so the web's own read is
  * denied in the desktop app. Main answers only the focused product window, and a
@@ -264,6 +271,8 @@ export interface FieldHost {
   readonly updates?: FieldUpdatesHost;
   /** BP-D4 — the desk browser's data (`FieldBrowserDataHost`); absent where main owns no browser profile. */
   readonly browserData?: FieldBrowserDataHost;
+  /** VT-2c — the door to the Vitals window (`FieldVitalsHost`); absent where no main opens it. */
+  readonly vitals?: FieldVitalsHost;
   readonly simulatorSetup?: {
     check(): Promise<SimulatorSetupStatus>;
     open(target: SimulatorSetupTarget): Promise<void>;

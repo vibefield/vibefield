@@ -460,6 +460,13 @@ contextBridge.exposeInMainWorld("vibefield", {
     clear: async (): Promise<BrowserDataClearResult> =>
       BrowserDataClearResultSchema.parse(await ipcRenderer.invoke(IPC_CHANNELS.browserDataClear)),
   },
+  /** VT-2c — Settings → Diagnostics' Open Vitals: main opens the Vitals window or brings it forward. Nothing is sent
+   * and nothing comes back; the window's figures never pass through this page. */
+  vitals: {
+    open: async (): Promise<void> => {
+      await ipcRenderer.invoke(IPC_CHANNELS.vitalsOpen);
+    },
+  },
   /** Item 102 — a paste's read: main reads the system clipboard for this window
    * while it and its page are focused (the shell session grants no Chromium
    * clipboard permission, ESP §7.4). Validated both ways; a refusal rejects with

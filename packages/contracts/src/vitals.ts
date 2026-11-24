@@ -181,6 +181,7 @@ export const VITALS_ROLES = [
   "flows-host",
   "rosettad",
   "plugin-process",
+  "mcp-server", // VT-2c (2026-11-24) — an MCP server fieldd started itself, never one an agent started
   // the floor and what it starts
   "field-native",
   "terminal-cell",
@@ -330,6 +331,12 @@ export const VitalsSeriesV1 = z
     cpuMean: z.array(z.number().nonnegative().nullable()).max(VITALS.QUERY_MAX_POINTS),
     cpuPeak: z.array(z.number().nonnegative().nullable()).max(VITALS.QUERY_MAX_POINTS),
     memPeak: z.array(count().nullable()).max(VITALS.QUERY_MAX_POINTS),
+    /** VT-3, the query's fold (2026-11-24) — what the process said of itself (`VitalsPointV1.own`), one entry a
+     * step, null for a step in which it said nothing. Within a step: `loopBusy` is its busiest second's share (a held
+     * loop is never averaged away), `gcMs` and `longFrames` are summed, `gcMaxMs` and `longFrameMaxMs` are the
+     * longest, `slow` is the slowest request; a figure no second said is left out. Absent for a process that said
+     * nothing over the whole span, and from a fieldd before the fold. */
+    own: z.array(VitalsOwnV1.nullable()).max(VITALS.QUERY_MAX_POINTS).optional(),
   })
   .passthrough();
 export type VitalsSeriesV1 = z.infer<typeof VitalsSeriesV1>;

@@ -22,6 +22,7 @@ import {
 import type { Logger } from "@vibefield/logging";
 import { type NativeLink, RpcCallError } from "./native-link";
 import type { ProductApi } from "./product-api";
+import { foldOwnStep } from "./vitals-own-fold";
 
 // VT-1 (track VT, 2026-11-24; `draft/thinking-vitals.md`) — the vitals recorder. The floor measures every process
 // and names none but its own children (`native.vitals.*`); this service names the rest, turns the floor's cumulative
@@ -617,6 +618,8 @@ export class VitalsService {
       cpuCount: number[];
       cpuPeak: (number | null)[];
       memPeak: (number | null)[];
+      /** VT-3, the query's fold — made at the first second the process says anything of itself */
+      own?: (VitalsOwnV1 | null)[];
     }
     const folds = new Map<string, Fold>();
     for (const { sample } of this.ring) {
@@ -641,6 +644,13 @@ export class VitalsService {
           fold.cpuCount[step] = (fold.cpuCount[step] ?? 0) + 1;
           fold.cpuPeak[step] = Math.max(fold.cpuPeak[step] ?? 0, point.cpu);
         }
+        if (point.own !== undefined) {
+          const said = foldOwnStep(fold.own?.[step], point.own);
+          if (said !== null) {
+            fold.own ??= new Array<VitalsOwnV1 | null>(count).fill(null);
+            fold.own[step] = said;
+          }
+        }
       }
     }
 
@@ -658,6 +668,7 @@ export class VitalsService {
         }),
         cpuPeak: fold.cpuPeak,
         memPeak: fold.memPeak,
+        ...(fold.own !== undefined ? { own: fold.own } : {}),
       });
     }
     return { v: 1, stepMs, times, processes, series };

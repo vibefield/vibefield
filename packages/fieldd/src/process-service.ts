@@ -9,6 +9,7 @@ import {
   type ProcessSubEvent,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { ChildPidCensus } from "./child-pid-census";
 import { RpcCallError } from "./native-link";
 import { shimSpawn } from "./spawn-shim";
 
@@ -210,6 +211,11 @@ export interface McpStdioChild {
   onExit: (cb: (code: number | null) => void) => void;
 }
 
+/** VT-2c (track VT, 2026-11-24) — the MCP stdio servers this door started and that have not exited: the vitals
+ * recorder names each (`vitals-sources.ts`). An MCP server an agent starts inside its own terminal is not here: it is
+ * already inside that terminal's tree. */
+export const MCP_STDIO_CHILDREN = new ChildPidCensus();
+
 /** §17.4 — the MCP stdio door, spawned daemon-side with pipes.
  *
  * It lives HERE, beside the plugin process door, because the two must obey one
@@ -242,6 +248,7 @@ export function spawnMcpStdio(req: {
     windowsHide: true,
     ...(cmd.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
   });
+  MCP_STDIO_CHILDREN.note(child);
   return {
     stdin: child.stdin as NodeJS.WritableStream,
     stdout: child.stdout as NodeJS.ReadableStream,

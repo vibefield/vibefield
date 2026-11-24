@@ -403,7 +403,7 @@ import type { PluginUpdateDeadlines } from "./plugin-update-coordinator";
 import { PluginUpdateManager } from "./plugin-update-manager";
 import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
-import { ProcessService, spawnMcpStdio } from "./process-service";
+import { MCP_STDIO_CHILDREN, ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { ProfileDraftsStore } from "./profile-drafts";
 import { createProjectIdentityStore } from "./project-identity";
@@ -488,6 +488,7 @@ import { TranscriptHostSupervisor, type TranscriptHostTimings } from "./transcri
 import { SparkTranscriptTickets } from "./transcripts/tickets";
 import { userMe } from "./user-me";
 import { type VitalsNamedProcess, VitalsService } from "./vitals-service";
+import { mcpServerVitalsRows, pluginProcessVitalsRows, terminalVitalsRows } from "./vitals-sources";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
 import { WorkspacePicker } from "./workspace/picker";
@@ -2722,7 +2723,8 @@ export async function bootstrap(
     diagnosticsService.register(api);
     // VT-1 — the vitals recorder (`vitals-service.ts`): the floor measures, and these are the processes fieldd can
     // name because it started them or was told their pid. Each answers from memory. A terminal's process is named
-    // by its role alone: its title can hold a folder or a command, which never reaches a row (VT-D4).
+    // by its role, or by the agent fieldd launched in it (VT-2c), never by its title: a title can hold a folder or a
+    // command, which never reaches a row (VT-D4).
     const one = (
       pid: number | null | undefined,
       role: VitalsNamedProcess["role"],
@@ -2741,16 +2743,21 @@ export async function bootstrap(
         () => one(rosettad?.health().pid, "rosettad"),
         () => one(workspace.supervisor.health().pid, "files-host"),
         () => one(transcriptHost.health().pid, "transcripts-host"),
+        // VT-2c — the plugins' supervised children, by their plugin's title, and the MCP servers fieldd started
+        () =>
+          pluginProcessVitalsRows(processes.stat(null), (pluginId) => plugins.get(pluginId)?.title),
+        () => mcpServerVitalsRows(MCP_STDIO_CHILDREN.pids()),
+        // VT-2c — a terminal fieldd launched an agent in says the agent, by the catalog's label (`vitals-sources.ts`)
         () =>
           terminals.observation() === undefined
             ? []
-            : terminals
-                .list()
-                .flatMap((terminal): VitalsNamedProcess[] =>
-                  typeof terminal.pid === "number" && terminal.pid > 0
-                    ? [{ pid: terminal.pid, group: "agents", role: "terminal", tree: true }]
-                    : [],
-                ),
+            : terminalVitalsRows(
+                terminals.list(),
+                () => agents.list().sessions,
+                (agentId) =>
+                  (config.agentCatalog ?? AGENT_CATALOG).find((entry) => entry.id === agentId)
+                    ?.label,
+              ),
       ],
     });
     vitals = vitalsService;

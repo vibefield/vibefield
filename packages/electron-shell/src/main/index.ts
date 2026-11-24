@@ -216,6 +216,7 @@ import { createElectronApplyPort, installUpdateController } from "./updates/inst
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { ViewRegistry } from "./view";
 import { installVitals, type VitalsHost } from "./vitals";
+import { registerVitalsOpen } from "./vitals-door";
 import { installWindowChords } from "./window-chords";
 import { hasInsetLights, LightsRegistry } from "./window-lights";
 import { WindowRegistry } from "./window-policy";
@@ -2058,6 +2059,12 @@ async function main(
     async () => liveSurfaceSupport?.clearBrowsingData() ?? { profiles: 0, pages: 0 },
     logger.child({ component: "ipc.browser-data" }),
   );
+  // VT-2c: Settings → Diagnostics' Open Vitals — the Window menu's own action, for the focused product window
+  registerVitalsOpen({
+    registry,
+    open: () => (vitals === null ? null : () => vitals?.open()),
+    logger: logger.child({ component: "ipc.vitals" }),
+  });
   // Item 102: a paste in the deck or the sign-in terminal reads the clipboard here,
   // for a registered product window while it and its page hold the focus; the
   // grant set stays empty (ESP §7.4). Audited, best-effort: a paste never waits on

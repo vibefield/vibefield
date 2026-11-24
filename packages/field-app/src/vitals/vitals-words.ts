@@ -23,6 +23,7 @@ const ROLES: Readonly<Record<string, string>> = {
   "flows-host": "Flows host",
   rosettad: "rosettad",
   "plugin-process": "Plugin process",
+  "mcp-server": "MCP server", // VT-2c (2026-11-24)
   "field-native": "field-native",
   "terminal-cell": "Terminal cell",
   "mesh-sidecar": "Mesh sidecar",

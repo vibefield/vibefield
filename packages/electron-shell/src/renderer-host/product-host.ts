@@ -160,6 +160,10 @@ export function mountProductHost(
       browserData: {
         clear: () => window.vibefield.browserData.clear(),
       },
+      // VT-2c — Settings → Diagnostics' Open Vitals, straight onto the preload's one door
+      vitals: {
+        open: () => window.vibefield.vitals.open(),
+      },
       // Item 102 — a terminal's paste reads through main's door; the web's read is denied here
       clipboard: {
         readText: () => window.vibefield.clipboard.readText(),

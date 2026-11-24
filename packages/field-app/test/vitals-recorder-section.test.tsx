@@ -9,7 +9,9 @@ import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { vitalsFixtureModel, vitalsFixtureOff } from "../src/design-system/vitals-fixtures";
+import type { FieldVitalsHost } from "../src/host";
 import {
+  OPEN_VITALS,
   RECORD_VITALS_LINE,
   RECORD_VITALS_TITLE,
   VITALS_SECTION_LINE,
@@ -21,7 +23,7 @@ import { applyDelta } from "../src/vitals/vitals-model";
 import { stateWords, VITALS_WORDS } from "../src/vitals/vitals-words";
 
 // VT-2b (track VT, 2026-11-24; VT-D2's second half) — the recorder's switch in Settings → Diagnostics, and the
-// Vitals window's off state.
+// Vitals window's off state. VT-2c (2026-11-24) — the section's door, Open Vitals.
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -53,7 +55,11 @@ function client(snapshot: Record<string, unknown>, request = vi.fn(async () => (
   } as unknown as FielddClient;
 }
 
-async function mount(fieldd: FielddClient, onSettingsChanged?: (undoable: boolean) => void) {
+async function mount(
+  fieldd: FielddClient,
+  onSettingsChanged?: (undoable: boolean) => void,
+  door?: FieldVitalsHost,
+) {
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -64,6 +70,7 @@ async function mount(fieldd: FielddClient, onSettingsChanged?: (undoable: boolea
         { client: fieldd },
         createElement(VitalsRecorderSection, {
           ...(onSettingsChanged === undefined ? {} : { onSettingsChanged }),
+          ...(door === undefined ? {} : { door }),
         }),
       ),
     );
@@ -139,6 +146,46 @@ describe("VT-2b — Settings → Diagnostics' Vitals section", () => {
     const toggle = await mount(never);
     expect(toggle?.disabled).toBe(true);
     expect(container?.textContent).toContain("Loading preferences…");
+  });
+});
+
+describe("VT-2c — the section's door to the Vitals window", () => {
+  const openButton = (): HTMLButtonElement | undefined =>
+    [...(container?.querySelectorAll("button") ?? [])].find(
+      (button) => button.textContent === OPEN_VITALS,
+    );
+
+  it("says Open Vitals in DESIGN.md's word, and asks main's door once a press", async () => {
+    const open = vi.fn(async () => undefined);
+    await mount(client(EFFECTIVE), undefined, { open });
+    expect(design()).toContain(`"${OPEN_VITALS}"`);
+    const button = openButton();
+    expect(button).toBeDefined();
+    await act(async () => button?.click());
+    expect(open).toHaveBeenCalledOnce();
+    expect(open.mock.calls).toEqual([[]]);
+    // the door writes no preference: the switch's request is the only one the section makes
+    expect(container?.querySelectorAll('[role="switch"]')).toHaveLength(1);
+  });
+
+  it("is not drawn where no main answers it (the browser-only catalog), and the switch stands", async () => {
+    const toggle = await mount(client(EFFECTIVE));
+    expect(openButton()).toBeUndefined();
+    expect(toggle).not.toBeNull();
+  });
+
+  it("says a refusal in main's words and stays pressable", async () => {
+    const open = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("Vitals is not available in this window"))
+      .mockResolvedValueOnce(undefined);
+    await mount(client(EFFECTIVE), undefined, { open });
+    await act(async () => openButton()?.click());
+    expect(container?.textContent).toContain("Vitals is not available in this window");
+    expect(openButton()?.disabled).toBe(false);
+    await act(async () => openButton()?.click());
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(container?.textContent).not.toContain("Vitals is not available in this window");
   });
 });
 
