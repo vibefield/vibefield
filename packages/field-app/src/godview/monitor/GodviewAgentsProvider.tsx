@@ -14,8 +14,10 @@ import { type ChromeFacts, type ChromeRun, NO_RUNS } from "./chrome-facts";
 import { type GodviewMonitorFeed, useMonitorReplica } from "./model-replica";
 import {
   noteDoorsOfRuns,
+  type PaneRan,
   paneFrameAgents,
   paneFrameFactsKey,
+  ranBySession,
   runIdsBySession,
   runsByTerminal,
   stopsBySession,
@@ -58,9 +60,16 @@ export interface DeckAgentFacts {
   agents: ReadonlyMap<string, PaneFrameAgent>;
   runs: ReadonlyMap<string, string>;
   stops: ReadonlyMap<string, AgentStopState>;
+  /** PF-21 — each session's running time as its run says it (`ranBySession`): the pane frame's clock reads it */
+  ran: ReadonlyMap<string, PaneRan>;
 }
 
-const EMPTY_DECK_FACTS: DeckAgentFacts = { agents: new Map(), runs: new Map(), stops: new Map() };
+const EMPTY_DECK_FACTS: DeckAgentFacts = {
+  agents: new Map(),
+  runs: new Map(),
+  stops: new Map(),
+  ran: new Map(),
+};
 
 const DeckAgentFactsContext = createContext<DeckAgentFacts | undefined>(undefined);
 /** `null` is a fact of its own: no door, no model port, or Godview closed. The
@@ -99,11 +108,12 @@ function useDeckFacts(chrome: ChromeFacts | null): DeckAgentFacts {
     const agents = paneFrameAgents(byTerminal);
     const sessions = runIdsBySession(byTerminal);
     const stops = stopsBySession(byTerminal);
-    const key = paneFrameFactsKey(agents, sessions, stops);
+    const ran = ranBySession(byTerminal);
+    const key = paneFrameFactsKey(agents, sessions, stops, ran);
     held.current =
       key === cache.key
         ? { runs, key, facts: cache.facts }
-        : { runs, key, facts: { agents, runs: sessions, stops } };
+        : { runs, key, facts: { agents, runs: sessions, stops, ran } };
     return held.current.facts;
   };
   return useSyncExternalStore(subscribe, read, read);

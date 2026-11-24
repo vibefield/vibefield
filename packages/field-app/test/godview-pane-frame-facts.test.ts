@@ -30,8 +30,10 @@ import {
   noteDoorsOfRuns,
   paneFrameAgentFacts,
   paneFrameAgents,
+  paneFrameClocks,
   paneFrameFactsKey,
   paneFrameStatus,
+  ranBySession,
   runIdsBySession,
   runsByTerminal,
   stopsBySession,
@@ -318,6 +320,122 @@ describe("the pane frame's facts", () => {
     // the agent's own control presses no key (or a daemon from before Q08):
     // the frame is handed none, and its title names none
     expect(factsOf(row)).not.toHaveProperty("stopKey");
+  });
+});
+
+describe("PF-21 — the pane's clock", () => {
+  const NOW = Date.parse("2026-11-23T12:00:00.000Z");
+  const live = (id: string, bornAgoMs: number) => ({
+    id,
+    exited: false,
+    createdAtMs: NOW - bornAgoMs,
+  });
+
+  it("reads each run's running time through fieldd's cut: nothing before a run that continues nothing", () => {
+    const fresh = managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" });
+    const resumed: AgentSessionSummary = {
+      ...managedSummary({ runtimeRunId: "run-b", terminalSessionId: "pty-b" }),
+      carried: { ranMs: 3 * 3_600_000, usd: 4.5, tokens: 900 },
+    };
+    const ended: AgentSessionSummary = {
+      ...managedSummary({ runtimeRunId: "run-c", terminalSessionId: "pty-c" }),
+      carried: { ranMs: 60_000 },
+      ranMs: 47 * 60_000,
+    };
+    const byTerminal = runsByTerminal([
+      chromeRunOf(fresh),
+      chromeRunOf(resumed),
+      chromeRunOf(ended),
+    ]);
+    expect([...ranBySession(byTerminal)]).toEqual([
+      ["pty-a", { beforeMs: 0 }],
+      ["pty-b", { beforeMs: 3 * 3_600_000 }],
+      ["pty-c", { beforeMs: 60_000, totalMs: 47 * 60_000 }],
+    ]);
+  });
+
+  it("leaves out a run whose fieldd says no time (a daemon from before PF-21)", () => {
+    const row = chromeRunOf(managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" }));
+    const { ran: _ran, ...local } = row.local ?? {};
+    const older = { ...row, local } as ChromeRun;
+    expect(ranBySession(runsByTerminal([older])).size).toBe(0);
+    // and a time that is no time
+    const broken = { ...row, local: { ...local, ran: { beforeMs: Number.NaN } } } as ChromeRun;
+    expect(ranBySession(runsByTerminal([broken])).size).toBe(0);
+  });
+
+  it("runs a live session on from its terminal's birth, on top of what its run carried in", () => {
+    const ran = new Map([
+      ["pty-resumed", { beforeMs: 3 * 3_600_000 }],
+      ["pty-fresh", { beforeMs: 0 }],
+    ]);
+    expect([
+      ...paneFrameClocks(
+        [
+          live("pty-resumed", 4 * 60_000),
+          live("pty-fresh", 90_000),
+          live("pty-shell", 12 * 60_000),
+        ],
+        ran,
+      ),
+    ]).toEqual([
+      ["pty-resumed", { ms: 3 * 3_600_000, at: NOW - 4 * 60_000 }],
+      ["pty-fresh", { ms: 0, at: NOW - 90_000 }],
+      // a shell no run is in counts from its own birth
+      ["pty-shell", { ms: 0, at: NOW - 12 * 60_000 }],
+    ]);
+  });
+
+  it("stops an ended session at the whole time fieldd kept, and says none where nobody kept it", () => {
+    const clocks = paneFrameClocks(
+      [
+        { id: "pty-ended", exited: true, createdAtMs: NOW - 50 * 60_000 },
+        { id: "pty-husk", exited: false, createdAtMs: NOW - 50 * 60_000 },
+        { id: "pty-lost", exited: true, createdAtMs: NOW - 50 * 60_000 },
+        { id: "pty-dead-shell", exited: true, createdAtMs: NOW - 5_000 },
+      ],
+      new Map([
+        ["pty-ended", { beforeMs: 60_000, totalMs: 47 * 60_000 }],
+        // the run has ended though its pane's terminal still reads live: the kept time stands, stopped
+        ["pty-husk", { beforeMs: 0, totalMs: 9 * 60_000 }],
+        ["pty-lost", { beforeMs: 60_000 }],
+      ]),
+    );
+    expect([...clocks]).toEqual([
+      ["pty-ended", { ms: 47 * 60_000 }],
+      ["pty-husk", { ms: 9 * 60_000 }],
+    ]);
+  });
+
+  it("says none for another desktop's session, or for a terminal with no birth", () => {
+    const sessions = [
+      live("replica-1", 60_000),
+      { id: "pty-unborn", exited: false },
+      { id: "pty-zero", exited: false, createdAtMs: 0 },
+      live("pty-a", 60_000),
+    ];
+    expect([
+      ...paneFrameClocks(sessions, new Map(), (sessionId) => sessionId === "replica-1").keys(),
+    ]).toEqual(["pty-a"]);
+  });
+
+  it("redraws a frame when its clock's facts move, never with the clock itself", () => {
+    const row = managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" });
+    const key = (summary: AgentSessionSummary): string => {
+      const joined = runsByTerminal([chromeRunOf(summary)]);
+      return paneFrameFactsKey(
+        paneFrameAgents(joined),
+        runIdsBySession(joined),
+        stopsBySession(joined),
+        ranBySession(joined),
+      );
+    };
+    expect(key({ ...row, carried: { ranMs: 60_000 } })).not.toBe(key(row));
+    expect(key({ ...row, ranMs: 90_000 })).not.toBe(key(row));
+    // what a run carried of its cost and tokens draws nothing on a frame
+    expect(key({ ...row, carried: { ranMs: 60_000, usd: 3, tokens: 7 } })).toBe(
+      key({ ...row, carried: { ranMs: 60_000 } }),
+    );
   });
 });
 

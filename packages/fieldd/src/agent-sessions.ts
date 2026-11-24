@@ -6,6 +6,7 @@ import {
   type AgentModelSelection,
   AgentMonitorMirror,
   type AgentSessionAttach,
+  type AgentSessionCarried,
   type AgentSessionOrigin,
   type AgentSessionPlacement,
   type AgentSessionRecord,
@@ -295,6 +296,8 @@ export function recordForRun(input: {
    * for a resume of one (absent stays absent), the birth's time for a native resume from History. Required, so every
    * birth says which. */
   turnedAt: string | null | undefined;
+  /** PF-21 — what the session had run and used before this run: a resume's, from the run it continues */
+  carried?: AgentSessionCarried | undefined;
 }): AgentSessionRecord {
   const { info } = input;
   return {
@@ -337,6 +340,7 @@ export function recordForRun(input: {
     ...(input.origin !== undefined ? { origin: input.origin } : {}),
     ...(input.spark !== undefined ? { spark: input.spark } : {}),
     ...(input.turnedAt !== undefined ? { turnedAt: input.turnedAt } : {}),
+    ...(input.carried !== undefined ? { carried: input.carried } : {}),
   };
 }
 
@@ -429,6 +433,10 @@ export interface SummarizeInput {
   stop?: AgentStopState | undefined;
   /** TU-1 — the run's `turnedAt` as fieldd holds it (its record's, or the stamp this fieldd wrote) */
   turnedAt?: string | null | undefined;
+  /** PF-21 — what the session had run and used before this run's own counting began, as fieldd holds it */
+  carried?: AgentSessionCarried | undefined;
+  /** PF-21 — the whole time the session ran, for a run that has ended */
+  ranMs?: number | undefined;
 }
 
 /** Q08 — the floor's own interrupt, which is ⌃C (ghosttea encodes it `\x03`),
@@ -497,6 +505,8 @@ export function summarizeManaged(input: SummarizeInput): AgentSessionSummary {
     ...(input.door !== undefined ? { door: input.door } : {}),
     ...(input.stop !== undefined ? { stop: input.stop } : {}),
     ...(input.turnedAt !== undefined ? { turnedAt: input.turnedAt } : {}),
+    ...(input.carried !== undefined ? { carried: input.carried } : {}),
+    ...(input.ranMs !== undefined ? { ranMs: input.ranMs } : {}),
   };
 }
 
@@ -549,6 +559,8 @@ export function summarizeExitedRecord(input: SummarizeExitedInput): AgentSession
     ...(record.origin !== undefined ? { origin: record.origin } : {}),
     ...(record.spark !== undefined ? { spark: record.spark } : {}),
     ...(record.turnedAt !== undefined ? { turnedAt: record.turnedAt } : {}),
+    ...(record.carried !== undefined ? { carried: record.carried } : {}),
+    ...(input.ranMs !== undefined ? { ranMs: input.ranMs } : {}),
   };
 }
 
@@ -565,6 +577,8 @@ export interface SummarizeExitedInput {
   since: string;
   /** AR-D25 — false when the account it ran under is signed out (default true) */
   resumable?: boolean;
+  /** PF-21 — the whole time the session ran, when fieldd kept it */
+  ranMs?: number | undefined;
 }
 
 export interface SummarizePendingInput {
@@ -581,6 +595,8 @@ export interface SummarizePendingInput {
   /** AR-D25 — false when the account it runs under is signed out: it keeps
    * running until it ends, and nothing continues it (default true) */
   resumable?: boolean;
+  /** PF-21 — what the session had run and used before this fieldd met the run again */
+  carried?: AgentSessionCarried | undefined;
 }
 
 /** SessionSummary v2 for a run whose PTY outlived a fieldd that could NOT
@@ -632,5 +648,6 @@ export function summarizePending(input: SummarizePendingInput): AgentSessionSumm
     ...(record.origin !== undefined ? { origin: record.origin } : {}),
     ...(record.spark !== undefined ? { spark: record.spark } : {}),
     ...(record.turnedAt !== undefined ? { turnedAt: record.turnedAt } : {}),
+    ...(input.carried !== undefined ? { carried: input.carried } : {}),
   };
 }

@@ -758,6 +758,11 @@ export function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts
     ...(summary.stopKey !== undefined ? { stopKey: summary.stopKey } : {}),
     // OB — the door is off for this process: a card's Live face cannot land on it
     ...(summary.door !== undefined ? { door: summary.door } : {}),
+    // PF-21 — the pane frame's clock: the time before this run's terminal, and the whole of it once the run has ended
+    ran: {
+      beforeMs: Math.floor(summary.carried?.ranMs ?? 0),
+      ...(summary.ranMs !== undefined ? { totalMs: summary.ranMs } : {}),
+    },
     ...(monitor !== undefined
       ? {
           mirror: {

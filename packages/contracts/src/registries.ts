@@ -2895,6 +2895,12 @@ export const LAYOUT = {
    * last run". A picture to draw and nothing to act on — a restore resumes
    * through the signed records above, never through a row of this file. */
   AGENT_LAST_BOARD_FILE: ["agents", "last-board.json"],
+  /** PF-21 (2026-11-23) — what each of this user's runs has run and used so far (0600): its running time, its
+   * estimated cost and its tokens, rewritten twice a minute while a run is alive, at a run's exit and at a stop of
+   * the daemon. A resumed run starts from the figures of the run it continues, and a run met again after a fieldd
+   * restart from its own. Figures to draw and nothing to act on: unsigned, read tolerantly, and a resume still goes
+   * through the signed records above. */
+  AGENT_RUN_LEDGER_FILE: ["agents", "run-ledger.json"],
   /** LR — the picture a boot found its floor had lost sessions from, held
    * until a window answers restore or start clean (`agent.lastRunForget`), so
    * a second restart before the answer does not take the question away. */

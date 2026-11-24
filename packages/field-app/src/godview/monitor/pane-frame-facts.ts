@@ -3,6 +3,7 @@ import {
   type AgentVisualStatus,
   folderName,
   type PaneFrameAgent,
+  type PaneFrameClock,
 } from "@vibefield/puppeteer-views";
 import { noteRunNameable } from "../../frame/cards/card-landing";
 import type { ChromeRun } from "./chrome-facts";
@@ -204,6 +205,74 @@ export function stopsBySession(
   return stops;
 }
 
+/** PF-21 — a run's running time as fieldd says it (`local.ran`): the time before this run's terminal was born, and
+ * the whole of it once the run has ended. */
+export interface PaneRan {
+  beforeMs: number;
+  totalMs?: number | undefined;
+}
+
+/**
+ * PF-21 — each pane session's running time as its run's row says it, by the frame's own join. A run whose fieldd
+ * says none (a daemon from before PF-21) is left out, and its pane then counts from its terminal's own birth.
+ */
+export function ranBySession(
+  byTerminal: ReadonlyMap<string, ChromeRun>,
+): ReadonlyMap<string, PaneRan> {
+  const ran = new Map<string, PaneRan>();
+  for (const [sessionId, row] of byTerminal) {
+    const said = row.local?.ran;
+    if (said === undefined || !Number.isFinite(said.beforeMs) || said.beforeMs < 0) continue;
+    const total = said.totalMs;
+    ran.set(sessionId, {
+      beforeMs: said.beforeMs,
+      ...(total !== undefined && Number.isFinite(total) && total >= 0 ? { totalMs: total } : {}),
+    });
+  }
+  return ran;
+}
+
+/** What a pane's clock reads of its session: Ghosttea's summary, narrowed. */
+export interface PaneClockSession {
+  id: string;
+  exited: boolean;
+  createdAtMs?: number | undefined;
+}
+
+/**
+ * PF-21 — THE PANE'S CLOCK: how long each pane's session has been running, in the frame's words
+ * (`PaneFrameClock`: `ms` as of `at`, running on from `at`).
+ *
+ *   · A session whose run has ENDED and whose whole time fieldd kept stands at that time, stopped.
+ *   · A live session runs on from its terminal's own birth, on top of what its run carried in: a resumed session
+ *     goes on from where the run it continues stopped, and a shell (no run, or a run typed into it) counts from the
+ *     shell's own birth.
+ *   · An ended session nobody kept the time of says none: a terminal has no exit time, and a clock that ran on
+ *     past the end would be a time invented at the seam.
+ *
+ * `skip` names the sessions that say none whatever they are: another desktop's session shows here as a replica
+ * whose birth is this window's attach, never the session's own.
+ */
+export function paneFrameClocks(
+  sessions: readonly PaneClockSession[],
+  ran: ReadonlyMap<string, PaneRan>,
+  skip: (sessionId: string) => boolean = () => false,
+): ReadonlyMap<string, PaneFrameClock> {
+  const clocks = new Map<string, PaneFrameClock>();
+  for (const session of sessions) {
+    if (skip(session.id)) continue;
+    const said = ran.get(session.id);
+    if (said?.totalMs !== undefined) {
+      clocks.set(session.id, { ms: said.totalMs });
+      continue;
+    }
+    const born = session.createdAtMs;
+    if (session.exited || born === undefined || !Number.isFinite(born) || born <= 0) continue;
+    clocks.set(session.id, { ms: said?.beforeMs ?? 0, at: born });
+  }
+  return clocks;
+}
+
 /**
  * The key a re-projection is worth doing on: every field the frame DRAWS, and
  * nothing else. A working agent's row moves several times a second — tokens,
@@ -216,6 +285,7 @@ export function paneFrameFactsKey(
   agents: ReadonlyMap<string, PaneFrameAgent>,
   runs: ReadonlyMap<string, string>,
   stops: ReadonlyMap<string, AgentStopState> = new Map(),
+  ran: ReadonlyMap<string, PaneRan> = new Map(),
 ): string {
   const parts: string[] = [];
   // Keyed over the RUNS, not the agents: a session whose facts have gone (a
@@ -224,6 +294,7 @@ export function paneFrameFactsKey(
   for (const [sessionId, runtimeRunId] of runs) {
     const facts = agents.get(sessionId);
     const stop = stops.get(sessionId);
+    const clock = ran.get(sessionId);
     parts.push(
       [
         sessionId,
@@ -246,6 +317,9 @@ export function paneFrameFactsKey(
         facts?.stopKey ?? "",
         stop?.stage ?? "",
         stop?.unheardAt === undefined ? "" : 1,
+        // PF-21 — the clock's two facts move at a birth and at an end, never with the clock
+        clock?.beforeMs ?? "",
+        clock?.totalMs ?? "",
       ].join("\u0001"),
     );
   }

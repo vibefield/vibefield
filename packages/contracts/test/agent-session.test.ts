@@ -8,6 +8,7 @@ import {
   AgentMonitorMirror,
   AgentResumeNativeParams,
   AgentResumeParams,
+  AgentSessionCarried,
   AgentSessionPlacement,
   AgentSessionRecord,
   AgentSessionSummary,
@@ -697,5 +698,50 @@ describe("TU-1 — the record and its row say whether the run's conversation has
       );
     const before = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
     expect("turnedAt" in before).toBe(false);
+  });
+});
+
+describe("PF-21 — a session's clock and totals, carried by the run that continues it", () => {
+  it("is the signed record's own and the row's: every figure optional, absent on a run that continues nothing", () => {
+    const valid = AgentSessionRecord.parse(fixture("agent-session-record.valid.json"));
+    expect("carried" in valid).toBe(false);
+    // under the record's HMAC, beside the launch facts
+    expect(Object.keys(AgentSessionRecord.shape)).toContain("carried");
+    const carried = { ranMs: 11_340_000, usd: 4.52, coverage: "partial", tokens: 1_204_800 };
+    expect(AgentSessionRecord.parse({ ...valid, carried }).carried).toEqual(carried);
+    // a run that kept only its clock
+    expect(AgentSessionRecord.parse({ ...valid, carried: { ranMs: 60_000 } }).carried).toEqual({
+      ranMs: 60_000,
+    });
+
+    const row = AgentSessionSummary.parse(fixture("agent-session-summary.valid.json"));
+    expect("carried" in row).toBe(false);
+    expect("ranMs" in row).toBe(false);
+    const ended = AgentSessionSummary.parse({ ...row, carried, ranMs: 11_400_000 });
+    expect(ended.carried).toEqual(carried);
+    expect(ended.ranMs).toBe(11_400_000);
+  });
+
+  it("is a tolerant reader of a later word, and refuses a figure that is none", () => {
+    // OPEN coverage, and a key this build never heard
+    expect(AgentSessionCarried.parse({ coverage: "later-word", later: 1 })).toEqual({
+      coverage: "later-word",
+      later: 1,
+    });
+    for (const bad of [
+      { ranMs: -1 },
+      { ranMs: 1.5 },
+      { usd: -0.01 },
+      { tokens: -1 },
+      { coverage: "" },
+    ]) {
+      expect(AgentSessionCarried.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
+    }
+    const row = fixture("agent-session-summary.valid.json") as Record<string, unknown>;
+    for (const bad of [-1, 0.5, "90000", null]) {
+      expect(AgentSessionSummary.safeParse({ ...row, ranMs: bad }).success, String(bad)).toBe(
+        false,
+      );
+    }
   });
 });

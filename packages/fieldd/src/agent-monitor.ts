@@ -277,6 +277,32 @@ export function hostRunFromSummary(
       : {}),
     ...(alive !== undefined ? { alive } : {}),
     nativeSessionId: summary.sessionId,
+    // PF-21 (2026-11-23) — what the session had used before this run's own counting began (the run ledger's
+    // figures, `agent-run-ledger.ts`): the backend adds the run's own live count to it, so a resumed session's cost
+    // and tokens go on from where they stood (puppeteer 0.4.12's `MonitorHostRun.carried`)
+    ...carriedUsageOf(summary),
+  };
+}
+
+/** PF-21 — a summary's carried usage in the backend's words; nothing when the run carries no figure. The coverage
+ * is the backend's two words, and any other word reads as a floor. */
+function carriedUsageOf(summary: AgentSessionSummary): Pick<MonitorHostRun, "carried"> {
+  const carried = summary.carried;
+  if (carried === undefined || (carried.usd === undefined && carried.tokens === undefined))
+    return {};
+  return {
+    carried: {
+      ...(carried.usd !== undefined
+        ? {
+            usd: carried.usd,
+            coverage:
+              carried.coverage === "complete" || carried.coverage === undefined
+                ? "complete"
+                : "partial",
+          }
+        : {}),
+      ...(carried.tokens !== undefined ? { tokens: carried.tokens } : {}),
+    },
   };
 }
 

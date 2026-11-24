@@ -35,6 +35,7 @@ import {
   type AgentResumeParams,
   type AgentResumeRunParams,
   AgentSessionAttach,
+  type AgentSessionCarried,
   type AgentSessionOrigin,
   type AgentSessionPlacement,
   type AgentSessionRecord,
@@ -127,6 +128,15 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
+import {
+  carriedFrom,
+  ownUsage,
+  recordedRanMs,
+  RUN_LEDGER_WRITE_MS,
+  RunLedger,
+  type RunTotals,
+  runTotals,
+} from "./agent-run-ledger";
 import { RESUMED_WHEN_IDLE, type StartedThrough, startedThrough } from "./agent-started-through";
 import {
   afterEscalation,
@@ -555,6 +565,9 @@ export interface AgentRuntimeServiceOptions {
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
   /** ST test seam: how long a sent Stop waits to be heard (default `AGENT_STOP.HEARD_WITHIN_MS`) */
   stopHeardWithinMs?: number;
+  /** PF-21 test seam: how often the live runs' lines of the run ledger are written (default `RUN_LEDGER_WRITE_MS`);
+   * 0 arms no timer, and the ledger is then written at an exit and at the stop alone */
+  runLedgerWriteMs?: number;
   /** A login pane ended and the agent confirmed it is signed in. */
   onProfileSignedIn?: (profileId: string) => Promise<void>;
   /** AO-5a (AO-D14) — the note of the profiles Add a profile… made and no
@@ -662,6 +675,10 @@ interface ManagedEntry {
   /** TU-1 — the record's `turnedAt`, held here so a publish never reads the disk: seeded at entry, a time once fieldd
    * stamps the first turn it sees (`stampTurn`) */
   turnedAt: string | null | undefined;
+  /** PF-21 — what the session had run and used before this run's own counting began in THIS fieldd: a resume's from
+   * the run it continues, a re-attached run's time from its record and its usage from its own ledger line, and, at
+   * a new epoch of the same run, what the last epoch counted (`applyMonitor`). Absent: nothing came before. */
+  carried?: AgentSessionCarried | undefined;
 }
 
 /** Item 124 — one birth's identity (`AgentRuntimeService.identity`): each attempt of a briefed birth has its own. */
@@ -855,6 +872,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** PJ-6 — each agent's own model picker, per Agent Profile, as last read */
   private readonly modelCatalogs: AgentModelCatalogs;
   private readonly records: SessionRecordStore;
+  /** PF-21 — what each run has run and used so far (`agent-run-ledger.ts`) */
+  private readonly ledger: RunLedger;
+  private ledgerTimer: NodeJS.Timeout | null = null;
+  private readonly ledgerWriteMs: number;
   private readonly home: string;
   private readonly logger: Logger;
   private readonly now: () => Date;
@@ -970,6 +991,15 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       now: this.now,
       logger: this.logger,
     });
+    // PF-21 — the run ledger, read before any run enters: a re-attached run starts from its own line, a resumed one
+    // from the line of the run it continues
+    this.ledger = new RunLedger({
+      path: join(opts.userRoot, ...LAYOUT.AGENT_RUN_LEDGER_FILE),
+      now: this.now,
+      logger: this.logger,
+    });
+    this.ledger.load();
+    this.ledgerWriteMs = opts.runLedgerWriteMs ?? RUN_LEDGER_WRITE_MS;
     // AR-4 — the durable creation registry a run is restored against
     // (`agents/runs/`: the claims and the installation key, puppeteer's own
     // schema and modes, 0700/0600 — PU-8 again). Every birth names a
@@ -3308,8 +3338,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     for (const record of this.records.list()) {
       if (record.profileId !== undefined && profileIds.has(record.profileId)) {
         this.records.remove(record.runtimeRunId);
+        this.ledger.forget(record.runtimeRunId);
       }
     }
+    this.ledger.flush();
   }
 
   /** The persona's open login pane — for as long as the pane lives. */
@@ -3364,6 +3396,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * no record is stamped; the next boot finds the records and re-attaches. */
   async dispose(): Promise<void> {
     if (this.disposed) return;
+    // PF-21 — the stop's own writing of the ledger: a Quit ends every terminal with the daemons, and no exit of
+    // theirs is heard here, so this is where each live run's clock and totals are kept for the run that resumes it
+    if (this.ledgerTimer !== null) {
+      clearTimeout(this.ledgerTimer);
+      this.ledgerTimer = null;
+    }
+    this.keepLedger();
     this.disposed = true;
     if (this.onTransition !== null) this.opts.supervisor?.off("transition", this.onTransition);
     for (const unsubscribe of this.unsubscribeMonitor) unsubscribe();
@@ -3586,6 +3625,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       resumed?: true | undefined;
       /** Item 502 — the door it came through, said on its start line alone (never on the record) */
       through?: StartedThrough | undefined;
+      /** PF-21 — a resume: what the session had run and used before this run (`carriedOnward`) */
+      carried?: AgentSessionCarried | undefined;
     } & (
       | {
           /** AR-4 — the record already exists: this run was re-attached, and the
@@ -3628,6 +3669,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
           origin: launch.origin,
           spark: launch.spark,
           turnedAt,
+          carried: launch.carried,
         }),
       );
       if (placement !== undefined) this.ledgerPlacement(info, placement);
@@ -3688,6 +3730,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       spark: launch.spark ?? launch.reattached?.record.spark,
       door: launch.door,
       turnedAt,
+      // PF-21 — a birth carries what its launch names; a run met again carries its record's time and, for its usage,
+      // its own ledger line, because this fieldd's monitor counts it again from nothing
+      carried:
+        launch.reattached === undefined
+          ? launch.carried
+          : this.carriedAgain(launch.reattached.record),
     };
     if (this.disposed) {
       // the service stopped while this run was being born or attached: the
@@ -3713,6 +3761,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     this.managed.set(info.runtimeRunId, entry);
     this.byTerminal.set(info.terminalSessionId, info.runtimeRunId);
+    this.armLedger();
     this.settleEarlyExit(info.terminalSessionId);
     // TU-1 (D7) — a spark's session that enters having worked tells its spark again
     if (typeof turnedAt === "string") this.sparkTurned(entry, turnedAt);
@@ -3998,6 +4047,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         ...(record.spark !== undefined ? { spark: record.spark } : {}),
         // TU-1 (Q1, Q5) — the same conversation continued: whether it has worked is the record's, absent kept absent
         turnedAt: record.turnedAt,
+        // PF-21 — and its clock and its totals go on from where the run it continues left them
+        carried: this.carriedOnward(record),
         resumed: true,
       });
       // OB custody (rule 6) — who the successor is, for launch memory and the floor's entry ONLY (`resumedAs`): the
@@ -4799,6 +4850,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       attaching: false,
     };
     this.pending.set(record.runtimeRunId, entry);
+    this.armLedger();
     this.byTerminal.set(terminalId, record.runtimeRunId);
     const typed = isTypedRun(held) ? held.process : undefined;
     if (next === "retry" && attempt < ATTACH_RETRY_ATTEMPTS) {
@@ -5395,7 +5447,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // the PTY first: an exit for it heard from here on is a late one, and finds no run
     if (entry.record.terminalSessionId !== undefined)
       this.byTerminal.delete(entry.record.terminalSessionId);
-    this.records.stampExit(runtimeRunId, { at: this.now().toISOString(), ...exit });
+    const closedAt = this.now();
+    // PF-21 — a pending run's clock stops where its process was found ended; its line keeps the usage it had
+    this.ledger.note(
+      runtimeRunId,
+      runTotals({
+        carried: { ranMs: entry.record.carried?.ranMs ?? 0 },
+        createdAt: entry.record.createdAt,
+        untilMs: closedAt.getTime(),
+        own: {},
+      }),
+    );
+    this.ledger.flush();
+    this.records.stampExit(runtimeRunId, { at: closedAt.toISOString(), ...exit });
     // Item 201 (RV #17, gap2-6) — told while the run is still in the fold, so it is named as fieldd names it
     // (CO-Q4 (b)); then it leaves
     this.ended(runtimeRunId, entry.record.creationRequestId);
@@ -5559,6 +5623,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
             this.resumableNow(exited.record) && this.personaActive(exited.record.profileId),
           exited: true,
         },
+        ranMs: this.endedRanMs(exited.record),
       });
     }
     return this.withCatalogWord(
@@ -5572,8 +5637,86 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         terminal: exited.terminal,
         since: exited.since,
         resumable: this.resumableNow(exited.record) && this.personaActive(exited.record.profileId),
+        ranMs: this.endedRanMs(exited.record),
       }),
     );
+  }
+
+  /** PF-21 — what a run that CONTINUES this record's conversation carries in: the record's line of the run ledger
+   * (the session's totals as fieldd last kept them), else what the record itself can say. A record stamped with an
+   * exit fieldd saw says its own time (its carried time plus birth to exit); one stamped `unknown` was stamped by a
+   * later boot, so its exit time is no end, and it says only what it carried. */
+  private carriedOnward(record: AgentSessionRecord): AgentSessionCarried | undefined {
+    const line = this.ledger.read(record.runtimeRunId);
+    if (line !== undefined) return carriedFrom(line);
+    const ranMs = recordedRanMs(record);
+    if (ranMs === undefined) return record.carried;
+    return { ...record.carried, ranMs };
+  }
+
+  /** PF-21 — what a run this fieldd meets AGAIN carries (a re-attach, a pending run): its time is still its
+   * record's (the run was born when it was), and its usage its own ledger line, the totals a fieldd before this one
+   * kept for it, because this fieldd's monitor counts the run again from nothing. */
+  private carriedAgain(record: AgentSessionRecord): AgentSessionCarried | undefined {
+    const line = this.ledger.read(record.runtimeRunId);
+    if (line === undefined) return record.carried;
+    const ranMs = record.carried?.ranMs;
+    return {
+      ...(ranMs !== undefined ? { ranMs } : {}),
+      ...(line.usd !== undefined ? { usd: line.usd } : {}),
+      ...(line.usd !== undefined && line.coverage !== undefined ? { coverage: line.coverage } : {}),
+      ...(line.tokens !== undefined ? { tokens: line.tokens } : {}),
+    };
+  }
+
+  /** PF-21 — the whole time an ended run's session ran: its ledger line's, else what its record can say. */
+  private endedRanMs(record: AgentSessionRecord): number | undefined {
+    return this.ledger.read(record.runtimeRunId)?.ranMs ?? recordedRanMs(record);
+  }
+
+  /** PF-21 — a managed run's totals at a moment: what it carries, plus its own time and its mirror's own count. */
+  private totalsOf(entry: ManagedEntry, untilMs: number): Omit<RunTotals, "asOf"> {
+    return runTotals({
+      carried: entry.carried,
+      createdAt: entry.createdAt,
+      untilMs,
+      own: ownUsage(entry.mirror),
+    });
+  }
+
+  /** PF-21 — every live run's line, then the file. A managed run's totals are its own; a pending run (alive,
+   * unobserved) moves its clock alone, and its line keeps the usage it had. */
+  private keepLedger(): void {
+    const nowMs = this.now().getTime();
+    for (const [runtimeRunId, entry] of this.managed) {
+      if (!entry.exiting) this.ledger.note(runtimeRunId, this.totalsOf(entry, nowMs));
+    }
+    for (const [runtimeRunId, entry] of this.pending) {
+      this.ledger.note(
+        runtimeRunId,
+        runTotals({
+          carried: { ranMs: entry.record.carried?.ranMs ?? 0 },
+          createdAt: entry.record.createdAt,
+          untilMs: nowMs,
+          own: {},
+        }),
+      );
+    }
+    this.ledger.flush();
+  }
+
+  /** PF-21 — the ledger's clock: one timer while any run is alive, re-armed by its own firing, so an idle daemon
+   * holds none. */
+  private armLedger(): void {
+    if (this.disposed || this.ledgerTimer !== null || this.ledgerWriteMs <= 0) return;
+    if (this.managed.size === 0 && this.pending.size === 0) return;
+    this.ledgerTimer = setTimeout(() => {
+      this.ledgerTimer = null;
+      if (this.disposed) return;
+      this.keepLedger();
+      this.armLedger();
+    }, this.ledgerWriteMs);
+    this.ledgerTimer.unref?.();
   }
 
   /** Whether `agent.resume` would take this record right now: it exists, no
@@ -5632,6 +5775,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         // AR-D25's signed-out account, and RA-D7's unsaved conversation: the
         // row stays, and says nothing continues it
         resumable: this.personaActive(entry.record.profileId) && conversationSaved(entry.record),
+        // PF-21 — the run is alive and unobserved: its clock runs on from its record's, and its totals stand where a
+        // fieldd before this one kept them
+        carried: this.carriedAgain(entry.record),
       }),
     );
   }
@@ -5704,6 +5850,23 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         "puppeteer's monitor state does not match the pinned mirror; the row reads unknown",
         { runtimeRunId: entry.info.runtimeRunId, schemaVersion: state.schemaVersion, issue },
       );
+    }
+    // PF-21 — a new epoch of the same run is counted from nothing (the monitor reads the current epoch alone), so
+    // what the last epoch counted joins what the run carries
+    const last = entry.mirror;
+    if (last !== undefined && mirror !== undefined && mirror.runtimeEpoch !== last.runtimeEpoch) {
+      const counted = ownUsage(last);
+      if (counted.usd !== undefined || counted.tokens !== undefined) {
+        const born = Date.parse(entry.createdAt);
+        entry.carried = carriedFrom(
+          runTotals({
+            carried: entry.carried,
+            createdAt: entry.createdAt,
+            untilMs: Number.isFinite(born) ? born : 0,
+            own: counted,
+          }),
+        );
+      }
     }
     entry.mirror = mirror;
     const status = foldStatus(mirror);
@@ -5928,8 +6091,12 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         this.publish();
       });
     this.exitCleanups.set(runtimeRunId, cleanup);
+    const exitedAt = this.now();
+    // PF-21 — the run's last line: its clock stops here, and a resume starts from these totals
+    this.ledger.note(runtimeRunId, this.totalsOf(entry, exitedAt.getTime()));
+    this.ledger.flush();
     this.records.stampExit(runtimeRunId, {
-      at: this.now().toISOString(),
+      at: exitedAt.toISOString(),
       exitCode: exit.exitCode,
       signal: exit.signal,
       reason: exit.reason,
@@ -6038,6 +6205,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       hosted?: boolean;
       terminal?: TerminalInfo | undefined;
       record?: NonNullable<AgentSessionSummary["continuation"]>;
+      /** PF-21 — the whole time the session ran, for a run that has ended */
+      ranMs?: number | undefined;
     },
   ): AgentSessionSummary {
     let observationLevel = "unknown";
@@ -6068,6 +6237,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         modelSwitch: modelSwitchOf(entry.agent),
         stop: entry.stop,
         turnedAt: entry.turnedAt,
+        carried: entry.carried,
+        ranMs: overrides?.ranMs,
         createdAt: entry.createdAt,
         stateChangedAt: entry.stateChangedAt,
         lastActivityAt: entry.lastActivityAt,

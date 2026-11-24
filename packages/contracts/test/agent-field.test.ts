@@ -754,6 +754,20 @@ describe("MV-3d — the chrome's facts ride this desktop's own rows of the model
     }
   });
 
+  it("PF-21 — the chrome's clock fact: the time before this run, and the whole of it once the run has ended", () => {
+    const own = AgentModelDeskRow.parse(golden("agent-model-desk-row.valid.json"));
+    // a daemon from before PF-21 says none, and the pane then says no time
+    expect("ran" in (own.local ?? {})).toBe(false);
+    expect(AgentModelLocalFacts.parse({ ran: { beforeMs: 0 } }).ran).toEqual({ beforeMs: 0 });
+    expect(
+      AgentModelLocalFacts.parse({ ran: { beforeMs: 60_000, totalMs: 2_820_000, later: true } })
+        .ran,
+    ).toEqual({ beforeMs: 60_000, totalMs: 2_820_000, later: true });
+    for (const bad of [{}, { beforeMs: -1 }, { beforeMs: 0.5 }, { beforeMs: 0, totalMs: -1 }]) {
+      expect(AgentModelLocalFacts.safeParse({ ran: bad }).success, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
   it("the union keeps the facts through the board's reader, and the tolerant reader takes any part of them", () => {
     const asBoard = AgentModelBoardRow.parse(golden("agent-model-desk-row.valid.json"));
     expect(AgentModelDeskRow.parse(asBoard).local?.spawnedBy).toBe("user-shell");

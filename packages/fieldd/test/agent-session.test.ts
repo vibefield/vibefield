@@ -5677,6 +5677,129 @@ describe("TU-1 — fieldd keeps whether a run has worked (the real floor)", () =
   }, 150_000);
 });
 
+// PF-21 (2026-11-23) — a session's clock and its totals go on across a resume. A resumed run is a new run in a new
+// terminal, and the monitor counts a run's own live usage alone, so until PF-21 a resume began both at nothing. fieldd
+// keeps each run's totals in its run ledger (`agents/run-ledger.json`): written at the run's exit, read by the run
+// that continues it, carried on that run's signed record and on its row, and added to by the monitor backend
+// (puppeteer 0.4.12's `MonitorHostRun.carried`).
+describe("PF-21 — a session's clock and totals go on across a resume (the real floor)", () => {
+  type Line = { ranMs: number; usd?: number; tokens?: number };
+  const ledgerOf = (dataDir: string) =>
+    JSON.parse(readFileSync(join(dataDir, ...LAYOUT.AGENT_RUN_LEDGER_FILE), "utf8")) as {
+      v: number;
+      runs: Record<string, Line>;
+    };
+  async function rowOf(win: WsRpc, runtimeRunId: string) {
+    const { sessions: rows } = (await win.call("agent.list", {})) as AgentListResult;
+    return rows.find((r) => r.runtimeRunId === runtimeRunId);
+  }
+  /** The run's row of the model board, as this desktop's window reads it. */
+  async function modelRowOf(win: WsRpc, runtimeRunId: string) {
+    const sub = (await win.call("agent.subscribe", { projection: "model" })) as {
+      snapshot: { rows: Record<string, unknown>[] };
+    };
+    return sub.snapshot.rows.find((r) => r["runtimeRunId"] === runtimeRunId) as
+      | {
+          monitorRow?: { tokens?: { total?: number } };
+          local?: { ran?: { beforeMs: number; totalMs?: number } };
+        }
+      | undefined;
+  }
+
+  it("a resumed run carries what the run it continues ran and used: on its record, its row and the model's row", async () => {
+    const box = await setup({ floor: "real" });
+    const { daemon, dataDir, envOut } = box;
+    const win = await window(daemon, DECK, "pf21");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: envOut,
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    await joinedRow(win, runId);
+    // a run that continues nothing carries nothing, and its clock starts with it
+    expect(readRecord(dataDir, runId)).not.toHaveProperty("carried");
+    expect((await modelRowOf(win, runId))?.local?.ran).toEqual({ beforeMs: 0 });
+    // the run counts some tokens, as its adapter's hook would say them
+    scriptedEvent(box, spawned.terminal.sessionId, {
+      type: "usage:tokens-used",
+      usageId: "pf21-first",
+      boundary: "response",
+      canonical: true,
+      totalTokens: 500,
+    } as unknown as ScriptedEvent);
+    await poll(
+      async (seen) => {
+        const usage = (await rowOf(win, runId))?.monitor?.usage;
+        seen({ usage: usage ?? null });
+        return usage?.cumulativeTokens === 500 ? true : undefined;
+      },
+      15_000,
+      "the run's tokens on its row",
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1_100));
+    await win.call("terminal.terminate", { sessionId: spawned.terminal.sessionId });
+    const ended = await poll(
+      async () => {
+        const record = readRecord(dataDir, runId);
+        return record.exited ? record : undefined;
+      },
+      15_000,
+      "the run's exit on its record",
+    );
+    // the ledger's line, written at the exit: the run's whole time (birth to exit, to the millisecond) and its tokens
+    const line = ledgerOf(dataDir).runs[runId];
+    expect(line?.ranMs).toBe(Date.parse(String(ended.exited?.at)) - Date.parse(ended.createdAt));
+    expect(line?.ranMs).toBeGreaterThanOrEqual(1_000);
+    expect(line?.tokens).toBe(500);
+    if (process.platform !== "win32") {
+      expect(statSync(join(dataDir, ...LAYOUT.AGENT_RUN_LEDGER_FILE)).mode & 0o777).toBe(0o600);
+    }
+
+    const resumed = (await born(win, "agent.resume", { runtimeRunId: runId })) as AgentSpawnResult;
+    const nextId = resumed.session.runtimeRunId;
+    // carried on the successor's signed record, on its row, and in the chrome's clock fact
+    expect(readRecord(dataDir, nextId).carried).toMatchObject({ ranMs: line?.ranMs, tokens: 500 });
+    expect((await rowOf(win, nextId))?.carried).toMatchObject({ ranMs: line?.ranMs, tokens: 500 });
+    // and the model's row goes on from the tokens the session had: the backend adds the run's own count to them
+    const model = await poll(
+      async (seen) => {
+        const row = await modelRowOf(win, nextId);
+        seen({ tokens: row?.monitorRow?.tokens ?? null, ran: row?.local?.ran ?? null });
+        return row?.monitorRow?.tokens?.total === 500 ? row : undefined;
+      },
+      15_000,
+      "the resumed run's row carrying the session's tokens",
+    );
+    expect(model.local?.ran).toEqual({ beforeMs: line?.ranMs });
+    scriptedEvent(box, resumed.terminal.sessionId, {
+      type: "usage:tokens-used",
+      usageId: "pf21-second",
+      boundary: "response",
+      canonical: true,
+      totalTokens: 40,
+    } as unknown as ScriptedEvent);
+    await poll(
+      async (seen) => {
+        const row = await modelRowOf(win, nextId);
+        seen({ tokens: row?.monitorRow?.tokens ?? null });
+        return row?.monitorRow?.tokens?.total === 540 ? true : undefined;
+      },
+      15_000,
+      "the resumed run's own tokens on top of what it carried",
+    );
+    await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
+    await poll(
+      async () => (readRecord(dataDir, nextId).exited ? true : undefined),
+      15_000,
+      "the resumed run's exit on its record",
+    );
+    // the successor's own line is the session's: what it carried plus its own
+    const after = ledgerOf(dataDir).runs[nextId];
+    expect(after?.tokens).toBe(540);
+    expect(after?.ranMs).toBeGreaterThan(line?.ranMs ?? Number.NaN);
+  }, 120_000);
+});
+
 // Item 97 — an exit fieldd never heard. AR-6-0 reddened three times after item 87 with its run never
 // reading exited and no `fieldd.agents.exit_heard` in the log. The floor's `session-exited` is the one
 // word of an exit fieldd hears, and MF-1g keeps an agent's pane, so the husk stays listed and the old

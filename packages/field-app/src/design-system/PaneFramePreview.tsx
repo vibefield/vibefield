@@ -9,7 +9,12 @@ import { type CSSProperties, type ReactElement, useState } from "react";
 import { DEFAULT_DECK_APPEARANCE } from "../godview/deck-appearance";
 import { godviewTerminalTheme, terminalGround } from "../godview/deck-theme";
 import type { ChromeRun } from "../godview/monitor/chrome-facts";
-import { paneFrameAgentFacts } from "../godview/monitor/pane-frame-facts";
+import {
+  type PaneRan,
+  paneFrameAgentFacts,
+  paneFrameClocks,
+  ranBySession,
+} from "../godview/monitor/pane-frame-facts";
 
 /**
  * THE PANE FRAME, as the deck ships it (GT-6, record §07).
@@ -52,6 +57,8 @@ interface RunRowOptions {
   effort?: { value: string; intent: string };
   contextPercent?: number;
   percentageSource?: string;
+  /** PF-21 — the session's running time as fieldd says it (`local.ran`); absent: nothing came before this run. */
+  ran?: PaneRan;
   /** A run before its first monitor state: no facts, and the bare badge. */
   monitor?: false;
 }
@@ -85,6 +92,7 @@ function runRow(options: RunRowOptions): ChromeRun {
     local: {
       nativeSessionId: "native-1",
       cwd: options.cwd,
+      ran: { ...(options.ran ?? { beforeMs: 0 }) },
       ...(spoken
         ? {
             mirror: {
@@ -103,6 +111,8 @@ interface FrameSpecimen {
   id: string;
   caption: string;
   session: PaneFrameSession;
+  /** PF-21 — when the pane's terminal was born (Ghosttea's `createdAtMs`); absent: the pane says no running time. */
+  bornMs?: number;
   row?: ChromeRun;
   remote?: string;
   color?: string;
@@ -116,8 +126,9 @@ const SHELL: PaneFrameSession = { id: "pty-1", exited: false, cwd: "/Users/j/src
 const SPECIMENS: readonly FrameSpecimen[] = [
   {
     id: "shell",
-    caption: "a bare shell — the folder, and nothing it cannot say",
+    caption: "a bare shell — the folder, how long it has run, and nothing it cannot say",
     session: SHELL,
+    bornMs: NOW - 12 * 60_000,
   },
   {
     id: "starting",
@@ -134,10 +145,13 @@ const SPECIMENS: readonly FrameSpecimen[] = [
   },
   {
     id: "working",
-    caption: "working — the turn's time on the stop verb, the context meter past 80%",
+    caption:
+      "working — the turn's time on the stop verb, the context ring past 80%, a resumed session's time going on",
     session: SHELL,
+    bornMs: NOW - 4 * 60_000,
     color: "oklch(0.62 0.15 250)",
     row: runRow({
+      ran: { beforeMs: 3 * 3_600_000 + 9 * 60_000 },
       kind: "claude",
       label: "Claude",
       status: "working",
@@ -166,10 +180,12 @@ const SPECIMENS: readonly FrameSpecimen[] = [
   },
   {
     id: "exited",
-    caption: "the process has ended — one verb, resume",
+    caption: "the process has ended — one verb, resume, and its clock stopped where it ended",
     session: { id: "pty-2", exited: true, cwd: "/Users/j/src/rosetta" },
+    bornMs: NOW - 50 * 60_000,
     color: "oklch(0.7 0.14 150)",
     row: runRow({
+      ran: { beforeMs: 0, totalMs: 47 * 60_000 },
       kind: "codex",
       label: "Codex",
       status: "idle",
@@ -214,8 +230,9 @@ const SPECIMENS: readonly FrameSpecimen[] = [
   },
   {
     id: "unavailable-share",
-    caption: "a provider that cannot say how full its window is — no meter, no invented figure",
+    caption: "a provider that cannot say how full its window is — no ring, no invented figure",
     session: SHELL,
+    bornMs: NOW - 26 * 3_600_000,
     color: "oklch(0.62 0.15 250)",
     row: runRow({
       kind: "gemini",
@@ -243,6 +260,14 @@ function FramedPane({
   style: CSSProperties;
 }): ReactElement {
   const agent = specimen.row === undefined ? undefined : paneFrameAgentFacts(specimen.row);
+  // PF-21 — the pane's clock by the deck's own rule: the run's `local.ran` joined to the terminal's birth, and
+  // none for another desktop's session
+  const sessionId = specimen.session.id;
+  const clock = paneFrameClocks(
+    [{ id: sessionId, exited: specimen.session.exited, createdAtMs: specimen.bornMs }],
+    ranBySession(new Map(specimen.row === undefined ? [] : [[sessionId, specimen.row]])),
+    () => specimen.remote !== undefined,
+  ).get(sessionId);
   /** The pane element the frame is PORTALLED into, exactly as the deck hands
    * ghosttea's over. Held in state rather than a ref so the portal mounts on
    * the render after the element exists. */
@@ -275,6 +300,7 @@ function FramedPane({
           model={paneFrameModel({
             session: specimen.session,
             ...(agent ? { agent } : {}),
+            ...(clock ? { clock } : {}),
             nowMs: NOW,
           })}
           {...(specimen.color !== undefined ? { color: specimen.color } : {})}
@@ -290,6 +316,7 @@ function FramedPane({
           pane={pane}
           session={specimen.session}
           {...(agent ? { agent } : {})}
+          {...(clock ? { clock } : {})}
           {...(specimen.remote !== undefined ? { remote: specimen.remote } : {})}
           {...(specimen.color !== undefined ? { color: specimen.color } : {})}
           zoomed={specimen.zoomed === true}

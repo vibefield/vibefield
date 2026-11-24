@@ -118,6 +118,40 @@ describe("hostRunFromSummary — the fold's row as the backend's host record", (
     untitled.service.dispose();
   });
 
+  it("PF-21 — hands the backend what the session had used before this run, and its row goes on from there", async () => {
+    expect(hostRunFromSummary(working).carried).toBeUndefined();
+    // a clock alone is no usage: the backend is handed nothing
+    expect(hostRunFromSummary({ ...working, carried: { ranMs: 60_000 } }).carried).toBeUndefined();
+    const carried = { ranMs: 60_000, usd: 4.5, coverage: "complete", tokens: 900 };
+    expect(hostRunFromSummary({ ...working, carried }).carried).toEqual({
+      usd: 4.5,
+      coverage: "complete",
+      tokens: 900,
+    });
+    // a cost with no coverage said reads complete, and any word but `complete` a floor (the contract's word is open)
+    expect(hostRunFromSummary({ ...working, carried: { usd: 1 } }).carried).toEqual({
+      usd: 1,
+      coverage: "complete",
+    });
+    expect(
+      hostRunFromSummary({ ...working, carried: { usd: 1, coverage: "later-word" } }).carried,
+    ).toEqual({ usd: 1, coverage: "partial" });
+    // tokens alone carry no coverage: that word is the cost's
+    expect(
+      hostRunFromSummary({ ...working, carried: { tokens: 7, coverage: "partial" } }).carried,
+    ).toEqual({ tokens: 7 });
+
+    // the backend's row: a run that has counted nothing of its own already stands at what it carried
+    const resumed = await testMonitor({ summaries: [{ ...working, carried }] });
+    const row = resumed.row("run-working");
+    expect(row.cost?.usd).toBe(4.5);
+    expect(row.tokens?.total).toBe(900);
+    resumed.service.dispose();
+    const fresh = await testMonitor({ summaries: [working] });
+    expect(fresh.row("run-working").cost?.usd).not.toBe(4.5);
+    fresh.service.dispose();
+  });
+
   it("an exited typed run is not alive and claims no PTY — its shell is a bare terminal again (AR-7)", () => {
     const run = hostRunFromSummary(exited);
     expect(run.alive).toBe(false);

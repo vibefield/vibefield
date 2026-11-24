@@ -109,6 +109,7 @@ import {
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
+import { paneFrameClocks } from "./monitor/pane-frame-facts";
 import { PaneTransitions } from "./monitor/pane-transitions";
 import { instrumentDevicesPort } from "./monitor/perf/door-instruments";
 
@@ -1880,6 +1881,18 @@ export function GodviewDeck({
     return folders;
   }, [workspace]);
 
+  /** PF-21 — each pane's clock: how long its session has been running (`paneFrameClocks`). Another desktop's
+   * session says none here: its pane is a replica born at this window's attach. */
+  const frameClocks = useMemo(
+    () =>
+      paneFrameClocks(
+        (workspace?.panes ?? []).map((pane) => pane.session),
+        paneAgents.ran,
+        (sessionId) => remoteDevices.current.has(sessionId),
+      ),
+    [workspace, paneAgents.ran],
+  );
+
   /**
    * THE VERBS the deck lends the frame.
    *
@@ -2061,13 +2074,13 @@ export function GodviewDeck({
         // pane's frame takes that frame alone, and the other panes keep theirs.
         // It tries again for a fact the frame is handed, never for the clock it
         // ticks on (`nowMs`, every second while an agent works).
-        const { agent, color, fallbackCwd, pane, verbs, zoomed } = props;
+        const { agent, clock, color, fallbackCwd, pane, verbs, zoomed } = props;
         // Item 620 (2026-11-20): GodviewPaneFrame is a component, made once by the memo above, and
         // this is its top level, where a hook belongs
         // biome-ignore lint/correctness/useHookAtTopLevel: a component's top level, as said above
         const retryKey = useMemo(
-          () => ({ session, agent, color, fallbackCwd, pane, verbs, zoomed, remote }),
-          [session, agent, color, fallbackCwd, pane, verbs, zoomed, remote],
+          () => ({ session, agent, clock, color, fallbackCwd, pane, verbs, zoomed, remote }),
+          [session, agent, clock, color, fallbackCwd, pane, verbs, zoomed, remote],
         );
         return (
           <ChromeBoundary name="Pane frame" retryKey={retryKey}>
@@ -2298,10 +2311,19 @@ export function GodviewDeck({
       agents: paneAgents.agents,
       colors: framePaneColors,
       cwds: frameFallbackCwds,
+      clocks: frameClocks,
       verbs: frameVerbs,
       zoomedPaneId,
     }),
-    [workspace, paneAgents.agents, framePaneColors, frameFallbackCwds, frameVerbs, zoomedPaneId],
+    [
+      workspace,
+      paneAgents.agents,
+      framePaneColors,
+      frameFallbackCwds,
+      frameClocks,
+      frameVerbs,
+      zoomedPaneId,
+    ],
   );
   const launchersRetryKey = useMemo(
     () => ({
@@ -2594,6 +2616,7 @@ export function GodviewDeck({
             agentsBySession={paneAgents.agents}
             paneColors={framePaneColors}
             fallbackCwdBySession={frameFallbackCwds}
+            clocksBySession={frameClocks}
             verbs={frameVerbs}
             frame={Frame}
             zoomedPaneId={zoomedPaneId}

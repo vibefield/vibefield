@@ -247,6 +247,22 @@ export const AgentModelSwitchOffer = z
   .passthrough();
 export type AgentModelSwitchOffer = z.infer<typeof AgentModelSwitchOffer>;
 
+/** PF-21 (2026-11-23) — what a session had run and used BEFORE the run that continues it, as fieldd kept it. A
+ * resumed run is a new run in a new terminal, the runtime counts a run's own live usage alone (a resumed session's
+ * history is replayed, never counted again), and its totals live in memory; so without this a resume or a fieldd
+ * restart began every clock and every total again at nothing. `ranMs` is the time the session was running, `usd` its
+ * estimated API-equivalent cost (`coverage`, OPEN: `complete` · `partial`; absent reads `complete`), `tokens` its
+ * tokens. Every figure is optional: a run that carries one keeps what it knows. */
+export const AgentSessionCarried = z
+  .object({
+    ranMs: z.number().int().nonnegative().optional(),
+    usd: z.number().nonnegative().optional(),
+    coverage: z.string().min(1).max(32).optional(),
+    tokens: z.number().nonnegative().optional(),
+  })
+  .passthrough();
+export type AgentSessionCarried = z.infer<typeof AgentSessionCarried>;
+
 /** SessionSummary v2 — the fold's row (design-01 §6.2 as amended by AR-D4).
  * `sessionId` is the provider-native session id, THE spine every repo joins
  * on (puppeteer `nativeSession.id`, rosetta `native_session_id`); before an
@@ -342,6 +358,14 @@ export const AgentSessionSummary = z
     /** TU-1 — the record's `turnedAt`, as fieldd holds it for the run: a time (its conversation has worked), `null`
      * (not yet), absent (a record or a daemon from before TU-1). */
     turnedAt: z.string().min(1).nullable().optional(),
+    /** PF-21 — what the session had run and used before this run's own counting began, as fieldd holds it for the
+     * run: a resume's from the run it continues, a run met again after a fieldd restart its own last kept totals.
+     * The run's clock is `carried.ranMs` plus the time since `createdAt`; its totals are these plus what the monitor
+     * counts. Absent: nothing came before (or a daemon from before PF-21). */
+    carried: AgentSessionCarried.optional(),
+    /** PF-21 — the whole time the session ran, once this run has ENDED: its carried time plus its own. Absent while
+     * the run is alive, and for an ended run whose end fieldd never saw and never kept. */
+    ranMs: z.number().int().nonnegative().optional(),
   })
   .passthrough();
 export type AgentSessionSummary = z.infer<typeof AgentSessionSummary>;
@@ -539,6 +563,10 @@ export const AgentSessionRecord = z
      * keeps the fact, no turn seen. Absent: a record from before TU-1, unknown. Optional and nullable, so a record
      * without it canonicalises (and verifies) as before, and an older fieldd's passthrough keeps it. */
     turnedAt: z.string().min(1).nullable().optional(),
+    /** PF-21 (2026-11-23) — what the session had run and used before this run was born: a resume's, the totals of the
+     * run it continues as fieldd last kept them (`LAYOUT.AGENT_RUN_LEDGER_FILE`, else that record's own times). A run
+     * that continues nothing carries none. Optional, so a record without it canonicalises (and verifies) as before. */
+    carried: AgentSessionCarried.optional(),
   })
   .passthrough();
 export type AgentSessionRecord = z.infer<typeof AgentSessionRecord>;

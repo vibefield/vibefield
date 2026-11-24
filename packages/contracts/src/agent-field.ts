@@ -724,6 +724,16 @@ export const AgentModelLocalFacts = z
     /** OB — the session's `door` (`off`: this process holds no tool plane): whether a card's Live face can land on it. Absent:
      * the door as briefed */
     door: z.string().optional(),
+    /** PF-21 (2026-11-23) — the session's running time, for the pane frame's clock: `beforeMs` is the time the
+     * session ran before this run's terminal was born (a resume's carried time; 0 for a run that continues nothing),
+     * and `totalMs` the whole of it once the run has ended. Absent: a daemon from before PF-21 */
+    ran: z
+      .object({
+        beforeMs: z.number().int().nonnegative(),
+        totalMs: z.number().int().nonnegative().optional(),
+      })
+      .passthrough()
+      .optional(),
     /** The mirror's own words the chrome reads, present exactly when fieldd
      * holds a monitor mirror for the run — the provider has spoken. Absent is
      * the run before its first state: the pane frame's bare badge, the

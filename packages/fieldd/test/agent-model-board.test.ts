@@ -501,7 +501,12 @@ describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)
       },
     });
     // before the provider speaks: no mirror, and the workspace names the directory
-    expect(unspoken?.local).toEqual({ nativeSessionId: "run-starting-native", cwd: "/repo/wt" });
+    expect(unspoken?.local).toEqual({
+      nativeSessionId: "run-starting-native",
+      cwd: "/repo/wt",
+      // PF-21 — the chrome's clock fact: a run that continues nothing ran no time before itself
+      ran: { beforeMs: 0 },
+    });
     // fieldd witnessed the exit; the mirror's own liveness rides beside it, verbatim
     expect(ended?.local).toMatchObject({ exited: true, mirror: { alive: true } });
     expect(ended?.alive).toBe(false);
