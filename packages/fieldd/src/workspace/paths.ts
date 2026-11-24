@@ -57,6 +57,14 @@ export function relativePathRefusal(
   }
 }
 
+/** History QA (2026-11-24) — what the files pane says of a folder a live tree is never rooted at
+ * (`tickets.ts`): the home directory, or a whole volume. One sentence for what it is and one for what Files
+ * opens instead (DESIGN.md §9: what happened, and what to do next). */
+export function wideFolderRefusal(browse: "home" | "volume" | undefined): string {
+  const what = browse === "volume" ? "A whole drive" : "Your home folder";
+  return `${what} is too wide to show here. Files opens a project's own folder.`;
+}
+
 /** A root's id: a digest of its kind and its path — stable across restarts
  * and reinstalls, so a phone's kept id names the same folder tomorrow, and
  * two roots of different kinds over one folder (a place in the home directory)

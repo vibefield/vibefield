@@ -9,7 +9,7 @@ import {
 } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
 import { isWorkspaceWindow, readRefused } from "./doors";
-import { parseRelativePath, relativePathRefusal } from "./paths";
+import { parseRelativePath, relativePathRefusal, wideFolderRefusal } from "./paths";
 import type { RootsRegistry } from "./roots";
 import { FilesHostRefusal, type FilesHostSupervisor, FilesHostUnavailable } from "./supervisor";
 
@@ -91,6 +91,19 @@ export class WorkspaceTickets {
         rootPath: ask.root.path,
         segments: ask.segments,
       });
+      // History QA (2026-11-24) — a live tree is never rooted at a browse export itself: the home
+      // directory, or a whole volume. The files engine watches its root's whole subtree, and a home is
+      // written to all day by everything that runs. Opened there (a session that ran in `~`), the worker
+      // held a full core and pushed the window 25 tree updates a second for as long as the pane stood
+      // (the QA desktop, probed: 0.57 cores mean and 1.04 peak, against 0.01 for a checkout). A folder
+      // below one is a tree; the export itself is refused here, where every caller's ask arrives.
+      const wide = this.registry
+        .roots()
+        .find((root) => root.kind === "browse" && !root.missing && root.path === rootPath);
+      if (wide !== undefined)
+        throw new RpcCallError("PRECONDITION_FAILED", wideFolderRefusal(wide.browse), false, {
+          reason: "folder-too-wide",
+        });
       const ticket = randomBytes(32).toString("base64url");
       const gitTicket = randomBytes(32).toString("base64url");
       const expiresAt = Date.now() + WORKSPACE_LIMITS.TICKET_TTL_MS;

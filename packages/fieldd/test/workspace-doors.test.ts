@@ -578,6 +578,32 @@ describe("the attached door (FS-1b)", () => {
     );
     expect(world.daemon.health().workspace.phase).toBe("ready");
   });
+
+  // History QA (2026-11-24): a session that ran in `~` rooted the room's files pane at the home directory, and
+  // the worker held a full core for as long as the pane stood, and for minutes after.
+  it("never roots a live tree at the home directory itself: the ask is refused in the pane's words, a folder below it opens", async () => {
+    const world = await boot();
+    const win = await windowOf(world.daemon, ["workspace.read"]);
+    const home = homeRoot(WorkspaceRootsResult.parse(await win.call("workspace.roots", {})));
+    for (const params of [{ rootId: home.rootId }, { rootId: home.rootId, path: "" }]) {
+      const refused = await win.callErr("workspace.openTicket", params);
+      expect(refused.data).toMatchObject({ kind: "PRECONDITION_FAILED", retryable: false });
+      expect(refused.data?.details).toEqual({ reason: "folder-too-wide" });
+      expect(refused.message).toBe(
+        "Your home folder is too wide to show here. Files opens a project's own folder.",
+      );
+    }
+    const below = WorkspaceOpenTicketResult.parse(
+      await win.call("workspace.openTicket", { rootId: home.rootId, path: "Projects" }),
+    );
+    expect(below.rootPath).toBe(join(world.home, "Projects"));
+    await win.call("workspace.closeTicket", { ticket: below.ticket });
+    // the home's rows are still listed: only the live tree is refused
+    const page = WorkspaceListResult.parse(
+      await win.call("workspace.list", { rootId: home.rootId }),
+    );
+    expect(page.entries.length).toBeGreaterThan(0);
+  });
 });
 
 describe("each attachment's life in the ledger (R6)", () => {
