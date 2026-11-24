@@ -50,6 +50,8 @@ interface ColumnPlate {
   limit?: boolean;
   /** Godview's animations off: the breath held still, as under Reduce Motion (M6) */
   still?: boolean;
+  /** UM-6 — the pinned card's ↻ is reading its profile again: it turns, takes no press, and the age says so */
+  refreshing?: boolean;
 }
 
 const PLATES: readonly ColumnPlate[] = [
@@ -85,6 +87,14 @@ const PLATES: readonly ColumnPlate[] = [
     sets: FIXTURE_PROFILE_SETS,
     rows: TYPICAL,
     pinned: FIXTURE_NATIVE.id,
+  },
+  {
+    id: "popover-refreshing",
+    caption: "The same card, its ↻ reading This Mac again: the age says so",
+    sets: FIXTURE_PROFILE_SETS,
+    rows: TYPICAL,
+    pinned: FIXTURE_NATIVE.id,
+    refreshing: true,
   },
   {
     id: "plan-tiers",
@@ -150,6 +160,9 @@ function Plate({ plate, theme }: { plate: ColumnPlate; theme: GodviewTheme }): R
         canAdd
         canOpen
         canRetry
+        refreshing={
+          plate.refreshing === true && open !== undefined ? new Set([open.set.id]) : undefined
+        }
         chosenPlanFamily={null}
         onChoosePlan={NOTHING}
         moment={
@@ -169,6 +182,7 @@ function Plate({ plate, theme }: { plate: ColumnPlate; theme: GodviewTheme }): R
         onAdd={NOTHING}
         onOpenProfile={NOTHING}
         onRetry={NOTHING}
+        onRefresh={NOTHING}
       />
     </figure>
   );

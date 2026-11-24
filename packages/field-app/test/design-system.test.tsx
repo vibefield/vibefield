@@ -170,6 +170,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "several-near",
       "several-first",
       "popover",
+      "popover-refreshing",
       "plan-tiers",
       "add",
       "limit",
@@ -189,6 +190,15 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     ];
     const said = (id: string): (string | null)[] =>
       circles(id).map((circle) => circle.getAttribute("aria-label"));
+    // UM-6 (UM-D30 R1): the pinned card's head holds ↻ beside ×; while it reads it is busy and the age says so
+    const refresh = (id: string) =>
+      columnPlate(id)?.querySelector<HTMLButtonElement>(".vf-profiles-pop-refresh");
+    expect(refresh("popover")?.getAttribute("aria-busy")).toBe("false");
+    expect(refresh("popover-refreshing")?.getAttribute("aria-busy")).toBe("true");
+    expect(refresh("popover-refreshing")?.disabled).toBe(true);
+    expect(
+      columnPlate("popover-refreshing")?.querySelector(".vf-profiles-pop-age")?.textContent,
+    ).toBe("Reading usage…");
     // one profile: This Mac, a plain button; its tightest plan ahead of pace, then its week at 92%
     expect(said("one-typical")).toEqual(["This Mac, tightest 64%"]);
     expect(circles("one-typical")[0]?.hasAttribute("aria-pressed")).toBe(false);
@@ -927,7 +937,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     }
     // UM-3: the profiles column's plates follow the page into Godview's dark, every one
     const darkPlates = [...(container?.querySelectorAll("[data-profiles-plate]") ?? [])];
-    expect(darkPlates).toHaveLength(13);
+    expect(darkPlates).toHaveLength(14);
     for (const plate of darkPlates) expect(plate.classList.contains("theme-dark")).toBe(true);
   });
 

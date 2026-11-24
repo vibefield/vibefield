@@ -199,7 +199,11 @@ export type AgentAccountUsageBatch = z.infer<typeof AgentAccountUsageBatch>;
  * with nothing cached yet, the one reading any cold read kicks
  * (`AccountUsageService.snapshot`).*
  * *Corrected 2026-11-10 (item 274): how old each METER is, is its own
- * `fetchedAt`, else its entry's; an entry's `fetchedAt` is its newest meter's.* */
+ * `fetchedAt`, else its entry's; an entry's `fetchedAt` is its newest meter's.*
+ * *Corrected 2026-11-24 (UM-D33, UM-6, which revisits UM-D8): the owner's own
+ * phone (a self tailnet principal) takes a reading too, its ↻ or pull on the
+ * Agent Profiles page, asked only on a person's act (UM-L4: never a timer). Any
+ * other caller's `refresh: true` is still answered the cached batch.* */
 export const AgentsUsageParams = z
   .object({
     refresh: z.boolean().optional(),

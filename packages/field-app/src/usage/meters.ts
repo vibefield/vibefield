@@ -26,6 +26,8 @@ import {
   meterReadAt,
   type Pressed,
   pressureOf,
+  type ResetClock,
+  resetClockOf,
   tightestOf,
   windowWords,
 } from "./rules";
@@ -85,6 +87,9 @@ export interface MeterWindow {
    * window wins that tie (`outranks`) */
   pressure: number;
   forecast?: MeterForecast;
+  /** UM-6 — where its reset stands on the clock, for its line's end cap (`resetClockOf`, the reader's zone); absent
+   * where `resetIn` is. Never recorded by the usage bands golden, which stays zone-free. */
+  resetClock?: ResetClock;
 }
 
 /** The words at a meter's right: the forecast while it runs ahead, else the reset; a kept reading says its age, and
@@ -221,7 +226,11 @@ export function meterWindows(
       passed,
       pressure: pressureOf({ hot: line.hot, usedPercent: line.usedPercent, passed }),
     };
-    if (resetIn !== undefined) window.resetIn = resetIn;
+    if (resetIn !== undefined) {
+      window.resetIn = resetIn;
+      const clock = resetClockOf(metric.resetsAt, now);
+      if (clock !== undefined) window.resetClock = clock;
+    }
     const forecast = forecastOf({
       usedPercent: line.usedPercent,
       elapsedPercent: line.elapsedPercent,

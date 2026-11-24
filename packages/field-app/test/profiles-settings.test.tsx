@@ -55,6 +55,11 @@ vi.mock("../src/panels/agents/SignInTerminal", () => ({
 // ── fixtures ──
 
 const NOW = new Date(2026, 8, 23, 12, 0, 0);
+/** UM-6 — a moment `minutes` from NOW, and its clock as a line's words say it (rules.ts' `resetClockOf`: the reader's
+ * own zone and locale, a 24-hour clock) */
+const fromNow = (minutes: number): Date => new Date(NOW.getTime() + minutes * 60_000);
+const hhmm = (at: Date): string =>
+  at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 // read well before any login a test starts: an identity read AFTER a login began means it ended
 const READ = "2026-09-01T09:00:00.000Z";
 
@@ -277,7 +282,7 @@ describe("the profiles model", () => {
     expect(budget(79)?.hot).toBe(false);
   });
 
-  it("says when a window runs out before its reset at the line's end, the meters' forecast (UM-D3, UM-D4)", async () => {
+  it("ends a line in its reset's cap, and marks under its bar when it runs out first (UM-6: UM-D29 A, UM-D32 T9)", async () => {
     // 5 hours, half of them gone, 82% used: out in ~35m, before the reset in 2h 30m
     const metric = {
       id: "5h",
@@ -285,10 +290,17 @@ describe("the profiles model", () => {
       kind: "window" as const,
       usedPercent: 82,
       durationMinutes: 300,
-      resetsAt: new Date(NOW.getTime() + 150 * 60_000).toISOString(),
+      resetsAt: fromNow(150).toISOString(),
     };
     const windows = meterWindows([metric], NOW);
     expect(windows[0]?.forecast?.short).toBe("out in ~35m");
+    // today's reset is its clock alone, and how far off it is
+    expect(windows[0]?.resetClock).toEqual({
+      time: hhmm(fromNow(150)),
+      at: hhmm(fromNow(150)),
+      in: "2h 30m",
+      passed: false,
+    });
     container = document.createElement("div");
     document.body.appendChild(container);
     root = createRoot(container);
@@ -297,15 +309,92 @@ describe("the profiles model", () => {
         createElement(UsageTimeline, {
           lines: windows.map((window) => window.line),
           forecasts: { "5h": "out in ~35m" },
+          clocks: { "5h": windows[0]!.resetClock! },
           label: "Claude Max",
         }),
       ),
     );
-    const line = container.querySelector("[role=listitem]");
-    expect(line?.getAttribute("aria-label")).toBe(
-      "5H: 82% used, resets in 2h 30m, ahead of pace, out in ~35m",
+    const line = container.querySelector<HTMLElement>("[role=listitem]");
+    const said = `5H: 82% used, resets at ${hhmm(fromNow(150))}, in 2h 30m, ahead of pace, out in ~35m`;
+    expect(line?.getAttribute("aria-label")).toBe(said);
+    // its words are its tooltip too: how far off the reset is stands there, never on the line
+    expect(line?.getAttribute("title")).toBe(said);
+    // the cap holds the clock alone, today, and never turns orange
+    expect(line?.classList.contains("has-cap")).toBe(true);
+    expect(line?.querySelector(".vf-profiles-usage-cap-day")).toBeNull();
+    expect(line?.querySelector(".vf-profiles-usage-cap-time")?.textContent).toBe(
+      hhmm(fromNow(150)),
     );
-    expect(line?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("out in ~35m");
+    // the out mark: a tick where it runs out on its own time (half gone at 82%: 50 / 82 of the track), its words beside
+    // it — after it until they are measured
+    const tick = line?.querySelector<HTMLElement>(".vf-profiles-usage-tick");
+    expect(Number.parseFloat(tick?.style.left ?? "")).toBeCloseTo((50 * 100) / 82, 6);
+    const out = line?.querySelector<HTMLElement>(".vf-profiles-usage-out-words");
+    expect(out?.textContent).toBe("out in ~35m");
+    expect(out?.dataset["side"]).toBe("after");
+    expect(line?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe(hhmm(fromNow(150)));
+  });
+
+  it("says a reset on another day by its weekday, a week on by its date, and one that has come as RESET (UM-6)", async () => {
+    const metric = (id: string, used: number, length: number, minutes: number) => ({
+      id,
+      label: id.toUpperCase(),
+      kind: "window" as const,
+      usedPercent: used,
+      durationMinutes: length,
+      resetsAt: fromNow(minutes).toISOString(),
+    });
+    const windows = meterWindows(
+      [
+        metric("7d", 10, 7 * 24 * 60, 3 * 24 * 60),
+        metric("30d", 10, 30 * 24 * 60, 9 * 24 * 60),
+        metric("1d", 30, 1440, -10),
+      ],
+      NOW,
+    );
+    const weekday = fromNow(3 * 24 * 60).toLocaleDateString([], { weekday: "short" });
+    const date = fromNow(9 * 24 * 60).toLocaleDateString([], { month: "short", day: "numeric" });
+    expect(windows.map((window) => window.resetClock)).toEqual([
+      {
+        day: weekday,
+        time: hhmm(fromNow(3 * 24 * 60)),
+        at: `${weekday} ${hhmm(fromNow(3 * 24 * 60))}`,
+        in: "3d",
+        passed: false,
+      },
+      { day: date, at: date, in: "9d", passed: false },
+      { time: hhmm(fromNow(-10)), at: hhmm(fromNow(-10)), passed: true },
+    ]);
+    const clocks = Object.fromEntries(
+      windows.map((window) => [window.line.id, window.resetClock!] as const),
+    );
+    await mount(
+      createElement(UsageTimeline, {
+        lines: windows.map((window) => window.line),
+        clocks,
+        ages: { "1d": "as of 3h ago" },
+        label: "Claude Max",
+      }),
+    );
+    const items = [...(container?.querySelectorAll<HTMLElement>("[role=listitem]") ?? [])];
+    expect(items.map((line) => line.getAttribute("aria-label"))).toEqual([
+      `7D: 10% used, resets ${weekday} ${hhmm(fromNow(3 * 24 * 60))}, in 3d`,
+      `30D: 10% used, resets ${date}, in 9d`,
+      `1D: 30% used, reset at ${hhmm(fromNow(-10))}, as of 3h ago`,
+    ]);
+    const cap = (line: HTMLElement | undefined) => [
+      line?.querySelector(".vf-profiles-usage-cap-day")?.textContent,
+      line?.querySelector(".vf-profiles-usage-cap-time")?.textContent,
+    ];
+    expect(items.map(cap)).toEqual([
+      [weekday, hhmm(fromNow(3 * 24 * 60))],
+      [date, undefined],
+      ["Reset", hhmm(fromNow(-10))],
+    ]);
+    // the one that has come keeps its cap's place dashed, the age of its read under its bar
+    expect(items[2]?.classList.contains("is-passed")).toBe(true);
+    expect(items[2]?.querySelector(".vf-profiles-usage-age")?.textContent).toBe("as of 3h ago");
+    expect(items.slice(0, 2).every((line) => !line.classList.contains("is-passed"))).toBe(true);
   });
 
   it("says a reset by its length, by its day and clock, or now, as the phone does (UM-D3; §9 'A reading', ‹for James›)", async () => {
@@ -1146,9 +1235,9 @@ describe("a profile's page", () => {
     );
     expect(lines).toEqual([
       // UM-D4: a window that runs out before its reset says when, as the meters say it
-      "5H: 91% used, resets in 1h, ahead of pace, out in ~25m",
+      `5H: 91% used, resets at ${hhmm(fromNow(60))}, in 1h, ahead of pace, out in ~25m`,
       // a reset three days off is said by its day and clock, as the phone says it (§9 'A reading', ‹for James›)
-      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
+      `7D: 12% used, resets ${resetWords(fromNow(3 * 24 * 60), NOW)}, in 3d`,
     ]);
     // not the default: the switch offers it, the delete is open
     const toggle = container?.querySelector<HTMLButtonElement>('[role="switch"]');
@@ -2158,8 +2247,8 @@ describe("the plans a profile runs on (pass 19)", () => {
         line.getAttribute("aria-label"),
       ),
     ).toEqual([
-      "5H: 91% used, resets in 1h, ahead of pace, out in ~25m",
-      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
+      `5H: 91% used, resets at ${hhmm(fromNow(60))}, in 1h, ahead of pace, out in ~25m`,
+      `7D: 12% used, resets ${resetWords(fromNow(3 * 24 * 60), NOW)}, in 3d`,
     ]);
     expect(claudeCard.textContent).toContain("Claude Code, Pi");
 
@@ -2229,15 +2318,21 @@ describe("the plans a profile runs on (pass 19)", () => {
     ];
     // the running week keeps its reset; the spent five hours says the reading's age, as the meters say it (§9)
     const said = [
-      "5H: 100% used, as of 3h ago",
-      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
+      `5H: 100% used, reset at ${hhmm(fromNow(-10))}, as of 3h ago`,
+      `7D: 12% used, resets ${resetWords(fromNow(3 * 24 * 60), NOW)}, in 3d`,
     ];
     const card = container?.querySelector<HTMLElement>('.vf-profiles-plan[data-plan="anthropic"]');
     expect(lines(card).map((line) => line.getAttribute("aria-label"))).toEqual(said);
     const [fiveHours] = lines(card);
-    expect(fiveHours?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("as of 3h ago");
-    // the age is not a reset: no reset mark before it, and the line is unlit
-    expect(fiveHours?.querySelector(".vf-profiles-reset")).toBeNull();
+    // UM-6 (DESIGN.md §8 "A meter line's end"): its cap's place stays, dashed, saying when it reset, and the age of its
+    // read stands under its bar; no mark leads either, and the line is unlit
+    expect(fiveHours?.classList.contains("is-passed")).toBe(true);
+    expect(fiveHours?.querySelector(".vf-profiles-usage-cap-day")?.textContent).toBe("Reset");
+    expect(fiveHours?.querySelector(".vf-profiles-usage-cap-time")?.textContent).toBe(
+      hhmm(fromNow(-10)),
+    );
+    expect(fiveHours?.querySelector(".vf-profiles-usage-age")?.textContent).toBe("as of 3h ago");
+    expect(fiveHours?.querySelector(".vf-glyph")).toBeNull();
     expect(fiveHours?.classList.contains("is-hot")).toBe(false);
     // nor is its plan near its limit: no badge of it wears the dot
     const badges = [
@@ -2255,7 +2350,7 @@ describe("the plans a profile runs on (pass 19)", () => {
     await section.render({ feed: feed([NATIVE, WORK]), route: { kind: "profile", set: "work" } });
     const row = container?.querySelector<HTMLElement>('.vf-profiles-row[data-provider="claude"]');
     expect(lines(row).map((line) => line.getAttribute("aria-label"))).toEqual(said);
-    expect(lines(row)[0]?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe(
+    expect(lines(row)[0]?.querySelector(".vf-profiles-usage-age")?.textContent).toBe(
       "as of 3h ago",
     );
   });
@@ -2292,10 +2387,10 @@ describe("the plans a profile runs on (pass 19)", () => {
     const card = container?.querySelector<HTMLElement>('.vf-profiles-plan[data-plan="anthropic"]');
     const lines = [...(card?.querySelectorAll<HTMLElement>(".vf-profiles-usage-line") ?? [])];
     expect(lines.map((line) => line.getAttribute("aria-label"))).toEqual([
-      "5H: 100% used, as of 3h ago",
-      `7D: 12% used, resets ${resetWords(new Date(NOW.getTime() + 3 * 24 * 60 * 60_000), NOW)}`,
+      `5H: 100% used, reset at ${hhmm(fromNow(-10))}, as of 3h ago`,
+      `7D: 12% used, resets ${resetWords(fromNow(3 * 24 * 60), NOW)}, in 3d`,
     ]);
-    expect(lines[0]?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("as of 3h ago");
+    expect(lines[0]?.querySelector(".vf-profiles-usage-age")?.textContent).toBe("as of 3h ago");
   });
 
   it("adds a sign-in to a harness by one of its own routes", async () => {

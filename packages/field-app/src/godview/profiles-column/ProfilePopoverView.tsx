@@ -2,22 +2,27 @@ import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import type { ReactElement } from "react";
 import { PlanTierMark } from "../../panels/agents/PlanTierMark";
-import { type UsageResetForm, UsageTimeline } from "../../panels/agents/ProfilesView";
+import {
+  type UsageLinesWords,
+  type UsageResetForm,
+  UsageTimeline,
+  usageLineWords,
+} from "../../panels/agents/ProfilesView";
 import { spokenPlanName, type TierMark, tierMarks } from "../../panels/agents/plan-tier";
-import type { UsageLine } from "../../panels/agents/profiles-model";
-import { bandsGeometry, bandsLabel } from "../../usage/bands";
+import { bandsGeometry, bandsKeyOf, bandsLabel } from "../../usage/bands";
 import type { PlanMeter, ProfileMeters } from "../../usage/meters";
-import { resetForm } from "../../usage/rules";
+import { type ResetClock, resetForm } from "../../usage/rules";
 import { BandsCircle, BandsKey } from "./BandsCircle";
 import type { ColumnCircle } from "./ProfilesColumnView";
 
 // UM-3 (DESIGN.md §8 "Godview's profiles column", the popover; §9 "The meters' words") — ONE PROFILE'S METERS, OPENED
 // beside its circle: the circle at 212 with its arcs answering the pointer and the bands key under it, and one row per
 // plan in the circle's order (UM-D15), each its agent's mark, the plan as Agent Profiles names it, and Settings' own C1
-// lines for every window it reads, each saying its forecast while it runs ahead (UM-D4), else its reset (2026-11-16:
-// until then it drew the tightest window's line alone, UM-D13, and said its words at the row's head) — the shipping
-// `UsageTimeline`, never a copy (UM-D3: one meter everywhere). Controller-free: what it opens,
-// reads again or closes is handed back. A plan's row and its arc filter the field (UM-D14; UM-5a).
+// lines for every window it reads, each ending in its reset's cap with its out mark under it while it runs out first
+// (UM-6; 2026-11-16: until then it drew the tightest window's line alone, UM-D13, and said its words at the row's head)
+// — the shipping `UsageTimeline`, never a copy (UM-D3: one meter everywhere). Controller-free: what it opens, reads
+// again or closes is handed back. A plan's row and its arc filter the field (UM-D14; UM-5a). UM-6 (UM-D30 R1): the
+// head's ↻ reads the profile's sign-ins again; UM-D31 K3: the key names only what its circle draws.
 // A plan's tier stands after its title as Settings' card draws it (DESIGN.md §8 "A plan's tier";
 // `PlanTierMark`, decided by `tierMarks` over every plan the card's circle carries), and the plan's
 // spoken name carries it.
@@ -57,8 +62,10 @@ export interface ProfilePopoverViewProps {
   read: string;
   /** Settings can be opened on this profile's page (it is not open already): Sign in and Agent Profiles… */
   canOpen: boolean;
-  /** the usage door can read a sign-in again: Retry */
+  /** the usage door can read a sign-in again: Retry, and the head's ↻ */
   canRetry: boolean;
+  /** UM-6 — the head's ↻ is reading this profile's usage again: it turns, takes no press, and the age says so */
+  refreshing?: boolean | undefined;
   /** UM-5a — the chosen plan and its twins (union keys, `‹set›/‹key›`), or null: its rows draw pressed, the others dim */
   chosenPlanFamily: readonly string[] | null;
   /** UM-5a — choose a plan by its union key, or null to clear */
@@ -69,6 +76,8 @@ export interface ProfilePopoverViewProps {
   onOpenProfile: (setId: string) => void;
   /** read these sign-ins' usage again (Retry) */
   onRetry: (profileIds: readonly string[]) => void;
+  /** UM-6 — read this profile's sign-ins again (the head's ↻): every sign-in a plan on its circle is read by */
+  onRefresh?: ((profileIds: readonly string[]) => void) | undefined;
 }
 
 /** What a plan's row may ask for, and whether each can be asked here (§8: "No act is inert"). */
@@ -118,31 +127,44 @@ function NeedAct({
 }
 
 /** Every window of a plan's reading as Settings' C1 lines (UM-D3: one meter everywhere; asked 2026-11-16: "show all
- * the meters of this agent, not just showing one"), each with its own words at its end: its forecast while it runs
- * ahead (UM-D4), else its reset, said as Settings says it (the leaf's `resetForm`). A reading kept after a failed
- * refresh says its age on every line and forecasts nothing, and a window read before its reset says the age in its
- * reset's place, as the row's right words said them for the tightest (`meters.ts` `rightOf`). */
-export function windowLines(entry: Extract<PlanMeter, { kind: "reading" }>): {
-  lines: UsageLine[];
-  forecasts: Readonly<Record<string, string>>;
-  resetForms: Readonly<Record<string, UsageResetForm>>;
-  ages: Readonly<Record<string, string>>;
-} {
+ * the meters of this agent, not just showing one"), each ending in its reset's cap (UM-6, UM-D32 T9: the window's
+ * `resetClock`), with its out mark under it while it runs out first (UM-D4, UM-D29 A). A reading kept after a failed
+ * refresh forecasts nothing, and says its age once, at the row's head (`keptWords`); a window read before its reset
+ * keeps its cap's place dashed and the age under its bar, as the row's right words said them for the tightest
+ * (`meters.ts` `rightOf`). */
+export function windowLines(entry: Extract<PlanMeter, { kind: "reading" }>): UsageLinesWords {
   const forecasts: Record<string, string> = {};
   const resetForms: Record<string, UsageResetForm> = {};
+  const clocks: Record<string, ResetClock> = {};
   const ages: Record<string, string> = {};
   const age = entry.right.kind === "kept" || entry.right.kind === "passed" ? entry.right.words : "";
   for (const window of entry.windows) {
     const id = window.line.id;
-    const aged = entry.right.kind === "kept" || window.passed;
-    if (aged && age !== "") ages[id] = age;
+    if (window.passed && age !== "") ages[id] = age;
     if (window.forecast !== undefined && entry.right.kind !== "kept") {
       forecasts[id] = window.forecast.short;
     }
     const form = resetForm(window);
     if (form !== undefined) resetForms[id] = form;
+    if (window.resetClock !== undefined) clocks[id] = window.resetClock;
   }
-  return { lines: entry.windows.map((window) => window.line), forecasts, resetForms, ages };
+  return { lines: entry.windows.map((window) => window.line), forecasts, resetForms, clocks, ages };
+}
+
+/** UM-6 — a kept reading's age, said once at its row's head (§8 "The body"): nothing for a reading that is not kept. */
+export function keptWords(entry: PlanMeter): string {
+  return entry.kind === "reading" && entry.right.kind === "kept" ? entry.right.words : "";
+}
+
+/** UM-6 (UM-D30 R1) — whose usage the head's ↻ reads again: every sign-in a plan on the circle is read by, once each,
+ * in the circle's order. */
+export function refreshIds(meters: ProfileMeters): string[] {
+  const ids: string[] = [];
+  for (const entry of meters.entries) {
+    if (entry.kind === "no-meter" || entry.profileId === undefined) continue;
+    if (!ids.includes(entry.profileId)) ids.push(entry.profileId);
+  }
+  return ids;
 }
 
 /** A part of an address, veiled: its first character and three dots, whatever its length (the length is not said). */
@@ -212,6 +234,23 @@ function PlanRow({
   const choosable = entry.kind !== "needs-you";
   // the badge is part of the plan's name, so the name a reader hears carries it ("ChatGPT Pro 200")
   const named = spokenPlanName(entry.title, tier);
+  const lines = entry.kind === "reading" ? windowLines(entry) : undefined;
+  const kept = keptWords(entry);
+  // the row's button covers its lines, so their words ride its tooltip: how far off each reset is ("in 1h") is said
+  // there and in each line's own words, never on the line (UM-6)
+  const tip =
+    lines === undefined
+      ? undefined
+      : lines.lines
+          .map((line) =>
+            usageLineWords(line, {
+              forecast: lines.forecasts[line.id],
+              form: lines.resetForms[line.id],
+              clock: lines.clocks[line.id],
+              age: lines.ages[line.id],
+            }),
+          )
+          .join("\n");
   return (
     // pointing at a row lights its arc, as pointing at the arc does; a click chooses it (UM-D14), through a button
     // stretched over the row so the row keeps its C1 line's list
@@ -232,6 +271,7 @@ function PlanRow({
           className="vf-profiles-pop-row-choose"
           aria-pressed={pressed}
           aria-label={`Show only ${named}'s sessions`}
+          {...(tip !== undefined ? { title: tip } : {})}
           onClick={onToggle}
         />
       ) : null}
@@ -247,17 +287,21 @@ function PlanRow({
             {account}
           </span>
         ) : null}
-        {/* a reading's lines each say their own words, so its head says none; a plan with no lines says its own */}
-        {entry.kind === "reading" ? null : (
+        {/* a reading's lines each say their own words, so its head says none but a kept reading's age, once (UM-6); a
+            plan with no lines says its own, led by no mark */}
+        {entry.kind === "reading" ? (
+          kept !== "" ? (
+            <span className="vf-profiles-pop-row-right">{kept}</span>
+          ) : null
+        ) : (
           <span className="vf-profiles-pop-row-right" {...(right.hot ? { "data-hot": "" } : {})}>
-            {right.icon ? <FieldGlyph name="reset" size={9} /> : null}
             {right.words}
           </span>
         )}
       </span>
       {entry.kind === "reading" ? (
         <span className="vf-profiles-pop-row-meter">
-          <UsageTimeline {...windowLines(entry)} label={named} />
+          <UsageTimeline {...(lines ?? windowLines(entry))} label={named} />
         </span>
       ) : entry.kind === "first-read" ? (
         <span
@@ -294,12 +338,14 @@ export function ProfilePopoverView({
   read,
   canOpen,
   canRetry,
+  refreshing = false,
   chosenPlanFamily,
   onChoosePlan,
   onClose,
   onFocusPlan,
   onOpenProfile,
   onRetry,
+  onRefresh,
 }: ProfilePopoverViewProps): ReactElement {
   const { set, meters } = circle;
   // a row hands back its union key (`meters.ts`'s `${set.id}/${entry.key}`); focus and the arcs stay on the bare key
@@ -343,21 +389,45 @@ export function ProfilePopoverView({
     : choosable.size > 0
       ? planWords(rows.some((row) => drawnPressed(row.key)))
       : null;
+  // UM-6 (UM-D30 R1): ↻ reads the card's sign-ins again, where the door can and there is a sign-in to read; while it
+  // reads, the age says so (§9 "The popover")
+  const ids = refreshIds(meters);
+  const refreshable = canRetry && onRefresh !== undefined && ids.length > 0;
+  const age = refreshing ? "Reading usage…" : read;
   return (
     <div id={id} className="vf-profiles-pop" role="dialog" aria-label={set.label}>
       <div className="vf-profiles-pop-head">
         <ProfileGlyph glyph={set.glyph} kind={set.kind} filled={set.default} size={15} />
         <b className="vf-profiles-pop-name">{set.label}</b>
         {lens && set.default ? <span className="vf-profiles-pop-tag">default</span> : null}
-        {read !== "" ? <span className="vf-profiles-pop-age">{read}</span> : null}
-        <button
-          type="button"
-          className="vf-profiles-pop-close"
-          aria-label="Close"
-          onClick={onClose}
-        >
-          <FieldGlyph name="close" size={11} />
-        </button>
+        <span className="vf-profiles-pop-end">
+          {age !== "" ? (
+            <span className="vf-profiles-pop-age" aria-live="polite">
+              {age}
+            </span>
+          ) : null}
+          {refreshable ? (
+            <button
+              type="button"
+              className="vf-profiles-pop-refresh"
+              aria-label="Refresh usage"
+              title="Refresh usage"
+              aria-busy={refreshing}
+              disabled={refreshing}
+              onClick={() => onRefresh?.(ids)}
+            >
+              <FieldGlyph name="reset" size={12} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            className="vf-profiles-pop-close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            <FieldGlyph name="close" size={11} />
+          </button>
+        </span>
       </div>
       <div className="vf-profiles-pop-body">
         <div className="vf-profiles-pop-circle">
@@ -368,7 +438,7 @@ export function ProfilePopoverView({
             choosable={choosable}
             onChoosePlan={toggle}
           />
-          <BandsKey />
+          <BandsKey items={bandsKeyOf(meters.entries)} />
         </div>
         <div className="vf-profiles-pop-rows">
           {rows.map((entry) => (

@@ -4,7 +4,9 @@ import Observation
 
 // UM-4 (UM-D8 A; 2026-11-06) — THE METERS' FEED on the phone: the HOME's cached usage batch and the
 // home's profiles, read through the home's one door (DS-8), as Chat's feed reads its lists (`ChatFeed`). The phone
-// runs no poll of its own and never asks for a fresh reading (`AgentsUsageParams.cached`, no `refresh`): it asks
+// runs no poll of its own and asks for a fresh reading only when a person asks for one (UM-6, UM-D33, 2026-11-24: the
+// Agent Profiles page's ↻ and its pull, `refresh`, `AgentsUsageParams.fresh`; UM-D8 had refused it, and UM-L4 stands:
+// never a timer). Otherwise it asks the cached batch (`AgentsUsageParams.cached`, no `refresh`):
 // `agents.usage` once when a door is handed over, then watches `agents.usage.subscribe` (whole batches at the stream
 // floor; the home's own windows run the poll, a phone's subscription is a passive watcher) for as long as the door is
 // held — HomeScreen hands it over while the app is in the foreground and takes it back in the background. The home's
@@ -77,6 +79,8 @@ struct MetersReading: Equatable {
 @Observable
 final class MetersFeed {
   private(set) var reading = MetersReading()
+  /// UM-D33 — a person's fresh reading is out (`refresh`): the page's ↻ turns and its head says "Reading usage…".
+  private(set) var refreshing = false
   /// The clock the meters are read at: the device's, or a fixture's stamp under `-vf-mock`.
   @ObservationIgnored var clock: @MainActor () -> Date = { Date() }
 
@@ -120,6 +124,30 @@ final class MetersFeed {
   func open() {
     readProfiles()
     if reading.usage == .unavailable { readUsage() }
+  }
+
+  /// UM-6 (UM-D33, 2026-11-24) — the page's ↻, or its pull: ask the home to read its usage again (`agents.usage` with
+  /// `refresh: true`), which it reads as its own windows' refresh (bypassing the poll interval, never the backoff). One
+  /// at a time; nothing without a door. The answer is the new batch, which replaces the reading at once (the watch
+  /// brings the same frame after). A home that refuses `agent.usage` is said; any other failure leaves the last batch
+  /// standing (a feed with no answer yet says "usage unavailable"). An answer for a door since replaced is dropped.
+  func refresh() async {
+    guard let door, !refreshing else { return }
+    let asked = ask
+    refreshing = true
+    defer { refreshing = false }
+    let answer: MetersReading.Usage?
+    do {
+      answer = .batch(
+        try AgentAccountUsageBatch(json: try await door.call("agents.usage", params: AgentsUsageParams.fresh.json)))
+    } catch let refusal as FieldProductError where refusal.kind == "FORBIDDEN_SCOPE" {
+      answer = .notShared
+    } catch {
+      answer = reading.usage == .waiting ? .unavailable : nil
+    }
+    guard asked == ask, let answer, reading.usage != answer else { return }
+    reading.usage = answer
+    if answer != .notShared, watch == nil { watchUsage(door, asked: asked) }
   }
 
   private func readProfiles() {

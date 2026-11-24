@@ -193,10 +193,16 @@ struct AgentUsageShapeTests {
     #expect(throws: WireDecodeError.self) { try AgentAccountUsageBatch(json: unstamped) }
   }
 
-  @Test("the phone's ask never refreshes: it is answered from the home's cache (UM-D8)")
-  func askNeverRefreshes() {
+  /// UM-6 (UM-D33, 2026-11-24, revisiting UM-D8): the standing ask is the home's cache; only a person's ↻ or pull on
+  /// the Agent Profiles page asks a fresh reading.
+  @Test("the phone's standing ask names no refresh; a person's ↻ asks refresh: true (UM-D33)")
+  func asksCachedOrFresh() {
     let ask = AgentsUsageParams.cached.json
     #expect(ask == .object([:]))
     #expect(ask["refresh"] == nil)
+    let fresh = AgentsUsageParams.fresh.json
+    #expect(fresh == .object(["refresh": .bool(true)]))
+    let standing = AgentsUsageParams()
+    #expect(standing == .cached)
   }
 }

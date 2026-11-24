@@ -5,8 +5,10 @@
 // this desktop's credentialed calls is the door's rule (daemon.ts, the
 // `agents.usage` pair), and these rows measure it:
 //   · `agents.usage` answers the batch this desktop holds; a phone's
-//     `refresh: true` is answered from that cache and takes no reading, where
-//     a window's Retry takes one;
+//     `refresh: true` takes a reading of its own, as a window's Retry does
+//     (UM-D33, UM-6, 2026-11-24: the person's ↻ or pull on the Agent Profiles
+//     page; until then it was answered from the cache and took none), while a
+//     plain read and every other caller's refresh is the cache;
 //   · `agents.usage.subscribe` is a PASSIVE watcher for a phone: it never
 //     begins the poll, its frames move when a window's poll moves the batch,
 //     and its staying keeps no poll alive once the window leaves;
@@ -235,7 +237,7 @@ describe("UM-D8 — the phone reads its home's usage, and runs no poll of its ow
     expect(world.scripted.fetches()).toEqual({});
   }, 30_000);
 
-  it("the phone is answered the batch this desktop holds, and its Retry takes no reading — a window's takes one", async () => {
+  it("the phone is answered the batch this desktop holds, and its refresh takes a reading of its own, as a window's does (UM-D33)", async () => {
     const world = await boot({ profiles: true });
     const held = await heldBatch(world);
     // a sign-in made after the reading: nothing has been read for it yet
@@ -256,24 +258,27 @@ describe("UM-D8 — the phone reads its home's usage, and runs no poll of its ow
     // the phone's plain read: the cache, whole
     const read = AgentAccountUsageBatch.parse(await answered(world.phone, "agents.usage", {}));
     expect(read.entries).toEqual(held.entries);
-    // the phone's Retry, naming the new sign-in: the flag spends nothing — the
-    // answer is the same cache, honest about what it holds (no row for an
-    // account nobody has read), and the adapter was asked for nothing
-    const retried = AgentAccountUsageBatch.parse(
+    expect(world.scripted.fetches()).toEqual(before);
+    // UM-D33 (UM-6, 2026-11-24): the phone's refresh, naming the new sign-in, is a
+    // reading — the sign-in's own, taken now, as a window's Retry takes one; until
+    // UM-6 it was answered from the cache and the adapter was asked for nothing
+    const refreshed = AgentAccountUsageBatch.parse(
       await answered(world.phone, "agents.usage", { refresh: true, profileIds: [profileId] }),
     );
-    expect(retried.entries).toEqual(held.entries);
-    expect(retried.entries.some((entry) => entry.profileId === profileId)).toBe(false);
-    expect(world.scripted.fetches()).toEqual(before);
+    expect(refreshed.entries).toContainEqual(
+      expect.objectContaining({ profileId, state: "available" }),
+    );
+    expect(world.scripted.fetches()[profileId]).toBe(1);
 
-    // the window's Retry is a reading: the sign-in's own, taken now
+    // the window's Retry answers the same sign-in's reading (the monitor holds the
+    // one the phone's refresh just took)
     const fromWindow = AgentAccountUsageBatch.parse(
       await world.window.call("agents.usage", { refresh: true, profileIds: [profileId] }),
     );
     expect(fromWindow.entries).toContainEqual(
       expect.objectContaining({ profileId, state: "available" }),
     );
-    expect(world.scripted.fetches()[profileId]).toBe(1);
+    expect(world.scripted.fetches()[profileId]).toBeGreaterThanOrEqual(1);
   }, 30_000);
 
   it("the phone's subscription starts no poll: it opens on the batch this desktop holds, and nothing is read while it alone watches", async () => {

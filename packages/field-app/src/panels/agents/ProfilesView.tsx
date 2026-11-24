@@ -15,7 +15,7 @@ import {
   useState,
 } from "react";
 import { meterWindows } from "../../usage/meters";
-import { ageWords, meterReadAt, resetForm } from "../../usage/rules";
+import { ageWords, meterReadAt, type ResetClock, resetForm } from "../../usage/rules";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { borderCls, fieldCls, labelCls, SettingsRow, SettingsSection } from "../settings-ui";
 import type { AgentsNotice } from "./AgentsView";
@@ -114,10 +114,6 @@ function PlusIcon(): ReactElement {
   return <FieldGlyph name="plus" size={13} className="vf-profiles-plus" />;
 }
 
-function ResetIcon(): ReactElement {
-  return <FieldGlyph name="reset" size={10} className="vf-profiles-reset" />;
-}
-
 function DownIcon(): ReactElement {
   return <FieldGlyph name="chevron" size={10} turn={90} className="vf-profiles-down" />;
 }
@@ -153,82 +149,165 @@ export type UsageResetForm = NonNullable<ReturnType<typeof resetForm>>;
 /** UM-D3, UM-D4 — Settings' C1 lines as the meters read them (`usage/meters.ts`'s
  * `meterWindows`: Settings' own lines, every window in play), with the words of
  * each window that runs out before its reset at this pace ("out in ~35m"), said
- * at its line's end, how each reset is said (`resetForm`), and the reading's
- * age for each window read before its reset (`passed`; the leaf's `ageWords`,
- * "as of 3h ago", from when that window was read: its own `fetchedAt` where a
- * later reading did not carry it, else the reading's, `meterReadAt`, item 274)
- * — so Settings and Godview's popover never say different things. */
+ * under its line beside its out mark, how each reset is said (`resetForm`), where
+ * each reset stands on the clock for its line's end cap (`resetClock`, UM-6), and
+ * the reading's age for each window read before its reset (`passed`; the leaf's
+ * `ageWords`, "as of 3h ago", from when that window was read: its own `fetchedAt`
+ * where a later reading did not carry it, else the reading's, `meterReadAt`, item
+ * 274) — so Settings and Godview's popover never say different things. */
 function meterLines(
   metrics: Parameters<typeof meterWindows>[0],
   now: Date,
   fetchedAt: string | undefined,
-): {
-  lines: UsageLine[];
-  forecasts: Readonly<Record<string, string>>;
-  resetForms: Readonly<Record<string, UsageResetForm>>;
-  ages: Readonly<Record<string, string>>;
-} {
+): UsageLinesWords {
   const windows = meterWindows(metrics, now);
   const forecasts: Record<string, string> = {};
   const resetForms: Record<string, UsageResetForm> = {};
+  const clocks: Record<string, ResetClock> = {};
   const ages: Record<string, string> = {};
-  // what a window read before its reset metered is gone, so its reset gives way to the reading's age (DESIGN.md §8
-  // "A window read before its reset"); one whose time cannot be read keeps its reset
+  // what a window read before its reset metered is gone: its cap says when it reset, and its read's age stands under
+  // its bar (DESIGN.md §8 "A meter line's end")
   for (const window of windows) {
     if (window.forecast !== undefined) forecasts[window.line.id] = window.forecast.short;
     const form = resetForm(window);
     if (form !== undefined) resetForms[window.line.id] = form;
+    if (window.resetClock !== undefined) clocks[window.line.id] = window.resetClock;
     // item 274 (UM-274-D2 A): each passed line says its own read's age
     const at = meterReadAt(window.metric, fetchedAt);
     const age = at === undefined ? "" : ageWords(at, now);
     if (window.passed && age !== "") ages[window.line.id] = age;
   }
-  return { lines: windows.map((window) => window.line), forecasts, resetForms, ages };
+  return { lines: windows.map((window) => window.line), forecasts, resetForms, clocks, ages };
+}
+
+/** What a timeline is handed: its lines, and by each line's id its forecast's words, how its reset is said, where it
+ * stands on the clock, and the age of a window read before its reset. */
+export interface UsageLinesWords {
+  lines: UsageLine[];
+  forecasts: Readonly<Record<string, string>>;
+  resetForms: Readonly<Record<string, UsageResetForm>>;
+  clocks: Readonly<Record<string, ResetClock>>;
+  ages: Readonly<Record<string, string>>;
 }
 
 /** No lines: what a row that leaves its usage to its plan's card, or has none yet, hands its timeline. */
-const NO_METER_LINES: ReturnType<typeof meterLines> = {
+const NO_METER_LINES: UsageLinesWords = {
   lines: [],
   forecasts: {},
   resetForms: {},
+  clocks: {},
   ages: {},
 };
 
-/** One window's line. The figure's place is laid out in pixels, so the
- * track and the figure are measured, and again whenever either resizes. A
- * window that runs out before its reset says when at its end, in the reset's
- * place (UM-D4). A reset is said "resets in 2h" by its length (§9's ruled
- * words); by its day and clock, "resets Thu 09:00", and once it has come,
- * "resets now", as the phone says them (§9 "A reading", ‹for James›). A line
- * handed no form is said by its length. A window read before its reset says
- * the reading's age there instead, "as of 3h ago", with no reset mark: what it
- * metered is gone (DESIGN.md §8 "A window read before its reset"). */
+/** What a line says beside its numbers: its forecast's words, how its reset is said, where it stands on the clock,
+ * and the age of a window read before its reset. */
+export interface UsageLineSaid {
+  forecast?: string | undefined;
+  form?: UsageResetForm | undefined;
+  clock?: ResetClock | undefined;
+  age?: string | undefined;
+}
+
+/** How a line says its reset (DESIGN.md §9 "A reading", amended 2026-11-24, UM-6): on the clock with how far off it
+ * is, "resets at 15:00, in 1h", "resets Thu 12:00, in 2d 22h", "resets Dec 4, in 9d 3h"; once it has come, "reset at
+ * 12:30" and its read's age. A line handed no clock says it as it did: by its length ("resets in 2h"), its day
+ * ("resets Thu 09:00"), "resets now", or the reading's age. */
+function resetSaid(line: UsageLine, { form, clock, age }: UsageLineSaid): string {
+  if (clock !== undefined) {
+    const when = clock.day === undefined && clock.at === clock.time ? `at ${clock.at}` : clock.at;
+    if (clock.passed) return `, reset ${when}${age !== undefined ? `, ${age}` : ""}`;
+    return `, resets ${when}${clock.in !== undefined ? `, in ${clock.in}` : ""}`;
+  }
+  if (age !== undefined) return `, ${age}`;
+  if (line.reset === undefined) return "";
+  return form === "day" || form === "now" ? `, resets ${line.reset}` : `, resets in ${line.reset}`;
+}
+
+/** A line in words, its label and tooltip (§9): "Gemini models, 5H: 91% used, resets at 15:00, in 1h, ahead of pace,
+ * out in ~25m". The popover's row says its lines' words on its tooltip with this too. */
+export function usageLineWords(line: UsageLine, said: UsageLineSaid = {}): string {
+  const group = line.group !== undefined ? `${line.group.label}, ` : "";
+  const forecast = said.forecast !== undefined ? `, ${said.forecast}` : "";
+  return `${group}${line.label}: ${Math.round(line.usedPercent)}% used${resetSaid(line, said)}${
+    line.hot ? ", ahead of pace" : ""
+  }${forecast}`;
+}
+
+/** What the end cap holds: its day (a weekday, a date, or "Reset" once it has come; drawn in capitals) and its time. A
+ * line handed no clock holds its reset's words as they were. */
+function capOf(
+  line: UsageLine,
+  clock: ResetClock | undefined,
+): { day?: string; time?: string } | undefined {
+  if (clock !== undefined) {
+    if (clock.passed)
+      return { day: "Reset", ...(clock.time !== undefined ? { time: clock.time } : {}) };
+    return {
+      ...(clock.day !== undefined ? { day: clock.day } : {}),
+      ...(clock.time !== undefined ? { time: clock.time } : {}),
+    };
+  }
+  return line.reset === undefined ? undefined : { time: line.reset };
+}
+
+/** UM-6 (UM-D29 A) — where a window that runs out first runs out, as a share of its track: the time gone over the
+ * share used, its pace so far (rules.ts' `forecastOf` reads the same pace); nothing without a pace. */
+export function outShare(line: UsageLine): number | undefined {
+  const elapsed = line.elapsedPercent;
+  if (elapsed === undefined || !(line.usedPercent > 0)) return undefined;
+  return Math.min(100, Math.max(0, (elapsed * 100) / line.usedPercent));
+}
+
+/** The out words' gap from their tick, before it or after it. */
+const OUT_GAP = 5;
+
+/** One window's line. The figure's place is laid out in pixels, so the track and
+ * the figure are measured, and again whenever either resizes. UM-6 (UM-D32 T9,
+ * DESIGN.md §8 "A meter line's end"): the line ends in its reset's END CAP, on
+ * the clock — "15:00" today, "THU 12:00" within six days, "DEC 4" from a week —
+ * and a window read before its reset keeps the cap's place dashed, "RESET 12:30",
+ * the age of its read under its bar. A window that runs out before its reset at
+ * this pace (UM-D4, UM-D29 A) is marked under its bar: a tick where it runs out on
+ * its own time and its words beside it, "out in ~25m", before the tick when they
+ * fit there. The cap never turns orange. A line handed no clock holds its reset's
+ * words in the cap. */
 function UsageLineView({
   line,
   forecast,
   form,
+  clock,
   age,
 }: {
   line: UsageLine;
   forecast?: string | undefined;
   form?: UsageResetForm | undefined;
+  clock?: ResetClock | undefined;
   age?: string | undefined;
 }): ReactElement {
   const track = useRef<HTMLSpanElement | null>(null);
   const figure = useRef<HTMLSpanElement | null>(null);
-  const [size, setSize] = useState({ track: 0, figure: 0, height: TRACK_HEIGHT });
+  const outWords = useRef<HTMLSpanElement | null>(null);
+  const out = forecast === undefined ? undefined : outShare(line);
+  const [size, setSize] = useState({ track: 0, figure: 0, height: TRACK_HEIGHT, out: 0 });
+  // measured again when the out mark comes or goes, so its words are measured once they stand
+  const marked = out !== undefined;
   useLayoutEffect(() => {
     const trackEl = track.current;
     const figureEl = figure.current;
     if (trackEl === null || figureEl === null) return;
+    const outEl = marked ? outWords.current : null;
     const measure = () => {
       const next = {
         track: trackEl.clientWidth,
         figure: figureEl.offsetWidth,
         height: trackEl.clientHeight || TRACK_HEIGHT,
+        out: outEl?.offsetWidth ?? 0,
       };
       setSize((held) =>
-        held.track === next.track && held.figure === next.figure && held.height === next.height
+        held.track === next.track &&
+        held.figure === next.figure &&
+        held.height === next.height &&
+        held.out === next.out
           ? held
           : next,
       );
@@ -238,8 +317,9 @@ function UsageLineView({
     const observer = new ResizeObserver(measure);
     observer.observe(trackEl);
     observer.observe(figureEl);
+    if (outEl !== null) observer.observe(outEl);
     return () => observer.disconnect();
-  }, []);
+  }, [marked]);
   const used = Math.min(100, Math.max(0, line.usedPercent));
   const place = usageFigurePlace({
     track: size.track,
@@ -248,23 +328,21 @@ function UsageLineView({
     elapsed: line.elapsedPercent,
   });
   const nowWidth = USAGE_NOW_WIDTH + 2 * USAGE_NOW_FLARE;
-  const words = `${line.group !== undefined ? `${line.group.label}, ` : ""}${line.label}: ${Math.round(
-    line.usedPercent,
-  )}% used${
-    age !== undefined
-      ? `, ${age}`
-      : line.reset === undefined
-        ? ""
-        : form === "day" || form === "now"
-          ? `, resets ${line.reset}`
-          : `, resets in ${line.reset}`
-  }${line.hot ? ", ahead of pace" : ""}${forecast !== undefined ? `, ${forecast}` : ""}`;
+  const words = usageLineWords(line, { forecast, form, clock, age });
+  const cap = capOf(line, clock);
+  const passed = clock?.passed === true;
+  // the out words stand before the tick when they fit there, else after it; unmeasured, after
+  const tick = out === undefined ? 0 : (size.track * out) / 100;
+  const before = out !== undefined && size.out > 0 && tick - OUT_GAP >= size.out;
   return (
     // biome-ignore lint/a11y/useSemanticElements: a row of the timeline's grid; see UsageTimeline
     <div
       role="listitem"
       aria-label={words}
-      className={`vf-profiles-usage-line${line.hot ? " is-hot" : ""}`}
+      title={words}
+      className={`vf-profiles-usage-line${line.hot ? " is-hot" : ""}${cap !== undefined ? " has-cap" : ""}${
+        passed ? " is-passed" : ""
+      }`}
     >
       <span className="vf-profiles-usage-label" aria-hidden="true">
         {line.label}
@@ -294,17 +372,38 @@ function UsageLineView({
         </span>
       </span>
       <span className="vf-profiles-usage-reset tabular-nums" aria-hidden="true">
-        {forecast !== undefined ? (
-          forecast
-        ) : age !== undefined ? (
-          age
-        ) : (
-          <>
-            {line.resets && <ResetIcon />}
-            {line.reset ?? ""}
-          </>
-        )}
+        {cap !== undefined ? (
+          <span className="vf-profiles-usage-cap">
+            {cap.day !== undefined ? (
+              <span className="vf-profiles-usage-cap-day">{cap.day}</span>
+            ) : null}
+            {cap.time !== undefined ? (
+              <span className="vf-profiles-usage-cap-time">{cap.time}</span>
+            ) : null}
+          </span>
+        ) : null}
       </span>
+      {out !== undefined ? (
+        <span className="vf-profiles-usage-out" aria-hidden="true">
+          <span className="vf-profiles-usage-tick" style={{ left: `${out}%` }} />
+          <span
+            ref={outWords}
+            className="vf-profiles-usage-out-words"
+            data-side={before ? "before" : "after"}
+            style={
+              before
+                ? { right: `calc(${100 - out}% + ${OUT_GAP}px)` }
+                : { left: `calc(${out}% + ${OUT_GAP}px)` }
+            }
+          >
+            {forecast}
+          </span>
+        </span>
+      ) : passed && age !== undefined ? (
+        <span className="vf-profiles-usage-age" aria-hidden="true">
+          {age}
+        </span>
+      ) : null}
     </div>
   );
 }
@@ -312,26 +411,31 @@ function UsageLineView({
 /** One line per usage window (pass 10, C1; pass 22, Line · Glow · Halo): the
  * track is the window's time, the fill is use with its head lit, the % rides
  * the head and never moves for the now line — the line gives way to it — and
- * the reset closes the track. Windows that meter part of the plan sit under a
+ * the reset closes the track, in its end cap (UM-6). Windows that meter part of the plan sit under a
  * heading in the provider's words (pass 20). Orange only when ahead of pace
  * (or over, or near the limit when pace is unknown). */
 export function UsageTimeline({
   lines,
   forecasts,
   resetForms,
+  clocks,
   ages,
   label,
   variant = "row",
 }: {
   lines: readonly UsageLine[];
   /** UM-D4 — the words of each window that runs out before its reset, by its
-   * line's id (`meterLines`), said at the line's end */
+   * line's id (`meterLines`), said under the line beside its out mark (UM-6) */
   forecasts?: Readonly<Record<string, string>> | undefined;
   /** UM-D3 — how each line's reset is said, by its line's id (`meterLines`,
-   * the leaf's `resetForm`): by its length, by its day and clock, or now */
+   * the leaf's `resetForm`): by its length, by its day and clock, or now; the
+   * words of a line handed no clock */
   resetForms?: Readonly<Record<string, UsageResetForm>> | undefined;
+  /** UM-6 — where each line's reset stands on the clock, by its line's id
+   * (`meterLines`, the window's `resetClock`), for its end cap */
+  clocks?: Readonly<Record<string, ResetClock>> | undefined;
   /** the reading's age ("as of 3h ago") for each window read before its
-   * reset, by its line's id (`meterLines`), said in its reset's place */
+   * reset, by its line's id (`meterLines`), said under its bar */
   ages?: Readonly<Record<string, string>> | undefined;
   /** what these windows belong to, for a screen reader */
   label: string;
@@ -356,6 +460,7 @@ export function UsageTimeline({
             line={line}
             forecast={forecasts?.[line.id]}
             form={resetForms?.[line.id]}
+            clock={clocks?.[line.id]}
             age={ages?.[line.id]}
           />
         );
@@ -371,12 +476,14 @@ function UsageGroupLine({
   line,
   forecast,
   form,
+  clock,
   age,
 }: {
   heading?: string | undefined;
   line: UsageLine;
   forecast?: string | undefined;
   form?: UsageResetForm | undefined;
+  clock?: ResetClock | undefined;
   age?: string | undefined;
 }) {
   return (
@@ -386,7 +493,7 @@ function UsageGroupLine({
           {heading}
         </span>
       )}
-      <UsageLineView line={line} forecast={forecast} form={form} age={age} />
+      <UsageLineView line={line} forecast={forecast} form={form} clock={clock} age={age} />
     </>
   );
 }
@@ -467,7 +574,11 @@ export function PlanCardView({
   refreshingUsage?: boolean;
   onAct?: ((card: PlanCard) => void) | undefined;
 }): ReactElement {
-  const { lines, forecasts, resetForms, ages } = meterLines(card.metrics, now, card.fetchedAt);
+  const { lines, forecasts, resetForms, clocks, ages } = meterLines(
+    card.metrics,
+    now,
+    card.fetchedAt,
+  );
   const loading =
     refreshingUsage && card.named && card.namedBy !== undefined && card.act?.kind !== "reauth";
   const titleId = useId();
@@ -522,6 +633,7 @@ export function PlanCardView({
             lines={lines}
             forecasts={forecasts}
             resetForms={resetForms}
+            clocks={clocks}
             ages={ages}
             label={named}
             variant="card"
@@ -1267,7 +1379,7 @@ function ProfileAgentRowView({
   const badged = row.badges.length > 0 && (row.state === "signed-in" || row.state === "expired");
   // Usage may arrive before the identity that places it on a plan. Keep it
   // for that card instead of briefly moving the meters into the agent row.
-  const { lines, forecasts, resetForms, ages } =
+  const { lines, forecasts, resetForms, clocks, ages } =
     badged || row.state === "unread"
       ? NO_METER_LINES
       : meterLines(row.usage, now ?? new Date(), row.usageFetchedAt);
@@ -1343,6 +1455,7 @@ function ProfileAgentRowView({
           lines={lines}
           forecasts={forecasts}
           resetForms={resetForms}
+          clocks={clocks}
           ages={ages}
           label={row.label}
         />
@@ -1465,7 +1578,11 @@ export function ProfileAgentPageView({
   extensions,
 }: ProfileAgentPageViewProps): ReactElement {
   const at = now ?? new Date();
-  const { lines, forecasts, resetForms, ages } = meterLines(row.usage, at, row.usageFetchedAt);
+  const { lines, forecasts, resetForms, clocks, ages } = meterLines(
+    row.usage,
+    at,
+    row.usageFetchedAt,
+  );
   const identity = row.persona.identity;
   const signedIn = row.state === "signed-in" || row.state === "expired";
   // a vendor agent's one sign-in is on its company's plan: the card says it best
@@ -1585,6 +1702,7 @@ export function ProfileAgentPageView({
               lines: windows,
               forecasts: windowForecasts,
               resetForms: windowResetForms,
+              clocks: windowClocks,
               ages: windowAges,
             } = meterLines(line.metrics, at, line.fetchedAt);
             const plan = plans.find((candidate) => candidate.id === line.planId);
@@ -1612,6 +1730,7 @@ export function ProfileAgentPageView({
                     lines={windows}
                     forecasts={windowForecasts}
                     resetForms={windowResetForms}
+                    clocks={windowClocks}
                     ages={windowAges}
                     label={line.title}
                   />
@@ -1668,6 +1787,7 @@ export function ProfileAgentPageView({
               lines={lines}
               forecasts={forecasts}
               resetForms={resetForms}
+              clocks={clocks}
               ages={ages}
               label={row.label}
             />

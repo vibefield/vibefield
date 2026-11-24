@@ -22,6 +22,7 @@ import { BandsCircle, BandsKey } from "../src/godview/profiles-column/BandsCircl
 import {
   ProfilePopoverView,
   readWords,
+  refreshIds,
   veiledAccount,
 } from "../src/godview/profiles-column/ProfilePopoverView";
 import {
@@ -36,7 +37,7 @@ import {
 } from "../src/godview/profiles-column/ProfilesColumnView";
 import { resetWords } from "../src/panels/agents/profiles-model";
 import { PROFILES_WORDS } from "../src/setup/profiles-words";
-import { bandsGeometry } from "../src/usage/bands";
+import { bandsGeometry, bandsKeyOf } from "../src/usage/bands";
 import {
   type MetersOptions,
   type NoMeterReason,
@@ -303,13 +304,36 @@ describe("the Bands circle (UM-D16): the model's geometry drawn, never re-derive
     expect(onFocusPlan).toHaveBeenLastCalledWith(null);
   });
 
-  it("says the bands key's three words, said as the key", () => {
-    const page = mount(<BandsKey />);
-    const key = page.querySelector(".vf-profiles-key");
-    expect(key?.textContent).toBe("5 hours7 daysa model's week");
-    expect(key?.getAttribute("aria-label")).toBe(
-      "Inside, the next five hours; outside, the week; a hairline, a model's own week",
+  it("says only the bands its circle draws, the hairline by its group's own word, said as the key (UM-6, UM-D31)", () => {
+    const page = mount(
+      <BandsKey
+        items={[
+          { band: "inner", words: "5 hours" },
+          { band: "outer", words: "7 days" },
+          { band: "hairline", words: "Opus" },
+        ]}
+      />,
     );
+    const key = page.querySelector(".vf-profiles-key");
+    expect(key?.textContent).toBe("5 hours7 daysOpus");
+    expect(key?.getAttribute("aria-label")).toBe(
+      "Inside, 5 hours; outside, 7 days; a hairline, Opus",
+    );
+    // a budget lights both bands, said as both
+    const credits = mount(<BandsKey items={[{ band: "budget", words: "credits" }]} />);
+    expect(credits.querySelector(".vf-profiles-key")?.getAttribute("aria-label")).toBe(
+      "Both bands, credits",
+    );
+    // nothing to name: no key
+    expect(mount(<BandsKey items={[]} />).querySelector(".vf-profiles-key")).toBeNull();
+  });
+
+  it("keeps the key on one line: no wrap, the last word giving way (UM-6; asked 2026-11-24)", () => {
+    const rule = /\n\.vf-profiles-key \{[^}]*\}/u.exec(CSS)?.[0] ?? "";
+    expect(rule).toContain("flex-wrap: nowrap;");
+    expect(rule).toContain("white-space: nowrap;");
+    expect(CSS).toContain("\n.vf-profiles-key-item:last-child {\n  flex: 0 1 auto;\n}");
+    expect(/\n\.vf-profiles-key-word \{[^}]*text-overflow: ellipsis;/u.test(CSS)).toBe(true);
   });
 });
 
@@ -752,8 +776,13 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(CSS).toContain(
       "\n.vf-profiles-pop-row-meter .vf-profiles-usage-track {\n  height: 12px;\n}",
     );
+    // UM-6: the label's 22 and its 10 (32), the track, and the reset's end cap in 66 (64 and its 2), the cap 14 beside
+    // the 12 track
     expect(CSS).toMatch(
-      /\n\.vf-profiles-pop-row-meter \.vf-profiles-usage \{[^}]*grid-template-columns: 22px minmax\(0, 1fr\) auto;/u,
+      /\n\.vf-profiles-pop-row-meter \.vf-profiles-usage \{[^}]*grid-template-columns: 32px minmax\(0, 1fr\) 66px;/u,
+    );
+    expect(CSS).toMatch(
+      /\n\.vf-profiles-pop-row-meter \.vf-profiles-usage-cap \{[^}]*height: 14px;/u,
     );
     expect(CSS).not.toMatch(
       /\.vf-profiles-pop-row-meter \.vf-profiles-usage-reset \{[^}]*display: none/u,
@@ -767,10 +796,149 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     expect(rule).toContain("position: relative;");
     expect(rule).toContain("width: 16px;");
     expect(rule).toContain("height: 11px;");
-    const page = mount(<ProfilePopoverView {...popover(thisMac())} />);
-    const bands = [...page.querySelectorAll(".vf-profiles-key > .vf-profiles-key-band")];
-    expect(bands).toHaveLength(3);
+    const circle = thisMac();
+    const page = mount(<ProfilePopoverView {...popover(circle)} />);
+    const bands = [...page.querySelectorAll(".vf-profiles-key-item > .vf-profiles-key-band")];
+    // UM-6: one band for each word the circle's key names
+    const items = bandsKeyOf(circle.meters.entries);
+    expect(items.length).toBeGreaterThan(0);
+    expect(bands).toHaveLength(items.length);
     for (const band of bands) expect(band.querySelector("svg.vf-bands-drawing")).not.toBeNull();
+    expect(
+      [...page.querySelectorAll(".vf-profiles-key-word")].map((word) => word.textContent),
+    ).toEqual(items.map((item) => item.words));
+  });
+
+  it("reads the card's sign-ins again from the head's ↻, beside ×, and says so while it reads (UM-6, UM-D30 R1)", () => {
+    const circle = work();
+    const onRefresh = vi.fn();
+    const page = mount(<ProfilePopoverView {...popover(circle, { onRefresh })} />);
+    // the age, ↻ and × stand together at the head's end, in that order
+    const end = page.querySelector(".vf-profiles-pop-end");
+    expect([...(end?.children ?? [])].map((child) => child.className)).toEqual([
+      "vf-profiles-pop-age",
+      "vf-profiles-pop-refresh",
+      "vf-profiles-pop-close",
+    ]);
+    const refresh = page.querySelector<HTMLButtonElement>(".vf-profiles-pop-refresh");
+    expect(refresh?.getAttribute("aria-label")).toBe("Refresh usage");
+    expect(refresh?.getAttribute("aria-busy")).toBe("false");
+    expect(refresh?.querySelector(".vf-glyph")).not.toBeNull();
+    act(() => refresh?.click());
+    // every sign-in a plan on the circle is read by, once each, as Retry reads one
+    const ids = refreshIds(circle.meters);
+    expect(ids.length).toBeGreaterThan(0);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(onRefresh).toHaveBeenCalledWith(ids);
+    // while it reads: it takes no press, it is busy, and the age says so
+    act(() =>
+      root?.render(<ProfilePopoverView {...popover(circle, { onRefresh, refreshing: true })} />),
+    );
+    const busy = page.querySelector<HTMLButtonElement>(".vf-profiles-pop-refresh");
+    expect(busy?.disabled).toBe(true);
+    expect(busy?.getAttribute("aria-busy")).toBe("true");
+    expect(page.querySelector(".vf-profiles-pop-age")?.textContent).toBe("Reading usage…");
+  });
+
+  it("offers ↻ only where the usage door can read again, and the card holds a sign-in to read (UM-6)", () => {
+    const onRefresh = vi.fn();
+    const off = mount(<ProfilePopoverView {...popover(work(), { onRefresh, canRetry: false })} />);
+    expect(off.querySelector(".vf-profiles-pop-refresh")).toBeNull();
+    act(() => root?.unmount());
+    host?.remove();
+    const none = mount(<ProfilePopoverView {...popover(work())} />);
+    expect(none.querySelector(".vf-profiles-pop-refresh")).toBeNull();
+    // × still stands at the head's end
+    expect(none.querySelector(".vf-profiles-pop-end > .vf-profiles-pop-close")).not.toBeNull();
+  });
+
+  it("turns ↻ while it reads, a turn every 0.9s, and stills it with Godview's animations off and under Reduce Motion (UM-6)", () => {
+    expect(CSS).toMatch(
+      /\n\.vf-profiles-pop-refresh\[aria-busy="true"\] > \.vf-glyph \{\n {2}animation: vf-profiles-turn 0\.9s linear infinite;/u,
+    );
+    expect(CSS).toMatch(
+      /\.vf-godview\[data-godview-animations="off"\] \.vf-profiles-pop-refresh\[aria-busy="true"\] > \.vf-glyph \{\n {2}animation: none;/u,
+    );
+    const reduced = CSS.slice(CSS.indexOf("@media (prefers-reduced-motion: reduce)"));
+    expect(reduced).toMatch(
+      /\.vf-profiles-pop-refresh\[aria-busy="true"\] > \.vf-glyph \{\n {4}animation: none;/u,
+    );
+  });
+
+  it("marks a window that runs out first under its bar, and its cap keeps its reset (UM-6, UM-D29 A)", () => {
+    // the first plan's five hours: 80% of it gone at 91%, its reset an hour off: out in ~25m, before it
+    const rows = withNamer(FIXTURE_WORK, (row) => ({
+      ...row,
+      metrics: row.metrics.map((metric, index) =>
+        index === 0
+          ? {
+              ...metric,
+              usedPercent: 91,
+              durationMinutes: 300,
+              resetsAt: new Date(NOW.getTime() + 60 * 60_000).toISOString(),
+            }
+          : metric,
+      ),
+    }));
+    const meters = metersOf(FIXTURE_WORK, rows);
+    const entry = meters.entries.find(
+      (each) => each.kind === "reading" && each.plan?.id === FIXTURE_WORK.plans?.[0]?.id,
+    );
+    if (entry?.kind !== "reading") throw new Error("expected the first plan's reading");
+    const window = entry.windows[0];
+    expect(window?.forecast?.short).toBe("out in ~25m");
+    const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_WORK, meters })} />);
+    const line = page.querySelector<HTMLElement>(
+      `.vf-profiles-pop-row[data-plan="${entry.key}"] [role="listitem"]`,
+    );
+    const tick = line?.querySelector<HTMLElement>(".vf-profiles-usage-tick");
+    expect(Number.parseFloat(tick?.style.left ?? "")).toBeCloseTo((80 * 100) / 91, 6);
+    expect(line?.querySelector(".vf-profiles-usage-out-words")?.textContent).toBe("out in ~25m");
+    // the cap keeps the reset's clock, and never the forecast
+    const time = new Date(NOW.getTime() + 60 * 60_000).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
+    expect(line?.querySelector(".vf-profiles-usage-cap")?.textContent).toBe(time);
+    // the row's button covers its lines, so their words ride its tooltip, how far off the reset is with them
+    const choose = page.querySelector<HTMLButtonElement>(
+      `.vf-profiles-pop-row[data-plan="${entry.key}"] .vf-profiles-pop-row-choose`,
+    );
+    const tip = choose?.getAttribute("title")?.split("\n") ?? [];
+    expect(tip).toHaveLength(entry.windows.length);
+    expect(tip[0]).toBe(line?.getAttribute("aria-label"));
+    expect(tip[0]).toContain(`resets at ${time}, in 1h`);
+  });
+
+  it("says a kept reading's age once, at its row's head, and forecasts nothing (UM-6)", () => {
+    const fetchedAt = new Date(NOW.getTime() - 32 * 60_000).toISOString();
+    const rows = withNamer(FIXTURE_WORK, (row) => ({
+      ...row,
+      state: "unavailable" as const,
+      stale: true,
+      fetchedAt,
+    }));
+    const meters = metersOf(FIXTURE_WORK, rows);
+    const entry = meters.entries.find(
+      (each) => each.kind === "reading" && each.plan?.id === FIXTURE_WORK.plans?.[0]?.id,
+    );
+    if (entry?.kind !== "reading") throw new Error("expected the first plan's reading");
+    expect(entry.right.kind).toBe("kept");
+    const page = mount(<ProfilePopoverView {...popover({ set: FIXTURE_WORK, meters })} />);
+    const row = page.querySelector<HTMLElement>(`.vf-profiles-pop-row[data-plan="${entry.key}"]`);
+    expect(
+      row?.querySelector(".vf-profiles-pop-row-head .vf-profiles-pop-row-right")?.textContent,
+    ).toBe("as of 32m ago");
+    // each line keeps its cap, says no age of its own, and marks no forecast
+    const lines = [...(row?.querySelectorAll<HTMLElement>('[role="listitem"]') ?? [])];
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(line.querySelector(".vf-profiles-usage-out")).toBeNull();
+      if (!line.classList.contains("is-passed")) {
+        expect(line.querySelector(".vf-profiles-usage-age")).toBeNull();
+      }
+    }
   });
 
   /** The reading rows of a circle, with the bare and the union key of each. */
@@ -1086,13 +1254,20 @@ describe("the popover (DESIGN.md §8 'Godview's profiles column')", () => {
     const said = [
       ...page.querySelectorAll(`.vf-profiles-pop-row[data-plan="${entry.key}"] [role="listitem"]`),
     ].map((item) => item.getAttribute("aria-label"));
-    // every window's line, in the reading's order; one whose reset has come says the reading's age in its reset's
-    // place, as Settings' line does (§8 "A window read before its reset"), now that no head says it above
+    // every window's line, in the reading's order, said on the clock as Settings' line says it (UM-6, §9 "A
+    // reading"): three days off by its day and clock and how far off it is; one whose reset has come says when it
+    // reset and the reading's age (§8 "A window read before its reset")
+    const time = at.toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    });
     expect(said).toEqual(
       entry.windows.map(({ line, passed }) => {
         const age = passed && entry.right.words !== "" ? entry.right.words : undefined;
-        const words =
-          age !== undefined ? `, ${age}` : line.reset === undefined ? "" : `, resets ${line.reset}`;
+        const words = passed
+          ? `, reset at ${time}${age !== undefined ? `, ${age}` : ""}`
+          : `, resets ${resetWords(at, NOW)}, in 3d`;
         return `${line.group !== undefined ? `${line.group.label}, ` : ""}${line.label}: ${Math.round(
           line.usedPercent,
         )}% used${words}${line.hot ? ", ahead of pace" : ""}`;

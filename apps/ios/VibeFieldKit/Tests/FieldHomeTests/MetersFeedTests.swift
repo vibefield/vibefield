@@ -8,7 +8,9 @@ import Testing
 /// the home's one door: `agents.usage` asked with no `refresh`, `agents.usage.subscribe` watched while the door is
 /// held, the profiles and catalog read on attach and on every open; a home that refuses `agent.usage` is said, a door
 /// that cannot answer is "usage unavailable" — still watched, and asked again when a meter view opens — and without a
-/// door the last word stands, or "usage unavailable" when there is none (the U3 review).
+/// door the last word stands, or "usage unavailable" when there is none (the U3 review). *Since UM-6 (UM-D33,
+/// 2026-11-24):* a person's ↻ or pull asks a fresh reading (`refresh`, `refresh: true`), one at a time; every other
+/// ask still names no `refresh`.
 ///
 /// No key path and no `try` inside an #expect/#require argument: hoisted into a `let` first (T10f's kit trap).
 @Suite("the meters' feed reads the home's cached usage and its profiles, and says what is true")
@@ -21,6 +23,16 @@ struct MetersFeedTests {
     var frames: [@MainActor (JSONValue) -> Void] = []
     var usage: Result<JSONValue, FieldProductError> = .success(MetersFixtureDoor.fixture("agent-usage.budget") ?? .null)
     var cancelled = 0
+    /// UM-D33 — while set, an `agents.usage` ask waits until `release()`
+    var held = false
+    private var parked: [CheckedContinuation<Void, Never>] = []
+
+    func release() {
+      held = false
+      let waiting = parked
+      parked = []
+      for continuation in waiting { continuation.resume() }
+    }
 
     final class Watch: ChatWatch {
       let door: Door
@@ -33,7 +45,9 @@ struct MetersFeedTests {
       switch method {
       case "agents.profileSets.list": return MetersFixtureDoor.fixture("agents-profile-sets.meters") ?? .null
       case "agent.catalog": return try HomeFixture.json("agent-catalog.valid")
-      case "agents.usage": return try usage.get()
+      case "agents.usage":
+        if held { await withCheckedContinuation { parked.append($0) } }
+        return try usage.get()
       default: throw FieldProductError(kind: "NOT_FOUND", message: method)
       }
     }
@@ -222,6 +236,61 @@ struct MetersFeedTests {
     #expect(door.count("agents.usage") == 1)
     let refreshes = door.calls.filter { $0.params?["refresh"] != nil }
     #expect(refreshes.isEmpty)
+  }
+
+  @Test("↻ asks the home for a fresh reading: refresh true, one at a time, and its answer replaces the reading")
+  func refreshAsksAFreshReading() async throws {
+    let door = Door()
+    let feed = MetersFeed()
+    feed.attach(door, home: "dev-home")
+    await settle { !door.watched.isEmpty }
+    let empty = try #require(MetersFixtureDoor.fixture("agent-usage.empty"))
+    door.usage = .success(empty)
+    door.held = true
+    let asking = Task { await feed.refresh() }
+    await settle { feed.refreshing }
+    let out = feed.refreshing
+    #expect(out)
+    // a second ask while the first is out asks nothing. Made only while the first is out: on a host too loaded to
+    // start it in time, a second ask would itself wait at the held door, before the release below
+    if out { await feed.refresh() }
+    door.release()
+    await asking.value
+    #expect(!feed.refreshing)
+    let fresh = door.calls.filter { $0.method == "agents.usage" && $0.params == .object(["refresh": .bool(true)]) }
+    #expect(fresh.count == 1)
+    let cached = door.calls.filter { $0.method == "agents.usage" && $0.params == .object([:]) }
+    #expect(cached.count == 1)
+    let emptied = try AgentAccountUsageBatch(json: empty)
+    #expect(feed.reading.usage == .batch(emptied))
+  }
+
+  @Test("a fresh reading the home refuses is said; one that fails leaves the last batch standing")
+  func refreshRefusedOrFailed() async throws {
+    let door = Door()
+    let feed = MetersFeed()
+    feed.attach(door, home: "dev-home")
+    await settle { !door.watched.isEmpty }
+    let before = feed.reading.usage
+    guard case .batch = before else {
+      Issue.record("the attach did not read the home's batch: \(before)")
+      return
+    }
+    door.usage = .failure(FieldProductError(kind: "UNAVAILABLE", message: "down", retryable: true))
+    await feed.refresh()
+    #expect(feed.reading.usage == before)
+    #expect(!feed.refreshing)
+    door.usage = .failure(FieldProductError(kind: "FORBIDDEN_SCOPE", message: "agent.usage"))
+    await feed.refresh()
+    #expect(feed.reading.usage == .notShared)
+  }
+
+  @Test("with no door a refresh asks nothing and says nothing new")
+  func refreshWithoutADoor() async {
+    let feed = MetersFeed()
+    await feed.refresh()
+    #expect(!feed.refreshing)
+    #expect(feed.reading.usage == .waiting)
   }
 
   @Test("the door taken back (the background) ends the watch and keeps the last word; another home starts afresh")

@@ -2890,6 +2890,9 @@ export const METHODS: MethodDef[] = [
   // floor, for a window as for a phone. fieldd keeps "no poll of its own":
   // a phone's subscription watches without starting the poll, and its
   // `refresh: true` is answered from the cache (`daemon.ts`).*
+  // *Corrected 2026-11-24 (UM-D33, UM-6): the owner's own phone's
+  // `refresh: true` is a reading, as a window's is — a person's ↻ or pull,
+  // never a timer; its subscription still only watches (`daemon.ts`).*
   // AR-S4b — Extensions (agent-extensions.ts): what each agent in an Agent
   // Profile holds — MCP servers, skills, plugins, marketplaces — read from the
   // agent's own stores and grouped into the profile page's lens. A read of the

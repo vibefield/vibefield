@@ -238,6 +238,17 @@ kicks (`AccountUsageService.snapshot`) — because Claude's endpoint is heavily
 rate limited (below) and the phone must not drive extra readings. The rows are
 in fieldd's `agent-usage-tailnet.test.ts`.*
 
+*Corrected 2026-11-24 (UM-D33, UM-6, which revisits UM-D8; James, in session,
+"yes" to the phone's own refresh): the owner's own phone (a self tailnet
+principal) takes a reading with `refresh: true`, as a window's Retry does: the
+person's ↻ or pull on the Agent Profiles page. It drives no reading of its own
+accord: the kit asks it only on that act (UM-L4, never a timer), its plain read
+and its subscription still ask only the cache, and its refresh meets the same
+cooldown, backoff and repeated-click guard as a window's, so a phone can spend
+no more readings than a window's clicks can. A guest holds no scope, and any
+other caller's `refresh: true` (a peer daemon's, a node with no self mark) is
+still answered from the cache. The row is in `agent-usage-tailnet.test.ts`.*
+
 ## Faster updates and external limits
 
 Automatic intervals remain unchanged. No published numeric request-per-minute

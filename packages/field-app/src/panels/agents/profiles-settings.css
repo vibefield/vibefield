@@ -27,8 +27,7 @@
 }
 
 .vf-profiles-plus,
-.vf-profiles-down,
-.vf-profiles-reset {
+.vf-profiles-down {
   flex: none;
 }
 
@@ -79,10 +78,13 @@
    space between two rounded ends, and the % never moves for it — the line
    gives way to the %. ── */
 
+/* UM-6 (UM-D32 T9; DESIGN.md §8 "A meter line's end"): the label's column takes the 10 that stood between it and the
+   track, and the track runs into its end cap with 2 between them, so the columns stand with no gap; one cap width
+   (64, its column 66) holds every reset, so a list's bars end together */
 .vf-profiles-usage {
   display: grid;
-  grid-template-columns: 30px minmax(0, 1fr) 70px;
-  gap: 5px 10px;
+  grid-template-columns: 40px minmax(0, 1fr) 66px;
+  gap: 5px 0;
   align-items: center;
   max-width: 470px;
   margin-top: 8px;
@@ -92,7 +94,10 @@
   display: contents;
 }
 
+/* each part of a line names its column: an out mark or an age takes a row of its own under the track, and the next
+   line's label must start its own row, not the cell after it */
 .vf-profiles-usage-label {
+  grid-column: 1;
   color: var(--vf-text-tertiary);
   font-size: 9px;
   font-weight: 600;
@@ -117,6 +122,7 @@
 }
 
 .vf-profiles-usage-track {
+  grid-column: 2;
   position: relative;
   height: 14px;
   overflow: hidden;
@@ -197,22 +203,106 @@
     -1.1px -1.1px 0 var(--vf-usage-edge);
 }
 
+/* the track's end meets its cap square; a line with no reset (a budget) keeps its round end */
+.vf-profiles-usage-line.has-cap .vf-profiles-usage-track {
+  border-radius: 4px 0 0 4px;
+}
+
+/* the end column holds the cap, which never turns orange: orange says one thing at a line's end, running out */
 .vf-profiles-usage-reset {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  color: var(--vf-text-tertiary);
-  font-size: 10.5px;
+  grid-column: 3;
+  display: grid;
+  min-width: 0;
+  color: var(--vf-text-primary);
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 
-.vf-profiles-usage-line.is-hot .vf-profiles-usage-reset {
-  color: var(--vf-orange);
+/* the end cap (T9): the track + 2 tall, 2 after the track, its left corners 2 and its right end round, the ink at
+   15%; its time at 9.5/650 in the primary ink, led 3 before it by the day at 7.5/750 in capitals in the secondary */
+.vf-profiles-usage-cap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  height: 16px;
+  margin-left: 2px;
+  overflow: hidden;
+  border-radius: 2px 8px 8px 2px;
+  background: color-mix(in srgb, var(--vf-foreground) 15%, transparent);
+  font-size: 9.5px;
+  font-weight: 650;
+  line-height: 1;
 }
 
-.vf-profiles-reset {
-  width: 10px;
-  height: 10px;
+.vf-profiles-usage-cap-day {
+  color: var(--vf-text-secondary);
+  font-size: 7.5px;
+  font-weight: 750;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* a window read before its reset: the cap's place, empty and dashed, says when it reset, in the tertiary ink */
+.vf-profiles-usage-line.is-passed .vf-profiles-usage-cap {
+  background: transparent;
+  outline: 1px dashed color-mix(in srgb, var(--vf-foreground) 28%, transparent);
+  outline-offset: -1px;
+  color: var(--vf-text-tertiary);
+}
+
+/* …its word set closer, so "RESET 12:30" stands clear of its dashed edge in the cap's 64 */
+.vf-profiles-usage-line.is-passed .vf-profiles-usage-cap {
+  gap: 2px;
+}
+
+.vf-profiles-usage-line.is-passed .vf-profiles-usage-cap-day {
+  color: var(--vf-text-tertiary);
+  letter-spacing: 0.02em;
+}
+
+/* the out mark (UM-D29 A), under the bar in the track's column, 3 up into the gap: a tick 1.5 × 8 where the window
+   runs out on its own time, standing 2 into the track's foot, and its words beside it, 5 before or after it */
+.vf-profiles-usage-out {
+  grid-column: 2;
+  position: relative;
+  height: 11px;
+  margin-top: -3px;
+}
+
+.vf-profiles-usage-tick {
+  position: absolute;
+  top: -2px;
+  width: 1.5px;
+  height: 8px;
+  margin-left: -0.75px;
+  border-radius: 1px;
+  background: var(--vf-orange);
+}
+
+.vf-profiles-usage-out-words {
+  position: absolute;
+  top: 0;
+  color: var(--vf-orange);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  line-height: 11px;
+  white-space: nowrap;
+}
+
+/* a window read before its reset: the age of its read under its bar, from the track's start */
+.vf-profiles-usage-age {
+  grid-column: 2;
+  margin-top: -3px;
+  overflow: hidden;
+  color: var(--vf-text-tertiary);
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* Pending usage uses the meter's silhouette; the soft sweep is indeterminate. */
@@ -797,10 +887,16 @@
 }
 
 .vf-profiles-usage--card {
-  grid-template-columns: 34px minmax(0, 1fr) 66px;
-  gap: 7px 10px;
+  grid-template-columns: 44px minmax(0, 1fr) 66px;
+  gap: 7px 0;
   max-width: none;
   margin-top: 0;
+}
+
+/* the card's rows stand 7 apart: its out mark and its age rise 5, so the tick hangs 1 under the track, as in a row */
+.vf-profiles-usage--card .vf-profiles-usage-out,
+.vf-profiles-usage--card .vf-profiles-usage-age {
+  margin-top: -5px;
 }
 
 .vf-profiles-plan-foot {

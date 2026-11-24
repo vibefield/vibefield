@@ -63,8 +63,10 @@ export interface ProfilesColumnViewProps {
   canAdd: boolean;
   /** Settings can be opened on one profile's page (it is not open already): a popover's Sign in and Agent Profiles… */
   canOpen: boolean;
-  /** the usage door can read a sign-in again: a popover's Retry */
+  /** the usage door can read a sign-in again: a popover's Retry and its head's ↻ */
   canRetry: boolean;
+  /** UM-6 — the profiles whose head's ↻ is reading their usage again (their set ids); absent, none */
+  refreshing?: ReadonlySet<string> | undefined;
   /** UM-5a — the chosen plan and its twins (union keys), or null: the popover's rows draw pressed, the others dim */
   chosenPlanFamily: readonly string[] | null;
   /** UM-5a — choose a plan by its union key (a row or an arc), or null to clear */
@@ -87,6 +89,8 @@ export interface ProfilesColumnViewProps {
   onAdd: () => void;
   onOpenProfile: (setId: string) => void;
   onRetry: (profileIds: readonly string[]) => void;
+  /** UM-6 — a card's ↻: read this profile's sign-ins again (its set id, and the sign-ins its plans are read by) */
+  onRefresh?: ((setId: string, profileIds: readonly string[]) => void) | undefined;
 }
 
 /** The column's circle size (§8: "a 40 round button holding the profile's Bands circle at 40"). */
@@ -128,6 +132,7 @@ export function ProfilesColumnView({
   canAdd,
   canOpen,
   canRetry,
+  refreshing,
   chosenPlanFamily,
   onChoosePlan,
   moment,
@@ -141,6 +146,7 @@ export function ProfilesColumnView({
   onAdd,
   onOpenProfile,
   onRetry,
+  onRefresh,
 }: ProfilesColumnViewProps): ReactElement {
   const popoverId = useId();
   // UM-R-F (c3; §8 "A circle"): the circle the pin holds wears the quiet tell, under a peek too
@@ -214,12 +220,16 @@ export function ProfilesColumnView({
                     read={read}
                     canOpen={canOpen}
                     canRetry={canRetry}
+                    refreshing={refreshing?.has(id) === true}
                     chosenPlanFamily={chosenPlanFamily}
                     onChoosePlan={onChoosePlan}
                     onClose={onClose}
                     onFocusPlan={onFocusPlan}
                     onOpenProfile={onOpenProfile}
                     onRetry={onRetry}
+                    {...(onRefresh !== undefined
+                      ? { onRefresh: (profileIds: readonly string[]) => onRefresh(id, profileIds) }
+                      : {})}
                   />
                 </CardStand>
               ) : null}

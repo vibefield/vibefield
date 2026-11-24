@@ -5,13 +5,20 @@ import SwiftUI
 // C1 line) — SETTINGS' C1 LINE ON THE PHONE: the desktop's `UsageLineView` and `usageFigurePlace`
 // (`panels/agents/ProfilesView.tsx`, `profiles-model.ts`; pass 22's Line · Glow · Halo) at the page's 12 tall. The
 // track is the window's time, the fill its use with its last 10 lit, the now line the time gone — giving way across
-// the figure where it would touch it — and the figure rides the head; the reset closes the line. A window read before
-// its reset says the reading's age there instead, with no reset mark (DESIGN.md §8 "A window read before its reset";
-// Settings' `ages`, 48a30767d). A window that meters part of the plan stands under its group's heading. Orange only
-// when the window runs hot (`UsageLine.hot`), which a window read before its reset never does.
+// the figure where it would touch it — and the figure rides the head. A window that meters part of the plan stands
+// under its group's heading. Orange only when the window runs hot (`UsageLine.hot`), which a window read before its
+// reset never does.
+//
+// UM-6 (UM-D29 A, UM-D32 T9; DESIGN.md §8 "A meter line's end", 2026-11-24) — THE LINE ENDS IN ITS RESET. The track
+// runs square-ended into its END CAP, 2 away: a capsule 64 × 14 in the ink at 15% holding the reset on the clock
+// ("15:00", "THU 12:00", "DEC 4"; `ResetClock`). A window read before its reset keeps the cap's place, empty and
+// dashed, "RESET 12:30", and its read's age stands under its bar. A window that runs out before its reset is marked
+// under its bar: a tick where it runs out on its own time and "out in ~25m" beside it. The cap never turns orange; no
+// glyph leads a reset (the page's ↻ is the refresh's). *Before:* a 58 slot at the end held `arrow.counterclockwise` and
+// the reset as a length or by its day, or the reading's age, and the plan's forecast was a sentence under its lines.
 
-/// A plan's windows, each a C1 line, under their groups' headings; a kept reading draws at 50%. Each window read
-/// before its reset (`MeterWindow.passed`) says its own age (`ages`, by its line's id) in its reset's place.
+/// A plan's windows, each a C1 line, under their groups' headings; a kept reading draws at 50% and forecasts nothing.
+/// Each window read before its reset (`MeterWindow.passed`) says its own age (`ages`, by its line's id) under its bar.
 struct UsageLinesView: View {
   let windows: [MeterWindow]
   var stale = false
@@ -29,7 +36,10 @@ struct UsageLinesView: View {
             .lineLimit(1)
             .accessibilityHidden(true)
         }
-        UsageLineView(line: window.line, form: window.resetForm, age: window.passed ? ages[window.line.id] : nil)
+        // a kept reading (a refresh that failed) forecasts nothing, so it draws no out mark
+        UsageLineView(
+          line: window.line, clock: window.resetClock, forecast: stale ? nil : window.forecast?.short,
+          age: window.passed ? ages[window.line.id] : nil, form: window.resetForm)
       }
     }
     .opacity(stale ? 0.5 : 1)
@@ -55,14 +65,19 @@ struct UsageLinesView: View {
   }
 }
 
-/// One window's line: its label (26), the track, and the reset (58); or, for a window read before its reset, the
-/// reading's age in the reset's place, at its own width, the track giving way (‹to pick›).
+/// One window's line: its label (36, the old 26 and the 10 that stood after it), the track, and its end cap (64, 2
+/// after the track); under it, while it runs out first, its out mark, or for a window read before its reset its read's
+/// age.
 struct UsageLineView: View {
   let line: UsageLine
-  /// how its reset is said: by its length, by its day, or now
-  let form: MeterRules.ResetForm?
-  /// the reading's age, said in the reset's place with no reset mark (a window read before its reset)
+  /// its reset on the clock (`MeterWindow.resetClock`); nil for a budget and a window that names no reset
+  var clock: ResetClock? = nil
+  /// "out in ~25m" (`MeterForecast.short`) while it runs out before its reset; nil for a kept reading
+  var forecast: String? = nil
+  /// its read's age ("as of 3h ago"), for a window read before its reset
   var age: String? = nil
+  /// how its reset is said in words when no clock is handed (the fallback; `MeterWindow.resetForm`)
+  var form: MeterRules.ResetForm? = nil
 
   static let height: CGFloat = 12
   /// The fill's lit head (the desktop's `USAGE_GLOW`); the figure inside the fill stops 2 short of it.
@@ -73,44 +88,178 @@ struct UsageLineView: View {
   /// The figure's gap after the head, and the now line's reach toward it.
   static let figureGap: CGFloat = 5
   static let clearance: CGFloat = 3
+  /// The label's column: the old 26 and the 10 that stood between it and the track.
+  static let labelWidth: CGFloat = 36
+  /// The end cap: 64 × 14, a hair taller than the track, 2 after it; its column 66 whether or not it draws, so a
+  /// list's bars end together. 64 on both platforms (DESIGN.md §8 "A meter line's end"): "RESET 11:50" with its tabular
+  /// figures stands about 57 wide even at the passed cap's tighter spacing, which touched a 60 cap's dashed edge.
+  static let capWidth: CGFloat = 64
+  static let capHeight: CGFloat = 14
+  static let capGap: CGFloat = 2
+  /// The row under the bar (the out mark, or a passed line's age): 13 tall, from 2 below the track's foot; its tick
+  /// 1.5 × 9 hanging just under the track, its top 1 below the track's foot; its words 5 from the tick.
+  static let underHeight: CGFloat = 13
+  static let underGap: CGFloat = 2
+  static let tickWidth: CGFloat = 1.5
+  static let tickHeight: CGFloat = 9
+  static let tickDrop: CGFloat = 1
+  static let tickGap: CGFloat = 5
+  /// The out words' measure before they are drawn (10.5 semibold, tabular), which decides only their side of the tick.
+  static let outCharacter: CGFloat = 5.9
+
+  /// A cap stands: a clock, or a reset said only in words (a line handed no clock).
+  private var capped: Bool { clock != nil || (line.resets && line.reset != nil) }
 
   var body: some View {
-    HStack(spacing: 10) {
-      Text(line.label)
-        .font(ChromeType.sans(9, .semibold))
-        .tracking(ChromeType.tracking(0.06, of: 9))
-        .foregroundStyle(ChromePalette.inkTertiary)
-        .lineLimit(1)
-        .frame(width: 26, alignment: .leading)
-      GeometryReader { geo in track(geo.size.width) }
-        .frame(height: Self.height)
-      HStack(spacing: 4) {
-        if line.resets, line.reset != nil, age == nil {
-          Image(systemName: "arrow.counterclockwise")
-            .font(.system(size: 8, weight: .semibold))
-        }
-        Text(age ?? line.reset ?? "")
-          .font(ChromeType.sans(10.5))
-          .monospacedDigit()
+    VStack(alignment: .leading, spacing: 0) {
+      HStack(spacing: 0) {
+        Text(line.label)
+          .font(ChromeType.sans(9, .semibold))
+          .tracking(ChromeType.tracking(0.06, of: 9))
+          .foregroundStyle(ChromePalette.inkTertiary)
           .lineLimit(1)
+          .frame(width: Self.labelWidth, alignment: .leading)
+        GeometryReader { geo in track(geo.size.width) }
+          .frame(height: Self.height)
+        cap
+          .padding(.leading, Self.capGap)
       }
-      .foregroundStyle(line.hot ? ChromePalette.attention : ChromePalette.inkTertiary)
-      // an age is longer than a reset: it keeps its own width, so it is never cut short
-      .fixedSize(horizontal: age != nil, vertical: false)
-      .frame(width: age == nil ? 58 : nil, alignment: .leading)
+      .frame(height: Self.capHeight)
+      if let forecast, let at = outAt {
+        under { width in outMark(forecast, at: at, width: width) }
+      } else if clock?.passed == true, let age {
+        under { _ in
+          Text(age)
+            .font(ChromeType.sans(10, .medium))
+            .monospacedDigit()
+            .foregroundStyle(ChromePalette.inkTertiary)
+            .lineLimit(1)
+            .fixedSize()
+            .frame(height: Self.underHeight)
+        }
+      }
     }
     .accessibilityElement()
-    .accessibilityLabel(Self.words(line, form: form, age: age))
+    .accessibilityLabel(Self.words(line, clock: clock, forecast: forecast, age: age, form: form))
   }
 
-  /// The line in words, as the desktop says it; a reset is said "resets in 2h" by its length, and "resets Thu 09:00"
-  /// or "resets now" by its day or once it has come (the U3 review: never "resets in Thu 09:00"); a window read before
-  /// its reset says the reading's age there instead, "as of 3h ago", as Settings' line does.
-  static func words(_ line: UsageLine, form: MeterRules.ResetForm?, age: String? = nil) -> String {
+  /// Where the window runs out on its own time, as a share of the track (the time gone over the share used): the
+  /// forecast's own moment, before the reset at the track's end.
+  private var outAt: CGFloat? {
+    guard let elapsed = line.elapsedPercent, line.usedPercent > 0 else { return nil }
+    return CGFloat(min(1, max(0, elapsed / line.usedPercent)))
+  }
+
+  /// The row under the bar, in the track's column alone: from 2 below the track's foot, 13 tall.
+  private func under<Content: View>(@ViewBuilder _ content: @escaping (CGFloat) -> Content) -> some View {
+    GeometryReader { geo in content(geo.size.width) }
+      .frame(height: Self.underHeight)
+      .padding(.leading, Self.labelWidth)
+      .padding(.trailing, Self.capGap + Self.capWidth)
+      // the track stands 1 inside the cap's 14, so its foot is 1 above the line's: the row starts 2 below the foot
+      .padding(.top, Self.underGap - (Self.capHeight - Self.height) / 2)
+      .accessibilityHidden(true)
+  }
+
+  /// The out mark: a tick where the window runs out, hanging just under the track (its top 1 below the track's foot,
+  /// so 1 above the row's top), and its words beside it — ending 5 before the tick when they fit there, else starting
+  /// 5 after it.
+  private func outMark(_ words: String, at share: CGFloat, width: CGFloat) -> some View {
+    let tick = width * share
+    let fits = tick - Self.tickGap >= CGFloat(words.count) * Self.outCharacter
+    return ZStack(alignment: .topLeading) {
+      RoundedRectangle(cornerRadius: 1, style: .continuous)
+        .fill(ChromePalette.attention)
+        .frame(width: Self.tickWidth, height: Self.tickHeight)
+        .offset(x: tick - Self.tickWidth / 2, y: Self.tickDrop - Self.underGap)
+      Text(words)
+        .font(ChromeType.sans(10.5, .semibold))
+        .monospacedDigit()
+        .foregroundStyle(ChromePalette.attention)
+        .lineLimit(1)
+        .fixedSize()
+        .frame(width: fits ? max(0, tick - Self.tickGap) : nil, height: Self.underHeight, alignment: .trailing)
+        .offset(x: fits ? 0 : tick + Self.tickGap)
+    }
+    .frame(width: width, height: Self.underHeight, alignment: .topLeading)
+  }
+
+  /// The end cap: the reset on the clock, its day before its time; empty and dashed once it has come; nothing for a
+  /// budget or a window that names no reset, its column kept.
+  @ViewBuilder
+  private var cap: some View {
+    if let clock {
+      Self.capView(day: clock.passed ? "Reset" : clock.day, time: clock.time, spent: clock.passed)
+    } else if line.resets, let reset = line.reset {
+      // a line handed no clock says its reset's words in the cap's place
+      Self.capView(day: nil, time: reset, spent: form == .now)
+    } else {
+      Color.clear.frame(width: Self.capWidth, height: Self.capHeight)
+    }
+  }
+
+  /// A passed cap's word sits closer, so "RESET 12:30" holds inside the 64: its gap 2 and its tracking 0.02em, where a
+  /// weekday's or a date's cap keeps 3 and 0.07em.
+  private static func capView(day: String?, time: String?, spent: Bool) -> some View {
+    let shape = UnevenRoundedRectangle(
+      topLeadingRadius: 2, bottomLeadingRadius: 2, bottomTrailingRadius: capHeight / 2,
+      topTrailingRadius: capHeight / 2, style: .continuous)
+    return HStack(spacing: spent ? 2 : 3) {
+      if let day {
+        Text(day)
+          .font(ChromeType.sans(7.5, .bold))
+          .tracking(ChromeType.tracking(spent ? 0.02 : 0.07, of: 7.5))
+          .textCase(.uppercase)
+          .foregroundStyle(spent ? ChromePalette.inkTertiary : ChromePalette.inkSecondary)
+      }
+      if let time {
+        Text(time)
+          .font(ChromeType.sans(9.5, .semibold))
+          .monospacedDigit()
+          .foregroundStyle(spent ? ChromePalette.inkTertiary : ChromePalette.ink)
+      }
+    }
+    .lineLimit(1)
+    .minimumScaleFactor(0.8)
+    .padding(.horizontal, 3)
+    .frame(width: capWidth, height: capHeight)
+    .background {
+      if spent {
+        // its place kept, empty: a 1 dashed ring in the ink at 28%, inside its edge
+        shape
+          .stroke(ChromePalette.ink.opacity(0.28), style: StrokeStyle(lineWidth: 1, dash: [3, 2]))
+          .padding(0.5)
+      } else {
+        shape.fill(ChromePalette.ink.opacity(0.15))
+      }
+    }
+  }
+
+  /// The line in words, as the desktop says it (§9 "The meters' words", UM-6): "5H: 91% used, resets at 15:00, in 1h,
+  /// ahead of pace, out in ~25m"; on another day "resets Thu 12:00, in 2d 22h"; a week on "resets Dec 4, in 9d 3h";
+  /// once it has come "reset at 12:30, as of 3h ago". A line handed no clock keeps the words it said before: "resets
+  /// in 2h" by its length, "resets Thu 09:00" or "resets now" by its day or once it has come (the U3 review: never
+  /// "resets in Thu 09:00"), or the reading's age in its reset's place.
+  static func words(
+    _ line: UsageLine, clock: ResetClock?, forecast: String? = nil, age: String? = nil,
+    form: MeterRules.ResetForm? = nil
+  ) -> String {
     let group = line.group.map { "\($0.label), " } ?? ""
-    let said = line.reset.map { form == .length ? ", resets in \($0)" : ", resets \($0)" } ?? ""
-    let reset = age.map { ", \($0)" } ?? said
-    return "\(group)\(line.label): \(wholeWords(line.usedPercent))% used\(reset)\(line.hot ? ", ahead of pace" : "")"
+    let reset: String
+    if let clock {
+      if clock.passed {
+        reset = ", reset \(clock.saidAt)" + (age.map { ", \($0)" } ?? "")
+      } else {
+        reset = ", resets \(clock.saidAt)" + (clock.away.map { ", in \($0)" } ?? "")
+      }
+    } else if let age {
+      reset = ", \(age)"
+    } else {
+      reset = line.reset.map { form == .length ? ", resets in \($0)" : ", resets \($0)" } ?? ""
+    }
+    let pace = line.hot ? ", ahead of pace" : ""
+    let out = forecast.map { ", \($0)" } ?? ""
+    return "\(group)\(line.label): \(wholeWords(line.usedPercent))% used\(reset)\(pace)\(out)"
   }
 
   private func track(_ width: CGFloat) -> some View {
@@ -126,6 +275,8 @@ struct UsageLineView: View {
     let reach = Self.nowWidth / 2 + Self.clearance
     let gives = now.map { $0 >= x - reach && $0 <= x + figureWidth + reach } ?? false
     let box = Self.nowWidth + 2 * Self.nowFlare
+    // the track runs square-ended into its cap; with none it keeps its round end
+    let end: CGFloat = capped ? 0 : 4
     return ZStack(alignment: .topLeading) {
       ChromePalette.ink.opacity(0.07)
       fill(head)
@@ -152,7 +303,10 @@ struct UsageLineView: View {
         .offset(x: x)
     }
     .frame(width: width, height: Self.height, alignment: .topLeading)
-    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+    .clipShape(
+      UnevenRoundedRectangle(
+        topLeadingRadius: 4, bottomLeadingRadius: 4, bottomTrailingRadius: end, topTrailingRadius: end,
+        style: .continuous))
   }
 
   /// The fill: a pale body whose last 10 brighten to its lit head — the ink's, or the hot fill's toward white.

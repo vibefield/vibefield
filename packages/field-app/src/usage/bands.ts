@@ -192,6 +192,61 @@ export function bandsOf(entry: PlanMeter): PlanBands {
   return bands;
 }
 
+/** One word of the bands key: which band it names, and the word. */
+export interface BandsKeyItem {
+  band: "inner" | "outer" | "budget" | "hairline";
+  words: string;
+}
+
+/** A group's word beside a figure: its label without the adapter's " only" ("Opus only" is "Opus"). */
+const groupWord = (window: MeterWindow): string | undefined =>
+  window.line.group?.label.replace(/ only$/u, "");
+
+/** UM-6 (UM-D31 K3; DESIGN.md §8 "Godview's profiles column", the body) — the bands key names only what its circle
+ * draws: the inside band by its window's own length ("5 hours"), the outside band by its ("7 days"), a budget by
+ * "credits", and the hairline by its group's own word ("Opus"), or "a model's week" while the groups have more than
+ * one name. Nothing read, no words: the key is not drawn. */
+export function bandsKeyOf(entries: readonly PlanMeter[]): BandsKeyItem[] {
+  let inner: string | undefined;
+  let outer: string | undefined;
+  let budget = false;
+  const groups = new Set<string>();
+  for (const entry of entries) {
+    const bands = bandsOf(entry);
+    inner ??= bands.short?.lengthWords;
+    outer ??= bands.long?.lengthWords;
+    if (bands.budget !== undefined) budget = true;
+    const word = bands.group === undefined ? undefined : groupWord(bands.group);
+    if (word !== undefined) groups.add(word);
+  }
+  const items: BandsKeyItem[] = [];
+  if (inner !== undefined) items.push({ band: "inner", words: inner });
+  if (outer !== undefined) items.push({ band: "outer", words: outer });
+  if (budget) items.push({ band: "budget", words: "credits" });
+  if (groups.size > 0) {
+    const [only] = groups;
+    items.push({
+      band: "hairline",
+      words: groups.size === 1 && only !== undefined ? only : "a model's week",
+    });
+  }
+  return items;
+}
+
+/** How the key says each band before its word. */
+const KEY_SAID: Readonly<Record<BandsKeyItem["band"], string>> = {
+  inner: "inside",
+  outer: "outside",
+  budget: "both bands",
+  hairline: "a hairline",
+};
+
+/** The key in words (§9 "The popover"): "Inside, 5 hours; outside, 7 days; a hairline, Opus". */
+export function bandsKeyLabel(items: readonly BandsKeyItem[]): string {
+  const words = items.map((item) => `${KEY_SAID[item.band]}, ${item.words}`).join("; ");
+  return words.charAt(0).toUpperCase() + words.slice(1);
+}
+
 // ── the plans' words ──
 
 /** "of 7 days", "of 5 hours", "of 7 days · Fable", "of credits". */

@@ -14,8 +14,14 @@ import SwiftUI
 // While the field is live a plan's row says its sessions and, with some, draws Show (Showing while it is the one
 // chosen, UM-5b, UM-D14); the row itself takes no tap. *(Corrected 2026-11-09, UM-5b: this said wave 1's row carries no
 // Show or Showing and no sessions line; a run's plan has been readable since SE-2's `monitor.profileSet` and the join.)*
-// A plan that needs you says where it is fixed, with no act (a phone signs in on no desktop, and its refresh spends no
-// call, UM-D8).
+// A plan that needs you says where it is fixed, with no act of its own (a phone signs in on no desktop).
+//
+// UM-6 (UM-D33, 2026-11-24; DESIGN.md §8 "The Agent Profiles page") — the page's ↻, before close, and pulling the page
+// down ask the home to read its usage again (`MetersFeed.refresh`, `agents.usage` with `refresh: true`), which UM-D8
+// had refused a phone: a person's ask, never a timer, so the phone still polls nothing (UM-L4). While that reading is
+// out the head's line says "Reading usage…". Every line ends in its reset's cap with its out mark under it (UM-D29,
+// UM-D32: `UsageLineView`), so the plan's forecast sentence ("Runs out in ~35m at this pace") retires; the bands key
+// names only what the circle draws (UM-D31: `BandsLayout.keyItems`).
 
 struct AgentProfilesWords: Equatable {
   /// One row of the page's Profiles group: All profiles (`id` nil) or a profile.
@@ -44,10 +50,11 @@ struct AgentProfilesWords: Equatable {
     }
 
     enum Body: Equatable {
-      /// every window as Settings' C1 line, the kept reading's age, the age said in the reset's place of each window
-      /// read before its reset (`MeterWindow.passed`), by its line's id (none when no window was, or its time cannot be
-      /// read; item 274: each its own read, Settings' `meterLines`' `ages`), and the forecast's sentence
-      case reading(windows: [MeterWindow], kept: String?, ages: [String: String], forecast: String?, stale: Bool)
+      /// every window as Settings' C1 line, the kept reading's age, the age said under the bar of each window read
+      /// before its reset (`MeterWindow.passed`), by its line's id (none when no window was, or its time cannot be read;
+      /// item 274: each its own read, Settings' `meterLines`' `ages`). *Since UM-6 (UM-D29):* no forecast sentence; a
+      /// window that runs out first is marked under its own bar (`UsageLineView`).
+      case reading(windows: [MeterWindow], kept: String?, ages: [String: String], stale: Bool)
       /// the first reading is out
       case firstRead
       /// what it needs, said with no act
@@ -100,6 +107,9 @@ struct AgentProfilesWords: Equatable {
 
   static let title = "Agent Profiles"
   static let foot = "Manage profiles in Settings → Agent Profiles. New profiles are made on a desktop."
+  /// UM-D33 — ↻ aloud, and the head's line while its reading is out (§9 "The popover", the phone's page)
+  static let refreshLabel = "Refresh usage"
+  static let refreshing = "Reading usage…"
 
   init(reading: MetersReading, lens: ProfileLens, home: String, now: Date, live: PhoneSearch.Live? = nil) {
     let every = reading.meters(of: nil, now: now)
@@ -201,10 +211,10 @@ struct AgentProfilesWords: Equatable {
     }
   }
 
-  /// A plan's row below its title. A window read before its reset says the reading's age in its reset's place, as
-  /// Settings' line does (`meterLines`' `ages`, 48a30767d) — a kept reading's too, under its own age above — and only
-  /// while that age can be said. *Since item 274 (2026-11-10, UM-274-D2 A):* each passed line says its own read's age
-  /// (`MeterRules.meterReadAt`), as Settings' line now does.
+  /// A plan's row below its title. A window read before its reset says the reading's age, as Settings' line does
+  /// (`meterLines`' `ages`, 48a30767d) — a kept reading's too, under its own age above — and only while that age can be
+  /// said. *Since item 274 (2026-11-10, UM-274-D2 A):* each passed line says its own read's age
+  /// (`MeterRules.meterReadAt`), as Settings' line now does. *Since UM-6:* under its bar, its cap dashed.
   static func body(_ entry: PlanMeter, home: String, now: Date) -> PlanRow.Body {
     switch entry.state {
     case .reading(let reading):
@@ -216,8 +226,7 @@ struct AgentProfilesWords: Equatable {
       }
       let ages = Dictionary(passed, uniquingKeysWith: { first, _ in first })
       return .reading(
-        windows: reading.windows, kept: reading.stale ? entry.right?.words : nil, ages: ages,
-        forecast: reading.tightest.forecast?.long, stale: reading.stale)
+        windows: reading.windows, kept: reading.stale ? entry.right?.words : nil, ages: ages, stale: reading.stale)
     case .firstRead:
       return .firstRead
     case .needsYou(let need):
@@ -295,10 +304,11 @@ struct AgentProfilesMenuRow {
 }
 
 /// UM-4 — the Agent Profiles page (UM-D26 A; DESIGN.md §8 "The phone's corner"): a sheet of its own in Settings'
-/// materials — paper, the large title, close only (iOS 26's `role: .close`) — that rises as Settings' does. From the
-/// top: the circle at 214 (a tap on a plan focuses it), the bands key, and where the reading comes from; Profiles (the
-/// lens's rows, with a check, when there are several; with one, a row that takes no tap); the plans in view; the foot.
-/// Opening it reads the home's profiles again (`MetersFeed.open`).
+/// materials — paper, the large title, close (iOS 26's `role: .close`) and, since UM-6 (UM-D33), ↻ before it — that
+/// rises as Settings' does. From the top: the circle at 214 (a tap on a plan focuses it), the bands key, and where the
+/// reading comes from; Profiles (the lens's rows, with a check, when there are several; with one, a row that takes no
+/// tap); the plans in view; the foot. Opening it reads the home's profiles again (`MetersFeed.open`); ↻ and pulling
+/// the page down ask the home for a fresh reading (`MetersFeed.refresh`).
 struct AgentProfilesPage: View {
   static let circle: Double = 214
   static let rowCircle: Double = 36
@@ -318,7 +328,10 @@ struct AgentProfilesPage: View {
       page
         .navigationTitle(AgentProfilesWords.title)
         .navigationBarTitleDisplayMode(.large)
-        .toolbar { closeItem }
+        .toolbar {
+          refreshItem
+          closeItem
+        }
     }
     .tint(ChromePalette.ink)
     .onAppear { feed.open() }
@@ -333,7 +346,8 @@ struct AgentProfilesPage: View {
     let several = reading.profiles.count > 1
     return List {
       Section {
-        head(reading, read: words.read, now: now, mark: mark)
+        // while the page's own ask is out the line says so; when the batch lands, its age again (UM-D33)
+        head(reading, read: feed.refreshing ? AgentProfilesWords.refreshing : words.read, now: now, mark: mark)
       }
       .listRowBackground(Color.clear)
       Section {
@@ -362,22 +376,28 @@ struct AgentProfilesPage: View {
       .chromeRows()
     }
     .chromeList()
+    // pulling the page down asks the home to read again, as ↻ does, with the system's spinner (UM-D33)
+    .refreshable { await feed.refresh() }
   }
 
   /// The circle of the plans in view, the bands key, and where the reading comes from.
   private func head(_ reading: MetersReading, read: String, now: Date, mark: @escaping (String) -> String)
     -> some View
   {
+    let entries = reading.meters(of: lens.profile, now: now).entries
     let geometry = BandsLayout.geometry(
-      Self.circle, reading.meters(of: lens.profile, now: now).entries,
-      .page(every: lens.profile == nil, several: reading.profiles.count > 1, focus: focus))
+      Self.circle, entries, .page(every: lens.profile == nil, several: reading.profiles.count > 1, focus: focus))
+    // UM-D31 — the key names only what this circle draws; with nothing read yet, there is none
+    let key = BandsLayout.keyItems(entries)
     return VStack(spacing: 6) {
       BandsDial(geometry: geometry, ground: ChromePalette.paper, mark: mark)
         .contentShape(Circle())
         .onTapGesture(coordinateSpace: .local) { spot in
           focus = geometry.plan(at: Double(spot.x), Double(spot.y))
         }
-      BandsKey()
+      if !key.isEmpty {
+        BandsKey(items: key)
+      }
       Text(read)
         .font(ChromeListType.detail)
         .foregroundStyle(ChromePalette.inkTertiary)
@@ -404,6 +424,21 @@ struct AgentProfilesPage: View {
         .accessibilityAddTraits(row.checked ? .isSelected : [])
     } else {
       label
+    }
+  }
+
+  /// UM-D33 — ↻, before close: asks the home to read its usage again. While that reading is out it turns (the symbol's
+  /// own rotate, which Reduce Motion stills) and takes no press.
+  private var refreshItem: some ToolbarContent {
+    ToolbarItem(placement: .topBarTrailing) {
+      Button {
+        Task { await feed.refresh() }
+      } label: {
+        Image(systemName: "arrow.clockwise")
+          .symbolEffect(.rotate, options: .repeat(.continuous), isActive: feed.refreshing)
+      }
+      .disabled(feed.refreshing)
+      .accessibilityLabel(AgentProfilesWords.refreshLabel)
     }
   }
 
@@ -477,7 +512,8 @@ private struct AgentProfileRowLabel: View {
 }
 
 /// A Plans row: its agent's mark (18), its title (a crowded agent's wearing its profile's glyph), and under it the
-/// kept reading's age, every window as Settings' C1 line and the forecast in the attention ink; or the first read's
+/// kept reading's age and every window as Settings' C1 line, each ending in its reset's cap with its out mark under it
+/// (UM-6); or the first read's
 /// silhouette, or a need in words; while the field is live, its sessions and its **Show** or **Showing** (UM-5b). An
 /// agent with no meter is a line of its own. The row itself takes no tap; only its button does.
 private struct AgentPlanRowView: View {
@@ -577,18 +613,14 @@ private struct AgentPlanRowView: View {
   @ViewBuilder
   private var detail: some View {
     switch row.body {
-    case .reading(let windows, let kept, let ages, let forecast, let stale):
+    case .reading(let windows, let kept, let ages, let stale):
       if let kept {
         Text(kept)
           .font(ChromeListType.detail)
           .foregroundStyle(ChromePalette.inkTertiary)
       }
+      // each line ends in its reset's cap and marks its own run-out under its bar (UM-D29, UM-D32)
       UsageLinesView(windows: windows, stale: stale, ages: ages)
-      if let forecast {
-        Text(forecast)
-          .font(ChromeListType.detail)
-          .foregroundStyle(ChromePalette.attention)
-      }
     case .firstRead:
       UsageLinesView.Loading()
     case .needs(let said), .none(let said):

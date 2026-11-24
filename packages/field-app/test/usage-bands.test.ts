@@ -26,11 +26,14 @@ import {
   type BandsGeometry,
   type BandsPlan,
   bandsGeometry,
+  bandsKeyLabel,
+  bandsKeyOf,
   bandsLabel,
   bandsLevel,
   bandsOf,
 } from "../src/usage/bands";
 import { everyPlan, type PlanMeter, planMeters } from "../src/usage/meters";
+import { resetClockOf } from "../src/usage/rules";
 
 const NOW = new Date("2026-11-06T12:00:00.000Z");
 const DEG = Math.PI / 180;
@@ -1065,5 +1068,122 @@ describe("UM-1 — the usage bands golden", () => {
     expect(USAGE_BANDS_CASES.map((each) => each.size)).toEqual(
       expect.arrayContaining([26, 36, 40, 54, 96, 206, 212, 214, 232]),
     );
+  });
+});
+
+// UM-6 (UM-D31 K3; DESIGN.md §8 "Godview's profiles column", the body): the key names only what its circle draws.
+describe("the bands key (UM-6, UM-D31): only what the circle draws", () => {
+  const WEEK = 7 * 24 * 60;
+  const opus = (id: string, label: string) => paced(id, 22, 58, WEEK, { group: { id, label } });
+
+  it("names the inside band and the outside by their windows' own lengths, and the hairline by its group's word", () => {
+    const items = bandsKeyOf(
+      meters([
+        ["claude", [paced("5h", 91, 80), paced("7d", 38, 58, WEEK), opus("opus", "Opus only")]],
+      ]),
+    );
+    expect(items).toEqual([
+      { band: "inner", words: "5 hours" },
+      { band: "outer", words: "7 days" },
+      { band: "hairline", words: "Opus" },
+    ]);
+    expect(bandsKeyLabel(items)).toBe("Inside, 5 hours; outside, 7 days; a hairline, Opus");
+  });
+
+  it("draws no hairline word nobody needs: a circle of weeks alone names the week and nothing else", () => {
+    expect(bandsKeyOf(meters([["codex", [paced("7d", 18, 30, WEEK)]]]))).toEqual([
+      { band: "outer", words: "7 days" },
+    ]);
+  });
+
+  it("says a model's week for groups of more than one name, and credits for a budget", () => {
+    const items = bandsKeyOf(
+      meters([
+        ["claude", [paced("5h", 10, 50), opus("opus", "Opus only")]],
+        ["codex", [paced("5h", 10, 50), opus("luna", "Luna Reserve")]],
+        ["grok", [budget(30)]],
+      ]),
+    );
+    expect(items).toEqual([
+      { band: "inner", words: "5 hours" },
+      { band: "budget", words: "credits" },
+      { band: "hairline", words: "a model's week" },
+    ]);
+    expect(bandsKeyLabel(items)).toBe(
+      "Inside, 5 hours; both bands, credits; a hairline, a model's week",
+    );
+  });
+
+  it("names nothing while nothing reads: no key", () => {
+    expect(bandsKeyOf(meters([["claude", { state: "unauthenticated" }]]))).toEqual([]);
+    expect(bandsKeyOf([])).toEqual([]);
+  });
+});
+
+// UM-6 (UM-D32 T9; DESIGN.md §8 "A meter line's end"): a reset as its end cap says it, by the reader's calendar days.
+describe("the reset clock (UM-6, UM-D32): its cap's day and time", () => {
+  // local moments, so the days are the reader's whatever the zone
+  const now = new Date(2026, 10, 23, 22, 0);
+  const time = (at: Date) =>
+    at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const weekday = (at: Date) => at.toLocaleDateString([], { weekday: "short" });
+  const date = (at: Date) => at.toLocaleDateString([], { month: "short", day: "numeric" });
+
+  it("says today's reset by its clock alone", () => {
+    const at = new Date(2026, 10, 23, 23, 30);
+    expect(resetClockOf(at.toISOString(), now)).toEqual({
+      time: time(at),
+      at: time(at),
+      in: "1h 30m",
+      passed: false,
+    });
+  });
+
+  it("says a five hours that resets after midnight by its day, since it is another day's", () => {
+    const at = new Date(2026, 10, 24, 1, 0);
+    expect(resetClockOf(at.toISOString(), now)).toEqual({
+      day: weekday(at),
+      time: time(at),
+      at: `${weekday(at)} ${time(at)}`,
+      in: "3h",
+      passed: false,
+    });
+  });
+
+  it("says one of the next six days by its weekday, and a week or more off by its date alone", () => {
+    const sixth = new Date(2026, 10, 29, 9, 0);
+    expect(resetClockOf(sixth.toISOString(), now)).toMatchObject({
+      day: weekday(sixth),
+      time: time(sixth),
+    });
+    const week = new Date(2026, 10, 30, 22, 0);
+    expect(resetClockOf(week.toISOString(), now)).toEqual({
+      day: date(week),
+      at: date(week),
+      in: "7d",
+      passed: false,
+    });
+  });
+
+  it("says one that has come by when it came, with no day before it and no time to go", () => {
+    const earlier = new Date(2026, 10, 23, 21, 50);
+    expect(resetClockOf(earlier.toISOString(), now)).toEqual({
+      time: time(earlier),
+      at: time(earlier),
+      passed: true,
+    });
+    const yesterday = new Date(2026, 10, 22, 23, 0);
+    expect(resetClockOf(yesterday.toISOString(), now)).toEqual({
+      time: time(yesterday),
+      at: `${weekday(yesterday)} ${time(yesterday)}`,
+      passed: true,
+    });
+    // at the moment itself it has come
+    expect(resetClockOf(now.toISOString(), now)?.passed).toBe(true);
+  });
+
+  it("says nothing for a reset it is not given, or cannot read", () => {
+    expect(resetClockOf(undefined, now)).toBeUndefined();
+    expect(resetClockOf("not a time", now)).toBeUndefined();
   });
 });

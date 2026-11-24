@@ -241,6 +241,15 @@ struct PlanBands: Equatable, Sendable {
   var budget: MeterWindow?
 }
 
+/// UM-6 (UM-D31 K3; DESIGN.md §8 "Godview's profiles column", the body) — one word of the bands key, led by its band
+/// drawn small: only a band the circle draws (`BandsLayout.keyItems`, the desktop's `bandsKeyOf`).
+struct BandsKeyItem: Equatable, Sendable {
+  enum Band: String, Sendable { case inner, outer, budget, hairline }
+  let band: Band
+  /// the window's own length ("5 hours", "7 days"), "credits", or the hairline's group ("Opus")
+  let words: String
+}
+
 enum BandsLayout {
   /// The inner band's reach: a window of five hours or less.
   static let shortWindowMinutes = 300
@@ -265,6 +274,46 @@ enum BandsLayout {
     bands.group = reading.windows.first { $0.line.group != nil }
     bands.budget = reading.windows.first { $0.budget }
     return bands
+  }
+
+  /// UM-6 (UM-D31 K3; the desktop's `bandsKeyOf`) — the bands key names only what the circle draws, over its plans that
+  /// read: the inside band by its window's own length (the first plan's that has one: "5 hours"), the outside band by
+  /// its ("7 days"), a budget by "credits", and the hairline by its group's own word ("Opus"), or "a model's week"
+  /// while the circle's groups have more than one name. In that order; none while nothing reads.
+  static func keyItems(_ entries: [PlanMeter]) -> [BandsKeyItem] {
+    var inner: String?
+    var outer: String?
+    var budget = false
+    var groups: [String] = []
+    for entry in entries where entry.kind == .reading {
+      let bands = bandsOf(entry)
+      if inner == nil, let short = bands.short { inner = short.lengthWords }
+      if outer == nil, let long = bands.long { outer = long.lengthWords }
+      if bands.budget != nil { budget = true }
+      if let word = bands.group?.line.group?.word, !groups.contains(word) { groups.append(word) }
+    }
+    var items: [BandsKeyItem] = []
+    if let inner { items.append(BandsKeyItem(band: .inner, words: inner)) }
+    if let outer { items.append(BandsKeyItem(band: .outer, words: outer)) }
+    if budget { items.append(BandsKeyItem(band: .budget, words: "credits")) }
+    if let only = groups.first {
+      items.append(BandsKeyItem(band: .hairline, words: groups.count == 1 ? only : "a model's week"))
+    }
+    return items
+  }
+
+  /// The key aloud, one sentence (§9 "The popover"): "Inside, 5 hours; outside, 7 days; a hairline, Opus".
+  static func keyWords(_ items: [BandsKeyItem]) -> String {
+    let said = items.map { item -> String in
+      switch item.band {
+      case .inner: return "inside, \(item.words)"
+      case .outer: return "outside, \(item.words)"
+      case .budget: return "both bands, \(item.words)"
+      case .hairline: return "a hairline, \(item.words)"
+      }
+    }
+    .joined(separator: "; ")
+    return said.prefix(1).uppercased() + said.dropFirst()
   }
 
   // MARK: - The plans' words

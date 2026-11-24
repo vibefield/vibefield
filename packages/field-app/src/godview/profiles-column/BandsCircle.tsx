@@ -2,7 +2,14 @@ import type { AgentProfileSet } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { AgentIcon, ProfileGlyph } from "@vibefield/puppeteer-view-sdk/react";
 import type { ReactElement, ReactNode } from "react";
-import { arcPath, type BandsGeometry, type BandsMark, type BandsPaint } from "../../usage/bands";
+import {
+  arcPath,
+  type BandsGeometry,
+  type BandsKeyItem,
+  type BandsMark,
+  type BandsPaint,
+  bandsKeyLabel,
+} from "../../usage/bands";
 import "./profiles-column.css";
 
 // UM-3 (DESIGN.md §8 "The Bands circle"; UM-D16 = E, "Bands") — THE BANDS CIRCLE, DRAWN: every number is the meter
@@ -291,8 +298,9 @@ export function BandsCircle({
   );
 }
 
-/** One band of the key drawn small (the drawing's `bkIcon`): the inner band, the outer, or the hairline beside both. */
-function KeyBand({ which }: { which: "inner" | "outer" | "hairline" }): ReactElement {
+/** One band of the key drawn small (the drawing's `bkIcon`): the inner band, the outer, both for a budget, or the
+ * hairline beside both. */
+function KeyBand({ which }: { which: BandsKeyItem["band"] }): ReactElement {
   const on = bandsPaint({ tone: "ink", percent: 72 });
   const off = bandsPaint({ tone: "ink", percent: 16 });
   return (
@@ -301,12 +309,12 @@ function KeyBand({ which }: { which: "inner" | "outer" | "hairline" }): ReactEle
         <path
           d="M2.4 10.4A5.6 5.6 0 0 1 13.6 10.4"
           strokeWidth={2.2}
-          style={{ fill: "none", stroke: which === "outer" ? on : off }}
+          style={{ fill: "none", stroke: which === "outer" || which === "budget" ? on : off }}
         />
         <path
           d="M5.3 10.4A2.7 2.7 0 0 1 10.7 10.4"
           strokeWidth={2.2}
-          style={{ fill: "none", stroke: which === "inner" ? on : off }}
+          style={{ fill: "none", stroke: which === "inner" || which === "budget" ? on : off }}
         />
         {which === "hairline" ? (
           <path
@@ -320,22 +328,25 @@ function KeyBand({ which }: { which: "inner" | "outer" | "hairline" }): ReactEle
   );
 }
 
-/** THE BANDS KEY (§8 "Godview's profiles column", the popover's body; §9): which band is which, in Settings' own
- * window words, each word led by its band drawn small. */
-export function BandsKey(): ReactElement {
+/** THE BANDS KEY (§8 "Godview's profiles column", the popover's body; §9): which band is which, each word led by its
+ * band drawn small, on one line. UM-6 (UM-D31 K3): it names only what its circle draws (`bandsKeyOf`), the hairline by
+ * its group's own word; with nothing to name it is not drawn. *Before (2026-11-24):* the same three words always,
+ * which wrapped onto two lines in the 212 column. */
+export function BandsKey({ items }: { items: readonly BandsKeyItem[] }): ReactElement | null {
+  if (items.length === 0) return null;
   return (
     <p
       className="vf-profiles-key"
       // the key is a picture of the bands with their words, said as one line (§9)
       role="img"
-      aria-label="Inside, the next five hours; outside, the week; a hairline, a model's own week"
+      aria-label={bandsKeyLabel(items)}
     >
-      <KeyBand which="inner" />
-      {"5 hours"}
-      <KeyBand which="outer" />
-      {"7 days"}
-      <KeyBand which="hairline" />
-      {"a model's week"}
+      {items.map((item) => (
+        <span key={item.band} className="vf-profiles-key-item" data-band={item.band}>
+          <KeyBand which={item.band} />
+          <span className="vf-profiles-key-word">{item.words}</span>
+        </span>
+      ))}
     </p>
   );
 }

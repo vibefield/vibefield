@@ -1009,7 +1009,9 @@ describe("a meter a later reading did not carry keeps its own read (item 274)", 
 // cold `snapshot()` kicks only before any batch exists, and the push itself makes one, since the
 // monitor publishes it synchronously (`ingest` → `materializeBatch` → fieldd's `ingestBatch`); the
 // phone asks only the cache (MetersFeed.swift:147). So the push itself kicks one reconcile, with
-// `poll: false`.
+// `poll: false`. *(Corrected 2026-11-24, UM-6: since UM-D33 a person's ↻ or pull on the phone's
+// Agent Profiles page asks `refresh: true`, which reads and reconciles as a window's Retry does;
+// the phone's plain read and its subscription still ask only the cache.)*
 
 const WORK: AgentProfile = {
   id: "work",

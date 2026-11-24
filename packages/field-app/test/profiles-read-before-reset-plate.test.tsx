@@ -1,8 +1,9 @@
 // @vitest-environment happy-dom
 /**
  * Agent Profiles' catalog plate for a window read before its reset (docs/UI_SYSTEM.md's meaningful states; DESIGN.md
- * §8): the SHIPPING page over a fixture reading three hours old, whose five hours reset ten minutes ago. It says the
- * reading's age where the reset stood, unlit, and the running week keeps its reset.
+ * §8): the SHIPPING page over a fixture reading three hours old, whose five hours reset ten minutes ago. Since UM-6
+ * (DESIGN.md §8 "A meter line's end") its cap's place stays, dashed, saying when it reset, the reading's age under its
+ * bar, unlit; the running week keeps its reset in its cap.
  */
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -44,13 +45,18 @@ describe("Agent Profiles' catalog plate: a window read before its reset", () => 
       lines.find((line) => line.getAttribute("aria-label")?.startsWith(lead));
 
     const fiveHours = said("5H:");
-    expect(fiveHours?.getAttribute("aria-label")).toBe("5H: 100% used, as of 3h ago");
-    expect(fiveHours?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("as of 3h ago");
-    // the age is not a reset: no reset mark before it, and the line is unlit
-    expect(fiveHours?.querySelector(".vf-profiles-reset")).toBeNull();
+    expect(fiveHours?.getAttribute("aria-label")).toMatch(
+      /^5H: 100% used, reset at .+, as of 3h ago$/u,
+    );
+    // its cap says when it reset, dashed; the age stands under its bar; no mark leads either, and it is unlit
+    expect(fiveHours?.classList.contains("is-passed")).toBe(true);
+    expect(fiveHours?.querySelector(".vf-profiles-usage-cap-day")?.textContent).toBe("Reset");
+    expect(fiveHours?.querySelector(".vf-profiles-usage-age")?.textContent).toBe("as of 3h ago");
+    expect(fiveHours?.querySelector(".vf-glyph")).toBeNull();
     expect(fiveHours?.classList.contains("is-hot")).toBe(false);
 
     expect(said("7D:")?.getAttribute("aria-label")).toContain("38% used, resets");
+    expect(said("7D:")?.classList.contains("is-passed")).toBe(false);
   });
 });
 
@@ -76,8 +82,10 @@ describe("Agent Profiles' catalog plate: a meter a later reading did not carry (
       lines.find((line) => line.getAttribute("aria-label")?.startsWith(lead));
 
     const fiveHours = said("5H:");
-    expect(fiveHours?.getAttribute("aria-label")).toBe("5H: 100% used, as of 3h ago");
-    expect(fiveHours?.querySelector(".vf-profiles-usage-reset")?.textContent).toBe("as of 3h ago");
+    expect(fiveHours?.getAttribute("aria-label")).toMatch(
+      /^5H: 100% used, reset at .+, as of 3h ago$/u,
+    );
+    expect(fiveHours?.querySelector(".vf-profiles-usage-age")?.textContent).toBe("as of 3h ago");
     expect(said("7D:")?.getAttribute("aria-label")).toContain("38% used, resets");
   });
 });

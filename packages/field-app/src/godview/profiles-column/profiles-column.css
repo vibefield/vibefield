@@ -441,6 +441,15 @@
   color: var(--vf-text-secondary);
 }
 
+/* UM-6 (UM-D30 R1): the age, ↻ and × stand together at the head's end, 8 apart */
+.vf-profiles-pop-end {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .vf-profiles-pop-age {
   flex: none;
   font-size: 11.5px;
@@ -454,7 +463,6 @@
   place-items: center;
   width: 24px;
   height: 24px;
-  margin-left: auto;
   padding: 0;
   border: 0;
   border-radius: 12px;
@@ -467,6 +475,44 @@
 .vf-profiles-pop-close:hover {
   background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
   color: var(--vf-text-primary);
+}
+
+/* ↻ is × made again: the same 24 round, the same steps under the pointer (UM-6, UM-D30 R1) */
+.vf-profiles-pop-refresh {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
+  color: var(--vf-text-secondary);
+  cursor: pointer;
+}
+
+.vf-profiles-pop-refresh:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+  color: var(--vf-text-primary);
+}
+
+/* while its reading is out ↻ takes no press and turns, a turn every 0.9s (still under M6, below) */
+.vf-profiles-pop-refresh:disabled {
+  cursor: default;
+}
+
+.vf-profiles-pop-refresh[aria-busy="true"] > .vf-glyph {
+  animation: vf-profiles-turn 0.9s linear infinite;
+}
+
+@keyframes vf-profiles-turn {
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .vf-profiles-pop-body {
@@ -482,18 +528,41 @@
   gap: 2px;
 }
 
-/* the bands key: three words, each led by its band drawn small, at 10.5/500 in t3 */
+/* the bands key: the words of what its circle draws, each led by its band drawn small, at 10.5/500 in t3, on ONE line
+   (UM-6, UM-D31 K3; asked 2026-11-24: "make this design in one line, two line looks odd"): 5 between a band and its
+   word, 10 between words, and the last word gives way with an ellipsis, never a second line */
 .vf-profiles-key {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   justify-content: center;
   align-items: center;
-  gap: 2px 5px;
+  gap: 10px;
+  max-width: 100%;
+  min-width: 0;
   margin: 4px 0 0;
   font-size: 10.5px;
   font-weight: 500;
   line-height: 1.2;
+  white-space: nowrap;
   color: var(--vf-text-tertiary);
+}
+
+.vf-profiles-key-item {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+
+.vf-profiles-key-item:last-child {
+  flex: 0 1 auto;
+}
+
+.vf-profiles-key-word {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* its band's box, 16 × 11, holds the drawing: `.vf-bands-drawing` fills the nearest positioned box, and without this
@@ -502,13 +571,9 @@
 .vf-profiles-key-band {
   position: relative;
   display: inline-grid;
+  flex: none;
   width: 16px;
   height: 11px;
-  margin-left: 5px;
-}
-
-.vf-profiles-key-band:first-child {
-  margin-left: 0;
 }
 
 /* DESIGN.md §8 "A plan's tier": a plan's tier after its title (`PlanTierMark`, its look in
@@ -637,16 +702,31 @@
   grid-column: 2 / 4;
 }
 
-/* Settings' own C1 lines (the shipping `UsageTimeline`), one per window: its label in 22, its track, and its own
-   reset, forecast or age at its end, as Settings says them */
+/* Settings' own C1 lines (the shipping `UsageTimeline`), one per window: its label in 22 and the 10 after it (32), its
+   track, and its reset's end cap in 66, the cap 64 with its 2 (UM-6, DESIGN.md §8 "A meter line's end") */
 .vf-profiles-pop-row-meter .vf-profiles-usage {
-  grid-template-columns: 22px minmax(0, 1fr) auto;
+  grid-template-columns: 32px minmax(0, 1fr) 66px;
   margin-top: 0;
 }
 
 /* 12 tall in the row, where Settings' track is 14: the line measures its track, so its now line follows */
 .vf-profiles-pop-row-meter .vf-profiles-usage-track {
   height: 12px;
+}
+
+/* …and its cap a hair taller than it, 14, its right end round */
+.vf-profiles-pop-row-meter .vf-profiles-usage-cap {
+  height: 14px;
+  border-radius: 2px 7px 7px 2px;
+}
+
+/* the out mark in the stage's attention ink, as the row's hot words are */
+.vf-profiles-pop-row-meter .vf-profiles-usage-tick {
+  background: var(--vf-monitor-ink-attention);
+}
+
+.vf-profiles-pop-row-meter .vf-profiles-usage-out-words {
+  color: var(--vf-monitor-ink-attention);
 }
 
 /* a reading kept after a failed refresh draws at half */
@@ -736,8 +816,9 @@
   color: var(--vf-text-primary);
 }
 
-/* the keyboard's ring, always (§7): ×, a row's act and Agent Profiles… */
+/* the keyboard's ring, always (§7): ×, ↻, a row's act and Agent Profiles… */
 .vf-profiles-pop-close:focus-visible,
+.vf-profiles-pop-refresh:focus-visible,
 .vf-profiles-pop-row-act:focus-visible,
 .vf-profiles-pop-open:focus-visible {
   outline: 2px solid var(--vf-select);
@@ -809,6 +890,11 @@
   opacity: 0.6;
 }
 
+/* …and the card's ↻ does not turn while it reads: the head's "Reading usage…" says it */
+.vf-godview[data-godview-animations="off"] .vf-profiles-pop-refresh[aria-busy="true"] > .vf-glyph {
+  animation: none;
+}
+
 /* …and the ring and the hover change at once, as under Reduce Motion */
 .vf-godview[data-godview-animations="off"] .vf-profiles-limit-act,
 .vf-godview[data-godview-animations="off"] .vf-profiles-circle,
@@ -831,5 +917,9 @@
 
   .vf-profiles-limit {
     transition: none;
+  }
+
+  .vf-profiles-pop-refresh[aria-busy="true"] > .vf-glyph {
+    animation: none;
   }
 }

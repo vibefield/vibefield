@@ -448,6 +448,7 @@ import { createSurfaceService } from "./surface-service";
 import { oweSyncQuestion } from "./sync-question";
 import { peerAnswerBytes, tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
+import { isSelfTailnetPrincipal } from "./terminal-grants";
 import { createTerminalLinkDoor } from "./terminal-links";
 import { TerminalSchemeStore } from "./terminal-scheme";
 import {
@@ -5755,19 +5756,26 @@ export async function bootstrap(
     // sentence for a refusal (EL7). Before the first reading lands the answer
     // is an honest empty batch, never a wait and never a throw.
     // UM-D8 (A), 2026-11-06 — the phone reads its home's batch and runs no poll
-    // of its own. Only this desktop's own windows (`ownWindow`) spend a reading
-    // or run the poll; every other caller (the phone) is answered from the
-    // cache and watches. The rule is the house allow-list, so a caller of a
-    // kind not named there spends nothing (EL7 fails closed). A phone's
-    // `refresh: true` is answered from the cache, as a door clamps a tailnet
-    // ask rather than refusing it: the batch's stamps say how old it is, so the
-    // answer claims no fresh reading. The one reading a phone can still cause
-    // is the one any read kicks while nothing is cached yet (`snapshot`).
+    // of its own. Only this desktop's own windows (`ownWindow`) run the poll;
+    // every other caller's subscription watches (below). The rule is the house
+    // allow-list, so a caller of a kind not named there spends nothing (EL7
+    // fails closed). The one reading such a caller can still cause is the one
+    // any read kicks while nothing is cached yet (`snapshot`).
+    // UM-D33 (UM-6, 2026-11-24, which revisits UM-D8; DECISIONS UM, the phone's
+    // own refresh): `refresh: true` is a reading for the owner's
+    // own windows AND the owner's own phone (a self tailnet principal), the
+    // person's ↻ or pull on the Agent Profiles page — never a timer (UM-L4
+    // stands: the kit asks it only on a person's act). It takes the monitor's
+    // backoff like a window's (`refresh` never bypasses it). Every other
+    // caller's — a peer daemon's, a node with no self mark, a plugin's — is
+    // still answered from the cache, as a door clamps a tailnet ask rather
+    // than refusing it: the batch's stamps say how old it is.
     api.register("agents.usage", (ctx, params) => {
       const parsed = AgentsUsageParams.safeParse(params ?? {});
       if (!parsed.success)
         throw new RpcCallError("PRECONDITION_FAILED", "expected { refresh?, profileIds? }", false);
-      if (parsed.data.refresh !== true || !ownWindow(ctx)) return agentUsage.snapshot();
+      const reads = ownWindow(ctx) || isSelfTailnetPrincipal(ctx.principal);
+      if (parsed.data.refresh !== true || !reads) return agentUsage.snapshot();
       // A refresh of an account's meters reads the account again too: its plan
       // is the card the meters sit on, and it changes without a sign-in. The
       // read is not waited for; its frames come by the profiles feed.

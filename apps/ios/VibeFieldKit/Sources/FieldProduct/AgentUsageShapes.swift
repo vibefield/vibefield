@@ -199,12 +199,21 @@ public struct AgentAccountUsageBatch: Sendable, Equatable {
   }
 }
 
-/// `agents.usage` as the phone asks it: the home's cached batch, every profile's. It names no `refresh` — a phone's
-/// would be answered from the cache all the same (UM-D8 A: only the desktop's own windows spend a reading) — so the
-/// ask claims nothing it does not get.
+/// `agents.usage` as the phone asks it, every profile's: the home's cached batch (`cached`, no `refresh`), or — only
+/// when a person asks, the Agent Profiles page's ↻ or its pull — a fresh reading (`fresh`, `refresh: true`). *Since
+/// UM-6 (UM-D33, 2026-11-24):* the home reads a refresh from the person's own phone (a self tailnet principal) as its
+/// own windows' refresh; UM-D8 had answered it from the cache, so the phone named no `refresh` then. Any other caller's
+/// is still answered from the cache.
 public struct AgentsUsageParams: Sendable, Equatable {
-  /// The phone's one ask.
-  public static let cached = AgentsUsageParams()
+  /// read the usage again before answering
+  public var refresh: Bool
 
-  public var json: JSONValue { .object([:]) }
+  public init(refresh: Bool = false) { self.refresh = refresh }
+
+  /// The phone's standing ask: the home's cached batch.
+  public static let cached = AgentsUsageParams()
+  /// A person's ask for a fresh reading.
+  public static let fresh = AgentsUsageParams(refresh: true)
+
+  public var json: JSONValue { refresh ? .object(["refresh": .bool(true)]) : .object([:]) }
 }

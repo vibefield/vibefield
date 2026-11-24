@@ -177,6 +177,52 @@ enum MeterRules {
     }
   }
 
+  /// UM-6 (UM-D32 T9; DESIGN.md §8 "A meter line's end") — where a reset stands on the clock, as a line's end cap
+  /// says it (the desktop's `resetClockOf`, rules.ts): a reset today by its time alone ("15:00"), one on one of the
+  /// next six days by its weekday and time ("Thu 12:00"), one a week or more off by its date alone ("Dec 4"), on a
+  /// 24-hour clock in the calendar's zone and the reader's locale; once it has come, when it came ("12:30", "Mon
+  /// 23:00"), with nothing left to wait. Nil when the window names no reset.
+  static func resetClock(
+    at: Date?, now: Date, calendar: Calendar = .current, locale: Locale = .current
+  ) -> ResetClock? {
+    guard let at else { return nil }
+    let zone = calendar.timeZone
+    // calendar days between the two local dates: a day that a clock change made 23 or 25 hours long is still one
+    let days =
+      calendar.dateComponents([.day], from: calendar.startOfDay(for: now), to: calendar.startOfDay(for: at)).day ?? 0
+    let time = clockFormatter("HHmm", locale: locale, zone: zone).string(from: at)
+    let weekday = clockFormatter("EEE", locale: locale, zone: zone).string(from: at)
+    let date = clockFormatter("MMMd", locale: locale, zone: zone).string(from: at)
+    let minutes = (at.timeIntervalSince1970 - now.timeIntervalSince1970) / 60
+    if minutes <= 0 {
+      // it has come: the cap says RESET and its time; the words say when, its day too when it was not today
+      let words = days == 0 ? time : days >= -6 ? "\(weekday) \(time)" : date
+      return ResetClock(day: nil, time: time, at: words, away: nil, passed: true)
+    }
+    if days <= 0 { return ResetClock(day: nil, time: time, at: time, away: durationWords(minutes), passed: false) }
+    if days <= 6 {
+      return ResetClock(
+        day: weekday, time: time, at: "\(weekday) \(time)", away: durationWords(minutes), passed: false)
+    }
+    return ResetClock(day: date, time: nil, at: date, away: durationWords(minutes), passed: false)
+  }
+
+  /// The end cap's formatters, one per template, locale and zone, each made once, as the day form's are.
+  private static let clockFormatters = OSAllocatedUnfairLock<[String: DateFormatter]>(uncheckedState: [:])
+
+  private static func clockFormatter(_ template: String, locale: Locale, zone: TimeZone) -> DateFormatter {
+    clockFormatters.withLockUnchecked { made in
+      let key = "\(template) \(locale.identifier) \(zone.identifier)"
+      if let formatter = made[key] { return formatter }
+      let formatter = DateFormatter()
+      formatter.locale = locale
+      formatter.timeZone = zone
+      formatter.setLocalizedDateFormatFromTemplate(template)
+      made[key] = formatter
+      return formatter
+    }
+  }
+
   /// UM-D4 — the forecast: at this pace the window is spent before it resets. Never for a budget, a window already
   /// spent, one whose length, time gone or reset is unknown, or one not ahead of pace.
   static func forecast(_ window: ForecastInput) -> MeterForecast? {
@@ -210,6 +256,25 @@ struct ForecastInput: Equatable, Sendable {
   var resetIn: Double?
   var budget: Bool
   var hot: Bool
+}
+
+/// UM-6 (UM-D32 T9; DESIGN.md §8 "A meter line's end") — a reset as its line's end cap says it (`MeterRules.resetClock`,
+/// the desktop's `ResetClock`). It is the reader's clock, so the usage bands golden never records it.
+struct ResetClock: Equatable, Sendable {
+  /// what leads the time in the cap, drawn in capitals: the weekday ("Thu") on one of the next six days, the date ("Dec
+  /// 4") a week or more off; nil today, and once it has come (the cap then says RESET)
+  let day: String?
+  /// the 24-hour clock ("15:00"); nil a week or more off, where the date stands alone
+  let time: String?
+  /// when, in the line's words: "15:00", "Thu 12:00", "Dec 4"; once it has come, "12:30" or "Mon 23:00"
+  let at: String
+  /// how far off it is ("1h", "2d 22h"); nil once it has come
+  let away: String?
+  /// it has come: its `resetsAt` is at or before now
+  let passed: Bool
+
+  /// "at 15:00" for a time alone, today's or a passed reset's own day; "Thu 12:00" and "Dec 4" as they are
+  var saidAt: String { time == at ? "at \(at)" : at }
 }
 
 /// UM-D4 — when a window runs out at this pace.
@@ -333,6 +398,9 @@ struct MeterWindow: Equatable, Sendable {
   /// UM-D13's rank: 0 once passed
   let pressure: Double
   let forecast: MeterForecast?
+  /// UM-6 — its reset on the clock, as its end cap says it (`MeterRules.resetClock`); nil for a budget and a window
+  /// that names no reset. The reader's own zone and locale: never in the usage bands golden.
+  let resetClock: ResetClock?
 
   var resetForm: MeterRules.ResetForm? { MeterRules.resetForm(resetIn: resetIn) }
 }
@@ -573,8 +641,11 @@ enum MeterModel {
           hot: MeterRules.isHot(used: settings.usedPercent, elapsed: nil))
         : settings
       var resetIn: Double?
+      var resetClock: ResetClock?
       if paced.resets, let at = parseWireDate(metric.resetsAt) {
         resetIn = (at.timeIntervalSince1970 - now.timeIntervalSince1970) / 60
+        // UM-6 — its end cap's clock, in the phone's own zone and locale (meters.ts' `resetClockOf`)
+        resetClock = MeterRules.resetClock(at: at, now: now)
       }
       // read before its reset (DESIGN.md §8 "A window read before its reset"): its reset is at or before now, whether
       // it came before or after the reading, so what it metered is gone and it runs ahead of nothing. Only its orange
@@ -594,7 +665,8 @@ enum MeterModel {
         metric: metric, line: line, budget: budget,
         lengthWords: MeterRules.windowWords(label: metric.label, durationMinutes: metric.durationMinutes),
         resetIn: resetIn, passed: passed,
-        pressure: MeterRules.pressure(hot: line.hot, used: line.usedPercent, passed: passed), forecast: forecast)
+        pressure: MeterRules.pressure(hot: line.hot, used: line.usedPercent, passed: passed), forecast: forecast,
+        resetClock: resetClock)
     }
   }
 

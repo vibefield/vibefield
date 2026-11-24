@@ -125,6 +125,25 @@ function ProfilesColumnController({
 }: ProfilesColumnProps): ReactElement {
   // ruling 8: This Mac's circle lists the agents Settings lists there; until the door answers, every agent
   const [installed, setInstalled] = useState<ReadonlySet<string> | undefined>(undefined);
+  // UM-6 (UM-D30 R1): the profiles whose card's ↻ is reading again, by set id, until the door answers
+  const [refreshing, setRefreshing] = useState<ReadonlySet<string>>(() => new Set());
+  const refresh = useCallback(
+    (setId: string, profileIds: readonly string[]): void => {
+      const read = port?.refresh;
+      if (read === undefined) return;
+      setRefreshing((held) => new Set(held).add(setId));
+      read(profileIds)
+        .catch(() => undefined)
+        .finally(() =>
+          setRefreshing((held) => {
+            const next = new Set(held);
+            next.delete(setId);
+            return next;
+          }),
+        );
+    },
+    [port],
+  );
   useEffect(() => {
     let cancelled = false;
     port
@@ -271,6 +290,7 @@ function ProfilesColumnController({
       canAdd={openNewProfile !== undefined}
       canOpen={openProfile !== undefined}
       canRetry={port?.refresh !== undefined}
+      refreshing={refreshing}
       chosenPlanFamily={chosenPlanFamily}
       onChoosePlan={onChoosePlan}
       moment={
@@ -308,6 +328,7 @@ function ProfilesColumnController({
       onRetry={(profileIds) => {
         port?.refresh?.(profileIds).catch(() => undefined);
       }}
+      onRefresh={refresh}
     />
   );
 }

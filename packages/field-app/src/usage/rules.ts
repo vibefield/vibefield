@@ -1,6 +1,6 @@
 // UM-1 (track UM; UM-D3, D4 and D13 at their leans, James 2026-11-06 03:11Z) — THE METER'S RULES, A LEAF: how a window
-// is pressed (UM-D13), which is the tightest, when it runs out at this pace (UM-D4), and how a length and a reset are
-// said. The ruled drawing's (draft/profile-meters/round4/src/p3a-core.js: `pressure`, `tightest`, `forecast`, `dur`),
+// is pressed (UM-D13), which is the tightest, when it runs out at this pace (UM-D4), how a length and a reset are
+// said, and where a reset stands on the clock for its line's end cap (UM-6, `resetClockOf`). The ruled drawing's (draft/profile-meters/round4/src/p3a-core.js: `pressure`, `tightest`, `forecast`, `dur`),
 // and a window's length in words (`windowWords`), which the limit moment says too (`setup/limit-moment.ts` reads it
 // here, so the meters need nothing of setup/).
 //
@@ -24,6 +24,48 @@ export function resetForm(window: {
   if (window.resetIn === undefined) return undefined;
   if (window.resetIn <= 0) return "now";
   return Math.round(window.resetIn) >= RESET_BY_DAY_MINUTES ? "day" : "length";
+}
+
+/** UM-6 (UM-D32 T9; DESIGN.md §8 "A meter line's end") — where a reset stands on the clock, as a line's end cap says
+ * it, in the reader's own zone and locale. */
+export interface ResetClock {
+  /** what leads the time in the cap: the weekday ("Thu") on one of the next six days, the date ("Dec 4") a week or
+   * more off; absent today, and once the reset has come */
+  day?: string;
+  /** a 24-hour clock, "15:00"; absent a week or more off, where the date alone is said */
+  time?: string;
+  /** how the line's words say it: "15:00" today, "Thu 12:00" within six days, "Dec 4" from a week; once come, the
+   * same for the day it came on */
+  at: string;
+  /** how far off it is, "1h", "2d 22h"; absent once it has come */
+  in?: string;
+  /** it has come: at or before now */
+  passed: boolean;
+}
+
+/** A day's local midnight, so two moments are told apart by their calendar days, not by 24-hour spans. */
+function dayStart(at: Date): number {
+  return new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
+}
+
+/** UM-6 — a reset as its line's end cap says it (`ResetClock`): nothing when it names none or its stamp cannot be
+ * read. Days are calendar days in the reader's zone, so a five-hour window that resets after midnight says its day. */
+export function resetClockOf(resetsAt: string | undefined, now: Date): ResetClock | undefined {
+  if (resetsAt === undefined) return undefined;
+  const at = new Date(resetsAt);
+  if (Number.isNaN(at.getTime())) return undefined;
+  // rounded: a day that DST shortens or lengthens is still one day
+  const days = Math.round((dayStart(at) - dayStart(now)) / 86_400_000);
+  const time = at.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+  const weekday = at.toLocaleDateString([], { weekday: "short" });
+  const date = at.toLocaleDateString([], { month: "short", day: "numeric" });
+  const away = Math.abs(days);
+  const said = away === 0 ? time : away < 7 ? `${weekday} ${time}` : date;
+  const ahead = (at.getTime() - now.getTime()) / 60_000;
+  if (ahead <= 0) return { time, at: said, passed: true };
+  if (days === 0) return { time, at: said, in: durationWords(ahead), passed: false };
+  if (days < 7) return { day: weekday, time, at: said, in: durationWords(ahead), passed: false };
+  return { day: date, at: said, in: durationWords(ahead), passed: false };
 }
 
 /** What a window's length is said from: its length in minutes, or its adapter's label when it names none. */

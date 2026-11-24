@@ -117,7 +117,7 @@ struct AgentProfilesPageTests {
     #expect(titles == ["Claude Max", "ChatGPT Business", "Kimi Code"])
     let bodies = work.plans.map(\.body)
     let first = try #require(bodies.first)
-    guard case .reading(let windows, let kept, let ages, let forecast, let stale) = first else {
+    guard case .reading(let windows, let kept, let ages, let stale) = first else {
       Issue.record("Work's first plan is not a reading: \(first)")
       return
     }
@@ -125,7 +125,10 @@ struct AgentProfilesPageTests {
     #expect(ids == ["five-hour", "seven-day"])
     #expect(kept == nil)
     #expect(ages.isEmpty)
-    #expect(forecast == "Runs out in ~1h 30m at this pace")
+    // UM-6 (UM-D29): no forecast sentence; the five hours marks its own run-out under its bar
+    let five = windows.first { $0.line.id == "five-hour" }
+    let out = five?.forecast?.short
+    #expect(out == "out in ~1h 30m")
     #expect(!stale)
     #expect(bodies.dropFirst().first == .needs("Couldn't read · retry"))
     #expect(bodies.last == .needs("Not signed in · sign in on studio"))
@@ -304,7 +307,7 @@ struct AgentProfilesPageTests {
     let words = Self.words(try Self.reading())
     #expect(words.plans.count == 7)
     let kept = words.plans.compactMap { row -> String? in
-      guard case .reading(_, let kept, _, _, _) = row.body else { return nil }
+      guard case .reading(_, let kept, _, _) = row.body else { return nil }
       return kept
     }
     #expect(kept == ["as of 32m ago"])
@@ -315,33 +318,43 @@ struct AgentProfilesPageTests {
   }
 
   /// DESIGN.md §8 "A window read before its reset", §9 "A reading" — the phone's common case (UM-D8): the home's batch
-  /// read three hours on, after the five hours reset. A window read before its reset says the reading's age where its
-  /// reset stood, unlit and with no reset mark, as Settings' C1 line says it (48a30767d); a window still running keeps
-  /// its reset; the plan's word is its tightest still running. A kept reading keeps its own age above its lines too.
-  @Test("a window read before its reset says the reading's age where its reset stood; the tightest still runs")
+  /// read three hours on, after the five hours reset. A window read before its reset says the reading's age, unlit, as
+  /// Settings' C1 line says it (48a30767d); a window still running keeps its reset; the plan's word is its tightest
+  /// still running. A kept reading keeps its own age above its lines too. *Since UM-6 (§8 "A meter line's end"):* the
+  /// passed line's cap says when it reset ("RESET 12:30") and its age stands under its bar; the running week's cap says
+  /// its reset on the clock, and its words how far off it is. The clock is the simulator's own zone, so the words are
+  /// held to the window's own clock, never to a literal time.
+  @Test("a window read before its reset says when it reset and the reading's age; the tightest still runs")
   func passedSaysItsAge() throws {
     let reading = try Self.reading()
     let later = Self.now.addingTimeInterval(3 * 3600)
     let words = AgentProfilesWords(reading: reading, lens: Self.lens(reading, "native"), home: "studio", now: later)
     let anthropic = try #require(words.plans.first { $0.key == "plan:anthropic" })
-    guard case .reading(let windows, let kept, let ages, let forecast, _) = anthropic.body else {
+    guard case .reading(let windows, let kept, let ages, _) = anthropic.body else {
       Issue.record("This Mac's Anthropic plan is not a reading: \(anthropic.body)")
       return
     }
     #expect(kept == nil)
     let age = ages["five-hour"]
     #expect(age == "as of 3h 1m ago")
-    #expect(forecast == nil)
     let passed = windows.filter { $0.passed }.map(\.line.id)
     #expect(passed == ["five-hour"])
     let five = try #require(windows.first { $0.passed })
-    let fiveSaid = UsageLineView.words(five.line, form: five.resetForm, age: age)
-    #expect(fiveSaid == "5H: 64% used, as of 3h 1m ago")
+    #expect(five.forecast == nil)
+    let fiveClock = try #require(five.resetClock)
+    #expect(fiveClock.passed)
+    #expect(fiveClock.away == nil)
+    #expect(fiveClock.day == nil)
+    let fiveSaid = UsageLineView.words(five.line, clock: fiveClock, age: age)
+    #expect(fiveSaid == "5H: 64% used, reset \(fiveClock.saidAt), as of 3h 1m ago")
     let week = try #require(windows.first { $0.line.id == "seven-day" })
-    let weekSaid = UsageLineView.words(week.line, form: week.resetForm)
-    #expect(weekSaid == "7D: 47% used, resets in 9h")
+    let weekClock = try #require(week.resetClock)
+    #expect(!weekClock.passed)
+    #expect(weekClock.away == "9h")
+    let weekSaid = UsageLineView.words(week.line, clock: weekClock)
+    #expect(weekSaid == "7D: 47% used, resets \(weekClock.saidAt), in 9h")
     let openai = try #require(words.plans.first { $0.key == "plan:openai" })
-    guard case .reading(_, let openaiKept, let openaiAges, _, let stale) = openai.body else {
+    guard case .reading(_, let openaiKept, let openaiAges, let stale) = openai.body else {
       Issue.record("This Mac's OpenAI plan is not a reading: \(openai.body)")
       return
     }
@@ -365,7 +378,7 @@ struct AgentProfilesPageTests {
     let reading = try Self.reading(.batch(batch))
     let mac = AgentProfilesWords(reading: reading, lens: Self.lens(reading, "native"), home: "studio", now: Self.now)
     let anthropic = try #require(mac.plans.first { $0.key == "plan:anthropic" })
-    guard case .reading(_, let kept, let ages, _, _) = anthropic.body else {
+    guard case .reading(_, let kept, let ages, _) = anthropic.body else {
       Issue.record("This Mac's Anthropic plan is not a reading: \(anthropic.body)")
       return
     }
@@ -374,7 +387,7 @@ struct AgentProfilesPageTests {
     #expect(ages == ["fable": "as of 40m ago"])
     let side = AgentProfilesWords(reading: reading, lens: Self.lens(reading, "side"), home: "studio", now: Self.now)
     let sideAnthropic = try #require(side.plans.first { $0.key == "plan:anthropic" })
-    guard case .reading(_, let sideKept, let sideAges, _, let stale) = sideAnthropic.body else {
+    guard case .reading(_, let sideKept, let sideAges, let stale) = sideAnthropic.body else {
       Issue.record("Side's Anthropic plan is not a reading: \(sideAnthropic.body)")
       return
     }
@@ -430,19 +443,22 @@ struct AgentProfilesPageTests {
     #expect(!down.firstRead)
   }
 
-  @Test("a window's reset aloud: by its length \"resets in 2h\", by its day \"resets Thu 09:00\", or \"resets now\"")
+  /// A line handed no clock (none since UM-6: every window that names a reset carries one) keeps the words it said
+  /// before; `MeterLineEndTests` holds the clock's words.
+  @Test("a line with no clock says its reset as before: \"resets in 2h\", \"resets Thu 09:00\", or \"resets now\"")
   func resetSaid() {
     func line(_ reset: String) -> UsageLine {
       UsageLine(
         id: "seven-day", label: "7D", group: nil, usedPercent: 42, elapsedPercent: 50, reset: reset, resets: true,
         hot: false)
     }
-    #expect(UsageLineView.words(line("2h"), form: .length) == "7D: 42% used, resets in 2h")
-    #expect(UsageLineView.words(line("Thu 09:00"), form: .day) == "7D: 42% used, resets Thu 09:00")
-    #expect(UsageLineView.words(line("now"), form: .now) == "7D: 42% used, resets now")
+    #expect(UsageLineView.words(line("2h"), clock: nil, form: .length) == "7D: 42% used, resets in 2h")
+    #expect(UsageLineView.words(line("Thu 09:00"), clock: nil, form: .day) == "7D: 42% used, resets Thu 09:00")
+    #expect(UsageLineView.words(line("now"), clock: nil, form: .now) == "7D: 42% used, resets now")
     // a window read before its reset says the reading's age in its reset's place (a reading whose time cannot be
     // read hands no age, and keeps "resets now")
-    #expect(UsageLineView.words(line("now"), form: .now, age: "as of 3h ago") == "7D: 42% used, as of 3h ago")
+    let aged = UsageLineView.words(line("now"), clock: nil, age: "as of 3h ago", form: .now)
+    #expect(aged == "7D: 42% used, as of 3h ago")
   }
 
   @Test("a tap on a plan's arc focuses it; a tap in the middle focuses none")
