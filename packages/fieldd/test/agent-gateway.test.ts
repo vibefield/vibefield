@@ -818,6 +818,7 @@ interface UnitOptions {
   catalog?: readonly AgentCatalogEntry[];
   /** Item 372 — the executable each offered agent's launcher names, by provider id */
   executables?: ReadonlyMap<string, string>;
+  readExecutables?: () => Promise<ReadonlyMap<string, string>>;
 }
 
 async function unit(options: UnitOptions = {}): Promise<Unit> {
@@ -871,7 +872,7 @@ async function unit(options: UnitOptions = {}): Promise<Unit> {
     catalog: createAgentCatalogReaders(catalog),
     terminals: () => (options.floor === false ? null : terminals),
     fold,
-    executables: () => new Map(options.executables ?? []),
+    executables: options.readExecutables ?? (() => new Map(options.executables ?? [])),
     shimScript: options.shimScript ?? shimScript,
     ...(options.launcher === null
       ? {}
@@ -1603,6 +1604,35 @@ describe("the gateway's start, refresh and stop (AR-7b)", () => {
     await box.gateway.refresh();
     expect(existsSync(box.home)).toBe(false);
     expect(box.terminals.listeners()).toBe(0);
+  });
+
+  it("releases shutdown while boot is still reading the shared install inventory", async () => {
+    let entered!: () => void;
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve;
+    });
+    let finish!: (value: ReadonlyMap<string, string>) => void;
+    const pending = new Promise<ReadonlyMap<string, string>>((resolve) => {
+      finish = resolve;
+    });
+    const box = await unit({
+      readExecutables: () => {
+        entered();
+        return pending;
+      },
+    });
+    const start = box.gateway.start();
+    try {
+      await reading;
+      await box.gateway.stop();
+      await start;
+    } finally {
+      finish(new Map());
+    }
+    await box.gateway.refresh();
+    expect(box.terminals.listeners()).toBe(0);
+    expect(box.kit.gateway).toEqual([]);
+    expect(box.kit.rendezvous).toEqual([]);
   });
 
   it(

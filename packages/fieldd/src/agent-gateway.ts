@@ -856,6 +856,20 @@ export class AgentGatewayService {
   /** launches that ran as typed, by code (no argument, no provider's words) */
   private readonly ranAsTyped = new Map<RanAsTypedCode, number>();
   private stopping: Promise<void> | undefined;
+  // Discovery runs inside the serialized publisher. Quit may release its
+  // read-only wait. Writes and active launches still drain in order.
+  private interruptDiscovery: (() => void) | undefined;
+
+  private async untilStop<T>(read: Promise<T>): Promise<T | undefined> {
+    const interrupted = new Promise<undefined>((resolve) => {
+      this.interruptDiscovery = () => resolve(undefined);
+    });
+    try {
+      return await Promise.race([read, interrupted]);
+    } finally {
+      this.interruptDiscovery = undefined;
+    }
+  }
 
   constructor(private readonly opts: AgentGatewayOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -897,6 +911,7 @@ export class AgentGatewayService {
    * launcher waits for the fieldd that comes next. */
   stop(): Promise<void> {
     this.stopping ??= (async () => {
+      this.interruptDiscovery?.();
       // a shell born from here on is born as before: nothing of this
       // gateway's will answer the launcher its PATH would lead with
       this.opts.onShellIntegration?.(null);
@@ -1025,7 +1040,7 @@ export class AgentGatewayService {
       );
       return;
     }
-    if (this.opts.hold !== undefined) await this.opts.hold;
+    if (this.opts.hold !== undefined) await this.untilStop(this.opts.hold);
     if (this.stopping !== undefined) return;
     const layout = spawnThroughLayout(this.home);
     // A2 — THE BOOT WINDOW. The integration is written FIRST, before anything
@@ -1062,11 +1077,15 @@ export class AgentGatewayService {
     // (`handOverIntegration`); `publish` hands it over for a home first
     // written there — a refresh after nothing was written at the start.
     if (await this.writeIntegration(layout)) this.handOverIntegration();
-    this.choice = await chooseLauncherRuntime({
-      ...ownRuntimeFacts([layout.shimDirectory, process.env["PUPPETEER_SHIM_DIR"]]),
-      ...this.opts.runtimeFacts,
-      ...(this.opts.launcher !== undefined ? { configured: this.opts.launcher } : {}),
-    });
+    if (this.stopping !== undefined) return;
+    this.choice = await this.untilStop(
+      chooseLauncherRuntime({
+        ...ownRuntimeFacts([layout.shimDirectory, process.env["PUPPETEER_SHIM_DIR"]]),
+        ...this.opts.runtimeFacts,
+        ...(this.opts.launcher !== undefined ? { configured: this.opts.launcher } : {}),
+      }),
+    );
+    if (this.choice === undefined || this.stopping !== undefined) return;
     if (this.choice.runtime === undefined) {
       this.logger.warn(
         "fieldd.agents.gateway_no_launcher_runtime",
@@ -1107,10 +1126,12 @@ export class AgentGatewayService {
     if (this.stopping !== undefined || !this.posix) return;
     const script = this.bundledShim();
     const runtime = this.choice?.runtime;
-    this.offered =
+    const offered =
       script === undefined || runtime === undefined
         ? { providers: [], names: [], withheld: [] }
-        : await this.offer();
+        : await this.untilStop(this.offer());
+    if (offered === undefined || this.stopping !== undefined) return;
+    this.offered = offered;
     this.sayWithheld();
     if (this.offered.names.length === 0 && !existsSync(this.home) && this.gateway === undefined) {
       return;
