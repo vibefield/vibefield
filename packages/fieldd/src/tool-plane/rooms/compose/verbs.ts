@@ -167,10 +167,14 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
   const session = (row: AgentSessionSummary, profile: AgentProfileSetId): ComposeSession => {
     const blocker = row.monitor?.blockers[0];
     const facts = deps.runFacts(row.runtimeRunId);
+    // Spark QA F19 (2026-11-25) — the title a launch gave, else the one the session gave itself (the board's own
+    // order): an agent a spark started is launched with none, and was listed untitled while its row had a name
+    const own = row.monitor?.session?.title;
+    const title = row.title || (typeof own === "string" ? own : undefined);
     return {
       id: row.runtimeRunId,
       agent: row.kind,
-      ...(row.title ? { title: row.title } : {}),
+      ...(title ? { title } : {}),
       state: stateOf(row),
       ...(stateOf(row) === "asking" && blocker ? { asking: blocker.kind } : {}),
       folder: row.monitor?.environment?.cwd ?? row.workspace?.root ?? "",

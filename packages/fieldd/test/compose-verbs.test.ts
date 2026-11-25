@@ -234,6 +234,24 @@ describe("the read verbs, held to a spark's profiles (CP-1b; TL-D5)", () => {
     });
   });
 
+  // Spark QA F19 (2026-11-25) — found in real use: an agent a spark started is launched with no title, names itself
+  // on its first turn, and was still listed untitled
+  it("agents_list: a session is named by its launch's title, else by the title it gave itself", async () => {
+    const runs = [
+      row("run-own", "work", {
+        monitor: { blockers: [], session: { title: "Automerge notes" } } as never,
+      }),
+      row("run-both", "work", {
+        title: "my own helper",
+        monitor: { blockers: [], session: { title: "READY" } } as never,
+      }),
+      row("run-none", "work"),
+    ];
+    const { verbs } = deps({ runs: () => runs });
+    const listed = (await verbs.agents_list(SPARK, {})).sessions;
+    expect(listed.map((s) => s.title)).toEqual(["Automerge notes", "my own helper", undefined]);
+  });
+
   // Spark QA F8 (2026-11-25) — found in real use with History not brought in: every agent_read answered an empty
   // list and nothing else, and the spark read it as "my words never arrived" and sent them again
   it("agent_read: a session History holds no words of answers no turns WITH its reason, by History's phase", async () => {
