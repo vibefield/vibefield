@@ -585,8 +585,8 @@ function SelectionBarOn({
     () => (chosen === undefined ? menuEyebrow(facts.selection) : choiceEyebrow(chosen.label)),
     [chosen, facts.selection],
   );
-  // IK — over the words the menu is the words' own: Cut · Copy · Paste | Select all; Paste waits where the page cannot read
-  // the clipboard (the app's shell — the host's read through main is not the editor's)
+  // IK — over the words the menu is the words' own: Cut · Copy · Paste | Select all; Paste reads through the shell's clipboard
+  // door (round two) and waits only where there is none (the browser catalog)
   const paste = wordsPasteOf(peekHost());
   const wordsGroups = useMemo(() => wordsMenuGroups(keys, paste), [keys, paste]);
   const groups = overWords ? wordsGroups : objectGroups;
@@ -674,7 +674,15 @@ function SelectionBarOn({
       // IK — a words' row: the editor's own command, run now, inside the press
       const command = commandOfRow(row.id);
       if (command !== undefined) {
-        void runWordsCommand(editorOf(desk), command, keys, sayOnLine);
+        // Paste reads through the shell's clipboard door (main's read; the web's is refused in the app)
+        const door = peekHost()?.clipboard;
+        void runWordsCommand(
+          editorOf(desk),
+          command,
+          keys,
+          sayOnLine,
+          door === undefined ? undefined : () => door.readText(),
+        );
         return;
       }
       if (row.id === "copy") copySelection(desk, "menu");

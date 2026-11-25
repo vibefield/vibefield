@@ -845,7 +845,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(picks(wordsPlates[3])).toEqual(["yellow:on", "green", "pink", "blue", "orange", "none"]);
     expect(shownWords(wordsPlates[2])?.firstElementChild?.getAttribute("data-act")).toBe("back");
     // V5b — the keys ICE's written part declares, in the tips; the words' More grown on its two plates, its rows the
-    // product's own (`wordsMenuGroups`): where the page reads the clipboard, and in the app, where Paste waits
+    // product's own (`wordsMenuGroups`): where the host has the clipboard door, and where it has none, so Paste waits
     const tipOf = (act: string): string | null | undefined =>
       shownWords(wordsPlates[0])
         ?.querySelector<HTMLElement>(`[data-act="word:${act}"]`)

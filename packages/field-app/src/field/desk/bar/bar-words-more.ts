@@ -8,21 +8,20 @@ import type { DeskKeys, MenuRow } from "./bar-model";
 // editor's own items, never a kind's acts: they run through the desk's one editor (bar-acts.ts `runWordsCommand`), which
 // keeps the field's focus and its range.
 //
-// PASTE, HONESTLY. The editor's paste reads the system clipboard through the web's own read (`navigator.clipboard`). The
-// desktop app grants no Chromium permission (ESP §7.4), so that read is refused there, and the editor would then lay the
-// last words copied or cut on THIS desk, whatever the clipboard holds since. A paste of stale words is worse than none, so
-// where the page cannot read the clipboard (the app: its host reads it through main, `FieldClipboardHost`) the bar's Paste
-// WAITS — drawn, never taken — and its tooltip says the key that does paste (the field's ⌘V). Where the page reads it (a
-// browser harness), Paste runs, and a paste that laid nothing says so on the status line.
+// PASTE, THROUGH THE SHELL'S DOOR (round two). The desktop app grants the page no Chromium permission (ESP §7.4), so the web's
+// own clipboard read is refused there; main reads the system clipboard for the focused product window instead
+// (`FieldClipboardHost.readText`, the door a terminal's paste already takes — terminal/clipboard.ts). The bar's Paste reads
+// the words through that door and hands them to the editor (`DeskEditor.command("paste", { text })`, which reads no clipboard
+// itself and lays the desk's last copied piece only when its words are exactly these, so their marks come back). Where no
+// such door exists (the browser catalog) the bar has no honest read, and its Paste WAITS — drawn, never taken — saying the
+// key that does paste (the field's ⌘V). A paste that laid nothing, or a read the door refused, says so on the status line.
 
-/** Whether this page can read the system clipboard itself: `reads` (the web's read stands), or `shell` (the app's shell
- * refuses it; the host reads it through main, which the editor's paste does not take). */
-export type WordsPaste = "reads" | "shell";
+/** The bar's road to the clipboard: `door` (the host reads it through main), or `none` (no door: Paste waits). */
+export type WordsPaste = "door" | "none";
 
-/** The page's road to the clipboard, by its host: a host that reads the clipboard through main is the app's shell, where the
- * web's own read is refused (host.ts `FieldClipboardHost`); no such host, the web's read stands. */
+/** The bar's road, by its host: a host with the clipboard door (host.ts `FieldClipboardHost`) reads it; none, no road. */
 export const wordsPasteOf = (host: Pick<FieldHost, "clipboard"> | null): WordsPaste =>
-  host?.clipboard === undefined ? "reads" : "shell";
+  host?.clipboard === undefined ? "none" : "door";
 
 /** The words' More rows' ids: `words:<command>`. */
 export const WORDS_ROW = "words:";
@@ -49,7 +48,7 @@ export const pasteWaits = (keys: DeskKeys): string =>
 
 /**
  * The words' menu, NEAREST FIRST: Cut · Copy · Paste | Select all (§8), each with the platform field's key. Paste waits where
- * the page cannot read the clipboard (`shell`), and says the key that pastes.
+ * the bar has no road to the clipboard (`none`), and says the key that pastes.
  */
 export function wordsMenuGroups(keys: DeskKeys, paste: WordsPaste): MenuRow[][] {
   const k = WORDS_KEYS[keys];
@@ -59,7 +58,7 @@ export function wordsMenuGroups(keys: DeskKeys, paste: WordsPaste): MenuRow[][] 
     key: k[name],
   });
   const pasteRow: MenuRow =
-    paste === "shell" ? { ...row("paste"), waits: pasteWaits(keys) } : row("paste");
+    paste === "none" ? { ...row("paste"), waits: pasteWaits(keys) } : row("paste");
   return [[row("cut"), row("copy"), pasteRow], [row("selectAll")]];
 }
 
@@ -87,3 +86,7 @@ export function wordsMissed(name: EditorCommand, keys: DeskKeys): string | undef
       return undefined;
   }
 }
+
+/** What the status line says when the clipboard door refused its read (main answers only the focused product window). */
+export const pasteUnread = (keys: DeskKeys): string =>
+  `Couldn't read the clipboard. ${WORDS_KEYS[keys].paste} pastes from it.`;

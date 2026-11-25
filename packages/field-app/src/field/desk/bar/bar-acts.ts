@@ -9,7 +9,7 @@ import {
 import type { DeskEditor, EditorCommand } from "@vibecook/ice/desk";
 import { getRendererLogger } from "../../../logging";
 import type { DeskKeys } from "./bar-model";
-import { wordsMissed } from "./bar-words-more";
+import { pasteUnread, wordsMissed } from "./bar-words-more";
 
 // THE BAR'S ACTS (DK-11; DESIGN.md §8 "The doors": "the acts run through the engine's ops"; "The bar grown"). Each
 // act of the bar and its grown menu is ONE engine op on the selection — `ops.runMenuAction` for a kind's,
@@ -100,7 +100,9 @@ export function runWordsAct(
  * IK (DESIGN.md §8 "The words bar" — More; ICE I60) — run one of the words' More rows, Cut, Copy, Paste or Select all,
  * through the desk's ONE editor's `command`: the one place the bar runs the editor's items. Called INSIDE the press's own
  * event, as the platform grants the clipboard to a person's gesture, while the field keeps its focus (the bar's presses
- * prevent their defaults). A command that did nothing is said on the status line with the key that does it (never a silent
+ * prevent their defaults). PASTE with `read` (round two: the shell's clipboard door, main's read) reads the words first and
+ * hands them in — `command("paste", { text })`, the editor reading no clipboard; a read refused is said and logged, and the
+ * editor is not asked. A command that did nothing is said on the status line with the key that does it (never a silent
  * nothing); a refusal is logged. Resolves what the editor answered.
  */
 export function runWordsCommand(
@@ -108,22 +110,49 @@ export function runWordsCommand(
   name: EditorCommand,
   keys: DeskKeys,
   say: (words: string) => void,
+  read?: () => Promise<string>,
 ): Promise<boolean> {
   const missed = (): false => {
     const words = wordsMissed(name, keys);
     if (words !== undefined) say(words);
     return false;
   };
+  const failed = (event: string, message: string, error: unknown): void => {
+    getRendererLogger()
+      .child({ component: "canvas.desk.bar" })
+      .warn(event, message, {
+        command: name,
+        error: error instanceof Error ? error.message : String(error),
+      });
+  };
   if (editor === null || editor === undefined) return Promise.resolve(missed());
+  if (name === "paste" && read !== undefined) {
+    let asked: Promise<string>;
+    try {
+      asked = read();
+    } catch (error) {
+      asked = Promise.reject(error);
+    }
+    return asked.then(
+      (text) =>
+        editor.command("paste", { text }).then(
+          (done) => done || missed(),
+          (error: unknown) => {
+            failed("renderer.desk.words-command-failed", "The editor's command failed", error);
+            return missed();
+          },
+        ),
+      (error: unknown) => {
+        failed("renderer.desk.words-paste-unread", "The clipboard door refused its read", error);
+        say(pasteUnread(keys));
+        return false;
+      },
+    );
+  }
   return editor.command(name).then(
     (done) => done || missed(),
     (error: unknown) => {
-      getRendererLogger()
-        .child({ component: "canvas.desk.bar" })
-        .warn("renderer.desk.words-command-failed", "The editor's command failed", {
-          command: name,
-          error: error instanceof Error ? error.message : String(error),
-        });
+      failed("renderer.desk.words-command-failed", "The editor's command failed", error);
       return missed();
     },
   );

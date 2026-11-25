@@ -542,8 +542,8 @@ export function HandPlate({ state, dark }: { state: HandState; dark: boolean }):
 // (`deskLook`), as ICE's own note's are. A plate per row: the words' row, the same with no pen shared and no highlight, the pens' row and
 // the highlighters' row, each opened by the view's own state (`wordsOpen`). The plate stages the sheet, its brackets and
 // the words' wash, which the desk draws in the product; the place is the view's, over the words' box. V5b: the words' More
-// grown — its rows read by the product's own model (`wordsMenuGroups`) — where the page reads the clipboard, and in the
-// app, where Paste waits; More folds and grows it again on the plate. The toggles and Highlight carry the keys ICE's written
+// grown — its rows read by the product's own model (`wordsMenuGroups`) — where the host has the clipboard door (the app;
+// round two), and where it has none, so Paste waits; More folds and grows it again on the plate. The toggles and Highlight carry the keys ICE's written
 // part declares (⇧⌘X, ⌘U, ⇧⌘H), printed in their tips.
 
 const PEN_NAMES = ["felt", "ball", "fountain", "red"] as const;
@@ -603,7 +603,7 @@ export const WORDS_STATES = [
   "Words — the pens",
   "Words — the highlighters",
   "Words — More",
-  "Words — More in the app: Paste waits",
+  "Words — More with no clipboard door: Paste waits",
 ] as const;
 export type WordsState = (typeof WORDS_STATES)[number];
 
@@ -624,8 +624,8 @@ const WORDS_PLATES: Record<
   },
   "Words — the pens": { menu: MARKED, open: "ink.pen" },
   "Words — the highlighters": { menu: MARKED, open: "ink.highlight" },
-  "Words — More": { menu: MARKED, more: "reads" },
-  "Words — More in the app: Paste waits": { menu: MARKED, more: "shell" },
+  "Words — More": { menu: MARKED, more: "door" },
+  "Words — More with no clipboard door: Paste waits": { menu: MARKED, more: "none" },
 };
 
 /** A plate whose menu grows stands its sheet this much lower, and is this tall, so the menu grows UP as it does mid-desk. */

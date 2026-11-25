@@ -18,7 +18,8 @@
  *   THE WORDS' MORE (V5b) — More and a right-click on the sheet being written grow the bar into the words' menu, Cut · Copy ·
  *     Paste | Select all with the field's keys, each run ONCE through the desk's one editor's `command` (a double: happy-dom
  *     has no editor) with the field's focus kept; a command that did nothing is said on the status line; in the app (a host
- *     that reads the clipboard through main) Paste waits and says ⌘V; a right-click anywhere else is the objects' as before;
+ *     that reads the clipboard through main) Paste reads through that door and hands the words in (round two), and with no
+ *     door it waits and says ⌘V; a right-click anywhere else is the objects' as before;
  *     a slot's declared `keys` printed in its tip.
  * No kind on the desk declares words acts yet (ICE's ink acts arrive with the note's next slice): the anchors are fixtures.
  */
@@ -220,8 +221,9 @@ beforeEach(async () => {
   commands = [];
   answer = true;
   const editor = {
-    command: vi.fn(async (name: string) => {
-      commands.push(name);
+    command: vi.fn(async (name: string, opts?: { readonly text?: string }) => {
+      // a paste handed its words (round two: read through the shell's door) is said with them
+      commands.push(opts?.text === undefined ? name : `${name}:${opts.text}`);
       if (answer instanceof Error) throw answer;
       return answer;
     }),
@@ -743,6 +745,15 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
     });
   };
 
+  /** The system clipboard's words, as main's door reads them (round two). */
+  let clipboardText: string;
+  let readText: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    // the app's road: a host with the clipboard door (main's read; the web's is refused there)
+    clipboardText = "words";
+    readText = vi.fn(async () => clipboardText);
+    setHost({ clipboard: { readText, writeImage: async () => undefined } } as unknown as FieldHost);
+  });
   afterEach(() => {
     setHost(null as unknown as FieldHost);
   });
@@ -763,7 +774,7 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
       "eyebrow WORDS",
     ]);
     expect(bar().querySelector('[role="menu"]')?.getAttribute("aria-label")).toBe("Words");
-    // the nearest row is hot; nothing waits where the page reads the clipboard
+    // the nearest row is hot; nothing waits where the host has the clipboard door
     expect(menuRow("words:cut").hasAttribute("data-hot")).toBe(true);
     expect(menuRow("words:paste").hasAttribute("aria-disabled")).toBe(false);
     // More again folds it
@@ -787,13 +798,15 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
       expect(down.defaultPrevented, name).toBe(true);
       expect(mouse.defaultPrevented, name).toBe(true);
       act(() => target.click());
-      expect(commands.at(-1), name).toBe(name);
+      // asked inside the press: the editor's command, or for Paste the door's read that comes first
+      if (name === "paste") expect(readText).toHaveBeenCalledTimes(1);
+      else expect(commands.at(-1), name).toBe(name);
       expect(surfaceNow, name).toBeNull();
       expect(document.activeElement, name).toBe(field);
       expect([field.selectionStart, field.selectionEnd], name).toEqual([4, 12]);
       await settle();
     }
-    expect(commands).toEqual(["cut", "copy", "paste", "selectAll"]);
+    expect(commands).toEqual(["cut", "copy", "paste:words", "selectAll"]);
     // no act of a kind ran for them
   });
 
@@ -830,10 +843,35 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
     }
   });
 
-  it("IN THE APP (a host that reads the clipboard through main, where the web's read is refused) Paste WAITS and says ⌘V — never a paste of stale words", () => {
-    setHost({
-      clipboard: { readText: async () => "words", writeImage: async () => undefined },
-    } as unknown as FieldHost);
+  it("IN THE APP Paste reads the clipboard through main's door and hands the words to the editor (round two); a refused read is said", async () => {
+    const said: string[] = [];
+    const unhear = hearLineSays((text) => said.push(text));
+    try {
+      clipboardText = "two words";
+      mount();
+      act(() => cell("more").click());
+      const paste = menuRow("words:paste");
+      expect(paste.hasAttribute("aria-disabled")).toBe(false);
+      expect(paste.querySelector(".vf-bar-key")?.textContent).toBe("⌘V");
+      act(() => paste.click());
+      await settle();
+      expect(readText).toHaveBeenCalledTimes(1);
+      expect(commands).toEqual(["paste:two words"]);
+      expect(said).toEqual([]);
+      // the door refuses (not the focused window): said, and the editor is not asked
+      readText.mockRejectedValueOnce(new Error("not the focused window"));
+      act(() => cell("more").click());
+      act(() => menuRow("words:paste").click());
+      await settle();
+      expect(commands).toEqual(["paste:two words"]);
+      expect(said).toEqual(["Couldn't read the clipboard. ⌘V pastes from it."]);
+    } finally {
+      unhear();
+    }
+  });
+
+  it("with NO clipboard door (the browser catalog) Paste WAITS and says ⌘V — never a paste the bar cannot read", () => {
+    setHost(null as unknown as FieldHost);
     mount();
     act(() => cell("more").click());
     const paste = menuRow("words:paste");
