@@ -68577,3 +68577,42 @@ chat. "HQ" is that QA's own numbering, not a ratified track. Each commit's body 
   minute, cause not known. The room still says "Up to date" for the seconds before the first projects. Phone Browse
   at a home folder still holds its engine for the long lease. The long fix for a wide tree is mille's (watch only
   what is expanded). The rest of the git polling's cost is the room package's (reads only for the showing tab).
+
+## MA-D16 — an app on a Mac that is not connected opens where it is, and the shelf says what connecting gives (M554)
+
+**2026-11-24 · on local main: `d7c6364dc` (doc), `4a6ea7685` MA-D16 (code).** James, 2026-11-24, in chat, on the
+desk's Apps shelf in a QA desktop with no linked login (no thumbnails, no app would open, the layout off): "there are
+three kinds of ingested artifacts, ones with real html file, ones with only claude url, ones that has both. and we
+should design things differently based on whether user has linked tailscale or not linked, if user not linked, the
+ones with html files, they can click to open the file in system browser, if with claude url they open the link in
+browser, and there should be proper ui design that tell user if they link their tailscale account they can publush
+these apps in their network and have access anywhere with their devices like their phone" (track MA; DECISIONS MA).
+
+- **A press goes where the app is.** A kept page on a desktop with no linked login opens as a FILE in the browser:
+  `artifact.open` answers `local`, the files worker writes `local.html` with the app's own policy in its head (no
+  response header reaches a file; MA-L7), and main finds that file itself from the app and its page's digest
+  (`shell.openMadeApp`, never a path). An app with a hosted link and no kept page opens the link. One with both
+  opens the page and keeps "Open in ‹host›" in its menu. Once connected, apps are served as before.
+- **The shelf.** A connect row ("These apps open on this Mac only." … **Connect…**, which opens Settings →
+  Devices); periods where there were days (8 headings for 23 on a 44-app corpus); the tile's third line never loses
+  its word (cut off on 19 of 44 before); a refusal stays in sight; an empty Live is one row; a tile's menu says why
+  it has no preview; the circle's sheet opens to 600 (the pill's keeps 420).
+- **The phone's reading did not move:** the desk's link decision is a layer over the shared reading
+  (`madeAppTileStateOf`), and `made-app-facts.golden.json` is unchanged.
+- **Proof:** contracts whole (82 files, 2,382 passed); field-app whole (401 files, 5,856 passed, 3 skipped);
+  electron-shell `made-app-local` and `shell-provider` (29 passed); fieldd's six files of the change (127 passed);
+  tsc on the four packages; `biome check` on every changed file; the import walls; the agent id literal lint;
+  `check:ios-fixtures`; `pnpm gen` moved no generated file. Seen run in an isolated dev-mode desktop with OS
+  hand-offs recorded: a press on a kept page handed over its `file:` URL (audited `artifact.made.open` with
+  `state: local`, then `artifact.made.reveal`), a press on a link-only tile its `https:` address, and Connect…
+  opened Devices. In a hidden Chromium the head's policy refused a page a host it was not written for, and the same
+  page without it reached that host.
+- **Not run:** `pnpm verify` whole, any smoke, `gate:landing`. No browser was opened by a press: the tab itself is
+  unseen by this session.
+- **Not built:** a Mac that is not connected draws no previews (the capture and the images both go through the
+  serve), so its tiles keep the fallback icon. An ask with no `reveal` is still refused `not-linked`.
+- **Limits of the file road, said in DECISIONS:** the page stands in the browser's `file:` origin, not one of its
+  own; a hard link at the derived path opens; the OS picks the app for an `.html` file.
+- **Owed ‹for James›:** his press of a tile (the tab); the draft words in DESIGN.md §9 "A Mac that is not
+  connected"; whether the pill's sheet grows too; MA-L7's dated words at their source
+  (`draft/thinking-mini-apps.md` §3), which wait for his own `pnpm commit-draft`.

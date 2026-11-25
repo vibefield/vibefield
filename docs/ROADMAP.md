@@ -610,6 +610,10 @@ DESIGN.md §2.9, §8 "The phone's Apps" and §9 "Apps"; DECISIONS MA
   item 373's gate stands OPEN.
 - Landed 11-18, AH-4's findings: **item 517** (M385: Refresh preview is audited with the person, and captures go
   one at a time) and **item 519** (M424: a preview capture reuses its own browser session, once it is cleared).
+- Landed 11-24: **MA-D16, an app on a Mac that is not connected** (`d7c6364dc` doc, `4a6ea7685` code, M554; LANDED
+  "MA-D16"): a kept page opens as a file in the browser (`artifact.open` answers `local`, the policy in the file's
+  head), a link-only app opens its link, and the desk's shelf has a connect row, periods for days and a 600 sheet
+  under a cover. Previews on a Mac that is not connected are NOT built; the whole verify is NOT run on it.
 - Next: what is left of MA-3h, Versions on the phone · MA-5b's later slices, not built: the row's fold on scroll,
   the warm page kept for ten minutes, the opening words held until the first paint, and ···'s acts (M429) ·
   SP-4d, the relay item 373 waits on (M350).
