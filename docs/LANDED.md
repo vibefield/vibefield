@@ -68934,3 +68934,63 @@ research, to do flow, etc. test for real and fix bugs".
   - A spark prints run ids and needs ids to the person; its brief names no rule for it.
   - A paused turn leaves no line in the thread, neither its written part nor that it was paused.
   - The phone's `ChatMarkdown.swift` has no table and reads bold around code the old way.
+
+## EL8: puppeteer 0.4.15 — a long paste into Claude Code is confirmed, and a reply stopped with Esc ends its turn (M561)
+
+**2026-11-25 · on local main: `f4b3d8b12` (EL8: puppeteer 0.4.15). Upstream: vibefield/puppeteer #124 (squash
+`19965fc3`), #126 (the re-base that replaced #125) and the release #127 (v0.4.15 = `629a447b`, published
+2026-11-25T15:33Z).**
+Both changes were found by the Spark QA round of the same day (the entry above, M560), on James's ask to "test for
+real … and fix bugs". They were made in a clone of puppeteer of the lane's own, at v0.4.14; VF-PM pushed them,
+merged each on green and took the release.
+
+- **What was so, on Claude Code 2.1.332.**
+  - A paste of more than a line is handed to the hooks inside a `pasted_content` wrapper. The adapter confirmed a
+    send only on a prompt equal to the words it pasted, so every such send read `uncertain` after 5 s though it had
+    arrived: a spark's long say read "may not have it", and a spark was told "no echo came" for each task it gave a
+    Claude Code agent.
+  - Esc in the middle of a reply stops Claude Code and fires no Stop hook. The turn never ended: the run read
+    `working` for good, VibeField said "Still running · the cancellation was not confirmed", and because the input
+    queue delivers at idle, every later say to a paused spark waited for good.
+- **Upstream, puppeteer 0.4.15.**
+  - #124: a wrapper that is the whole prompt, with the same id on both tags, is read through. The injector confirms
+    on the words inside it, and `turn:started` says those words; the native event keeps the wrapper. A paste joined
+    to a draft, two pastes and ids that differ confirm nothing.
+  - #126: the live transcript read reports the root `[Request interrupted by user]` row for the turn it names, and
+    the hook rail ends its running main-thread turn on it as `turn:completed` with outcome `interrupted`, closing
+    what the turn left open as its Stop would (a permission request as `unknown`). A first read, an attach, a
+    subagent's marker and a turn already ended change nothing. Measured on two real stops: the marker carries the
+    turn's own `promptId` and follows the partial reply's row by 7 to 8 ms.
+  - Limit, upstream's: a prompt typed inside the one-second transcript poll, before the marker is read, closes the
+    earlier turn the old way.
+- **Here, the pin.** The EL8's usual set, place for place as the 0.4.14 EL8 (`1a4fbb6b3`): the lock's puppeteer
+  entry (`629a447b`, release.npm 0.4.15) and its lead sentence, the seven override rows and their dated note, the
+  twenty release-age rows (0.4.14's kept for the one install that rewrote the lock, then dropped; the frozen install
+  is green without them), preflight's seven `PIN_EXPECTATIONS` rows, `pnpm-lock.yaml` by `pnpm install` (+132 −132,
+  no 0.4.14 left; each of the twenty integrity rows equals the sha512 of the tarball the registry served), the views
+  patch carried by its key and file name alone (its `patch_hash` unchanged), the phone goldens re-blessed by their
+  one writer and the kit's nine mirrors copied from them (each moves by its version stamp alone), and the ROADMAP's
+  pin row. The published 0.4.14 and 0.4.15 were compared tarball by tarball, all twenty: adapter-claude's `dist`
+  changes (driver, normalization/pipeline and turn, observation/transcript/conversation and provider,
+  services/prompt and turn-stop), core changes `PUPPETEER_VERSION` alone, and every package.json its version lines
+  alone.
+- **With the pin the two are live in the product, and no code here changes for them.** fieldd's receipts and its
+  stop already read the adapter's events. Seen before the release through the lane's dev overlay of the two
+  branches (2026-11-25): a 587-character say and a started Haiku's multi-line task read "Delivered" (13:40Z), and
+  Pause on a spark mid-reply read "Ready" inside 3 s with the next say delivered and answered (13:56Z). And seen again on the pin
+  itself, with no overlay (the lane's QA desktop on this commit's frozen install, 2026-11-25): a 381-character say
+  read "Delivered" 4 s after its send, was drawn once and was answered (15:59:01Z); Pause 14 s into a reply wrote
+  Claude Code's marker at 15:59:34.4Z, the head read "Ready" inside 3 s, and the next say read "Delivered" and was
+  answered (15:59:41Z).
+- **Ran, in the lane's clone at this pin:** each alone after a lone load read (5.2 to 15.9), niced, 4 workers, its
+  own cargo target: `pnpm install` and then `pnpm install --frozen-lockfile` after the old rows went (both exit 0),
+  `siblings render --prod --check`, `check-agent-catalog --enforce --literals`, `preflight` (its one standing
+  warning), `gen:check`, `check:deps`, `check:ios-fixtures`, the workspace typecheck (28 projects), `biome check .`,
+  fieldd's whole suite (346 files passed, 5 skipped; 5276 tests passed, 34 skipped) and field-app's (402 files
+  passed, 1 skipped; 5898 tests passed, 3 skipped).
+- **Not run:** `pnpm verify` as one line, the Rust stages (no Rust changed), the smokes and `pnpm gate:landing`, the
+  kit's xcodebuild rows over the re-blessed mirrors.
+- **Owed.** 0.4.15's twenty release-age rows go once the version is past the release-age window. M560's own
+  reader of the paste wrapper in the spark's transcript (`spark-transcripts.ts`, `pastedWords`) is now a second line
+  of defence: with 0.4.15 `turn:started` already says the words. It stays for a run on an older adapter and may go
+  at the next pin.
