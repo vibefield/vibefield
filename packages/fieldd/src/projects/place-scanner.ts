@@ -418,7 +418,7 @@ export class PlaceScanner {
         }
       }
       // History QA (2026-11-24) — the rows' own roots are read, and the worktrees they name are still to
-      // come: on James's Mac that second wave was 540 of 645 places and most of a 67 s pass, and until the
+      // come: on the QA's cut that second wave was 540 of 645 places and most of a 67 s pass, and until the
       // pass published, the room filed every session of a first import under no project. A row that has no
       // place published yet gets its roots' places now. They are the places its sessions ran in (a worktree
       // somebody worked in is a root of its own), so the grouping this publishes is the one the whole pass
