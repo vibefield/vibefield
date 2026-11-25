@@ -24,7 +24,7 @@ import {
 import { COMMENT_PAD_PART } from "./ids";
 import { PAD, PAD_FACE, PAD_HAND, writingBox } from "./law";
 import type { PadGeometry } from "./layout";
-import type { PadLook } from "./theme";
+import { type PadLook, swatchIn } from "./theme";
 import { PAD_MARKS, padSink } from "./typing";
 import type { PadWriting } from "./writing";
 
@@ -108,6 +108,6 @@ export function createPadSheet(host: ObjectDomHost): PadSheet | undefined {
     geometry: padGeometry(host, writing),
     sink: padSink(writing),
     // a copy's `text/html` in the host's inks, by the words' menu's swatch roles (none named: the tags alone)
-    colour: (role) => (host.look() as PadLook | undefined)?.swatches[role],
+    colour: (role) => swatchIn(host.look() as PadLook | undefined, role),
   });
 }

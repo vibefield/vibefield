@@ -17,13 +17,17 @@ import {
   inkActs,
   type MenuActionDef,
 } from "@vibefield/plugin-sdk/desk";
+import { madePadLook, swatchIn } from "./theme";
 import type { PadWriting } from "./writing";
 
 /** The marks a pad's words take: all four of the kit's (its written part and its acts are given the same list). */
 export const PAD_MARKS: readonly InkField[] = INK_FIELDS;
 
-/** The pad's acts on its selected words — the words bar's (DESIGN.md §8): Pen ▾, Highlight ▾, Strike, Underline, Clear. */
-export const padActs = (): MenuActionDef[] => inkActs({ marks: PAD_MARKS });
+/** The pad's acts on its selected words — the words bar's (DESIGN.md §8): Pen ▾, Highlight ▾, Strike, Underline, Clear. Their
+ * choices carry the pad's own inks as CSS swatches (`colour`: the look its kind last made, read at each read so a theme change
+ * follows; none before a desk made one — the bar then draws them by name). */
+export const padActs = (): MenuActionDef[] =>
+  inkActs({ marks: PAD_MARKS, colour: (role) => swatchIn(madePadLook(), role) });
 
 /** What the pad's writing is told by the kit's typing and lease: the draft (and how its glyphs came), the caret, the selection. */
 export function padSink(writing: () => PadWriting | undefined): InkSink {

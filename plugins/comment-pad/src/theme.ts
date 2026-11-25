@@ -132,3 +132,24 @@ export function padLook(palette: CommentPadPalette): PadLook {
     swatches,
   };
 }
+
+/** A swatch ROLE's colour as CSS in a look (`pen.<name>`, `highlight.<name>`): undefined where the look names none, or there is
+ * no look. The ONE reading of the pad's swatches — a copy's `text/html` (body.ts, over its host's look) and the words bar's
+ * choices (typing.ts `padActs`, over the look its kind last made) both take it. */
+export function swatchIn(look: PadLook | undefined, role: string): string | undefined {
+  if (look === undefined || !Object.hasOwn(look.swatches, role)) return undefined;
+  return look.swatches[role];
+}
+
+/** The look the pad's kind last made (its `theme(palette)`: the desk's theme), for what reads it with no host — the acts'
+ * choices are declared once on the binding (IK, 2026-11-25, round two). One look a page: the desk's theme is one. */
+let made: PadLook | undefined;
+
+/** Keep the look the kind made, and hand it on (the kind's `theme`). */
+export function keepPadLook(look: PadLook): PadLook {
+  made = look;
+  return look;
+}
+
+/** The look the kind last made, or undefined before any desk asked for one. */
+export const madePadLook = (): PadLook | undefined => made;

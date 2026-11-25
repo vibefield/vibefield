@@ -57,6 +57,7 @@ describe("a kind's glyph on the bar (R2)", () => {
         "duplicate",
         "ellipsis",
         "eraser",
+        "highlighter",
         "lock",
         "pen",
         "redo",
@@ -77,6 +78,9 @@ describe("a kind's glyph on the bar (R2)", () => {
     expect(kindGlyphOf("underline")).toEqual({ by: "set", name: "underline" });
     expect(kindGlyphOf("clear-marks")).toEqual({ by: "set", name: "clear-marks" });
     expect(draw("clear-marks").getAttribute("data-glyph")).toBe("clear-marks");
+    // round two: the Highlight act's `highlighter`, ICE's ink acts' default name, is the set's own
+    expect(kindGlyphOf("highlighter")).toEqual({ by: "set", name: "highlighter" });
+    expect(draw("highlighter").getAttribute("data-glyph")).toBe("highlighter");
     // `back` is no name of the set's: Back is the bar's own cell, the chevron turned 180 (§13)
     expect(kindGlyphOf("back")).toEqual({ by: "missing", name: "back" });
   });

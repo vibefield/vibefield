@@ -14,18 +14,22 @@ import {
   type EditorLease,
   type Entity,
   type HandMetrics,
+  HIGHLIGHTERS,
   INK_ACTS,
   INK_FIELDS,
   type InkValue,
   inkOf,
   layoutText,
+  type MenuActionDef,
   type ObjectDomHost,
+  PENS,
 } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
 import {
   COMMENT_PAD_PART,
   COMMENT_PAD_TYPE,
   commentPad,
+  commentPadKind,
   createPadSheet,
   PAD_HAND,
   PAD_MARKS,
@@ -155,6 +159,36 @@ describe("the pad's words and their acts", () => {
     const acts = padActs().map((a) => [a.id, a.on]);
     expect(acts).toEqual(Object.values(INK_ACTS).map((id) => [id, "words"]));
     expect(commentPad.menu?.map((a) => a.id)).toEqual(Object.values(INK_ACTS));
+  });
+
+  it("their choices carry the pad's own inks as CSS swatches (round two): none before its kind made a look, then the theme's — and a theme change follows", () => {
+    const act = (id: string): MenuActionDef | undefined => padActs().find((a) => a.id === id);
+    const swatches = (id: string) =>
+      act(id)
+        ?.choices?.({} as never)
+        ?.map((c) => [c.id, c.swatch]);
+    // before any desk asked the kind for its look, no colour is said (the bar draws the choices by name)
+    expect(swatches(INK_ACTS.pen)).toEqual(PENS.map((n) => [n, undefined]));
+    const palette = (tint: number) => ({
+      pens: Object.fromEntries(PENS.map((n, i) => [n, { css: `rgb(${i} 0 ${tint})` }])),
+      calendars: {
+        highlighters: Object.fromEntries(
+          HIGHLIGHTERS.map((n, i) => [n, { css: `rgb(0 ${i} ${tint})` }]),
+        ),
+      },
+    });
+    const kind = commentPadKind();
+    kind.theme?.(palette(1) as never);
+    expect(swatches(INK_ACTS.pen)).toEqual(PENS.map((n, i) => [n, `rgb(${i} 0 1)`]));
+    // the bound acts (the binding's own `menu`) read the same look, at each read
+    const bound = commentPad.menu?.find((a) => a.id === INK_ACTS.highlight);
+    expect(bound?.choices?.({} as never)?.map((c) => [c.id, c.swatch])).toEqual([
+      ...HIGHLIGHTERS.map((n, i) => [n, `rgb(0 ${i} 1)`]),
+      ["none", undefined],
+    ]);
+    // the theme changes: the colours follow
+    kind.theme?.(palette(2) as never);
+    expect(swatches(INK_ACTS.highlight)?.[0]).toEqual(["yellow", "rgb(0 0 2)"]);
   });
 
   it("tell the pad's writing the draft and how its glyphs came, the caret and the selection", () => {

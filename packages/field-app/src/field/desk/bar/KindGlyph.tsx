@@ -20,6 +20,8 @@ export const ICE_GLYPHS: Readonly<
   strike: { name: "strike" },
   underline: { name: "underline" },
   "clear-marks": { name: "clear-marks" },
+  // round two: the Highlight act's own (ICE's ink acts' default name); its choices are stripes under it
+  highlighter: { name: "highlighter" },
   chevron: { name: "chevron" },
   "chevron-left": { name: "chevron", turn: 180 },
   undo: { name: "undo" },

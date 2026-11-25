@@ -378,6 +378,21 @@ export const DRAWINGS = {
     instrument: { s: P("M4.5 5h11M10 5v14M14.5 14.5l5 5M19.5 14.5l-5 5") },
     hardware: { d: `M4 4h12v3h-4.5v12.5h-3V7H4Z${xPoly(17, 17, 3.3, 1.1)}` },
   },
+  // The Highlight act's own (round two, 2026-11-25): a kind's highlighter act declares `highlighter` (ICE's ink acts'
+  // default name), and the bar draws its choices as stripes under it. A broad chisel-tipped marker leaning as the pen leans,
+  // over the stripe it lays — the pen's barrel thickened, so the two read apart at 16.
+  highlighter: {
+    label: "Highlighter",
+    group: "actions",
+    role: "The words bar's Highlight: the highlighter laid under the selected words; its choices are the desk's five highlighters",
+    instrument: {
+      s: `${P("M9.5 15.5 7 13l8.2-8.2a1.8 1.8 0 0 1 2.5 0l1.5 1.5a1.8 1.8 0 0 1 0 2.5Z")}${P("M7 13l-2.5 3.5h3.5l1.5-1")}${P("M4.5 20h15")}`,
+    },
+    // the barrel and its chisel apart, over the stripe
+    hardware: {
+      d: `M9.5 16.6 6.4 13.5 14.75 5.15a2.3 2.3 0 0 1 3.25 0l1.85 1.85a2.3 2.3 0 0 1 0 3.25ZM5.7 14.3 8.7 17.3 7.6 18.2H3.4Z${rectPath(4, 19, 16, 2.4, 1.2)}`,
+    },
+  },
   // Godview round 3 (One Frame §23.2, ruled 2026-10-02): the wrapper around the
   // terminals wears the window's own pair, in the order windows keep them. The
   // page's paths were stand-ins (strokes of 1.7 and 1.9, 1-unit corners); these

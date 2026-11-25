@@ -30,7 +30,7 @@ import { bandFor, PAD, PAD_HAND, type PadLaw, padReach, writingBox } from "./law
 import type { PadGeometry, PadInks, PadInstance } from "./layout";
 import { PadPass } from "./pass";
 import { padShaders } from "./shaders";
-import { type CommentPadPalette, type PadLook, padLook } from "./theme";
+import { type CommentPadPalette, keepPadLook, type PadLook, padLook } from "./theme";
 import { createPadWriting, type PadWriting } from "./writing";
 
 /** The pad's accent from its props (an unknown one is the first — indigo). */
@@ -197,6 +197,7 @@ export function commentPadKind(
       const b = blockOf(G);
       return { cx: b.cx, cy: b.cy, hx: b.hx, hy: b.hy, angle: 0, r: G.radius };
     },
-    theme: (palette): PadLook => padLook(palette as CommentPadPalette),
+    // the look is kept for the words bar's swatches, which are declared with no host (typing.ts `padActs`)
+    theme: (palette): PadLook => keepPadLook(padLook(palette as CommentPadPalette)),
   };
 }
