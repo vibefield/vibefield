@@ -68541,3 +68541,39 @@ session: "can you make it automatically launch when in dev mode?" (track VT; DEC
 - **Readings ‹for James›, on no page:** it comes back at every start of the shell under `pnpm dev`, a restart after
   a main or preload edit included, even if it was closed before; there is no switch for it. It opens at Electron's
   default place (the centre of the screen) each time, because the window does not remember where it was put.
+
+## HQ — the History room's manual QA of 2026-11-24: fifteen fixes (M553)
+
+**2026-11-24 · on local main: `f72dc396e` … `3c7abd701` (HQ-1 … HQ-15, one commit a fix).** James did the History
+room's QA by hand in a QA desktop on a cut of his own agent data; each fix answers something he saw there or said in
+chat. "HQ" is that QA's own numbering, not a ratified track. Each commit's body carries its measurements.
+
+- **The room's first minute.** A row's own roots are placed before the worktrees they name are read, so projects
+  arrive 14 s after consent where they took 71 s (HQ-2). The first reading holds behind the glass until the room has
+  DRAWN its projects, so "Unassigned sessions" never stands alone as the whole room (HQ-12, HQ-13; James: "the
+  un[as]signed sessions stage is confusing for users, can we just show a[n] entire loading screen at this entire
+  stage?"; DESIGN.md §8 "History" amended first). The unassigned bucket's figures are answered in the window (HQ-3).
+- **The Files pane's cost.** A live tree is never rooted at the home folder or a whole drive (HQ-6; his "go with
+  your recommandation"): a session that ran in `~` had the files worker at a full core. An engine a pane was attached
+  to is let go 10 s after the pane (HQ-5). The pane's git polling runs two processes a tick where it ran seven, joins
+  an ask already in flight, and rests while History is out of sight (HQ-14).
+- **The look.** On the glass the room lays no slab: the Files rail's root row and a conversation's wait (HQ-7; his
+  two screenshots; DESIGN.md §8 amended first). A Bring in history that failed says "Couldn't bring in your
+  history." and logs the cause (HQ-11; §9 swept first).
+- **Development builds.** Every document of the renderer host drains React's panel measures (HQ-8, HQ-15): his dev
+  desk had reached 2,437 MB in four minutes and stood at 893 MB once they were cleared. The files client is
+  pre-bundled, so a first session open on a cold dev cache no longer reloads the page (HQ-4).
+- **Logs.** No listener-leak warning at boot from the roster and the settings doc (HQ-9); a window closing as the
+  shell stops no longer logs a token revocation error (HQ-10).
+- **The QA seam.** `FIELDD_ROSETTAD_HOME` hands History's reader a home of its own; ignored in a packaged build
+  (HQ-1; `.env.example`).
+- **Proof:** per fix, in its commit: the named suites of fieldd, field-app and electron-shell, tsc on the three,
+  `biome check` on the changed files and the import walls. On the landed tip (with M554's two commits): field-app
+  whole (401 files, 5,856 passed, 3 skipped) and contracts whole (82 files, 2,382 passed).
+- **Not run:** `pnpm verify` whole, any smoke, `gate:landing`, on any commit of the set.
+- **Not seen, named in the commits:** HQ-4's reload gone on a cold checkout; HQ-10 at a real dev stop; HQ-7's rail
+  row by this session (his eye, in the dev window); HQ-13 re-measured in a development build.
+- **Open, found here and not fixed:** with History in view the dev window makes about 100,000 component redraws a
+  minute, cause not known. The room still says "Up to date" for the seconds before the first projects. Phone Browse
+  at a home folder still holds its engine for the long lease. The long fix for a wide tree is mille's (watch only
+  what is expanded). The rest of the git polling's cost is the room package's (reads only for the showing tab).

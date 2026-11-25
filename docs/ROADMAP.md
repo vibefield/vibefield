@@ -1282,6 +1282,11 @@ agent is using"
 - Landed 11-17: **item 394** (M355): History's top fade on glass is the glass's own colour, at most 64%, eased over
   96px, DESIGN.md first. Landed 11-18: **item 516** (M388): History on the phone waits in the living mark, its first
   read and a project's list, none at rest; **item 520** (M390, test-only): History's folder-list test gets 20 s.
+- Landed 11-24: **the History room's manual QA, fifteen fixes** (`f72dc396e` … `3c7abd701`, HQ-1 … HQ-15, M553;
+  LANDED "HQ — the History room's manual QA of 2026-11-24"): projects 14 s after consent for 71; the first reading
+  holds behind the glass until the room has drawn its projects; a live tree is never rooted at the home folder; the
+  Files pane's git polling at two processes a tick, resting out of sight; no slab on the glass; a development
+  window drains React's panel measures; the QA seam `FIELDD_ROSETTAD_HOME`. The whole verify is NOT run on it.
 - Next: the phone's `AppReviewTests.swift` comment-only follow-up (LANDED "EL8 — Rosetta 0.1.6", Owed), item 398
   slice 2 (the kit: the phone reads `totals` and asks by id, which ends the messages stat's undercount past 100
   conversations; the row's figures wait for DESIGN.md), and item 411's plan (a Swift-plane change for a 0.1.8, which
