@@ -146,25 +146,31 @@ describe("the ink tools through the applier", () => {
     });
   });
 
-  it("marks a note's words where the note keeps marks, and says plainly where it does not", () => {
-    const { ce, answer, place } = mount();
+  it("marks a note's words: ICE's note keeps marks in its ink cell (round two), so mark_text marks them and read_writing says so", () => {
+    const { ce, ok, place } = mount();
+    // the note's cell holds `marks` beside its words in one group: a mark is one write of the whole cell
+    expect(ce.catalog.widget(NOTE_TYPE)?.propToGroup["marks"]).toBe(
+      ce.catalog.widget(NOTE_TYPE)?.propToGroup["text"],
+    );
     const { key } = place(NOTE_TYPE, { text: "one two" });
-    const keeps = ce.catalog.widget(NOTE_TYPE)?.propToGroup["marks"] !== undefined;
-    const said = answer({
+    const said = ok({
       op: "act",
       key,
       tool: "mark_text",
       doing: "x",
       input: { quote: "two", highlight: "yellow" },
     });
-    if (keeps)
-      expect(said).toMatchObject({ ok: true, changed: 'Marked "two": highlighted yellow' });
-    else
-      expect(said).toMatchObject({
-        ok: false,
-        fact: "bad-input",
-        text: "This note keeps no marks: its words can be changed, not marked.",
-      });
+    expect(said).toMatchObject({ ok: true, changed: 'Marked "two": highlighted yellow' });
+    expect(ok({ op: "read", key, tool: "read_writing", input: {} }).value).toMatchObject({
+      text: "one two",
+      runs: [{ from: 4, to: 7, text: "two", highlight: "yellow" }],
+    });
+    // write_text rewrites the note whole, its marks with it: the old ones never land on new words
+    ok({ op: "act", key, tool: "write_text", doing: "x", input: { text: "three four" } });
+    expect(ok({ op: "read", key, tool: "read_writing", input: {} }).value).toMatchObject({
+      text: "three four",
+      runs: [],
+    });
   });
 
   it("lands an open draft first, so the agent quotes the words the person is writing", () => {
