@@ -1,3 +1,6 @@
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { drainPanelMeasures, type MeasureDrainScope } from "../src/renderer-host/dev-measure-drain";
 
@@ -72,4 +75,39 @@ describe("the development build's measure drain", () => {
     const stop = drainPanelMeasures({ performance: { clearMeasures: () => undefined } });
     expect(() => stop()).not.toThrow();
   });
+});
+
+// History QA (2026-11-24): HQ-8 put the drain in `index.ts` and `vitals.ts`, and the document `pnpm dev` shows as
+// the desk is neither: it is `studio-product.html`. The window went on growing (2.3 GB in four minutes, 574,861
+// measures) until it was measured from inside. So the rule is held here, not remembered: every document of the
+// renderer host installs the drain in its own entry, or says why it has no need.
+describe("every document of the renderer host drains React's panel measures in development", () => {
+  const host = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "renderer-host");
+  /** Documents that mount no React tree, each with its reason. */
+  const NO_REACT: Record<string, string> = {
+    "spike-live-surfaces-lab.html": "the live-surface lab: plain DOM and canvases, no React",
+  };
+  const documents = readdirSync(host).filter((name) => name.endsWith(".html"));
+
+  it("finds the documents (the product's, Studio's two, the catalog's, Vitals' and the labs)", () => {
+    expect(documents).toEqual(
+      expect.arrayContaining(["index.html", "studio-product.html", "studio.html", "vitals.html"]),
+    );
+  });
+
+  for (const document of documents) {
+    it(`${document}: its entry installs the drain, behind the literal that folds away in a build`, () => {
+      const entry = /<script[^>]*\bsrc="\.\/([^"]+\.ts)"/.exec(
+        readFileSync(join(host, document), "utf8"),
+      )?.[1];
+      expect(entry, "the document's module entry").toBeDefined();
+      const source = readFileSync(join(host, entry as string), "utf8");
+      if (document in NO_REACT) {
+        expect(source).not.toMatch(/from "react|field-app|product-host/);
+        return;
+      }
+      expect(source).toContain('import { drainPanelMeasures } from "./dev-measure-drain";');
+      expect(source).toMatch(/^if \(import\.meta\.env\.DEV\) drainPanelMeasures\(\);$/m);
+    });
+  }
 });
