@@ -46,6 +46,8 @@
   cursor: pointer;
   pointer-events: auto;
   -webkit-tap-highlight-color: transparent;
+  /* its own layer, so its ring can stand behind its paper and still over the sticker before it in the pile */
+  isolation: isolate;
 }
 
 .vf-pane-sticker:focus-visible {
@@ -180,6 +182,8 @@
   border-radius: 50%;
   opacity: 0;
   pointer-events: none;
+  /* behind its own paper: the ring leaves the sticker's edge rather than crossing its picture */
+  z-index: -1;
 }
 
 .vf-pane-sticker[data-state="needs"] .vf-pane-sticker__ring {
@@ -204,9 +208,10 @@
   opacity: 0.6;
 }
 
-/* waiting its turn at a one-at-a-time object another agent holds: on its backing */
+/* waiting its turn at a one-at-a-time object another agent holds: on its backing, in the terminal's ground (the
+   pile lays it over the one before, and a clear backing would draw its dashes across that one) */
 .vf-pane-sticker[data-state="waiting"] .vf-pane-sticker__paper {
-  background: transparent;
+  background: var(--vf-godview-terminal-bg, var(--vf-godview-pane-ground));
   box-shadow: none;
   outline: 0.8px dashed
     color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 55%, transparent);
@@ -260,7 +265,9 @@
   padding: 0 8px;
   overflow: hidden;
   border-radius: 5px;
-  background: var(--vf-godview-pane-ground, var(--vf-sticker-edge));
+  /* the terminal's ground without the pane's glass (the stage root's `--vf-godview-terminal-bg`): it stands over
+     rows, and a ground at the pane's alpha would let them through */
+  background: var(--vf-godview-terminal-bg, var(--vf-godview-pane-ground));
   box-shadow:
     inset 0 0 0 1px
     color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 14%, transparent),

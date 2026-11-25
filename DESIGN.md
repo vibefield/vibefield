@@ -7270,19 +7270,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       marks, *The Fourth Hand*, 2026-11-17: "no need to indicate different state with colors"): it **lands** on the
       pop (280ms) when the run takes the object; a **band of light** crosses it every 2.4s while the agent reads (at
       0.6) or acts (at full); each act lands with a **press** (to 0.86 in 100ms, and back); while the agent **needs
-      you** it lifts (1.08, its cast deepened) and a ring in the pane's colour leaves it every 2.4s until you
-      answer; an act that **fails** shivers it once (2.4px, 0.6s); while **your hand** holds the object it is grey
-      and still (OB-L5); **waiting** its turn it stands on its backing, a dashed outline with its art at 0.28; when
-      the run **lets go** it peels off (400ms, the retract curve). The band and the ring are argued into Godview by
-      name (GT-D15.1's audit: transform and opacity alone, only while a call is in flight or an answer owed, never
-      under reduced motion or with Godview's animations off); the shiver is a one-shot on the Web Animations API,
-      and the rest are transitions. Reduced motion: the states hold still, and the words carry them.
+      you** it lifts (1.08, its cast deepened) and a ring in the pane's colour leaves it from behind its paper every
+      2.4s until you answer; an act that **fails** shivers it once (2.4px, 0.6s); while **your hand** holds the
+      object it is grey and still (OB-L5); **waiting** its turn it stands on its backing, in the terminal's ground
+      with a dashed edge and its art at 0.28 (the pile lays it over the one before, so the backing hides that one
+      rather than letting the dashes cross it); when the run **lets go** it peels off (400ms, the retract curve).
+      The band and the ring are argued into Godview by name (GT-D15.1's audit: transform and opacity alone, only
+      while a call is in flight or an answer owed, never under reduced motion or with Godview's animations off); the
+      shiver is a one-shot on the Web Animations API, and the rest are transitions. Reduced motion: the states hold
+      still, and the words carry them.
     - **Touch:** pointing at one, or focusing it, shows its words above it in a capsule as the frame's own are, 18
-      tall with corners of 5: **Browser · localhost:5173 · changing it ↗**, the kind's title, the object's own name
-      where its kind names one, and the state's words. Clicking one brings Canvas forward with the object centred
-      and selected (`thinking-objects-at-work.md` §7: "Selecting one navigates Canvas to that object"). The look is
-      ICE's `ops.lookAt` (petition I58: it flies, keeps a zoom the object reads at, and reaches an object inside a
-      mini mat) once its release is pinned; until then it is the desk's card door's, centred at the zoom you are at.
+      tall with corners of 5, on the terminal's ground without the pane's glass (it stands over rows): **Browser ·
+      localhost:5173 · changing it ↗**, the kind's title, the object's own name where its kind names one, and the
+      state's words. Clicking one brings Canvas forward with the object centred and selected
+      (`thinking-objects-at-work.md` §7: "Selecting one navigates Canvas to that object"). The look is ICE's
+      `ops.lookAt` (petition I58: it flies, keeps a zoom the object reads at, and reaches an object inside a mini
+      mat) once its release is pinned; until then it is the desk's card door's, centred at the zoom you are at.
     - **The art is the kind's** (OB-L2, one declaration per kind; James, 2026-11-25: "an object intended for agent
       use needs to expose their sticker art for it properly, so each sticker art lives in their own plugin bundle",
       06:56Z). A plugin kind declares `sticker` beside its agent half and ships its art, an SVG, in its own bundle
