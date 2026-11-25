@@ -243,7 +243,7 @@ describe("TreeSizes (HD-3)", () => {
   });
 
   it.skipIf(process.platform === "win32")(
-    "reads a real checkout with du, in the background where the platform has one",
+    "reads a real checkout with du, under the utility clamp where the platform has one",
     async () => {
       const dir = mkdtempSync(join(tmpdir(), "vf-tree-size-"));
       cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -253,7 +253,7 @@ describe("TreeSizes (HD-3)", () => {
       const bytes = await measureWithDu(dir);
       expect(bytes).toBeGreaterThanOrEqual(300_000);
       expect(bytes).toBeLessThan(2_000_000);
-      expect(await measureWithDu(dir, { background: false })).toBe(bytes);
+      expect(await measureWithDu(dir, { clamp: false })).toBe(bytes);
       expect(await measureWithDu(join(dir, "absent"))).toBeNull();
 
       const sizes = new TreeSizes();

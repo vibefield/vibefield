@@ -1370,7 +1370,8 @@ export const WORKSPACE_GIT = {
 
 /** HD-3 (2026-11-24) — what a worktree's folder holds on disk, for the room's worktree ledger
  * (`workspace.worktreeSizes`, `WorkspaceGitWorktree.sizeBytes`). The files worker walks a folder with `du` only
- * when it is asked for by name, one at a time, in the background (macOS: `taskpolicy -b`), and keeps each figure
+ * when it is asked for by name, one at a time, at the lowest priority (macOS: `taskpolicy -c utility`; background
+ * quality of service throttled the disk to a 32 s walk, corrected the same day), and keeps each figure
  * on disk (LAYOUT.WORKSPACE_TREE_SIZES_FILE). TTL_MS: how long a figure stands before an ask walks it again (the
  * old figure is answered meanwhile). FAILED_TTL_MS: how long a failed or cut walk is remembered as "no figure".
  * TIMEOUT_MS: one walk's limit. ASK_MAX: folders one ask may name, and so the longest the queue gets (an ask
@@ -1387,8 +1388,8 @@ export const WORKSPACE_TREE_SIZE = {
   FAILED_TTL_MS: 10 * 60_000,
   TIMEOUT_MS: 60_000,
   ASK_MAX: 32,
-  REST_MIN_MS: 200,
-  REST_FACTOR: 2,
+  REST_MIN_MS: 100,
+  REST_FACTOR: 1,
   KEPT: 4096,
   SAVE_DELAY_MS: 2_000,
   LIST_FRESH_MS: 60_000,

@@ -8045,8 +8045,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       It is not what removing the worktree would free, and the row does not claim so.
       **Only the rows on screen are weighed** (HD-5): the list asks for them by name, again when a
       scroll settles, and a figure is **kept on disk for a day**, so opening the list again weighs
-      nothing. A walk runs in the background (macOS's background quality of service), one folder
-      at a time, and rests twice its own time after each. **A row whose figure is owed says so**:
+      nothing. A walk runs below the person's own work (lowest priority; on macOS the utility
+      quality of service), one folder at a time, and rests as long as it took after each.
+      *Corrected the same day:* this said background quality of service and a rest of twice the
+      walk. Background throttles the disk, a cold 0.87 GB checkout took 32 s instead of 0.9 s,
+      and the list showed a figure every half minute (James: "this walk seems very slow"). **A row whose figure is owed says so**:
       a slow sheen on its bar's track and on a pill where the size will be (still, under reduced
       motion), never a blank. A row keeps its place while the list is scrolled or has the pointer
       or the keyboard in it, and takes its rank at rest. The row itself: the name and its size on

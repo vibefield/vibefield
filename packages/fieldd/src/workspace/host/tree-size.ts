@@ -22,10 +22,15 @@ import { WORKSPACE_TREE_SIZE } from "@vibefield/contracts/registries";
 //    showing. A new ask REPLACES the queue: a row scrolled away is no longer owed.
 //  · A FIGURE IS KEPT, on disk (`file`), and stands for TTL_MS (a day). Opening the list again reads the file
 //    and walks nothing. `peek` answers a standing figure however old, and queues nothing.
-//  · A WALK RUNS IN THE BACKGROUND AND RESTS: on macOS through `taskpolicy -b` (background quality of service:
-//    the efficiency cores, throttled disk), elsewhere at the lowest priority; and after each walk the queue
-//    rests REST_FACTOR times as long as the walk took (REST_MIN_MS at least), so the walker never holds more
-//    than a third of one core however long the queue.
+//  · A WALK RUNS BELOW THE PERSON'S OWN WORK AND RESTS: at the lowest priority, on macOS clamped to utility
+//    quality of service (`taskpolicy -c utility`); and after each walk the queue rests as long as the walk
+//    took (REST_FACTOR; REST_MIN_MS at least), so the walker never holds more than half of one core however
+//    long the queue.
+//    *Corrected 2026-11-24, the same day:* the second cut ran the walk at BACKGROUND quality of service
+//    (`taskpolicy -b`) and rested twice the walk after it. Background throttles the disk: measured on this
+//    repository's own cold worktrees (an external SSD), a 0.87 GB checkout walked in 32 s under `-b` and in
+//    0.9 s unclamped; three of 0.6 GB in 1.1 to 1.4 s under the utility clamp. With the rest, the list showed
+//    one figure every half minute. The bound on heat is the first two points, not a starved walker.
 //
 // `du` walks: it counts a hard-linked file once, counts blocks allocated, and with `-x` never leaves the
 // filesystem it started on. The figure is NOT what removing the folder would free (files cloned from a
@@ -44,7 +49,7 @@ export type TreeMeasure = (
   options: { onChild?: (child: ChildProcess) => void },
 ) => Promise<number | null>;
 
-/** macOS's door to background quality of service; absent elsewhere. */
+/** macOS's door to a quality of service clamp; absent elsewhere. */
 const TASKPOLICY = "/usr/sbin/taskpolicy";
 
 /** `du -skx -- <folder>`: kilobytes allocated, in bytes; null when it could not be read or ran out of time.
@@ -55,16 +60,16 @@ export function measureWithDu(
     timeoutMs?: number;
     env?: NodeJS.ProcessEnv;
     onChild?: (child: ChildProcess) => void;
-    background?: boolean;
+    /** false: no quality of service clamp (a test's comparison) */
+    clamp?: boolean;
   } = {},
 ): Promise<number | null> {
-  const background =
-    options.background ?? (process.platform === "darwin" && existsSync(TASKPOLICY));
+  const clamp = options.clamp ?? (process.platform === "darwin" && existsSync(TASKPOLICY));
   const du = ["-skx", "--", folder];
   return new Promise((resolve) => {
     const child = execFile(
-      background ? TASKPOLICY : "du",
-      background ? ["-b", "du", ...du] : du,
+      clamp ? TASKPOLICY : "du",
+      clamp ? ["-c", "utility", "du", ...du] : du,
       {
         timeout: options.timeoutMs ?? WORKSPACE_TREE_SIZE.TIMEOUT_MS,
         maxBuffer: 64 * 1024,
