@@ -115,6 +115,7 @@ function harness(real?: ToolPlaneAudit, actTurns = 0) {
       runFacts: () => undefined,
       projects: () => [],
       indexSessionFor: async () => undefined,
+      indexPhase: async () => "live",
       indexSessionProfile: async () => ({}),
       timeline: async () => {
         throw new Error("unused");

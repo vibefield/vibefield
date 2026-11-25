@@ -397,6 +397,10 @@ export const SERVED_TOOLS = [
         "before": {
           "type": "string",
           "minLength": 1
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
@@ -817,6 +821,10 @@ export const SERVED_TOOLS = [
           }
         },
         "before": {
+          "type": "string",
+          "minLength": 1
+        },
+        "note": {
           "type": "string",
           "minLength": 1
         }

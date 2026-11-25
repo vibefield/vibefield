@@ -96,6 +96,7 @@ async function harness(respond: (intent: ObjectIntent) => Answer | undefined) {
       runFacts: () => undefined,
       projects: () => [],
       indexSessionFor: async () => undefined,
+      indexPhase: async () => "live",
       indexSessionProfile: async () => ({}),
       timeline: async () => {
         throw new Error("unused");

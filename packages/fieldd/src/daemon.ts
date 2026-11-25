@@ -4163,6 +4163,7 @@ export async function bootstrap(
         }),
         timeline: (sessionId, cursor, limit) =>
           index.timeline({ sessionId, cursor, limit, boundedBelow: true }),
+        indexPhase: async () => (await index.status()).phase,
         search: (q, runtime, limit, afterMs) =>
           index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
       },

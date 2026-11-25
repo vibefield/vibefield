@@ -17,6 +17,7 @@ import {
   type ComposeReadOutput,
   type ComposeSession,
   type ComposeTurn,
+  type IndexPhase,
   type IndexSearchResult,
   type IndexTimelineResult,
   personaSetsOf,
@@ -38,6 +39,23 @@ import { RpcCallError } from "../../../native-link";
 /** A read's bounds: what a turn may carry, and the page asked of the index for each turn kept. */
 const TURN_TEXT_MAX = 4000;
 const TURNS_DEFAULT = 4;
+
+/** Spark QA F8 (2026-11-25) — agent_read's note for a session History holds no words of, by History's phase: it is
+ * not on for this Mac (nobody has let it read), it is not running, or it has not read the session yet. A spark that
+ * was told nothing read an empty list as "my words never arrived" and sent them again. */
+export function unreadNote(phase: IndexPhase): string {
+  switch (phase) {
+    case "awaiting_consent":
+    case "unconfigured":
+      return "History is not on for this Mac, so VibeField has no copy of this session's words. Turning it on is the person's to do, in History.";
+    case "failed":
+    case "stopped":
+    case "unknown":
+      return "History is not running just now, so this session's words cannot be read.";
+    default:
+      return "History has not read this session yet. Read it again in a moment.";
+  }
+}
 const SEARCH_DEFAULT = 20;
 const MODELS_WAIT_MS = 4000;
 
@@ -59,6 +77,8 @@ export interface VerbDeps {
   projects(): readonly ComposeProject[];
   /** The index's id for a run's conversation, by its native id; undefined when the index has not read it. */
   indexSessionFor(nativeSessionId: string): Promise<string | undefined>;
+  /** History's phase now (`index.status`), read only when a session has no index row: it words agent_read's note */
+  indexPhase(): Promise<IndexPhase>;
   /** The persona a History session was filed under (`index.session`), to hold history_read to the profiles. */
   indexSessionProfile(sessionId: string): Promise<{ profileId?: string | undefined }>;
   /** One backward page of a session's timeline: the newest rows first asked, `cursor` for older. */
@@ -273,7 +293,9 @@ export function createComposeVerbs(deps: VerbDeps): ComposeVerbs {
     async agent_read(caller, input) {
       const row = scopedRun(caller, input.session);
       const indexId = await deps.indexSessionFor(row.sessionId);
-      if (!indexId) return { session: input.session, turns: [] };
+      // Spark QA F8 (2026-11-25) — no turns is said with its reason: History is the one copy of a session's words
+      if (!indexId)
+        return { session: input.session, turns: [], note: unreadNote(await deps.indexPhase()) };
       const out = await read(indexId, input.before, input.turns);
       return { ...out, session: input.session };
     },

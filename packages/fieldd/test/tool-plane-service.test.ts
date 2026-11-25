@@ -195,6 +195,7 @@ function harness(
       runFacts: () => undefined,
       projects: () => [{ key: "p-vibe", name: "vibe-field", folders: ["/p/vibe-field"] }],
       indexSessionFor: async () => undefined,
+      indexPhase: async () => "live",
       indexSessionProfile: async () => ({}),
       timeline: async () => {
         throw new Error("unused");

@@ -454,6 +454,10 @@ export const ComposeReadOutput = z
     turns: z.array(ComposeTurn),
     /** pass it back as `before` for the turns before these; absent at the session's start */
     before: z.string().min(1).optional(),
+    /** Spark QA F8 (2026-11-25) — why there are no turns when History has none of this session's words: it is not on
+     * for this Mac, or it has not read the session yet. Never beside turns. An empty list alone read as "nothing was
+     * said", and a spark sent its words again. */
+    note: z.string().min(1).optional(),
   })
   .passthrough();
 export type ComposeReadOutput = z.infer<typeof ComposeReadOutput>;

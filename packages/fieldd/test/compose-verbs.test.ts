@@ -136,6 +136,7 @@ function deps(over: Partial<VerbDeps> = {}) {
     runFacts: (id) => (id === "run-work" ? { usd: 0.31, effort: "high" } : undefined),
     projects: () => [{ key: "pk-1", name: "vibe-field", folders: ["/code/vibe-field"] }],
     indexSessionFor: async (nativeId) => `ix-${nativeId}`,
+    indexPhase: async () => "live",
     indexSessionProfile: async (sessionId) => ({
       profileId: sessionId.includes("home") ? "claude:home" : "claude:work",
     }),
@@ -231,6 +232,38 @@ describe("the read verbs, held to a spark's profiles (CP-1b; TL-D5)", () => {
     await expect(verbs.agent_read(SPARK, { session: "run-nope" })).rejects.toMatchObject({
       kind: "NOT_FOUND",
     });
+  });
+
+  // Spark QA F8 (2026-11-25) — found in real use with History not brought in: every agent_read answered an empty
+  // list and nothing else, and the spark read it as "my words never arrived" and sent them again
+  it("agent_read: a session History holds no words of answers no turns WITH its reason, by History's phase", async () => {
+    const none = { indexSessionFor: async () => undefined };
+    const off = await deps({
+      ...none,
+      indexPhase: async () => "awaiting_consent",
+    }).verbs.agent_read(SPARK, { session: "run-work" });
+    expect(off).toEqual({
+      session: "run-work",
+      turns: [],
+      note: "History is not on for this Mac, so VibeField has no copy of this session's words. Turning it on is the person's to do, in History.",
+    });
+    const late = await deps({ ...none, indexPhase: async () => "live" }).verbs.agent_read(SPARK, {
+      session: "run-work",
+    });
+    expect(late.note).toBe("History has not read this session yet. Read it again in a moment.");
+    expect(late.turns).toEqual([]);
+    const down = await deps({ ...none, indexPhase: async () => "failed" }).verbs.agent_read(SPARK, {
+      session: "run-work",
+    });
+    expect(down.note).toBe(
+      "History is not running just now, so this session's words cannot be read.",
+    );
+    // a session it does hold says no note
+    expect((await deps().verbs.agent_read(SPARK, { session: "run-work" })).note).toBeUndefined();
+    // and the scope is read first: a session outside the profiles is refused, never noted
+    await expect(
+      deps({ ...none }).verbs.agent_read(SPARK, { session: "run-home" }),
+    ).rejects.toMatchObject({ kind: "FORBIDDEN_SCOPE" });
   });
 
   it("history_search: one search per runtime under the profiles, merged by time, nothing from another profile", async () => {
