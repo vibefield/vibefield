@@ -4840,6 +4840,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       stands under the rows: "An agent History reads stays on. Clear History, below, removes what was read and turns
       them all off." Stop reading and its question are gone. In the panes that only ask (the Setup Assistant's,
       History's own card), nothing is read yet and every switch is free.
+    - **While an agent is brought in** (track HD, HD-7, 2026-11-24; James, on turning a second agent on here: "nothing
+      seems happens … th size in the history settings also has no updates"): the row of an agent History is reading
+      for the first time says so where its last use stood: "Importing · 188 MB read" while it reads, "Importing…"
+      before its first figure, and its facts again once it is in. The page asks `index.status` every 2 s while any
+      agent imports (5 s otherwise), so On this Mac grows as the reading does; the measure itself stays rosetta's,
+      at its own pace.
     - **On this Mac** (track HD, HD-1, 2026-11-24; James, the History QA: "there should be similar ingested cache space size
       indicators uis like those in the hover menu, and there should be a button for user to clear the entire ingested
       data, and the history room will go back to pre-ingested empty state"): the second section, under the rows. It
@@ -7881,6 +7887,31 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       the foot, at every moment of the import and at rest. It closes the panel and opens Settings → History, where
       what is kept can be cleared and whose sessions are read is chosen. The words are VibeField's; the room hands out
       plain data and no act.
+    - **Agents not in History** (track HD, HD-7, 2026-11-24; James, the History QA, after bringing in one agent of
+      two: "it only shows this one agent is done ingested, but it does not show the rest agent that are not ingested,
+      we should design those not ingested agents here properly so user can also opt in them here like using the toggle
+      in settings"): in the panel's **Agents** section, under the agents History reads, stand the agents with past
+      sessions on this Mac that it does not read. Over them one quiet line in the tertiary ink, "Not in History".
+      Each is a row of the section's own grid: its mark, its name in the secondary ink (it is not read, so it does
+      not take the ink of one that is), its facts under the name in the caption ink ("304 MB · last used yesterday",
+      the census's own figures, said as Settings says them), and at the row's end the kit's small switch, named
+      "Bring in Codex's history". Turning one on applies at once, as it does in Settings → History: one `index.enroll`
+      with the complete set. The switch stands on and gray while the history service takes it (§7 "Off"), then the
+      agent leaves this group and stands with the ones History reads, importing. A switch that is on stays on
+      (HD-2): there is no row here to turn off. A refusal is said under the rows in the attention ink. The section's
+      count ("1 of 1 done") counts the agents History reads and no others. The census is fieldd's
+      (`index.discoveries`: sizes, never content), asked when the panel opens and again after a switch; an index that
+      does not answer shows no such rows. With no agent History reads and none it could, the section is not drawn.
+      The words are VibeField's; the room's sign names only what the index reads.
+    - **An agent brought in later is an import** (HD-7; James: "when later opt in agent ingest, the indicator should go
+      back to ingesting state and show all the process properly, and other UIs as well"). *Corrected 2026-11-24:*
+      turning an agent on after the first import showed nothing anywhere: the history service read that agent's whole
+      past on its live path and reported itself live throughout, every agent "queued", so the circle stayed at rest,
+      the panel listed nothing new and no figure moved until the reading was over. The service now reports that
+      reading as an import (rosetta, the first reading on a warm start): the circle works again, its rim on the
+      step, the panel's Agents show the new agent with what it has read and the standing ones done, conversations
+      open newest first as they are read, and the circle rests when the last is in. What was readable before stays
+      readable throughout.
     - **An agent of unknown size** (IM-D6): while reading, the step's fraction counts the sizes that are known, and its
       line names the agents whose size is not ("Antigravity's size not known yet"); a build that knows no size draws no
       fraction.
