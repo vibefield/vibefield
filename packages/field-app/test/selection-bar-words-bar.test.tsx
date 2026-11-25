@@ -479,6 +479,24 @@ describe("the words bar: its rows and its acts (IK)", () => {
     expect(bar().hasAttribute("data-open")).toBe(false);
   });
 
+  it("an act its kind says is not enabled is drawn dim and aria-disabled, and its press runs nothing — a choice act opens no row", () => {
+    const off = (slot: MenuSlot): MenuSlot =>
+      slot.id === "ink.clear" ? slot : ({ ...slot, enabled: false } as MenuSlot);
+    selection.publish({ words: words({ menu: inkMenu().map(off) }) });
+    mount();
+    const run = vi.spyOn(ce.ops, "runMenuAction");
+    for (const id of ["ink.pen", "ink.highlight", "ink.strike", "ink.underline"]) {
+      expect(cell(`word:${id}`).getAttribute("aria-disabled")).toBe("true");
+      expect(cell(`word:${id}`).hasAttribute("data-disabled")).toBe(true);
+      act(() => cell(`word:${id}`).click());
+    }
+    expect(run).not.toHaveBeenCalled();
+    expect(shownRow()).toBe("main");
+    expect(cell("word:ink.clear").hasAttribute("aria-disabled")).toBe(false);
+    act(() => cell("word:ink.clear").click());
+    expect(run).toHaveBeenCalledTimes(1);
+  });
+
   it("Esc returns from the choices to the main row — taken ahead of the editor's field, which keeps the focus; the next Esc is the field's", () => {
     mount();
     act(() => field.focus());

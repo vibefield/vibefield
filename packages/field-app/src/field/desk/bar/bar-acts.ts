@@ -1,4 +1,11 @@
-import { type CanvasEngine, type Entity, Position, Size, selectedEntities } from "@vibecook/ice";
+import {
+  type CanvasEngine,
+  type Entity,
+  type MenuActionRange,
+  Position,
+  Size,
+  selectedEntities,
+} from "@vibecook/ice";
 
 // THE BAR'S ACTS (DK-11; DESIGN.md §8 "The doors": "the acts run through the engine's ops"; "The bar grown"). Each
 // act of the bar and its grown menu is ONE engine op on the selection — `ops.runMenuAction` for a kind's,
@@ -63,6 +70,22 @@ export function layComment(engine: CanvasEngine): Entity | null {
   });
   engine.ops.setSelection([entity]);
   return entity;
+}
+
+/**
+ * IK (DESIGN.md §8 "The words bar"; ICE I60) — run a WORDS act on the words: THE ONE place the bar names
+ * `ops.runMenuAction`'s options, so when ICE's call shape moves this function alone changes. `choice`: the id of one of the
+ * act's choices, for a choice act; `range`: the object being written and the range selected, as the anchor last said them.
+ */
+export function runWordsAct(
+  engine: CanvasEngine,
+  press: { readonly act: string; readonly choice?: string },
+  range: MenuActionRange,
+): void {
+  engine.ops.runMenuAction(
+    press.act,
+    press.choice === undefined ? { range } : { choice: press.choice, range },
+  );
 }
 
 /** Run one of the bar's acts on the selection — through the engine's ops alone. `locked`: every selected object

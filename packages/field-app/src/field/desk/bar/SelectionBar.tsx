@@ -22,7 +22,7 @@ import { inHand } from "../desk-anchor";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
 import { deskLook } from "../desk-layer";
 import type { ObjectWords } from "../desk-object-words";
-import { type BarActId, COMMENT_PAD_TYPE, runBarAct } from "./bar-acts";
+import { type BarActId, COMMENT_PAD_TYPE, runBarAct, runWordsAct } from "./bar-acts";
 import { offScreen } from "./bar-geometry";
 import { type HandCell, type HeldSlot, handCells, slotsKey } from "./bar-hand";
 import {
@@ -567,15 +567,11 @@ function SelectionBarOn({
   useEffect(() => {
     if (wordsRow !== null) sayMissingSwatches(wordsRow.cells);
   }, [wordsRow]);
-  // IK — a words act runs on the words as the anchor last said them: `ops.runMenuAction(id, { choice?, range })`
+  // IK — a words act runs on the words as the anchor last said them, through the bar's one words run (bar-acts.ts)
   const onWords = useCallback(
     (press: WordsPress): void => {
       const range = rangeRef.current;
-      if (range === null) return;
-      engine.ops.runMenuAction(
-        press.act,
-        press.choice === undefined ? { range } : { choice: press.choice, range },
-      );
+      if (range !== null) runWordsAct(engine, press, range);
     },
     [engine],
   );

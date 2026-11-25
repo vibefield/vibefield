@@ -14,9 +14,11 @@ import type { MenuSlot } from "@vibecook/ice/desk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   missingSwatches,
+  readSlot,
   resetMissingSwatchesForTest,
   type SwatchPalette,
   sayMissingSwatches,
+  swatchFor,
   swatchOf,
   type WordsCell,
   type WordsFace,
@@ -152,6 +154,7 @@ describe("the words row", () => {
       id: "ink.strike",
       label: "Strike",
       tip: "Strike",
+      disabled: false,
       glyph: "strike",
       on: false,
     });
@@ -162,6 +165,7 @@ describe("the words row", () => {
       id: "ink.clear",
       label: "Clear",
       tip: "Clear",
+      disabled: false,
       glyph: "clear-marks",
     });
   });
@@ -318,5 +322,54 @@ describe("the swatches: palette roles the desk's own palette draws (DESIGN.md §
     expect(wordsKey(inkMenu({ pen: "felt" }))).toBe(wordsKey(inkMenu({ pen: "felt" })));
     expect(wordsKey(inkMenu({ pen: "felt" }))).not.toBe(wordsKey(inkMenu({ pen: "red" })));
     expect(wordsKey(inkMenu({ strike: false }))).not.toBe(wordsKey(inkMenu({ strike: true })));
+  });
+});
+
+describe("the one adapter over ICE's slot shape (readSlot) — the only reader of choices, chosen, pressed, swatch, enabled", () => {
+  it("reads a slot as the bar's: its kind of cell, its state now, its choices with what each swatch asks for", () => {
+    const [pen, highlight, strike, , clear] = inkMenu({ pen: "ball", strike: true }).map(readSlot);
+    expect(pen).toMatchObject({ id: "ink.pen", kind: "choice", pressed: false, enabled: true });
+    expect(pen?.choices.map((c) => [c.id, c.swatch, c.current])).toEqual(
+      PENS.map((n) => [n, { shape: "dot", role: `pen.${n}` }, n === "ball"]),
+    );
+    expect(highlight?.choices.at(-1)).toEqual({
+      id: "none",
+      label: "None",
+      glyph: undefined,
+      swatch: undefined,
+      current: false,
+    });
+    expect(highlight?.choices[0]?.swatch).toEqual({ shape: "stripe", role: "highlight.yellow" });
+    expect(strike).toMatchObject({ kind: "toggle", pressed: true, enabled: true });
+    expect(clear).toMatchObject({ kind: "act", pressed: false, glyph: "clear-marks" });
+  });
+
+  it("draws a swatch from what it asks for: a role through the desk's palette, a colour as its kind says it", () => {
+    expect(swatchFor({ shape: "dot", role: "pen.red" }, LIGHT)).toEqual({
+      shape: "dot",
+      ink: LIGHT.pens?.red?.css,
+      role: "pen.red",
+    });
+    expect(swatchFor({ shape: "stripe", css: "rgb(1 2 3)" }, LIGHT)).toEqual({
+      shape: "stripe",
+      ink: "rgb(1 2 3)",
+    });
+    expect(swatchFor({ shape: "dot", css: "" }, LIGHT).ink).toBeUndefined();
+  });
+
+  it("a slot its kind says is not enabled is a DISABLED cell, whatever its kind; read where a build carries it", () => {
+    const off = (slot: MenuSlot): MenuSlot => ({ ...slot, enabled: false }) as MenuSlot;
+    const menu = inkMenu().map((slot) => (slot.id === "ink.clear" ? slot : off(slot)));
+    expect(readSlot(menu[0] as MenuSlot).enabled).toBe(false);
+    const cells = wordsCells(menu, LIGHT);
+    expect(
+      cells.flatMap((c) => (c.kind === "rule" || c.kind === "more" ? [] : [[c.id, c.disabled]])),
+    ).toEqual([
+      ["ink.pen", true],
+      ["ink.highlight", true],
+      ["ink.strike", true],
+      ["ink.underline", true],
+      ["ink.clear", false],
+    ]);
   });
 });

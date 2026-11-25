@@ -109,7 +109,7 @@ export interface WordsRow {
   readonly run: number;
 }
 
-/** IK — a words act pressed: its id, and the choice made for a choice act's (the controller runs `ops.runMenuAction`). */
+/** IK — a words act pressed: its id, and the choice made for a choice act's (the controller runs it: `runWordsAct`, bar-acts.ts). */
 export interface WordsPress {
   readonly act: string;
   readonly choice?: string;
@@ -970,9 +970,10 @@ export function SelectionBarView({
     .filter((i) => i >= 0);
   const wordsRovingAt = wordsStops.includes(wordsRover) ? wordsRover : (wordsStops[0] ?? 0);
 
-  /** A words act pressed: a choice act swaps in its choices; a toggle or a plain act runs; More waits (its rows need the
-   * editor's own command, not on this build of ICE). */
+  /** A words act pressed: a choice act swaps in its choices; a toggle or a plain act runs; one its kind says is disabled
+   * does nothing; More waits (its rows need the editor's own command, not on this build of ICE). */
   const pressWords = (cell: WordsCell, fromKeyboard: boolean): void => {
+    if ("disabled" in cell && cell.disabled) return;
     if (cell.kind === "choice") swapWords(cell, fromKeyboard ? { to: "pick" } : null);
     else if (cell.kind === "toggle" || cell.kind === "act") onWords?.({ act: cell.id });
   };
@@ -1298,6 +1299,7 @@ export function SelectionBarView({
             data-face={cell.face.by}
             aria-label={cell.label}
             title={cell.tip}
+            {...(cell.disabled ? { "aria-disabled": true, "data-disabled": "" } : {})}
             onClick={() => pressWords(cell, false)}
             {...stop}
           >
@@ -1322,6 +1324,7 @@ export function SelectionBarView({
                   ...(cell.on ? { "data-on": "" } : {}),
                 }
               : {})}
+            {...(cell.disabled ? { "aria-disabled": true, "data-disabled": "" } : {})}
             onClick={() => pressWords(cell, false)}
             {...stop}
           >

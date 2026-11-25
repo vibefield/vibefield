@@ -87,7 +87,7 @@ export interface WordsChoice {
   /** Its name: its tooltip and accessible name. */
   readonly label: string;
   readonly face: WordsFace;
-  /** The words' current choice (the slot's `chosen`): shown on, `aria-pressed`. */
+  /** The words' current choice: shown on, `aria-pressed`. */
   readonly on: boolean;
 }
 
@@ -98,6 +98,8 @@ export type WordsCell =
       readonly id: string;
       readonly label: string;
       readonly tip: string;
+      /** Its kind says it is not to be used now: dim, `aria-disabled`, its press nothing. */
+      readonly disabled: boolean;
       readonly face: WordsFace;
       readonly choices: readonly WordsChoice[];
     }
@@ -107,6 +109,8 @@ export type WordsCell =
       readonly id: string;
       readonly label: string;
       readonly tip: string;
+      /** Its kind says it is not to be used now: dim, `aria-disabled`, its press nothing. */
+      readonly disabled: boolean;
       readonly glyph: HeldGlyph | undefined;
       readonly on: boolean;
     }
@@ -116,6 +120,8 @@ export type WordsCell =
       readonly id: string;
       readonly label: string;
       readonly tip: string;
+      /** Its kind says it is not to be used now: dim, `aria-disabled`, its press nothing. */
+      readonly disabled: boolean;
       readonly glyph: HeldGlyph | undefined;
     }
   | { readonly kind: "rule" }
@@ -129,47 +135,99 @@ export const WORDS_TOOLBAR = "Words";
 /** The desk's More on the words row. */
 export const WORDS_MORE: WordsCell = { kind: "more", label: "More", tip: "More", waits: true };
 
-type Run = "choice" | "toggle" | "act";
+// ── THE ONE ADAPTER over ICE's slot shape (IK, 2026-11-25). Nothing else in the bar reads a slot's `choices`, `chosen`,
+// `pressed`, `swatch` or `enabled`: when ICE's act shape moves (a choice's `current` in place of the slot's `chosen`, a
+// swatch a CSS colour the kind says, a slot's `enabled`), `readSlot` alone changes. A swatch is what it ASKS for — a palette
+// role today, a colour after — with the shape it is drawn in; `swatchFor` draws either.
 
-/** A slot's run, read off its data alone: it offers choices, it says `pressed`, or neither. */
-const runOf = (slot: MenuSlot): Run =>
-  slot.choices !== undefined && slot.choices.length > 0
-    ? "choice"
-    : slot.pressed !== undefined
-      ? "toggle"
-      : "act";
+/** What a choice's swatch asks for: a palette ROLE's name (ICE I60 today), or a CSS colour its kind says. */
+export type SwatchAsk =
+  | { readonly shape: SwatchShape; readonly role: string }
+  | { readonly shape: SwatchShape; readonly css: string };
 
-/** The shape a choice act's choices are drawn in: their first swatch's family — undefined when none carries one. */
-function shapeOfChoices(slot: MenuSlot): SwatchShape | undefined {
-  for (const choice of slot.choices ?? []) {
-    if (choice.swatch === undefined) continue;
-    return familyOf(choice.swatch)?.shape ?? "dot";
-  }
-  return undefined;
+/** One of a slot's choices, as the adapter reads it. */
+export interface SlotChoice {
+  readonly id: string;
+  readonly label: string;
+  readonly glyph: HeldGlyph | undefined;
+  readonly swatch: SwatchAsk | undefined;
+  /** It is the words' current choice. */
+  readonly current: boolean;
 }
+
+/** A words act's slot as the bar reads it: its kind of cell, its state now, its choices. */
+export interface WordsSlot {
+  readonly id: string;
+  readonly label: string;
+  readonly glyph: HeldGlyph | undefined;
+  readonly kind: "choice" | "toggle" | "act";
+  /** A toggle's state now. */
+  readonly pressed: boolean;
+  /** False: its kind says it is not to be used now — drawn dim, `aria-disabled`, its press nothing. */
+  readonly enabled: boolean;
+  readonly choices: readonly SlotChoice[];
+}
+
+/** The shape a palette role is drawn in: its family's (a pen's dot, a highlighter's stripe); a role of no family a dot. */
+const roleShape = (role: string): SwatchShape => familyOf(role)?.shape ?? "dot";
+
+/** THE ADAPTER: ICE's `MenuSlot` (I60's shape) read as the bar's slot. A slot's `enabled: false` is read where a build
+ * carries it (tolerant: the I60 type has none). */
+export function readSlot(slot: MenuSlot): WordsSlot {
+  const offered: readonly MenuChoice[] = slot.choices ?? [];
+  const enabled = (slot as { readonly enabled?: unknown }).enabled !== false;
+  return {
+    id: slot.id,
+    label: slot.label,
+    glyph: slot.glyph,
+    kind: offered.length > 0 ? "choice" : slot.pressed !== undefined ? "toggle" : "act",
+    pressed: slot.pressed === true,
+    enabled,
+    choices: offered.map((choice) => ({
+      id: choice.id,
+      label: choice.label,
+      glyph: choice.glyph,
+      swatch:
+        choice.swatch === undefined
+          ? undefined
+          : { shape: roleShape(choice.swatch), role: choice.swatch },
+      current: slot.chosen === choice.id,
+    })),
+  };
+}
+
+/** A swatch as drawn, from what it asks for: a role through the desk's palette, a colour as said. */
+export function swatchFor(ask: SwatchAsk, palette: SwatchPalette): Swatch {
+  if ("css" in ask) return { shape: ask.shape, ink: ask.css.length === 0 ? undefined : ask.css };
+  return { ...swatchOf(ask.role, palette), shape: ask.shape };
+}
+
+/** The shape a choice act's choices are drawn in: their first swatch's — undefined when none carries one. */
+const shapeOfChoices = (slot: WordsSlot): SwatchShape | undefined =>
+  slot.choices.find((c) => c.swatch !== undefined)?.swatch?.shape;
 
 /** A choice's face: its swatch; else its glyph; else, among swatches, its family's hollow (None); else its label. */
 function choiceFace(
-  choice: MenuChoice,
+  choice: SlotChoice,
   shape: SwatchShape | undefined,
   palette: SwatchPalette,
 ): WordsFace {
   if (choice.swatch !== undefined)
-    return { by: "swatch", swatch: swatchOf(choice.swatch, palette) };
+    return { by: "swatch", swatch: swatchFor(choice.swatch, palette) };
   if (choice.glyph !== undefined) return { by: "glyph", glyph: choice.glyph };
   if (shape !== undefined) return { by: "swatch", swatch: { shape, ink: undefined } };
   return { by: "label" };
 }
 
-/** A choice act's cell face — the words' current value: the chosen choice's face; with none shared, its family's hollow
+/** A choice act's cell face — the words' current value: the current choice's face; with none shared, its family's hollow
  * swatch, else the act's own glyph, else its label. */
 function currentFace(
-  slot: MenuSlot,
+  slot: WordsSlot,
   choices: readonly WordsChoice[],
   shape: SwatchShape | undefined,
 ): WordsFace {
-  const chosen = choices.find((c) => c.on);
-  if (chosen !== undefined && chosen.face.by !== "label") return chosen.face;
+  const current = choices.find((c) => c.on);
+  if (current !== undefined && current.face.by !== "label") return current.face;
   if (shape !== undefined) return { by: "swatch", swatch: { shape, ink: undefined } };
   if (slot.glyph !== undefined) return { by: "glyph", glyph: slot.glyph };
   return { by: "label" };
@@ -177,46 +235,36 @@ function currentFace(
 
 /**
  * The words row's cells (DESIGN.md §8 "The words bar" — Order): the kind's words acts in their declared order — each a
- * choice act, a toggle or a plain act by its own data — a rule where the run changes between them, and the desk's More at
- * the end. For the ink acts: Pen ▾ · Highlight ▾ · rule · Strike · Underline · rule · Clear · More.
+ * choice act, a toggle or a plain act by its own data (`readSlot`) — a rule where the run changes between them, and the
+ * desk's More at the end. For the ink acts: Pen ▾ · Highlight ▾ · rule · Strike · Underline · rule · Clear · More.
  */
 export function wordsCells(menu: readonly MenuSlot[], palette: SwatchPalette): WordsCell[] {
   const cells: WordsCell[] = [];
-  let last: Run | undefined;
-  for (const slot of menu) {
-    const run = runOf(slot);
-    if (last !== undefined && run !== last) cells.push({ kind: "rule" });
-    last = run;
-    const tip = tipOf(slot.label);
-    if (run === "choice") {
+  let last: WordsSlot["kind"] | undefined;
+  for (const slot of menu.map(readSlot)) {
+    if (last !== undefined && slot.kind !== last) cells.push({ kind: "rule" });
+    last = slot.kind;
+    const base = {
+      id: slot.id,
+      label: slot.label,
+      tip: tipOf(slot.label),
+      disabled: !slot.enabled,
+    };
+    if (slot.kind === "choice") {
       const shape = shapeOfChoices(slot);
-      const choices = (slot.choices ?? []).map(
+      const choices = slot.choices.map(
         (choice): WordsChoice => ({
           id: choice.id,
           label: choice.label,
           face: choiceFace(choice, shape, palette),
-          on: slot.chosen === choice.id,
+          on: choice.current,
         }),
       );
-      cells.push({
-        kind: "choice",
-        id: slot.id,
-        label: slot.label,
-        tip,
-        face: currentFace(slot, choices, shape),
-        choices,
-      });
-    } else if (run === "toggle") {
-      cells.push({
-        kind: "toggle",
-        id: slot.id,
-        label: slot.label,
-        tip,
-        glyph: slot.glyph,
-        on: slot.pressed === true,
-      });
+      cells.push({ kind: "choice", ...base, face: currentFace(slot, choices, shape), choices });
+    } else if (slot.kind === "toggle") {
+      cells.push({ kind: "toggle", ...base, glyph: slot.glyph, on: slot.pressed });
     } else {
-      cells.push({ kind: "act", id: slot.id, label: slot.label, tip, glyph: slot.glyph });
+      cells.push({ kind: "act", ...base, glyph: slot.glyph });
     }
   }
   cells.push(WORDS_MORE);
