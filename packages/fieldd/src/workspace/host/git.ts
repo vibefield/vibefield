@@ -6,6 +6,7 @@ import type {
 } from "@vibefield/contracts";
 import { WORKSPACE_GIT } from "@vibefield/contracts/registries";
 import { parseRelativePath } from "../paths";
+import { measureWithDu, type TreeSizeReader, TreeSizes } from "./tree-size";
 
 // FS-1a — the INTERIM git service under the files worker (FS-D8 RULED (a):
 // M5 is mille's own git spec, `GitService`; until its PR 8 lands, this is a
@@ -753,9 +754,26 @@ export function serveGitPort(port: GitPortLike, service: GitService): void {
   port.start?.();
 }
 
+/** HD-3 — the worker's one measurer of worktree folders (`tree-size.ts`): its
+ * walks run with the git runner's own allowlisted environment. */
+const treeSizes = new TreeSizes({
+  measure: (folder, options) =>
+    measureWithDu(folder, { ...options, env: scrubbedEnvironment(process.env) }),
+});
+
+/** The worker is leaving: end the walk in flight. */
+export function stopTreeSizes(): void {
+  treeSizes.dispose();
+}
+
 /** A root's git facts (rosetta's `gitFacts`): null when the folder is not in
- * a repository; every field nullable when git could not answer it. */
-export async function gitFacts(root: string): Promise<WorkspaceGitFacts | null> {
+ * a repository; every field nullable when git could not answer it. HD-3: each
+ * worktree with its commit, whether its folder is gone, and what it holds on
+ * disk as far as `sizes` has measured (asking is what queues a measurement). */
+export async function gitFacts(
+  root: string,
+  sizes: TreeSizeReader = treeSizes,
+): Promise<WorkspaceGitFacts | null> {
   const inside = await git(root, ["rev-parse", "--is-inside-work-tree"], { timeoutMs: 4_000 });
   if (!inside.ok || inside.stdout.trim() !== "true") return null;
   // `symbolic-ref`, not rosetta's `rev-parse --abbrev-ref`: a branch with no
@@ -769,7 +787,18 @@ export async function gitFacts(root: string): Promise<WorkspaceGitFacts | null> 
   const dirty = status.ok ? parseStatus(status.stdout).length : null;
   const listed = await git(root, ["worktree", "list", "--porcelain"], { timeoutMs: 4_000 });
   const worktrees: WorkspaceGitWorktree[] = listed.ok
-    ? parseWorktreeList(listed.stdout).map(({ path, branch }) => ({ path, branch }))
+    ? parseWorktreeList(listed.stdout).map((entry) => {
+        const worktree: WorkspaceGitWorktree = {
+          path: entry.path,
+          branch: entry.branch,
+          head: entry.head,
+          gone: entry.prunable,
+        };
+        // a folder that is gone holds nothing, and a bare repository is no
+        // working tree: neither is walked
+        const sizeBytes = entry.prunable || entry.bare ? undefined : sizes.read(entry.path);
+        return sizeBytes === undefined ? worktree : { ...worktree, sizeBytes };
+      })
     : [];
   return { branch, dirty, worktrees };
 }
@@ -780,6 +809,9 @@ export async function gitFacts(root: string): Promise<WorkspaceGitFacts | null> 
 export interface WorktreeEntry {
   path: string;
   branch: string | null;
+  /** the commit checked out (a hex object id); null when git names none (a
+   * bare repository, or a line this reader does not know as one) */
+  head: string | null;
   bare: boolean;
   prunable: boolean;
 }
@@ -794,9 +826,11 @@ export function parseWorktreeList(raw: string): WorktreeEntry[] {
       .find((line) => line.startsWith("branch "))
       ?.slice(7)
       .replace("refs/heads/", "");
+    const head = lines.find((line) => line.startsWith("HEAD "))?.slice(5) ?? "";
     entries.push({
       path,
       branch: named && named.length > 0 ? named : null,
+      head: /^[0-9a-f]{4,64}$/.test(head) ? head : null,
       bare: lines.includes("bare"),
       prunable: lines.some((line) => line === "prunable" || line.startsWith("prunable ")),
     });

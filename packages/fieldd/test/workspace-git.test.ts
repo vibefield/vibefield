@@ -79,16 +79,26 @@ function repo(): { root: string; worktree: string; head: string } {
 
 describe("gitFacts (the room's GitFacts, read-only)", () => {
   it("answers the branch, the dirty count and every worktree", async () => {
-    const { root, worktree } = repo();
-    const facts = WorkspaceGitFactsResult.parse(await gitFacts(root));
+    const { root, worktree, head } = repo();
+    // HD-3: each worktree with its commit, its folder's standing, and what it
+    // holds on disk as far as the measurer has read (here: one figure, one owed)
+    const asked: string[] = [];
+    const sizes = {
+      read: (folder: string) => {
+        asked.push(folder);
+        return folder === root ? 4096 : null;
+      },
+    };
+    const facts = WorkspaceGitFactsResult.parse(await gitFacts(root, sizes));
     expect(facts).toEqual({
       branch: "main",
       dirty: 2,
       worktrees: [
-        { path: root, branch: "main" },
-        { path: worktree, branch: "side" },
+        { path: root, branch: "main", head, gone: false, sizeBytes: 4096 },
+        { path: worktree, branch: "side", head, gone: false, sizeBytes: null },
       ],
     });
+    expect(asked).toEqual([root, worktree]);
     const other = WorkspaceGitFactsResult.parse(await gitFacts(worktree));
     expect(other?.branch).toBe("side");
     expect(other?.dirty).toBe(0);
@@ -104,6 +114,25 @@ describe("gitFacts (the room's GitFacts, read-only)", () => {
     const facts = WorkspaceGitFactsResult.parse(await gitFacts(root));
     expect(facts?.branch).toBeNull();
     expect(facts?.dirty).toBe(0);
+  });
+
+  it("HD-3: a worktree whose folder is gone says so and is never measured; an unmeasured desktop sends no size", async () => {
+    const { root, worktree, head } = repo();
+    rmSync(worktree, { recursive: true, force: true });
+    const asked: string[] = [];
+    const facts = WorkspaceGitFactsResult.parse(
+      await gitFacts(root, {
+        read: (folder) => {
+          asked.push(folder);
+          return undefined;
+        },
+      }),
+    );
+    expect(facts?.worktrees).toEqual([
+      { path: root, branch: "main", head, gone: false },
+      { path: worktree, branch: "side", head, gone: true },
+    ]);
+    expect(asked).toEqual([root]);
   });
 
   it("a status takes no lock: the index is untouched by a read", async () => {

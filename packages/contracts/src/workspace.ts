@@ -239,6 +239,17 @@ export const WorkspaceGitWorktree = z
     path: z.string().min(1),
     /** absent on a detached HEAD */
     branch: z.string().min(1).nullable(),
+    /** HD-3 — the commit it has checked out (git's hex object id): what a
+     * checkout with no branch is told apart by. null: git named none. */
+    head: z.string().min(4).max(64).nullable().optional(),
+    /** HD-3 — git still lists it and its folder is gone (`prunable`). */
+    gone: z.boolean().optional(),
+    /** HD-3 — what the folder holds on disk, as a walk of it counts
+     * (`WORKSPACE_TREE_SIZE`): ignored files and build output included, a
+     * linked folder not followed, and not what removing it would free. null:
+     * being measured, and a later answer carries it. Absent: this desktop does
+     * not measure, or the folder could not be read. */
+    sizeBytes: z.number().int().nonnegative().nullable().optional(),
   })
   .passthrough();
 export type WorkspaceGitWorktree = z.infer<typeof WorkspaceGitWorktree>;

@@ -126,6 +126,7 @@ async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
 async function shutdown(code: number): Promise<never> {
   if (!stopping) {
     stopping = true;
+    gitModule?.stopTreeSizes();
     try {
       await listener?.close();
       await engines?.disposeAll();

@@ -1368,6 +1368,20 @@ export const WORKSPACE_GIT = {
   CONCURRENCY: 6,
 } as const;
 
+/** HD-3 (2026-11-24) — what a worktree's folder holds on disk, for the room's
+ * worktree ledger (`WorkspaceGitWorktree.sizeBytes`). The files worker walks
+ * one folder at a time with `du`, at NICE, only when a root's git facts are
+ * asked for. TTL_MS: how long a figure stands before the next ask measures it
+ * again (the old figure is answered meanwhile). TIMEOUT_MS: one walk's limit;
+ * a walk that runs out is remembered as "no figure" for TTL_MS. KEPT: folders
+ * remembered, the oldest dropped first. TS-only: no native reader. */
+export const WORKSPACE_TREE_SIZE = {
+  TTL_MS: 10 * 60_000,
+  TIMEOUT_MS: 60_000,
+  NICE: 10,
+  KEPT: 256,
+} as const;
+
 /** PJ-1 (`thinking-project-places.md` §4.1, §9; `build-pj.md` L1–L3) — place
  * facts: what this desktop reads of each folder its index names, through the
  * files worker's one git runner (`WORKSPACE_GIT`).

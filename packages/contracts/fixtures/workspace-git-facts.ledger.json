@@ -1,0 +1,27 @@
+{
+  "branch": "main",
+  "dirty": 0,
+  "worktrees": [
+    {
+      "path": "/Users/ada/Projects/vibe-field",
+      "branch": "main",
+      "head": "4082d6c9a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "gone": false,
+      "sizeBytes": 6549825126
+    },
+    {
+      "path": "/private/tmp/scratchpad/wt-10bfix",
+      "branch": null,
+      "head": "0e4919fff0a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "gone": false,
+      "sizeBytes": null
+    },
+    {
+      "path": "/private/tmp/scratchpad/wt-09-probe",
+      "branch": null,
+      "head": "22fdbadc00a1b2c3d4e5f60718293a4b5c6d7e8f",
+      "gone": true
+    },
+    { "path": "/Volumes/Old/field.git", "branch": null, "head": null, "gone": false }
+  ]
+}
