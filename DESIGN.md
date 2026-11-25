@@ -1576,7 +1576,11 @@ the island curve**, stopping short of sharp, while the card forms **160ms** behi
 560ms on the island curve, as the Setup Assistant's glass forms; ⌘3 out and back develops it again, a resize or a theme
 change does not. **The sample leaves at once** (HG-D6): when the room stops waiting the card goes in **240ms on the
 retract curve** (to `.985`) and the sample fades over **480ms `ease`**, uncovering the room's own import, which never
-waits for them. Reduced motion: each is one 120ms `ease` fade. **The mark means working** (HG-L1): a living mark that
+waits for them. Reduced motion: each is one 120ms `ease` fade. *Amended 2026-11-24 (History QA; §8 "History", "The
+first reading holds behind the glass"):* the sample no longer leaves when the room stops waiting. It stays under the
+hold until the first projects are there, and leaves then, as above (480ms `ease`), while the room under it comes up
+over the same 480ms; the card still goes when the room stops waiting, at once, and the hold's mark and line come in
+late, as every hold's do. **The mark means working** (HG-L1): a living mark that
 stands for a wait (§8 "The living mark, drawn as SVG") moves only while that work moves. A wait whose work has stopped
 answering (its updates paused) shows the mark at rest, the icon's pose, beside its words, and the mark moves again when
 the work does; reduced motion stands every mark at rest. **History's holds** (HG-W1) move as FG-4b's: late (nothing
@@ -7803,6 +7807,36 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     quiet **Look again**, its sample line the short "The room behind this card is a sample." The census's other
     states (looking, unavailable, a refusal, nine agents) stand as the pane draws them, on the glass; in History the
     unavailable note says only "History isn't available right now." (§9). The develop and the leave are §6's.
+    *Amended 2026-11-24 (History QA; James, in the QA desktop after two cold imports: "the un[as]signed sessions
+    stage is confusing for users, can we just show a[n] entire loading screen at this entire stage? so in the empty
+    history room state, user click start ingest and it hides the popup and just show our loading logo at the blurred
+    room, once this stage passed we reveal the room, and user will already see projects entries po[p]ping out in the
+    project list"):* **the first reading holds behind the glass.** This overturns "when the room stops waiting the
+    sample leaves at once" above, and §6's HG-D6 with it.
+    **What was wrong.** The room's cold start holds "before the first project" (HG-W1), and its first project was its
+    own bucket for sessions no place holds yet, "Unassigned sessions". Every session is in that bucket until fieldd
+    has read its folder's place, so the hold ended the moment sessions were listed and the room stood as one project
+    of everything, under "Up to date", until the projects arrived (71 seconds on the QA cut before HQ-2, a few after).
+    **What it is.** From Bring in history until fieldd's first projects are listed, the view keeps the glass: the
+    sample stays, the card goes, and in the card's place stands **the hold** (HG-W1's: the living mark at the centre
+    of the room's box, one line 26 under it and its count under that), drawn by the view in the glass's own layer.
+    The room under it is not shown (no opacity, hidden from assistive tech), so neither its own hold nor the one
+    bucket is ever seen. When the first projects are listed the sample leaves (§6) and the room comes up with them
+    in it, the rest arriving as fieldd places them and the import's sign (IM) saying what is still to come.
+    **Its words are the import's own** (the room's reading, R11): the step's title with its ellipsis over its count
+    ("Discovering conversations…" over "1,333 files checked"; the first step's title alone, "Finding your
+    history…"), and, once the reading is done and only the places are still being read, **"Gathering your
+    projects…"** alone.
+    **When it holds** (`history/history-hold.ts`): while the index reads for the first time (discovering,
+    backfilling, restoring, finalizing, publishing), through the restart a grant causes, and after it is live while
+    sessions are listed and no project is, for at most **30 seconds**. It never holds once a project is listed,
+    when there are no sessions to place, while the index waits for consent (the card's), or when the index failed,
+    stopped or cannot be reached (the room says those itself, with their acts). The 30 seconds is the one bound that
+    is not a fact: places that cannot be read (the files service down) must not keep the room shut, and after it the
+    room stands as it would have, the one bucket included. It holds the same way when History is opened during a
+    reading begun elsewhere (the Setup Assistant's), with no card before it.
+    **Kept:** the develop, the press, the card, the sample's frost and its inertness, and the room's own hold where
+    there is no glass (rosetta's own app).
   - **It lists your projects** (PJ-4, H1–H6 ruled (a) 2026-10-09; "we map, the room draws"): the
     room's projects are fieldd's (`project.list`: places grouped by evidence, PJ-L1), each session
     filed under the key fieldd joined it to, and what the room draws beyond its own rows is

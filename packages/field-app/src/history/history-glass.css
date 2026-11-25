@@ -50,6 +50,31 @@
   pointer-events: auto;
 }
 
+/* The first reading's hold (History QA, 2026-11-24; DESIGN.md §8 "History" — before its past, "The first reading
+   holds behind the glass"): in the card's place, the room's box from the head band to the reserve, HG-W1's hold
+   (its rows, its type and its late arrival are `.vf-history-hold`'s, `history-room-view.css`). It takes no pointer. */
+.vf-history-glass-hold {
+  position: absolute;
+  inset: var(--vf-history-head) 0 var(--vf-history-reserve) 0;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+/* While it holds the room under the glass is not shown: neither its own cold start nor the one bucket every session
+   is in before its place is read. Hidden from assistive tech too (`visibility`). When the hold ends the room comes
+   up over the sample's own 480ms (§6), `visibility` turning at once so the rise is seen. */
+.vf-history > .vf-history-room {
+  transition:
+    opacity 480ms ease,
+    visibility 0s;
+}
+
+.vf-history[data-held] > .vf-history-room {
+  visibility: hidden;
+  opacity: 0;
+  transition: none;
+}
+
 /* The room develops (§6, HG-D5): once each time History shows while the index
    waits, the sample comes into focus from a 24px blur at nothing to its frost
    over 640ms on the island curve, stopping short of sharp, and the card forms
@@ -110,6 +135,11 @@
   animation: vf-history-sample-out 480ms ease both;
 }
 
+/* The hold goes as the card does, in 240ms: its work is done, and the room is what comes up. */
+.vf-history-glass[data-phase="leave"] .vf-history-glass-hold > * {
+  animation: vf-history-fade-out 240ms ease both;
+}
+
 @keyframes vf-history-card-out {
   to {
     opacity: 0;
@@ -140,10 +170,14 @@
   }
 
   .vf-history .vf-history-glass[data-phase="leave"] .vf-history-sample,
-  .vf-history .vf-history-glass[data-phase="leave"] .vf-history-glass-card > * {
+  .vf-history .vf-history-glass[data-phase="leave"] .vf-history-glass-card > *,
+  .vf-history .vf-history-glass[data-phase="leave"] .vf-history-glass-hold > * {
     /* biome-ignore lint/complexity/noImportantStyles: as above. */
     animation: vf-history-fade-out 120ms ease both !important;
   }
+
+  /* the room's rise needs no line here: the view's floor (`history-room-view.css`, M6) cuts every transition in
+     the view to nothing, so under reduced motion the room is simply there when the sample has faded */
 }
 
 @keyframes vf-history-fade-a {

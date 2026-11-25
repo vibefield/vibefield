@@ -23,6 +23,7 @@ import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { type ViewKeys, viewKeysOf } from "../frame/views";
 // HG-2: History before its past — the view's own layer over the room while it waits for consent
 import { HistoryConsentMarker, HistoryGlass } from "./HistoryGlass";
+import type { HistoryHolding } from "./history-hold";
 // HG-W1, HG-W4: the room's waits in VibeField's mark
 import { carriesOpening, historyWaitMark } from "./history-mark";
 // The room's own sheet enters HERE, with the room — one row, the package's own
@@ -162,6 +163,11 @@ export interface HistoryRoomViewProps {
    * (`import-sign-door.ts`), one object for the room's life. Absent, the room
    * keeps its own import card, as the catalog's plates show it. */
   importSign?: RoomImportSign | undefined;
+  /** History QA (2026-11-24; DESIGN.md §8 "History" — before its past, "The first reading holds behind the glass")
+   * — the first reading holds, and in which phase, from the controller (`history-hold.ts`). While it is not null the
+   * glass stays over the room with the hold in the card's place (its words the import's own, read where they are
+   * drawn), and the room is not shown. Absent or null, the view as it was: the glass for the consent card alone. */
+  hold?: HistoryHolding | null | undefined;
 }
 
 export function HistoryRoomView({
@@ -178,6 +184,7 @@ export function HistoryRoomView({
   shown = true,
   opening,
   importSign,
+  hold = null,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
   // HG-W1, HG-W4 (DESIGN.md §8 "History"): the room's waits wear the living mark (`waitMark`, R10), and its first
@@ -205,6 +212,7 @@ export function HistoryRoomView({
   return (
     <div
       className="vf-history"
+      data-held={hold !== null ? "" : undefined}
       style={
         {
           "--vf-history-reserve": `${COVER_RESERVE_PX}px`,
@@ -235,8 +243,8 @@ export function HistoryRoomView({
           importSign={importSign}
         />
       </div>
-      {card !== null && (
-        <HistoryGlass waiting={waiting} shown={shown}>
+      {(card !== null || hold !== null) && (
+        <HistoryGlass waiting={card !== null && waiting} hold={hold} shown={shown}>
           {card}
         </HistoryGlass>
       )}

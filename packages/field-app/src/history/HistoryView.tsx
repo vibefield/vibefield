@@ -52,6 +52,7 @@ import {
   thrownReason,
 } from "./acts";
 import { HistoryConsent } from "./HistoryConsent";
+import { useHistoryHolding } from "./history-hold";
 import {
   type HistoryHostActs,
   type HistoryHostState,
@@ -135,6 +136,8 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     useCallback((listener: () => void) => ports.catalog.onWordsChange(listener), [ports]),
     () => ports.catalog.indexPhase(),
   );
+  // History QA (2026-11-24) — the first reading holds behind the glass until fieldd's first projects are listed
+  const hold = useHistoryHolding(ports.catalog);
 
   /* ── the host model (PJ-4): one per listing, gathered while History shows ── */
 
@@ -503,6 +506,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
       keys={keys}
       inputs={inputs}
       importSign={HISTORY_IMPORT_SIGN}
+      hold={hold}
     />
   );
 }

@@ -5,11 +5,17 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
-import type { CatalogPort, HistoryRoomHandle, RoomPorts } from "@vibefield/rosetta-room";
+import type {
+  CatalogPort,
+  HistoryRoomHandle,
+  ImportSign,
+  RoomPorts,
+} from "@vibefield/rosetta-room";
 import { act, createElement, createRef, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { historyFixturePorts } from "../src/design-system/history-fixtures";
+import { publishImportSign } from "../src/frame/import-sign-door";
 import { HistoryRoomView } from "../src/history/HistoryRoomView";
 
 // HG-2 (track HG; HG-D1…HG-D6 ruled by James 2026-11-08; DESIGN.md §8 "History" — before its past, the room behind
@@ -336,6 +342,95 @@ describe("History's motions before its past (HG-2; HG-D5, HG-D6; DESIGN.md §6)"
     // one 120ms fade, timed by the DOM however late the row looks
     expect(await until(length, "the layer gone", 4_000)).toBeLessThan(400);
   }, 20_000);
+});
+
+// History QA (2026-11-24; DESIGN.md §8 "History" — before its past, "The first reading holds behind the glass"):
+// from Bring in history until fieldd's first projects are listed, the view keeps the glass, the hold stands in the
+// card's place, and the room under it is not shown.
+describe("the first reading holds behind the glass (History QA, 2026-11-24)", () => {
+  // what the controller hands the view: that it holds, and the phase; the words are the import's sign, read where
+  // they are drawn
+  const HOLD = { phase: "backfilling" } as const;
+  const signed = (title: string, count: string | null): void =>
+    publishImportSign({ tone: "working", step: 1, title, count } as ImportSign);
+  afterEach(() => publishImportSign(null));
+
+  it("stands the sample and the hold, never the card, and marks the view held so the room is not shown", async () => {
+    const ports = historyFixturePorts("room");
+    await mount(view(ports, { hold: HOLD }));
+    await act(async () => signed("Discovering conversations", "1,333 files checked"));
+    const layer = await until(glass, "the view's layer");
+    expect(layer.getAttribute("data-face")).toBe("hold");
+    expect(layer.querySelector(".vf-history-sample")).not.toBeNull();
+    const hold = layer.querySelector(".vf-history-glass-hold.vf-history-hold");
+    expect(hold?.getAttribute("role")).toBe("status");
+    expect(hold?.querySelector(".vf-history-hold-mark .vf-history-mark")).not.toBeNull();
+    expect(hold?.querySelector(".vf-history-hold-line")?.textContent).toBe(
+      "Discovering conversations…",
+    );
+    expect(hold?.querySelector(".vf-history-hold-sub")?.textContent).toBe("1,333 files checked");
+    expect(layer.querySelector(".vf-history-glass-card")).toBeNull();
+    expect(host?.querySelector(".vf-history")?.hasAttribute("data-held")).toBe(true);
+    // the room is mounted under it all the while (it reads the import, and has its projects when shown)
+    expect(host?.querySelector(".vf-history > .vf-history-room .ah-frame")).not.toBeNull();
+  }, 20_000);
+
+  it("keeps the layer from the card to the hold: no leave between them, and the card goes", async () => {
+    const { ports, grant } = consentPorts();
+    const room = createRef<HistoryRoomHandle>();
+    await mount(view(ports, { roomRef: room }));
+    const layer = await until(glass, "the layer");
+    expect(layer.getAttribute("data-face")).toBe("card");
+    // the grant lands and the controller says the reading holds
+    grant();
+    await rerender(view(ports, { roomRef: room, hold: HOLD }));
+    await act(async () => room.current?.refreshStatus());
+    await until(
+      () => host?.querySelector('.vf-history-glass[data-face="hold"]'),
+      "the hold in the card's place",
+      4_000,
+    );
+    expect(glass()).toBe(layer); // the same layer: the sample never left
+    expect(glass()?.getAttribute("data-phase")).toBe("rest");
+    expect(host?.querySelector(".hg-card-probe")).toBeNull();
+    // a new line of the same hold is the same layer still
+    await rerender(view(ports, { roomRef: room, hold: { phase: "live" } }));
+    expect(glass()?.getAttribute("data-phase")).toBe("rest");
+    expect(glass()?.querySelector(".vf-history-hold-line")?.textContent).toBe(
+      "Gathering your projects…",
+    );
+  }, 20_000);
+
+  it("leaves when the hold ends, the hold's words whole through the leave, and the room is shown again at once", async () => {
+    const ports = historyFixturePorts("room");
+    await mount(view(ports, { hold: HOLD }));
+    await act(async () => signed("Discovering conversations", "1,333 files checked"));
+    await until(glass, "the layer");
+    const length = leaveLength();
+    await rerender(view(ports, { hold: null }));
+    const leaving = await until(
+      () => host?.querySelector('.vf-history-glass[data-phase="leave"]'),
+      "the leave",
+      4_000,
+    );
+    expect(leaving.querySelector(".vf-history-hold-line")?.textContent).toBe(
+      "Discovering conversations…",
+    );
+    expect(leaving.querySelector(".vf-history-sample")).not.toBeNull();
+    expect(host?.querySelector(".vf-history")?.hasAttribute("data-held")).toBe(false);
+    expect(await until(length, "the layer gone", 4_000)).toBeGreaterThanOrEqual(400);
+  }, 20_000);
+
+  it("the sheet hides the held room and brings it up over the sample's 480ms", () => {
+    const layer = read("../src/history/history-glass.css");
+    expect(rule(layer, ".vf-history[data-held] > .vf-history-room")).toMatch(
+      /visibility: hidden;[\s\S]*opacity: 0;/u,
+    );
+    expect(rule(layer, ".vf-history > .vf-history-room")).toContain("opacity 480ms ease");
+    expect(rule(layer, ".vf-history-glass-hold")).toContain(
+      "inset: var(--vf-history-head) 0 var(--vf-history-reserve) 0;",
+    );
+  });
 });
 
 /** One rule's body in a sheet, by its exact selector at the start of a line. */
