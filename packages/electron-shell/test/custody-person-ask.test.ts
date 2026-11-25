@@ -209,7 +209,13 @@ describe("what hands a person's ask on, and who makes one (C1)", () => {
   it("a person's asks in main are the bootstrap, the switch and Try Again; the boot's own ensure is nobody's", () => {
     const main = source("main/index.ts");
     expect(source("main/bootstrap.ts")).toContain("const handle = await ensure({ person: true });");
-    expect(main).toContain("(options) => fielddHandles!.ensure(options),");
+    // HQ-10 (2026-11-24): the window boundary takes the guarded road, never the coordinator itself (a window
+    // destroyed after teardown retires its token with none attached), and that road hands the ask on whole
+    expect(main).toMatch(
+      /registerWindowBootstrap\(\n\s+registry,\n(?:\s+\/\/[^\n]*\n)*\s+ensureFieldd,\n/u,
+    );
+    expect(main).toContain("if (fielddHandles !== null) return fielddHandles.ensure(options);");
+    expect(main).not.toContain("fielddHandles!.ensure");
     expect(main).toContain("await bundle.handles.ensure({ person: true });");
     expect(main).toContain("await fielddHandles?.ensure({ person: true });");
     expect(main.match(/person: true/gu)).toHaveLength(2);
