@@ -14493,14 +14493,14 @@ Every functional icon the chrome draws — the line's create and the views track
 pill and its chevron and package, the package circle, the 40px round buttons, the Settings rail, the
 agent rows, the plugins' toolbars (and the edge trays, until HN-8), the phone's composer and keypad, the swarm's
 marks, the desk's bar, the tools in hand and the wrapper around Godview's terminals — is one of
-**71 named glyphs** in one **24-unit box**,
+**72 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
 the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
 I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (61) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (62) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **One thing on the chrome is not a glyph: the paper card** (CS-D12 E, ruled by James 2026-11-09, *The
@@ -14523,7 +14523,7 @@ weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn poin
 *turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
 *flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
 outward · link · return · backspace · ellipsis · start · resume · jump · duplicate · tape · lift · trash ·
-pen · eraser · today · strike · underline · clear-marks · minimize · maximize · restore · sparkle; navigation: chevron · arrow; places and objects:
+pen · eraser · today · strike · underline · clear-marks · highlighter · minimize · maximize · restore · sparkle; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
 mic · scantext · snippets · prompt · sound · document · type-text · type-image · type-ref; signals: message · key · question · exclaim · flame · missing · importing;
@@ -14608,6 +14608,10 @@ kinds' eraser). A kind's words acts name them (the table below). They made the s
 was written; they are the desktop's alone, not among the phone's picks. **Back**, the pens' and the highlighters' row's way
 home, needs no glyph of its own: it is the `chevron` turned 180, the set's one drawing for going back, as the New spark
 sheet's "All agents" row wears it (§8) — so `back` is not a fourth drawing.
+**`highlighter`** (2026-11-25, IK round two; §8 "The words bar") is the Highlight act's: a broad chisel-tipped marker leaning
+as `pen` leans, its barrel thicker so the two read apart at 16, over the stripe it lays. ICE's ink acts declare it by that name
+(`inkActs`' default glyph), and the bar draws a choice act's choices as STRIPES under it and as DOTS under `pen` — the act's glyph
+says which, never its id. Instrument, its Hardware record drawn and not shipped, the desktop's alone. It made the set 72.
 **ICE's glyph names, mapped** (R2 — the orchestrator's Phase 4 rulings, 2026-10-03): a kind declares
 a glyph by a NAME of ICE's set or by its own drawing (`HeldGlyph = string | { path, fill? }`), and
 the desk's chrome draws it from this set by this table, never by a guess:
@@ -14619,7 +14623,7 @@ the desk's chrome draws it from this set by this table, never by a guess:
 | `pen` · `eraser` · `today` | `pen` · `eraser` · `today` |
 | `duplicate` · `lock` · `unlock` · `trash` | `duplicate` · `tape` · `lift` · `trash` |
 | `agents` · `ellipsis` · `check` | `agents` · `ellipsis` · `check` |
-| `strike` · `underline` · `clear-marks` (a kind's words acts, IK) | `strike` · `underline` · `clear-marks` |
+| `strike` · `underline` · `clear-marks` · `highlighter` (a kind's words acts, IK) | `strike` · `underline` · `clear-marks` · `highlighter` |
 | `{ path }` · `{ path, fill: true }` | the bar's own path renderer: the path in the 24-unit box, stroked 2 in the bar's ink, or filled |
 | any other name | **`missing`** — said once, never another glyph |
 
