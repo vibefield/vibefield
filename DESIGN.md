@@ -2055,6 +2055,65 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     the window never holds `shell.open`. Until DS-9 the open, the tile's image and its capture reach
     the tailnet through the OS Tailscale app (AH's sanctioned interim), and the words for a desktop
     where it is not up are owed to James (§9 "Apps").
+  *Amended 2026-11-24 (MA-D16; James, in chat, after his own look at the shelf on a Mac that is not
+  connected: "there are three kinds of ingested artifacts, ones with real html file, ones with only
+  claude url, ones that has both. and we should design things differently based on whether user has
+  linked tailscale or not linked, if user not linked, the ones with html files, they can click to
+  open the file in system browser, if with claude url they open the link in browser, and there
+  should be proper ui design that tell user if they link their tailscale account they can publush
+  these apps in their network and have access anywhere with their devices like their phone"; and of
+  the shelf as it stood, "the desktop app menu is poorly built, its layout is pretty off, and i cant
+  really open any apps"). What he saw, measured on a Mac with 44 apps and no connection: an empty
+  Live filled the open sheet and said "No apps yet" above 44 of them; the 44 stood under 23 day
+  headings, 13 of them over one tile, 5,741 of scroll in a shelf 380 tall; the state's word was cut
+  off on every tile that had one, behind its desktop's name; and a press that could not open said
+  why at the head of the group, which was scrolled out of sight. The eight lines below are the
+  shelf from this day; the lines above stand where these do not replace them.*
+  - **A press goes where the app is.** A made app is one of three by what it holds, and its tile
+    opens accordingly:
+    - **A page kept on its desktop** opens as the app. On a connected Mac that is the serve, as
+      above. On a Mac that is **not connected** there is no serve to carry it, so its own desktop
+      opens the kept page **as a file in the browser**: nothing is served and nothing listens, and
+      the file carries the page's own policy in its head, so it reaches the hosts it was written
+      for and nothing else on this road too (MA-L7; the `local` answer of `artifact.open`).
+    - **A link and no page** (the page was not kept, was too large or cannot be kept, and the app
+      has a hosted link) opens **the link** in the browser, connected or not. It was a tile that
+      said "not kept" and opened nothing.
+    - **Both**: it opens as a page kept on its desktop, and **Open in ‹host›** stays in its menu.
+    - With neither, the tile says why, as before.
+  - **The tile's third line says where a press goes.** A page: the status dot and its desktop's
+    name, then the state's word when it has one. A link: §13's `outward` and the link's ‹host›, in
+    the secondary ink, with no dot. **The name gives way, never the word:** a long desktop name ends
+    in an ellipsis and the word after it is always whole. While this Mac is not connected it is the
+    field's only desktop, and its own apps say **This Mac**, never the name the OS gave it.
+  - **The connect row** (§8 "Asking again": a row, so it keeps no ledger, has no ×, and stands only
+    while this Mac is in the ordinary unconnected state). It stands at the head of From your
+    agents, under the heading and the search field: one card in the fill, corners 12, padded 10 by
+    12 — §13's `mesh` at 18 in the secondary ink, its heading at 12/600 in the primary ink and its
+    line at 11 in the secondary (§9 "Apps" words both), and **Connect…** at its end, which opens
+    Settings → Devices and begins the link there (`open-connect`), as every such row does. It
+    leaves the moment the link lands. Tailscale's mark is not drawn here (§13: only where trust is
+    decided).
+  - **What a press could not open is said where the person is.** The group's notice and its error
+    hold to the top of the shelf while the list scrolls under them (sticky, on the sheet's own
+    surface, a hairline under them), so a press far down the list is answered in sight.
+  - **An empty Live is one row.** With nothing published it draws its header and one row under it:
+    its line in the secondary ink and **Publish…** at the row's end, 32 high. The quiet state's
+    art, its heading and its primary button are gone from the shelf: they filled the sheet above the
+    person's apps, and the heading was false while those apps stood below (§9 "Apps" had it owed).
+    Live's reading and its unavailable state keep their quiet states.
+  - **The made group is laid out by when, in six words at most, never by day.** Newest first, under
+    **Today**, **Yesterday**, **Previous 7 days**, **Previous 30 days**, then a month's name
+    ("October"), with its year once it is not this year's ("December 2025"). A tile's own day is in
+    its tooltip. A day's heading over one tile is what made the shelf long.
+  - **Why a tile has no preview is said in its menu**, as its first line, in the tertiary ink at
+    11: the phone's About words (§9 "Apps"), and on a Mac that is not connected the line that says
+    previews wait for the connection. A tile with a preview says nothing there.
+  - **The circle's sheet is taller.** Under a covered view the sheet holds Apps alone, and opens to
+    `min(600px, 100% − 88px)`, where it was 420: three rows of tiles and the heads above them. Its
+    width stays 544, so the Hub's 504 and its three-across tiles stand. The pill's sheet on the
+    desk keeps 420: it turns between Fields and Apps in place and never regrows (HN-8).
+    ‹for James: whether the pill's sheet grows too.›
 - **Edge trays — the notch and its drawer** — *retired 2026-10-30 (HN-8; PL-D1…PL-D3 ruled by James
   2026-10-29, Cards in Hand; HN-L7: the edges' drawers retire with the edges).* What it was
   (2026-09-23, James; the record is `draft/composer/compact.html` §15–19 and `compact.md` Parts
@@ -3527,7 +3586,10 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     18 in secondary ink (primary under the pointer), above the cover with the line and the corner
     (62). Its tooltip, its name and its dot are the pill's package's (the dot 7 in from the
     circle's top right). **It grows the same sheet, on Artifacts** — 600ms on the island curve, the
-    sheet's left on the circle's (x 96–640 at the default window), 544 × 420, corners 22 22 40 40 —
+    sheet's left on the circle's (x 96–640 at the default window), 544 × 420, corners 22 22 40 40
+    (*amended 2026-11-24, MA-D16: 544 × 600. It holds Apps alone and never turns to Fields, so it
+    takes the room; the pill's sheet keeps 420. §8 "Artifacts — the Artifacts shelf's contents", as
+    amended that day*) —
     and the sheet's head row is the circle's own: the package, now a 28 round button 6 in, on
     ("Close  Esc") until the fold ends, holding `package` at the circle's 18 with its dot where the
     circle's is (7 in from the circle's top right), so neither moves; 8 after it, the shelf's name,
@@ -12292,6 +12354,21 @@ is not plain ASCII in its `xn--` form, so a look-alike never reads as the name i
   "The app limit has been reached."). Its list form's plus is "Add app", a tile's menu "App actions", its
   region "Live" and its list "Live apps". The empty Live keeps "No apps yet" and its second line, the header's
   count stands as it is, and the made group draws no count.
+- **A Mac that is not connected** (*added 2026-11-24, MA-D16; where each stands is §8 "Artifacts — the Artifacts
+  shelf's contents", as amended that day. Each is a draft, James's to rule, and his replace them.*) The connect row's
+  heading is **These apps open on this Mac only.** and its line "Connect your devices to open them on your phone and
+  your other computers.", with **Connect…** (the link's own words, above: the place says Connect your devices, and
+  "This Mac only" is the state). A tile of this Mac's says **This Mac** ("This PC" on Windows) where a connected field
+  says its desktop's name. A tile that opens a link says ‹host› after `outward`, and its tooltip "Open ‹app› in
+  ‹host›". Live's empty row says "Publish a proxy or a folder" beside **Publish…**: the heading "No apps yet" is
+  gone, which closes the slot above that called it false. The made group's headings are **Today**, **Yesterday**,
+  **Previous 7 days**, **Previous 30 days** and then a month ("October", "December 2025"). A tile's menu says why it
+  has no preview in About's three lines above, with two of the desk's own: on the app's own desktop, while its
+  drawing is owed, "No preview yet — it's being drawn" (VibeField is open there, so "the next time VibeField is
+  open" would be false); and on a Mac that is not connected "No preview yet — previews are drawn once your devices
+  are connected". A press whose desktop has no connection of its own says "Can't reach
+  ‹desktop›" over "It isn't connected to your devices yet." (it said "your tailnet", a word that stays in Network
+  details).
 - **History is the one named exception.** Inside History the room's library says Artifacts, as rosetta wrote it,
   until rosetta's room takes the host's words (RO-37), by the room rule below.
 
