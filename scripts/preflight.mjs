@@ -249,14 +249,14 @@ const PIN_EXPECTATIONS = [
   // to the line's end like ice's row, so a prerelease never passes for the release.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.10\s*$/m,
-    label: '"@vibefield/rosetta-protocol": 0.1.10',
+    re: /"@vibefield\/rosetta-protocol":\s*0\.1\.11\s*$/m,
+    label: '"@vibefield/rosetta-protocol": 0.1.11',
     package: "@vibefield/rosetta-protocol",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/rosetta-room":\s*0\.1\.10\s*$/m,
-    label: '"@vibefield/rosetta-room": 0.1.10',
+    re: /"@vibefield\/rosetta-room":\s*0\.1\.11\s*$/m,
+    label: '"@vibefield/rosetta-room": 0.1.11',
     package: "@vibefield/rosetta-room",
   },
   // The kit pins release.swift independently (DECISIONS RD). 0.1.6 is the

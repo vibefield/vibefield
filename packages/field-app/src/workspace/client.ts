@@ -344,7 +344,7 @@ export class WorkspaceClient implements WorktreeHostPort {
     );
   }
   /** HD-3 — what these worktrees of the open root's repository hold on disk (the room's
-   * `WorktreeHostPort.worktreeSizes`, from the release after rosetta 0.1.10): the room names the
+   * `WorktreeHostPort.worktreeSizes`, rosetta 0.1.11): the room names the
    * rows it is showing, and each ask replaces what the last one queued. A stale root answers nothing. */
   async worktreeSizes(root: string, generation: number, paths: readonly string[]) {
     const resolved = this.#resolved;

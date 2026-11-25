@@ -326,8 +326,12 @@ overrides:
   # dials nothing — VibeField's adapters (field-app `history/doors.ts`) are its
   # ports. Its react/react-dom are PEERS (>=19 <20) and resolve to this tree's
   # copy; its `@vibecook/mille*` dependencies take the mille rows below. Both were
-  # published from the revision siblings.lock.json pins. Tags v0.1.10 and npm-v0.1.10 at
-  # 83865a707 (rosetta PR #64) include resumable ingestion and bounded shutdown.
+  # published from the revision siblings.lock.json pins. Tags v0.1.11 and npm-v0.1.11 at
+  # 8beea2dbb (rosetta PR #66), EL8 2026-11-24: the worktree list as a ledger of disk
+  # (`WorktreeHostPort.worktreeSizes`, `HostPort.copyText`), a diff's long lines wrapped in
+  # their own rows, and an agent consented after the first import read and reported as an
+  # import (rosettad's first reading on a warm start; the room polls it as one).
+  # 0.1.10 at 83865a707 (rosetta PR #64): resumable ingestion and bounded shutdown.
   # The kit uses 0.1.6, the last release to change the Swift client.
   # 0.1.9 at c5eaded1d, PRs #60 (History's import sign) and #61 (the release), 11-23.
   # 0.1.8 at bf5b526de, PRs #58 (temp paths in the
@@ -348,8 +352,8 @@ overrides:
   # EL8 commit: these rows, preflight's PIN_EXPECTATIONS, the lock's rosetta sha
   # (`pnpm siblings:pin rosetta`), and minimumReleaseAgeExclude for a version
   # published this week.
-  "@vibefield/rosetta-protocol": 0.1.10
-  "@vibefield/rosetta-room": 0.1.10
+  "@vibefield/rosetta-protocol": 0.1.11
+  "@vibefield/rosetta-room": 0.1.11
   # puppeteer — EXACT registry pins since 2026-10-26 (RD-5's exit for its npm
   # plane; packages ask for "*"). 0.2.3 was published from the tag v0.2.3
   # (ee785ec1, the commit npm's SLSA provenance names for every package) under
@@ -574,9 +578,11 @@ minimumReleaseAgeExclude:
   - '@vibecook/ghosttea-react@0.16.3'
   - '@vibecook/ghosttea-frame@0.16.3'
   - '@vibecook/ghosttea@0.16.3'
-  # Reviewed Rosetta 0.1.10 at 83865a707 for interruption-safe History ingestion.
-  - '@vibefield/rosetta-protocol@0.1.10'
-  - '@vibefield/rosetta-room@0.1.10'
+  # EL8 2026-11-24: reviewed Rosetta 0.1.11 at 8beea2dbb (the worktree ledger, wrapped diffs, later opt-in
+  # imports), inside the age window. The prior 0.1.10 rows were kept through the install that regenerated
+  # the lock, then removed.
+  - '@vibefield/rosetta-protocol@0.1.11'
+  - '@vibefield/rosetta-room@0.1.11'
   # puppeteer (RD-5's exit for its npm plane, 0.2.3 on 2026-10-26): our own packages, reviewed as an EL8 pin.
   # Every `@vibefield/puppeteer-*` package the seven rows reach is here, the adapters included: they are the
   # rows' dependencies, and the window applies to each.

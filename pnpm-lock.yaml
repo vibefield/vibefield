@@ -48,8 +48,8 @@ overrides:
   '@vibecook/ghosttea-react': 0.16.3
   '@vibecook/ghosttea-protocol': 0.16.3
   '@vibecook/ghosttea-frame': 0.16.3
-  '@vibefield/rosetta-protocol': 0.1.10
-  '@vibefield/rosetta-room': 0.1.10
+  '@vibefield/rosetta-protocol': 0.1.11
+  '@vibefield/rosetta-room': 0.1.11
   '@vibefield/puppeteer-runtime': 0.4.13
   '@vibefield/puppeteer-builtin-providers': 0.4.13
   '@vibefield/puppeteer-core': 0.4.13
@@ -439,11 +439,11 @@ importers:
         specifier: 0.4.13
         version: 0.4.13(patch_hash=bfa4081684fb25f23f33ce65d11882ac70d61c66300f392931f751131f6e191c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/rosetta-protocol':
-        specifier: 0.1.10
-        version: 0.1.10
+        specifier: 0.1.11
+        version: 0.1.11
       '@vibefield/rosetta-room':
-        specifier: 0.1.10
-        version: 0.1.10(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.1.11
+        version: 0.1.11(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/sound':
         specifier: workspace:*
         version: link:../sound
@@ -554,8 +554,8 @@ importers:
         specifier: 0.4.13
         version: 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/rosetta-protocol':
-        specifier: 0.1.10
-        version: 0.1.10
+        specifier: 0.1.11
+        version: 0.1.11
       '@vibefield/trust':
         specifier: workspace:*
         version: link:../trust
@@ -2580,12 +2580,12 @@ packages:
     resolution: {integrity: sha512-SBnhIzZ8ZFlW8DTexaRvnUIGVG2RPy3Iu6/eZE6GO0wiap5twhLy5MN1vLmeEfvxIleB6Ev4GV/P2nLESMqtKg==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/rosetta-protocol@0.1.10':
-    resolution: {integrity: sha512-V3/q3BGAttxODyzokdtB840TLmUcdBoiFFWhcyTI3cR4wUyY5/bVcV7yym+UUWqlsbht/y2wNVzJYq//wO/9Cw==}
+  '@vibefield/rosetta-protocol@0.1.11':
+    resolution: {integrity: sha512-jCbfBX5uX6USdt/VrcqEaDcKiLrWhib4os6r1wytYX9nAl+HwYVMj+6qzamy1+hnb2BmSepLm7gTtq1j8MddlQ==}
     engines: {node: '>=22.18'}
 
-  '@vibefield/rosetta-room@0.1.10':
-    resolution: {integrity: sha512-icH2RUaDR+b1p6LMuPhdU3abKJITH2hbz8CIKj6bjtorHinCErIhTNxVkSXTXgFNZ6TZKjd/NqQBOMVJnMD6HA==}
+  '@vibefield/rosetta-room@0.1.11':
+    resolution: {integrity: sha512-A0CTex9eUFA9xe7kV3TJuw0mcowmX+e+dBLF/5Qekt/etRW7qy9QTjVU8QPRDceDYddryVXajIJC7I8zP5hRlA==}
     engines: {node: '>=22'}
     peerDependencies:
       react: '>=19 <20'
@@ -5582,9 +5582,9 @@ snapshots:
 
   '@vibefield/puppeteer-workspaces@0.4.13': {}
 
-  '@vibefield/rosetta-protocol@0.1.10': {}
+  '@vibefield/rosetta-protocol@0.1.11': {}
 
-  '@vibefield/rosetta-room@0.1.10(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@vibefield/rosetta-room@0.1.11(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@radix-ui/react-context-menu': 2.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@radix-ui/react-dialog': 1.3.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -5592,7 +5592,7 @@ snapshots:
       '@tanstack/react-virtual': 3.14.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibecook/mille': 0.3.6(react@19.2.7)
       '@vibecook/mille-ui': 0.3.6(@radix-ui/react-context-menu@2.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-dialog@1.3.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@radix-ui/react-tooltip@1.4.1(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@tanstack/react-virtual@3.14.18(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@vibecook/mille@0.3.6(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
-      '@vibefield/rosetta-protocol': 0.1.10
+      '@vibefield/rosetta-protocol': 0.1.11
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
     transitivePeerDependencies:
