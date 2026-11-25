@@ -1,4 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 38">
+  <title>Comment pad</title>
   <style>.accent{fill:var(--accent,#6366f1)}</style>
   <rect width="30" height="38" fill="#ddd2bf"/>
   <rect y="0" width="30" height="36.6" fill="#f3ebdc"/>
