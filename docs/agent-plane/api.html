@@ -3060,9 +3060,13 @@
                 <tr><td><code>workspace.gitFacts</code></td><td><code>{rootId, path?}</code>:
                   branch, dirty count and worktrees; null outside a repository. Each worktree
                   carries its commit (<code>head</code>), whether its folder is gone
-                  (<code>gone</code>) and what it holds on disk (<code>sizeBytes</code>: null while
-                  the files worker is measuring it, absent where nothing measures). Asking is what
-                  queues a measurement.</td></tr>
+                  (<code>gone</code>) and, where this desktop already holds one, what it holds on
+                  disk (<code>sizeBytes</code>). Git facts never start a walk.</td></tr>
+                <tr><td><code>workspace.worktreeSizes</code></td><td><code>{rootId, path?, paths}</code>:
+                  what the named worktrees hold on disk, in the order asked: bytes, null while the
+                  files worker walks the folder, absent when no figure can be had. Local. At most 32
+                  paths; only a path git lists for the root is walked; each ask replaces the queue;
+                  figures are kept on disk for a day.</td></tr>
                 <tr><td><code>workspace.subscribe</code></td><td><code>{scope: "roots"}</code>:
                   the roots as a rows subscription.</td></tr>
                 <tr><td><code>workspace.pickFolder</code></td><td>Local attended folder selection:

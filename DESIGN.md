@@ -8041,9 +8041,22 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       the page's own clipboard, which the shell denies by law (§7.4 of the shell's plan), so in
       VibeField each was refused and the room said so; only its workspace copies (a file's
       path) reached the door.
-      The size is what the folder holds as a walk counts it (packages and build output included),
-      measured in the background one folder at a time and kept ten minutes. It is not what removing
-      the worktree would free, and the row does not claim so.
+      The size is what the folder holds as a walk counts it (packages and build output included).
+      It is not what removing the worktree would free, and the row does not claim so.
+      **Only the rows on screen are weighed** (HD-5): the list asks for them by name, again when a
+      scroll settles, and a figure is **kept on disk for a day**, so opening the list again weighs
+      nothing. A walk runs in the background (macOS's background quality of service), one folder
+      at a time, and rests twice its own time after each. **A row whose figure is owed says so**:
+      a slow sheen on its bar's track and on a pill where the size will be (still, under reduced
+      motion), never a blank. A row keeps its place while the list is scrolled or has the pointer
+      or the keyboard in it, and takes its rank at rest. The row itself: the name and its size on
+      one line, every size ending on the same edge; the bar under them, as wide as the row.
+      *Correction, 2026-11-24, the day it was built:* the first cut weighed every worktree a
+      repository has and each again every ten minutes. On one with 470 that was a walk without
+      end and ran a laptop hot (James: "this reading process is cooking my macbook … it should
+      load gradually as user scroll"; "the size should be preserved so next time opening will not
+      do the heavy work again"). The same cut let the column size itself to its widest name, so
+      every size and the head's sum were cut at the column's edge.
     - **The chips** (R7): over the list, **any desktop ▾** — every desktop with its mark, "here" or
       "asleep", and how many of these projects live on it (one with none is dimmed, so a choice
       never empties the list); over a project's sessions, **any agent ▾** — the agents its
