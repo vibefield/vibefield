@@ -9,12 +9,30 @@
  * print must still arrive: the plates byte for byte ICE's generated ones, each face through
  * `new FontFace(family, "url(…)")` into the document's font set. The Electron half — the same
  * loads under the real packaged policy, with no violation said — is `smoke:canvas`'s.
+ *
+ * IK (2026-11-25; ICE I59) — the same for THE HAND'S PEN: the three faces baked (assets/hand) reach ICE's lender through the
+ * desk's own reader, each file from its bundled module, so a lender whose window `fetch` is refused still lands every face.
  */
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { PEN_FACES } from "@vibecook/ice/desk";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { DESK_FACE_URLS, deskPlate, deskText, samplePrint } from "../src/field/desk/desk-assets";
-import { DESK_FACE_FILES, DESK_FACES_FOLDER } from "../src/field/desk/desk-faces";
+import {
+  DESK_FACE_URLS,
+  DESK_HAND_FILES,
+  DESK_HAND_MODULE_NAMES,
+  deskHand,
+  deskHandFile,
+  deskPlate,
+  deskText,
+  samplePrint,
+} from "../src/field/desk/desk-assets";
+import {
+  DESK_FACE_FILES,
+  DESK_FACES_FOLDER,
+  DESK_HANDS_FOLDER,
+  deskHandFiles,
+} from "../src/field/desk/desk-faces";
 import { type DeskPlant, PLANT_PLATES, PLATE_BYTES } from "../src/field/desk/desk-plates";
 
 const sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
@@ -141,5 +159,84 @@ describe("the desk's assets under a policy that forbids connect-src", () => {
     expect([...print.bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
     expect(await sha256(print.bytes)).toBe(print.sha256);
     expect(refused).toEqual([]);
+  });
+
+  it("IK: lands every hand face from its bundled modules — the baked atlases, no request", async () => {
+    const hand = deskHand();
+    // the faces the desk ships files for, by ICE's pen names (its other two are the platform's own, with no file to bake)
+    const names = Object.keys(DESK_HAND_FILES);
+    expect(names).toEqual(["caveat", "caveat-bold", "kalam"]);
+    expect(names.every((name) => name in PEN_FACES)).toBe(true);
+    expect(names.every((name) => hand.loading(name))).toBe(true);
+    expect(await Promise.all(names.map((name) => hand.load(name)))).toEqual([true, true, true]);
+    const faces = names.map((name) => {
+      const atlas = hand.face(name);
+      return [
+        name,
+        atlas?.format,
+        atlas?.family,
+        atlas?.weight,
+        Object.keys(atlas?.glyphs ?? {}).length,
+      ];
+    });
+    expect(faces).toEqual([
+      ["caveat", "ice-hand/1", "Caveat", 500, 203],
+      ["caveat-bold", "ice-hand/1", "Caveat", 600, 203],
+      ["kalam", "ice-hand/1", "Kalam", 400, 203],
+    ]);
+    // each atlas is its own face's: the font the table names, by its hash
+    for (const name of names) {
+      const atlas = hand.face(name);
+      expect(atlas?.source.file, name).toBe(DESK_FACE_FILES[name]);
+      expect([atlas?.family, atlas?.weight], name).toEqual([
+        PEN_FACES[name]?.family,
+        PEN_FACES[name]?.weight,
+      ]);
+      expect(atlas?.bin.length, name).toBe((atlas?.width ?? 0) * (atlas?.height ?? 0) * 2);
+      expect(hand.failed(name), name).toBeUndefined();
+      expect(hand.loading(name), name).toBe(false);
+    }
+    expect(refused).toEqual([]);
+  });
+
+  it("IK: each bundled hand file is the committed baked file, byte for byte", async () => {
+    for (const name of DESK_HAND_MODULE_NAMES) {
+      const answer = await deskHandFile(name);
+      expect([answer.ok, answer.status], name).toEqual([true, 200]);
+      const bundled = new Uint8Array(await answer.arrayBuffer());
+      const committed = readFileSync(
+        resolve(process.cwd(), "src/field/desk", DESK_HANDS_FOLDER, name),
+      );
+      expect(bundled.length, name).toBe(committed.length);
+      expect(Buffer.from(bundled).equals(committed), name).toBe(true);
+    }
+    expect(refused).toEqual([]);
+  });
+
+  it("IK: the hand's files are the face table's — each face's two, by ICE's rule; a name outside answers 404", async () => {
+    expect(Object.keys(DESK_HAND_FILES)).toEqual(Object.keys(DESK_FACE_FILES));
+    for (const [name, file] of Object.entries(DESK_FACE_FILES)) {
+      expect(DESK_HAND_FILES[name], name).toEqual(deskHandFiles(file));
+    }
+    expect(deskHandFiles("Caveat-500.ttf")).toEqual({
+      json: "caveat-500.hand.json",
+      bin: "caveat-500.hand.bin",
+    });
+    // the bundle holds exactly the six the table names, and each lies on disk beside the fonts
+    expect([...DESK_HAND_MODULE_NAMES].sort()).toEqual(
+      Object.values(DESK_HAND_FILES)
+        .flatMap((f) => [f.json, f.bin])
+        .sort(),
+    );
+    for (const name of DESK_HAND_MODULE_NAMES) {
+      const onDisk = resolve(process.cwd(), "src/field/desk", DESK_HANDS_FOLDER, name);
+      expect(existsSync(onDisk), onDisk).toBe(true);
+    }
+    expect(existsSync(resolve(process.cwd(), "src/field/desk", DESK_HANDS_FOLDER, "OFL.txt"))).toBe(
+      true,
+    );
+    const none = await deskHandFile("cursive.hand.json");
+    expect([none.ok, none.status]).toEqual([false, 404]);
+    await expect(none.json()).rejects.toThrow(/no hand file/u);
   });
 });

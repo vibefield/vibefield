@@ -18,7 +18,7 @@ import {
   SIMULATOR_DEVICES,
   type SimulatorDevices,
 } from "@vibefield/plugin-sdk/desk";
-import { deskText } from "./desk-assets";
+import { deskHand, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 import { deskLightLook, deskNightTheme } from "./desk-light";
 import { PEERS } from "./peers/peers-model";
@@ -138,7 +138,7 @@ export function deskHold(engine: CanvasEngine): DeskHold {
 
 /**
  * The layer the field mounts: the engine catalog's object types (the layer reads them — `objects`
- * adds none), the shipped hand (`text`), the document a note's typing commits into (`docs` — the
+ * adds none), the shipped hand (`text`) and its baked faces, the pen (`hand`, IK), the document a note's typing commits into (`docs` — the
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
  * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
  * pegboard's bottom fade (`tray`, DK-13), the wind's window (`ambientIdleMs`, Q4), and the desk's LIVE pages when the stage lends them (PT-2:
@@ -162,6 +162,8 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     objects: [],
     name: `vibefield/desk#${opts.mount ?? 0}`,
     text: deskText(),
+    // IK (2026-11-25; ICE I59): the same faces baked — lent to every kind as `HAND_FACES`, so a note writes with the pen
+    hand: deskHand(),
     docs: opts.engine.docs,
     blobs: deskBlobs(),
     grid: deskGrid(light),

@@ -23,6 +23,13 @@ declare module "*?raw" {
   export default text;
 }
 
+// `?url&inline` (IK, 2026-11-25 — the desk's pen): a file's bytes as a data URL in its own module, whatever its size (the hand's
+// baked bins, decoded in memory — never a request); `vite/client` declares the same for the renderer's program.
+declare module "*?url&inline" {
+  const url: string;
+  export default url;
+}
+
 /** The renderer is built by Vite, but field-app deliberately has no build-tool dependency. */
 interface ImportMetaEnv {
   readonly DEV: boolean;

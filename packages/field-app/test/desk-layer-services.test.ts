@@ -5,8 +5,11 @@
  * kind's act picking one of the selected up (desk-hold.test.ts runs the hold itself). Each is lent only where the stage hands
  * it; a desk handed none lends no service at all. ICE's `deskLayer` is watched: what the field asks of it is the row
  * (pegboard-layer.test.ts's pattern).
+ * IK (2026-11-25; ICE I59) — and its HAND: the desk's three faces baked, lent as `deskLayer({ hand })` (ICE lends them on as
+ * `HAND_FACES`), every mount the page's one lender.
  */
 import type { CanvasEngine } from "@vibecook/ice";
+import { type HandFacesLender, PEN_FACES } from "@vibecook/ice/desk";
 import { type Lent, LIVE } from "@vibecook/ice/desk/kit";
 import {
   BROWSER_NAVIGATION,
@@ -68,5 +71,28 @@ describe("the field's desk layer lends its kinds what the stage hands it", () =>
     expect(lent()).toEqual([{ name: DESK_HOLD.name, value: deskHold }]);
     fieldDeskLayer({ engine, theme: "light", devices, deskHold });
     expect(lent()?.map((l) => l.name)).toEqual([SIMULATOR_DEVICES.name, DESK_HOLD.name]);
+  });
+
+  it("IK: lends the desk's hand — the three baked faces by ICE's pen names, every mount the page's one lender", async () => {
+    const { fieldDeskLayer } = await import("../src/field/desk/desk-layer");
+    const { deskHand } = await import("../src/field/desk/desk-assets");
+    fieldDeskLayer({ engine, theme: "light" });
+    const hand = (asked.at(-1) as { hand?: HandFacesLender }).hand;
+    expect(hand).toBe(deskHand());
+    // lent, and none landed yet: each face the desk ships a file for is on its way. ICE's other two pen faces are the
+    // platform's own (Marker Felt, Noteworthy: no file, so nothing to bake) and are not lent: their sheets keep the raster
+    expect(Object.keys(PEN_FACES)).toEqual([
+      "caveat",
+      "caveat-bold",
+      "kalam",
+      "marker",
+      "noteworthy",
+    ]);
+    const lent = Object.keys(PEN_FACES).filter((name) => hand?.loading(name) === true);
+    expect(lent).toEqual(["caveat", "caveat-bold", "kalam"]);
+    expect(hand?.loading("cursive")).toBe(false);
+    // a remount lends the same faces: they load once a page
+    fieldDeskLayer({ engine, theme: "dark", mount: 1 });
+    expect((asked.at(-1) as { hand?: HandFacesLender }).hand).toBe(hand);
   });
 });
