@@ -1,7 +1,7 @@
 {
   "name": "@vibefield/plugin-comment-pad",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "description": "VibeField's first own object kind (DK-8, DK-D14): the comment pad — a durable pad of comments lying on the desk, written in the desk's hand through the kit and the host's text raster, through @vibefield/plugin-sdk/desk alone.",
   "exports": {

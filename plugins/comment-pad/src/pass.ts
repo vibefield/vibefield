@@ -7,9 +7,13 @@
 // reach), one `shade_pad` per covered fragment, premultiplied, through the slot's presence and its portal chain.
 // It binds the slot's ONE view block (the kit's `MatPass.view` — never written, never copied), the slot's gobo
 // silhouette and the blue noise, its records' persistent store (a pad keeps its slot and is written only when
-// its record changed — a pan writes nothing), and the INK LAYERS: one r8 layer per pad whose writing is laid
-// (writing.ts lays the host's text raster there). Every slot spawned from the root's shares the pipelines and
-// the ink layers; each reads its own mat.
+// its record changed — a pan writes nothing), the INK LAYERS: one r8 layer per pad whose writing is laid by the
+// raster's road (writing.ts lays the host's text raster there), and THE PEN (IK, 2026-11-25 — the kit's, petition
+// I59/I60): the kind's RUN STORE (`createHandRuns` — every pen-road pad's glyph run, its marks and its wash, the
+// base in the pad's record), the face the pads are read in (`handAtlasGpu`: one texture a device, shared with every
+// kind) with its sampler, and the pen's clock in the pass's own knobs (`penNow` — the only thing a frame writes
+// while the pen moves). Every slot spawned from the root's shares the pipelines, the ink layers and the run store;
+// each reads its own mat and keeps its own knobs.
 
 import {
   bindGroup,
@@ -17,16 +21,30 @@ import {
   type ComposeOptions,
   compile,
   compose,
+  createHandRuns,
   createRecordStore,
+  HAND_BINDINGS,
+  type HandAtlas,
+  type HandRun,
+  type HandRuns,
+  type HandRunsStats,
+  handAtlasGpu,
+  handSampler,
+  type InkWash,
   type KindExtra,
   type KindPass,
   litByOwn,
   type MatPass,
+  type PenKey,
+  penNow,
   type RecordStore,
   renderPipeline,
   type SlotContext,
+  sentBytes,
+  uniformBuffer,
+  writeChanged,
 } from "@vibefield/plugin-sdk/desk";
-import { MAX_PADS, Pad, type PadInstance, padValues } from "./layout";
+import { MAX_PADS, Pad, type PadInstance, PadKnobs, padValues } from "./layout";
 
 /** Premultiplied "source over" — every desk object's blend. */
 const BLEND_PREMUL: GPUBlendState = {
@@ -132,6 +150,20 @@ export class PadInk {
   }
 }
 
+/**
+ * THE PEN'S ROOM (IK, 2026-11-25) — what the writing writes through, every slot's the same: a pad's run written into the kind's
+ * run store (its base for the record, −1 when the device holds no more), its room given back, its selection's wash rewritten
+ * alone, the face the pads are read in bound, the pen's time told to every slot's knobs.
+ */
+export interface PadRuns {
+  write(key: PenKey, run: HandRun): number;
+  free(key: PenKey): void;
+  wash(key: PenKey, wash: InkWash): boolean;
+  face(atlas: HandAtlas): void;
+  at(ms: number): void;
+  stats(): HandRunsStats;
+}
+
 interface PadShared {
   readonly layout: GPUBindGroupLayout;
   readonly pipeline: GPURenderPipeline;
@@ -141,6 +173,35 @@ interface PadShared {
   readonly noiseSampler: GPUSampler;
   readonly inkSampler: GPUSampler;
   readonly ink: PadInk;
+  readonly runs: HandRuns;
+  /** The face every pen-road pad is read in (one a pass) — a texel of nothing until one lands (no pad reads it before). */
+  face: { readonly atlas: HandAtlas | undefined; readonly view: GPUTextureView };
+  readonly blank: GPUTexture;
+  readonly handSampler: GPUSampler;
+  faceVersion: number;
+  /** The pen's time, ms on the desk's clock (the writing's `at`): every slot's knobs carry it as `penNow`. */
+  penMs: number;
+}
+
+/** The pen's room over a pass's shared resources (every slot's writes the same store, face and time). */
+function roomOf(device: GPUDevice, shared: PadShared): PadRuns {
+  const { runs } = shared;
+  return {
+    write: (key, run) => runs.write(key, run),
+    free: (key) => {
+      runs.free(key);
+    },
+    wash: (key, wash) => runs.wash(key, wash),
+    face: (atlas) => {
+      if (shared.face.atlas === atlas) return;
+      shared.face = { atlas, view: handAtlasGpu(device, atlas).view };
+      shared.faceVersion += 1;
+    },
+    at: (ms) => {
+      shared.penMs = ms;
+    },
+    stats: () => runs.stats(),
+  };
 }
 
 export class PadPass implements KindPass<PadInstance> {
@@ -152,7 +213,14 @@ export class PadPass implements KindPass<PadInstance> {
   private boundAssets = -1;
   private boundStore = -1;
   private boundInk = -1;
+  private boundRuns = -1;
+  private boundFace = -1;
   private count = 0;
+  /** The slot's knobs (the pen's clock), written only when they change: a pad at rest costs a frame nothing. */
+  private readonly knobBuf: GPUBuffer;
+  private readonly knobs = PadKnobs.alloc(1);
+  private readonly knobsSent = sentBytes(PadKnobs.size);
+  private readonly room: PadRuns;
   private litElsewhere = false;
   private readonly device: GPUDevice;
   private readonly shared: PadShared;
@@ -165,6 +233,8 @@ export class PadPass implements KindPass<PadInstance> {
     this.shared = shared;
     this.mat = mat;
     this.root = root;
+    this.knobBuf = uniformBuffer(device, PadKnobs.size, "comment-pad/knobs");
+    this.room = roomOf(device, shared);
     this.store = createRecordStore<PadInstance, keyof typeof Pad.slots>({
       device,
       def: Pad,
@@ -198,6 +268,10 @@ export class PadPass implements KindPass<PadInstance> {
         { binding: 6, stages: ["vertex"], buffer: "read-only-storage" },
         { binding: 7, stages: ["fragment"], texture: "float", dimension: "2d-array" },
         { binding: 8, stages: ["fragment"], sampler: "filtering" },
+        { binding: 9, ...HAND_BINDINGS.runs }, // THE PEN: the kind's run store
+        { binding: 10, ...HAND_BINDINGS.atlas }, // …the face's atlas, every level
+        { binding: 11, ...HAND_BINDINGS.sampler }, // …its sampler
+        { binding: 12, stages: ["fragment"], buffer: "uniform" }, // the slot's knobs: the pen's clock
       ],
       "comment-pad/pads",
     );
@@ -228,6 +302,14 @@ export class PadPass implements KindPass<PadInstance> {
         addressModeU: repeat ? "repeat" : "clamp-to-edge",
         addressModeV: repeat ? "repeat" : "clamp-to-edge",
       });
+    // the pen's face until one lands: a texel of nothing (no pad reads it — a pad takes the pen's road only once its face has)
+    const blank = device.createTexture({
+      label: "comment-pad/hand face (none yet)",
+      size: [1, 1],
+      format: "rg8unorm",
+      usage: GPUTextureUsage.TEXTURE_BINDING,
+    });
+    const runs = createHandRuns(device, { label: "comment-pad/hand runs" });
     const shared: PadShared = {
       layout,
       pipeline,
@@ -236,6 +318,12 @@ export class PadPass implements KindPass<PadInstance> {
       noiseSampler: linear("comment-pad/noise", true),
       inkSampler: linear("comment-pad/ink", false),
       ink: new PadInk(device),
+      runs,
+      face: { atlas: undefined, view: blank.createView({ dimension: "2d" }) },
+      blank,
+      handSampler: handSampler(device),
+      faceVersion: 0,
+      penMs: 0,
     };
     return new PadPass(device, shared, mat, true);
   }
@@ -250,12 +338,19 @@ export class PadPass implements KindPass<PadInstance> {
     return this.shared.ink;
   }
 
+  /** The pen's room every slot's pass binds — where the writing writes its runs (writing.ts, through `KindHost.pass()`). */
+  runs(): PadRuns {
+    return this.room;
+  }
+
   private rebind(): void {
     const ink = this.shared.ink;
     if (
       this.boundAssets === this.mat.assetVersion &&
       this.boundStore === this.store.version &&
-      this.boundInk === ink.version()
+      this.boundInk === ink.version() &&
+      this.boundRuns === this.shared.runs.version &&
+      this.boundFace === this.shared.faceVersion
     )
       return;
     const s = this.shared;
@@ -272,12 +367,18 @@ export class PadPass implements KindPass<PadInstance> {
         this.store.order,
         ink.view(),
         s.inkSampler,
+        s.runs.view,
+        s.face.view,
+        s.handSampler,
+        this.knobBuf,
       ],
       "comment-pad/pads",
     );
     this.boundAssets = this.mat.assetVersion;
     this.boundStore = this.store.version;
     this.boundInk = ink.version();
+    this.boundRuns = s.runs.version;
+    this.boundFace = s.faceVersion;
   }
 
   /** This frame's pads in paint order, through the persistent store (keyed by `extra.keys`; none = packed afresh — the oracle's form). */
@@ -294,8 +395,12 @@ export class PadPass implements KindPass<PadInstance> {
       list,
       keys !== undefined && keys.length > MAX_PADS ? keys.slice(0, MAX_PADS) : keys,
     );
-    this.rebind(); // after: the store's buffers may have grown, the ink may have
+    this.rebind(); // after: the store's buffers may have grown, the ink or the runs may have, a face may have landed
     this.litElsewhere = !litByOwn(s.view, s.lit);
+    // the pen's time: the writing holds it at the last moment written once nothing moves, so at rest the knobs stand
+    const [ps, pms] = penNow(this.shared.penMs);
+    this.knobs.set({ pen: [ps, pms, 0, 0] });
+    writeChanged(this.device.queue, this.knobBuf, this.knobs, this.knobsSent);
     return this.count;
   }
 
@@ -308,6 +413,11 @@ export class PadPass implements KindPass<PadInstance> {
     return this.store.stats();
   }
 
+  /** The run store's counters (a rig's witness): runs held, texels given and used, its growth, its writes. */
+  penRuns(): HandRunsStats {
+    return this.shared.runs.stats();
+  }
+
   drawRange(pass: GPURenderPassEncoder, first: number, end: number): void {
     const hi = Math.min(end, this.count);
     if (first >= hi) return;
@@ -318,6 +428,11 @@ export class PadPass implements KindPass<PadInstance> {
 
   dispose(): void {
     this.store.dispose();
-    if (this.root) this.shared.ink.dispose();
+    this.knobBuf.destroy();
+    if (this.root) {
+      this.shared.ink.dispose();
+      this.shared.runs.dispose();
+      this.shared.blank.destroy();
+    }
   }
 }

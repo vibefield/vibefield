@@ -29,6 +29,7 @@ import {
   Position,
   PrefabId,
 } from "@vibecook/ice";
+import { inkTyping } from "@vibecook/ice/desk";
 import {
   createNoteTyping,
   MINIMAT_TYPE,
@@ -40,7 +41,7 @@ import { DOC_SYNC_RECORD } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer, standInEndpoint } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
-import { COMMENT_PAD_TYPE, createPadTyping, type PadCell } from "@vibefield/plugin-comment-pad";
+import { COMMENT_PAD_TYPE } from "@vibefield/plugin-comment-pad";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getBoardStatus } from "../src/board-status";
@@ -341,35 +342,27 @@ describe("Phase 2's witness — a fresh board converges across two tabs through 
   });
 });
 
-/** The comment pad's two cells on a tab's desk — `ink` (`{ text, seeds }`) and `props` — from the object the host
- * compiled (`buildRegistry`'s `defineObject`, process-wide like every prefab). */
-function padCells(): { ink: PadCell; props: PadCell } {
+/** The comment pad as the host compiled it (`buildRegistry`'s `defineObject`, process-wide like every prefab), and its
+ * `ink` cell (`{ text, seeds, marks }`). */
+function padObject() {
   const object = buildRegistry().allWidgets().get(COMMENT_PAD_TYPE);
   const ink = object?.groups.find((g) => g.name === "ink")?.component;
-  const props = object?.groups.find((g) => g.name === "props")?.component;
-  if (ink === undefined || props === undefined)
+  if (object === undefined || ink === undefined)
     throw new Error("the comment pad is not registered");
-  return { ink, props };
+  return { object, ink };
 }
 
-/** A line written on a pad as the desk's one editor writes it: the pad's own typing SESSION
- * (`createPadTyping` — the draft kept off the document, ONE transaction at the session's end). */
+/** A line written on a pad as the desk's one editor writes it: the kit's typing the pad's written part holds (IK — `inkTyping`:
+ * the draft kept off the document, ONE transaction when the typing ends). */
 function write(ce: CanvasEngine, pad: Entity, lines: readonly string[]): void {
-  const { ink, props } = padCells();
-  const typing = createPadTyping({
-    world: ce.world,
-    docs: ce.docs,
-    ink,
-    props,
-    writing: () => undefined,
-  });
+  const typing = inkTyping({ world: ce.world, docs: ce.docs, object: padObject().object });
   expect(typing.begin(pad)).toBe(true);
   for (const line of lines) typing.input(line);
   typing.end();
 }
 
 const padText = (ce: CanvasEngine, pad: Entity): string | undefined =>
-  (ce.world.get(pad, padCells().ink) as { text?: string } | undefined)?.text;
+  (ce.world.get(pad, padObject().ink) as { text?: string } | undefined)?.text;
 
 describe("the comment pad converges across two tabs through fieldd (DK-8, DK-D14)", () => {
   it("a line written on the pad in A appears in B's pad, a line written in B lands in A, and the two hold one board", async () => {

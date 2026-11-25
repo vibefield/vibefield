@@ -8,7 +8,7 @@ export * from "./law";
 export * from "./layout";
 export { commentPadManifest } from "./manifest";
 export { commentPad, padDriver } from "./object";
-export { INK_LAYER, type InkBitmap, PadInk, PadPass } from "./pass";
+export { INK_LAYER, type InkBitmap, PadInk, PadPass, type PadRuns } from "./pass";
 export { default as commentPadRenderer } from "./renderer";
 export * from "./shaders";
 export * from "./theme";

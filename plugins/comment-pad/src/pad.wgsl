@@ -1,10 +1,12 @@
 // THE COMMENT PAD as a material — a PURE module: the record `Pad`, the view block `MatUniforms` and the textures
 // arrive as parameters; it names no colour (the paper's, the accent's and the pen's are the record's, from the
 // look). A block of writing paper under a gummed binding strip: its top sheet ruled in the accent's tint at the
-// hand's baselines, a margin rule, the writing laid from the ink layers, the caret while the desk's editor is
-// on it; the lower sheets' edges along its foot; its shadow cast along the lamp's slope by its height; lit by
-// the mat's own light (the kit's `light` piece: the gobo's dapple, the day's chain, the night's).
-// Composed after the kit's view · portal · sdf · light pieces (shaders.ts); y runs down the screen.
+// hand's baselines, a margin rule, the writing — by the PEN (the kit's `hand_ink` over the pad's glyph run, with
+// `ink_marks`'s highlighters, wash and lines in the paper's order) or by the raster's road (its coverage from the ink
+// layers) — the caret while the desk's editor is on it; the lower sheets' edges along its foot; its shadow cast along
+// the lamp's slope by its height; lit by the mat's own light (the kit's `light` piece: the gobo's dapple, the day's
+// chain, the night's). Composed after the kit's view · portal · sdf · light · hand · marks pieces (shaders.ts); y runs
+// down the screen.
 
 fn pad_cov(d: f32, px: f32) -> f32 { return clamp(0.5 - d / px, 0.0, 1.0); }
 
@@ -37,10 +39,35 @@ fn pad_colour(u: MatUniforms, albedo: vec3f, gobo: f32, noise: f32) -> vec3f {
   return mix(day, night, u.night.x);
 }
 
+// A pen's ink by its number as the kit numbers it (`HandInk.pen`, `InkMarks.pen`): 0 the sheet's own, n `PENS[n − 1]`.
+fn pad_pen(P: Pad, n: u32) -> vec3f {
+  switch n {
+    case 1u: { return P.pens[0].xyz; }
+    case 2u: { return P.pens[1].xyz; }
+    case 3u: { return P.pens[2].xyz; }
+    case 4u: { return P.pens[3].xyz; }
+    default: { return P.ink.xyz; }
+  }
+}
+
+// A highlighter by its number (`InkMarks.tint`): n `HIGHLIGHTERS[n − 1]` — its colour and its presence (0: the host named none).
+fn pad_highlighter(P: Pad, n: u32) -> vec4f {
+  switch n {
+    case 1u: { return P.highlighters[0]; }
+    case 2u: { return P.highlighters[1]; }
+    case 3u: { return P.highlighters[2]; }
+    case 4u: { return P.highlighters[3]; }
+    case 5u: { return P.highlighters[4]; }
+    default: { return vec4f(0.0); }
+  }
+}
+
 // One pad at world point p: premultiplied colour. px = world units per device px; frag = the framebuffer pixel;
-// lit = the slot is lit from elsewhere (a mini mat's inside) — a pipeline constant, never a uniform flag.
+// lit = the slot is lit from elsewhere (a mini mat's inside) — a pipeline constant, never a uniform flag; hand_runs,
+// hand_atlas, hand_samp = the pen's run store, the face's atlas and its sampler; pen_now = the pen's clock (`penNow`).
 fn shade_pad(P: Pad, u: MatUniforms, p: vec2f, px: f32, frag: vec2f,
              ink_tex: texture_2d_array<f32>, ink_samp: sampler,
+             hand_runs: texture_2d<f32>, hand_atlas: texture_2d<f32>, hand_samp: sampler, pen_now: vec2f,
              gobo_tex: texture_2d<f32>, gobo_samp: sampler, noise_tex: texture_2d<f32>, noise_samp: sampler, lit: bool) -> vec4f {
   let q = p - P.centre;
   let s = max(P.scale, 1.0e-4);
@@ -85,8 +112,26 @@ fn shade_pad(P: Pad, u: MatUniforms, p: vec2f, px: f32, frag: vec2f,
     }
     albedo = mix(albedo, P.accent.xyz, pad_line(pl.x - P.marks.y, P.rules.w, pu) * P.marks.z);
   }
-  // the writing: the ink's coverage from its layer, in the pen's colour
-  if (P.ink.w > 0.5) {
+  // the writing on the PEN's road, in the paper's order: the highlighters (by multiply — a dye stains the paper), the
+  // selection's wash, the ink (a re-inked letter's new pen over the old along its own path), the lines over it. The
+  // point and the device px are in the LAYOUT's units — the writing box's, the held pad's scale divided out (`pl`, `pu`);
+  // the writing stops at the box's foot (`dims.w`), as the raster's does
+  if (P.pen.y > 0.5 && pl.y < P.dims.w) {
+    let lp = pl - P.pen.zw;
+    let base = u32(P.pen.x);
+    let m = ink_marks(hand_runs, base, lp, pen_now, pu);
+    if (m.marker > 0.0 && m.tint > 0u) {
+      let h = pad_highlighter(P, m.tint);
+      albedo = albedo * mix(vec3f(1.0), h.xyz, m.marker * h.w);
+    }
+    albedo = mix(albedo, P.wash.xyz, m.wash * P.wash.w);
+    let pen = hand_ink(hand_runs, hand_atlas, hand_samp, base, lp, pen_now, pu);
+    if (pen.cover > 0.0) {
+      albedo = mix(albedo, mix(pad_pen(P, pen.was), pad_pen(P, pen.pen), pen.over), pen.cover);
+    }
+    albedo = mix(albedo, pad_pen(P, m.pen), m.line);
+  } else if (P.ink.w > 0.5) {
+    // the RASTER's road (a glyph the face lacks, the face not landed or not lent): the ink's coverage from its layer
     let texel = (pl - P.raster.zw) * P.raster.y;
     if (texel.x >= 0.0 && texel.y >= 0.0 && texel.x < P.rasterSize.x && texel.y < P.rasterSize.y) {
       let a = textureSampleLevel(ink_tex, ink_samp, texel / P.rasterSize.zw, i32(P.raster.x), 0.0).r;

@@ -8,8 +8,12 @@ override LIT_ELSEWHERE: bool = false;
 @group(0) @binding(4) var noise_tex: texture_2d<f32>;
 @group(0) @binding(5) var noise_samp: sampler;
 @group(0) @binding(6) var<storage, read> order: array<u32>;   // the draw list: paint index → the record's slot
-@group(0) @binding(7) var ink_tex: texture_2d_array<f32>;     // the writing's rasters, a layer a pad (writing.ts)
+@group(0) @binding(7) var ink_tex: texture_2d_array<f32>;     // the writing's rasters, a layer a pad (writing.ts — the raster's road)
 @group(0) @binding(8) var ink_samp: sampler;
+@group(0) @binding(9) var pad_hand_runs: texture_2d<f32>;     // THE PEN: the kind's run store — rgba32float, read texel by texel
+@group(0) @binding(10) var pad_hand_atlas: texture_2d<f32>;   // …the face's atlas, every level
+@group(0) @binding(11) var pad_hand_samp: sampler;            // …its sampler
+@group(0) @binding(12) var<uniform> pad_k: PadKnobs;          // the slot's knobs: the pen's clock
 
 struct VSOut {
   @builtin(position) clip: vec4f,
@@ -48,7 +52,8 @@ fn fs(in: VSOut) -> @location(0) vec4f {
   let dpr = mat_dpr(u);
   let px = 1.0 / (mat_zoom(u) * dpr);
   let p = in.clip.xy * px + u.cam.xy;   // device px → world
-  let c = shade_pad(P, u, p, px, in.clip.xy, ink_tex, ink_samp, gobo_tex, gobo_samp, noise_tex, noise_samp, LIT_ELSEWHERE);
+  let c = shade_pad(P, u, p, px, in.clip.xy, ink_tex, ink_samp, pad_hand_runs, pad_hand_atlas, pad_hand_samp, pad_k.pen.xy,
+                    gobo_tex, gobo_samp, noise_tex, noise_samp, LIT_ELSEWHERE);
   if (c.a < 0.002) { discard; }
   return c * (u.view.w * portal_cover(in.clip.xy / dpr, u.portals, u.clips, dpr));
 }

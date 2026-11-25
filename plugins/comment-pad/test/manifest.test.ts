@@ -40,15 +40,19 @@ describe("vibefield.comment-pad", () => {
     expect(row?.provides).toEqual([COMMENT_PAD_TYPE, DESK_OBJECT, CONTAINABLE]);
   });
 
-  it("keeps its writing in ONE cell, `ink` — the text and its seeds, written in one transaction, never split", () => {
-    expect(row?.groups).toEqual({ ink: ["text", "seeds"] });
+  it("keeps its writing in ONE cell, `ink` — the text, its seeds and its marks, written in one transaction, never split", () => {
+    expect(row?.groups).toEqual({ ink: ["text", "seeds", "marks"] });
     expect(Object.keys(row?.props ?? {}).sort()).toEqual([
       "accent",
+      "marks",
       "pen",
       "seed",
       "seeds",
       "text",
     ]);
+    // a pad stored before the marks reads unmarked: the field is additive, its default the unmarked cell, the type's schema as it was
+    expect(row?.props.marks).toEqual({ kind: "string", default: "", maxLength: 200000 });
+    expect(row?.schemaVersion).toBe(1);
   });
 
   it("hangs on no hook: the selection bar's Comment is its door (the first launch's lineup)", () => {

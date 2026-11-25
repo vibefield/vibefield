@@ -7,9 +7,11 @@
 import {
   DEFAULT_GRID,
   type Entity,
+  HIGHLIGHTERS,
   lampOf,
   type ObjectContext,
   PAPER_FINISH,
+  PENS,
   rgb,
 } from "@vibefield/plugin-sdk/desk";
 import { type KindReport, productPalette, runKindConformance } from "@vibefield/plugin-sdk/testing";
@@ -127,6 +129,34 @@ describe("the comment pad's world half", () => {
     expect(R.raster).toBeUndefined();
     expect(R.caret).toBeUndefined();
     expect(R.rules.pitch).toBeGreaterThan(0);
+  });
+
+  it("draws its MARKS in the host's inks: the kit's pens in order (one the host never named in the sheet's own), the desk's highlighters at their presence, the pencil's wash", () => {
+    const R = k.record(k.resolve(ctxOf({ pen: "felt" })), ctxOf({ pen: "felt" })) as PadInstance;
+    const pens = (productPalette.light as unknown as { pens: Record<string, { css: string }> })
+      .pens;
+    expect(R.inks.pens).toEqual(PENS.map((name) => rgb(pens[name]?.css ?? "")));
+    const named = (
+      productPalette.light as unknown as {
+        calendars: { highlighters: Record<string, { css: string }>; alpha: { highlight: number } };
+      }
+    ).calendars;
+    expect(R.inks.highlighters).toEqual(
+      HIGHLIGHTERS.map((name) => rgb(named.highlighters[name]?.css ?? "")),
+    );
+    expect(R.inks.highlight).toBe(named.alpha.highlight);
+    expect(R.inks.wash).toEqual(rgb(COMMENT_PAD_PALETTE.wash.css));
+    expect(R.inks.washAlpha).toBe(0.28);
+    expect(R.pen).toBeUndefined(); // no writing on this desk: no run
+    // a host that names only one pen and no highlighter: the rest in the sheet's own, no highlight at all
+    const sparse = padLook({
+      ...productPalette.light,
+      pens: { ball: { token: "t", css: "#102030" } },
+      calendars: {},
+    } as never);
+    const S = k.record(k.resolve(ctxOf({})), ctxOf({}, { look: sparse })) as PadInstance;
+    expect(S.inks.pens).toEqual(PENS.map(() => rgb("#102030")));
+    expect(S.inks.highlighters.every((h) => h === undefined)).toBe(true);
   });
 
   it("its RUNG is its ink's band — the record is remade at a power of two of the screen's density, never within one", () => {

@@ -1,4 +1,5 @@
 // OB-2 — a plugin's agent half, witnessed: the comment pad's tools run over its declared states with no desk.
+import { encodeMarks, highlightOf, inkOf, mark } from "@vibefield/plugin-sdk/desk";
 import {
   agentToolHarness,
   productPalette,
@@ -41,6 +42,23 @@ describe("the comment pad's agent half", () => {
     const pad = agentToolHarness(commentPadAgent, row, { text: "first", seeds: "kept" });
     pad.act("add_comment", { text: "two\nlines" });
     expect(pad.props()).toMatchObject({ text: "first\ntwo lines", seeds: "kept" });
+  });
+
+  it("keeps the marks on the words they were made on: the new line comes unmarked, the cell's marks read against the words it had", () => {
+    const words = inkOf({ text: "first" }, 0);
+    const marks = encodeMarks(mark(words, 0, 5, { highlight: "yellow" }).marks);
+    const pad = agentToolHarness(commentPadAgent, row, { text: "first", marks });
+    pad.act("add_comment", { text: "second" });
+    const after = pad.props();
+    const ink = inkOf({ text: String(after["text"]), marks: String(after["marks"]) }, 0);
+    expect(ink.marks.slice(0, 5).map(highlightOf)).toEqual([1, 1, 1, 1, 1]);
+    expect(ink.marks.slice(5)).toEqual(Array(7).fill(0)); // the break and "second"
+    // a stranger's cell whose marks ran past its words: read against them (cut), so the new line never takes the excess
+    const long = encodeMarks(mark(inkOf({ text: "firstXX" }, 0), 0, 7, { strike: true }).marks);
+    const odd = agentToolHarness(commentPadAgent, row, { text: "first", marks: long });
+    odd.act("add_comment", { text: "two" });
+    const read = inkOf({ text: "first\ntwo", marks: String(odd.props()["marks"]) }, 0);
+    expect(read.marks.slice(5)).toEqual([0, 0, 0, 0]);
   });
 
   it("says when the pad is full, and writes nothing", () => {

@@ -85,7 +85,8 @@
         "groups": {
           "ink": [
             "text",
-            "seeds"
+            "seeds",
+            "marks"
           ]
         },
         "interaction": {
@@ -108,6 +109,11 @@
               "red",
               "blue"
             ]
+          },
+          "marks": {
+            "default": "",
+            "kind": "string",
+            "maxLength": 200000
           },
           "pen": {
             "default": "ball",
@@ -181,5 +187,5 @@
   "id": "vibefield.comment-pad",
   "manifestVersion": 1,
   "title": "Comment pad",
-  "version": "0.1.0"
+  "version": "0.2.0"
 }

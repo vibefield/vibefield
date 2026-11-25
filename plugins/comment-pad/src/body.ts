@@ -1,30 +1,31 @@
 // THE PAD'S SHEET — its TEXT PART (ICE K8a, `defineObject({ host: { text } })`): the part of a pad the desk's ONE
-// editor is lent to, exactly as the note's body and the calendar's day line lease it. A TAP on a pad — a press and
-// release within the drag slop, the primary button, no modifier, the pad not carried — puts the editor on it,
-// the caret where the tap fell in its writing (the end below the last line). The pad under the tap is the
-// interaction stack's exact hit (the editor's `tapHit`); a tap whose pointer is gone takes nothing.
+// editor is lent to. Since IK (2026-11-25) it is the kit's WRITTEN PART (`inkPart`, ICE petition I60): the pad
+// DECLARES its writing — where it lies (its GEOMETRY: its layout as last laid, the two maps between the world and the
+// layout's units, where the editor's textarea stands), its ink cell and the marks its words take (typing.ts), and the
+// sink its writing draws from — and the kit gives it the rest: a tap's lease with the caret where it fell, typing as a
+// draft landed in one step, a drag, a word and a line, the clipboard in three flavours, the words' box the words bar
+// stands over, and the words' acts.
 //
-// The editor is the DESK's and invisible (transparent text and caret): it takes what the platform does best —
-// keys, key repeat, IME, dictation, the caret's index — and the pad draws the rest (its draft, its caret) from its
-// writing. The lease: `value` (the cell's text between sessions, so a peer's or an undo's reaches the field; null
-// while a session is open — the field is the truth), `input` (the session's draft), `caret`, `place` (the
-// writing box on screen, from the camera — the door's `Camera`), `idle` (a session's end), `ended` (the pad let
-// go), `live` (still alive and in the frame — the door's `Active`; a delete or a nav cut ends it).
+// The editor is the DESK's and invisible (transparent text and caret): it takes what the platform does best — keys,
+// key repeat, IME, dictation, the caret's index — and the pad draws the rest (its draft, its caret, the selection's
+// wash) from its writing.
 
 import {
-  Active,
   Camera,
-  type EditorLease,
+  type EditorPlace,
   type Entity,
+  type InkGeometry,
+  type InkPart,
+  inkPart,
   type KindDriver,
   type ObjectDomHost,
   PEN_FACES,
-  type TextPart,
 } from "@vibefield/plugin-sdk/desk";
 import { COMMENT_PAD_PART } from "./ids";
 import { PAD, PAD_FACE, PAD_HAND, writingBox } from "./law";
 import type { PadGeometry } from "./layout";
-import { createPadTyping, type PadCell, type PadTyping } from "./typing";
+import type { PadLook } from "./theme";
+import { PAD_MARKS, padSink } from "./typing";
 import type { PadWriting } from "./writing";
 
 /** The pad's driver (`ObjectBinding.drivers`): what its text part asks of the desk's kind host. */
@@ -35,125 +36,78 @@ export interface PadDriver extends KindDriver {
   readonly writing: () => PadWriting | undefined;
 }
 
-/** The pad's sheet: its text part (the desk routes taps to it) and the doors a smoke or a key uses. */
-export interface PadSheet extends TextPart {
-  /** Put the editor on pad `e`, the caret before glyph `index` (the end by default). False for a non-pad or a read-only document. */
-  focus(e: Entity, index?: number): boolean;
-  /** The pad being written, or undefined (the editor lent elsewhere, or to nothing). */
-  editing(): Entity | undefined;
-  /** The session under it (a test's witness). */
-  readonly typing: PadTyping;
-}
+/** The pad's sheet: the kit's written part — its text part (the desk routes taps to it), its doors (`focus`, `editing`) and its typing. */
+export type PadSheet = InkPart;
 
-/** A cell of the compiled object by its group's name (`ink`, `props`). */
-function cellOf(host: ObjectDomHost, name: string): PadCell | undefined {
-  return host.object.groups.find((g) => g.name === name)?.component;
+/**
+ * Where a pad's writing lies (the kit's `InkGeometry`): its layout as its writing last laid it, in the writing box's units (y
+ * down from the box's top-left); a world point there through the pad as drawn (its centre, its held scale) — undefined off the
+ * sheet; and the editor's textarea over the writing box on screen, from the camera.
+ */
+export function padGeometry(
+  host: Pick<ObjectDomHost, "world" | "geometryOf">,
+  writing: () => PadWriting | undefined,
+): InkGeometry {
+  const font = PEN_FACES[PAD_FACE] ?? { family: "Caveat", weight: 500 };
+  const drawn = (e: Entity): PadGeometry | undefined =>
+    host.geometryOf(e) as PadGeometry | undefined;
+  return {
+    layout: (e) => writing()?.layoutOf(e),
+    toLayout(e, wx, wy) {
+      const G = drawn(e);
+      if (G === undefined) return undefined;
+      const x = (wx - G.centre[0]) / G.scale + G.size.w / 2;
+      const y = (wy - G.centre[1]) / G.scale + G.size.h / 2;
+      if (x < 0 || y < 0 || x > G.size.w || y > G.size.h) return undefined; // off the sheet: not its writing's
+      const box = writingBox(G.size.w, G.size.h, PAD);
+      return [x - box.x, y - box.y];
+    },
+    toWorld(e, x, y) {
+      const G = drawn(e);
+      if (G === undefined) return undefined;
+      const box = writingBox(G.size.w, G.size.h, PAD);
+      return [
+        G.centre[0] + (box.x + x - G.size.w / 2) * G.scale,
+        G.centre[1] + (box.y + y - G.size.h / 2) * G.scale,
+      ];
+    },
+    place(e): EditorPlace | null {
+      const G = drawn(e);
+      const cam = host.world.getResource(Camera);
+      if (G === undefined || cam === undefined) return null;
+      const z = cam.zoom;
+      const s = G.scale;
+      const box = writingBox(G.size.w, G.size.h, PAD);
+      // the writing box on screen: pad units → world (about the sheet's centre, the lift's scale in) → container px
+      const wx = G.centre[0] + (box.x - G.size.w / 2) * s;
+      const wy = G.centre[1] + (box.y - G.size.h / 2) * s;
+      return {
+        x: (wx - cam.x) * z,
+        y: (wy - cam.y) * z,
+        w: box.w * s * z,
+        h: box.h * s * z,
+        fontPx: PAD_HAND.size * s * z,
+        lineHeight: PAD_HAND.size * PAD_HAND.lineHeight * s * z,
+        wrap: true,
+        font,
+      };
+    },
+  };
 }
 
 /** The pad's text part, or undefined where the desk gave it nothing to lease from (no driver: no sheet). */
 export function createPadSheet(host: ObjectDomHost): PadSheet | undefined {
   const driver = host.driver as PadDriver | undefined;
-  const ink = cellOf(host, "ink");
-  const props = cellOf(host, "props");
-  if (driver === undefined || ink === undefined || props === undefined) return undefined;
-  const { editor, world } = host;
+  if (driver === undefined) return undefined;
   const writing = (): PadWriting | undefined => driver.writing();
-  const typing = createPadTyping({ world, docs: host.docs, ink, props, writing });
-  const font = PEN_FACES[PAD_FACE] ?? { family: "Caveat", weight: 500 };
-  /** The pad being written and ITS lease — one lease a pad, so a tap on the same pad keeps it and a tap on another hands over. */
-  let current: { readonly entity: Entity; readonly lease: EditorLease } | undefined;
-
-  const leaseFor = (e: Entity): EditorLease => {
-    const lease: EditorLease = {
-      part: COMMENT_PAD_PART,
-      label: "write on the comment pad",
-      // between sessions the cell's text reaches the field (a peer, an undo); while a session is open the field is the truth
-      value: () => (typing.open() ? null : (typing.committed(e)?.text ?? "")),
-      input(value) {
-        typing.input(value);
-        writing()?.setCaret(e, editor.element.selectionStart);
-      },
-      // Escape lets the pad go (the keymap's gate 1 stands down; the release is ours)
-      keydown(ev) {
-        if (ev.key !== "Escape") return false;
-        editor.release(lease);
-        return true;
-      },
-      caret(index) {
-        writing()?.setCaret(e, index);
-      },
-      place() {
-        const G = host.geometryOf(e) as PadGeometry | undefined;
-        const cam = world.getResource(Camera);
-        if (G === undefined || cam === undefined) return null;
-        const z = cam.zoom;
-        const s = G.scale;
-        const box = writingBox(G.size.w, G.size.h, PAD);
-        // the writing box on screen: pad units → world (about the sheet's centre, the lift's scale in) → container px
-        const wx = G.centre[0] + (box.x - G.size.w / 2) * s;
-        const wy = G.centre[1] + (box.y - G.size.h / 2) * s;
-        return {
-          x: (wx - cam.x) * z,
-          y: (wy - cam.y) * z,
-          w: box.w * s * z,
-          h: box.h * s * z,
-          fontPx: PAD_HAND.size * s * z,
-          lineHeight: PAD_HAND.size * PAD_HAND.lineHeight * s * z,
-          wrap: true,
-          font,
-        };
-      },
-      idle() {
-        typing.commit();
-      },
-      ended() {
-        if (typing.editing() === e) typing.end();
-        if (current?.entity === e) {
-          current = undefined;
-          writing()?.setCaret(undefined);
-        }
-      },
-      // a delete or a nav cut ends the writing
-      live: () => world.isAlive(e) && world.hasTag(e, Active),
-    };
-    return lease;
-  };
-
-  /** The lease a pad takes, its session begun — or undefined: refused (dead, not a pad, a read-only document). */
-  const take = (e: Entity): EditorLease | undefined => {
-    if (!world.isAlive(e) || !driver.isPad(e)) return undefined;
-    if (!typing.begin(e)) return undefined;
-    if (current?.entity === e && editor.lease() === current.lease) return current.lease;
-    current = { entity: e, lease: leaseFor(e) };
-    return current.lease;
-  };
-
-  /** Where a tap at world (wx, wy) puts the caret in `e`'s writing: by its last layout, else at the end. */
-  const caretAtTap = (e: Entity, wx: number, wy: number): number => {
-    const end = typing.text(e).length;
-    const G = host.geometryOf(e) as PadGeometry | undefined;
-    if (G === undefined) return end;
-    const x = (wx - G.centre[0]) / G.scale + G.size.w / 2;
-    const y = (wy - G.centre[1]) / G.scale + G.size.h / 2;
-    return writing()?.caretIndexAt(e, x, y) ?? end;
-  };
-
-  return {
+  return inkPart(host, {
     part: COMMENT_PAD_PART,
-    tap({ wx, wy, found, hit }) {
-      if (!found || hit === undefined || !driver.isPad(hit)) return undefined;
-      const lease = take(hit);
-      if (lease === undefined) return undefined;
-      return { lease, caret: caretAtTap(hit, wx, wy) };
-    },
-    focus(e, index) {
-      const lease = take(e);
-      if (lease === undefined) return false;
-      editor.lend(lease, index ?? typing.text(e).length);
-      return true;
-    },
-    editing: () =>
-      current !== undefined && editor.lease() === current.lease ? current.entity : undefined,
-    typing,
-  };
+    label: "write on the comment pad",
+    marks: PAD_MARKS,
+    accepts: (e) => host.world.isAlive(e) && driver.isPad(e),
+    geometry: padGeometry(host, writing),
+    sink: padSink(writing),
+    // a copy's `text/html` in the host's inks, by the words' menu's swatch roles (none named: the tags alone)
+    colour: (role) => (host.look() as PadLook | undefined)?.swatches[role],
+  });
 }

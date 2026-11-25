@@ -1,7 +1,8 @@
 // The pad pass's GPU record, declared once: one pad as drawn — its block where it lies and how high, the lamp's
 // slope its shadow falls along, its colours (the look's — never a literal in the shader), its ruling, its ink's
-// place in the ink layers, and the caret while the desk's editor is on it. The camera, the light, the gobo and
-// the portal chain arrive in the slot's view block (`MatUniforms`), which the pass binds and never writes.
+// place (the PEN's glyph run in the run store, or the raster's layer in the ink layers), the inks its marks are drawn
+// in, and the caret while the desk's editor is on it. The camera, the light, the gobo and the portal chain arrive in
+// the slot's view block (`MatUniforms`), which the pass binds and never writes; the pen's clock in the pass's knobs.
 
 import { defineStruct, type RGB } from "@vibefield/plugin-sdk/desk";
 
@@ -24,8 +25,17 @@ export const Pad = defineStruct("Pad", [
   ["raster", "vec4f"], // the raster's layer, its band (texels per pad unit), its origin (pad units)
   ["rasterSize", "vec4f"], // the raster's texels (w, h), the layer's texels (w, h)
   ["caret", "vec4f"], // the caret's x, its top, its height (pad units), 1 when shown
-  ["dims", "vec4f"], // the sheet's size (pad units: w, h), a lower sheet's step (pad units); unused
+  ["dims", "vec4f"], // the sheet's size (pad units: w, h), a lower sheet's step, the writing box's foot (pad units)
+  // IK, 2026-11-25 — THE PEN (the kit's `hand_ink` and `ink_marks`): the run's base in the run store, 1 on the pen's road, the
+  // layout's origin (pad units: the writing box's top-left)
+  ["pen", "vec4f"],
+  ["pens", "array<vec4f, 4>"], // the kit's PENS in order (n: PENS[n − 1]; 0 is the sheet's own, `ink`), sRGB
+  ["highlighters", "array<vec4f, 5>"], // the kit's HIGHLIGHTERS in order, sRGB, w its presence (0: the host named none)
+  ["wash", "vec4f"], // the selection's wash: its pencil (sRGB), its presence
 ] as const);
+
+/** The pass's own knobs (one block a slot): the pen's clock, `penNow(ms)` — whole seconds and the ms past them. */
+export const PadKnobs = defineStruct("PadKnobs", [["pen", "vec4f"]] as const);
 
 /** The most pads one slot's pass draws (the record store grows to it). */
 export const MAX_PADS = 1024;
@@ -75,6 +85,27 @@ export interface PadRules {
   readonly last: number;
 }
 
+/** Where a pad's PEN run lies (writing.ts writes it): its base in the run store, and its layout's origin (pad units). */
+export interface PadPenRun {
+  readonly base: number;
+  readonly x: number;
+  readonly y: number;
+  /** The writing box's foot (pad units): the pen writes nothing below it, as the raster lays nothing past its box. */
+  readonly foot: number;
+}
+
+/** The inks a pad's marks are drawn in (the look's): the kit's pens and highlighters in order, the wash. */
+export interface PadInks {
+  /** `PENS[n − 1]` for n 1…4 (a pen the host never named is drawn in the sheet's own). */
+  readonly pens: readonly RGB[];
+  /** `HIGHLIGHTERS[n − 1]` for n 1…5 — undefined where the host named none (nothing is laid). */
+  readonly highlighters: readonly (RGB | undefined)[];
+  /** A highlighter's presence (multiply), the wash's pencil and its presence. */
+  readonly highlight: number;
+  readonly wash: RGB;
+  readonly washAlpha: number;
+}
+
 /** The caret while the desk's editor is on the pad: its x, its top and its height (pad units). */
 export interface PadCaret {
   readonly x: number;
@@ -97,12 +128,28 @@ export interface PadInstance {
   readonly margin: { readonly x: number; readonly alpha: number };
   readonly caretWidth: number;
   readonly raster?: PadRaster | undefined;
+  /** The pen's run (the pen's road): drawn over the raster's road, which then lays none. */
+  readonly pen?: PadPenRun | undefined;
+  readonly inks: PadInks;
   readonly caret?: PadCaret | undefined;
 }
 
+const flat = (
+  colours: readonly (RGB | undefined)[],
+  n: number,
+  w: (c: RGB) => number,
+): number[] => {
+  const out: number[] = [];
+  for (let i = 0; i < n; i += 1) {
+    const c = colours[i];
+    out.push(...(c === undefined ? [0, 0, 0, 0] : [c[0], c[1], c[2], w(c)]));
+  }
+  return out;
+};
+
 export function padValues(r: PadInstance) {
   const G = r.geometry;
-  const R = r.raster;
+  const R = r.pen === undefined ? r.raster : undefined;
   const C = r.caret;
   return {
     centre: G.centre,
@@ -122,6 +169,10 @@ export function padValues(r: PadInstance) {
     raster: R === undefined ? [0, 1, 0, 0] : [R.layer, R.band, R.x, R.y],
     rasterSize: R === undefined ? [0, 0, 1, 1] : [R.w, R.h, R.layerW, R.layerH],
     caret: C === undefined ? [0, 0, 0, 0] : [C.x, C.y, C.h, 1],
-    dims: [G.size.w, G.size.h, G.step, 0],
+    dims: [G.size.w, G.size.h, G.step, r.pen === undefined ? 0 : r.pen.foot],
+    pen: r.pen === undefined ? [0, 0, 0, 0] : [r.pen.base, 1, r.pen.x, r.pen.y],
+    pens: flat(r.inks.pens, 4, () => 1),
+    highlighters: flat(r.inks.highlighters, 5, () => r.inks.highlight),
+    wash: [r.inks.wash[0], r.inks.wash[1], r.inks.wash[2], r.inks.washAlpha],
   };
 }

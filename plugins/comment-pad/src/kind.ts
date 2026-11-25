@@ -4,11 +4,13 @@
 // the block where it lies (lifted in a hand, fading as a ghost) under the desk's one lamp, `record` its paper,
 // rules, ink and caret from its look and its writing, `hit` its block (what is picked is what is drawn), its chip
 // in a container's face (paper, its writing greeked), the frame the desk's marks go round, its look from the
-// palette (the host's pens; its own paper — theme.ts), its rung (the ink's raster density), and its desk state
-// (the writing — writing.ts).
+// palette (the host's pens and the desk's highlighters; its own paper — theme.ts), its rung (the ink's raster
+// density — none on the pen's road, whose record reads no zoom), and its desk state (the writing — writing.ts: the
+// pen's road and the raster's).
 
 import {
   type ChildShape,
+  HIGHLIGHTERS,
   type KindProgram,
   type Lamp,
   type MarkFrame,
@@ -16,6 +18,7 @@ import {
   type ObjectHit,
   type ObjectKind,
   PAPER_FINISH,
+  PENS,
   type RGB,
   type RungContext,
   type ShaderText,
@@ -24,7 +27,7 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { COMMENT_PAD_KIND, PAD_ACCENTS, type PadAccent } from "./ids";
 import { bandFor, PAD, PAD_HAND, type PadLaw, padReach, writingBox } from "./law";
-import type { PadGeometry, PadInstance } from "./layout";
+import type { PadGeometry, PadInks, PadInstance } from "./layout";
 import { PadPass } from "./pass";
 import { padShaders } from "./shaders";
 import { type CommentPadPalette, type PadLook, padLook } from "./theme";
@@ -106,6 +109,15 @@ export interface CommentPadKindOptions {
 const penOf = (look: PadLook, props: Readonly<Record<string, unknown>>): RGB | undefined =>
   look.pens[stringProp(props, "pen", "ball")] ?? Object.values(look.pens)[0];
 
+/** The inks a pad's marks are drawn in, from its look: a pen the host never named in the sheet's own, a highlighter not at all. */
+export const inksOf = (look: PadLook, own: RGB): PadInks => ({
+  pens: PENS.map((name) => look.pens[name] ?? own),
+  highlighters: HIGHLIGHTERS.map((name) => look.highlighters[name]),
+  highlight: look.highlight,
+  wash: look.wash,
+  washAlpha: look.washAlpha,
+});
+
 /** The pad's kind, whole (`ObjectKind`): its program and its world half. */
 export function commentPadKind(
   opts: CommentPadKindOptions = {},
@@ -114,8 +126,11 @@ export function commentPadKind(
   return {
     ...commentPadProgram(opts.text),
     reach: padReach(law),
-    // the record reads the view's zoom and dpr ONLY through the ink's band: a zoom within a rung remakes nothing
-    rung: (c: RungContext): number => Math.round(Math.log2(bandFor(c.zoom * c.dpr, law))),
+    // the record reads the view's zoom and dpr ONLY through the raster's band: a zoom within a rung remakes nothing, and on
+    // the pen's road no zoom does
+    rung: (c: RungContext): number =>
+      (c.local as PadWriting | undefined)?.rungOf(c.entity, c.props, c.zoom * c.dpr) ??
+      Math.round(Math.log2(bandFor(c.zoom * c.dpr, law))),
     local: (host) => createPadWriting(host, law),
     resolve: (ctx: ObjectContext): PadGeometry => resolvePad(ctx.rect, ctx.flux, ctx.lamp, law),
     record(G: PadGeometry, ctx: ObjectContext): PadInstance {
@@ -147,6 +162,8 @@ export function commentPadKind(
         margin: { x: law.marginRule, alpha: look.marginAlpha },
         caretWidth: law.caret.width,
         raster: drawn?.raster,
+        pen: drawn?.pen,
+        inks: inksOf(look, ink),
         caret: drawn?.caret,
       };
     },

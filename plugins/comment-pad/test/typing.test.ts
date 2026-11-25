@@ -1,19 +1,39 @@
-// TYPING ON THE PAD, on a fake world and a fake document: the SESSION (a draft drawn at once, ONE transaction at
-// its end, nothing when it nets to nothing, nothing on a read-only document, the runtime alone with no document,
-// each glyph's hand carried through an edit) and the SHEET — the pad's TEXT PART the desk's one editor is lent
-// to: a tap on a pad takes the editor with the caret where it fell, a tap on anything else is not the pad's, the
-// field is the session's while it is open and the cell's between sessions, 1 s idle commits, Escape lets go, a
-// pad deleted or cut from the frame ends the lease, and the editor stands over the writing box on screen.
+// TYPING ON THE PAD — the kit's written part (IK, 2026-11-25; ICE I60's `inkPart`, `inkTyping`, `inkActs`), as the pad
+// declares it, on a fake world and a fake document. The kit's own rows hold what typing IS (the carry, the paste, the acts'
+// letters); these hold what the PAD gives it and keeps of it: the marks its words take and its acts (the words bar's); the
+// sink that tells its writing the draft, how the draft's glyphs came, the caret and the selection; its sheet — the pad's
+// TEXT PART the desk's one editor is lent to: a tap on a pad takes the editor with the caret where it fell on the writing, a
+// tap on anything else is not the pad's, the field is the draft's while it is open and the cell's between drafts, 1 s idle
+// lands the draft as ONE transaction writing the words, their hand and their marks together, Escape lets go, a read-only
+// document's pad is read and never written; and its GEOMETRY — the editor stood over the writing box on screen, a world
+// point in the layout's units and back through the pad as drawn. The real engine's rows (a document, its undo, the acts
+// run by `ops.runMenuAction`) are the host's: packages/field-app/test/comment-pad-plugin.test.ts.
 import {
   Active,
   Camera,
-  decodeSeeds,
   type EditorLease,
   type Entity,
+  type HandMetrics,
+  INK_ACTS,
+  INK_FIELDS,
+  type InkValue,
+  inkOf,
+  layoutText,
   type ObjectDomHost,
 } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
-import { COMMENT_PAD_PART, createPadSheet, createPadTyping, PAD_HAND, writingBox } from "../src";
+import {
+  COMMENT_PAD_PART,
+  COMMENT_PAD_TYPE,
+  commentPad,
+  createPadSheet,
+  PAD_HAND,
+  PAD_MARKS,
+  padActs,
+  padGeometry,
+  padSink,
+  writingBox,
+} from "../src";
 
 const INK = { name: "vibefield.comment-pad:ink" };
 const PROPS = { name: "vibefield.comment-pad:props" };
@@ -27,15 +47,38 @@ const OK_REPORT = {
   renamedInDoc: {},
 };
 
+/** The compiled object as the kit reads it: its ink cell by its group's name (its three fields) and its sheet's `seed`. */
+const OBJECT = {
+  type: COMMENT_PAD_TYPE,
+  groups: [
+    { name: "ink", component: INK, fields: { text: {}, seeds: {}, marks: {} } },
+    { name: "props", component: PROPS, fields: { pen: {}, accent: {}, seed: {} } },
+  ],
+  propToGroup: {
+    text: "ink",
+    seeds: "ink",
+    marks: "ink",
+    pen: "props",
+    accent: "props",
+    seed: "props",
+  },
+};
+
 function fakeWorld() {
   const cells = new Map<string, unknown>();
   const tags = new Set<string>([`${PAD}:active`, `${NOT_A_PAD}:active`]);
   const alive = new Set<Entity>([PAD, NOT_A_PAD]);
   const key = (e: Entity, c: { name: string }) => `${e}:${c.name}`;
-  cells.set(key(PAD, INK), { text: "first", seeds: "" });
+  cells.set(key(PAD, INK), { text: "first", seeds: "", marks: "" });
   cells.set(key(PAD, PROPS), { pen: "ball", accent: "indigo", seed: 5 });
   const world = {
-    get: (e: Entity, c: { name: string }) => cells.get(key(e, c)),
+    get: (e: Entity, c: { name: string }) => {
+      // the object's type, as core's `PrefabId` holds it: the kit asks which type an entity is
+      if (/PrefabId/.test(c.name))
+        return alive.has(e) ? { id: e === PAD ? COMMENT_PAD_TYPE : "other.kind" } : undefined;
+      return cells.get(key(e, c));
+    },
+    has: () => false,
     isAlive: (e: Entity) => alive.has(e),
     hasTag: (e: Entity, t: unknown) => t === Active && tags.has(`${e}:active`),
     edit: (e: Entity) => ({
@@ -50,146 +93,101 @@ function fakeWorld() {
     cells,
     tags,
     alive,
-    ink: () => cells.get(key(PAD, INK)) as { text: string; seeds: string },
+    ink: () => cells.get(key(PAD, INK)) as { text: string; seeds: string; marks: string },
   };
 }
 
-function fakeDocs(
-  w: ReturnType<typeof fakeWorld>,
-  opts: { readOnly?: boolean; none?: boolean } = {},
-) {
+function fakeDocs(w: ReturnType<typeof fakeWorld>, opts: { readOnly?: boolean } = {}) {
   const commits: unknown[] = [];
-  let readOnly = opts.readOnly ?? false;
-  const session = {
+  const opened = {
     store: {
       transaction: (fn: (tx: unknown) => void) => {
         const tx = {
-          edit: (e: Entity) => ({
-            set: (c: { name: string }, v: unknown) => {
-              commits.push(v);
-              w.world.edit(e).set(c, v);
-            },
-          }),
+          edit: (e: Entity) => {
+            const editor = {
+              set: (c: { name: string }, v: unknown) => {
+                commits.push(v);
+                w.world.edit(e).set(c, v);
+                return editor;
+              },
+            };
+            return editor;
+          },
         };
         fn(tx);
       },
     },
     liveWriter: {},
-    get readOnly() {
-      return readOnly;
-    },
+    readOnly: opts.readOnly ?? false,
     versionReport: () => OK_REPORT,
   };
-  const docs = { current: () => (opts.none === true ? undefined : session) };
-  return { docs, commits, goReadOnly: () => (readOnly = true) };
+  return { docs: { current: () => opened }, commits };
 }
 
+/** The hand's metrics the tests lay with: every glyph half an em (the layout is the kit's). */
+const METRICS: HandMetrics = { ascent: 0.8, descent: 0.25, advance: () => 0.5 };
+const BOX = writingBox(220, 280);
+const laidOf = (text: string) =>
+  layoutText(text, BOX, PAD_HAND, METRICS, 5, inkOf({ text }, 5).seeds);
+
 function fakeWriting() {
-  const drafts: (string | undefined)[] = [];
+  const drafts: { text: string | undefined; how: string | undefined }[] = [];
   const carets: (number | undefined)[] = [];
+  const selections: ([number, number] | undefined)[] = [];
   return {
     drafts,
     carets,
+    selections,
     writing: {
-      setDraft: (_e: Entity, d: { text: string } | undefined) => drafts.push(d?.text),
+      setDraft: (_e: Entity, d: InkValue | undefined, arrived?: { how: string }) =>
+        drafts.push({ text: d?.text, how: arrived?.how }),
       setCaret: (_e: Entity | undefined, i?: number) => carets.push(i),
-      caretIndexAt: () => 2,
+      setSelection: (e: Entity | undefined, from?: number, to?: number) =>
+        selections.push(e === undefined ? undefined : [from ?? 0, to ?? 0]),
+      layoutOf: () => laidOf("first"),
     },
   };
 }
 
-describe("the pad's typing session", () => {
-  const make = (opts: { readOnly?: boolean; none?: boolean } = {}) => {
-    const w = fakeWorld();
-    const d = fakeDocs(w, opts);
+describe("the pad's words and their acts", () => {
+  it("take every mark the kit has, and its acts are the words bar's: Pen, Highlight, Strike, Underline, Clear — on the words", () => {
+    expect([...PAD_MARKS]).toEqual([...INK_FIELDS]);
+    const acts = padActs().map((a) => [a.id, a.on]);
+    expect(acts).toEqual(Object.values(INK_ACTS).map((id) => [id, "words"]));
+    expect(commentPad.menu?.map((a) => a.id)).toEqual(Object.values(INK_ACTS));
+  });
+
+  it("tell the pad's writing the draft and how its glyphs came, the caret and the selection", () => {
     const fw = fakeWriting();
-    const typing = createPadTyping({
-      world: w.world as never,
-      docs: d.docs as never,
-      ink: INK as never,
-      props: PROPS as never,
-      writing: () => fw.writing as never,
-      fresh: () => 4242,
-    });
-    return { w, d, fw, typing };
-  };
-
-  it("draws a session's DRAFT at once and commits ONE transaction at its end — the cell unmoved until then", () => {
-    const { w, d, fw, typing } = make();
-    expect(typing.begin(PAD)).toBe(true);
-    typing.input("first ");
-    typing.input("first c");
-    typing.input("first comment");
-    expect(w.ink().text).toBe("first"); // the document has not moved
-    expect(fw.drafts).toEqual(["first ", "first c", "first comment"]);
-    expect(typing.text(PAD)).toBe("first comment");
-    expect(typing.commit()).toBe(true);
-    expect(d.commits).toHaveLength(1);
-    expect(w.ink().text).toBe("first comment");
-    expect(fw.drafts.at(-1)).toBeUndefined(); // the draft goes: the cell is drawn again
-    expect(typing.open()).toBe(false);
-  });
-
-  it("carries each glyph's HAND through an edit: the prefix keeps its seeds, the inserted run gets fresh ones", () => {
-    const { w, typing } = make();
-    typing.begin(PAD);
-    typing.input("first!");
-    typing.commit();
-    const seeds = decodeSeeds(w.ink().seeds);
-    expect(seeds).toHaveLength(6);
-    expect(seeds[5]).toBe(4242);
-    typing.input("first!?");
-    typing.commit();
-    expect(decodeSeeds(w.ink().seeds).slice(0, 6)).toEqual(seeds);
-  });
-
-  it("a session that NETS TO NOTHING commits nothing", () => {
-    const { d, typing } = make();
-    typing.begin(PAD);
-    typing.input("firstX");
-    typing.input("first");
-    expect(typing.commit()).toBe(false);
-    expect(d.commits).toEqual([]);
-  });
-
-  it("a READ-ONLY document takes no session; one gone read-only mid-session lands nothing", () => {
-    expect(make({ readOnly: true }).typing.begin(PAD)).toBe(false);
-    const { w, d, typing } = make();
-    typing.begin(PAD);
-    typing.input("first edit");
-    d.goReadOnly();
-    expect(typing.commit()).toBe(false);
-    expect(d.commits).toEqual([]);
-    expect(w.ink().text).toBe("first");
-  });
-
-  it("with NO document at all the runtime is all there is: the commit writes the world", () => {
-    const { w, typing } = make({ none: true });
-    typing.begin(PAD);
-    typing.input("first, offline");
-    expect(typing.commit()).toBe(true);
-    expect(w.ink().text).toBe("first, offline");
-  });
-
-  it("refuses a dead entity and one with no ink cell", () => {
-    const { w, typing } = make();
-    expect(typing.begin(NOT_A_PAD)).toBe(false);
-    w.alive.delete(PAD);
-    expect(typing.begin(PAD)).toBe(false);
+    const sink = padSink(() => fw.writing as never);
+    sink.draft?.(PAD, inkOf({ text: "first!" }, 5), { from: 5, to: 6, how: "typed" });
+    sink.draft?.(PAD, undefined);
+    sink.caret?.(PAD, 3);
+    sink.selection?.(PAD, 1, 4);
+    sink.selection?.(undefined);
+    expect(fw.drafts).toEqual([
+      { text: "first!", how: "typed" },
+      { text: undefined, how: undefined },
+    ]);
+    expect(fw.carets).toEqual([3]);
+    expect(fw.selections).toEqual([[1, 4], undefined]);
   });
 });
 
-describe("the pad's sheet — its text part", () => {
+describe("the pad's sheet — the kit's written part", () => {
   function sheetOn(opts: { readOnly?: boolean } = {}) {
     const w = fakeWorld();
     const d = fakeDocs(w, opts);
     const fw = fakeWriting();
     let lent: EditorLease | undefined;
-    const element = { selectionStart: 0, value: "" };
+    const element = { selectionStart: 0, selectionEnd: 0, value: "" };
     const editor = {
       element,
-      lend: (lease: EditorLease) => {
+      lend: (lease: EditorLease, index?: number) => {
         lent = lease;
+        element.value = lease.value() ?? element.value;
+        element.selectionStart = index ?? 0;
+        element.selectionEnd = index ?? 0;
       },
       release: (lease?: EditorLease) => {
         if (lent !== undefined && (lease === undefined || lease === lent)) {
@@ -199,30 +197,26 @@ describe("the pad's sheet — its text part", () => {
         }
       },
       lease: () => lent,
+      write: () => true,
       blur: () => {},
       follow: () => {},
       placement: () => null,
+      command: async () => false,
       dispose: () => {},
     };
-    const G = {
-      centre: [100, 80],
-      half: [110, 140],
-      size: { w: 220, h: 280 },
-      scale: 1,
-    };
+    const G = { centre: [100, 80], half: [110, 140], size: { w: 220, h: 280 }, scale: 1 };
     const host = {
       container: {},
       world: w.world,
       docs: d.docs,
       use: () => undefined,
       editor,
-      object: {
-        groups: [
-          { name: "ink", component: INK },
-          { name: "props", component: PROPS },
-        ],
+      object: OBJECT,
+      driver: {
+        isPad: (e: Entity) => e === PAD,
+        writing: () => fw.writing,
+        follow: () => {},
       },
-      driver: { isPad: (e: Entity) => e === PAD, writing: () => fw.writing, follow: () => {} },
       look: () => undefined,
       geometryOf: (e: Entity) => (e === PAD ? G : undefined),
       hand: () => undefined,
@@ -231,69 +225,129 @@ describe("the pad's sheet — its text part", () => {
     } as unknown as ObjectDomHost;
     const sheet = createPadSheet(host);
     if (sheet === undefined) throw new Error("no sheet");
-    const tap = (hit: Entity | undefined, found = true) =>
-      sheet.tap?.({ wx: 100, wy: 80, found, hit });
-    return { w, d, fw, sheet, editor, element, tap, take: (l: EditorLease) => (lent = l) };
+    /** A tap at a point of the writing box (pad units from its top-left), the pad at (100, 80) as drawn. */
+    const tap = (hit: Entity | undefined, at: readonly [number, number] = [0, 0], found = true) =>
+      sheet.tap?.({
+        wx: 100 - 110 + BOX.x + at[0],
+        wy: 80 - 140 + BOX.y + at[1],
+        found,
+        hit,
+      } as never);
+    /** What the platform does with a key: the field's words, its caret after them, then the input. */
+    const type = (lease: EditorLease, value: string) => {
+      element.value = value;
+      element.selectionStart = value.length;
+      element.selectionEnd = value.length;
+      lease.input(value);
+    };
+    return { w, d, fw, sheet, editor, element, tap, type, take: (l: EditorLease) => (lent = l) };
   }
 
-  it("names its part, and a TAP on a pad takes the editor with the caret where the tap fell; anything else is not the pad's", () => {
+  it("names its part, and a TAP on a pad takes the editor with the caret where the tap fell on its writing; anything else is not the pad's", () => {
     const s = sheetOn();
     expect(s.sheet.part).toBe(COMMENT_PAD_PART);
     expect(s.tap(NOT_A_PAD)).toBeUndefined();
     expect(s.tap(undefined)).toBeUndefined();
-    expect(s.tap(PAD, false)).toBeUndefined(); // the pointer is gone: the sheet looks for nothing
-    const taken = s.tap(PAD);
-    expect(taken?.caret).toBe(2);
-    expect(taken?.lease.part).toBe(COMMENT_PAD_PART);
+    expect(s.tap(PAD, [0, 0], false)).toBeUndefined(); // the pointer is gone: the pad names no sheet to find
+    const atStart = s.tap(PAD, [0.5, PAD_HAND.size * 0.5]);
+    expect(atStart?.caret).toBe(0);
+    expect(atStart?.lease.part).toBe(COMMENT_PAD_PART);
+    expect(atStart?.lease.entity).toBe(PAD); // the words' menu is its own
+    expect(atStart?.lease.label).toBe("write on the comment pad");
+    // after its third letter, on its one line; past the line's end, low on the box: the words' end
+    const third = laidOf("first").positions[2 * 3] ?? 0;
+    expect(s.tap(PAD, [third + 0.5, PAD_HAND.size * 0.5])?.caret).toBe(3);
+    expect(s.tap(PAD, [BOX.w - 4, BOX.h - 2])?.caret).toBe(5);
   });
 
-  it("the field is the CELL's between sessions and the session's while it is open; idle commits; Escape lets go", () => {
+  it("the field is the CELL's between drafts and the draft's while it is open; idle lands ONE transaction — the words, their hand and their marks; Escape lets go", () => {
     const s = sheetOn();
     const lease = s.tap(PAD)?.lease;
     if (lease === undefined) throw new Error("no lease");
     s.take(lease);
+    s.element.value = "first";
     expect(lease.value()).toBe("first");
-    s.element.selectionStart = 9;
-    lease.input("first new");
-    expect(lease.value()).toBeNull(); // a session is open: the field is the truth
+    s.type(lease, "first new");
+    expect(lease.value()).toBeNull(); // a draft is open: the field is the truth
+    expect(s.w.ink().text).toBe("first"); // the document has not moved
+    expect(s.fw.drafts.at(-1)).toEqual({ text: "first new", how: "typed" });
     expect(s.fw.carets.at(-1)).toBe(9);
-    lease.idle(); // 1 s without input: the session ends
-    expect(s.d.commits).toEqual([expect.objectContaining({ text: "first new" })]);
+    expect(s.fw.selections.at(-1)).toEqual([9, 9]);
+    lease.idle(); // 1 s without input: the draft lands
+    expect(s.d.commits).toEqual([
+      expect.objectContaining({ text: "first new", seeds: expect.any(String), marks: "" }),
+    ]);
+    expect(s.fw.drafts.at(-1)).toEqual({ text: undefined, how: undefined }); // the cell is drawn again
     expect(lease.value()).toBe("first new");
+    lease.idle(); // nothing open: nothing lands
+    expect(s.d.commits).toHaveLength(1);
     expect(lease.keydown({ key: "a" } as KeyboardEvent)).toBe(false);
     expect(lease.keydown({ key: "Escape" } as KeyboardEvent)).toBe(true);
     expect(s.sheet.editing()).toBeUndefined();
-    expect(s.fw.carets.at(-1)).toBeUndefined(); // the caret goes with the lease
+    expect(s.fw.carets.at(-1)).toBeUndefined(); // the caret and the wash go with the lease
+    expect(s.fw.selections.at(-1)).toBeUndefined();
   });
 
-  it("a lease ends when its pad is deleted or cut from the frame, and the session's text lands as it does", () => {
+  it("a draft that NETS TO NOTHING lands nothing; a lease ends when its pad is cut from the frame, and its draft lands as it does", () => {
     const s = sheetOn();
     const lease = s.tap(PAD)?.lease;
     if (lease === undefined) throw new Error("no lease");
+    s.take(lease);
+    s.type(lease, "firstX");
+    s.type(lease, "first");
+    lease.idle();
+    expect(s.d.commits).toEqual([]);
     expect(lease.live?.()).toBe(true);
     s.w.tags.delete(`${PAD}:active`); // a nav cut: the pad is no longer in the frame
     expect(lease.live?.()).toBe(false);
-    lease.input("first, then cut");
+    s.type(lease, "first, then cut");
     lease.ended();
     expect(s.w.ink().text).toBe("first, then cut");
   });
 
+  it("a read-only document's pad is read, never written: a tap takes nothing", () => {
+    expect(sheetOn({ readOnly: true }).tap(PAD)).toBeUndefined();
+  });
+});
+
+describe("the pad's geometry", () => {
+  const G = { centre: [100, 80], half: [121, 154], size: { w: 220, h: 280 }, scale: 1.1 };
+  const geometry = padGeometry(
+    {
+      world: fakeWorld().world as never,
+      geometryOf: (e: Entity) => (e === PAD ? G : undefined),
+    } as never,
+    () => ({ layoutOf: () => laidOf("first") }) as never,
+  );
+
   it("stands the editor over the WRITING BOX on screen, from the camera, in the pad's hand", () => {
-    const s = sheetOn();
-    const lease = s.tap(PAD)?.lease;
-    const box = writingBox(220, 280);
+    const flat = padGeometry(
+      {
+        world: fakeWorld().world as never,
+        geometryOf: () => ({ centre: [100, 80], size: { w: 220, h: 280 }, scale: 1 }),
+      } as never,
+      () => undefined,
+    );
     // the camera at (−100, −50), zoom 2; the pad's centre (100, 80), its top-left (−10, −60)
-    expect(lease?.place()).toMatchObject({
-      x: (-10 + box.x + 100) * 2,
-      y: (-60 + box.y + 50) * 2,
-      w: box.w * 2,
-      h: box.h * 2,
+    expect(flat.place(PAD)).toMatchObject({
+      x: (-10 + BOX.x + 100) * 2,
+      y: (-60 + BOX.y + 50) * 2,
+      w: BOX.w * 2,
+      h: BOX.h * 2,
       fontPx: PAD_HAND.size * 2,
       wrap: true,
     });
   });
 
-  it("a read-only document's pad is read, never written: a tap takes nothing", () => {
-    expect(sheetOn({ readOnly: true }).tap(PAD)).toBeUndefined();
+  it("maps a world point into the layout's units and back through the pad as drawn — a held pad's scale in — and nothing off the sheet", () => {
+    const back = geometry.toWorld(PAD, 12, 30);
+    if (back === undefined) throw new Error("no world point");
+    const there = geometry.toLayout(PAD, back[0], back[1]);
+    expect(there?.[0]).toBeCloseTo(12, 9);
+    expect(there?.[1]).toBeCloseTo(30, 9);
+    expect(back[0]).toBeCloseTo(100 + (BOX.x + 12 - 110) * 1.1, 9);
+    expect(geometry.toLayout(PAD, 100 + 125, 80)).toBeUndefined(); // past the sheet's right edge
+    expect(geometry.toLayout(NOT_A_PAD, 100, 80)).toBeUndefined();
+    expect(geometry.layout(PAD)?.glyphs).toHaveLength(5);
   });
 });

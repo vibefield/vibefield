@@ -9,8 +9,9 @@ import { COMMENT_PAD_PALETTE } from "./theme";
  * a pad holds lines of text, written in the desk's hand).
  *
  * This manifest is the pad's DURABLE half: its writing in ONE conflict group, `ink` — `text` (its lines, the
- * comments) and `seeds` (each glyph's own hand, so a reload re-draws the same hand) — one cell written in one
- * transaction, so a text never pairs with another writer's seeds; its pen (the host's ink, by name), its accent
+ * comments), `seeds` (each glyph's own hand, so a reload re-draws the same hand) and `marks` (each glyph's pen,
+ * highlighter, strike and underline — IK, 2026-11-25) — one cell written in one transaction, so a text never pairs
+ * with another writer's seeds or marks; its pen (the host's ink, by name), its accent
  * (DESIGN.md §2.6 — the binding strip and the rules' tint) and its `seed` (the hand of a glyph with no stored
  * seed); its size; its interaction (movable, selectable, snapping both ways, never resized); what it PROVIDES —
  * it lies on the desk (`desk.object`) and goes into a mini mat (`desk.containable`, where its chip is its paper
@@ -21,7 +22,7 @@ import { COMMENT_PAD_PALETTE } from "./theme";
 export const commentPadManifest: PluginManifestV1 = {
   manifestVersion: 1,
   id: COMMENT_PAD_TYPE,
-  version: "0.1.0",
+  version: "0.2.0",
   title: "Comment pad",
   description:
     "A pad of comments lying on the desk — tap it and write in the desk's hand; its lines are the document's, undoable, shared with every peer",
@@ -45,11 +46,15 @@ export const commentPadManifest: PluginManifestV1 = {
         props: {
           text: { kind: "string", default: "", maxLength: 20000 },
           seeds: { kind: "string", default: "", maxLength: 200000 },
+          // IK, 2026-11-25: each glyph's MARK (its pen, a highlighter under it, a line through it, one under it — the kit's ink
+          // value, its runs `count:mark` in base 36 with the unmarked tail dropped): "" is unmarked, so a pad stored before
+          // the marks reads unmarked, its cell filled with the default as it projects (no migration: the field is additive)
+          marks: { kind: "string", default: "", maxLength: 200000 },
           pen: { kind: "enum", options: [...PAD_PENS], default: "ball" },
           accent: { kind: "enum", options: [...PAD_ACCENTS], default: "indigo" },
           seed: { kind: "number", default: 0 },
         },
-        groups: { ink: ["text", "seeds"] },
+        groups: { ink: ["text", "seeds", "marks"] },
         // what an agent can do with a pad (OB-2): one of this kind's two witnesses for a plugin's agent half
         agent: {
           summary: "A pad of comments, one to a line.",
