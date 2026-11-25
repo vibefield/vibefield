@@ -96,6 +96,10 @@
           "h": 150,
           "w": 150
         },
+        "sticker": {
+          "art": "./assets/sticker.svg",
+          "radius": 16
+        },
         "title": "Clock",
         "tray": {
           "category": "things",

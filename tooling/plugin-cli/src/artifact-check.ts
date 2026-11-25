@@ -15,7 +15,12 @@
 
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { OBJECT_LIMITS, type PluginManifestV1 } from "@vibefield/contracts";
+import {
+  OBJECT_LIMITS,
+  type PluginManifestV1,
+  STICKER_LIMITS,
+  stickerArtProblems,
+} from "@vibefield/contracts";
 import { findUnmappableSpecifiers } from "@vibefield/plugin-build/build";
 import { note, pass, refuse, type Verdict } from "./verdict";
 
@@ -92,8 +97,81 @@ function checkAgentGuides(root: string, manifest: PluginManifestV1): Verdict[] {
   return verdicts;
 }
 
+/** OB-D16 (2026-11-25) — every kind an agent can hold shows its sticker in Godview's pane, so a kind with an agent half
+ * declares one, and its art is on disk, small and sound (the same problems fieldd refuses to serve). A source file, as the
+ * guide is: its absence is a defect now. */
+function checkStickers(root: string, manifest: PluginManifestV1): Verdict[] {
+  const verdicts: Verdict[] = [];
+  for (const [index, object] of (manifest.contributes?.objects ?? []).entries()) {
+    const sticker = object.sticker;
+    const pointer = `/contributes/objects/${index}/sticker`;
+    if (sticker === undefined) {
+      if (object.agent !== undefined)
+        verdicts.push(
+          refuse(
+            "artifact",
+            "sticker-missing",
+            `${object.type} has an agent half and no sticker: Godview's pane wears an object's sticker while an agent holds it`,
+            { pointer: `/contributes/objects/${index}` },
+          ),
+        );
+      continue;
+    }
+    const path = resolve(root, sticker.art);
+    if (!existsSync(path) || !statSync(path).isFile()) {
+      verdicts.push(
+        refuse(
+          "artifact",
+          "sticker-art-missing",
+          `${object.type}'s sticker ${sticker.art} is not on disk`,
+          {
+            pointer: `${pointer}/art`,
+          },
+        ),
+      );
+      continue;
+    }
+    const bytes = statSync(path).size;
+    if (bytes > STICKER_LIMITS.ART_BYTES) {
+      verdicts.push(
+        refuse(
+          "artifact",
+          "sticker-art-too-large",
+          `${object.type}'s sticker ${sticker.art} is ${bytes} bytes, over the ${STICKER_LIMITS.ART_BYTES} a sticker carries`,
+          { pointer: `${pointer}/art` },
+        ),
+      );
+      continue;
+    }
+    const problems = stickerArtProblems(readFileSync(path, "utf8"));
+    const unsafe = problems.filter((problem) => problem.code === "unsafe");
+    const invalid = problems.filter((problem) => problem.code !== "unsafe");
+    if (invalid.length > 0)
+      verdicts.push(
+        refuse(
+          "artifact",
+          "sticker-art-invalid",
+          `${object.type}'s sticker ${sticker.art}: ${invalid.map((problem) => problem.message).join("; ")}`,
+          { pointer: `${pointer}/art` },
+        ),
+      );
+    if (unsafe.length > 0)
+      verdicts.push(
+        refuse(
+          "artifact",
+          "sticker-art-unsafe",
+          `${object.type}'s sticker ${sticker.art}: ${unsafe.map((problem) => problem.message).join("; ")}`,
+          { pointer: `${pointer}/art` },
+        ),
+      );
+    if (problems.length === 0)
+      verdicts.push(pass("artifact", `${object.type}'s sticker is ${bytes} bytes and ships`));
+  }
+  return verdicts;
+}
+
 export function checkArtifacts(root: string, manifest: PluginManifestV1): Verdict[] {
-  const guides = checkAgentGuides(root, manifest);
+  const guides = [...checkAgentGuides(root, manifest), ...checkStickers(root, manifest)];
   const declared = declaredEntries(manifest);
   if (declared.length === 0) return [...guides, pass("artifact", "no entry modules declared")];
 

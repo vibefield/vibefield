@@ -94,6 +94,8 @@ export const browserPaneManifest: PluginManifestV1 = {
           },
           local: true,
         },
+        // OB-D16 (2026-11-25): the likeness Godview's pane wears while an agent holds one (its art ships in assets/)
+        sticker: { art: "./assets/sticker.svg", radius: 6, name: "url" },
         binding: { kind: "browserPane" },
       },
     ],

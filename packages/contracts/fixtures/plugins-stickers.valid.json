@@ -1,0 +1,25 @@
+{
+  "stickers": [
+    {
+      "plugin": "vibefield.simulator",
+      "kind": "vibefield.simulator.phone",
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 44 80\"><style>.body{fill:var(--finish,#e0692a)}</style><rect class=\"body\" width=\"44\" height=\"80\" rx=\"9\"/></svg>",
+      "radius": 9,
+      "paint": [
+        {
+          "prop": "finish",
+          "slot": "--finish",
+          "values": { "cosmic-orange": "#e0692a", "deep-blue": "#2b3c5c" },
+          "fallback": "#e0692a"
+        }
+      ]
+    },
+    {
+      "plugin": "vibefield.browser-pane",
+      "kind": "vibefield.browser-pane.pane",
+      "svg": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 44 32\"><rect width=\"44\" height=\"32\" fill=\"#eef8f5\"/></svg>",
+      "radius": 6,
+      "name": "url"
+    }
+  ]
+}

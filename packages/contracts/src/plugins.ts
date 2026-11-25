@@ -2,6 +2,7 @@ import { z } from "zod";
 import { SemverString } from "./envelope";
 import { ChipType, OBJECT_LIMITS, ObjectConcurrency, ObjectReadInput } from "./objects";
 import { SCOPES, type Scope } from "./registries";
+import { ObjectSticker, stickerDeclarationProblems } from "./stickers";
 
 // Plugin manifest contracts (plugin-architecture spec §7/§8, slice P0 — PA-3:
 // the canonical schema lives HERE; plugin-runtime must not own a hand-written
@@ -1008,6 +1009,8 @@ export const ObjectContribution = z
     tray: TrayEntryContribution.optional(),
     /** what an agent can do with it (§5.3); absent: agents can place and name it, nothing more */
     agent: ObjectAgentHalf.optional(),
+    /** OB-D16 — its likeness, cut to its shape, worn by a Godview pane whose agent holds it (`stickers.ts`) */
+    sticker: ObjectSticker.optional(),
     binding: ObjectBindingRef,
   })
   .passthrough();
@@ -1485,6 +1488,10 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
             "guide",
           ]);
       }
+      // OB-D16 — a sticker paints from the kind's own props, each slot once (its art is `check`'s and fieldd's to read)
+      if (o.sticker !== undefined)
+        for (const problem of stickerDeclarationProblems(o.sticker, Object.keys(o.props)))
+          issue(problem.message, [...path, "sticker", ...problem.path]);
       // the tray entry's face and take name declared props, each a value of
       // its prop's kind (ICE validates the same at defineObject; saying it here
       // keeps a bad specimen out of the manifest, not the mount)

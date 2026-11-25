@@ -698,6 +698,14 @@ straight so rows line up. From 20px, the control holding it lifts it on hover or
 tilt relaxed to 35%, on `--vf-ease-lift` (180ms) — held, like a card (§7). Reduced motion: the
 same lift in 90ms, `ease-out` (M6).
 
+*Amended 2026-11-25 (OB-D16; §8 "At work, in the pane"):* an **object's** sticker in a Godview
+pane is cut from the same paper: the edge in `--vf-sticker-edge` in both themes at a fixed 1.5px
+(`--vf-pane-sticker-edge`), the cut and the cast as above, the object's art fitted by its long
+side into 22px (`--vf-pane-sticker-size`), and a count on that paper (**+2**) in
+`--vf-pane-sticker-ink` (#1c1c1e: the paper is white in both themes, so its ink is too). Below
+40px it still tilts, up to ±6° from its object and its run, never a person's: it stands in its
+own corner, not in a row that must line up.
+
 **The coin** (by choice — then the frame itself tells personas apart: a fox sticker at home, a
 minted octopus at work). Pewter. The figure at 58% of the box (66% at 20px and below), raised
 with a small drop shadow off a field sunk by an inset shadow; rim 8.5% of the size (15% once
@@ -7242,6 +7250,47 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     person is watching the page.
     *Amended 2026-11-19 (James; DECISIONS "FL", as amended):* this said the browser pane had shipped in no
     packaged app since 2026-11-09, so these words held for a dev run until it returned. It ships Built in at 0.9.
+  - **At work, in the pane** (OB-D16, Godview's end of item 550's at-work mark; ruled by James on the page *Swapped
+    Stickers*, 2026-11-25 06:39Z: the look A, the place B, the state A, the touch A; the first page's places in the
+    pane's head set aside on his word of 06:15Z, "the header area is too crowded, try design at right bottom area
+    instead"). On the desk, item 550's mark gives an object an agent works on that agent's sticker; in Godview the
+    agent's pane wears the object's. While a run holds an object, or waits its turn at a one-at-a-time object
+    another run holds, the run's pane wears the object's **sticker**: its likeness, cut to its shape (a browser a
+    slab of glass with its page, the iOS Simulator its phone in its own finish, a note its square of yellow paper),
+    on §2.8's sticker: the paper edge in `--vf-sticker-edge` in both themes (`--vf-pane-sticker-edge`, 1.5px), the
+    cut (`--vf-sticker-cut`) and the cast (`--vf-sticker-shadow`). The art is fitted into a 22px box by its long
+    side (`--vf-pane-sticker-size`) and turned its own angle, up to ±6°, from its object and its run, as a sticker
+    is stuck on by hand.
+    - **Where:** stuck on the pane's bottom-right corner over the terminal's last rows, 7 in from the side and 4 up
+      from the foot; the first held nearest the corner, each later one over a third of the one before, to its left;
+      past three, the first two and a count (**+2**) on paper in `--vf-pane-sticker-ink`. Nothing is reserved for
+      it: the grid keeps every row. Another desktop's pane wears none (the at-work feed is this window's), nor does
+      a bare shell's.
+    - **What it says, by motion and in words, never by colour** (James's notes on the first page of the at-work
+      marks, *The Fourth Hand*, 2026-11-17: "no need to indicate different state with colors"): it **lands** on the
+      pop (280ms) when the run takes the object; a **band of light** crosses it every 2.4s while the agent reads (at
+      0.6) or acts (at full); each act lands with a **press** (to 0.86 in 100ms, and back); while the agent **needs
+      you** it lifts (1.08, its cast deepened) and a ring in the pane's colour leaves it every 2.4s until you
+      answer; an act that **fails** shivers it once (2.4px, 0.6s); while **your hand** holds the object it is grey
+      and still (OB-L5); **waiting** its turn it stands on its backing, a dashed outline with its art at 0.28; when
+      the run **lets go** it peels off (400ms, the retract curve). The band and the ring are argued into Godview by
+      name (GT-D15.1's audit: transform and opacity alone, only while a call is in flight or an answer owed, never
+      under reduced motion or with Godview's animations off); the shiver is a one-shot on the Web Animations API,
+      and the rest are transitions. Reduced motion: the states hold still, and the words carry them.
+    - **Touch:** pointing at one, or focusing it, shows its words above it in a capsule as the frame's own are, 18
+      tall with corners of 5: **Browser · localhost:5173 · changing it ↗**, the kind's title, the object's own name
+      where its kind names one, and the state's words. Clicking one brings Canvas forward with the object centred
+      and selected (`thinking-objects-at-work.md` §7: "Selecting one navigates Canvas to that object"). The look is
+      ICE's `ops.lookAt` (petition I58: it flies, keeps a zoom the object reads at, and reaches an object inside a
+      mini mat) once its release is pinned; until then it is the desk's card door's, centred at the zoom you are at.
+    - **The art is the kind's** (OB-L2, one declaration per kind; James, 2026-11-25: "an object intended for agent
+      use needs to expose their sticker art for it properly, so each sticker art lives in their own plugin bundle",
+      06:56Z). A plugin kind declares `sticker` beside its agent half and ships its art, an SVG, in its own bundle
+      under `assets/`; `vibefield-plugin check` refuses a kind with an agent half and none (`sticker-missing`).
+      fieldd serves each enabled plugin's art that is sound (`plugins.stickers`), and the window draws it only as an
+      image, its declared slots painted from the object's props (the phone's finish, the pad's accent). A built-in
+      kind's art lives with its window half (`agent-kinds/stickers`). A kind whose art is not served wears its paper
+      alone.
   - **A run a Stop has not stopped** (track ST, ST-D4 (a); ruled by James on the board: the place
     at `ds-d4-place`, Accept, 2026-10-31 06:16:32Z, and the look at `ds-d4-look`, "Accept all
     three", 06:29:00Z, as VF-PM proposed them at 06:16Z and in the convention read of 06:26Z).

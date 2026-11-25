@@ -375,6 +375,7 @@ import { DeskObjects } from "./objects/desk-objects";
 import { boardKnownIn, registerObjectDoors } from "./objects/doors";
 import { type DeskKind, deskKinds, pluginDeskKinds } from "./objects/kinds";
 import { SparkStarts } from "./objects/spark-starts";
+import { createPluginStickerShelf } from "./objects/stickers";
 import { ObjectsStore } from "./objects/store";
 import { OwnVitals } from "./own-vitals";
 import { PeerLink } from "./peer-link";
@@ -1929,6 +1930,20 @@ export async function bootstrap(
     // plugin-local tokens. Registry generation orders rebuild observations;
     // each plugin's serving identity decides whether its URLs carry or die.
     const pluginModules = new PluginModuleAuthority({ plugins });
+    // OB-D16 (2026-11-25) — the object stickers Godview's panes wear, each read from its plugin's installed bundle and
+    // held to `check`'s problems; refused art is said here and left out
+    const pluginStickerShelf = createPluginStickerShelf({
+      snapshot: () => plugins.snapshot().plugins,
+      rootPath: (id) => plugins.rootPath(id),
+      onChanged: (listener) => plugins.on("changed", listener),
+      refused: (refusal) =>
+        logger.warn("fieldd.plugins.sticker_refused", "A plugin's sticker art was not served", {
+          plugin: refusal.plugin,
+          kind: refusal.kind,
+          art: refusal.art,
+          reasons: refusal.reasons.join("; "),
+        }),
+    });
 
     // C6-3g — cross-device doc sync. BEST EFFORT, and that is the honest shape:
     // the mesh is off by default, so the byte socket usually is not there at
@@ -7254,6 +7269,8 @@ export async function bootstrap(
     // filesystem path, so it rides the same principals as the registry snapshot
     // the renderer already holds.
     api.register("plugins.modules", async () => await pluginModules.modules());
+    // OB-D16 — the stickers, as text: no path rides the answer, so it goes with the registry snapshot's principals
+    api.register("plugins.stickers", async () => pluginStickerShelf.read());
     // …and its privileged twin. `plugins.serve` is a scope the renderer never
     // holds, and the shell-main gate is on top of it: this is the one method
     // that returns a path, so scope is necessary and not sufficient (§11.2's

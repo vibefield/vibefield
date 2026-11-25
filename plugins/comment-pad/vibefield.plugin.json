@@ -144,6 +144,27 @@
           "h": 280,
           "w": 220
         },
+        "sticker": {
+          "art": "./assets/sticker.svg",
+          "paint": [
+            {
+              "fallback": "#6366F1",
+              "prop": "accent",
+              "slot": "--accent",
+              "values": {
+                "amber": "#F59E0B",
+                "blue": "#3B82F6",
+                "cyan": "#06B6D4",
+                "green": "#22C55E",
+                "indigo": "#6366F1",
+                "pink": "#EC4899",
+                "red": "#EF4444",
+                "violet": "#8B5CF6"
+              }
+            }
+          ],
+          "radius": 3
+        },
         "title": "Comment pad",
         "type": "vibefield.comment-pad"
       }

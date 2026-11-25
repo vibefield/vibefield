@@ -1,5 +1,6 @@
 import type { PluginManifestV1 } from "@vibefield/contracts";
 import { COMMENT_PAD_TYPE, PAD_ACCENTS, PAD_PENS, PAD_SIZE } from "./ids";
+import { COMMENT_PAD_PALETTE } from "./theme";
 
 /**
  * THE COMMENT PAD (DK-8, DK-D14) — VibeField's first own object kind, built as a plugin kind exactly as a third
@@ -86,6 +87,24 @@ export const commentPadManifest: PluginManifestV1 = {
                 properties: { comments: { type: "integer", minimum: 1 } },
                 required: ["comments"],
               },
+            },
+          ],
+        },
+        // OB-D16 (2026-11-25): the likeness Godview's pane wears while an agent holds one, in its accent (its art ships in assets/)
+        sticker: {
+          art: "./assets/sticker.svg",
+          radius: 3,
+          paint: [
+            {
+              prop: "accent",
+              slot: "--accent",
+              values: Object.fromEntries(
+                Object.entries(COMMENT_PAD_PALETTE.accents).map(([name, token]) => [
+                  name,
+                  token.css,
+                ]),
+              ),
+              fallback: COMMENT_PAD_PALETTE.accents.indigo.css,
             },
           ],
         },

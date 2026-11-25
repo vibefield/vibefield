@@ -123,6 +123,7 @@ import type {
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { paneCardTarget } from "./pane-card-target";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
+import { PaneToolStickers } from "./pane-stickers/PaneToolStickers";
 import { RemotePaneState } from "./RemotePaneState";
 import { SeatPaneState } from "./SeatPaneState";
 import { StopPaneState } from "./StopPaneState";
@@ -2090,6 +2091,8 @@ export function GodviewDeck({
             <SeatPaneState pane={props.pane} sessionId={session.id} />
             {/* ST-D4 (a) — the pane says a Stop fieldd has not heard */}
             <StopPaneState pane={props.pane} sessionId={session.id} endRun={endRun} />
+            {/* OB-D16 — the objects its agent holds on the desk, as their stickers in its bottom-right corner */}
+            <PaneToolStickers pane={props.pane} sessionId={session.id} />
           </ChromeBoundary>
         );
       },

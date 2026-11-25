@@ -293,6 +293,42 @@ export const REFUSAL_CATALOG = {
     meaning: "the agent guide is over the limit a manual can carry",
     guidance: "shorten it: the manual's prose is at most 6000 bytes (OBJECT_LIMITS.GUIDE_BYTES)",
   },
+  "sticker-missing": {
+    check: "artifact",
+    level: "refuse",
+    meaning:
+      "the kind has an agent half and no sticker: Godview's pane wears an object's sticker while an agent holds it",
+    guidance:
+      "declare `sticker: { art, radius }` on the object, its art an SVG under `assets/`: the object's likeness, cut to its shape",
+  },
+  "sticker-art-missing": {
+    check: "artifact",
+    level: "refuse",
+    meaning: "the sticker names art that is not on disk",
+    guidance: "draw it as an SVG under `assets/`, the folder the bundle ships",
+  },
+  "sticker-art-too-large": {
+    check: "artifact",
+    level: "refuse",
+    meaning: "the sticker's art is over the size a sticker carries",
+    guidance:
+      "simplify it: a likeness is a handful of shapes, at most 8192 bytes (STICKER_LIMITS.ART_BYTES)",
+  },
+  "sticker-art-invalid": {
+    check: "artifact",
+    level: "refuse",
+    meaning: "the sticker's art is not an SVG with a viewBox a sticker can be cut from",
+    guidance:
+      'open the file with <svg viewBox="0 0 w h">, each side at most 256 and the long side at most three times the short',
+  },
+  "sticker-art-unsafe": {
+    check: "artifact",
+    level: "refuse",
+    meaning:
+      "the sticker's art holds something a likeness may not: a script, a handler, a link, foreign content, an animation, or a reference outside the file",
+    guidance:
+      "keep it to shapes, its own gradients and its own styles; every reference a #id inside the file",
+  },
   "object-create-failed": {
     check: "activation",
     level: "refuse",

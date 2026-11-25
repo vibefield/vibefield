@@ -10,6 +10,22 @@ import {
   UNBOUND,
 } from "./ids";
 import { DEFAULT_PHONE, MM } from "./law";
+import { SIMULATOR_FINISHES, SIMULATOR_PALETTE } from "./theme";
+
+/** OB-D16 — the sticker's paint, from the finishes table (DESIGN.md §5.1): the body in its finish, the front in its ink. */
+const FRONT_INK = {
+  black: SIMULATOR_PALETTE.inkBlack.css,
+  white: SIMULATOR_PALETTE.inkWhite.css,
+} as const;
+const STICKER_FINISH: Record<string, string> = Object.fromEntries(
+  Object.entries(SIMULATOR_FINISHES).map(([id, finish]) => [id, finish.css]),
+);
+const STICKER_FRONT: Record<string, string> = Object.fromEntries(
+  Object.entries(SIMULATOR_FINISHES).map(([id, finish]) => [id, FRONT_INK[finish.front]]),
+);
+const STICKER_FINISH_DEFAULT = SIMULATOR_FINISHES[DEFAULT_PHONE.finishes[0] ?? ""]?.css;
+if (STICKER_FINISH_DEFAULT === undefined)
+  throw new Error("the default phone's first finish is not in the finishes table");
 
 /** Round to the hundredth of a world unit — a size as a document holds it. */
 const hundredth = (v: number): number => Math.round(v * 100) / 100;
@@ -98,6 +114,25 @@ export const simulatorManifest: PluginManifestV1 = {
               [1, 0.5],
             ],
           },
+        },
+        // OB-D16 (2026-11-25): the likeness Godview's pane wears while an agent holds one, in its own finish (its art ships in assets/)
+        sticker: {
+          art: "./assets/sticker.svg",
+          radius: 9,
+          paint: [
+            {
+              prop: PROP.finish,
+              slot: "--finish",
+              values: STICKER_FINISH,
+              fallback: STICKER_FINISH_DEFAULT,
+            },
+            {
+              prop: PROP.finish,
+              slot: "--front",
+              values: STICKER_FRONT,
+              fallback: FRONT_INK.black,
+            },
+          ],
         },
         binding: { kind: SIMULATOR_BINDING_EXPORT },
       },

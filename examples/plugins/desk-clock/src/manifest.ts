@@ -88,6 +88,8 @@ export const deskClockManifest: PluginManifestV1 = {
             },
           ],
         },
+        // OB-D16 (2026-11-25): the likeness Godview's pane wears while an agent holds one (its art ships in assets/)
+        sticker: { art: "./assets/sticker.svg", radius: 16 },
         binding: { kind: "clock" },
       },
     ],

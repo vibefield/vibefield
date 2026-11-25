@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 38">
+  <style>.accent{fill:var(--accent,#6366f1)}</style>
+  <rect width="30" height="38" fill="#ddd2bf"/>
+  <rect y="0" width="30" height="36.6" fill="#f3ebdc"/>
+  <rect class="accent" width="30" height="6.4"/>
+  <circle cx="7" cy="3.2" r="1.1" fill="#f3ebdc"/>
+  <circle cx="15" cy="3.2" r="1.1" fill="#f3ebdc"/>
+  <circle cx="23" cy="3.2" r="1.1" fill="#f3ebdc"/>
+  <g stroke="#b9ad97" stroke-width="0.6">
+    <path d="M3 13.4H27M3 19.8H27M3 26.2H27M3 32.6H27"/>
+  </g>
+  <circle class="accent" cx="5.6" cy="11" r="1.5"/>
+  <rect x="9" y="10" width="15" height="2" rx="1" fill="#3b3a44"/>
+  <circle cx="5.6" cy="17.4" r="1.5" fill="#ec4899"/>
+  <rect x="9" y="16.4" width="11" height="2" rx="1" fill="#3b3a44"/>
+  <circle class="accent" cx="5.6" cy="23.8" r="1.5"/>
+  <rect x="9" y="22.8" width="13.5" height="2" rx="1" fill="#3b3a44"/>
+  <circle cx="5.6" cy="30.2" r="1.5" fill="#22c55e"/>
+  <rect x="9" y="29.2" width="9" height="2" rx="1" fill="#3b3a44"/>
+</svg>

@@ -34,6 +34,7 @@ import {
   ServiceContribution,
   ServiceMethodContribution,
   SettingsContribution,
+  STICKER_LIMITS,
   SurfaceContribution,
   TRAY_ACCESSORIES,
   TrayEntryContribution,
@@ -963,6 +964,42 @@ function objectsDoc(): string {
       "each tool over your states with no document, on the in-memory harness",
       "(`agentToolHarness`, from `@vibefield/plugin-sdk/testing`), which your own tests can",
       "hold too.",
+      "",
+    ]),
+    section("The sticker — the object's likeness in Godview", [
+      "While an agent holds an object, the agent's terminal pane in Godview wears that object's",
+      "STICKER in its bottom-right corner: the object's likeness, cut to its shape, the way the",
+      "desk wears the agent's own sticker. A kind with an agent half declares one",
+      "(`contributes.objects[].sticker`), and its art ships in the kind's own bundle; `check`",
+      "refuses a kind with an agent half and none (`sticker-missing`). The window draws the paper",
+      "edge, the cut and the cast around the art, and moves it: the art itself is still.",
+      "",
+      table(
+        ["field", "what it is"],
+        [
+          [
+            "`art`",
+            `an SVG under \`assets/\`, at most ${STICKER_LIMITS.ART_BYTES} bytes, opening with \`<svg viewBox>\`: its box is the cut's box, each side at most ${STICKER_LIMITS.VIEWBOX_MAX}, the long side at most ${STICKER_LIMITS.ASPECT_MAX} times the short`,
+          ],
+          [
+            "`radius`",
+            "the cut's corner radius in the art's own units: half the short side cuts a pill, or a circle",
+          ],
+          [
+            "`name`",
+            "optional: the prop whose value names one object, said beside the kind's title when the sticker is pointed at (a page's `url`)",
+          ],
+          [
+            "`paint`",
+            `at most ${STICKER_LIMITS.PAINT_SLOTS_MAX} slots the window fills from the object's props: a \`prop\` the kind declares, the \`slot\` (a custom property the art reads as \`var(--finish, …)\` in its own <style>), the prop's \`values\` to #rrggbb colours, and a \`fallback\``,
+          ],
+        ],
+      ),
+      "",
+      "**The art is a picture, never a page.** The window shows it as an image, which runs no",
+      "script and loads nothing, and `check` and fieldd both refuse art holding a script, an",
+      "event handler, a link, foreign content or another file's image, an animation, or any",
+      "reference outside the file: every `href` and `url()` is a `#id` of its own.",
       "",
     ]),
     section("The worked example — ICE's desk clock as a plugin", [

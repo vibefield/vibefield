@@ -1,4 +1,4 @@
-import { Camera, type Entity, Position, Size, Viewport } from "@vibecook/ice";
+import { Camera, type Entity } from "@vibecook/ice";
 import type { DeskLayerHandle } from "@vibecook/ice/desk";
 import {
   NOTE_TYPE,
@@ -32,6 +32,7 @@ import { type FieldHost, peekHost } from "../../host";
 import { getRendererLogger } from "../../logging";
 import { deskBlobs } from "./desk-blobs";
 import { currentDesk, type MountedDesk, subscribeDesk } from "./desk-door";
+import { lookAtObject } from "./look-at-object";
 import { trayOf } from "./pegboard/board-door";
 
 // THE DESK TAKES A CARD (HN-4, HN-D7; DESIGN.md §8 "The hand", where cards go): text, a message
@@ -191,27 +192,12 @@ async function goToObject(
   const place = await (deps.resolve ?? resolveRef)(face.ref);
   if (place === null) return { ok: false, note: OUTCOME_WORDS.objectGone };
   if (place.docId !== desk.docId) return { ok: false, note: OUTCOME_WORDS.onAnotherBoard };
-  const { engine } = desk;
-  const entity = engine.docs.current()?.store.resolve(place.key as never) as Entity | undefined;
-  const at = entity === undefined ? undefined : engine.world.get(entity, Position);
-  const size = entity === undefined ? undefined : engine.world.get(entity, Size);
-  const view = engine.world.getResource(Viewport);
-  const camera = engine.world.getResource(Camera);
-  if (
-    entity === undefined ||
-    at === undefined ||
-    size === undefined ||
-    view === undefined ||
-    camera === undefined
-  ) {
+  const entity = desk.engine.docs.current()?.store.resolve(place.key as never) as
+    | Entity
+    | undefined;
+  // the one door to an object (look-at-object.ts): its centre at the view's centre, and selected
+  if (entity === undefined || !lookAtObject(desk, entity))
     return { ok: false, note: OUTCOME_WORDS.objectGone };
-  }
-  // its centre at the view's centre, at the zoom the person is at
-  engine.ops.panTo(
-    at.x + size.w / 2 - view.w / (2 * camera.zoom),
-    at.y + size.h / 2 - view.h / (2 * camera.zoom),
-  );
-  engine.ops.setSelection([entity]);
   return { ok: true, note: OUTCOME_WORDS.onTheDesk };
 }
 

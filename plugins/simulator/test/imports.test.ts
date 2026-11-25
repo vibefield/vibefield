@@ -20,6 +20,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
+import { stickerArtProblems } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 
 const PKG = resolve(import.meta.dirname, "..");
@@ -204,8 +205,11 @@ describe("the phone reaches ICE through the SDK's doors alone (K-L1)", () => {
     expect(specifiersOf(src).sort()).toEqual(["x1", "x2", "x3", "x4", "x5", "x6"]);
   });
 
-  it("ships no Apple artwork (PHONE.md Q-9): no image of any kind in the package, and the fixture draws from arithmetic", () => {
-    expect(imagesIn(PKG)).toEqual([]);
+  it("ships no Apple artwork (PHONE.md Q-9): no image in the package but the kind's own sticker, drawn in shapes, and the fixture draws from arithmetic", () => {
+    // OB-D16 (2026-11-25): a kind an agent can hold ships its sticker in its own bundle. The phone's is our drawing of
+    // the phone in shapes, never a picture of Apple's: the sticker's own law refuses an <image> or any other file
+    expect(imagesIn(PKG)).toEqual(["assets/sticker.svg"]);
+    expect(stickerArtProblems(readFileSync(join(PKG, "assets/sticker.svg"), "utf8"))).toEqual([]);
     expect(readFileSync(join(PKG, "src/fixture.ts"), "utf8")).not.toMatch(
       /ios-home|\.png|OffscreenCanvas|drawImage/,
     );

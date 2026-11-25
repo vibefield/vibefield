@@ -113,6 +113,11 @@
           "h": 461.94,
           "w": 698.16
         },
+        "sticker": {
+          "art": "./assets/sticker.svg",
+          "name": "url",
+          "radius": 6
+        },
         "title": "Browser",
         "tray": {
           "category": "portals",

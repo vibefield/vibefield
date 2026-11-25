@@ -42,6 +42,7 @@ import { getRendererLogger } from "../../../logging";
 import { askAgain } from "../../../reconnect";
 import { agentHalfOf } from "../agent-kinds";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
+import { publishPresence } from "./presence-store";
 
 // THE WINDOW'S APPLIER (OB-3c; thinking-objects-at-work.md §5.5, CP-D13, OB-L4, OB-L5). fieldd records an intent and this
 // window, which alone knows a board's meaning and where the person's hand is, carries it out: one window, the desk it has
@@ -677,6 +678,8 @@ function startApplier(
     door.presence((payload) => {
       const snapshot = ObjectsPresenceSnapshot.safeParse(payload);
       if (!snapshot.success) return;
+      // OB-D16 — the window's copy, whole, for Godview's panes (this is the window's one subscription)
+      publishPresence(snapshot.data.objects);
       open = snapshot.data.objects
         .filter((object) => object.docId === docId && object.agents.length > 0)
         .map((object) => object.key);
@@ -697,6 +700,7 @@ function startApplier(
 
   return () => {
     disposed = true;
+    publishPresence([]);
     for (const wait of waits) clearTimeout(wait);
     waits.clear();
     guest?.();

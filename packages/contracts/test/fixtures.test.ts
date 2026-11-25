@@ -369,6 +369,7 @@ import {
   SparkTranscriptOpenTicketResult,
   SparkTranscriptServerFrame,
 } from "../src/spark-transcript";
+import { PluginStickersResult } from "../src/stickers";
 import {
   TerminalBindingsFile,
   TerminalCreateParams,
@@ -732,6 +733,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // MK-UC (2026-11-14): an update's card rides the same doors — prepare's params with `update`, and its answer with
   // the version you have and what the update asks for (`plugins-install-prepare-result.update`)
   "plugins-install-prepare-params": PluginsInstallPrepareParams,
+  // OB-D16 (2026-11-25): `plugins.stickers` — each enabled plugin's sticker art as fieldd serves it, with its cut, its
+  // paint and the prop that names one object (the window paints and draws it; godview-pane-stickers.test.tsx)
+  "plugins-stickers": PluginStickersResult,
   "registry-provenance": RegistryProvenance,
   "update-policy": UpdatePolicy,
   // WP12a (build-wp12-updater.md D4): the channel heads every release carries (refusals in trust-root.test.ts).

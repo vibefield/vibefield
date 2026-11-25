@@ -1,0 +1,322 @@
+/* OB-D16 (2026-11-25; DESIGN.md §8 "At work, in the pane") — THE OBJECTS A PANE'S AGENT HOLDS, as their stickers
+   (`PaneToolStickers.tsx`). Stuck on the pane's bottom-right corner over the terminal's last rows (OB-D16's place B),
+   first held nearest the corner and the rest a little pile to its left. Each is the object's own art (its kind's, from
+   its bundle) on §2.8's sticker: the paper edge in `--vf-sticker-edge` in both themes, the cut, the cast. The pane
+   clips its own box, so nothing here reaches past it. A state is said by motion and in words, never by a colour, as
+   the mat's at-work mark says it (item 550, 2026-11-17).
+
+   GODVIEW'S LOOPS ARE ARGUED IN BY NAME (GT-D15.1; `test/godview-cold-open.test.ts` reads this sheet): the band of
+   light (`vf-pane-sticker-sheen`, while the agent reads or acts) and the needs-you ring (`vf-pane-sticker-ring`). Both
+   animate transform and opacity alone, run only while a call is in flight or the agent waits for you, and never under
+   reduced motion or with Godview's animations off. The rest are transitions (the land on `@starting-style`, the lift,
+   the press, the peel) and one Web Animations shiver; nothing animates a filter. */
+
+.vf-pane-stickers {
+  position: absolute;
+  z-index: 9;
+  right: 7px;
+  bottom: 4px;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  pointer-events: none;
+}
+
+.vf-pane-sticker-slot {
+  position: relative;
+  display: inline-flex;
+}
+
+/* the pile: each later sticker over a third of the one before, the newest on top */
+.vf-pane-sticker-slot + .vf-pane-sticker-slot {
+  margin-right: -7px;
+}
+
+.vf-pane-sticker {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--vf-godview-terminal-ink, currentcolor);
+  font: inherit;
+  line-height: 0;
+  cursor: pointer;
+  pointer-events: auto;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.vf-pane-sticker:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.vf-pane-sticker__body {
+  display: block;
+  transform: rotate(var(--vf-sticker-tilt, 0deg));
+  transform-origin: 28% 86%;
+  transition:
+    transform 280ms var(--vf-ease-pop),
+    opacity 120ms ease;
+}
+
+/* the land: it pops on, as the mat's sticker does */
+@starting-style {
+  .vf-pane-sticker__body {
+    transform: scale(1.55) rotate(14deg) translateY(-3px);
+    opacity: 0;
+  }
+}
+
+.vf-pane-sticker:hover .vf-pane-sticker__body,
+.vf-pane-sticker:focus-visible .vf-pane-sticker__body {
+  transform: rotate(calc(var(--vf-sticker-tilt, 0deg) * 0.35)) translateY(-1px);
+}
+
+.vf-pane-sticker__paper {
+  position: relative;
+  display: block;
+  box-sizing: content-box;
+  width: calc(var(--vf-pane-sticker-size) * var(--vf-sticker-w, 1));
+  height: calc(var(--vf-pane-sticker-size) * var(--vf-sticker-h, 1));
+  padding: var(--vf-pane-sticker-edge);
+  overflow: hidden;
+  border-radius: calc(
+    var(--vf-pane-sticker-size) *
+    var(--vf-sticker-r, 0.16) +
+    var(--vf-pane-sticker-edge)
+  );
+  background: var(--vf-sticker-edge);
+  box-shadow:
+    0 0 0 0.7px var(--vf-sticker-cut),
+    0 0.7px 0.8px var(--vf-sticker-shadow),
+    0.4px 1.5px 2px var(--vf-sticker-shadow);
+}
+
+/* a kind with no art served: the paper alone, its inner edge drawn (the chip names it) */
+.vf-pane-sticker__paper[data-blank] {
+  box-shadow:
+    0 0 0 0.7px var(--vf-sticker-cut),
+    inset 0 0 0 1px var(--vf-sticker-cut),
+    0 0.7px 0.8px var(--vf-sticker-shadow);
+}
+
+.vf-pane-sticker__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: calc(var(--vf-pane-sticker-size) * var(--vf-sticker-r, 0.16));
+  user-select: none;
+}
+
+/* the band of light that crosses it while the agent reads (at 0.6) or acts (at full), every 2.4 s */
+.vf-pane-sticker__sheen {
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: -40%;
+  width: 30%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--vf-sticker-edge) 95%, transparent),
+    transparent
+  );
+  opacity: 0;
+  transform: translateX(0) skewX(-18deg);
+  pointer-events: none;
+}
+
+.vf-pane-sticker[data-state="reading"] .vf-pane-sticker__sheen {
+  opacity: 0.6;
+  animation: vf-pane-sticker-sheen 2.4s linear infinite;
+}
+
+.vf-pane-sticker[data-state="acting"] .vf-pane-sticker__sheen {
+  opacity: 1;
+  animation: vf-pane-sticker-sheen 2.4s linear infinite;
+}
+
+@keyframes vf-pane-sticker-sheen {
+  0% {
+    transform: translateX(0) skewX(-18deg);
+  }
+  38%,
+  100% {
+    transform: translateX(560%) skewX(-18deg);
+  }
+}
+
+/* each act lands: pressed once */
+.vf-pane-sticker.is-pressed .vf-pane-sticker__body {
+  transform: rotate(var(--vf-sticker-tilt, 0deg)) scale(0.86) translateY(0.5px);
+  transition-duration: 100ms;
+}
+
+/* needs you: it lifts, and a ring leaves it every 2.4 s until you answer */
+.vf-pane-sticker[data-state="needs"] .vf-pane-sticker__body {
+  transform: rotate(calc(var(--vf-sticker-tilt, 0deg) * 0.35)) scale(1.08);
+}
+
+.vf-pane-sticker[data-state="needs"] .vf-pane-sticker__paper {
+  box-shadow:
+    0 0 0 0.7px var(--vf-sticker-cut),
+    0 1.4px 1.2px var(--vf-sticker-shadow),
+    0.8px 3px 3px var(--vf-sticker-shadow);
+}
+
+.vf-pane-sticker__ring {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  box-sizing: border-box;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 1.5px solid var(--ghostty-pane-color, var(--vf-godview-terminal-ink, currentcolor));
+  border-radius: 50%;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.vf-pane-sticker[data-state="needs"] .vf-pane-sticker__ring {
+  animation: vf-pane-sticker-ring 2.4s ease-out infinite;
+}
+
+@keyframes vf-pane-sticker-ring {
+  0% {
+    transform: scale(0.7);
+    opacity: 0.95;
+  }
+  55%,
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* your hand: you hold the object, so every pane on it shows it grey and still (OB-L5) */
+.vf-pane-sticker[data-state="paused"] .vf-pane-sticker__paper {
+  filter: grayscale(1) contrast(0.85);
+  opacity: 0.6;
+}
+
+/* waiting its turn at a one-at-a-time object another agent holds: on its backing */
+.vf-pane-sticker[data-state="waiting"] .vf-pane-sticker__paper {
+  background: transparent;
+  box-shadow: none;
+  outline: 0.8px dashed
+    color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 55%, transparent);
+  outline-offset: -0.8px;
+}
+
+.vf-pane-sticker[data-state="waiting"] .vf-pane-sticker__art {
+  opacity: 0.28;
+}
+
+/* let go: it peels off (the feed keeps a released row a few seconds, then the sticker goes) */
+.vf-pane-sticker[data-state="released"] {
+  pointer-events: none;
+}
+
+.vf-pane-sticker[data-state="released"] .vf-pane-sticker__body {
+  transform: translate(6px, -8px) rotate(-30deg) scale(0.55);
+  opacity: 0;
+  transition:
+    transform 400ms var(--vf-ease-retract),
+    opacity 400ms var(--vf-ease-retract);
+}
+
+/* past three: the first two, and how many more */
+.vf-pane-sticker--more {
+  box-sizing: border-box;
+  min-width: calc(var(--vf-pane-sticker-size) * 0.8);
+  height: calc(var(--vf-pane-sticker-size) * 0.8);
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--vf-sticker-edge);
+  box-shadow:
+    0 0 0 0.7px var(--vf-sticker-cut),
+    0 0.7px 0.8px var(--vf-sticker-shadow);
+  color: var(--vf-pane-sticker-ink);
+  font: 700 9px / 1 var(--vf-font-sans);
+  cursor: default;
+}
+
+/* its words when pointed at: a capsule as the frame's own are (18 tall, corners of 5), above the sticker */
+.vf-pane-sticker-chip {
+  position: absolute;
+  right: -4px;
+  bottom: calc(100% + 6px);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-sizing: border-box;
+  height: 18px;
+  max-width: 300px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 5px;
+  background: var(--vf-godview-pane-ground, var(--vf-sticker-edge));
+  box-shadow:
+    inset 0 0 0 1px
+    color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 14%, transparent),
+    0 4px 12px var(--vf-sticker-shadow);
+  color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 86%, transparent);
+  font: 500 10.5px / 18px var(--vf-font-mono);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+@starting-style {
+  .vf-pane-sticker-chip {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+
+.vf-pane-sticker-chip b {
+  font-weight: 650;
+}
+
+.vf-pane-sticker-chip__dot,
+.vf-pane-sticker-chip__go {
+  opacity: 0.5;
+}
+
+.vf-pane-sticker-chip__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* reduced motion: the states hold still, and the words carry them (each rule as specific as the state rules it
+   follows, so it wins by its place) */
+@media (prefers-reduced-motion: reduce) {
+  .vf-pane-sticker[data-state] .vf-pane-sticker__sheen,
+  .vf-pane-sticker[data-state] .vf-pane-sticker__ring {
+    animation: none;
+    opacity: 0;
+  }
+  .vf-pane-sticker[data-state] .vf-pane-sticker__body,
+  .vf-pane-sticker-chip {
+    transition: none;
+  }
+}
+
+.vf-godview[data-godview-animations="off"] .vf-pane-sticker__sheen,
+.vf-godview[data-godview-animations="off"] .vf-pane-sticker__ring {
+  animation: none;
+  opacity: 0;
+}
+
+.vf-godview[data-godview-animations="off"] .vf-pane-sticker__body,
+.vf-godview[data-godview-animations="off"] .vf-pane-sticker-chip {
+  transition: none;
+}

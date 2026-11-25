@@ -1448,6 +1448,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // OB-D16 (2026-11-25) — each enabled plugin's object stickers, the art read from its installed bundle and found sound
+  // (`stickers.ts`, `PluginStickersResult`). The art travels as text: the window draws it as an image, never as markup.
+  defineMethod({
+    surface: "product",
+    method: "plugins.stickers",
+    scope: "plugins.read",
+    idempotent: true,
+    locality: "local",
+  }),
   // P8b — the privileged half. Electron main resolves ONE token to the bytes it
   // may serve; `plugins.serve` is deliberately a scope the renderer never holds,
   // and the handler gates on the shell-main principal on top of it (the §11.2

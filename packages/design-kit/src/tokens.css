@@ -172,6 +172,12 @@
   --vf-sticker-edge: #ffffff;
   --vf-sticker-cut: rgb(0 0 0 / 12%);
   --vf-sticker-shadow: rgb(0 0 0 / 22%);
+  /* §8 "At work, in the pane" (OB-D16, 2026-11-25): an object's sticker in a Godview pane — the box its art is fitted
+     into (its long side), the paper edge round it, and the ink of a count on that paper, the same in both themes as the
+     paper is */
+  --vf-pane-sticker-size: 22px;
+  --vf-pane-sticker-edge: 1.5px;
+  --vf-pane-sticker-ink: #1c1c1e;
   --vf-coin-rim: conic-gradient(
     from 210deg,
     #fbfbfd,

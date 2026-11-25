@@ -231,6 +231,8 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     // GV-D1: the head's own sheet rides `GodviewHeadView`, mounted with the
     // monitor — its label arrives by an entry transition, never a keyframe
     readFileSync(join(godviewRoot, "godview-head.css"), "utf8"),
+    // OB-D16: the objects a pane's agent holds, as their stickers in its corner (pane-stickers/)
+    readFileSync(join(godviewRoot, "pane-stickers", "pane-stickers.css"), "utf8"),
     ...packageSheets,
     ...ownSheets,
   ].join("\n");
@@ -272,15 +274,24 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     // runs only while the timeline is the mounted view and a body is owed,
     // and never under reduced motion or with Godview's animations off. Since
     // MV-6 it is the timeline's own sheet's, named in its own prefix (L18).
-    const argued = new Set(["mv-timeline-ring"]);
+    // OB-D16 (DESIGN §8 "At work, in the pane", 2026-11-25) — argued in: a pane sticker's band of light
+    // (`vf-pane-sticker-sheen`, while its agent reads or acts on the object) and its needs-you ring
+    // (`vf-pane-sticker-ring`, while the agent waits for you), the mat's own motion in the pane. Each animates
+    // transform and opacity alone, on a box of a few dozen pixels; each runs only while a call is in flight or an
+    // answer is owed, never at rest; neither runs under reduced motion or with Godview's animations off.
+    const argued = new Set(["mv-timeline-ring", "vf-pane-sticker-sheen", "vf-pane-sticker-ring"]);
     expect(
       keyframeBlocks(css)
         .map((block) => block.name)
         .filter((name) => !argued.has(name)),
     ).toEqual([]);
-    const ring = keyframeBlocks(css).find((block) => block.name === "mv-timeline-ring");
-    expect(ring?.body).toBeDefined();
-    expect(ring?.body).not.toMatch(/\b(width|height|top|left|box-shadow|filter|background)\s*:/);
+    for (const name of argued) {
+      const block = keyframeBlocks(css).find((candidate) => candidate.name === name);
+      expect(block?.body, name).toBeDefined();
+      expect(block?.body, name).not.toMatch(
+        /\b(width|height|top|left|box-shadow|filter|background)\s*:/,
+      );
+    }
   });
 
   it("animates filter in NO keyframe, anywhere in the overlay's stylesheets", () => {
