@@ -38,7 +38,14 @@ describe("the desk door's reads (DK-8)", () => {
     await seedField(ce, ce.docs.create(), createDeskBlobStore(), undefined, { examples: true });
     const pads = deskObjects(ce, COMMENT_PAD_TYPE);
     expect(pads).toHaveLength(1);
-    expect(pads[0]?.props).toEqual({ text: "", seeds: "", pen: "ball", accent: "indigo", seed: 0 });
+    expect(pads[0]?.props).toEqual({
+      text: "",
+      seeds: "",
+      marks: "",
+      pen: "ball",
+      accent: "indigo",
+      seed: 0,
+    });
     expect(deskObjects(ce, "no.such.type")).toEqual([]);
     ce.dispose();
   });

@@ -1858,8 +1858,8 @@ describe("UI system ownership boundaries", () => {
       ["browser-pane/src/theme.ts", 16],
       // a failed page's words, in the look's `notice` ink
       ["browser-pane/src/kind.ts", 1],
-      // the pad's paper, its sheet and its pens
-      ["comment-pad/src/theme.ts", 14],
+      // the pad's paper, its sheet and its pens; the desk's highlighters and the pencil's wash its words take (IK, 2026-11-25)
+      ["comment-pad/src/theme.ts", 17],
       // the phone's finishes, every colour a number of §5.1 "The phone's materials" (its own design.test.ts)
       ["simulator/src/theme.ts", 101],
       // a face's words, in the look's `words` ink, and that ink in each committed still's key (make-face-words.ts)
