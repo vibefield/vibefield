@@ -68831,3 +68831,52 @@ the release.
   re-blessed mirrors (the next push proof), puppeteer's own `GROK_LIVE` row, cargo fmt, clippy and `test:rust` (no
   Rust moved).
 - **Owed:** the kit's xcodebuild over the 9 mirrors, in the next push proof.
+
+## EL8: ICE 0.21.0 — a look at an object (I58) and a free slot (I57); the desk's look door flies (M559)
+
+**2026-11-25 · on local main: `522ab5ec2` (EL8: ICE 0.21.0). Upstream: vibefield/infinite-canvas-engine #8 (I57,
+merge `f3824e495ae3`), #10 (I58, merge `7a91bfb0c569`) and the release #11 (merge `75eb7a3d90cc`, tag v0.21.0; the
+release commit `68a447b3df83`). NOT pushed.**
+James, 2026-11-25 06:56:23Z, of the sticker's click: "not sure if there is already api implemented in ICE that do
+this object look action, if not it should be implemented properly in ICE and cut release." And at 10:30Z, typed in
+VF-PM's session and relayed by it, of the release: "yes, prepare and give me command to publish"; at 11:01Z, "done
+pub".
+
+- **Upstream, I58 (the ts lane's).** ICE had no such call: every camera op cut, and the one animation was the nav
+  flight into or out of a container. `ops.lookAt(entity, opts?)` centres the camera on an object in the viewport less
+  the host's inset, at a zoom its policy gives ("comfort" by default: the zoom the person is at where the object
+  reads and fits there), selects it, and flies there as an ordinary camera move; an object in another frame is
+  reached by the nav ops, the last step landing on the look camera (`NavOpts.landing`, new). It was #9 first, then
+  re-based over I57's merge with its docs commit as #10; VF-PM pushed both, merged #10 and closed #9 for it.
+- **Upstream, I57 (another lane's, in the same release).** `freeSlot` and `resolveFreeSlot`: the nearest free place
+  for an object that comes with no pointer. Nothing here asks it yet.
+- **The release.** The packet is the ts lane's, in 0.20.0's form (lanes/ts/rel021, PACKET-021.md): the release commit
+  cut in the lane's clone, the pack on the test Mac by the fixer (GREEN), the push, merge, tag and GitHub release by
+  VF-PM, and the npm publish by James. The registry's dist.integrity equals the packed tarball's
+  (sha512-IQ8kjohm…YXA==), read anonymously at 11:01:40Z; published 2026-11-25T11:01:34Z.
+- **ICE's gate, before the release (the fixer's, on the test Mac).** `gate:landing`'s 27 stages, each alone, at ICE's
+  main `c004ddb345d0` and with I57 and I58 merged: 22 green in both, five red in both and equal (the objects
+  oracle's golden, the desk clock's still, `rig:world`, `rig:sticky`, `rig:tray`), no stage the two petitions' own.
+  No rig drives `ops.lookAt`.
+- **Here, the pin.** The EL8's usual set, place for place as 0.20.0's (`0caaec63b`): the lock's `ice` entry
+  (`68a447b3`, release.npm 0.21.0), the overrides row and its note, PIN_EXPECTATIONS, the release-age row (0.20.0's
+  kept for the one install, then dropped; 0.21.0's stands until 2026-11-26 11:01:34Z), the lock by that one install
+  (the ICE entries alone, +10 −10), and fieldd's ICE1 probe fixtures by their own generator. `pnpm gen` moved
+  nothing.
+- **Here, the door.** field-app's `lookAtObject` is `ops.lookAt` at its defaults, where it was a pan at the zoom the
+  person was at and a select. A ref card played on the desk and a sticker clicked in a Godview pane come through it:
+  the camera flies where it cut. DESIGN.md §8 "At work, in the pane" says so, amended with its day; OB-D16's row in
+  DECISIONS is flipped.
+- **Proof** (in the lane, each stage alone after a lone load read under 20, nice 19, `NX_PARALLEL=1`, vitest at 4,
+  `CARGO_TARGET_DIR` the lane's own): the one install and the frozen one, each with pnpm's supply-chain check (668
+  entries); `check:deps` (one copy each of ICE 0.21.0, strata 0.13.0, loro 1.13.8); `siblings render --prod
+  --check`; preflight OK (its one standing R23 warning); `pnpm gen`; `pnpm typecheck` 28 projects; `biome check .`
+  4,180 files, no error (red once on the commit's own new test file, a format miss; fixed, and the whole run again);
+  `bundle:assert` (initial 1017.8 KB raw, 271.7 KB gz); `census:assert` no drift; `check:bundled-plugins` 3 of 3;
+  `pnpm test` whole, 28 projects, exit 0, none from the cache (field-app 5,886 tests, fieldd 5,258, electron-shell
+  3,343, contracts 2,395); `pnpm still` 19 of 19, each still held to its golden byte for byte on this Mac. The door
+  has a row on a real engine: a look at a far pane lands its centre at the view's centre and selects it alone.
+- **Not run:** cargo fmt, clippy and `test:rust` (no Rust moved); any smoke; `gate:landing`; the test Mac's V row.
+  Nobody has watched the look fly in a running desk or Godview.
+- **Owed for James:** his look at the stickers in a running Godview, now with the click's flight; a one-row commit
+  that drops 0.21.0's release-age row after 2026-11-26 11:01:34Z.
