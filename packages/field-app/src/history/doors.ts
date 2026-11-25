@@ -917,6 +917,9 @@ export interface CatalogPortOptions {
    * read-through). The port offers the room its library (`artifacts`) only
    * with one: a host that cannot read a page offers no library. */
   readonly readArtifact?: ArtifactReader;
+  /** History QA (2026-11-24) — told each time the view starts or stops showing (`setActive`), after the catalog's
+   * own listeners: what else of the room's should rest while it is out of sight (the files pane's timed reads). */
+  readonly onActive?: (active: boolean) => void;
 }
 
 /** A regroup the room has been handed (PJ-4): the key moves the pings
@@ -1622,6 +1625,7 @@ export function catalogPortOver(
       if (active === next) return;
       active = next;
       for (const listener of [...activeListeners]) listener();
+      options.onActive?.(next);
     },
 
     onRegrouped(listener) {
@@ -1726,6 +1730,8 @@ export function historyPortsOver(
     ...options.catalog,
     readArtifact: (sessionId, publicationId, signal) =>
       sessions.readArtifact(sessionId, publicationId, signal),
+    // the files pane rests with the view: no git is run for a pane behind another view
+    onActive: (active) => workspace.setActive(active),
   });
   // DS-7 — a session on another desktop is opened by its owner's ticket
   const sessions = sessionPortOver(client, options.sessions, (sessionId) =>

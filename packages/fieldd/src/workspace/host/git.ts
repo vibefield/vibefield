@@ -415,10 +415,174 @@ export interface GitService {
   }>;
 }
 
-/** The read half of rosetta's git service, for one root. */
-export function createGitService(root: string): GitService {
+// History QA (2026-11-24) — THE ROOM ASKS EVERY FOUR SECONDS; THE WORKER READS ONLY WHAT MAY HAVE MOVED.
+// The room's pane asks `branch`, `status` and `log` together on a timer, and each ask ran its own git: three for
+// the branch, one status, three for the log (the log twice over the same 200 commits): seven processes a tick, for
+// answers that change when HEAD or the upstream moves and otherwise never. Measured on a large checkout: 121
+// processes a minute. Now a tick is two:
+//  · ONE status serves `branch` and `status`: `--branch` adds the head, its upstream and the ahead/behind counts to
+//    the read the pane already asked for, and asks that arrive together (or within STATUS_SHARE_MS of its end)
+//    share it;
+//  · `log` is a pure function of the head commit and the upstream's, so its answer is kept per root under those
+//    two ids and read again only when one of them moves (one `rev-parse` asks the upstream's; none without one).
+// The answers are the ones the three reads gave. Where the shared status cannot answer (it failed, or timed out
+// on a tree too large to walk in time), `branch` reads as it did before, by its own three.
+
+/** How long a finished status read still serves an ask that arrives after it. */
+export const STATUS_SHARE_MS = 500;
+/** How many roots keep a memo (the worker serves a few panes at most). */
+const MEMO_ROOTS = 32;
+
+/** What `git status --branch` says of HEAD, in the words `branch()` answers in. */
+export interface StatusHeads {
+  /** the head commit's id; null before the first commit */
+  oid: string | null;
+  name: string | null;
+  upstream: string | null;
+  ahead: number | null;
+  behind: number | null;
+}
+
+/** The `# branch.*` records of `git status --porcelain=v2 --branch -z`; null when the output carries none. */
+export function parseStatusHeads(raw: string): StatusHeads | null {
+  let oid: string | null = null;
+  let head: string | null = null;
+  let upstream: string | null = null;
+  let ahead: number | null = null;
+  let behind: number | null = null;
+  let seen = false;
+  for (const record of raw.split("\0")) {
+    // the headers come first; the first record that is not one ends them
+    if (!record.startsWith("# ")) break;
+    seen = true;
+    const [key, ...rest] = record.slice(2).split(" ");
+    const value = rest.join(" ");
+    if (key === "branch.oid") oid = value === "(initial)" ? null : value;
+    else if (key === "branch.head") head = value;
+    else if (key === "branch.upstream") upstream = value;
+    else if (key === "branch.ab") {
+      const counts = /^\+(\d+) -(\d+)$/.exec(value);
+      if (counts !== null) {
+        ahead = Number.parseInt(counts[1] as string, 10);
+        behind = Number.parseInt(counts[2] as string, 10);
+      }
+    }
+  }
+  if (!seen) return null;
+  // `rev-parse --abbrev-ref HEAD` named a detached head "HEAD" and failed before the first commit; an upstream
+  // that is set and gone resolved to nothing. The answers stay those.
+  const name = oid === null ? null : head === "(detached)" ? "HEAD" : head;
+  const tracked = ahead !== null && behind !== null;
+  return {
+    oid,
+    name,
+    upstream: tracked ? upstream : null,
+    ahead: tracked ? ahead : null,
+    behind: tracked ? behind : null,
+  };
+}
+
+interface StatusRead {
+  run: GitRun;
+  heads: StatusHeads | null;
+  entries: StatusEntry[];
+}
+interface LogAnswer {
+  commits: LogCommit[];
+  error: string | null;
+}
+interface RootMemo {
+  status: { read: Promise<StatusRead>; endedAt: number | null } | null;
+  log: { key: string; answer: LogAnswer } | null;
+}
+const memos = new Map<string, RootMemo>();
+
+function memoOf(root: string): RootMemo {
+  let memo = memos.get(root);
+  if (memo !== undefined) {
+    // the newest-asked root is the last to go
+    memos.delete(root);
+    memos.set(root, memo);
+    return memo;
+  }
+  memo = { status: null, log: null };
+  memos.set(root, memo);
+  if (memos.size > MEMO_ROOTS) {
+    const oldest = memos.keys().next().value;
+    if (oldest !== undefined) memos.delete(oldest);
+  }
+  return memo;
+}
+
+/** Forget every root's memo (tests). */
+export function forgetGitMemos(): void {
+  memos.clear();
+}
+
+/** The one status read a tick's asks share: in flight, or ended within STATUS_SHARE_MS. */
+function sharedStatus(root: string, run: typeof runGit): Promise<StatusRead> {
+  const memo = memoOf(root);
+  const held = memo.status;
+  if (held !== null && (held.endedAt === null || Date.now() - held.endedAt <= STATUS_SHARE_MS))
+    return held.read;
+  const entry: NonNullable<RootMemo["status"]> = {
+    endedAt: null,
+    read: run(root, ["status", "--porcelain=v2", "--branch", "-z", "--untracked-files=all"]).then(
+      (result): StatusRead => {
+        entry.endedAt = Date.now();
+        return result.ok
+          ? {
+              run: result,
+              heads: parseStatusHeads(result.stdout),
+              entries: parseStatus(result.stdout),
+            }
+          : { run: result, heads: null, entries: [] };
+      },
+    ),
+  };
+  memo.status = entry;
+  return entry.read;
+}
+
+/** The read half of rosetta's git service, for one root. `run` is the runner (tests count its calls). */
+export function createGitService(root: string, run: typeof runGit = runGit): GitService {
+  const git = run;
+  /** The log, read from git: the commits, which of them are not pushed, and each one's line counts. */
+  async function readLog(): Promise<LogAnswer> {
+    const unpushedResult = await git(root, ["rev-list", "@{u}..HEAD"]);
+    const unpushed = unpushedResult.ok
+      ? new Set(
+          unpushedResult.stdout
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+        )
+      : null;
+    const result = await git(root, [
+      "log",
+      `--max-count=${WORKSPACE_GIT.LOG_LIMIT}`,
+      `--format=${LOG_FORMAT}`,
+    ]);
+    if (!result.ok) return { commits: [], error: result.stderr };
+    const commits = parseLog(result.stdout, unpushed);
+    const stat = await git(root, [
+      "log",
+      `--max-count=${WORKSPACE_GIT.LOG_LIMIT}`,
+      "--format=%H",
+      "--numstat",
+      "--no-renames",
+    ]);
+    if (stat.ok) applyNumstat(commits, stat.stdout);
+    return { commits, error: null };
+  }
   return {
     async branch() {
+      const shared = await sharedStatus(root, run);
+      if (shared.heads !== null) {
+        const { name, upstream, ahead, behind } = shared.heads;
+        return { name, upstream, ahead, behind };
+      }
+      // the shared status could not answer: the three reads, as before
       const head = await git(root, ["rev-parse", "--abbrev-ref", "HEAD"]);
       const name = head.ok ? head.stdout.trim() : null;
       const upstream = await git(root, [
@@ -444,37 +608,27 @@ export function createGitService(root: string): GitService {
     },
 
     async status() {
-      const result = await git(root, ["status", "--porcelain=v2", "-z", "--untracked-files=all"]);
-      if (!result.ok) return { entries: [], error: result.stderr };
-      return { entries: parseStatus(result.stdout), error: null };
+      const shared = await sharedStatus(root, run);
+      if (!shared.run.ok) return { entries: [], error: shared.run.stderr };
+      return { entries: shared.entries, error: null };
     },
 
     async log() {
-      const unpushedResult = await git(root, ["rev-list", "@{u}..HEAD"]);
-      const unpushed = unpushedResult.ok
-        ? new Set(
-            unpushedResult.stdout
-              .split("\n")
-              .map((s) => s.trim())
-              .filter(Boolean),
-          )
-        : null;
-      const result = await git(root, [
-        "log",
-        `--max-count=${WORKSPACE_GIT.LOG_LIMIT}`,
-        `--format=${LOG_FORMAT}`,
-      ]);
-      if (!result.ok) return { commits: [], error: result.stderr };
-      const commits = parseLog(result.stdout, unpushed);
-      const stat = await git(root, [
-        "log",
-        `--max-count=${WORKSPACE_GIT.LOG_LIMIT}`,
-        "--format=%H",
-        "--numstat",
-        "--no-renames",
-      ]);
-      if (stat.ok) applyNumstat(commits, stat.stdout);
-      return { commits, error: null };
+      // the log moves only when the head commit or the upstream's does: kept under the two ids
+      const heads = (await sharedStatus(root, run)).heads;
+      let key: string | null = null;
+      if (heads !== null && heads.oid !== null) {
+        const upstreamId =
+          heads.upstream === null
+            ? null
+            : await git(root, ["rev-parse", "--verify", "--quiet", "@{u}^{commit}"]);
+        key = `${heads.oid} ${heads.upstream ?? ""} ${upstreamId?.ok ? upstreamId.stdout.trim() : ""}`;
+        const kept = memoOf(root).log;
+        if (kept !== null && kept.key === key) return kept.answer;
+      }
+      const answer = await readLog();
+      if (key !== null && answer.error === null) memoOf(root).log = { key, answer };
+      return answer;
     },
 
     async diff(args) {

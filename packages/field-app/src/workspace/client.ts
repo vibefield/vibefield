@@ -19,6 +19,15 @@ export interface WorkspaceDoor {
 export interface WorkspaceClientOptions {
   worker?: () => Worker;
   copyText?: (text: string) => Promise<void>;
+  /** The page whose visibility pauses the pane's timed reads: the window's document when absent, none when null. */
+  page?: WorkspacePage | null;
+}
+
+/** The part of a document the client reads: whether it is hidden, and when that changes. */
+export interface WorkspacePage {
+  readonly visibilityState: string;
+  addEventListener(type: "visibilitychange", listener: () => void): void;
+  removeEventListener(type: "visibilitychange", listener: () => void): void;
 }
 
 /** A copied path's words onto the system clipboard alone, through the one copy door (HN-5):
@@ -80,10 +89,43 @@ export class WorkspaceClient implements WorktreeHostPort {
   #root: string | null = null;
   #resolved: { root: WorkspaceRoot; path: string } | null = null;
   #retryMs: number = WORKSPACE_LIMITS.RETRY_MIN_MS;
+  // History QA (2026-11-24): the pane is out of sight (History is not the view showing, or the window is hidden)
+  #active = true;
+  #hidden = false;
+  #unwatch: (() => void) | null = null;
+  #facts: { root: string; value: NonNullable<WorkspaceGitFactsResult> } | null = null;
 
   constructor(door: WorkspaceDoor, options: WorkspaceClientOptions = {}) {
     this.#door = door;
     this.#options = options;
+    // a hidden window draws nothing: the timed reads wait for it (a host without a document has none to hide)
+    const page = options.page === undefined ? (globalThis.document ?? null) : options.page;
+    if (page !== null) {
+      const read = (): void => {
+        this.#hidden = page.visibilityState === "hidden";
+        this.#tellWorker();
+      };
+      page.addEventListener("visibilitychange", read);
+      this.#unwatch = () => page.removeEventListener("visibilitychange", read);
+      this.#hidden = page.visibilityState === "hidden";
+    }
+  }
+  /**
+   * History QA (2026-11-24) — whether the view that shows this pane is the one showing. The room asks git on a
+   * timer for as long as it is mounted, and History stays mounted behind the other views: while it is not showing,
+   * or the window is hidden, those asks are answered in the window (`relay.ts`) and `gitFacts` answers its last
+   * reading, so the files worker runs no git for a pane nobody sees. The first tick after it shows reads again.
+   */
+  setActive(active: boolean): void {
+    if (this.#active === active) return;
+    this.#active = active;
+    this.#tellWorker();
+  }
+  get #paused(): boolean {
+    return !this.#active || this.#hidden;
+  }
+  #tellWorker(): void {
+    this.#worker?.postMessage({ type: "paused", paused: this.#paused });
   }
   async roots(device?: string) {
     return WorkspaceRootsResult.parse(
@@ -267,6 +309,7 @@ export class WorkspaceClient implements WorktreeHostPort {
         () => retry("The files connection did not open"),
         WORKSPACE_LIMITS.ATTACH_TIMEOUT_MS,
       );
+      worker.postMessage({ type: "paused", paused: this.#paused });
       worker.postMessage({ type: "attach", ticket });
     } catch (error) {
       const code = (error as { kind?: unknown })?.kind;
@@ -276,7 +319,19 @@ export class WorkspaceClient implements WorktreeHostPort {
       );
     }
   }
+  /** The repository's facts for the open root. Out of sight it answers its last reading and asks nothing; and an
+   * answer that says what the last one said IS the last one (the same object), so the room, which keeps what it
+   * is handed, draws nothing again for it. */
   async gitFacts(root: string, generation: number) {
+    const last = this.#facts !== null && this.#facts.root === root ? this.#facts.value : null;
+    if (this.#paused && last !== null) return last;
+    const value = await this.#askGitFacts(root, generation);
+    if (value === null) return null;
+    if (last !== null && JSON.stringify(last) === JSON.stringify(value)) return last;
+    this.#facts = { root, value };
+    return value;
+  }
+  async #askGitFacts(root: string, generation: number) {
     const resolved = this.#resolved;
     if (!resolved || root !== this.#root || generation !== this.#generation) return null;
     return WorkspaceGitFactsResult.parse(
@@ -314,6 +369,8 @@ export class WorkspaceClient implements WorktreeHostPort {
   }
   dispose(): void {
     this.#disposed = true;
+    this.#unwatch?.();
+    this.#unwatch = null;
     ++this.#revision;
     this.#clear();
     if (this.#pending?.type === "ports") {
