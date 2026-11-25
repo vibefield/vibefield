@@ -6,7 +6,7 @@
  *   a choice act (`choices`) a 44 × 32 cell with the words' current value — the chosen swatch, a dot for a pen and a
  *   stripe for a highlighter, hollow when none is shared — then its choices as their own row (None hollow among stripes);
  *   a toggle (`pressed`) on while its kind says so; a plain act its glyph or its label; a rule where the run changes; the
- *   desk's More at the end, waiting (its rows need ICE's editor command).
+ *   desk's More at the end (it grows the words' menu, V5b); a slot's declared keys in its tip.
  * A swatch is a palette ROLE the desk's own palette draws (the pens a note writes with, the calendar's five highlighters),
  * so the bar shows no colour the host never named; a role the palette lacks draws hollow and is said once.
  */
@@ -142,7 +142,7 @@ describe("the words row", () => {
       "more",
     ]);
     const more = wordsCells([], LIGHT).at(-1);
-    expect(more).toEqual({ kind: "more", label: "More", tip: "More", waits: true });
+    expect(more).toEqual({ kind: "more", label: "More", tip: "More" });
   });
 
   it("a toggle is on while its kind says so; its glyph and label as declared, its tip its label (R1: no key)", () => {
@@ -370,6 +370,38 @@ describe("the one adapter over ICE's slot shape (readSlot) — the only reader o
       ["ink.strike", true],
       ["ink.underline", true],
       ["ink.clear", false],
+    ]);
+  });
+});
+
+describe("the keys a slot declares (V5b): read by the adapter, printed in the tip the bar's way", () => {
+  it("a toggle's, a choice act's and a plain act's keys in their tips; none declared, the label alone; an empty string none", () => {
+    const menu = inkMenu().map((slot) =>
+      slot.id === "ink.strike"
+        ? { ...slot, keys: "⇧⌘X" }
+        : slot.id === "ink.highlight"
+          ? { ...slot, keys: "⇧⌘H" }
+          : slot.id === "ink.clear"
+            ? { ...slot, keys: "" }
+            : slot,
+    );
+    expect(menu.map(readSlot).map((s) => [s.id, s.keys])).toEqual([
+      ["ink.pen", undefined],
+      ["ink.highlight", "⇧⌘H"],
+      ["ink.strike", "⇧⌘X"],
+      ["ink.underline", undefined],
+      ["ink.clear", undefined],
+    ]);
+    const tips = wordsCells(menu, LIGHT).flatMap((c) =>
+      c.kind === "rule" ? [] : [c.kind === "more" ? `more ${c.tip}` : `${c.id} ${c.tip}`],
+    );
+    expect(tips).toEqual([
+      "ink.pen Pen",
+      "ink.highlight Highlight  ⇧⌘H",
+      "ink.strike Strike  ⇧⌘X",
+      "ink.underline Underline",
+      "ink.clear Clear",
+      "more More",
     ]);
   });
 });

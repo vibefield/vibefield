@@ -1265,7 +1265,15 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).toContain("SelectionBarView");
     // the CALLS, not the names (an import alone would satisfy a name) — DK-12: the tools in hand's too; IK: the words
     // bar's, its cells read from fixture words acts by the product's own `wordsCells`
-    for (const model of ["barCells(", "menuGroups(", "menuEyebrow(", "handCells(", "wordsCells("])
+    // (V5b: and the words' More's rows by its own `wordsMenuGroups`)
+    for (const model of [
+      "barCells(",
+      "menuGroups(",
+      "menuEyebrow(",
+      "handCells(",
+      "wordsCells(",
+      "wordsMenuGroups(",
+    ])
       expect(fixture).toContain(model);
     expect(fixture).not.toMatch(/className="vf-bar/);
     expect(fixture).not.toContain("<style");

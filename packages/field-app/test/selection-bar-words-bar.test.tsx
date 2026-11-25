@@ -10,11 +10,16 @@
  *   THE ROWS — a choice act swaps the row for its choices (Back first, the words' choice on), a choice runs at once with
  *     the range and the row stays, Back and Esc return (Esc taken ahead of the editor's field), a 120 ms cross-fade (reduced
  *     motion halved); a toggle shows `aria-pressed`; each act runs `ops.runMenuAction(id, { choice?, range })` with the
- *     range the LAST PUBLISH said; More waits;
+ *     range the LAST PUBLISH said; More grows the words' menu (V5b, below);
  *   THE FOCUS — a press on the words' row keeps the field's focus and its range (pointerdown's and mousedown's defaults);
  *     the keys as the bar has (← →, Esc back to the desk);
  *   ⌘C — while words are selected on a sheet being written the bar claims no ⌘C (the field's copy runs); with objects
  *     selected it is still Make a card.
+ *   THE WORDS' MORE (V5b) — More and a right-click on the sheet being written grow the bar into the words' menu, Cut · Copy ·
+ *     Paste | Select all with the field's keys, each run ONCE through the desk's one editor's `command` (a double: happy-dom
+ *     has no editor) with the field's focus kept; a command that did nothing is said on the status line; in the app (a host
+ *     that reads the clipboard through main) Paste waits and says ⌘V; a right-click anywhere else is the objects' as before;
+ *     a slot's declared `keys` printed in its tip.
  * No kind on the desk declares words acts yet (ICE's ink acts arrive with the note's next slice): the anchors are fixtures.
  */
 import { type CanvasEngine, type Entity, setWidgetProps } from "@vibecook/ice";
@@ -31,6 +36,8 @@ import { deskLook } from "../src/field/desk/desk-layer";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import { cardsStore } from "../src/frame/cards/cards-store";
 import type { FrameSurface } from "../src/frame/frame-surface";
+import { hearLineSays } from "../src/frame/line-door";
+import { type FieldHost, setHost } from "../src/host";
 import { getAppTheme } from "../src/theme";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -122,6 +129,11 @@ let note: Entity;
 /** The editor's field stands in as a textarea, as ICE's one editor is: what reached its own listeners. */
 let field: HTMLTextAreaElement;
 let fieldHeard: string[];
+/** The desk's pick (`handle.pick`): what a right-click is over. */
+let pick: ReturnType<typeof vi.fn>;
+/** The commands the desk's one editor was asked, in order, and what it answers. */
+let commands: string[];
+let answer: boolean | Error;
 
 /** The words as ICE publishes them while the note is written: the note's words [4, 12) and its ink acts. */
 const words = (over: Partial<WordsAnchor> = {}): WordsAnchor => ({
@@ -203,11 +215,22 @@ beforeEach(async () => {
   fieldHeard = [];
   field.addEventListener("keydown", (event) => fieldHeard.push(event.key));
   document.body.append(field);
+  pick = vi.fn(() => null);
+  commands = [];
+  answer = true;
+  const editor = {
+    command: vi.fn(async (name: string) => {
+      commands.push(name);
+      if (answer instanceof Error) throw answer;
+      return answer;
+    }),
+  };
   const desk: MountedDesk = {
     engine: ce,
     handle: {
       selection,
-      pick: vi.fn(() => null),
+      pick,
+      editor: () => editor,
       canvas,
       status: () => ({ state: "ready" }),
       capture: vi.fn(async () => undefined),
@@ -455,7 +478,7 @@ describe("the words bar: its rows and its acts (IK)", () => {
     expect(run).toHaveBeenCalledTimes(2);
   });
 
-  it("a toggle shows aria-pressed and runs with the range; a plain act runs with it; More waits and grows nothing", () => {
+  it("a toggle shows aria-pressed and runs with the range; a plain act runs with it; More runs no act", () => {
     mount();
     const run = vi.spyOn(ce.ops, "runMenuAction");
     expect(cell("word:ink.strike").getAttribute("aria-pressed")).toBe("false");
@@ -471,12 +494,13 @@ describe("the words bar: its rows and its acts (IK)", () => {
     expect(run).toHaveBeenLastCalledWith("ink.clear", {
       range: { entity: note, from: 4, to: 12 },
     });
+    // More runs no act: it grows the words' menu (V5b)
     const more = cell("more");
-    expect(more.getAttribute("aria-disabled")).toBe("true");
+    expect(more.hasAttribute("aria-disabled")).toBe(false);
     act(() => more.click());
     expect(run).toHaveBeenCalledTimes(2);
-    expect(surfaceNow).toBeNull();
-    expect(bar().hasAttribute("data-open")).toBe(false);
+    expect(surfaceNow).toBe("selection");
+    expect(bar().hasAttribute("data-open")).toBe(true);
   });
 
   it("an act its kind says is not enabled is drawn dim and aria-disabled, and its press runs nothing — a choice act opens no row", () => {
@@ -668,5 +692,246 @@ describe("⌘C while a sheet is written (IK; DESIGN.md §8 'The words bar' — K
       });
     });
     await vi.waitFor(() => expect(lastCopy()?.kept).not.toBeNull(), { timeout: 2_000 });
+  });
+});
+
+describe("the words' More: Cut, Copy, Paste and Select all, right-click at the words, the keys' tips (IK, V5b)", () => {
+  /** The grown menu's rows as a reader meets them, nearest first: `id key`, `|` a group's hairline. */
+  const menuSaid = (): string[] =>
+    [...bar().querySelectorAll<HTMLElement>(".vf-bar-list > *")].map((el) =>
+      el.classList.contains("vf-bar-sep")
+        ? "|"
+        : el.classList.contains("vf-bar-eye")
+          ? `eyebrow ${el.textContent}`
+          : `${el.dataset.row} ${el.querySelector(".vf-bar-key")?.textContent ?? ""}`,
+    );
+  const menuRow = (id: string): HTMLElement => {
+    const el = [...bar().querySelectorAll<HTMLElement>("[data-row]")].find(
+      (r) => r.dataset.row === id,
+    );
+    if (el === undefined) throw new Error(`no row ${id}`);
+    return el;
+  };
+  const rightClick = (): MouseEvent => {
+    const event = new MouseEvent("contextmenu", {
+      bubbles: true,
+      cancelable: true,
+      button: 2,
+      clientX: 500,
+      clientY: 330,
+    });
+    act(() => {
+      deskElement.querySelector("canvas")?.dispatchEvent(event);
+    });
+    return event;
+  };
+  /** Let the editor's answer and its `then` run. */
+  const settle = async (): Promise<void> => {
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  };
+
+  afterEach(() => {
+    setHost(null as unknown as FieldHost);
+  });
+
+  it("More grows the bar into the words' menu: Cut ⌘X · Copy ⌘C · Paste ⌘V | Select all ⌘A, WORDS at its far end; More shown on", () => {
+    mount();
+    act(() => cell("more").click());
+    expect(surfaceNow).toBe("selection");
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    expect(cell("more").getAttribute("aria-expanded")).toBe("true");
+    expect(cell("more").getAttribute("aria-haspopup")).toBe("menu");
+    expect(menuSaid()).toEqual([
+      "words:cut ⌘X",
+      "words:copy ⌘C",
+      "words:paste ⌘V",
+      "|",
+      "words:selectAll ⌘A",
+      "eyebrow WORDS",
+    ]);
+    expect(bar().querySelector('[role="menu"]')?.getAttribute("aria-label")).toBe("Words");
+    // the nearest row is hot; nothing waits where the page reads the clipboard
+    expect(menuRow("words:cut").hasAttribute("data-hot")).toBe(true);
+    expect(menuRow("words:paste").hasAttribute("aria-disabled")).toBe(false);
+    // More again folds it
+    act(() => cell("more").click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("each row runs its command ONCE through the desk's one editor, inside the press, the field's focus and range kept; the menu closes", async () => {
+    mount();
+    act(() => field.focus());
+    field.setSelectionRange(4, 12);
+    for (const name of ["cut", "copy", "paste", "selectAll"]) {
+      act(() => cell("more").click());
+      const target = menuRow(`words:${name}`);
+      const down = new PointerEvent("pointerdown", { bubbles: true, cancelable: true });
+      const mouse = new MouseEvent("mousedown", { bubbles: true, cancelable: true });
+      act(() => {
+        target.dispatchEvent(down);
+        target.dispatchEvent(mouse);
+      });
+      expect(down.defaultPrevented, name).toBe(true);
+      expect(mouse.defaultPrevented, name).toBe(true);
+      act(() => target.click());
+      expect(commands.at(-1), name).toBe(name);
+      expect(surfaceNow, name).toBeNull();
+      expect(document.activeElement, name).toBe(field);
+      expect([field.selectionStart, field.selectionEnd], name).toEqual([4, 12]);
+      await settle();
+    }
+    expect(commands).toEqual(["cut", "copy", "paste", "selectAll"]);
+    // no act of a kind ran for them
+  });
+
+  it("a command that did nothing is SAID on the status line with the key that does it; Select all says nothing; a refusal is said and logged", async () => {
+    const said: string[] = [];
+    const unhear = hearLineSays((text) => said.push(text));
+    try {
+      mount();
+      answer = false;
+      for (const name of ["copy", "cut", "paste", "selectAll"]) {
+        act(() => cell("more").click());
+        act(() => menuRow(`words:${name}`).click());
+        await settle();
+      }
+      expect(said).toEqual([
+        "Couldn't copy these words. ⌘C copies them.",
+        "Couldn't cut these words. ⌘X cuts them.",
+        "Nothing to paste here. ⌘V pastes from the clipboard.",
+      ]);
+      answer = new Error("refused");
+      act(() => cell("more").click());
+      act(() => menuRow("words:copy").click());
+      await settle();
+      expect(said.at(-1)).toBe("Couldn't copy these words. ⌘C copies them.");
+      // done, nothing is said
+      answer = true;
+      const before = said.length;
+      act(() => cell("more").click());
+      act(() => menuRow("words:copy").click());
+      await settle();
+      expect(said).toHaveLength(before);
+    } finally {
+      unhear();
+    }
+  });
+
+  it("IN THE APP (a host that reads the clipboard through main, where the web's read is refused) Paste WAITS and says ⌘V — never a paste of stale words", () => {
+    setHost({
+      clipboard: { readText: async () => "words", writeImage: async () => undefined },
+    } as unknown as FieldHost);
+    mount();
+    act(() => cell("more").click());
+    const paste = menuRow("words:paste");
+    expect(paste.getAttribute("aria-disabled")).toBe("true");
+    expect(paste.getAttribute("title")).toBe(
+      "Paste — the bar can't read the clipboard here; ⌘V pastes",
+    );
+    expect(paste.querySelector(".vf-bar-key")?.textContent).toBe("⌘V");
+    act(() => paste.click());
+    expect(commands).toEqual([]);
+    // Cut, Copy and Select all still run
+    act(() => menuRow("words:selectAll").click());
+    expect(commands).toEqual(["selectAll"]);
+  });
+
+  it("Esc folds the words' menu, taken ahead of the editor's field, which keeps the focus; the next Esc is the field's", () => {
+    mount();
+    act(() => field.focus());
+    act(() => cell("more").click());
+    fieldHeard = [];
+    const taken = key("Escape", field);
+    expect(taken.defaultPrevented).toBe(true);
+    expect(surfaceNow).toBeNull();
+    expect(fieldHeard).toEqual([]);
+    expect(document.activeElement).toBe(field);
+    const next = key("Escape", field);
+    expect(next.defaultPrevented).toBe(false);
+    expect(fieldHeard).toEqual(["Escape"]);
+  });
+
+  it("RIGHT-CLICK on the sheet being written, words on it selected: the words' menu grows from the bar over the words, the selection untouched — from the pens' row too, back on the main row", () => {
+    // the sheet is the lease's, not the desk's selection (a kind that writes without being selected): the right-click
+    // must not select it first, as it would another object
+    ce.ops.setSelection([]);
+    mount();
+    const select = vi.spyOn(ce.ops, "setSelection");
+    pick.mockReturnValue({ entity: note });
+    act(() => cell("word:ink.pen").click());
+    expect(shownRow()).toBe("ink.pen");
+    const event = rightClick();
+    expect(event.defaultPrevented).toBe(true);
+    expect(surfaceNow).toBe("selection");
+    expect(select).not.toHaveBeenCalled();
+    expect(shownRow()).toBe("main");
+    expect(menuSaid()[0]).toBe("words:cut ⌘X");
+    expect(bar().querySelector(".vf-bar-eye")?.textContent).toBe("WORDS");
+  });
+
+  it("RIGHT-CLICK elsewhere is the objects' as before: another object is selected first (its menu grows for it), the bare mat grows nothing", () => {
+    mount();
+    const select = vi.spyOn(ce.ops, "setSelection").mockImplementation(() => undefined);
+    pick.mockReturnValue(null);
+    rightClick();
+    expect(surfaceNow).toBeNull();
+    const other = (note + 1000) as Entity;
+    pick.mockReturnValue({ entity: other });
+    rightClick();
+    expect(select).toHaveBeenCalledWith([other]);
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("at a CARET alone a right-click grows nothing (as before): the bar is away while no words are selected — §8's caret rows are not built", () => {
+    selection.publish({ words: undefined });
+    mount();
+    pick.mockReturnValue({ entity: note });
+    rightClick();
+    expect(bar().hasAttribute("data-open")).toBe(false);
+    expect(bar().dataset.shown).toBe("false");
+  });
+
+  it("the words going — or coming — folds an open menu: each menu is its own row's", () => {
+    mount();
+    act(() => cell("more").click());
+    expect(surfaceNow).toBe("selection");
+    act(() => selection.publish({ editing: false, words: undefined }));
+    expect(surfaceNow).toBeNull();
+    // the objects' menu open, words coming fold it too
+    act(() => {
+      bar().querySelector<HTMLElement>('[data-face-row="selection"] [data-act="more"]')?.click();
+    });
+    expect(surfaceNow).toBe("selection");
+    expect(bar().querySelector(".vf-bar-eye")?.textContent).toBe("NOTE");
+    act(() => selection.publish({ editing: true, words: words() }));
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("THE KEYS' TIPS: a slot's declared keys are printed in its tip the bar's way (two spaces); a slot that declares none, its label alone; nothing is bound", () => {
+    const keyed = inkMenu().map((slot) =>
+      slot.id === "ink.strike"
+        ? { ...slot, keys: "⇧⌘X" }
+        : slot.id === "ink.underline"
+          ? { ...slot, keys: "⌘U" }
+          : slot.id === "ink.highlight"
+            ? { ...slot, keys: "⇧⌘H" }
+            : slot,
+    );
+    selection.publish({ words: words({ menu: keyed }) });
+    mount();
+    expect(cell("word:ink.strike").getAttribute("title")).toBe("Strike  ⇧⌘X");
+    expect(cell("word:ink.underline").getAttribute("title")).toBe("Underline  ⌘U");
+    expect(cell("word:ink.highlight").getAttribute("title")).toBe("Highlight  ⇧⌘H");
+    expect(cell("word:ink.clear").getAttribute("title")).toBe("Clear");
+    expect(cell("word:ink.pen").getAttribute("title")).toBe("Pen");
+    // the bar binds none of them: the key reaches the field untaken
+    const run = vi.spyOn(ce.ops, "runMenuAction");
+    act(() => field.focus());
+    const chord = key("x", field, { metaKey: true, shiftKey: true });
+    expect(chord.defaultPrevented).toBe(false);
+    expect(run).not.toHaveBeenCalled();
   });
 });

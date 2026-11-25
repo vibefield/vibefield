@@ -11,6 +11,7 @@ import {
   type SelectionFacts,
 } from "../field/desk/bar/bar-model";
 import { wordsCells } from "../field/desk/bar/bar-words";
+import { WORDS_EYEBROW, type WordsPaste, wordsMenuGroups } from "../field/desk/bar/bar-words-more";
 import {
   type PlaceAnchor,
   SelectionBarView,
@@ -540,7 +541,10 @@ export function HandPlate({ state, dark }: { state: HandState; dark: boolean }):
 // and Underline as toggles, Clear — their glyphs §13's names, their swatches palette ROLES that the product's own palette
 // draws (`deskLook`). A plate per row: the words' row, the same with no pen shared and no highlight, the pens' row and
 // the highlighters' row, each opened by the view's own state (`wordsOpen`). The plate stages the sheet, its brackets and
-// the words' wash, which the desk draws in the product; the place is the view's, over the words' box.
+// the words' wash, which the desk draws in the product; the place is the view's, over the words' box. V5b: the words' More
+// grown — its rows read by the product's own model (`wordsMenuGroups`) — where the page reads the clipboard, and in the
+// app, where Paste waits; More folds and grows it again on the plate. The toggles and Highlight carry the keys ICE's written
+// part declares (⇧⌘X, ⌘U, ⇧⌘H), printed in their tips.
 
 const PEN_NAMES = ["felt", "ball", "fountain", "red"] as const;
 const HIGHLIGHTER_NAMES = ["yellow", "green", "pink", "blue", "orange"] as const;
@@ -576,10 +580,17 @@ function wordsMenu(now: {
         })),
         { id: "none", label: "None" },
       ],
+      keys: "⇧⌘H",
       ...(now.highlight === undefined ? {} : { chosen: now.highlight }),
     },
-    { id: "ink.strike", label: "Strike", glyph: "strike", pressed: now.strike },
-    { id: "ink.underline", label: "Underline", glyph: "underline", pressed: now.underline },
+    { id: "ink.strike", label: "Strike", glyph: "strike", keys: "⇧⌘X", pressed: now.strike },
+    {
+      id: "ink.underline",
+      label: "Underline",
+      glyph: "underline",
+      keys: "⌘U",
+      pressed: now.underline,
+    },
     { id: "ink.clear", label: "Clear", glyph: "clear-marks" },
   ];
 }
@@ -589,6 +600,8 @@ export const WORDS_STATES = [
   "Words — no pen shared, no highlight",
   "Words — the pens",
   "Words — the highlighters",
+  "Words — More",
+  "Words — More in the app: Paste waits",
 ] as const;
 export type WordsState = (typeof WORDS_STATES)[number];
 
@@ -596,7 +609,12 @@ const MARKED = wordsMenu({ pen: "fountain", highlight: "yellow", strike: false, 
 
 const WORDS_PLATES: Record<
   WordsState,
-  { readonly menu: readonly MenuSlot[]; readonly open?: string }
+  {
+    readonly menu: readonly MenuSlot[];
+    readonly open?: string;
+    /** The words' More grown, by the page's road to the clipboard. */
+    readonly more?: WordsPaste;
+  }
 > = {
   "Words — the fountain pen, yellow, underlined": { menu: MARKED },
   "Words — no pen shared, no highlight": {
@@ -604,11 +622,25 @@ const WORDS_PLATES: Record<
   },
   "Words — the pens": { menu: MARKED, open: "ink.pen" },
   "Words — the highlighters": { menu: MARKED, open: "ink.highlight" },
+  "Words — More": { menu: MARKED, more: "reads" },
+  "Words — More in the app: Paste waits": { menu: MARKED, more: "shell" },
 };
 
+/** A plate whose menu grows stands its sheet this much lower, and is this tall, so the menu grows UP as it does mid-desk. */
+const MORE_DROP = 130;
+const MORE_HEIGHT = 520;
+
 /** The sheet on the plate (its brackets 6 out of it), and the words selected on it. */
-const SHEET = { x0: 170, y0: 190, x1: 390, y1: 350 } as const;
+const SHEET_BOX = { x0: 170, y0: 190, x1: 390, y1: 350 } as const;
 const WORDS_BOX = { x0: 214, y0: 244, x1: 336, y1: 266 } as const;
+
+/** A box stood `dy` lower. */
+const at = (box: { x0: number; y0: number; x1: number; y1: number }, dy: number) => ({
+  x0: box.x0,
+  y0: box.y0 + dy,
+  x1: box.x1,
+  y1: box.y1 + dy,
+});
 
 /** One plate: the shipping bar over the words selected on a stand-in sheet, placed from the plate's own words. */
 export function WordsPlate({ state, dark }: { state: WordsState; dark: boolean }): ReactElement {
@@ -617,49 +649,58 @@ export function WordsPlate({ state, dark }: { state: WordsState; dark: boolean }
     () => ({ cells: wordsCells(plate.menu, deskLook(dark ? "dark" : "light").palette), run: 1 }),
     [plate, dark],
   );
+  const [open, setOpen] = useState(plate.more !== undefined);
+  const groups = useMemo(
+    () => (plate.more === undefined ? NO_GROUPS : wordsMenuGroups("mac", plate.more)),
+    [plate],
+  );
+  const drop = plate.more === undefined ? 0 : MORE_DROP;
+  const height = plate.more === undefined ? 400 : MORE_HEIGHT;
+  const sheet = at(SHEET_BOX, drop);
+  const wordsBox = at(WORDS_BOX, drop);
   const anchor = useMemo<PlaceAnchor>(
-    () => ({ box: WORDS_BOX, count: 1, view: { width: WIDTH, height: 400 } }),
-    [],
+    () => ({ box: at(WORDS_BOX, drop), count: 1, view: { width: WIDTH, height } }),
+    [drop, height],
   );
   return (
-    <div className="vf-ds-bar-plate" data-state={state} style={{ height: 400 }}>
+    <div className="vf-ds-bar-plate" data-state={state} style={{ height }}>
       <div
         className="vf-ds-bar-object"
         style={{
-          left: SHEET.x0 + 6,
-          top: SHEET.y0 + 6,
-          width: SHEET.x1 - SHEET.x0 - 12,
-          height: SHEET.y1 - SHEET.y0 - 12,
+          left: sheet.x0 + 6,
+          top: sheet.y0 + 6,
+          width: sheet.x1 - sheet.x0 - 12,
+          height: sheet.y1 - sheet.y0 - 12,
         }}
       />
       <div
         className="vf-ds-bar-brackets"
         style={{
-          left: SHEET.x0,
-          top: SHEET.y0,
-          width: SHEET.x1 - SHEET.x0,
-          height: SHEET.y1 - SHEET.y0,
+          left: sheet.x0,
+          top: sheet.y0,
+          width: sheet.x1 - sheet.x0,
+          height: sheet.y1 - sheet.y0,
         }}
       />
       <div
         className="vf-ds-bar-wash"
         style={{
-          left: WORDS_BOX.x0,
-          top: WORDS_BOX.y0,
-          width: WORDS_BOX.x1 - WORDS_BOX.x0,
-          height: WORDS_BOX.y1 - WORDS_BOX.y0,
+          left: wordsBox.x0,
+          top: wordsBox.y0,
+          width: wordsBox.x1 - wordsBox.x0,
+          height: wordsBox.y1 - wordsBox.y0,
         }}
       />
       <SelectionBarView
         cells={NO_CELLS}
-        groups={NO_GROUPS}
-        eyebrow=""
+        groups={groups}
+        eyebrow={plate.more === undefined ? "" : WORDS_EYEBROW}
         shown
         stepAside={false}
-        open={false}
-        onOpenChange={() => undefined}
+        open={open && plate.more !== undefined}
+        onOpenChange={setOpen}
         onCell={() => undefined}
-        onRow={() => undefined}
+        onRow={() => setOpen(false)}
         words={words}
         onWords={() => undefined}
         {...(plate.open === undefined ? {} : { wordsOpen: plate.open })}

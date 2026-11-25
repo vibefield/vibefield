@@ -80,6 +80,8 @@ import "./selection-bar.css";
 // cell swaps that row for its choices — a row in the bar's place, never a menu — by a 120 ms cross-fade, the glass's width
 // following (reduced motion: halved, a fade only); Back or Esc returns. A press anywhere on it keeps the focus where it is:
 // the editor's field keeps it, and with it the range the acts run on (each `pointerdown` and `mousedown` default prevented).
+// Its More (V5b) grows the same element into the words' menu — Cut · Copy · Paste | Select all — as the objects' More grows
+// theirs: the controller hands the words' rows as `groups`, and the same list, grow and keys serve both.
 
 /** What the bar is placed from: the anchor's box, its count and the view (ICE's `SelectionAnchor`, narrowed). */
 export interface PlaceAnchor {
@@ -450,7 +452,7 @@ export function SelectionBarView({
     // grown, it is this selection's, and its motion is its own again (a cut, below, lasts until it grows)
     grownOver.current = anchor.selection;
     delete root.dataset.cut;
-    const w = roleRef.current === "hand" ? handWidthRef.current : widthRef.current;
+    const w = rowWidth(roleRef.current === "hand");
     const g = growMenu({ x: at.x, y: at.y, width: w }, listNatural.current, anchor.view);
     const listOut = g.listHeight + 1; // the list and the strong hairline between it and the row
     set("--vf-bar-grow-l", at.x - g.x);
@@ -462,7 +464,7 @@ export function SelectionBarView({
     set("--vf-bar-list-h", g.listHeight);
     root.dataset.dir = g.up ? "up" : "down";
     root.dataset.scroll = g.scroll ? "true" : "false";
-  }, []);
+  }, [rowWidth]);
 
   /** Item 550: the foot travels clear of the marks (`out`) or back — while the bar is seen and travels at all. The
    * transition goes on before the new place is written, and comes off one beat past its end. */
@@ -661,6 +663,11 @@ export function SelectionBarView({
             );
     (pill ?? moreRef.current)?.focus({ preventScroll: true });
   }, []);
+
+  // IK — the words' menu grows from the words' MAIN row, where its More stands: a right-click over the pens' row returns it
+  useEffect(() => {
+    if (open) setChoiceAt(null);
+  }, [open]);
 
   // keyboard-opened: the hot row takes the focus once it can
   useEffect(() => {
@@ -963,7 +970,7 @@ export function SelectionBarView({
   };
 
   // IK — THE WORDS' ROWS' KEYS (R9, as the bar has): a toolbar named "Words" — ← → Home End between its cells (a rule is
-  // no stop; More waits, a stop), Esc back to the desk, Enter and Space press; a choice act's row of choices is a toolbar of
+  // no stop; More a stop: ↑ ↓ or Enter grow it), Esc back to the desk, Enter and Space press; a choice act's row of choices is a toolbar of
   // its own, named for the act, Back its first stop (its Esc, the capture's above, returns to the main row).
   const wordsStops = (wordsRow?.cells ?? [])
     .map((cell, index) => (cell.kind === "rule" ? -1 : index))
@@ -971,9 +978,14 @@ export function SelectionBarView({
   const wordsRovingAt = wordsStops.includes(wordsRover) ? wordsRover : (wordsStops[0] ?? 0);
 
   /** A words act pressed: a choice act swaps in its choices; a toggle or a plain act runs; one its kind says is disabled
-   * does nothing; More waits (its rows need the editor's own command, not on this build of ICE). */
+   * does nothing; More grows the bar into the words' menu, or folds it. */
   const pressWords = (cell: WordsCell, fromKeyboard: boolean): void => {
     if ("disabled" in cell && cell.disabled) return;
+    if (cell.kind === "more") {
+      focusOnOpen.current = fromKeyboard && !open;
+      onOpenChange(!open);
+      return;
+    }
     if (cell.kind === "choice") swapWords(cell, fromKeyboard ? { to: "pick" } : null);
     else if (cell.kind === "toggle" || cell.kind === "act") onWords?.({ act: cell.id });
   };
@@ -995,6 +1007,7 @@ export function SelectionBarView({
       return;
     switch (event.key) {
       case "Escape":
+        if (open) return; // the open menu's own Esc takes it first
         event.preventDefault();
         target.blur();
         return;
@@ -1002,6 +1015,14 @@ export function SelectionBarView({
       case " ":
         event.preventDefault();
         if (cell !== undefined) pressWords(cell, true);
+        return;
+      case "ArrowUp":
+      case "ArrowDown":
+        event.preventDefault();
+        if (cell?.kind === "more" && !open) {
+          focusOnOpen.current = true;
+          onOpenChange(true);
+        }
         return;
     }
   };
@@ -1143,7 +1164,7 @@ export function SelectionBarView({
         return (
           <button
             key={cellKey(cell, index)}
-            ref={more ? moreRef : undefined}
+            ref={more && !wordsShown ? moreRef : undefined}
             type="button"
             className="vf-bar-cell"
             data-act={cell.act}
@@ -1339,13 +1360,15 @@ export function SelectionBarView({
         return (
           <button
             key="more"
+            ref={moreRef}
             type="button"
             className="vf-bar-cell"
             data-act="more"
             aria-label={cell.label}
             title={cell.tip}
-            aria-disabled="true"
-            data-disabled=""
+            aria-haspopup="menu"
+            aria-expanded={open}
+            onClick={() => pressWords(cell, false)}
             {...stop}
           >
             <FieldGlyph name="ellipsis" size={16} />

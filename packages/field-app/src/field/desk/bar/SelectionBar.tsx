@@ -13,6 +13,8 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { type FrameSurface, foldSurface } from "../../../frame/frame-surface";
+import { sayOnLine } from "../../../frame/line-door";
+import { peekHost } from "../../../host";
 import { useAppTheme } from "../../../theme";
 import { isCopyChord, listenForProductChord } from "../../product-chords";
 import { atWorkBarClear, atWorkInkScale } from "../at-work/at-work-model";
@@ -22,7 +24,13 @@ import { inHand } from "../desk-anchor";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
 import { deskLook } from "../desk-layer";
 import type { ObjectWords } from "../desk-object-words";
-import { type BarActId, COMMENT_PAD_TYPE, runBarAct, runWordsAct } from "./bar-acts";
+import {
+  type BarActId,
+  COMMENT_PAD_TYPE,
+  runBarAct,
+  runWordsAct,
+  runWordsCommand,
+} from "./bar-acts";
 import { offScreen } from "./bar-geometry";
 import { type HandCell, type HeldSlot, handCells, slotsKey } from "./bar-hand";
 import {
@@ -40,6 +48,7 @@ import {
 import { TRAVEL_MS, useReducedMotion } from "./bar-motion";
 import { barStats } from "./bar-stats";
 import { sayMissingSwatches, wordsCells, wordsKey } from "./bar-words";
+import { commandOfRow, WORDS_EYEBROW, wordsMenuGroups, wordsPasteOf } from "./bar-words-more";
 import { downloadable, downloadPrint } from "./print-download";
 import {
   type PlaceAnchor,
@@ -104,6 +113,10 @@ import {
 // keeps the bar away, and it comes 200 ms after the release, as after a gesture; a gesture still sends it away. Each act
 // runs through `ops.runMenuAction(id, { choice?, range })`, the range read at the press from the publish's own copy — never
 // a render's. A kind whose words declare no acts brings no words' row: the bar stays away while it is written, as before.
+// Its MORE (V5b) grows the bar into the words' menu — Cut · Copy · Paste | Select all (bar-words-more.ts), each run through
+// the desk's one editor's `command` inside the press (bar-acts.ts `runWordsCommand`) — and a RIGHT-CLICK on the sheet being
+// written, while words on it are selected, grows the same menu from the bar over the words (ICE keeps the field's focus
+// through a right press on its writing). A right-click anywhere else is the objects' as before.
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -354,6 +367,9 @@ export function atWorkClearOf(desk: MountedDesk): number {
   });
   return atWork ? atWorkBarClear(atWorkInkScale(world.getResource(Camera)?.zoom ?? 1)) : 0;
 }
+/** IK — the desk's ONE editor (`DeskLayerHandle.editor()`) — absent on a handle without one (a test's double). */
+const editorOf = (desk: MountedDesk) =>
+  (desk.handle as Partial<MountedDesk["handle"]>).editor?.() ?? null;
 
 /** The desk's own element, which the right-click is heard on (the layer's canvas lies in it). */
 const containerOf = (desk: MountedDesk): HTMLElement | null => {
@@ -469,15 +485,23 @@ function SelectionBarOn({
   const overWords = facts.words !== null;
 
   // R5: the menu closes on a gesture and when the bar goes — into the hand too, unless it is a tool in hand's choices
-  // that are listed (ICE I62); and a choice's list closes as its role goes (picked up, or put down); and to the words (IK)
+  // that are listed (ICE I62); and a choice's list closes as its role goes (picked up, or put down)
   const listFits = choosing === null ? !facts.inHand : (choosing.of === "tool") === facts.inHand;
   useEffect(() => {
-    if (open && (!shown || stepAside || !listFits || overWords)) fold();
-  }, [open, shown, stepAside, listFits, overWords, fold]);
+    if (open && (!shown || stepAside || !listFits)) fold();
+  }, [open, shown, stepAside, listFits, fold]);
   // folded, the bar lists More's menu again when it next grows
   useEffect(() => {
     if (!open) setChoosing(null);
   }, [open]);
+  // IK — and when the bar changes between the objects' row and the words': each menu is its own row's (R5's change of
+  // selection: the words came, or went)
+  const wordsSeen = useRef(overWords);
+  useEffect(() => {
+    if (overWords === wordsSeen.current) return;
+    wordsSeen.current = overWords;
+    if (surfaceRef.current.surface === "selection") fold();
+  }, [overWords, fold]);
 
   // R26: a right-click's own selection is the one the menu grows for, once the desk has drawn it (any other change of
   // selection folded it in the read, above)
@@ -502,6 +526,13 @@ function SelectionBarOn({
       const rect = container.getBoundingClientRect();
       const hit = handle.pick({ x: event.clientX - rect.left, y: event.clientY - rect.top });
       if (hit === null) return;
+      // IK — on the sheet being written, with words on it selected: the words' menu, from the bar over the words; the
+      // selection is not touched (the sheet's words are what it acts on)
+      const words = liveWords(source.anchor());
+      if (words !== undefined && hit.entity === words.entity) {
+        surfaceRef.current.onSurfaceChange("selection");
+        return;
+      }
       const selected = selectedEntities(engine.world);
       if (selected.includes(hit.entity)) {
         surfaceRef.current.onSurfaceChange("selection");
@@ -512,7 +543,7 @@ function SelectionBarOn({
     };
     container.addEventListener("contextmenu", onContextMenu);
     return () => container.removeEventListener("contextmenu", onContextMenu);
-  }, [desk, engine, handle]);
+  }, [desk, engine, handle, source]);
 
   /** A press on the desk that its pick lands on another object than the selection IS a change of selection (track OM,
    * 2026-11-26): the grown bar closes at once (the view's cut). A press on the bare mat, on the selection itself or off
@@ -545,14 +576,20 @@ function SelectionBarOn({
     const slot = slots.find((s) => s.id === choosing.id);
     return slot?.choices === undefined ? undefined : { label: slot.label, choices: slot.choices };
   }, [choosing, facts.selection, facts.hand]);
-  const groups = useMemo(
+  const objectGroups = useMemo(
     () => (chosen === undefined ? menuGroups(facts.selection, keys) : choiceGroups(chosen.choices)),
     [chosen, facts.selection, keys],
   );
-  const eyebrow = useMemo(
+  const objectEyebrow = useMemo(
     () => (chosen === undefined ? menuEyebrow(facts.selection) : choiceEyebrow(chosen.label)),
     [chosen, facts.selection],
   );
+  // IK — over the words the menu is the words' own: Cut · Copy · Paste | Select all; Paste waits where the page cannot read
+  // the clipboard (the app's shell — the host's read through main is not the editor's)
+  const paste = wordsPasteOf(peekHost());
+  const wordsGroups = useMemo(() => wordsMenuGroups(keys, paste), [keys, paste]);
+  const groups = overWords ? wordsGroups : objectGroups;
+  const eyebrow = overWords ? WORDS_EYEBROW : objectEyebrow;
   // IK — the words' row, its swatches in the desk's own palette as the theme dresses it (the stage's `deskLook`)
   const theme = useAppTheme().resolved;
   const palette = useMemo(() => deskLook(theme).palette, [theme]);
@@ -637,11 +674,17 @@ function SelectionBarOn({
         setChoosing({ of: "act", id: row.id.slice("act:".length) });
         return;
       }
+      // IK — a words' row: the editor's own command, run now, inside the press
+      const command = commandOfRow(row.id);
+      if (command !== undefined) {
+        void runWordsCommand(editorOf(desk), command, keys, sayOnLine);
+        return;
+      }
       if (row.id === "copy") copySelection(desk, "menu");
       else if (row.id === "download") void downloadPrint(desk);
       else runBarAct(engine, row.id as BarActId, factsRef.current.locked);
     },
-    [desk, engine, take],
+    [desk, engine, take, keys],
   );
   // a tool in hand used through the engine — a mode taken up, an action run — Done, the object put down, or Copy, the
   // object copied while it stays in hand
@@ -693,7 +736,7 @@ function SelectionBarOn({
       eyebrow={eyebrow}
       shown={shown}
       stepAside={stepAside}
-      open={open && shown && !overWords}
+      open={open && shown}
       choosing={open && shown && chosen !== undefined ? choosing : null}
       onOpenChange={onOpenChange}
       pressSelects={pressSelects}

@@ -223,7 +223,7 @@ export interface MenuRow {
   readonly label: string;
   readonly key?: string;
   /** A row that waits, and why: drawn, never taken — a kind's act its kind says is disabled now (ICE I61), whose why is
-   * "" (the kind says none). */
+   * "" (the kind says none); the words' Paste where the page cannot read the clipboard (IK). */
   readonly waits?: string;
   /** Delete: armed red under the pointer. */
   readonly danger?: boolean;

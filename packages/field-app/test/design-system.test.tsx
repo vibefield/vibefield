@@ -809,10 +809,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "main",
       "ink.pen",
       "ink.highlight",
+      "main",
+      "main",
     ]);
     expect(
       wordsPlates.map((p) => p.querySelector("[data-selection-bar]")?.hasAttribute("data-words")),
-    ).toEqual([true, true, true, true]);
+    ).toEqual([true, true, true, true, true, true]);
     expect(
       [...(shownWords(wordsPlates[0])?.children ?? [])].map((el) =>
         el.classList.contains("vf-bar-rule") ? "|" : el.getAttribute("data-act"),
@@ -842,6 +844,43 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(picks(wordsPlates[2])).toEqual(["felt", "ball", "fountain:on", "red"]);
     expect(picks(wordsPlates[3])).toEqual(["yellow:on", "green", "pink", "blue", "orange", "none"]);
     expect(shownWords(wordsPlates[2])?.firstElementChild?.getAttribute("data-act")).toBe("back");
+    // V5b — the keys ICE's written part declares, in the tips; the words' More grown on its two plates, its rows the
+    // product's own (`wordsMenuGroups`): where the page reads the clipboard, and in the app, where Paste waits
+    const tipOf = (act: string): string | null | undefined =>
+      shownWords(wordsPlates[0])
+        ?.querySelector<HTMLElement>(`[data-act="word:${act}"]`)
+        ?.getAttribute("title");
+    expect(["ink.highlight", "ink.strike", "ink.underline", "ink.clear"].map(tipOf)).toEqual([
+      "Highlight  ⇧⌘H",
+      "Strike  ⇧⌘X",
+      "Underline  ⌘U",
+      "Clear",
+    ]);
+    const rows = (p: HTMLElement | undefined): string[] =>
+      [...(p?.querySelectorAll<HTMLElement>(".vf-bar-list [data-row]") ?? [])].map(
+        (el) => `${el.dataset.row}${el.getAttribute("aria-disabled") === "true" ? ":waits" : ""}`,
+      );
+    expect(
+      wordsPlates.map((p) => p.querySelector("[data-selection-bar]")?.hasAttribute("data-open")),
+    ).toEqual([false, false, false, false, true, true]);
+    expect(rows(wordsPlates[4])).toEqual([
+      "words:cut",
+      "words:copy",
+      "words:paste",
+      "words:selectAll",
+    ]);
+    expect(rows(wordsPlates[5])).toEqual([
+      "words:cut",
+      "words:copy",
+      "words:paste:waits",
+      "words:selectAll",
+    ]);
+    expect(wordsPlates[4]?.querySelector(".vf-bar-eye")?.textContent).toBe("WORDS");
+    expect(
+      wordsPlates[4]
+        ?.querySelector('[data-words-row="main"] [data-act="more"]')
+        ?.getAttribute("aria-expanded"),
+    ).toBe("true");
     // HN — the hand: a plate per state, each the shipping fan (and the carried card) placed by the
     // product's own model over fixture cards, and never taking the page's keyboard
     const cardPlates = [...(container?.querySelectorAll<HTMLElement>(".vf-ds-cards-plate") ?? [])];

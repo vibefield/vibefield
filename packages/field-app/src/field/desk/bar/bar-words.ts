@@ -125,18 +125,17 @@ export type WordsCell =
       readonly glyph: HeldGlyph | undefined;
     }
   | { readonly kind: "rule" }
-  /** The desk's More: drawn, and WAITING — its rows (Cut · Copy · Paste | Select all) need the editor's own command, which
-   * this build of ICE does not have (`DeskEditor.command`, petition I60's next slice). */
-  | { readonly kind: "more"; readonly label: string; readonly tip: string; readonly waits: true };
+  /** The desk's More: it grows the bar into the words' menu, Cut · Copy · Paste | Select all (bar-words-more.ts; V5b). */
+  | { readonly kind: "more"; readonly label: string; readonly tip: string };
 
 /** The words row's toolbar, by name (the objects' row is "Selection" — R9). */
 export const WORDS_TOOLBAR = "Words";
 
 /** The desk's More on the words row. */
-export const WORDS_MORE: WordsCell = { kind: "more", label: "More", tip: "More", waits: true };
+export const WORDS_MORE: WordsCell = { kind: "more", label: "More", tip: "More" };
 
 // ── THE ONE ADAPTER over ICE's slot shape (IK, 2026-11-25). Nothing else in the bar reads a slot's `choices`, `chosen`,
-// `pressed`, `swatch` or `enabled`: when ICE's act shape moves (a choice's `current` in place of the slot's `chosen`, a
+// `pressed`, `swatch`, `enabled` or `keys`: when ICE's act shape moves (a choice's `current` in place of the slot's `chosen`, a
 // swatch a CSS colour the kind says, a slot's `enabled`), `readSlot` alone changes. A swatch is what it ASKS for — a palette
 // role today, a colour after — with the shape it is drawn in; `swatchFor` draws either.
 
@@ -161,6 +160,8 @@ export interface WordsSlot {
   readonly label: string;
   readonly glyph: HeldGlyph | undefined;
   readonly kind: "choice" | "toggle" | "act";
+  /** The key that does the same, as its kind declares it for the tip ("⇧⌘X"); the bar binds nothing (V5b). */
+  readonly keys: string | undefined;
   /** A toggle's state now. */
   readonly pressed: boolean;
   /** False: its kind says it is not to be used now — drawn dim, `aria-disabled`, its press nothing. */
@@ -180,6 +181,7 @@ export function readSlot(slot: MenuSlot): WordsSlot {
     id: slot.id,
     label: slot.label,
     glyph: slot.glyph,
+    keys: slot.keys === undefined || slot.keys.length === 0 ? undefined : slot.keys,
     kind: offered.length > 0 ? "choice" : slot.pressed !== undefined ? "toggle" : "act",
     pressed: slot.pressed === true,
     enabled,
@@ -247,7 +249,7 @@ export function wordsCells(menu: readonly MenuSlot[], palette: SwatchPalette): W
     const base = {
       id: slot.id,
       label: slot.label,
-      tip: tipOf(slot.label),
+      tip: tipOf(slot.label, slot.keys),
       disabled: !slot.enabled,
     };
     if (slot.kind === "choice") {
