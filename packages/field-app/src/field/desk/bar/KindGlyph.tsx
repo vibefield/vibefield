@@ -12,10 +12,14 @@ import { getRendererLogger } from "../../../logging";
 // that one renderer: the glyph test's allow-list names it, and nothing else in product code draws an inline svg
 // for a kind (§13: "the bar's ONE path renderer for a kind's own drawing … one component, allow-listed").
 
-/** §13's table: ICE's glyph names → the set's drawing, its turn and its flip. */
+/** §13's table: ICE's glyph names → the set's drawing, its turn and its flip — and the words bar's three (IK, 2026-11-25),
+ * the names a kind's words acts declare for the marks (Strike, Underline, Clear: `inkActs({ glyphs })`). */
 export const ICE_GLYPHS: Readonly<
   Record<string, { readonly name: GlyphName; readonly turn?: GlyphTurn; readonly flip?: boolean }>
 > = {
+  strike: { name: "strike" },
+  underline: { name: "underline" },
+  "clear-marks": { name: "clear-marks" },
   chevron: { name: "chevron" },
   "chevron-left": { name: "chevron", turn: 180 },
   undo: { name: "undo" },

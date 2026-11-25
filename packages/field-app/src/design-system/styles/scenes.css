@@ -1384,6 +1384,14 @@
   pointer-events: none;
 }
 
+/* IK — the words bar's plates: the words selected on the sheet, under the desk's wash (DESIGN.md §8 "The words bar": the
+   pencil, `--vf-tutor`'s value, at 28%, square to the line) — a stand-in where the desk draws its own */
+.vf-ds-bar-wash {
+  position: absolute;
+  background: color-mix(in srgb, var(--vf-tutor) 28%, transparent);
+  pointer-events: none;
+}
+
 .vf-ds-bar-caption {
   position: absolute;
   bottom: 10px;

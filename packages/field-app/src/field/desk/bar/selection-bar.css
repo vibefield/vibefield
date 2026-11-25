@@ -376,6 +376,97 @@
   outline-offset: 2px;
 }
 
+/* ── THE WORDS BAR (IK; DESIGN.md §8 "The words bar"): the same element over the selected words, the words' row in the
+   objects' place — Pen ▾ · Highlight ▾ · rule · Strike · Underline · rule · Clear · More — and a choice act's row of
+   choices swapped into it, never a menu ───────────────────────────────────────────────────────────────────────── */
+
+/* over the words the objects' row is not drawn: the words' rows stand in its place */
+.vf-bar[data-words] .vf-bar-row[data-face-row="selection"] {
+  display: none;
+}
+
+/* the words' rows cross-fade over the swap (120 ms; reduced motion, the view's half): the shown one in, the rest out */
+.vf-bar-row[data-words-row]:not([data-shown]) {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--vf-bar-swap-ms, 120ms) ease,
+    visibility 0s linear var(--vf-bar-swap-ms, 120ms);
+}
+
+/* a choice act: a 44 × 32 cell — the words' current value, then a ▾ (the chevron turned 90, 8, in the cell's ink) */
+.vf-bar-choice {
+  width: 44px;
+  gap: 4px;
+}
+
+.vf-bar-choice.vf-bar-cell--text {
+  width: auto;
+}
+
+/* a swatch: the desk palette's own ink (the view's projection, `--vf-bar-swatch`), with a 1 px inner ring (black/14;
+   white/20 by night) so a black ink reads on the night glass, as the tools in hand's dots — on the row, a pen's 10 dot and
+   a highlighter's 14 × 6 stripe; in a pen's row of choices, a 12 dot */
+.vf-bar-swatch {
+  position: relative;
+  flex: none;
+  box-sizing: border-box;
+  background: var(--vf-bar-swatch, transparent);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+}
+
+.dark .vf-bar-swatch {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 20%);
+}
+
+.vf-bar-swatch[data-shape="dot"] {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.vf-bar-pick .vf-bar-swatch[data-shape="dot"] {
+  width: 12px;
+  height: 12px;
+}
+
+.vf-bar-swatch[data-shape="stripe"] {
+  width: 14px;
+  height: 6px;
+  border-radius: 2px;
+}
+
+/* hollow — no value the words share, None, or a role the desk's palette lacks: the shape's outline in the cell's ink */
+.vf-bar-swatch[data-hollow],
+.dark .vf-bar-swatch[data-hollow] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+/* the words' choice shown on: a swatch wears the ring the pen in hand wears — 1.5 px in the foreground, 2 px off it —
+   since on the inverted solid a felt or ball ink sinks into the day's ink and a highlighter into the night's */
+.vf-bar-pick[aria-pressed="true"] .vf-bar-swatch::after {
+  position: absolute;
+  inset: -3.5px;
+  border: 1.5px solid var(--vf-foreground);
+  border-radius: 50%;
+  content: "";
+}
+
+.vf-bar-pick[aria-pressed="true"] .vf-bar-swatch[data-shape="stripe"]::after {
+  border-radius: 5.5px;
+}
+
+/* a toggle on (Strike, Underline), and a choice drawn by its glyph or its label on: the inverted solid */
+.vf-bar-cell[data-toggle][aria-pressed="true"],
+.vf-bar-cell[data-toggle][aria-pressed="true"]:hover,
+.vf-bar-pick[aria-pressed="true"]:not([data-face="swatch"]),
+.vf-bar-pick[aria-pressed="true"]:not([data-face="swatch"]):hover {
+  color: var(--vf-foreground-inverse);
+  background: var(--vf-foreground);
+}
+
 /* ── THE LIST: the grown menu's rows, nearest first ───────────────────────────────────────────────────── */
 
 .vf-bar-list {

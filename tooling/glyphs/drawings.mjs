@@ -345,6 +345,39 @@ export const DRAWINGS = {
       d: `${rectPath(3.5, 5, 17, 16, 2.5)}${rectPath(5.5, 10, 13, 9, 1)}${circlePath(12, 14.5, 2)}${rectPath(7.4, 2.5, 2.2, 4.5, 1.1)}${rectPath(14.4, 2.5, 2.2, 4.5, 1.1)}`,
     },
   },
+  // The words bar (IK, 2026-11-25; DESIGN.md §8 "The words bar"): the marks the bar lays on the selected words, a
+  // kind's words acts declaring them by name (§13's table). Strike and Underline are the letters' own toolbar marks —
+  // the S with a line through it, the U with a line under it — and Clear is the text's T with the × of marks taken
+  // off. Back, the pens' and highlighters' row's way home, is the chevron turned 180: one drawing per meaning.
+  // Hardware records drawn, not shipped.
+  strike: {
+    label: "Strike",
+    group: "actions",
+    role: "The words bar's Strike: a line through the selected words, on while every selected letter carries one",
+    instrument: {
+      s: P(
+        "M16.2 7.6C15.5 6 13.9 5 12 5c-2.5 0-4.5 1.4-4.5 3.5 0 2.1 1.8 3 4.5 3.5s4.5 1.4 4.5 3.5c0 2.1-2 3.5-4.5 3.5-1.9 0-3.5-1-4.2-2.6M5 12h14",
+      ),
+    },
+    // a blocky S, its middle bar run out past both sides as the line through it
+    hardware: { d: "M7 4h10v3h-7v3.5h10v3h-3V20H7v-3h7v-3.5H4v-3h3Z" },
+  },
+  underline: {
+    label: "Underline",
+    group: "actions",
+    role: "The words bar's Underline: a line under the selected words, on while every selected letter carries one",
+    instrument: { s: P("M7.5 4.5v6.5a4.5 4.5 0 0 0 9 0V4.5M5.5 20h13") },
+    hardware: {
+      d: `M6 4h3v7a3 3 0 0 0 6 0V4h3v7a6 6 0 0 1-12 0Z${rectPath(5, 19, 14, 2.5, 1.25)}`,
+    },
+  },
+  "clear-marks": {
+    label: "Clear marks",
+    group: "actions",
+    role: "The words bar's Clear: every mark lifted from the selected words — the pen, the highlighter, the strike and the underline",
+    instrument: { s: P("M4.5 5h11M10 5v14M14.5 14.5l5 5M19.5 14.5l-5 5") },
+    hardware: { d: `M4 4h12v3h-4.5v12.5h-3V7H4Z${xPoly(17, 17, 3.3, 1.1)}` },
+  },
   // Godview round 3 (One Frame §23.2, ruled 2026-10-02): the wrapper around the
   // terminals wears the window's own pair, in the order windows keep them. The
   // page's paths were stand-ins (strokes of 1.7 and 1.9, 1-unit corners); these

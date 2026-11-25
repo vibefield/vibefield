@@ -318,10 +318,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(away?.getAttribute("data-godview-deck")).toBe("away");
     expect(away?.querySelector(".vf-godview-terminal-deck")?.hasAttribute("inert")).toBe(true);
     expect(away?.querySelector(".vf-godview-monitor-stage")).not.toBeNull();
-    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 68 (SD-2's
-    // `sound` made it 65, and OB-UI's three type glyphs — type-text, type-image, type-ref — 68):
-    // the wrapper's three (round 3) among them, drawn by the shipping component.
-    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(68);
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 71 (SD-2's
+    // `sound` made it 65, OB-UI's three type glyphs — type-text, type-image, type-ref — 68, and IK's
+    // words bar three — strike, underline, clear-marks — 71): the wrapper's three (round 3) among
+    // them, drawn by the shipping component.
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(71);
     for (const name of ["minimize", "maximize", "restore"]) {
       const tile = [...(container?.querySelectorAll("#glyphs .vf-ds-glyph") ?? [])].find(
         (figure) => figure.querySelector("code")?.textContent === name,
@@ -796,6 +797,51 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "seconds ring24 zone-back zone-ahead dial",
     ]);
     expect(hands[0]?.querySelector("[data-readout]")?.textContent).toBe("Page 1");
+    // IK — the words bar: a plate per row, the shipping bar over the selected words in its words' row, its cells read by
+    // the product's own model; the pens' and the highlighters' rows opened by the view's own state, the words' choice on
+    const wordsPlates = [
+      ...(container?.querySelectorAll<HTMLElement>(".vf-ds-bar-plate") ?? []),
+    ].filter((p) => p.dataset.state?.startsWith("Words"));
+    const shownWords = (p: HTMLElement | undefined): HTMLElement | null | undefined =>
+      p?.querySelector<HTMLElement>('[data-face-row="words"][data-shown]');
+    expect(wordsPlates.map((p) => shownWords(p)?.dataset.wordsRow)).toEqual([
+      "main",
+      "main",
+      "ink.pen",
+      "ink.highlight",
+    ]);
+    expect(
+      wordsPlates.map((p) => p.querySelector("[data-selection-bar]")?.hasAttribute("data-words")),
+    ).toEqual([true, true, true, true]);
+    expect(
+      [...(shownWords(wordsPlates[0])?.children ?? [])].map((el) =>
+        el.classList.contains("vf-bar-rule") ? "|" : el.getAttribute("data-act"),
+      ),
+    ).toEqual([
+      "word:ink.pen",
+      "word:ink.highlight",
+      "|",
+      "word:ink.strike",
+      "word:ink.underline",
+      "|",
+      "word:ink.clear",
+      "more",
+    ]);
+    // no pen shared and no highlight: both hollow
+    expect(
+      [
+        ...(shownWords(wordsPlates[1])?.querySelectorAll<HTMLElement>(
+          ".vf-bar-choice .vf-bar-swatch",
+        ) ?? []),
+      ].map((s) => `${s.dataset.shape}${s.hasAttribute("data-hollow") ? ":hollow" : ""}`),
+    ).toEqual(["dot:hollow", "stripe:hollow"]);
+    const picks = (p: HTMLElement | undefined): string[] =>
+      [...(shownWords(p)?.querySelectorAll<HTMLElement>("[data-choice]") ?? [])].map(
+        (el) => `${el.dataset.choice}${el.getAttribute("aria-pressed") === "true" ? ":on" : ""}`,
+      );
+    expect(picks(wordsPlates[2])).toEqual(["felt", "ball", "fountain:on", "red"]);
+    expect(picks(wordsPlates[3])).toEqual(["yellow:on", "green", "pink", "blue", "orange", "none"]);
+    expect(shownWords(wordsPlates[2])?.firstElementChild?.getAttribute("data-act")).toBe("back");
     // HN — the hand: a plate per state, each the shipping fan (and the carried card) placed by the
     // product's own model over fixture cards, and never taking the page's keyboard
     const cardPlates = [...(container?.querySelectorAll<HTMLElement>(".vf-ds-cards-plate") ?? [])];

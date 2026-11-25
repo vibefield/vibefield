@@ -33,6 +33,7 @@ import {
   travelTransition,
 } from "./bar-motion";
 import { barStats } from "./bar-stats";
+import { WORDS_TOOLBAR, type WordsCell, type WordsChoice, type WordsFace } from "./bar-words";
 import { ChoiceFields, type ChoiceFieldsHandle } from "./ChoiceFields";
 import { KindGlyph } from "./KindGlyph";
 import { PaperCard } from "./PaperCard";
@@ -73,6 +74,12 @@ import "./selection-bar.css";
 // press began is carried to the next object; the controller has folded it in the read that says the new selection. A
 // press the controller says lands on another object (the desk's pick) is that change already, and cuts it as it lands;
 // a press on the bare mat or on the selection itself folds it where it stands (M4), fading the list that stood open.
+//
+// THE WORDS BAR (IK, 2026-11-25; §8 "The words bar"; ICE I60): over the words selected on a sheet being written the same
+// element stands with the WORDS' row in the objects' place (the controller places it over the words' box). A choice act's
+// cell swaps that row for its choices — a row in the bar's place, never a menu — by a 120 ms cross-fade, the glass's width
+// following (reduced motion: halved, a fade only); Back or Esc returns. A press anywhere on it keeps the focus where it is:
+// the editor's field keeps it, and with it the range the acts run on (each `pointerdown` and `mousedown` default prevented).
 
 /** What the bar is placed from: the anchor's box, its count and the view (ICE's `SelectionAnchor`, narrowed). */
 export interface PlaceAnchor {
@@ -93,6 +100,28 @@ export interface SelectionBarHandle {
 
 /** The bar's role: over a selection, or the tools in hand (§8). */
 export type BarRole = "selection" | "hand";
+
+/** IK — the words' row the bar stands in over the selected words (§8 "The words bar"). */
+export interface WordsRow {
+  /** Its cells, read by the product's own model (bar-words.ts `wordsCells`). */
+  readonly cells: readonly WordsCell[];
+  /** The run of words it was read for: a new run (a new range after the words went) closes an open choices row. */
+  readonly run: number;
+}
+
+/** IK — a words act pressed: its id, and the choice made for a choice act's (the controller runs `ops.runMenuAction`). */
+export interface WordsPress {
+  readonly act: string;
+  readonly choice?: string;
+}
+
+/** A choice act's cell — its choices are the row it swaps in. */
+type ChoiceCell = Extract<WordsCell, { readonly kind: "choice" }>;
+
+const isChoice = (cell: WordsCell): cell is ChoiceCell => cell.kind === "choice";
+
+/** Where the focus goes after a swap made from the keyboard: into the row that came, or back to its opener. */
+type WordsFocus = { readonly to: "pick" } | { readonly to: "opener"; readonly id: string };
 
 export interface SelectionBarViewProps {
   readonly cells: readonly BarCell[];
@@ -128,6 +157,13 @@ export interface SelectionBarViewProps {
   readonly onHand?: (cell: HandCell) => void;
   /** Reduced motion (M6, R8): every duration halved, fades only. */
   readonly reduced?: boolean;
+  /** IK — words selected on a sheet being written: the words' row in place of the objects' (§8 "The words bar"); null or
+   * absent, the objects' row. */
+  readonly words?: WordsRow | null;
+  /** IK — a words act pressed, or one of a choice act's choices (the row stays: a second choice replaces the first). */
+  readonly onWords?: (press: WordsPress) => void;
+  /** IK — a plate's open choices row (the catalog): the choice act whose choices the words' row shows as it mounts. */
+  readonly wordsOpen?: string;
   /** A plate's fixed place (the catalog): the view places itself from it. The product places imperatively. */
   readonly fixed?: PlaceAnchor;
   readonly handleRef?: Ref<SelectionBarHandle>;
@@ -232,6 +268,9 @@ export function SelectionBarView({
   travelMs = TRAVEL_MS,
   onHand,
   reduced = false,
+  words,
+  onWords,
+  wordsOpen,
   fixed,
   handleRef,
 }: SelectionBarViewProps): ReactElement {
@@ -311,6 +350,40 @@ export function SelectionBarView({
   if (hand.length > 0) lastHand.current = hand;
   const handShown = role === "hand" || face === "hand" || swapping ? lastHand.current : NO_HAND;
 
+  // IK — THE WORDS' ROW (§8 "The words bar"): in the objects' place while words are given; a choice act's choices swap into
+  // the row's place. Every choice act's row is drawn beside the main one, out, so a swap cross-fades both ways.
+  const wordsRow = words ?? null;
+  const wordsShown = wordsRow !== null;
+  /** The words' row is what the bar shows (its width is the glass's) — read by the place and the fit. */
+  const wordsModeRef = useRef(wordsShown);
+  wordsModeRef.current = wordsShown;
+  /** The open choice act, by id: its choices stand in the words' row until Back or Esc. */
+  const [choiceAt, setChoiceAt] = useState<string | null>(wordsOpen ?? null);
+  // a new run of words — a new range after the words went, or none — closes the choices (state derived as it renders)
+  const [runSeen, setRunSeen] = useState(wordsRow?.run);
+  if (wordsRow?.run !== runSeen) {
+    setRunSeen(wordsRow?.run);
+    if (choiceAt !== null) setChoiceAt(null);
+  }
+  const opener =
+    choiceAt === null
+      ? undefined
+      : wordsRow?.cells.find((c): c is ChoiceCell => isChoice(c) && c.id === choiceAt);
+  /** The words' row shown: "main", or the open choice act's id. */
+  const wordsAt = opener?.id ?? "main";
+  /** Each words' row element by its key ("main", or its choice act's id) — measured, and walked by the keys. */
+  const wordsRows = useRef(new Map<string, HTMLDivElement>());
+  /** The shown words' row's width, measured after each content change. */
+  const wordsWidthRef = useRef(0);
+  const [wordsRover, setWordsRover] = useState(0);
+  /** The open choices row's stop: 0 is Back, k + 1 the k-th choice. */
+  const [pickRover, setPickRover] = useState(0);
+  /** A swap between the words' rows is on: the glass's width follows over the cross-fade. */
+  const [wordsSwapping, setWordsSwapping] = useState(false);
+  const wordsSwapTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** A swap made from the keyboard: where the focus goes once the row has come. */
+  const wordsFocus = useRef<WordsFocus | null>(null);
+
   /** The root's transitions: its opacity's (shown, away, out — or a reduced role change's fade), the travel's transform
    * while it travels (else the foot's travel clear of an object at work's marks, item 550), and the width's while the
    * contents cross-fade. */
@@ -341,13 +414,19 @@ export function SelectionBarView({
   const travelsRef = useRef(motion.travels);
   travelsRef.current = motion.travels;
 
+  /** The width of the row the bar stands in: the tools in hand's, the words' row shown (IK), or the objects'. */
+  const rowWidth = useCallback(
+    (hand: boolean): number =>
+      hand ? handWidthRef.current : wordsModeRef.current ? wordsWidthRef.current : widthRef.current,
+    [],
+  );
+
   /** The width of what the bar shows — its glass — written with its place. */
   const fit = useCallback((): void => {
     const root = rootRef.current;
     if (root === null) return;
-    const w = faceRef.current === "hand" ? handWidthRef.current : widthRef.current;
-    root.style.width = `${w}px`;
-  }, []);
+    root.style.width = `${rowWidth(faceRef.current === "hand")}px`;
+  }, [rowWidth]);
 
   /** THE GROW (R6, R20): the one element's material grows from the bar's own row — up, or down with the row
    * heading it — to the menu, which is placed from that row; written imperatively, as the place is. */
@@ -414,7 +493,7 @@ export function SelectionBarView({
       if (!now) return;
       const root = rootRef.current;
       const inHand = roleRef.current === "hand";
-      const w = inHand ? handWidthRef.current : widthRef.current;
+      const w = rowWidth(inHand);
       const at = inHand ? placeHand(anchor.view, w) : placeBar(anchor, w, anchor.clear ?? 0);
       if (root === null || at === null) return;
       placed.current = at;
@@ -453,7 +532,7 @@ export function SelectionBarView({
       }
       if (openRef.current) layoutGrow();
     },
-    [layoutGrow, fit, travelClear],
+    [layoutGrow, fit, travelClear, rowWidth],
   );
   useImperativeHandle(handleRef, () => ({ place }), [place]);
 
@@ -542,10 +621,11 @@ export function SelectionBarView({
   useLayoutEffect(() => {
     widthRef.current = rowRef.current?.offsetWidth ?? 0;
     handWidthRef.current = handRowRef.current?.offsetWidth ?? 0;
+    wordsWidthRef.current = wordsRows.current.get(wordsAt)?.offsetWidth ?? 0;
     listNatural.current = listRef.current?.scrollHeight ?? 0;
     const anchor = fixed ?? lastAnchor.current;
     if (anchor !== null) place(anchor);
-  }, [cells, handShown, listGroups, listEyebrow, expanded, fixed, place]);
+  }, [cells, handShown, listGroups, listEyebrow, expanded, fixed, place, wordsRow, wordsAt]);
 
   // the grow follows `open`; the hot row is the nearest takeable one as it opens
   useLayoutEffect(() => {
@@ -707,6 +787,85 @@ export function SelectionBarView({
     };
   }, [open, onOpenChange, pressSelects, walk, take, takeable, hot, focusOrigin]);
 
+  // IK — THE SWAP between the words' rows (§8 "The words bar"): to a choice act's choices, or back to the main row, by the
+  // 120 ms cross-fade, the glass's width following (reduced motion: a fade alone). The open row's stop is the words' choice,
+  // else Back.
+  const swapWords = useCallback(
+    (to: ChoiceCell | null, focus: WordsFocus | null): void => {
+      wordsFocus.current = focus;
+      setChoiceAt(to?.id ?? null);
+      if (to !== null) setPickRover(to.choices.findIndex((c) => c.on) + 1);
+      setWordsSwapping(true);
+      if (wordsSwapTimer.current !== null) clearTimeout(wordsSwapTimer.current);
+      wordsSwapTimer.current = setTimeout(() => {
+        wordsSwapTimer.current = null;
+        setWordsSwapping(false);
+      }, motion.swapMs + TRAVEL_GRACE_MS);
+    },
+    [motion.swapMs],
+  );
+  useEffect(
+    () => () => {
+      if (wordsSwapTimer.current !== null) clearTimeout(wordsSwapTimer.current);
+    },
+    [],
+  );
+
+  // a swap made from the keyboard: the focus goes into the row that came — the words' choice, else Back — or back to the
+  // cell that opened it (asked after each render the row or its acts changed; only a swap leaves a focus to give)
+  useEffect(() => {
+    const focus = wordsFocus.current;
+    if (focus === null) return;
+    wordsFocus.current = null;
+    if (focus.to === "pick") {
+      if (opener === undefined) return;
+      const at = opener.choices.findIndex((c) => c.on) + 1;
+      wordsRows.current
+        .get(opener.id)
+        ?.querySelector<HTMLElement>(`[data-cell="${at}"]`)
+        ?.focus({ preventScroll: true });
+      return;
+    }
+    const index = wordsRow?.cells.findIndex((c) => isChoice(c) && c.id === focus.id) ?? -1;
+    if (index < 0) return;
+    setWordsRover(index);
+    wordsRows.current
+      .get("main")
+      ?.querySelector<HTMLElement>(`[data-cell="${index}"]`)
+      ?.focus({ preventScroll: true });
+  }, [opener, wordsRow]);
+
+  // ESC while a choice act's choices are open returns to the main row — taken on the capture phase, ahead of the editor's
+  // field (whose lease would let the sheet go) and of the desk's Esc ladder; never an IME's own Esc
+  const choicesOpen = opener !== undefined;
+  const openerId = opener?.id;
+  useEffect(() => {
+    if (!choicesOpen || !visible || openerId === undefined) return;
+    const onKey = (event: globalThis.KeyboardEvent): void => {
+      if (event.key !== "Escape" || event.isComposing) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const inside = rootRef.current?.contains(document.activeElement) === true;
+      swapWords(null, inside ? { to: "opener", id: openerId } : null);
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [choicesOpen, visible, openerId, swapWords]);
+
+  // A PRESS ON THE WORDS' ROW KEEPS THE FOCUS where it is (§8, I60): the editor's field holds it and the range with it, so
+  // the act runs on the words — the default of every press's `pointerdown` and `mousedown` prevented (the click still comes)
+  useEffect(() => {
+    const root = rootRef.current;
+    if (root === null || !wordsShown) return;
+    const keep = (event: Event): void => event.preventDefault();
+    root.addEventListener("pointerdown", keep);
+    root.addEventListener("mousedown", keep);
+    return () => {
+      root.removeEventListener("pointerdown", keep);
+      root.removeEventListener("mousedown", keep);
+    };
+  }, [wordsShown]);
+
   // THE TOOLBAR'S KEYS (R9): ← → between its cells, Home End to its ends, Esc back to the desk, Enter and Space
   // run the cell — each taken from the desk's keymap (its arrows nudge, its ⏎ opens, its Esc climbs out). In hand the
   // tools in hand are a toolbar of their own, keyed the same way.
@@ -801,6 +960,62 @@ export function SelectionBarView({
         if (cell !== undefined) runHand(cell);
         return;
     }
+  };
+
+  // IK — THE WORDS' ROWS' KEYS (R9, as the bar has): a toolbar named "Words" — ← → Home End between its cells (a rule is
+  // no stop; More waits, a stop), Esc back to the desk, Enter and Space press; a choice act's row of choices is a toolbar of
+  // its own, named for the act, Back its first stop (its Esc, the capture's above, returns to the main row).
+  const wordsStops = (wordsRow?.cells ?? [])
+    .map((cell, index) => (cell.kind === "rule" ? -1 : index))
+    .filter((i) => i >= 0);
+  const wordsRovingAt = wordsStops.includes(wordsRover) ? wordsRover : (wordsStops[0] ?? 0);
+
+  /** A words act pressed: a choice act swaps in its choices; a toggle or a plain act runs; More waits (its rows need the
+   * editor's own command, not on this build of ICE). */
+  const pressWords = (cell: WordsCell, fromKeyboard: boolean): void => {
+    if (cell.kind === "choice") swapWords(cell, fromKeyboard ? { to: "pick" } : null);
+    else if (cell.kind === "toggle" || cell.kind === "act") onWords?.({ act: cell.id });
+  };
+
+  /** A choice chosen: it runs at once and the row stays, so a second choice replaces the first (§8). */
+  const pick = (cell: ChoiceCell, choice: WordsChoice): void =>
+    onWords?.({ act: cell.id, choice: choice.id });
+
+  /** Back to the main row — the focus to the cell that opened it, when the press was the keyboard's. */
+  const back = (cell: ChoiceCell, fromKeyboard: boolean): void =>
+    swapWords(null, fromKeyboard ? { to: "opener", id: cell.id } : null);
+
+  const onWordsKey = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const target = event.target as HTMLElement;
+    const index = Number(target.dataset.cell);
+    if (!Number.isFinite(index)) return;
+    const cell = wordsRow?.cells[index];
+    if (roveKey(event, index, wordsStops, wordsRows.current.get("main") ?? null, setWordsRover))
+      return;
+    switch (event.key) {
+      case "Escape":
+        event.preventDefault();
+        target.blur();
+        return;
+      case "Enter":
+      case " ":
+        event.preventDefault();
+        if (cell !== undefined) pressWords(cell, true);
+        return;
+    }
+  };
+
+  const onPickKey = (event: KeyboardEvent<HTMLDivElement>, cell: ChoiceCell): void => {
+    const target = event.target as HTMLElement;
+    const index = Number(target.dataset.cell);
+    if (!Number.isFinite(index)) return;
+    const stops = [0, ...cell.choices.map((_, k) => k + 1)];
+    if (roveKey(event, index, stops, wordsRows.current.get(cell.id) ?? null, setPickRover)) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    const choice = cell.choices[index - 1];
+    if (index === 0) back(cell, true);
+    else if (choice !== undefined) pick(cell, choice);
   };
 
   const press = (cell: BarCell, fromKeyboard: boolean): void => {
@@ -1041,6 +1256,165 @@ export function SelectionBarView({
     }
   };
 
+  // IK — THE WORDS' CELLS (§8 "The words bar"): a swatch in the desk palette's own ink (the dot of a pen, the stripe of a
+  // highlighter; hollow when none is shared), a kind's glyph by §13's table, or a label
+  const faceNode = (face: WordsFace, label: string): ReactElement | string => {
+    if (face.by === "glyph") return <KindGlyph glyph={face.glyph} label={label} />;
+    if (face.by === "label") return label;
+    const { shape, ink } = face.swatch;
+    return (
+      <span
+        className="vf-bar-swatch"
+        data-shape={shape}
+        aria-hidden="true"
+        {...(ink === undefined
+          ? { "data-hollow": "" }
+          : { style: { "--vf-bar-swatch": ink } as CSSProperties })}
+      />
+    );
+  };
+
+  // the words' row: Pen ▾ · Highlight ▾ · rule · Strike · Underline · rule · Clear · More — as the kind declares them
+  const wordsNode = (cell: WordsCell, index: number): ReactElement => {
+    const stop = {
+      "data-cell": index,
+      tabIndex: index === wordsRovingAt ? 0 : -1,
+      onFocus: () => setWordsRover(index),
+    };
+    switch (cell.kind) {
+      case "rule":
+        return <span key={`rule-${index}`} className="vf-bar-rule" aria-hidden="true" />;
+      case "choice":
+        return (
+          <button
+            key={`word-${cell.id}`}
+            type="button"
+            className={
+              cell.face.by === "label"
+                ? "vf-bar-cell vf-bar-choice vf-bar-cell--text"
+                : "vf-bar-cell vf-bar-choice"
+            }
+            data-act={`word:${cell.id}`}
+            data-face={cell.face.by}
+            aria-label={cell.label}
+            title={cell.tip}
+            onClick={() => pressWords(cell, false)}
+            {...stop}
+          >
+            {faceNode(cell.face, cell.label)}
+            <FieldGlyph name="chevron" size={8} turn={90} />
+          </button>
+        );
+      case "toggle":
+      case "act":
+        return (
+          <button
+            key={`word-${cell.id}`}
+            type="button"
+            className={cell.glyph === undefined ? "vf-bar-cell vf-bar-cell--text" : "vf-bar-cell"}
+            data-act={`word:${cell.id}`}
+            aria-label={cell.label}
+            title={cell.tip}
+            {...(cell.kind === "toggle"
+              ? {
+                  "data-toggle": "",
+                  "aria-pressed": cell.on,
+                  ...(cell.on ? { "data-on": "" } : {}),
+                }
+              : {})}
+            onClick={() => pressWords(cell, false)}
+            {...stop}
+          >
+            {cell.glyph === undefined ? (
+              cell.label
+            ) : (
+              <KindGlyph glyph={cell.glyph} label={cell.label} />
+            )}
+          </button>
+        );
+      case "more":
+        return (
+          <button
+            key="more"
+            type="button"
+            className="vf-bar-cell"
+            data-act="more"
+            aria-label={cell.label}
+            title={cell.tip}
+            aria-disabled="true"
+            data-disabled=""
+            {...stop}
+          >
+            <FieldGlyph name="ellipsis" size={16} />
+          </button>
+        );
+    }
+  };
+
+  // a choice act's row: Back · each choice a 32 cell holding its swatch, the words' choice shown on — Back wears §13's
+  // chevron turned 180, its one drawing for going back
+  const choicesNode = (cell: ChoiceCell): ReactElement => {
+    const shown = wordsAt === cell.id;
+    const stop = (index: number) => ({
+      "data-cell": index,
+      tabIndex: index === (shown ? pickRover : 0) ? 0 : -1,
+      onFocus: () => setPickRover(index),
+    });
+    return (
+      <div
+        key={`choices-${cell.id}`}
+        ref={(el) => {
+          if (el === null) wordsRows.current.delete(cell.id);
+          else wordsRows.current.set(cell.id, el);
+        }}
+        className="vf-bar-row"
+        data-face-row="words"
+        data-words-row={cell.id}
+        {...(shown ? { "data-shown": "" } : {})}
+        role="toolbar"
+        aria-label={cell.label}
+        aria-orientation="horizontal"
+        {...(shown && face === "selection" ? {} : { "aria-hidden": true })}
+        inert={!shown || face !== "selection"}
+        onKeyDown={(event) => onPickKey(event, cell)}
+        style={{ height: BAR.height }}
+      >
+        <button
+          type="button"
+          className="vf-bar-cell"
+          data-act="back"
+          aria-label="Back"
+          title="Back"
+          onClick={() => back(cell, false)}
+          {...stop(0)}
+        >
+          <FieldGlyph name="chevron" size={16} turn={180} />
+        </button>
+        {cell.choices.map((choice, k) => (
+          <button
+            key={choice.id}
+            type="button"
+            className={
+              choice.face.by === "label"
+                ? "vf-bar-cell vf-bar-pick vf-bar-cell--text"
+                : "vf-bar-cell vf-bar-pick"
+            }
+            data-choice={choice.id}
+            data-face={choice.face.by}
+            aria-label={choice.label}
+            title={choice.label}
+            aria-pressed={choice.on}
+            {...(choice.on ? { "data-on": "" } : {})}
+            onClick={() => pick(cell, choice)}
+            {...stop(k + 1)}
+          >
+            {faceNode(choice.face, choice.label)}
+          </button>
+        ))}
+      </div>
+    );
+  };
+
   // the list, nearest first in the DOM (it is read that way); grown up it stands bottom-up (column-reverse)
   let order = 0;
   const listNodes: ReactElement[] = [];
@@ -1133,10 +1507,19 @@ export function SelectionBarView({
     "--vf-bar-swap-ms": `${motion.swapMs}ms`,
     opacity: visible ? 1 : 0,
     visibility: visible ? "visible" : "hidden",
-    transition: transitionOf(swapPhase, traveling, swapping, shown, away, clearing),
+    transition: transitionOf(
+      swapPhase,
+      traveling,
+      swapping || (wordsSwapping && !reduced),
+      shown,
+      away,
+      clearing,
+    ),
   } as CSSProperties;
 
   const selectionShown = face === "selection";
+  /** The objects' row is the one shown: over a selection, and no words given (IK). */
+  const objectsShown = selectionShown && !wordsShown;
   return (
     <div
       ref={rootRef}
@@ -1148,6 +1531,7 @@ export function SelectionBarView({
       data-face={face}
       {...(traveling ? { "data-traveling": "" } : {})}
       {...(open ? { "data-open": "" } : {})}
+      {...(wordsShown ? { "data-words": "" } : {})}
       style={rootStyle}
       inert={!visible}
     >
@@ -1172,13 +1556,35 @@ export function SelectionBarView({
         role="toolbar"
         aria-label="Selection"
         aria-orientation="horizontal"
-        {...(selectionShown ? {} : { "aria-hidden": true })}
-        inert={!selectionShown}
+        {...(objectsShown ? {} : { "aria-hidden": true })}
+        inert={!objectsShown}
         onKeyDown={onToolbarKey}
         style={{ height: BAR.height }}
       >
         {cells.map(cellNode)}
       </div>
+      {wordsRow === null ? null : (
+        <div
+          ref={(el) => {
+            if (el === null) wordsRows.current.delete("main");
+            else wordsRows.current.set("main", el);
+          }}
+          className="vf-bar-row"
+          data-face-row="words"
+          data-words-row="main"
+          {...(wordsAt === "main" ? { "data-shown": "" } : {})}
+          role="toolbar"
+          aria-label={WORDS_TOOLBAR}
+          aria-orientation="horizontal"
+          {...(wordsAt === "main" && selectionShown ? {} : { "aria-hidden": true })}
+          inert={wordsAt !== "main" || !selectionShown}
+          onKeyDown={onWordsKey}
+          style={{ height: BAR.height }}
+        >
+          {wordsRow.cells.map(wordsNode)}
+        </div>
+      )}
+      {wordsRow === null ? null : wordsRow.cells.filter(isChoice).map(choicesNode)}
       {handShown.length === 0 ? null : (
         <div
           ref={handRowRef}

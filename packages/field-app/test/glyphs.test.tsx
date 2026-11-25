@@ -46,8 +46,9 @@ const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch)\(|\b(?:black|whi
 
 describe("the glyph set", () => {
   it("has every name drawn, in one box, in currentColor and nothing else", () => {
-    // SD-2 (DESIGN.md §13): `sound`, Settings → Sound's rail, was the 65th; CS-D10 A's three made 68
-    expect(GLYPH_NAMES.length).toBe(68);
+    // SD-2 (DESIGN.md §13): `sound`, Settings → Sound's rail, was the 65th; CS-D10 A's three made 68; IK's three — the
+    // words bar's marks — made 71
+    expect(GLYPH_NAMES.length).toBe(71);
     expect(GLYPH_NAMES).toContain("sound");
     expect(GLYPHS.sound.kind).toBe("instrument");
     for (const name of ["type-text", "type-image", "type-ref"] as const) {
@@ -55,6 +56,19 @@ describe("the glyph set", () => {
       expect(GLYPHS[name].kind, name).toBe("instrument");
       expect(GLYPH_META[name].group, name).toBe("objects");
     }
+    // IK (§13 "The words bar's three"): Strike, Underline and Clear, actions drawn to the Instrument law; Back is the
+    // chevron turned 180, so `back` is no drawing of its own
+    for (const name of ["strike", "underline", "clear-marks"] as const) {
+      expect(GLYPH_NAMES).toContain(name);
+      expect(GLYPHS[name].kind, name).toBe("instrument");
+      expect(GLYPH_META[name].group, name).toBe("actions");
+    }
+    expect(GLYPH_NAMES).not.toContain("back");
+    expect([
+      GLYPH_META.strike.label,
+      GLYPH_META.underline.label,
+      GLYPH_META["clear-marks"].label,
+    ]).toEqual(["Strike", "Underline", "Clear marks"]);
     // `document` left Studio only with them: it says a card's file
     expect(GLYPH_META.document.group).toBe("objects");
     for (const name of GLYPH_NAMES) {

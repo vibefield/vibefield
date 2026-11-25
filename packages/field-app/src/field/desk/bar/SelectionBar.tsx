@@ -13,12 +13,14 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { type FrameSurface, foldSurface } from "../../../frame/frame-surface";
+import { useAppTheme } from "../../../theme";
 import { isCopyChord, listenForProductChord } from "../../product-chords";
 import { atWorkBarClear, atWorkInkScale } from "../at-work/at-work-model";
 import { atWorkStore } from "../at-work/at-work-store";
 import { copySelection } from "../copy/copy-to-hand";
 import { inHand } from "../desk-anchor";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
+import { deskLook } from "../desk-layer";
 import type { ObjectWords } from "../desk-object-words";
 import { type BarActId, COMMENT_PAD_TYPE, runBarAct } from "./bar-acts";
 import { offScreen } from "./bar-geometry";
@@ -37,8 +39,15 @@ import {
 } from "./bar-model";
 import { TRAVEL_MS, useReducedMotion } from "./bar-motion";
 import { barStats } from "./bar-stats";
+import { sayMissingSwatches, wordsCells, wordsKey } from "./bar-words";
 import { downloadable, downloadPrint } from "./print-download";
-import { type PlaceAnchor, type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
+import {
+  type PlaceAnchor,
+  type SelectionBarHandle,
+  SelectionBarView,
+  type WordsPress,
+  type WordsRow,
+} from "./SelectionBarView";
 
 // THE SELECTION BAR'S CONTROLLER (DK-11; DESIGN.md §8 "The doors", "The selection bar", "The bar grown — More, and
 // right-click"; R5, R7, R8, R26). ICE gives the chrome DATA, never pixels: `handle.selection` offers `anchor()` and
@@ -88,6 +97,13 @@ import { type PlaceAnchor, type SelectionBarHandle, SelectionBarView } from "./S
 // the foot clears its marks (`atWorkClearOf`). The clearance is read at each publish and whenever the at-work store
 // moves it, so an agent arriving on the selection or leaving it re-places the bar while the desk sleeps; the view
 // travels it on the stroke's own times when it turns on or off over the same selection.
+// THE WORDS BAR (IK, 2026-11-25; §8 "The words bar"; ICE I60): while a sheet is written and words on it are selected, the
+// anchor carries `words` — their box on screen, their object, their range and the object's WORDS acts — and the same bar
+// stands over them (by the bar's own place: its foot 10 above, flipped below at 94, 16 from the sides) with the words' row
+// in the objects' place (bar-words.ts). While a press the editor claimed is down ICE says no words, so a sheet being written
+// keeps the bar away, and it comes 200 ms after the release, as after a gesture; a gesture still sends it away. Each act
+// runs through `ops.runMenuAction(id, { choice?, range })`, the range read at the press from the publish's own copy — never
+// a render's. A kind whose words declare no acts brings no words' row: the bar stays away while it is written, as before.
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -123,11 +139,49 @@ interface BarFacts {
   readonly onScreen: boolean;
   /** An object is in hand, not flying home: the bar is the tools in hand (DK-12). */
   readonly inHand: boolean;
-  /** A gesture is on, or a note is being written (R8) — or the object in hand flies home. Never while it is in hand. */
+  /** A gesture is on, or a note is being written with no words selected on it (R8; IK) — or the object in hand flies
+   * home. Never while it is in hand. */
   readonly stepAside: boolean;
   readonly selection: SelectionFacts;
   /** What the bar says in hand (the anchor's `held`), or null with nothing in hand. */
   readonly hand: HandFacts | null;
+  /** IK — what the bar says of the words selected on a sheet being written: kept while the bar steps aside or fades out
+   * (it says what it said, R8); null — the objects' row. */
+  readonly words: WordsFacts | null;
+  /** IK — the anchor carries words with acts to offer NOW (not merely kept). */
+  readonly wordsLive: boolean;
+  /** IK — those words are on screen. */
+  readonly wordsOnScreen: boolean;
+}
+
+/** IK — the words as the bar says them: the object's words acts (the anchor's `words.menu`), and their run. */
+interface WordsFacts {
+  /** The acts as one key (what the bar says of them). */
+  readonly key: string;
+  readonly menu: readonly MenuSlot[];
+  /** Counts the runs of words: a new range after the words went (a press, a caret) is a new run, and closes the choices. */
+  readonly run: number;
+}
+
+/** IK — the anchor's words when they bring the words' row: some acts to offer, and nothing in hand. */
+const liveWords = (anchor: SelectionAnchor) => {
+  const words = anchor.words;
+  return words !== undefined && words.menu.length > 0 && !inHand(anchor) ? words : undefined;
+};
+
+/** IK — the words as of this anchor: the live ones (`prev`'s own when nothing the bar says moved), else the last ones while
+ * the bar is not to show the objects' row (`keep`), else none. */
+function readWords(
+  live: ReturnType<typeof liveWords>,
+  prev: BarFacts | null,
+  keep: boolean,
+): WordsFacts | null {
+  const was = prev?.words ?? null;
+  if (live === undefined) return keep ? was : null;
+  const key = wordsKey(live.menu);
+  const run = prev?.wordsLive === true && was !== null ? was.run : (was?.run ?? 0) + 1;
+  if (was !== null && was.key === key && was.run === run) return was;
+  return { key, menu: live.menu, run };
 }
 
 /** The hand as the bar says it: the kind's slots (and their key), the mode in hand, the kind's word, the travel. */
@@ -219,9 +273,16 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
   const faults = (desk.handle.status().faults ?? []).length;
   const onScreen = anchor.box !== null && !offScreen(anchor.box, anchor.view);
   const held = inHand(anchor);
-  // in hand the tools stay through a stroke or a line being written; only the flight home steps them aside
-  const stepAside = !held && (anchor.gesturing || anchor.editing || anchor.held?.landing === true);
+  const live = liveWords(anchor);
+  const wordsLive = live !== undefined;
+  const wordsOnScreen = live !== undefined && !offScreen(live.box, anchor.view);
+  // in hand the tools stay through a stroke or a line being written; only the flight home steps them aside — and a sheet
+  // being written sends the bar away only while no words on it are selected (IK: then it comes to them)
+  const stepAside =
+    !held && (anchor.gesturing || (anchor.editing && !wordsLive) || anchor.held?.landing === true);
   const hand = readHand(anchor, prev?.hand ?? null);
+  // the words are kept while the bar is not to show the objects' row — it steps aside, or it goes — so it says what it said
+  const words = readWords(live, prev, stepAside || !(anchor.count > 0 && onScreen));
   // a print's picture may arrive after the print was selected: the one fact of the selection read again each publish
   // (one lookup in memory). Deselected, the bar fades out saying what it said, so nothing is asked then.
   const savable =
@@ -239,6 +300,9 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     prev.inHand === held &&
     prev.stepAside === stepAside &&
     prev.hand === hand &&
+    prev.words === words &&
+    prev.wordsLive === wordsLive &&
+    prev.wordsOnScreen === wordsOnScreen &&
     savable
   ) {
     return prev;
@@ -261,6 +325,9 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     inHand: held,
     stepAside,
     hand,
+    words,
+    wordsLive,
+    wordsOnScreen,
     // deselected, the bar fades out still saying what it said (R8): its content stays the last selection's
     selection:
       prev !== null && (same || anchor.count === 0)
@@ -318,6 +385,12 @@ function SelectionBarOn({
   const [choosing, setChoosing] = useState<Choosing | null>(null);
   const choosingRef = useRef(choosing);
   choosingRef.current = choosing;
+  /** IK — the words a words act runs on, as the last publish said them (never a render's copy: E7's M13). */
+  const rangeRef = useRef<{
+    readonly entity: Entity;
+    readonly from: number;
+    readonly to: number;
+  } | null>(null);
 
   const fold = useCallback((): void => {
     const { surface: now, onSurfaceChange: change } = surfaceRef.current;
@@ -338,12 +411,20 @@ function SelectionBarOn({
       const prev = factsRef.current;
       const next = readFacts(anchor, desk, prev);
       clear = atWorkClearOf(desk);
-      const at: PlaceAnchor = { ...anchor, clear, selection: next.key };
+      // IK: over words the bar stands over THEIR box, by its own place's rules; the range is kept for the acts' runs
+      const live = liveWords(anchor);
+      rangeRef.current =
+        live === undefined ? null : { entity: live.entity, from: live.from, to: live.to };
+      const at: PlaceAnchor =
+        live === undefined
+          ? { ...anchor, clear, selection: next.key }
+          : { box: live.box, count: 1, view: anchor.view };
       if (next !== prev) {
         factsRef.current = next;
-        // what it SAYS changed — the selection's cells, or the hand's — so it is placed once it has re-rendered: this
-        // anchor is remembered first, since that render may be this very read's
-        const says = next.selection !== prev.selection || next.hand !== prev.hand;
+        // what it SAYS changed — the selection's cells, the hand's, or the words' — so it is placed once it has re-rendered:
+        // this anchor is remembered first, since that render may be this very read's
+        const says =
+          next.selection !== prev.selection || next.hand !== prev.hand || next.words !== prev.words;
         if (says) barRef.current?.place(at, false);
         const commit = (): void => {
           setFacts(next);
@@ -361,8 +442,11 @@ function SelectionBarOn({
         else commit();
         if (says) return;
       }
-      // in hand it stands under the head whatever the selection's box; over a selection, only where it can stand
-      const placing = next.inHand || (next.count > 0 && next.onScreen && !next.stepAside);
+      // in hand it stands under the head whatever the selection's box; over words or a selection, only where it can stand
+      const placing =
+        next.inHand ||
+        (!next.stepAside &&
+          (next.wordsLive ? next.wordsOnScreen : next.count > 0 && next.onScreen));
       barRef.current?.place(at, placing);
     };
     read(false);
@@ -377,15 +461,19 @@ function SelectionBarOn({
     };
   }, [source, desk, fold]);
 
-  const shown = !hidden && (facts.inHand || (facts.count > 0 && facts.onScreen));
+  // over words, while they are on screen (IK); over a selection on screen; or in hand
+  const shown =
+    !hidden &&
+    (facts.inHand || (facts.wordsLive ? facts.wordsOnScreen : facts.count > 0 && facts.onScreen));
   const stepAside = facts.stepAside;
+  const overWords = facts.words !== null;
 
   // R5: the menu closes on a gesture and when the bar goes — into the hand too, unless it is a tool in hand's choices
-  // that are listed (ICE I62); and a choice's list closes as its role goes (picked up, or put down)
+  // that are listed (ICE I62); and a choice's list closes as its role goes (picked up, or put down); and to the words (IK)
   const listFits = choosing === null ? !facts.inHand : (choosing.of === "tool") === facts.inHand;
   useEffect(() => {
-    if (open && (!shown || stepAside || !listFits)) fold();
-  }, [open, shown, stepAside, listFits, fold]);
+    if (open && (!shown || stepAside || !listFits || overWords)) fold();
+  }, [open, shown, stepAside, listFits, overWords, fold]);
   // folded, the bar lists More's menu again when it next grows
   useEffect(() => {
     if (!open) setChoosing(null);
@@ -464,6 +552,32 @@ function SelectionBarOn({
   const eyebrow = useMemo(
     () => (chosen === undefined ? menuEyebrow(facts.selection) : choiceEyebrow(chosen.label)),
     [chosen, facts.selection],
+  );
+  // IK — the words' row, its swatches in the desk's own palette as the theme dresses it (the stage's `deskLook`)
+  const theme = useAppTheme().resolved;
+  const palette = useMemo(() => deskLook(theme).palette, [theme]);
+  const wordsRow = useMemo<WordsRow | null>(
+    () =>
+      facts.words === null
+        ? null
+        : { cells: wordsCells(facts.words.menu, palette), run: facts.words.run },
+    [facts.words, palette],
+  );
+  // a swatch role the palette lacks draws hollow, and is said once
+  useEffect(() => {
+    if (wordsRow !== null) sayMissingSwatches(wordsRow.cells);
+  }, [wordsRow]);
+  // IK — a words act runs on the words as the anchor last said them: `ops.runMenuAction(id, { choice?, range })`
+  const onWords = useCallback(
+    (press: WordsPress): void => {
+      const range = rangeRef.current;
+      if (range === null) return;
+      engine.ops.runMenuAction(
+        press.act,
+        press.choice === undefined ? { range } : { choice: press.choice, range },
+      );
+    },
+    [engine],
   );
 
   // More grows the bar into ITS menu — over a choice's list too, which gives way to it (§8 "A choice's list")
@@ -551,7 +665,8 @@ function SelectionBarOn({
   // where the bar's Copy could be pressed — the desk showing (no cover over it, no sheet, the board put away), a
   // selection or an object in hand, no gesture and no writing — and never from a field or a kind that holds the
   // keyboard (the desk keymap's own gates: a note's editor, a page in hand, any input keep their native copy). Not
-  // claimed, the key goes on as it always did.
+  // claimed, the key goes on as it always did. IK (§8 "The words bar" — Keys): while words are selected on a sheet being
+  // written the keys are the field's, so ⌘C copies the words and Make a card's stands down, wherever the focus is.
   const hiddenRef = useRef(hidden);
   hiddenRef.current = hidden;
   useEffect(
@@ -562,7 +677,7 @@ function SelectionBarOn({
           return (
             isCopyChord(event, keys) &&
             !hiddenRef.current &&
-            (now.inHand || (now.count > 0 && !now.stepAside)) &&
+            (now.inHand || (now.count > 0 && !now.stepAside && !now.wordsLive)) &&
             !isEditableTarget(event.target) &&
             !keyboardClaimOf(event.target).claimed
           );
@@ -582,7 +697,7 @@ function SelectionBarOn({
       eyebrow={eyebrow}
       shown={shown}
       stepAside={stepAside}
-      open={open && shown}
+      open={open && shown && !overWords}
       choosing={open && shown && chosen !== undefined ? choosing : null}
       onOpenChange={onOpenChange}
       pressSelects={pressSelects}
@@ -593,6 +708,8 @@ function SelectionBarOn({
       travelMs={travel.current}
       onHand={onHand}
       reduced={reduced}
+      words={wordsRow}
+      onWords={onWords}
     />
   );
 }

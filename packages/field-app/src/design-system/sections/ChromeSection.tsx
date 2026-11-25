@@ -51,7 +51,14 @@ import { NewSparkSpecimen } from "../NewSparkPreview";
 import { PACKAGE_CIRCLE_STATES, PackageCirclePlate } from "../PackageCirclePreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
-import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
+import {
+  BAR_STATES,
+  HAND_STATES,
+  HandPlate,
+  SelectionBarPlate,
+  WORDS_STATES,
+  WordsPlate,
+} from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
 import { UpdateFacePlate, UpdateMenuPlate } from "../UpdateCornerPreview";
 import {
@@ -513,6 +520,27 @@ export function ChromeSection({
           the set lacks is the `missing` mark. Taped, Lift the tape and no Duplicate; a missing face
           names its type and word where the acts would stand. More grows the same element into its
           solid menu — up, or down near the top — nearest first, the eyebrow at the far end.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The words bar — the same bar over the selected words"
+        source="field/desk/bar/* · DESIGN.md §8 The words bar, §13"
+        bleed
+      >
+        <div className="vf-ds-bar-plates">
+          {WORDS_STATES.map((state) => (
+            <WordsPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          While a sheet is written and words on it are selected (IK), the same element stands 10
+          above them with the words' row — Pen ▾ · Highlight ▾ · rule · Strike · Underline · rule ·
+          Clear · More — the words' pen a dot and their highlighter a stripe in the desk's own inks,
+          hollow when the words share none. Pen ▾ and Highlight ▾ swap the row for their choices,
+          Back first and the words' choice ringed; a choice applies at once and the row stays.
+          Strike and Underline are toggles, the inverted solid while on. More waits for the
+          clipboard's rows.
         </p>
       </Specimen>
 

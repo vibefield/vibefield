@@ -20,7 +20,7 @@ export interface GlyphMeta {
   readonly role: string;
 }
 
-export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","minimize","maximize","restore","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","sound","type-text","type-image","type-ref","message","key","question","exclaim","flame","missing","importing","document","layers","sparkle"] as const;
+export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","strike","underline","clear-marks","minimize","maximize","restore","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","sound","type-text","type-image","type-ref","message","key","question","exclaim","flame","missing","importing","document","layers","sparkle"] as const;
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
@@ -46,6 +46,9 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   pen: {"label":"Pen","group":"actions","role":"A held kind's pen as a mode (the calendar's): on is the inverted solid"},
   eraser: {"label":"Eraser","group":"actions","role":"A held kind's eraser as a mode (the whiteboard's): on is the inverted solid"},
   today: {"label":"Today","group":"actions","role":"The held calendar's Today: back to this month"},
+  strike: {"label":"Strike","group":"actions","role":"The words bar's Strike: a line through the selected words, on while every selected letter carries one"},
+  underline: {"label":"Underline","group":"actions","role":"The words bar's Underline: a line under the selected words, on while every selected letter carries one"},
+  "clear-marks": {"label":"Clear marks","group":"actions","role":"The words bar's Clear: every mark lifted from the selected words — the pen, the highlighter, the strike and the underline"},
   minimize: {"label":"Minimize","group":"actions","role":"Godview's terminals, put away — every session keeps running; the first of the Lip's two controls"},
   maximize: {"label":"Maximize","group":"actions","role":"Godview's terminals take the window; the second of the Lip's two controls"},
   restore: {"label":"Restore","group":"actions","role":"Maximized terminals back to their place: the square behind a square, standing where maximize stood"},
@@ -117,6 +120,9 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   pen: {"kind":"instrument","strokes":[["path",{"d":"M5 19l1.2-4.2L15.6 5.4a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L9.2 17.8z"}],["path",{"d":"M13.5 7.5l3 3"}]],"fills":[]},
   eraser: {"kind":"instrument","strokes":[["path",{"d":"M4.5 15.5l7-7a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8l-4 4H9.3l-4.8-4z"}],["path",{"d":"M9 19.5h11"}]],"fills":[]},
   today: {"kind":"instrument","strokes":[["rect",{"x":"4.5","y":"6","width":"15","height":"13.5","rx":"2.5"}],["path",{"d":"M4.5 10.5h15M8.5 4v3.5M15.5 4v3.5"}]],"fills":[["circle",{"cx":"12","cy":"15","r":"1.6"}]]},
+  strike: {"kind":"instrument","strokes":[["path",{"d":"M16.2 7.6C15.5 6 13.9 5 12 5c-2.5 0-4.5 1.4-4.5 3.5 0 2.1 1.8 3 4.5 3.5s4.5 1.4 4.5 3.5c0 2.1-2 3.5-4.5 3.5-1.9 0-3.5-1-4.2-2.6M5 12h14"}]],"fills":[]},
+  underline: {"kind":"instrument","strokes":[["path",{"d":"M7.5 4.5v6.5a4.5 4.5 0 0 0 9 0V4.5M5.5 20h13"}]],"fills":[]},
+  "clear-marks": {"kind":"instrument","strokes":[["path",{"d":"M4.5 5h11M10 5v14M14.5 14.5l5 5M19.5 14.5l-5 5"}]],"fills":[]},
   minimize: {"kind":"instrument","strokes":[["path",{"d":"M6 12h12"}]],"fills":[]},
   maximize: {"kind":"instrument","strokes":[["rect",{"x":"6","y":"6","width":"12","height":"12","rx":"3"}]],"fills":[]},
   restore: {"kind":"instrument","strokes":[["rect",{"x":"6","y":"10","width":"8","height":"8","rx":"2"}],["path",{"d":"M10 6h6a2 2 0 0 1 2 2v6"}]],"fills":[]},

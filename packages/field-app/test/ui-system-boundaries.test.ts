@@ -1263,8 +1263,9 @@ describe("UI system ownership boundaries", () => {
     // bar's own classes, never a stylesheet, never the desk's doors or the host.
     const fixture = source("design-system/SelectionBarPreview.tsx");
     expect(fixture).toContain("SelectionBarView");
-    // the CALLS, not the names (an import alone would satisfy a name) — DK-12: the tools in hand's too
-    for (const model of ["barCells(", "menuGroups(", "menuEyebrow(", "handCells("])
+    // the CALLS, not the names (an import alone would satisfy a name) — DK-12: the tools in hand's too; IK: the words
+    // bar's, its cells read from fixture words acts by the product's own `wordsCells`
+    for (const model of ["barCells(", "menuGroups(", "menuEyebrow(", "handCells(", "wordsCells("])
       expect(fixture).toContain(model);
     expect(fixture).not.toMatch(/className="vf-bar/);
     expect(fixture).not.toContain("<style");
@@ -1513,6 +1514,8 @@ describe("UI system ownership boundaries", () => {
       "SelectionBarView",
       // DK-12 — the same bar as the tools in hand, over the four specimens' fixture hands
       "HandPlate",
+      // IK — the same bar over the selected words, its words' row and a choice act's row of choices
+      "WordsPlate",
       // DK-13 — the pegboard's chrome over a fixture tray, placed by the product's own model
       "PegboardPlate",
       "PegboardView",
@@ -1555,8 +1558,9 @@ describe("UI system ownership boundaries", () => {
     // …and the hand's plates and faces (HN)
     expect(page).toMatch(/<CardsPlate\s/u);
     expect(page).toMatch(/<CardFacesPlate\s/u);
-    // …and the selection bar's plates mounted (DK-11), and the pegboard's (DK-13).
+    // …and the selection bar's plates mounted (DK-11), its words bar's (IK), and the pegboard's (DK-13).
     expect(page).toMatch(/<SelectionBarPlate\s/u);
+    expect(page).toMatch(/<WordsPlate\s/u);
     expect(page).toMatch(/<PegboardPlate\s/u);
     // …and the peers' plates (DK-16)
     expect(page).toMatch(/<PeersPlate\s/u);

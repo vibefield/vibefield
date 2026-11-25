@@ -53,20 +53,32 @@ describe("a kind's glyph on the bar (R2)", () => {
         "check",
         "chevron",
         "chevron-left",
+        "clear-marks",
         "duplicate",
         "ellipsis",
         "eraser",
         "lock",
         "pen",
         "redo",
+        "strike",
         "today",
         "trash",
+        "underline",
         "undo",
         "unlock",
       ].sort(),
     );
     expect(draw("chevron-left").getAttribute("data-glyph")).toBe("chevron");
     expect(draw("unlock").getAttribute("data-glyph")).toBe("lift");
+  });
+
+  it("maps the words bar's three — the names a kind's words acts declare for its marks — to the set's own (IK)", () => {
+    expect(kindGlyphOf("strike")).toEqual({ by: "set", name: "strike" });
+    expect(kindGlyphOf("underline")).toEqual({ by: "set", name: "underline" });
+    expect(kindGlyphOf("clear-marks")).toEqual({ by: "set", name: "clear-marks" });
+    expect(draw("clear-marks").getAttribute("data-glyph")).toBe("clear-marks");
+    // `back` is no name of the set's: Back is the bar's own cell, the chevron turned 180 (§13)
+    expect(kindGlyphOf("back")).toEqual({ by: "missing", name: "back" });
   });
 
   it("draws a kind's own drawing through the ONE path renderer: the 24-unit box, stroked 2 in currentColor — or filled", () => {
