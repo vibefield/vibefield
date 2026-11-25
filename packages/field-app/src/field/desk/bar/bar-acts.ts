@@ -77,9 +77,10 @@ export function layComment(engine: CanvasEngine): Entity | null {
 }
 
 /**
- * IK (DESIGN.md §8 "The words bar"; ICE I60) — run a WORDS act on the words: THE ONE place the bar names
- * `ops.runMenuAction`'s options, so when ICE's call shape moves this function alone changes. `choice`: the id of one of the
- * act's choices, for a choice act; `range`: the object being written and the range selected, as the anchor last said them.
+ * IK (DESIGN.md §8 "The words bar"; ICE I60 on I62's call) — run a WORDS act on the words: THE ONE place the bar names
+ * `ops.runMenuAction`'s arguments, so when ICE's call shape moves this function alone changes. `choice`: the id of one of the
+ * act's choices, for a choice act — handed as the TAKEN choice (`{ id }`); `range`: the object being written and the range
+ * selected, as the anchor last said them.
  */
 export function runWordsAct(
   engine: CanvasEngine,
@@ -88,7 +89,10 @@ export function runWordsAct(
 ): void {
   engine.ops.runMenuAction(
     press.act,
-    press.choice === undefined ? { range } : { choice: press.choice, range },
+    press.choice === undefined ? undefined : { id: press.choice },
+    {
+      range,
+    },
   );
 }
 

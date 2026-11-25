@@ -193,15 +193,19 @@ function actsOn(p: ReturnType<typeof padDesk>) {
     range: { entity: p.e, from, to },
   });
   return {
+    // I62's call: the choice TAKEN as `{ id }`, the words as the options' range
     run: (id: string, from: number, to: number, choice?: string): boolean =>
-      p.ce.ops.runMenuAction(id, {
-        ...(choice !== undefined ? { choice } : {}),
+      p.ce.ops.runMenuAction(id, choice === undefined ? undefined : { id: choice }, {
         range: { entity: p.e, from, to },
       }),
+    // what the act says of the words now: its `current` choice (I62's `choices(ctx)`), a toggle's `pressed` (its `state`)
     state: (id: string, from: number, to: number) => {
       const act = def(id);
       const c = ctx(from, to) as never;
-      return { chosen: act.chosen?.(c), pressed: act.pressed?.(c) };
+      return {
+        current: act.choices?.(c)?.find((choice) => choice.current === true)?.id,
+        pressed: act.state?.(c)?.pressed,
+      };
     },
   };
 }
@@ -266,7 +270,7 @@ describe("the host compiles VibeField's comment pad as ICE compiles a built-in (
   it("a pad stored before the marks reads unmarked: its cell projects with the marks' default", () => {
     const p = padDesk("one two");
     expect(p.cell()).toMatchObject({ text: "one two", marks: "" });
-    expect(actsOn(p).state(INK_ACTS.highlight, 4, 7).chosen).toBe("none");
+    expect(actsOn(p).state(INK_ACTS.highlight, 4, 7).current).toBe("none");
     p.ce.dispose();
   });
 });
@@ -276,15 +280,15 @@ describe("the pad's words take the desk's marks (IK — the words bar's acts, IC
     const p = padDesk("one two three");
     const acts = actsOn(p);
     // nothing marked: the sheet's own pen, no highlighter, the toggles off
-    expect(acts.state(INK_ACTS.pen, 4, 7).chosen).toBe("ball");
-    expect(acts.state(INK_ACTS.highlight, 4, 7).chosen).toBe("none");
+    expect(acts.state(INK_ACTS.pen, 4, 7).current).toBe("ball");
+    expect(acts.state(INK_ACTS.highlight, 4, 7).current).toBe("none");
     expect(acts.state(INK_ACTS.strike, 4, 7).pressed).toBe(false);
     expect(acts.run(INK_ACTS.highlight, 4, 7, "yellow")).toBe(true);
     expect(p.marks(4, 7, highlightOf)).toEqual([1, 1, 1]);
-    expect(acts.state(INK_ACTS.highlight, 4, 7).chosen).toBe("yellow");
+    expect(acts.state(INK_ACTS.highlight, 4, 7).current).toBe("yellow");
     expect(acts.run(INK_ACTS.pen, 4, 7, "red")).toBe(true);
     expect(p.marks(4, 7, penOf)).toEqual([4, 4, 4]); // red: PENS' fourth
-    expect(acts.state(INK_ACTS.pen, 4, 7).chosen).toBe("red");
+    expect(acts.state(INK_ACTS.pen, 4, 7).current).toBe("red");
     expect(acts.run(INK_ACTS.strike, 0, 3)).toBe(true);
     expect(p.marks(0, 3, strikeOf)).toEqual([1, 1, 1]);
     expect(acts.state(INK_ACTS.strike, 0, 3).pressed).toBe(true);

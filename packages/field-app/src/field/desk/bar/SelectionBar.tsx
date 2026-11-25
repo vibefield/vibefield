@@ -47,7 +47,7 @@ import {
 } from "./bar-model";
 import { TRAVEL_MS, useReducedMotion } from "./bar-motion";
 import { barStats } from "./bar-stats";
-import { sayMissingSwatches, wordsCells, wordsKey } from "./bar-words";
+import { wordsCells, wordsKey } from "./bar-words";
 import { commandOfRow, WORDS_EYEBROW, wordsMenuGroups, wordsPasteOf } from "./bar-words-more";
 import { downloadable, downloadPrint } from "./print-download";
 import {
@@ -111,8 +111,9 @@ import {
 // stands over them (by the bar's own place: its foot 10 above, flipped below at 94, 16 from the sides) with the words' row
 // in the objects' place (bar-words.ts). While a press the editor claimed is down ICE says no words, so a sheet being written
 // keeps the bar away, and it comes 200 ms after the release, as after a gesture; a gesture still sends it away. Each act
-// runs through `ops.runMenuAction(id, { choice?, range })`, the range read at the press from the publish's own copy — never
-// a render's. A kind whose words declare no acts brings no words' row: the bar stays away while it is written, as before.
+// runs through `ops.runMenuAction(id, taken?, { range })` (bar-acts.ts `runWordsAct`), the range read at the press from
+// the publish's own copy — never a render's. A kind whose words declare no acts brings no words' row: the bar stays away
+// while it is written, as before.
 // Its MORE (V5b) grows the bar into the words' menu — Cut · Copy · Paste | Select all (bar-words-more.ts), each run through
 // the desk's one editor's `command` inside the press (bar-acts.ts `runWordsCommand`) — and a RIGHT-CLICK on the sheet being
 // written, while words on it are selected, grows the same menu from the bar over the words (ICE keeps the field's focus
@@ -600,10 +601,6 @@ function SelectionBarOn({
         : { cells: wordsCells(facts.words.menu, palette), run: facts.words.run },
     [facts.words, palette],
   );
-  // a swatch role the palette lacks draws hollow, and is said once
-  useEffect(() => {
-    if (wordsRow !== null) sayMissingSwatches(wordsRow.cells);
-  }, [wordsRow]);
   // IK — a words act runs on the words as the anchor last said them, through the bar's one words run (bar-acts.ts)
   const onWords = useCallback(
     (press: WordsPress): void => {

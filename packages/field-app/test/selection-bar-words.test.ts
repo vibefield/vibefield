@@ -1,35 +1,31 @@
 // @vitest-environment node
 /**
  * IK — WHAT THE WORDS BAR SAYS (field/desk/bar/bar-words.ts; DESIGN.md §8 "The words bar" — Order, The rows, The
- * highlighters; ICE I60). While a sheet is written and words on it are selected, the anchor's `words.menu` holds the
- * object's WORDS acts as slots; the bar prints them as the kind declares them, read off their own data, never their ids:
- *   a choice act (`choices`) a 44 × 32 cell with the words' current value — the chosen swatch, a dot for a pen and a
- *   stripe for a highlighter, hollow when none is shared — then its choices as their own row (None hollow among stripes);
+ * highlighters; ICE I60 on I61/I62's act shape). While a sheet is written and words on it are selected, the anchor's
+ * `words.menu` holds the object's WORDS acts as slots; the bar prints them as the kind declares them, read off their own
+ * data, never their ids:
+ *   a choice act (`choices`) a 44 × 32 cell with the words' current value — the `current` choice's swatch, a dot for a pen
+ *   and a stripe for a highlighter (by the act's GLYPH, `pen` or `highlighter`), hollow when none is shared — then its
+ *   choices as their own row (None hollow among stripes);
  *   a toggle (`pressed`) on while its kind says so; a plain act its glyph or its label; a rule where the run changes; the
- *   desk's More at the end (it grows the words' menu, V5b); a slot's declared keys in its tip.
- * A swatch is a palette ROLE the desk's own palette draws (the pens a note writes with, the calendar's five highlighters),
- * so the bar shows no colour the host never named; a role the palette lacks draws hollow and is said once.
+ *   desk's More at the end (it grows the words' menu, V5b); a slot's declared keys in its tip; `enabled: false` dim.
+ * A swatch is the CSS colour a kind says (the pad's, `inkActs({ colour })`); where it says none (ICE's own note) a pen's or a
+ * highlighter's choice is drawn from the desk's own palette by its NAME, so the bar shows no colour the host never named.
  */
 import type { MenuSlot } from "@vibecook/ice/desk";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  missingSwatches,
   readSlot,
-  resetMissingSwatchesForTest,
   type SwatchPalette,
-  sayMissingSwatches,
   swatchFor,
-  swatchOf,
   type WordsCell,
   type WordsFace,
   wordsCells,
   wordsKey,
 } from "../src/field/desk/bar/bar-words";
 import { deskLook } from "../src/field/desk/desk-layer";
-import { getRendererLogger } from "../src/logging";
 
 afterEach(() => {
-  resetMissingSwatchesForTest();
   vi.restoreAllMocks();
 });
 
@@ -37,34 +33,59 @@ const PENS = ["felt", "ball", "fountain", "red"] as const;
 const HIGHLIGHTERS = ["yellow", "green", "pink", "blue", "orange"] as const;
 const titled = (name: string): string => `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 
-/** ICE's ink acts as the anchor carries them (E6's `inkActs`: ids `ink.*`, swatch roles `pen.<name>`, `highlight.<name>`,
- * None without one), each as it stands for the words now. */
+/** A kind's own colours for the roles (the pad's `colour(role)`): one CSS string each, none the desk palette's. */
+const PAD_COLOUR = (role: string): string => `rgb(${role.length} ${role.charCodeAt(4)} 9)`;
+
+/**
+ * ICE's ink acts as the anchor carries them (this build's `inkActs`: ids `ink.*`, glyphs `pen` and `highlighter` by name,
+ * the marks' keys declared, the words' value as `current` on one choice), each as it stands for the words now. `colour`:
+ * the kind's (the pad's) — absent, its choices carry no swatch (ICE's own note).
+ */
 function inkMenu(
   now: { pen?: string; highlight?: string; strike?: boolean; underline?: boolean } = {},
+  colour?: (role: string) => string,
 ): MenuSlot[] {
+  const swatch = (role: string) => (colour === undefined ? {} : { swatch: colour(role) });
+  const current = (id: string, at: string | undefined) => (id === at ? { current: true } : {});
   return [
     {
       id: "ink.pen",
       label: "Pen",
       glyph: "pen",
-      choices: PENS.map((n) => ({ id: n, label: `${titled(n)} pen`, swatch: `pen.${n}` })),
-      ...(now.pen === undefined ? {} : { chosen: now.pen }),
+      choices: PENS.map((n) => ({
+        id: n,
+        label: `${titled(n)} pen`,
+        ...swatch(`pen.${n}`),
+        ...current(n, now.pen),
+      })),
     },
     {
       id: "ink.highlight",
       label: "Highlight",
-      glyph: { path: "M5 20h14" },
+      glyph: "highlighter",
+      keys: "⇧⌘H",
       choices: [
-        ...HIGHLIGHTERS.map((n) => ({ id: n, label: titled(n), swatch: `highlight.${n}` })),
-        { id: "none", label: "None" },
+        ...HIGHLIGHTERS.map((n) => ({
+          id: n,
+          label: titled(n),
+          ...swatch(`highlight.${n}`),
+          ...current(n, now.highlight),
+        })),
+        { id: "none", label: "None", ...current("none", now.highlight) },
       ],
-      ...(now.highlight === undefined ? {} : { chosen: now.highlight }),
     },
-    { id: "ink.strike", label: "Strike", glyph: "strike", pressed: now.strike ?? false },
+    {
+      id: "ink.strike",
+      label: "Strike",
+      glyph: "strike",
+      keys: "⇧⌘X",
+      pressed: now.strike ?? false,
+    },
     {
       id: "ink.underline",
       label: "Underline",
       glyph: "underline",
+      keys: "⌘U",
       pressed: now.underline ?? false,
     },
     { id: "ink.clear", label: "Clear", glyph: "clear-marks" },
@@ -123,7 +144,7 @@ describe("the words row", () => {
       { id: "a", label: "Bold", glyph: "strike", pressed: true },
       { id: "b", label: "Lean", pressed: false },
       { id: "c", label: "Wipe" },
-      { id: "d", label: "Ink", choices: [{ id: "x", label: "X", swatch: "pen.red" }] },
+      { id: "d", label: "Ink", choices: [{ id: "x", label: "X", swatch: "rgb(1 2 3)" }] },
     ];
     expect(said(wordsCells(menu, LIGHT))).toEqual([
       "toggle:a:on",
@@ -145,7 +166,7 @@ describe("the words row", () => {
     expect(more).toEqual({ kind: "more", label: "More", tip: "More" });
   });
 
-  it("a toggle is on while its kind says so; its glyph and label as declared, its tip its label (R1: no key)", () => {
+  it("a toggle is on while its kind says so; its glyph and label as declared, its tip its label and its declared keys", () => {
     const cells = wordsCells(inkMenu({ underline: true }), LIGHT);
     const strike = cells.find((c) => c.kind === "toggle" && c.id === "ink.strike");
     const underline = cells.find((c) => c.kind === "toggle" && c.id === "ink.underline");
@@ -153,7 +174,7 @@ describe("the words row", () => {
       kind: "toggle",
       id: "ink.strike",
       label: "Strike",
-      tip: "Strike",
+      tip: "Strike  ⇧⌘X",
       disabled: false,
       glyph: "strike",
       on: false,
@@ -172,26 +193,43 @@ describe("the words row", () => {
 });
 
 describe("a choice act's cell and its row", () => {
-  it("the cell shows the words' current value: their pen a dot in its ink, their highlighter a stripe in its own", () => {
+  it("THE NOTE'S (no swatch said): the cell shows the words' current value from the desk's palette by NAME — their pen a dot, their highlighter a stripe", () => {
     const cells = wordsCells(inkMenu({ pen: "fountain", highlight: "yellow" }), LIGHT);
     expect(faceOf(choice(cells, "ink.pen").face)).toBe(`dot:${LIGHT.pens?.fountain?.css}`);
     expect(faceOf(choice(cells, "ink.highlight").face)).toBe(
       `stripe:${LIGHT.calendars?.highlighters?.yellow?.css}`,
     );
     expect(choice(cells, "ink.pen").tip).toBe("Pen");
+    expect(choice(cells, "ink.highlight").tip).toBe("Highlight  ⇧⌘H");
   });
 
-  it("hollow when the words share none, and for None: the shape of its family, no ink", () => {
-    const mixed = wordsCells(inkMenu(), LIGHT);
-    expect(faceOf(choice(mixed, "ink.pen").face)).toBe("dot:hollow");
-    expect(faceOf(choice(mixed, "ink.highlight").face)).toBe("stripe:hollow");
-    const none = wordsCells(inkMenu({ highlight: "none" }), LIGHT);
-    expect(faceOf(choice(none, "ink.highlight").face)).toBe("stripe:hollow");
-    // a hollow names no role: nothing is said missing for it
-    expect(missingSwatches(none)).toEqual([]);
+  it("THE PAD'S (a CSS colour said, `colour(role)`): each choice draws the colour its kind says, never the palette's", () => {
+    const cells = wordsCells(inkMenu({ pen: "red", highlight: "blue" }, PAD_COLOUR), LIGHT);
+    expect(faceOf(choice(cells, "ink.pen").face)).toBe(`dot:${PAD_COLOUR("pen.red")}`);
+    expect(faceOf(choice(cells, "ink.highlight").face)).toBe(
+      `stripe:${PAD_COLOUR("highlight.blue")}`,
+    );
+    expect(choice(cells, "ink.pen").choices.map((c) => faceOf(c.face))).toEqual(
+      PENS.map((n) => `dot:${PAD_COLOUR(`pen.${n}`)}`),
+    );
+    // None says no colour: a hollow stripe among the stripes
+    expect(choice(cells, "ink.highlight").choices.map((c) => faceOf(c.face))).toEqual([
+      ...HIGHLIGHTERS.map((n) => `stripe:${PAD_COLOUR(`highlight.${n}`)}`),
+      "stripe:hollow",
+    ]);
   });
 
-  it("its row: each choice its swatch in the palette's ink, None hollow among the stripes, the words' choice on", () => {
+  it("hollow when the words share none, and for None: the shape of its act, no ink", () => {
+    for (const colour of [undefined, PAD_COLOUR]) {
+      const mixed = wordsCells(inkMenu({}, colour), LIGHT);
+      expect(faceOf(choice(mixed, "ink.pen").face)).toBe("dot:hollow");
+      expect(faceOf(choice(mixed, "ink.highlight").face)).toBe("stripe:hollow");
+      const none = wordsCells(inkMenu({ highlight: "none" }, colour), LIGHT);
+      expect(faceOf(choice(none, "ink.highlight").face)).toBe("stripe:hollow");
+    }
+  });
+
+  it("its row: each choice its swatch, None hollow among the stripes, the words' choice on", () => {
     const cells = wordsCells(inkMenu({ pen: "ball", highlight: "pink" }), LIGHT);
     const pens = choice(cells, "ink.pen").choices;
     expect(pens.map((c) => [c.id, c.label, faceOf(c.face), c.on])).toEqual(
@@ -208,43 +246,57 @@ describe("a choice act's cell and its row", () => {
     ]);
   });
 
-  it("a choice act whose choices are drawn by glyphs: the chosen one's glyph, else the act's own, else its label", () => {
+  it("dot or stripe by the act's GLYPH, never its id: under any other glyph a colour said is a dot, and no colour said is a label", () => {
+    const phones: MenuSlot = {
+      id: "ink.highlight", // the id names nothing: the glyph does
+      label: "Finish",
+      glyph: "duplicate",
+      choices: [
+        { id: "yellow", label: "Gold", swatch: "rgb(200 180 90)", current: true },
+        { id: "pink", label: "Rose" },
+      ],
+    };
+    const cell = choice(wordsCells([phones], LIGHT), "ink.highlight");
+    expect(faceOf(cell.face)).toBe("dot:rgb(200 180 90)");
+    expect(cell.choices.map((c) => faceOf(c.face))).toEqual(["dot:rgb(200 180 90)", "dot:hollow"]);
+    // no colour at all under a glyph that is no ink's: labels, and the act's own glyph for its value
     const fonts: MenuSlot = {
       id: "font",
       label: "Font",
-      glyph: "pen",
+      glyph: "chevron",
       choices: [
-        { id: "a", label: "Upright", glyph: "chevron" },
+        { id: "a", label: "Upright", current: true },
         { id: "b", label: "Lean" },
       ],
     };
-    expect(faceOf(choice(wordsCells([{ ...fonts, chosen: "a" }], LIGHT), "font").face)).toBe(
-      "glyph:chevron",
-    );
-    // the chosen one has neither swatch nor glyph: the act's own glyph
-    const lean = choice(wordsCells([{ ...fonts, chosen: "b" }], LIGHT), "font");
-    expect(faceOf(lean.face)).toBe("glyph:pen");
-    expect(lean.choices.map((c) => faceOf(c.face))).toEqual(["glyph:chevron", "label"]);
+    const font = choice(wordsCells([fonts], LIGHT), "font");
+    expect(faceOf(font.face)).toBe("glyph:chevron");
+    expect(font.choices.map((c) => faceOf(c.face))).toEqual(["label", "label"]);
     const { glyph: _drop, ...bare } = fonts;
     expect(faceOf(choice(wordsCells([bare], LIGHT), "font").face)).toBe("label");
+    // a kind's own drawing for the highlighter is no ink's glyph: its choices are labels (unless it says colours)
+    const drawn = inkMenu().map((s) =>
+      s.id === "ink.highlight" ? { ...s, glyph: { path: "M5 20h14" } } : s,
+    );
+    expect(
+      choice(wordsCells(drawn, LIGHT), "ink.highlight").choices.map((c) => faceOf(c.face)),
+    ).toEqual([...HIGHLIGHTERS.map(() => "label"), "label"]);
   });
 });
 
-describe("the swatches: palette roles the desk's own palette draws (DESIGN.md §8 'The highlighters')", () => {
-  it("a pen's role reads the pens the note writes with; a highlighter's, the calendar's five — in both themes", () => {
+describe("the swatches: the kind's colours, else the desk's own palette by name (DESIGN.md §8 'The highlighters')", () => {
+  it("a pen's name reads the pens the note writes with; a highlighter's, the calendar's five — in both themes", () => {
     for (const theme of ["light", "dark"] as const) {
       const palette = deskLook(theme).palette;
       for (const n of PENS)
-        expect(swatchOf(`pen.${n}`, palette)).toEqual({
+        expect(swatchFor({ shape: "dot", name: n }, palette)).toEqual({
           shape: "dot",
           ink: palette.pens?.[n]?.css,
-          role: `pen.${n}`,
         });
       for (const n of HIGHLIGHTERS)
-        expect(swatchOf(`highlight.${n}`, palette)).toEqual({
+        expect(swatchFor({ shape: "stripe", name: n }, palette)).toEqual({
           shape: "stripe",
           ink: palette.calendars?.highlighters?.[n]?.css,
-          role: `highlight.${n}`,
         });
     }
     // the five are the calendar's own, named by DESIGN.md (§8 "The highlighters")
@@ -257,7 +309,7 @@ describe("the swatches: palette roles the desk's own palette draws (DESIGN.md §
     ]);
   });
 
-  it("the row shows no colour the host never named: every ink in it is one of the palette's", () => {
+  it("the note's row shows no colour the host never named: every ink in it is one of the palette's", () => {
     const palette: SwatchPalette = LIGHT;
     const named = new Set([
       ...Object.values(palette.pens ?? {}).map((t) => t.css),
@@ -274,48 +326,22 @@ describe("the swatches: palette roles the desk's own palette draws (DESIGN.md §
     for (const ink of inks) expect(named.has(ink), ink).toBe(true);
   });
 
-  it("a role the palette lacks — an unknown name, an unknown family, a palette without it — draws hollow, and is said ONCE", () => {
+  it("a name the palette lacks — an unknown pen, a palette without highlighters, a prototype's name — draws hollow; a colour is drawn as said", () => {
     const palette: SwatchPalette = { pens: { felt: { css: "rgb(1 2 3)" } } };
-    expect(swatchOf("pen.felt", palette).ink).toBe("rgb(1 2 3)");
-    expect(swatchOf("pen.gold", palette)).toEqual({
+    expect(swatchFor({ shape: "dot", name: "felt" }, palette).ink).toBe("rgb(1 2 3)");
+    expect(swatchFor({ shape: "dot", name: "gold" }, palette)).toEqual({
       shape: "dot",
       ink: undefined,
-      role: "pen.gold",
     });
-    expect(swatchOf("highlight.yellow", palette)).toEqual({
+    expect(swatchFor({ shape: "stripe", name: "yellow" }, palette)).toEqual({
       shape: "stripe",
       ink: undefined,
-      role: "highlight.yellow",
     });
-    expect(swatchOf("marker.black", palette)).toEqual({
-      shape: "dot",
-      ink: undefined,
-      role: "marker.black",
+    expect(swatchFor({ shape: "dot", name: "toString" }, palette).ink).toBeUndefined();
+    expect(swatchFor({ shape: "stripe", css: "rgb(4 5 6)" }, palette)).toEqual({
+      shape: "stripe",
+      ink: "rgb(4 5 6)",
     });
-    // a name from the object's prototype is no role of the palette's
-    expect(swatchOf("pen.toString", palette).ink).toBeUndefined();
-    const menu: MenuSlot[] = [
-      {
-        id: "ink.pen",
-        label: "Pen",
-        choices: [
-          { id: "felt", label: "Felt pen", swatch: "pen.felt" },
-          { id: "gold", label: "Gold pen", swatch: "pen.gold" },
-        ],
-        chosen: "gold",
-      },
-    ];
-    const cells = wordsCells(menu, palette);
-    expect(missingSwatches(cells)).toEqual(["pen.gold"]);
-    const warn = vi.fn();
-    vi.spyOn(getRendererLogger(), "child").mockReturnValue({
-      ...getRendererLogger(),
-      warn,
-    } as never);
-    sayMissingSwatches(cells);
-    sayMissingSwatches(cells);
-    expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[2]).toEqual({ swatch: "pen.gold" });
   });
 
   it("what the bar says of the acts is one key: the same slots read the same, a state that moved does not", () => {
@@ -325,41 +351,31 @@ describe("the swatches: palette roles the desk's own palette draws (DESIGN.md §
   });
 });
 
-describe("the one adapter over ICE's slot shape (readSlot) — the only reader of choices, chosen, pressed, swatch, enabled", () => {
+describe("the one adapter over ICE's slot shape (readSlot) — the only reader of choices, current, pressed, swatch, enabled, keys", () => {
   it("reads a slot as the bar's: its kind of cell, its state now, its choices with what each swatch asks for", () => {
     const [pen, highlight, strike, , clear] = inkMenu({ pen: "ball", strike: true }).map(readSlot);
     expect(pen).toMatchObject({ id: "ink.pen", kind: "choice", pressed: false, enabled: true });
     expect(pen?.choices.map((c) => [c.id, c.swatch, c.current])).toEqual(
-      PENS.map((n) => [n, { shape: "dot", role: `pen.${n}` }, n === "ball"]),
+      PENS.map((n) => [n, { shape: "dot", name: n }, n === "ball"]),
     );
     expect(highlight?.choices.at(-1)).toEqual({
       id: "none",
       label: "None",
-      glyph: undefined,
-      swatch: undefined,
+      swatch: { shape: "stripe", name: "none" },
       current: false,
     });
-    expect(highlight?.choices[0]?.swatch).toEqual({ shape: "stripe", role: "highlight.yellow" });
-    expect(strike).toMatchObject({ kind: "toggle", pressed: true, enabled: true });
+    expect(highlight?.choices[0]?.swatch).toEqual({ shape: "stripe", name: "yellow" });
+    expect(strike).toMatchObject({ kind: "toggle", pressed: true, enabled: true, keys: "⇧⌘X" });
     expect(clear).toMatchObject({ kind: "act", pressed: false, glyph: "clear-marks" });
+    // the pad's: the colour its kind says
+    const [padPen] = inkMenu({}, PAD_COLOUR).map(readSlot);
+    expect(padPen?.choices[0]?.swatch).toEqual({ shape: "dot", css: PAD_COLOUR("pen.felt") });
   });
 
-  it("draws a swatch from what it asks for: a role through the desk's palette, a colour as its kind says it", () => {
-    expect(swatchFor({ shape: "dot", role: "pen.red" }, LIGHT)).toEqual({
-      shape: "dot",
-      ink: LIGHT.pens?.red?.css,
-      role: "pen.red",
-    });
-    expect(swatchFor({ shape: "stripe", css: "rgb(1 2 3)" }, LIGHT)).toEqual({
-      shape: "stripe",
-      ink: "rgb(1 2 3)",
-    });
-    expect(swatchFor({ shape: "dot", css: "" }, LIGHT).ink).toBeUndefined();
-  });
-
-  it("a slot its kind says is not enabled is a DISABLED cell, whatever its kind; read where a build carries it", () => {
-    const off = (slot: MenuSlot): MenuSlot => ({ ...slot, enabled: false }) as MenuSlot;
-    const menu = inkMenu().map((slot) => (slot.id === "ink.clear" ? slot : off(slot)));
+  it("a slot its kind says is not enabled (I61's `enabled: false`) is a DISABLED cell, whatever its kind", () => {
+    const menu: MenuSlot[] = inkMenu().map((slot) =>
+      slot.id === "ink.clear" ? slot : { ...slot, enabled: false },
+    );
     expect(readSlot(menu[0] as MenuSlot).enabled).toBe(false);
     const cells = wordsCells(menu, LIGHT);
     expect(
@@ -372,19 +388,15 @@ describe("the one adapter over ICE's slot shape (readSlot) — the only reader o
       ["ink.clear", false],
     ]);
   });
-});
 
-describe("the keys a slot declares (V5b): read by the adapter, printed in the tip the bar's way", () => {
-  it("a toggle's, a choice act's and a plain act's keys in their tips; none declared, the label alone; an empty string none", () => {
-    const menu = inkMenu().map((slot) =>
-      slot.id === "ink.strike"
-        ? { ...slot, keys: "⇧⌘X" }
-        : slot.id === "ink.highlight"
-          ? { ...slot, keys: "⇧⌘H" }
-          : slot.id === "ink.clear"
-            ? { ...slot, keys: "" }
-            : slot,
-    );
+  it("the keys a slot declares are printed in its tip the bar's way; none declared, the label alone; an empty string none", () => {
+    const menu = inkMenu().map((slot) => {
+      if (slot.id === "ink.underline") {
+        const { keys: _k, ...rest } = slot;
+        return rest;
+      }
+      return slot.id === "ink.clear" ? { ...slot, keys: "" } : slot;
+    });
     expect(menu.map(readSlot).map((s) => [s.id, s.keys])).toEqual([
       ["ink.pen", undefined],
       ["ink.highlight", "⇧⌘H"],

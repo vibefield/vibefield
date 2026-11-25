@@ -1,21 +1,20 @@
-import type { HeldGlyph, MenuChoice } from "@vibecook/ice";
+import type { ActChoice, HeldGlyph } from "@vibecook/ice";
 import type { MenuSlot } from "@vibecook/ice/desk";
-import { getRendererLogger } from "../../../logging";
 import { tipOf } from "./bar-model";
 
-// THE WORDS BAR'S CONTENT (IK, 2026-11-25; DESIGN.md §8 "The words bar"; ICE I60). Pure: what the bar says while a sheet is
-// being written and words on it are selected — the anchor's `words` (`WordsAnchor`: their box, their object, their range
-// and the object's WORDS acts as slots). The host prints what the kind declares and adds nothing (R1, R2), reading each
-// slot's own data, never its id:
+// THE WORDS BAR'S CONTENT (IK, 2026-11-25; DESIGN.md §8 "The words bar"; ICE I60 on I61/I62's act shape). Pure: what the bar
+// says while a sheet is being written and words on it are selected — the anchor's `words` (`WordsAnchor`: their box, their
+// object, their range and the object's WORDS acts as slots). The host prints what the kind declares and adds nothing (R1, R2),
+// reading each slot's own data, never its id:
 //   a CHOICE act (it carries `choices` — the Pen, the Highlight) is a 44 × 32 cell showing the words' current value — the
-//   chosen choice's swatch, a dot for an ink and a stripe for a highlighter, hollow when the words share none — then a ▾;
-//   pressed, it swaps the bar's row for its choices (Back first, each a 32 cell, the chosen one shown on);
+//   `current` choice's swatch, a dot for a pen and a stripe for a highlighter, hollow when the words share none — then a ▾;
+//   pressed, it swaps the bar's row for its choices (Back first, each a 32 cell, the current one shown on);
 //   a TOGGLE (it says `pressed` — Strike, Underline) is a 32 cell, shown on while its kind says so;
 //   a PLAIN act (Clear) is a 32 cell;
 // in the kind's declared order, a rule where the run changes between choices, toggles and plain acts, and the desk's More
-// at the end. A swatch is a PALETTE ROLE's name (`pen.felt`, `highlight.yellow`), never a colour: the ink is the desk's own
-// palette's (`deskLook(theme).palette` — the pens a note is written with, the calendar's five highlighters), so the bar
-// shows no colour the host never named, and a role the palette lacks draws hollow and is said once.
+// at the end. A SWATCH is the CSS colour the kind says (`inkActs({ colour })`); a kind that says none (ICE's own note) has its
+// pen's and highlighter's choices drawn from the desk's own palette by the choice's NAME (a kit pen's, a kit highlighter's —
+// `deskLook(theme).palette`). Dot or stripe is read from the act's GLYPH — the pen's or the highlighter's — never its id.
 
 /** The desk's palette as the swatches read it (ICE's `deskPalette`, narrowed): the pens' inks and the highlighters'. */
 export interface SwatchPalette {
@@ -31,48 +30,21 @@ export type SwatchShape = "dot" | "stripe";
 /** A swatch as the bar draws it. */
 export interface Swatch {
   readonly shape: SwatchShape;
-  /** Its ink, CSS, as the desk's palette names it — undefined: HOLLOW. */
+  /** Its ink, CSS — undefined: HOLLOW (no colour said or named: None, or a name the palette lacks). */
   readonly ink: string | undefined;
-  /** The palette role it was asked by; absent for a hollow that names none (no shared value, or a choice like None). */
-  readonly role?: string;
 }
 
-/** The palette's families of roles, by the role's first word: a pen's ink is a dot, a highlighter's a stripe. */
-const FAMILIES: Readonly<
-  Record<
-    string,
-    {
-      readonly shape: SwatchShape;
-      readonly inks: (
-        p: SwatchPalette,
-      ) => Readonly<Record<string, { readonly css: string }>> | undefined;
-    }
-  >
-> = {
-  pen: { shape: "dot", inks: (p) => p.pens },
-  highlight: { shape: "stripe", inks: (p) => p.calendars?.highlighters },
-};
+/** The act glyphs that say a choice act's choices are inks (the kit's and §13's names): the pen's dots, the highlighter's
+ * stripes. */
+const INK_GLYPHS: Readonly<Record<string, SwatchShape>> = { pen: "dot", highlighter: "stripe" };
 
-/** The family a role names (`pen.felt` → pen), or undefined. */
-const familyOf = (role: string) => {
-  const dot = role.indexOf(".");
-  return dot < 0 ? undefined : FAMILIES[role.slice(0, dot)];
-};
+/** The shape an act's glyph says its choices are drawn in — undefined for any other glyph (or a drawing). */
+const inkShapeOf = (glyph: HeldGlyph | undefined): SwatchShape | undefined =>
+  typeof glyph === "string" && Object.hasOwn(INK_GLYPHS, glyph) ? INK_GLYPHS[glyph] : undefined;
 
-/** A role's swatch from the desk's palette: its family's shape, its ink — hollow (`ink` undefined) where the palette names
- * no such role; a role of no family the bar knows is a hollow dot. */
-export function swatchOf(role: string, palette: SwatchPalette): Swatch {
-  const family = familyOf(role);
-  if (family === undefined) return { shape: "dot", ink: undefined, role };
-  const name = role.slice(role.indexOf(".") + 1);
-  const inks = family.inks(palette);
-  const css = inks !== undefined && Object.hasOwn(inks, name) ? inks[name]?.css : undefined;
-  return {
-    shape: family.shape,
-    ink: css === undefined || css.length === 0 ? undefined : css,
-    role,
-  };
-}
+/** The desk palette's inks a shape draws by name: a dot from its pens, a stripe from its highlighters. */
+const inksOf = (shape: SwatchShape, palette: SwatchPalette) =>
+  shape === "dot" ? palette.pens : palette.calendars?.highlighters;
 
 /** What a cell shows: a swatch, a glyph (by §13's table, the bar's one path renderer for a kind's own drawing — R2), or its
  * label alone (R3). */
@@ -134,23 +106,23 @@ export const WORDS_TOOLBAR = "Words";
 /** The desk's More on the words row. */
 export const WORDS_MORE: WordsCell = { kind: "more", label: "More", tip: "More" };
 
-// ── THE ONE ADAPTER over ICE's slot shape (IK, 2026-11-25). Nothing else in the bar reads a slot's `choices`, `chosen`,
-// `pressed`, `swatch`, `enabled` or `keys`: when ICE's act shape moves (a choice's `current` in place of the slot's `chosen`, a
-// swatch a CSS colour the kind says, a slot's `enabled`), `readSlot` alone changes. A swatch is what it ASKS for — a palette
-// role today, a colour after — with the shape it is drawn in; `swatchFor` draws either.
+// ── THE ONE ADAPTER over ICE's slot shape (IK, 2026-11-25; re-shaped to I61/I62's acts, round two). Nothing else in the bar
+// reads a slot's `choices`, `current`, `pressed`, `swatch`, `enabled` or `keys`: when ICE's act shape moves, `readSlot`
+// alone changes. A swatch is what it ASKS for — a colour its kind says, or a kit ink's name the desk's palette draws — with
+// the shape it is drawn in; `swatchFor` draws either.
 
-/** What a choice's swatch asks for: a palette ROLE's name (ICE I60 today), or a CSS colour its kind says. */
+/** What a choice's swatch asks for: the CSS colour its kind says, or a kit pen's or highlighter's NAME (the choice's id)
+ * the desk's palette draws — the shape from the act's glyph. */
 export type SwatchAsk =
-  | { readonly shape: SwatchShape; readonly role: string }
-  | { readonly shape: SwatchShape; readonly css: string };
+  | { readonly shape: SwatchShape; readonly css: string }
+  | { readonly shape: SwatchShape; readonly name: string };
 
 /** One of a slot's choices, as the adapter reads it. */
 export interface SlotChoice {
   readonly id: string;
   readonly label: string;
-  readonly glyph: HeldGlyph | undefined;
   readonly swatch: SwatchAsk | undefined;
-  /** It is the words' current choice. */
+  /** It is the words' current choice (`ActChoice.current`). */
   readonly current: boolean;
 }
 
@@ -164,19 +136,23 @@ export interface WordsSlot {
   readonly keys: string | undefined;
   /** A toggle's state now. */
   readonly pressed: boolean;
-  /** False: its kind says it is not to be used now — drawn dim, `aria-disabled`, its press nothing. */
+  /** False: its kind says it is not to be used now (I61) — drawn dim, `aria-disabled`, its press nothing. */
   readonly enabled: boolean;
   readonly choices: readonly SlotChoice[];
 }
 
-/** The shape a palette role is drawn in: its family's (a pen's dot, a highlighter's stripe); a role of no family a dot. */
-const roleShape = (role: string): SwatchShape => familyOf(role)?.shape ?? "dot";
+/** A choice's swatch: the colour its kind says; else, under the pen's or the highlighter's glyph, its name for the desk's
+ * palette; else none. A colour under any other glyph is a dot. */
+function askOf(choice: ActChoice, ink: SwatchShape | undefined): SwatchAsk | undefined {
+  if (choice.swatch !== undefined && choice.swatch.length > 0)
+    return { shape: ink ?? "dot", css: choice.swatch };
+  return ink === undefined ? undefined : { shape: ink, name: choice.id };
+}
 
-/** THE ADAPTER: ICE's `MenuSlot` (I60's shape) read as the bar's slot. A slot's `enabled: false` is read where a build
- * carries it (tolerant: the I60 type has none). */
+/** THE ADAPTER: ICE's `MenuSlot` (I61/I62's shape, with I60's `pressed`) read as the bar's slot. */
 export function readSlot(slot: MenuSlot): WordsSlot {
-  const offered: readonly MenuChoice[] = slot.choices ?? [];
-  const enabled = (slot as { readonly enabled?: unknown }).enabled !== false;
+  const offered: readonly ActChoice[] = slot.choices ?? [];
+  const ink = inkShapeOf(slot.glyph);
   return {
     id: slot.id,
     label: slot.label,
@@ -184,31 +160,30 @@ export function readSlot(slot: MenuSlot): WordsSlot {
     keys: slot.keys === undefined || slot.keys.length === 0 ? undefined : slot.keys,
     kind: offered.length > 0 ? "choice" : slot.pressed !== undefined ? "toggle" : "act",
     pressed: slot.pressed === true,
-    enabled,
+    enabled: slot.enabled !== false,
     choices: offered.map((choice) => ({
       id: choice.id,
       label: choice.label,
-      glyph: choice.glyph,
-      swatch:
-        choice.swatch === undefined
-          ? undefined
-          : { shape: roleShape(choice.swatch), role: choice.swatch },
-      current: slot.chosen === choice.id,
+      swatch: askOf(choice, ink),
+      current: choice.current === true,
     })),
   };
 }
 
-/** A swatch as drawn, from what it asks for: a role through the desk's palette, a colour as said. */
+/** A swatch as drawn, from what it asks for: a colour as said; a name through the desk's palette — hollow where it holds
+ * no such ink (None, or a name it lacks). */
 export function swatchFor(ask: SwatchAsk, palette: SwatchPalette): Swatch {
-  if ("css" in ask) return { shape: ask.shape, ink: ask.css.length === 0 ? undefined : ask.css };
-  return { ...swatchOf(ask.role, palette), shape: ask.shape };
+  if ("css" in ask) return { shape: ask.shape, ink: ask.css };
+  const inks = inksOf(ask.shape, palette);
+  const css = inks !== undefined && Object.hasOwn(inks, ask.name) ? inks[ask.name]?.css : undefined;
+  return { shape: ask.shape, ink: css === undefined || css.length === 0 ? undefined : css };
 }
 
 /** The shape a choice act's choices are drawn in: their first swatch's — undefined when none carries one. */
 const shapeOfChoices = (slot: WordsSlot): SwatchShape | undefined =>
   slot.choices.find((c) => c.swatch !== undefined)?.swatch?.shape;
 
-/** A choice's face: its swatch; else its glyph; else, among swatches, its family's hollow (None); else its label. */
+/** A choice's face: its swatch; else, among swatches, a hollow of their shape; else its label. */
 function choiceFace(
   choice: SlotChoice,
   shape: SwatchShape | undefined,
@@ -216,7 +191,6 @@ function choiceFace(
 ): WordsFace {
   if (choice.swatch !== undefined)
     return { by: "swatch", swatch: swatchFor(choice.swatch, palette) };
-  if (choice.glyph !== undefined) return { by: "glyph", glyph: choice.glyph };
   if (shape !== undefined) return { by: "swatch", swatch: { shape, ink: undefined } };
   return { by: "label" };
 }
@@ -275,43 +249,3 @@ export function wordsCells(menu: readonly MenuSlot[], palette: SwatchPalette): W
 
 /** What the bar says of the words acts, as one key (a change re-renders it; the same slots never do). */
 export const wordsKey = (menu: readonly MenuSlot[]): string => JSON.stringify(menu);
-
-/** The roles a row's swatches named that the desk's palette lacks — a kind's declaration the host cannot draw. */
-export function missingSwatches(cells: readonly WordsCell[]): string[] {
-  const roles = new Set<string>();
-  const seen = (face: WordsFace): void => {
-    if (face.by === "swatch" && face.swatch.ink === undefined && face.swatch.role !== undefined)
-      roles.add(face.swatch.role);
-  };
-  for (const cell of cells) {
-    if (cell.kind !== "choice") continue;
-    seen(cell.face);
-    for (const choice of cell.choices) seen(choice.face);
-  }
-  return [...roles];
-}
-
-/** The roles already said missing (said once: a kind's declaration error, not a look). */
-const saidMissing = new Set<string>();
-
-/** Say once each swatch role a kind named that the desk's palette does not hold. */
-export function sayMissingSwatches(cells: readonly WordsCell[]): void {
-  for (const role of missingSwatches(cells)) {
-    if (saidMissing.has(role)) continue;
-    saidMissing.add(role);
-    getRendererLogger()
-      .child({ component: "canvas.desk.bar" })
-      .warn(
-        "renderer.desk.swatch-missing",
-        "A kind named a swatch the desk's palette does not hold",
-        {
-          swatch: role,
-        },
-      );
-  }
-}
-
-/** Test seam: no role said yet. */
-export function resetMissingSwatchesForTest(): void {
-  saidMissing.clear();
-}

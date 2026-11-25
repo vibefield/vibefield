@@ -9,8 +9,8 @@
  *     the release; a gesture sends it away as before;
  *   THE ROWS — a choice act swaps the row for its choices (Back first, the words' choice on), a choice runs at once with
  *     the range and the row stays, Back and Esc return (Esc taken ahead of the editor's field), a 120 ms cross-fade (reduced
- *     motion halved); a toggle shows `aria-pressed`; each act runs `ops.runMenuAction(id, { choice?, range })` with the
- *     range the LAST PUBLISH said; More grows the words' menu (V5b, below);
+ *     motion halved); a toggle shows `aria-pressed`; each act runs `ops.runMenuAction(id, taken?, { range })` (I62's
+ *     call, the choice taken as `{ id }`) with the range the LAST PUBLISH said; More grows the words' menu (V5b, below);
  *   THE FOCUS — a press on the words' row keeps the field's focus and its range (pointerdown's and mousedown's defaults);
  *     the keys as the bar has (← →, Esc back to the desk);
  *   ⌘C — while words are selected on a sheet being written the bar claims no ⌘C (the field's copy runs); with objects
@@ -51,26 +51,27 @@ const PENS = ["felt", "ball", "fountain", "red"] as const;
 const HIGHLIGHTERS = ["yellow", "green", "pink", "blue", "orange"] as const;
 const titled = (name: string): string => `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 
-/** ICE's ink acts as the anchor carries them (E6's shape), each as it stands for the words now. */
+/** ICE's ink acts as the anchor carries them (this build's `inkActs`, I61/I62's shape: the words' value as `current` on one
+ * choice; no swatch said — ICE's own note's — so the bar draws the pens and highlighters by name), each as it stands now. */
 function inkMenu(
   now: { pen?: string; highlight?: string; strike?: boolean; underline?: boolean } = {},
 ): MenuSlot[] {
+  const current = (id: string, at: string | undefined) => (id === at ? { current: true } : {});
   return [
     {
       id: "ink.pen",
       label: "Pen",
       glyph: "pen",
-      choices: PENS.map((n) => ({ id: n, label: `${titled(n)} pen`, swatch: `pen.${n}` })),
-      ...(now.pen === undefined ? {} : { chosen: now.pen }),
+      choices: PENS.map((n) => ({ id: n, label: `${titled(n)} pen`, ...current(n, now.pen) })),
     },
     {
       id: "ink.highlight",
       label: "Highlight",
+      glyph: "highlighter",
       choices: [
-        ...HIGHLIGHTERS.map((n) => ({ id: n, label: titled(n), swatch: `highlight.${n}` })),
-        { id: "none", label: "None" },
+        ...HIGHLIGHTERS.map((n) => ({ id: n, label: titled(n), ...current(n, now.highlight) })),
+        { id: "none", label: "None", ...current("none", now.highlight) },
       ],
-      ...(now.highlight === undefined ? {} : { chosen: now.highlight }),
     },
     { id: "ink.strike", label: "Strike", glyph: "strike", pressed: now.strike ?? false },
     {
@@ -451,10 +452,13 @@ describe("the words bar: its rows and its acts (IK)", () => {
     act(() => cell("word:ink.pen").click());
     expect(run).not.toHaveBeenCalled(); // the swap runs nothing
     act(() => pickOf("ink.pen", "red").click());
-    expect(run).toHaveBeenLastCalledWith("ink.pen", {
-      choice: "red",
-      range: { entity: note, from: 4, to: 12 },
-    });
+    expect(run).toHaveBeenLastCalledWith(
+      "ink.pen",
+      { id: "red" },
+      {
+        range: { entity: note, from: 4, to: 12 },
+      },
+    );
     expect(shownRow()).toBe("ink.pen");
     // the kind says its words are red now — the same run, the row still open, red on
     act(() => selection.publish({ words: words({ menu: inkMenu({ pen: "red" }) }) }));
@@ -471,10 +475,13 @@ describe("the words bar: its rows and its acts (IK)", () => {
     );
     expect(readBarStats().renders).toBe(renders);
     act(() => pickOf("ink.pen", "felt").click());
-    expect(run).toHaveBeenLastCalledWith("ink.pen", {
-      choice: "felt",
-      range: { entity: note, from: 4, to: 16 },
-    });
+    expect(run).toHaveBeenLastCalledWith(
+      "ink.pen",
+      { id: "felt" },
+      {
+        range: { entity: note, from: 4, to: 16 },
+      },
+    );
     expect(run).toHaveBeenCalledTimes(2);
   });
 
@@ -484,14 +491,14 @@ describe("the words bar: its rows and its acts (IK)", () => {
     expect(cell("word:ink.strike").getAttribute("aria-pressed")).toBe("false");
     expect(cell("word:ink.clear").hasAttribute("aria-pressed")).toBe(false);
     act(() => cell("word:ink.strike").click());
-    expect(run).toHaveBeenLastCalledWith("ink.strike", {
+    expect(run).toHaveBeenLastCalledWith("ink.strike", undefined, {
       range: { entity: note, from: 4, to: 12 },
     });
     act(() => selection.publish({ words: words({ menu: inkMenu({ strike: true }) }) }));
     expect(cell("word:ink.strike").getAttribute("aria-pressed")).toBe("true");
     expect(cell("word:ink.strike").hasAttribute("data-on")).toBe(true);
     act(() => cell("word:ink.clear").click());
-    expect(run).toHaveBeenLastCalledWith("ink.clear", {
+    expect(run).toHaveBeenLastCalledWith("ink.clear", undefined, {
       range: { entity: note, from: 4, to: 12 },
     });
     // More runs no act: it grows the words' menu (V5b)
@@ -643,10 +650,13 @@ describe("the words bar: the focus and the keys (IK)", () => {
     key("ArrowRight", document.activeElement as Element);
     expect(document.activeElement).toBe(pickOf("ink.pen", "red"));
     key("Enter", document.activeElement as Element);
-    expect(run).toHaveBeenLastCalledWith("ink.pen", {
-      choice: "red",
-      range: { entity: note, from: 4, to: 12 },
-    });
+    expect(run).toHaveBeenLastCalledWith(
+      "ink.pen",
+      { id: "red" },
+      {
+        range: { entity: note, from: 4, to: 12 },
+      },
+    );
     expect(shownRow()).toBe("ink.pen");
     key("Escape", document.activeElement as Element);
     // on the main row Esc goes back to the desk

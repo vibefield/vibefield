@@ -538,8 +538,8 @@ export function HandPlate({ state, dark }: { state: HandState; dark: boolean }):
 // ── IK — THE WORDS BAR (DESIGN.md §8 "The words bar"): the same shipping bar over the words selected on a sheet being
 // written, its cells read by the product's own model (`wordsCells`) from fixture WORDS acts as a kind declares them — the
 // shape of ICE's ink acts: Pen ▾ over the desk's four pens, Highlight ▾ over the desk's five highlighters and None, Strike
-// and Underline as toggles, Clear — their glyphs §13's names, their swatches palette ROLES that the product's own palette
-// draws (`deskLook`). A plate per row: the words' row, the same with no pen shared and no highlight, the pens' row and
+// and Underline as toggles, Clear — their glyphs §13's names, their swatches drawn by NAME from the product's own palette
+// (`deskLook`), as ICE's own note's are. A plate per row: the words' row, the same with no pen shared and no highlight, the pens' row and
 // the highlighters' row, each opened by the view's own state (`wordsOpen`). The plate stages the sheet, its brackets and
 // the words' wash, which the desk draws in the product; the place is the view's, over the words' box. V5b: the words' More
 // grown — its rows read by the product's own model (`wordsMenuGroups`) — where the page reads the clipboard, and in the
@@ -550,13 +550,16 @@ const PEN_NAMES = ["felt", "ball", "fountain", "red"] as const;
 const HIGHLIGHTER_NAMES = ["yellow", "green", "pink", "blue", "orange"] as const;
 const titled = (name: string): string => `${name.charAt(0).toUpperCase()}${name.slice(1)}`;
 
-/** The words acts as the anchor carries them (`WordsAnchor.menu`), each as it stands for the words now. */
+/** The words acts as the anchor carries them (`WordsAnchor.menu`; ICE's `inkActs` on I61/I62's shape), each as it stands
+ * for the words now — the words' value `current` on one choice. No swatch is said (ICE's own note's), so the bar draws the
+ * pens and highlighters from the product's palette by name. */
 function wordsMenu(now: {
   readonly pen?: string;
   readonly highlight?: string;
   readonly strike: boolean;
   readonly underline: boolean;
 }): MenuSlot[] {
+  const current = (id: string, at: string | undefined) => (id === at ? { current: true } : {});
   return [
     {
       id: "ink.pen",
@@ -565,23 +568,22 @@ function wordsMenu(now: {
       choices: PEN_NAMES.map((name) => ({
         id: name,
         label: `${titled(name)} pen`,
-        swatch: `pen.${name}`,
+        ...current(name, now.pen),
       })),
-      ...(now.pen === undefined ? {} : { chosen: now.pen }),
     },
     {
       id: "ink.highlight",
       label: "Highlight",
+      glyph: "highlighter",
+      keys: "⇧⌘H",
       choices: [
         ...HIGHLIGHTER_NAMES.map((name) => ({
           id: name,
           label: titled(name),
-          swatch: `highlight.${name}`,
+          ...current(name, now.highlight),
         })),
-        { id: "none", label: "None" },
+        { id: "none", label: "None", ...current("none", now.highlight) },
       ],
-      keys: "⇧⌘H",
-      ...(now.highlight === undefined ? {} : { chosen: now.highlight }),
     },
     { id: "ink.strike", label: "Strike", glyph: "strike", keys: "⇧⌘X", pressed: now.strike },
     {
