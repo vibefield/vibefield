@@ -1,7 +1,8 @@
 // VELA'S WORDS, READ (TH-1; TH-Q35 (a); DESIGN.md §8 "Chat's thread", Vela's words). An agent's text is the
 // adversary's (EL7), so it is never markup: it is read here into plain data — paragraphs and their line breaks, bold
-// and italic, inline code, fenced code, lists and quotes, a heading as a bold paragraph — and the view draws every
-// run as text, which React escapes. A link is its words, inert; nothing else is read as markup. Pure.
+// and italic, inline code, fenced code, lists and quotes, a heading as a bold paragraph, a table (Spark QA F1,
+// 2026-11-25) — and the view draws every run as text, which React escapes. A link is its words, inert; nothing else is
+// read as markup. Pure.
 
 /** A run of words in a line, with how it is drawn. */
 export type InlineRun =
@@ -10,14 +11,25 @@ export type InlineRun =
   | { readonly kind: "italic"; readonly runs: readonly InlineRun[] }
   | { readonly kind: "code"; readonly text: string };
 
-/** One line of a paragraph or a list item: its runs. */
+/** One line of a paragraph or a list item, or one cell of a table: its runs. */
 export type InlineLine = readonly InlineRun[];
+
+/** A table column's alignment, as the colons of its delimiter cell say it; null, none (the column's start). */
+export type CellAlign = "left" | "center" | "right" | null;
 
 export type MarkdownBlock =
   | { readonly kind: "paragraph"; readonly lines: readonly InlineLine[]; readonly strong?: true }
   | { readonly kind: "code"; readonly text: string }
   | { readonly kind: "list"; readonly ordered: boolean; readonly items: readonly InlineLine[][] }
-  | { readonly kind: "quote"; readonly blocks: readonly MarkdownBlock[] };
+  | { readonly kind: "quote"; readonly blocks: readonly MarkdownBlock[] }
+  | {
+      readonly kind: "table";
+      /** one per column: the header's width */
+      readonly align: readonly CellAlign[];
+      readonly head: readonly InlineLine[];
+      /** each as wide as the head: a short row padded with empty cells, a long one cut */
+      readonly rows: readonly (readonly InlineLine[])[];
+    };
 
 const FENCE = /^\s{0,3}(```|~~~)/u;
 const BULLET = /^\s{0,3}[-*+]\s+(.*)$/u;
@@ -88,16 +100,113 @@ function blocksOf(lines: readonly string[]): MarkdownBlock[] {
       at += 1;
       continue;
     }
+    const table = tableAt(lines, at);
+    if (table !== null) {
+      blocks.push(table.block);
+      at = table.end;
+      continue;
+    }
     const body: InlineLine[] = [];
     while (at < lines.length) {
       const next = lines[at] ?? "";
-      if (next.trim() === "" || startsBlock(next)) break;
+      // a table's header may follow a paragraph's line with no blank between them
+      if (
+        next.trim() === "" ||
+        startsBlock(next) ||
+        (body.length > 0 && tableAt(lines, at) !== null)
+      )
+        break;
       body.push(inlineOf(next));
       at += 1;
     }
     blocks.push({ kind: "paragraph", lines: body });
   }
   return blocks;
+}
+
+/** A delimiter row's cell: dashes, a colon at either end aligning its column. */
+const DELIMITER_CELL = /^:?-+:?$/u;
+
+/** One code span in a row, read as `inlineOf` reads one, so a pipe in it divides nothing. */
+const ROW_CODE = /`[^`]+`/uy;
+
+/** A table at this line (Spark QA F1, 2026-11-25; GitHub's): its header row, the delimiter row under it with as many
+ * cells, then its body rows, down to a blank line, another block, or a line with no pipe. Null when there is none: a
+ * line of pipes with no delimiter row under it is a paragraph's. */
+function tableAt(
+  lines: readonly string[],
+  at: number,
+): { readonly block: MarkdownBlock; readonly end: number } | null {
+  const delimiter = cellsOf(lines[at + 1] ?? "");
+  if (delimiter === null || delimiter.length === 0) return null;
+  if (!delimiter.every((cell) => DELIMITER_CELL.test(cell))) return null;
+  const head = cellsOf(lines[at] ?? "");
+  if (head === null || head.length !== delimiter.length) return null;
+  const rows: InlineLine[][] = [];
+  let end = at + 2;
+  while (end < lines.length) {
+    const line = lines[end] ?? "";
+    const cells = line.trim() === "" || startsBlock(line) ? null : cellsOf(line);
+    if (cells === null) break;
+    // as wide as the head: padded with empty cells, or cut
+    rows.push(head.map((_, column) => inlineOf(cells[column] ?? "")));
+    end += 1;
+  }
+  const block: MarkdownBlock = {
+    kind: "table",
+    align: delimiter.map(alignOf),
+    head: head.map(inlineOf),
+    rows,
+  };
+  return { block, end };
+}
+
+function alignOf(cell: string): CellAlign {
+  const start = cell.startsWith(":");
+  const end = cell.endsWith(":");
+  if (start && end) return "center";
+  if (end) return "right";
+  return start ? "left" : null;
+}
+
+/** A row's cells, trimmed, between its pipes: never a pipe inside a code span, nor an escaped `\|`, which is a pipe in
+ * the cell's words. A pipe at the row's start or end bounds it and makes no cell. Null: the line has no pipe. */
+function cellsOf(line: string): string[] | null {
+  const text = line.trim();
+  const cells: string[] = [];
+  let cell = "";
+  // the row so far ends on a pipe
+  let closed = false;
+  let at = 0;
+  while (at < text.length) {
+    const char = text.charAt(at);
+    if (char === "|") {
+      cells.push(cell);
+      cell = "";
+      closed = true;
+      at += 1;
+      continue;
+    }
+    closed = false;
+    if (char === "\\" && text.charAt(at + 1) === "|") {
+      cell += "|";
+      at += 2;
+      continue;
+    }
+    ROW_CODE.lastIndex = at;
+    const span = char === "`" ? ROW_CODE.exec(text) : null;
+    if (span !== null) {
+      cell += span[0].replaceAll("\\|", "|");
+      at += span[0].length;
+      continue;
+    }
+    cell += char;
+    at += 1;
+  }
+  if (cells.length === 0) return null;
+  if (!closed) cells.push(cell);
+  if (text.startsWith("|")) cells.shift();
+  return cells.map((each) => each.trim());
 }
 
 function startsBlock(line: string): boolean {

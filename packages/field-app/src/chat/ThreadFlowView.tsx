@@ -13,15 +13,21 @@ import { ChatStarter } from "./ChatStarter";
 import { CrewCardView } from "./CrewCardView";
 import type { CrewCard } from "./crew-card";
 import { chipWordsOf, FLOW_WORDS, type Flow, type FlowItem } from "./transcript-items";
-import { type InlineRun, type MarkdownBlock, markdownBlocksOf } from "./transcript-markdown";
+import {
+  type CellAlign,
+  type InlineRun,
+  type MarkdownBlock,
+  markdownBlocksOf,
+} from "./transcript-markdown";
 import "./thread-flow.css";
 
 // THE FLOW, DRAWN (TH-1; DESIGN.md §8 "Chat's thread") — controller-free, so the catalog mounts this exact markup on
 // fixture lines. The flow scrolls under the thread's head: it opens at its foot and stays there while new rows land;
 // scrolled up, it stays where it was put. Your words stand at the right in a bubble with their chips and receipt;
 // Vela's beside its face, a still that leads once per run of its rows, drawn in the named subset as text (React
-// escapes every run, so nothing an agent writes is markup); its tools one quiet line a turn, opened on a press; the
-// hello as the first row; Thinking… at the foot. Each row's root says its kind (`data-row`).
+// escapes every run, so nothing an agent writes is markup; a table is drawn as one since Spark QA F1, 2026-11-25); its
+// tools one quiet line a turn, opened on a press; the hello as the first row; Thinking… at the foot. Each row's root
+// says its kind (`data-row`).
 
 export interface ThreadFlowViewProps {
   flow: Flow;
@@ -316,7 +322,43 @@ function blockOf(block: MarkdownBlock, key: string): ReactNode {
     }
     case "quote":
       return <blockquote key={key}>{blocksOf(block.blocks)}</blockquote>;
+    case "table":
+      // Spark QA F1, 2026-11-25 — a table drawn as one, its cells in the same subset; wider than the column, it
+      // scrolls sideways within its own box (thread-flow.css). A cell has no id of its own: its place is its key.
+      return (
+        <div key={key} className="vf-chat-table">
+          <table>
+            <thead>
+              <tr>
+                {block.head.map((cell, column) => (
+                  <th key={column} scope="col" {...alignedBy(block.align[column])}>
+                    {runsOf(cell, `h${column}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            {block.rows.length === 0 ? null : (
+              <tbody>
+                {block.rows.map((row, at) => (
+                  <tr key={at}>
+                    {row.map((cell, column) => (
+                      <td key={column} {...alignedBy(block.align[column])}>
+                        {runsOf(cell, `r${at}:${column}`)}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            )}
+          </table>
+        </div>
+      );
   }
+}
+
+/** A cell's column alignment, as its delimiter's colons said it: none stands at the column's start. */
+function alignedBy(align: CellAlign | undefined): { "data-align"?: string } {
+  return align === null || align === undefined ? {} : { "data-align": align };
 }
 
 /** A block's lines, its line breaks kept. */

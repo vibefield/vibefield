@@ -89,3 +89,101 @@ describe("the named subset (TH-Q35 (a))", () => {
     ]);
   });
 });
+
+const text = (words: string) => ({ kind: "text", text: words }) as const;
+const code = (words: string) => ({ kind: "code", text: words }) as const;
+
+describe("a reply's table (Spark QA F1, 2026-11-25)", () => {
+  it("reads a header, the delimiter row's alignment and the body rows, each cell as inline runs", () => {
+    const reply = [
+      "| Model id | Label | Effort levels | Notes |",
+      "|---|:---:|--:|:--|",
+      "| `default` | Default (recommended) | low, medium, high | **fast** |",
+    ].join("\n");
+    expect(markdownBlocksOf(reply)).toEqual([
+      {
+        kind: "table",
+        align: [null, "center", "right", "left"],
+        head: [[text("Model id")], [text("Label")], [text("Effort levels")], [text("Notes")]],
+        rows: [
+          [
+            [code("default")],
+            [text("Default (recommended)")],
+            [text("low, medium, high")],
+            [{ kind: "bold", runs: [text("fast")] }],
+          ],
+        ],
+      },
+    ]);
+  });
+
+  it("reads an escaped pipe as a pipe, never splits a cell at a pipe in a code span, and takes an empty first column", () => {
+    const reply = [
+      "| | Loro | Yjs |",
+      "| --- | --- | --- |",
+      "| a \\| b | `x | y` | `p\\|q` |",
+    ].join("\n");
+    expect(markdownBlocksOf(reply)).toEqual([
+      {
+        kind: "table",
+        align: [null, null, null],
+        head: [[], [text("Loro")], [text("Yjs")]],
+        rows: [[[text("a | b")], [code("x | y")], [code("p|q")]]],
+      },
+    ]);
+  });
+
+  it("pads a short row and cuts a long one to the header's width, and reads rows with no outer pipes", () => {
+    const [table] = markdownBlocksOf("a | b | c\n--|--|--\n1 | 2\n1 | 2 | 3 | 4\n|");
+    expect(table).toEqual({
+      kind: "table",
+      align: [null, null, null],
+      head: [[text("a")], [text("b")], [text("c")]],
+      rows: [
+        [[text("1")], [text("2")], []],
+        [[text("1")], [text("2")], [text("3")]],
+        [[], [], []],
+      ],
+    });
+  });
+
+  it("stands between paragraphs: it may follow a paragraph's line, and a blank line, another block or a line with no pipe ends it", () => {
+    const reply =
+      "Here's how they compare:\n| a | b |\n|---|---|\n| 1 | 2 |\nThat's all.\n\n| c |\n|---|\n- a list";
+    expect(markdownBlocksOf(reply).map((block) => block.kind)).toEqual([
+      "paragraph",
+      "table",
+      "paragraph",
+      "table",
+      "list",
+    ]);
+    // a header and its delimiter alone are a table with no rows
+    expect(markdownBlocksOf("| a | b |\n|---|---|")).toEqual([
+      { kind: "table", align: [null, null], head: [[text("a")], [text("b")]], rows: [] },
+    ]);
+  });
+
+  it("keeps a line of pipes a paragraph when no delimiter row stands under it, or one of another width", () => {
+    expect(markdownBlocksOf("| a | b |\n| c | d |")).toEqual([
+      { kind: "paragraph", lines: [[text("| a | b |")], [text("| c | d |")]] },
+    ]);
+    expect(markdownBlocksOf("| a | b |\n|---|").map((block) => block.kind)).toEqual(["paragraph"]);
+    // a rule with no pipe stays a rule, and `---` under words is no delimiter row
+    expect(markdownBlocksOf("words\n---\nmore").map((block) => block.kind)).toEqual([
+      "paragraph",
+      "paragraph",
+    ]);
+  });
+
+  it("keeps markup in a cell as words (EL7)", () => {
+    const [table] = markdownBlocksOf(
+      '| <img src=x onerror="alert(1)"> | [press](javascript:alert(1)) |\n|---|---|',
+    );
+    expect(table).toEqual({
+      kind: "table",
+      align: [null, null],
+      head: [[text('<img src=x onerror="alert(1)">')], [text("press")]],
+      rows: [],
+    });
+  });
+});

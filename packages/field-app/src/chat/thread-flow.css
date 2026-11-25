@@ -222,6 +222,56 @@
   color: var(--vf-text-secondary);
 }
 
+/* a table (Spark QA F1, 2026-11-25): its cells 13 at 1.45, padded 6 10 (none at the table's own start and end, so its
+   words stand on the reply's edge), set by their column's colons, a word never broken; its head 600 over the strong
+   hairline, a hairline between its rows. Wider than the column, it scrolls sideways within its own box, never
+   widening the thread. */
+.vf-chat-reply-text .vf-chat-table {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.vf-chat-table table {
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.vf-chat-table th,
+.vf-chat-table td {
+  padding: 6px 10px;
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+
+.vf-chat-table th {
+  font-weight: 600;
+  border-bottom: 1px solid var(--vf-hairline-strong);
+}
+
+.vf-chat-table tbody tr + tr td {
+  border-top: 1px solid var(--vf-hairline);
+}
+
+.vf-chat-table th:first-child,
+.vf-chat-table td:first-child {
+  padding-left: 0;
+}
+
+.vf-chat-table th:last-child,
+.vf-chat-table td:last-child {
+  padding-right: 0;
+}
+
+.vf-chat-table [data-align="center"] {
+  text-align: center;
+}
+
+.vf-chat-table [data-align="right"] {
+  text-align: right;
+}
+
 /* ── the hello and its starters (NS-D4; DESIGN.md §8 "Chat's thread", the hello): the flow's first row, drawn as
    Vela's words are. It comes in over 420ms on the island curve, from 8 below at opacity 0, and goes at once. Moved
    here from chat.css with the foot's hello card (TH-1, the pane leaves Chat). ── */

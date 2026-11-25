@@ -2622,6 +2622,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         hairline at their left, padded 10). A heading is a bold paragraph. A link is drawn as its words, inert: an
         agent's text is the adversary's (EL7), so a link, or an act drawn inside it, is a lure. Nothing else is read as
         markup.
+      - *Added 2026-11-25 (Spark QA F1):* **a table** is read too, GitHub's: a header row, the delimiter row under it
+        (a `:` at a cell's end sets its column), and its rows, each cut or padded to the header's width; a line of pipes
+        with no delimiter row under it stays words. Its cells are in the same subset, drawn as text. Its cells are 13
+        regular at 1.45 in primary ink, padded 6 10 (none at the table's own start and end, so its words stand on the
+        reply's edge), a word never broken; its head is 600 over the strong hairline, with a hairline between its rows.
+        Wider than the column, it scrolls sideways within its own box, as fenced code does, and never widens the
+        thread.
     - **What it did, as quiet lines** (TH-Q12 (a)), in the lead's place: 12.5 regular at 1.3 in tertiary ink, 22 tall
       at least, its glyph at 13, then 7.
       - **Its tools, one line a turn** (TH-Q1 (a + ii), James): "Used 3 tools" (`code`). Pressed, it opens its rows,

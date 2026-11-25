@@ -114,6 +114,42 @@ describe("the thread's plates (TH-1)", () => {
     expect(words(reply?.querySelector("blockquote"))).toBe("The other suites were already green.");
     expect(reply?.querySelector("a")).toBeNull();
     expect(words(reply)).toContain("The run is in the CI log.");
+    // Spark QA F1, 2026-11-25 — a table drawn as one: its head's cells name their columns, its cells in the subset,
+    // each set by its column's colons, in a box of its own that scrolls sideways (thread-flow.css)
+    const table = reply?.querySelector(":scope > .vf-chat-table > table");
+    expect(
+      [...(table?.querySelectorAll("thead th") ?? [])].map((th) => [
+        th.getAttribute("scope"),
+        words(th),
+        th.getAttribute("data-align"),
+      ]),
+    ).toEqual([
+      ["col", "Suite", null],
+      ["col", "Tests", "right"],
+      ["col", "Time", "right"],
+    ]);
+    expect(
+      [...(table?.querySelectorAll("tbody tr") ?? [])].map((tr) =>
+        [...tr.querySelectorAll("td")].map(words),
+      ),
+    ).toEqual([
+      ["chat-composer", "42", "1.2 s"],
+      ["thread-flow", "18", "0.9 s"],
+    ]);
+    expect(table?.querySelectorAll("tbody td:first-child > code")).toHaveLength(2);
+  });
+
+  it("scrolls a wide table sideways inside its own box, never widening the thread (Spark QA F1, 2026-11-25)", () => {
+    const css = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/chat/thread-flow.css"),
+      "utf8",
+    );
+    const box = css.match(/^\.vf-chat-reply-text \.vf-chat-table \{([^}]*)\}/mu)?.[1] ?? "";
+    expect(box).toContain("max-width: 100%;");
+    expect(box).toContain("overflow-x: auto;");
+    // a cell's words break only where they may, so a wide table scrolls rather than splitting its words
+    const cells = css.match(/^\.vf-chat-table th,\n\.vf-chat-table td \{([^}]*)\}/mu)?.[1] ?? "";
+    expect(cells).toContain("overflow-wrap: normal;");
   });
 
   it("draws an asleep spark's conversation too", async () => {
@@ -248,6 +284,32 @@ describe("an agent's words are never markup (EL7)", () => {
     expect($("b")).toBeNull();
     expect(words($('[data-row="reply"]'))).toBe('<img src=x onerror="alert(1)"> press p');
     expect(words($('[data-row="you"]'))).toBe("<b>bold?</b>");
+  });
+
+  it("draws a table's cells as text too (Spark QA F1, 2026-11-25)", async () => {
+    await mount(
+      <ThreadFlowView
+        name="Vela"
+        face={{ seed: 1, status: "ready" }}
+        flow={{
+          state: "ready",
+          items: [
+            {
+              kind: "reply",
+              key: "r",
+              lead: true,
+              text: '| <img src=x onerror="alert(1)"> | [press](javascript:alert(1)) |\n|---|---|\n| <b>x</b> | `<i>y</i>` |',
+            },
+          ],
+        }}
+      />,
+    );
+    expect($("img")).toBeNull();
+    expect($("a")).toBeNull();
+    expect($("b")).toBeNull();
+    expect($("i")).toBeNull();
+    expect($$(".vf-chat-table th").map(words)).toEqual(['<img src=x onerror="alert(1)">', "press"]);
+    expect($$(".vf-chat-table td").map(words)).toEqual(["<b>x</b>", "<i>y</i>"]);
   });
 });
 

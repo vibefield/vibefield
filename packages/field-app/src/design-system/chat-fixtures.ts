@@ -879,8 +879,8 @@ const JUNO_LINES = new Map<string, readonly unknown[]>([
   ["run-juno", JUNO_TODAY],
 ]);
 
-/** A reply in every part of the named subset: a heading, a list, inline and fenced code, a quote, and a link, which
- * is drawn as its words. */
+/** A reply in every part of the named subset: a heading, a list, inline and fenced code, a quote, a table (Spark QA
+ * F1, 2026-11-25), and a link, which is drawn as its words. */
 const LONG_REPLY = [
   "## What changed",
   "",
@@ -894,6 +894,11 @@ const LONG_REPLY = [
   "```",
   "",
   "> The other suites were already green.",
+  "",
+  "| Suite | Tests | Time |",
+  "|---|--:|--:|",
+  "| `chat-composer` | 42 | 1.2 s |",
+  "| `thread-flow` | 18 | 0.9 s |",
   "",
   "The run is in [the CI log](https://example.invalid/run/41943622431).",
 ].join("\n");
