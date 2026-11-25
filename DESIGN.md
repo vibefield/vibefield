@@ -8024,6 +8024,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       stay on Studio"** (or that Studio is asleep), and its caption names the desktop and the
       branch ("Studio · main"); a folder that is gone or unmounted says so in the same place. New
       agent follows the folder ③ shows (PJ-D8).
+    - **③'s foot is the worktree ledger** (HD-3, 2026-11-24; James, on the drawn options: "i choose
+      size ledger, and user should be able to one click copy the worktree name"): under the file
+      tree, when the repository has more than one worktree, they stand **heaviest first**. A row is
+      a name over a thin bar scaled to the heaviest row, with its size at the edge in mono; the
+      head says the count and the sum ("5 · 9.00 GB", with a "+" while a figure is still owed).
+      The bar is neutral ink: hue says which project or which state, and a share of disk is
+      neither. A worktree with no branch is named by **its folder and its commit** ("wt-10bfix
+      0e4919f"), never its path; where it is, and how dirty the shown one is, are on the row's
+      hover. The shown one carries the select dot. A row being measured says "…" after the
+      measured ones; one whose folder is gone says "gone", last. **A press copies the name**, with
+      a receipt ("worktree name copied"); it switches nothing, which stays the head's list.
+      The size is what the folder holds as a walk counts it (packages and build output included),
+      measured in the background one folder at a time and kept ten minutes. It is not what removing
+      the worktree would free, and the row does not claim so.
     - **The chips** (R7): over the list, **any desktop ▾** — every desktop with its mark, "here" or
       "asleep", and how many of these projects live on it (one with none is dimmed, so a choice
       never empties the list); over a project's sessions, **any agent ▾** — the agents its

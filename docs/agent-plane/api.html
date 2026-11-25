@@ -3058,7 +3058,11 @@
                 <tr><td><code>workspace.search</code></td><td><code>{rootId, path?, q, kinds?}</code>:
                   bounded subtree walk; <code>complete: false</code> means partial coverage.</td></tr>
                 <tr><td><code>workspace.gitFacts</code></td><td><code>{rootId, path?}</code>:
-                  branch, dirty count and worktrees; null outside a repository.</td></tr>
+                  branch, dirty count and worktrees; null outside a repository. Each worktree
+                  carries its commit (<code>head</code>), whether its folder is gone
+                  (<code>gone</code>) and what it holds on disk (<code>sizeBytes</code>: null while
+                  the files worker is measuring it, absent where nothing measures). Asking is what
+                  queues a measurement.</td></tr>
                 <tr><td><code>workspace.subscribe</code></td><td><code>{scope: "roots"}</code>:
                   the roots as a rows subscription.</td></tr>
                 <tr><td><code>workspace.pickFolder</code></td><td>Local attended folder selection:
