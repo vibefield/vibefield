@@ -220,26 +220,51 @@ function startsBlock(line: string): boolean {
   );
 }
 
-/** One line's runs: `code` first (nothing inside it is read), then a link as its words, then bold and italic. */
+/** Where a code span stands while a line's markup is read: U+FFFC, the object replacement character, which no markup
+ * reads (it is no space, no word and no delimiter). The line's own U+FFFC stands the same way, as its own text. */
+const HOLE = "\uFFFC";
+
+/** A code span, or the line's own U+FFFC: each is held out of the line while its markup is read. */
+const HELD = /`([^`]+)`|\uFFFC/gu;
+
+/** One line's runs: `code` first (nothing inside it is read), then a link as its words, then bold and italic, which
+ * may hold code (Spark QA F2, 2026-11-25: a bold verdict that opens on a code span is bold). Each code span stands in
+ * the line as a hole while its markup is read, so its words close nothing and open nothing. */
 export function inlineOf(line: string): InlineRun[] {
-  const runs: InlineRun[] = [];
-  let rest = line;
-  for (;;) {
-    const tick = /`([^`]+)`/u.exec(rest);
-    if (tick === null) break;
-    runs.push(...emphasisOf(linksAsWords(rest.slice(0, tick.index))));
-    runs.push({ kind: "code", text: tick[1] ?? "" });
-    rest = rest.slice(tick.index + tick[0].length);
-  }
-  runs.push(...emphasisOf(linksAsWords(rest)));
-  return merged(runs);
+  const held: InlineRun[] = [];
+  const holed = line.replace(HELD, (whole: string, code: string | undefined) => {
+    held.push(code === undefined ? { kind: "text", text: whole } : { kind: "code", text: code });
+    return HOLE;
+  });
+  return filled(emphasisOf(linksAsWords(holed)), held);
 }
 
-/** A link is drawn as its words, never as a link: `[words](url)` is "words", `<https://…>` its address as text. */
+/** The runs with each hole filled again, in the line's order: a code span, or the line's own U+FFFC as its text.
+ * Nothing drops a hole (a link's target never holds one), so the n-th hole is the n-th held. */
+function filled(runs: readonly InlineRun[], held: readonly InlineRun[]): InlineRun[] {
+  let next = 0;
+  const fill = (each: readonly InlineRun[]): InlineRun[] =>
+    merged(
+      each.flatMap((run): InlineRun[] => {
+        if (run.kind === "bold") return [{ kind: "bold", runs: fill(run.runs) }];
+        if (run.kind === "italic") return [{ kind: "italic", runs: fill(run.runs) }];
+        if (run.kind === "code") return [run];
+        return run.text.split(HOLE).flatMap((piece, index): InlineRun[] => {
+          const hole = index === 0 ? undefined : held[next++];
+          const words: InlineRun = { kind: "text", text: piece };
+          return hole === undefined ? [words] : [hole, words];
+        });
+      }),
+    );
+  return fill(runs);
+}
+
+/** A link is drawn as its words, never as a link: `[words](url)` is "words", `<https://…>` its address as text. A
+ * target that holds a code span is no link's, as it was while code split the line first. */
 function linksAsWords(text: string): string {
   return text
-    .replace(/!?\[([^\]]*)\]\((?:[^()\s]|\([^()\s]*\))*(?:\s+"[^"]*")?\)/gu, "$1")
-    .replace(/<((?:https?|mailto):[^>\s]+)>/gu, "$1");
+    .replace(/!?\[([^\]]*)\]\((?:[^()\s\uFFFC]|\([^()\s\uFFFC]*\))*(?:\s+"[^"\uFFFC]*")?\)/gu, "$1")
+    .replace(/<((?:https?|mailto):[^>\s\uFFFC]+)>/gu, "$1");
 }
 
 function emphasisOf(text: string): InlineRun[] {

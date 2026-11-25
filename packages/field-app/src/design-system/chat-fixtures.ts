@@ -880,7 +880,7 @@ const JUNO_LINES = new Map<string, readonly unknown[]>([
 ]);
 
 /** A reply in every part of the named subset: a heading, a list, inline and fenced code, a quote, a table (Spark QA
- * F1, 2026-11-25), and a link, which is drawn as its words. */
+ * F1, 2026-11-25), a bold line that holds code (Spark QA F2, 2026-11-25), and a link, which is drawn as its words. */
 const LONG_REPLY = [
   "## What changed",
   "",
@@ -899,6 +899,8 @@ const LONG_REPLY = [
   "|---|--:|--:|",
   "| `chat-composer` | 42 | 1.2 s |",
   "| `thread-flow` | 18 | 0.9 s |",
+  "",
+  "**`chat-composer` passes on both runs.**",
   "",
   "The run is in [the CI log](https://example.invalid/run/41943622431).",
 ].join("\n");

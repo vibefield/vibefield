@@ -93,6 +93,51 @@ describe("the named subset (TH-Q35 (a))", () => {
 const text = (words: string) => ({ kind: "text", text: words }) as const;
 const code = (words: string) => ({ kind: "code", text: words }) as const;
 
+describe("bold and italic around code (Spark QA F2, 2026-11-25)", () => {
+  it("lets a bold run hold a code run, as a spark writes a verdict", () => {
+    expect(inlineOf("**`review-until-clean` flow: can't be done.**")).toEqual([
+      { kind: "bold", runs: [code("review-until-clean"), text(" flow: can't be done.")] },
+    ]);
+    expect(inlineOf("**`a` and `b`** then *see `c`*")).toEqual([
+      { kind: "bold", runs: [code("a"), text(" and "), code("b")] },
+      text(" then "),
+      { kind: "italic", runs: [text("see "), code("c")] },
+    ]);
+  });
+
+  it("still reads nothing inside a code span, and a lone `*` or `_` inside a word is the word's own", () => {
+    // the code span's own asterisks close nothing
+    expect(inlineOf("**a `**` b**")).toEqual([
+      { kind: "bold", runs: [text("a "), code("**"), text(" b")] },
+    ]);
+    expect(inlineOf("`**`x`**`")).toEqual([code("**"), text("x"), code("**")]);
+    expect(inlineOf("snake_`x`_case and 2*`y`*3")).toEqual([
+      text("snake_"),
+      code("x"),
+      text("_case and 2*"),
+      code("y"),
+      text("*3"),
+    ]);
+    // a link's words may hold code; a code span in its target leaves it unread, as before
+    expect(inlineOf("[`x`](https://evil.invalid) and [a](`b`)")).toEqual([
+      code("x"),
+      text(" and [a]("),
+      code("b"),
+      text(")"),
+    ]);
+  });
+
+  it("keeps the line's own object replacement character as its text", () => {
+    const own = String.fromCodePoint(0xfffc);
+    expect(inlineOf(`a${own} **b** \`c\``)).toEqual([
+      text(`a${own} `),
+      { kind: "bold", runs: [text("b")] },
+      text(" "),
+      code("c"),
+    ]);
+  });
+});
+
 describe("a reply's table (Spark QA F1, 2026-11-25)", () => {
   it("reads a header, the delimiter row's alignment and the body rows, each cell as inline runs", () => {
     const reply = [

@@ -2629,6 +2629,8 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
         reply's edge), a word never broken; its head is 600 over the strong hairline, with a hairline between its rows.
         Wider than the column, it scrolls sideways within its own box, as fenced code does, and never widens the
         thread.
+      - *Added 2026-11-25 (Spark QA F2):* bold and italic may hold `code`: "**`review-until-clean` flow: can't be
+        done.**" is bold, its code inside it. Nothing inside the code is read, so its own asterisks close nothing.
     - **What it did, as quiet lines** (TH-Q12 (a)), in the lead's place: 12.5 regular at 1.3 in tertiary ink, 22 tall
       at least, its glyph at 13, then 7.
       - **Its tools, one line a turn** (TH-Q1 (a + ii), James): "Used 3 tools" (`code`). Pressed, it opens its rows,

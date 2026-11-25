@@ -137,6 +137,10 @@ describe("the thread's plates (TH-1)", () => {
       ["thread-flow", "18", "0.9 s"],
     ]);
     expect(table?.querySelectorAll("tbody td:first-child > code")).toHaveLength(2);
+    // Spark QA F2, 2026-11-25 — a bold line that opens on code is bold, its asterisks never drawn
+    const verdict = reply?.querySelector(":scope > p > strong > code")?.parentElement;
+    expect(words(verdict)).toBe("chat-composer passes on both runs.");
+    expect(words(reply)).not.toContain("*");
   });
 
   it("scrolls a wide table sideways inside its own box, never widening the thread (Spark QA F1, 2026-11-25)", () => {
