@@ -68880,3 +68880,57 @@ pub".
   Nobody has watched the look fly in a running desk or Godview.
 - **Owed for James:** his look at the stickers in a running Godview, now with the click's flight; a one-row commit
   that drops 0.21.0's release-age row after 2026-11-26 11:01:34Z.
+
+## Spark QA, the first real-agent round — a born run takes its first words once it has started; six more mends in the spark's talk and Chat's thread (M560)
+
+**2026-11-25 · on local main: `a57649b32` (nine commits over `5a4e50a6c`). Upstream: vibefield/puppeteer #124
+(a wrapped paste is confirmed; merged 14:12Z, squash `19965fc3`) and #125 (a reply stopped with Esc ends its turn;
+open); they reach main at the EL8 after their release.**
+James, 2026-11-25: "onboard to our spark track of work, and help me review and QA its full features, test for real
+use claude sonnet for spark agent, and ask spark to spawn and run claude haiku, codex gpt 6 luna, grok 4.7 to do
+research, to do flow, etc. test for real and fix bugs".
+
+- **How it was found.** A QA desktop of its own on main (the dev runner on its own root, driven through the page), a
+  spark on Claude Code with Sonnet 5.5, and the agents it started for research rounds: Claude Code on Haiku 5.5, Codex
+  on gpt-6-luna, Grok on grok-4.7. Each mend below was red in that desktop and seen green there after it.
+- **The start gate (`e7224da13`, `320d3d12a`).** `agent_spawn` queued a run's task and the input queue pasted it
+  about 10 ms after the terminal was spawned, because the run's first monitor row already read idle. Claude Code and
+  Codex kept the words as an unsent draft, the receipt read `uncertain`, and the next send joined that draft, so two
+  prompts went as one. A run born here now takes no input until its agent has said it started
+  (`session:started`, `session:ready`) and a settle has passed, or a turn has begun; `submit` answers
+  `rejected: starting` meanwhile and the queue looks again when the wait ends (`agent-boot.ts`). A run that was alive
+  before this fieldd (re-attached, adopted) is not held. **PROVISIONAL numbers, `AGENT_START` in registries.ts:**
+  settle 2500 ms, said within 12 000 ms (a run that never says it started takes input after that, said once in the
+  log as `fieldd.agents.start_unsaid`). Seen after: Codex confirmed its task 2.85 s after its spawn, Haiku took one
+  prompt, two spawns at once each took their own.
+- **The standing ask (`e39d00022`).** A spark was told "is asking you" for a tool ask Grok answered itself a moment
+  later. The waker now tells a spark of an ask once it has stood. **PROVISIONAL, `AGENT_WAKE.ASK_STANDS_MS`:**
+  1500 ms. Seen after: four agents, four "finished" wakes, no "is asking you".
+- **`agent_read` says why it is empty (`5216179ed`).** With History off, down or not caught up, the verb answered
+  no turns and no reason. `ComposeReadOutput` gains an optional `note`, and the verb says which of the three it is.
+- **A long say is kept once (`db43a0076`).** Claude Code 2.1.332 hands its hooks a long paste inside a
+  `pasted_content` wrapper; the spark's transcript kept the say and then the wrapped echo as a second bubble, tags
+  and all. The recorder reads through a wrapper that is the whole prompt.
+- **`agents_list` names a session (`f90105b96`)** by the title it gave itself when its launch gave none.
+- **Chat's thread and sheet (`f890fc792`, `5d96d03f4`, `a57649b32`).** A reply's table is drawn as a table, bold and
+  italic may hold code, and the New spark sheet's agent menu ends 8 above the window's foot and scrolls. DESIGN.md §8
+  gains three dated lines for them.
+- **Ran, at `a57649b32`:** on James's Mac, each alone after a lone load read under 20, niced, 4 workers,
+  the lane's own cargo target: `pnpm test` whole (28 projects, exit 0, none from the cache; fieldd 346 files and 5276
+  tests passed, field-app 402 files and 5898 passed, read from their own whole runs at the same code), the workspace
+  typecheck (28 projects), `gen:check`, `check:walls`, `check-agent-catalog --enforce --literals`, `biome check .`,
+  `preflight` (its one standing warning, R23's `acp` candidate), `bundle:assert` (initial 1017.9 KB raw, 271.7 KB
+  gz), `census:assert` (no drift), `check:bundled-plugins` (3 of 3). In the upstream clone, on both fixes together:
+  adapter-claude's typecheck and its whole suite (37 files, 603 passed, 4 skipped).
+- **Not run:** `pnpm verify` as one line, the Rust stages (no Rust changed), `gate:landing`.
+- **Found, not mended here.**
+  - Flows cannot be run: `flow_run`, `flow_read`, `flow_stop` and `flow_propose` have no handler, and there are no
+    flows doors (CP-4a2b's M-d, then CP-4b…4f). A spark asked for a flow says so.
+  - Until the EL8 after puppeteer #124 and #125: a multi-line send into Claude Code reads `uncertain` though it
+    arrived, and Pause on a Claude Code run (a spark too) is not heard, so its row reads "Still running" and every
+    later say to it waits. The way out is a prompt typed in its pane.
+  - A run standing at its agent's own start question (Grok's folder trust) reads "working", with no card.
+  - With History off a spark cannot read its agents' words at all (`agent_read`, `history_search` are History's).
+  - A spark prints run ids and needs ids to the person; its brief names no rule for it.
+  - A paused turn leaves no line in the thread, neither its written part nor that it was paused.
+  - The phone's `ChatMarkdown.swift` has no table and reads bold around code the old way.

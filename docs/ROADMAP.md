@@ -1167,6 +1167,19 @@ its rulings (`draft/rv/james-asks.md`, `draft/rv/lead-rulings.md`); the review `
   - A sign-out and a set's delete ask first, and refuse UNAVAILABLE {agents, records-unreadable} before anything is
     retired. The readers that only look go on with none, and say so in fieldd's log.
   - For James's eye (draft words; not a hold): "VibeField can't read the sessions it keeps; nothing was changed".
+- **Spark QA, the first real-agent round**: LANDED 11-25 (`a57649b32`, M560; LANDED "Spark QA, the first real-agent
+  round"), on James's ask of 11-25 ("test for real … and fix bugs"): a spark on Sonnet 5.5 starting Haiku 5.5,
+  gpt-6-luna and grok-4.7 agents in a QA desktop on main.
+  - A born run takes its first input once its agent has started, so a spawn's task is no longer an unsent draft
+    (`AGENT_START`, PROVISIONAL: settle 2500 ms, said within 12 000 ms). A spark is told of an ask once it has stood
+    (`AGENT_WAKE.ASK_STANDS_MS`, PROVISIONAL: 1500 ms).
+  - `agent_read` says why it has no turns; a long say is kept once; `agents_list` names a session by its own title;
+    a reply's table, bold around code, and the New spark sheet's menu (DESIGN.md §8, three dated lines).
+  - Owed, upstream: puppeteer #125 (a reply stopped with Esc ends its turn; #124, a wrapped paste is confirmed,
+    merged 11-25), then their release and the EL8. Until then a multi-line send into Claude Code reads `uncertain`, and Pause on a
+    Claude Code run is not heard: a paused spark takes no say until a prompt is typed in its pane.
+  - For James's eye: a spark cannot read its agents with History off; it prints run ids to the person; a paused
+    turn leaves no line in the thread; a run at its agent's own start question reads "working" with no card.
 - Next, in order (the CO waves matrix, `lanes/co-plan/plans/co-waves-matrix.md`):
   - **SP-1e4** (SP-1e: CH-D2's live cards in Chat's thread): Stop all and Pause all on the crew card, now that the
     card has landed (SP-1e2). SP-1e3 stays HELD.
