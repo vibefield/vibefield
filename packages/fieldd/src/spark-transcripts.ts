@@ -414,6 +414,18 @@ const PROMPTS_KEPT = 16;
 /** Words compared as a prompt: their whitespace one space, trimmed. */
 const promptWords = (text: string): string => text.replace(/\s+/gu, " ").trim();
 
+// Spark QA F3 (2026-11-25) — Claude Code (seen at 2.1.332) hands a long paste to its hooks inside a wrapper of its own,
+// `<pasted_content id="d2c1">` … `</pasted_content id="d2c1">`, so the prompt a turn starts with is not the words that
+// were pasted. A long message from Chat was kept twice: once as said, and once more, wrapper and all, as typed in the
+// pane. The words are read out of a wrapper that holds the WHOLE prompt, and of no other.
+const PASTE_WRAPPER =
+  /^\s*<pasted_content id="([^"\n]*)">\r?\n([\s\S]*?)\r?\n<\/pasted_content(?: id="\1")?>\s*$/u;
+
+/** A prompt's own words: what a whole-prompt paste wrapper holds, else the prompt as it is. */
+export function pastedWords(prompt: string): string {
+  return PASTE_WRAPPER.exec(prompt)?.[2] ?? prompt;
+}
+
 type ToolBody = Extract<TranscriptBody, { kind: "tool" }>;
 
 interface Recording {
@@ -478,7 +490,9 @@ export class SparkTranscriptRecorder {
     agent.on("turn:started", (envelope) => {
       if (!ownLive(envelope)) return;
       state.said = undefined;
-      const prompt = envelope.event.prompt;
+      // Spark QA F3 — the words, out of the agent's own paste wrapper: matched and kept as what was said
+      const prompt =
+        envelope.event.prompt === undefined ? undefined : pastedWords(envelope.event.prompt);
       if (prompt !== undefined && prompt.trim() !== "" && !this.#pasted(runtimeRunId, prompt))
         this.store.append(spark, runtimeRunId, { kind: "you", via: "terminal", text: prompt });
       this.store.append(spark, runtimeRunId, {

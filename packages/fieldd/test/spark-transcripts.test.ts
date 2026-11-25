@@ -27,6 +27,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { RpcCallError } from "../src/native-link";
 import { RecordSigner, UNREADABLE_WORDS } from "../src/signed-record";
 import {
+  pastedWords,
   SparkTranscriptRecorder,
   SparkTranscripts,
   type TranscriptAgent,
@@ -705,6 +706,62 @@ describe("the recorder (TH-1; a spark's own run's events, and VibeField's own fa
       ["turn", "start"],
     ]);
     expect(lines[2]).toMatchObject({ text: "/compact" });
+  });
+
+  // Spark QA F3 (2026-11-25) — found in real use: Claude Code 2.1.332 hands a long paste to its hooks inside
+  // `<pasted_content id="…">`, and an 802-character message from Chat was kept twice, the second time with the tags
+  it("a long say the agent hands back inside its own paste wrapper is the say's, and a wrapped paste in the pane is kept as its words", () => {
+    const h = harness();
+    const recorder = new SparkTranscriptRecorder(h.open());
+    const run = fakeAgent();
+    recorder.entered({ agent: run.agent, spark: VELA, runtimeRunId: RUN, begun: "spawn" });
+    const long = `Start three agents in the folder.\n${"Watch them. ".repeat(60)}`;
+    recorder.said(VELA, RUN, {
+      text: long,
+      input: "in-1",
+      requestId: "say-000000000009",
+      state: "queued",
+    });
+    recorder.expectPrompt(RUN, long);
+    run.emit("turn:started", {
+      turnId: "t-1",
+      prompt: `\n\n<pasted_content id="d2c1">\n${long}\n</pasted_content id="d2c1">\n`,
+    });
+    // a long paste a person made in the pane: theirs, via the terminal, as its words
+    run.emit("turn:started", {
+      turnId: "t-2",
+      prompt: '<pasted_content id="a64d">\nline one\nline two\n</pasted_content id="a64d">',
+    });
+    const lines = h.raw(VELA, RUN).slice(1);
+    expect(lines.map((line) => [line["kind"], line["via"] ?? line["edge"]])).toEqual([
+      ["you", "chat"],
+      ["turn", "start"],
+      ["you", "terminal"],
+      ["turn", "start"],
+    ]);
+    expect(lines[2]).toMatchObject({ text: "line one\nline two" });
+  });
+
+  it("pastedWords reads a wrapper that holds the whole prompt, and no other", () => {
+    expect(pastedWords("plain words")).toBe("plain words");
+    expect(
+      pastedWords('\n\n<pasted_content id="d2c1">\nthe words\n</pasted_content id="d2c1">\n'),
+    ).toBe("the words");
+    expect(pastedWords('<pasted_content id="d2c1">\r\nthe words\r\n</pasted_content>')).toBe(
+      "the words",
+    );
+    // words that hold the tags themselves are read to the LAST close
+    const inner = 'a\n</pasted_content id="d2c1">\nb';
+    expect(pastedWords(`<pasted_content id="d2c1">\n${inner}\n</pasted_content id="d2c1">`)).toBe(
+      inner,
+    );
+    // a draft before the paste, another id on the close, or words after it: the prompt as it is
+    for (const mixed of [
+      'a draft\n\n<pasted_content id="a64d">\nthe words\n</pasted_content id="a64d">\n',
+      '<pasted_content id="a64d">\nthe words\n</pasted_content id="ffff">',
+      '<pasted_content id="a64d">\nthe words\n</pasted_content id="a64d">\nand more',
+    ])
+      expect(pastedWords(mixed)).toBe(mixed);
   });
 
   it("writes your words via chat with their input, request id, receipt and chips, then what became of them as the queue told it", () => {
