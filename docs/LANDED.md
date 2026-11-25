@@ -68774,3 +68774,60 @@ should be implemented properly in ICE and cut release."
   plugin-cli's `refusals.ts` and `docs-generate.ts`, `tokens.css`, `GodviewDeck.tsx`, DESIGN.md and DECISIONS.md;
   every edit additive. Whichever lands second re-bases.
 - **Owed ‹for James›:** his look at the stickers in a running Godview; the click's flight after I58's release.
+
+## EL8: puppeteer 0.4.14 — a Grok run keeps the vibefield door after its viewer joins (M558)
+
+**2026-11-25 · on local main: `1a4fbb6b3` (EL8: puppeteer 0.4.14). Upstream: vibefield/puppeteer #122 (squash
+`e9d8931a`) and the release #123 (v0.4.14 = `bf77d643`).**
+James, 2026-11-24, in the Godview QA lane: "for testing, you should run real claude haiku agents, codex gpt-6-luna
+agents, and grok 4.7 agents to test for real"; and of the pages room's build: "if any upstream changes, you do a
+standalone checkout and land them with this worktree as well". VF-PM merged #122 on the lane's live result and took
+the release.
+
+- **What was so.** A Grok run that VibeField briefed with its `vibefield` server had no such server: Grok Build
+  1.0.92 listed only the person's own (the QA lane's first live run, 2026-11-24). The adapter names the run's servers
+  on the controller's `session/new`; the native viewer then joins by `--resume`, and its own `session/load` names only
+  the servers it finds itself, so Grok's leader ended the run's (`config_removed`).
+- **Upstream, puppeteer 0.4.14 (#122).** On that removal, for a server the run declared and the run's own session, a
+  short-lived ACP client of the run's own leader loads the session again with the run's servers and leaves. It
+  answers no permission request, gives up after 15 s, closes when its run stops, and runs at most five times a
+  minute. Red on 0.4.13 and green at its tip in the adapter's isolated live rig (Grok Build 1.0.92, a loopback
+  model); the person's own servers from six discovery sources each started once and ran to the end. Seen through
+  VibeField before the merge: the QA lane carried the fix as a pnpm patch of the installed 0.4.13, and a real Grok
+  4.7 session in its QA desktop (2026-11-24, 23:15 PST) said `vibefield` was among its servers and opened and read a
+  page with it. The re-assert's count was not measured there.
+- **Here, the pin.** The EL8's usual set, place for place as the 0.4.13 EL8 (`f618b6bf7`): the lock's puppeteer
+  entry (`bf77d643`, release.npm 0.4.14), the seven override rows, their 20 release-age rows (0.4.13's kept for the
+  one install that rewrote the lock, then dropped), preflight's seven expectations, pnpm's lock (+20 −20 packages),
+  the ROADMAP row, and 8 phone goldens with their 9 kit mirrors, re-blessed by their version stamp alone (with
+  0.4.14 written back to 0.4.13 each is main's byte for byte). All 20 published tarballs of 0.4.13 and 0.4.14 were
+  compared: only adapter-grok's dist, core's version file and the package.json versions differ, and nothing here
+  reads core's version. No `pnpm siblings:pin` (text edits), no Rust moved.
+- **The swarm patch is carried.** The local patch of `@vibefield/puppeteer-views` is re-keyed from 0.4.13 to 0.4.14 by
+  its key and file name alone: views 0.4.14's dist is file for file 0.4.13's, pnpm applies the patch under the same
+  hash, and the patched 0.4.14 install is byte-identical to the patched 0.4.13 one.
+- **Found on the way: a stale dependency pre-bundle after a lock move.** In the QA lane, after this bump and its
+  install, the first `pnpm dev` start failed (`renderer.boot.failed`: a dynamically imported module could not be
+  fetched; Vite's pre-transform errors named puppeteer-views 0.4.13's store path) until both
+  `packages/electron-shell/node_modules/.vite` and `packages/field-app/node_modules/.vite` were set aside. Read in
+  the code: the dev runner (`tooling/dev-runner/src/vite-server.mjs`) gives Vite no `optimizeDeps.force` and no cache
+  folder of its own; it relies on Vite 8.1.5's optimizer, which decides its pre-bundle is stale by hashing the
+  config and the installed lock it finds walking up from the renderer's root (`lockfileFormats`; for pnpm
+  `node_modules/.pnpm/lock.yaml`). In the committed shape that file is there and an install changes it, so a lock
+  move re-optimizes at the next `pnpm dev`. Under the dev overlay (`pnpm siblings use …`; the lane had ICE linked)
+  the install writes no `node_modules/.pnpm/lock.yaml` (read in three checkouts: present in the two without the
+  overlay, absent in the one with it), Vite hashes nothing, and a lock move never re-optimizes: what the lane met.
+  The land's steps set both `.vite` folders aside all the same.
+- **Proof** (VF-PM's stages, in the lane's worktree of this commit, each alone after a lone load read under 20
+  (6.1 to 10.8), nice 19, `NX_PARALLEL=1`, vitest at 4 (`VITEST_MAX_THREADS` and `VITEST_MAX_FORKS`), the
+  worktree's own `CARGO_TARGET_DIR`), at `1a4fbb6b3`: `pnpm install --frozen-lockfile` exit 0; `pnpm typecheck` 28
+  projects, exit 0 (231 s); `biome check .` 4,179 files, no error (187 warnings, 57 infos), exit 0; `gen:check` exit
+  0; `check:deps` one copy each; `check-agent-catalog --enforce --literals` pass; `bundle:assert` OK (initial
+  1017.8 KB raw, 271.7 KB gz); `census:assert` no drift; `pnpm test` 28 projects, exit 0, in 11 m 39 s: fieldd 345
+  files and 5,258 tests (5 files and 34 tests skipped, among them `packaged-typed-agent.test.ts`, which runs only
+  when `FIELDD_TEST_AGENTS_PACKAGE` names a package), field-app 401 and 5,884, electron-shell 219 and 3,343,
+  contracts 83 and 2,395. The tree read clean before and after.
+- **Not run:** `pnpm verify` (the test Mac's row), any smoke, `gate:landing`, the iOS kit's xcodebuild over the 9
+  re-blessed mirrors (the next push proof), puppeteer's own `GROK_LIVE` row, cargo fmt, clippy and `test:rust` (no
+  Rust moved).
+- **Owed:** the kit's xcodebuild over the 9 mirrors, in the next push proof.
