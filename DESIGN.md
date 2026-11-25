@@ -5582,6 +5582,11 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     them."). Right-click grows the menu from the bar over the words while words on the written sheet are selected; **at
     a caret alone it is not built** — ICE's anchor says where the words lie, never where a caret stands. A slot's
     declared keys are printed in its tip ("Strike  ⇧⌘X"); the bar binds none, ICE's written part handles them.*)
+    *(Corrected 2026-11-25, IK round two, at its source: Paste no longer waits in the desktop app. It reads the clipboard
+    through the shell's own door — main's read, the one a terminal's paste already takes — and hands the words to the
+    editor (ICE's `DeskEditor.command("paste", { text })`), which reads no clipboard itself and lays the desk's last copied
+    piece, marks and all, only when its words are exactly those. Paste waits only where no such door exists (the browser
+    catalog), with the same tooltip; a read the door refused says "Couldn't read the clipboard. ⌘V pastes from it.")*
   - **Keys** — while a sheet is written the keys are the platform field's, so ⌘C copies the selected words, ⌘X cuts,
     ⌘V pastes and ⌘A selects the sheet's words; Make a card's ⌘C stands down there, as it does today, and is the
     bar's again while objects are selected. ⇧⌘X strikes, ⌘U underlines, ⇧⌘H highlights with the last highlighter
