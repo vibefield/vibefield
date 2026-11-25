@@ -2,7 +2,13 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { app, BrowserWindow, type WebContents, webContents } from "electron";
-import { paneHeadPoint } from "./browser-pane-chrome";
+import {
+  choosePaneDevice,
+  openPaneCustom,
+  paneHeadPoint,
+  takePaneCustom,
+  typePaneCustom,
+} from "./browser-pane-chrome";
 import { layPane, type PaneRowsDriver, paneHands, paneToMiddle } from "./smoke-browser-pane";
 import { type HeldFrameSeen, pageOnWindow } from "./smoke-use-pane";
 
@@ -166,23 +172,16 @@ export async function browserPaneUi(
       );
       report.navigation = { address: true, back: true, forward: true, reload: true };
       d.say("BROWSER_UI_NAVIGATION_OK");
-      // Custom resolution and UA, using the real settings form and one Apply.
-      await h.pressSelector('[data-face-row="hand"] [data-tool="device"]');
-      await h.until(
-        "device settings",
-        4000,
-        `document.querySelector('.vf-browser-device')?.open===true`,
-      );
-      await h.js(
-        `(()=>{const f=document.querySelector('.vf-browser-device form'); const set=(n,v)=>{const e=f.elements.namedItem(n);e.value=v;e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));}; set('width','960');set('height','640');set('dpr','2');set('userAgentMode','custom');set('userAgent','VibeField-Emulation-Test/1.0');set('navigatorPlatform','MacIntel');})()`,
-      );
+      // Custom resolution and UA, from the Device list in hand: its row, its fields, one Use (track OM, OM-1).
+      await openPaneCustom(h, "hand");
+      await typePaneCustom(h, { width: 960, height: 640, agent: "VibeField-Emulation-Test/1.0" });
       await h.js(`new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
       await snap("device-settings");
       await h.theme("dark");
       await h.js(`new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))`);
       await snap("device-settings-dark");
       await h.theme("light");
-      await h.pressSelector('.vf-browser-device button[type="submit"]');
+      await takePaneCustom(h);
       await h.until(
         "custom device applied",
         10000,
@@ -204,20 +203,11 @@ export async function browserPaneUi(
       // Phone controls remain inside the object; then restore desktop for the video.
       for (const preset of ["phone", "laptop"]) {
         const previous = page.id;
-        await h.pressSelector('[data-face-row="hand"] [data-tool="device"]');
-        await h.until(
-          "device settings reopened",
-          4000,
-          `document.querySelector('.vf-browser-device')?.open===true`,
-        );
-        await h.js(
-          `(()=>{const e=document.querySelector('.vf-browser-device [name="preset"]');e.value=${JSON.stringify(preset)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`,
-        );
-        await h.pressSelector('.vf-browser-device button[type="submit"]');
+        await choosePaneDevice(h, preset, "hand");
         await h.until(
           "device preset applied",
           5000,
-          `globalThis.__vfDesk.objects('vibefield.browser-pane').find(r=>r.entity===${e}).props.device===${JSON.stringify(preset)}&&document.querySelector('.vf-browser-device')?.open===false`,
+          `globalThis.__vfDesk.objects('vibefield.browser-pane').find(r=>r.entity===${e}).props.device===${JSON.stringify(preset)}`,
         );
         const expectedDpr = preset === "phone" ? 3 : 2;
         let replacement: WebContents | undefined;
@@ -447,7 +437,7 @@ export async function browserPaneUi(
     report.error = String(error);
     report.desk = await h
       .js(
-        `({held:globalThis.__vfDesk.held(),dialog:{open:document.querySelector('.vf-browser-device')?.open,values:[...document.querySelectorAll('.vf-browser-device [name]')].map(e=>[e.name,e.value]),error:document.querySelector('.vf-browser-device [role=alert]')?.textContent},active:{tag:document.activeElement?.tagName,address:document.activeElement?.hasAttribute('data-browser-pane-address'),value:document.activeElement?.value,start:document.activeElement?.selectionStart,end:document.activeElement?.selectionEnd,pointer:document.activeElement&&getComputedStyle(document.activeElement).pointerEvents},panes:globalThis.__vfDesk.objects('vibefield.browser-pane')})`,
+        `({held:globalThis.__vfDesk.held(),devices:{open:document.querySelector('[data-selection-bar]')?.hasAttribute('data-open'),values:[...document.querySelectorAll('[data-selection-bar] [data-choice-fields] [name]')].map(e=>[e.name,e.value]),why:document.querySelector('[data-selection-bar] .vf-bar-field-why')?.textContent},active:{tag:document.activeElement?.tagName,address:document.activeElement?.hasAttribute('data-browser-pane-address'),value:document.activeElement?.value,start:document.activeElement?.selectionStart,end:document.activeElement?.selectionEnd,pointer:document.activeElement&&getComputedStyle(document.activeElement).pointerEvents},panes:globalThis.__vfDesk.objects('vibefield.browser-pane')})`,
       )
       .catch(() => null);
     report.page = await page

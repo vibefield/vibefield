@@ -1,4 +1,4 @@
-import type { HeldGlyph } from "@vibecook/ice";
+import type { ActChoice, ActChoiceField, HeldGlyph } from "@vibecook/ice";
 import type { MenuSlot } from "@vibecook/ice/desk";
 import type { GlyphName } from "@vibefield/design-kit/glyphs";
 import { eyebrowOf, type ObjectWords } from "../desk-object-words";
@@ -11,6 +11,9 @@ import { eyebrowOf, type ObjectWords } from "../desk-object-words";
 // ICE's demo's), while the DESK's acts print theirs (DK-D24; ⇧⌘L is the desk's, ICE's default keymap's — R23; ⌘C
 // the desk's Make a card, CS-D11). Item 578 (2026-11-19): Download… follows Open for one print whose picture the
 // desk holds; it is the host's act (the save is main's), prints no key, and has no cell on the bar itself.
+// Track OM (2026-11-25; ICE I61, I62): a kind's act says what it is NOW — disabled, another label and drawing, a swatch —
+// and an act may be a CHOICE: a pill with the current choice's label, whose list grows from the bar as More's menu does
+// (`choiceGroups`, `choiceEyebrow`), a choice that asks for values reading with an ellipsis there.
 
 /** The desk's keys as this platform spells them (the frame's way, FR-5: said, never a cap). */
 export type DeskKeys = "mac" | "other";
@@ -68,12 +71,30 @@ export type BarCell =
   /** Make a card — the bar's one word: the selection dealt into the hand as ONE card (CS-D11 A). */
   | { readonly kind: "copy"; readonly label: string; readonly tip: string }
   | { readonly kind: "rule"; readonly at: "lead" | "end" }
-  /** A kind's act: its glyph by §13's table, or its label alone (R3); its label is its tip — no key (R1). */
+  /** A kind's act: its glyph by §13's table, or its label alone (R3); its label is its tip — no key (R1). Its kind's word
+   * NOW (ICE I61): `disabled` — faint by ink and inert; a `swatch` in place of its glyph, the hand's dot. */
   | {
       readonly kind: "act";
       readonly id: string;
       readonly label: string;
       readonly glyph: HeldGlyph | undefined;
+      readonly disabled?: boolean;
+      readonly swatch?: string;
+    }
+  /** A kind's act that is a CHOICE (ICE I62; §8 "An act that is a choice"): a pill — its glyph, the current choice's
+   * label (`Mixed` when the selected objects stand on different ones), a chevron; pressed, its list grows. */
+  | {
+      readonly kind: "choice";
+      readonly id: string;
+      /** The act's name ("Device") — its list's eyebrow, and the tip's first word. */
+      readonly label: string;
+      readonly glyph: HeldGlyph | undefined;
+      /** The current choice's label, or `Mixed`. */
+      readonly current: string;
+      readonly mixed: boolean;
+      /** Its tooltip and accessible name: the act and the choice ("Device: Laptop"). */
+      readonly tip: string;
+      readonly disabled?: boolean;
     }
   /** A missing face selected: the type's name and its word where the kind's acts would stand — a label. */
   | { readonly kind: "words"; readonly label: string }
@@ -84,6 +105,45 @@ export type BarCell =
       readonly glyph: GlyphName;
       readonly tip: string;
     };
+
+/** What a choice pill says when the selected objects stand on different choices (§8 "An act that is a choice"). */
+export const MIXED_LABEL = "Mixed";
+
+/** A choice act's current choice as its pill says it — the label of the one marked current, or Mixed with none. */
+export function currentChoice(choices: readonly ActChoice[]): {
+  readonly current: string;
+  readonly mixed: boolean;
+} {
+  const on = choices.find((c) => c.current === true);
+  return on === undefined
+    ? { current: MIXED_LABEL, mixed: true }
+    : { current: on.label, mixed: false };
+}
+
+/** A kind's act as the bar prints it: a choice pill when it offers choices, else a cell (ICE I61, I62). */
+export function actCell(act: MenuSlot): BarCell {
+  if (act.choices !== undefined) {
+    const { current, mixed } = currentChoice(act.choices);
+    return {
+      kind: "choice",
+      id: act.id,
+      label: act.label,
+      glyph: act.glyph,
+      current,
+      mixed,
+      tip: `${act.label}: ${current}`,
+      ...(act.enabled === false ? { disabled: true } : {}),
+    };
+  }
+  return {
+    kind: "act",
+    id: act.id,
+    label: act.label,
+    glyph: act.glyph,
+    ...(act.enabled === false ? { disabled: true } : {}),
+    ...(act.swatch !== undefined ? { swatch: act.swatch } : {}),
+  };
+}
 
 /** The first selected type the desk draws as missing — the bar names it where the acts would stand. */
 export const missingOf = (f: SelectionFacts): ObjectWords | undefined =>
@@ -103,9 +163,7 @@ export function barCells(f: SelectionFacts, keys: DeskKeys): BarCell[] {
   ];
   const missing = missingOf(f);
   if (missing !== undefined) cells.push({ kind: "words", label: missing.label });
-  else
-    for (const act of f.menu)
-      cells.push({ kind: "act", id: act.id, label: act.label, glyph: act.glyph });
+  else for (const act of f.menu) cells.push(actCell(act));
   if (!f.locked) {
     cells.push({
       kind: "desk",
@@ -144,10 +202,20 @@ export interface MenuRow {
   readonly id: string;
   readonly label: string;
   readonly key?: string;
-  /** A row that waits, and why: drawn, never taken (none does on this build). */
+  /** A row that waits, and why: drawn, never taken — a kind's act its kind says is disabled now (ICE I61), whose why is
+   * "" (the kind says none). */
   readonly waits?: string;
   /** Delete: armed red under the pointer. */
   readonly danger?: boolean;
+  /** Taking it OPENS another list in this one's place — More's row for a choice act (§8 "A choice's list"): the menu
+   * stays grown. */
+  readonly opens?: boolean;
+  /** A choice's row (ICE I62): whether it is the current one — `menuitemradio`, `check` at its start. Absent: not a choice. */
+  readonly checked?: boolean;
+  /** A choice's swatch: a 12 dot before its label. */
+  readonly swatch?: string;
+  /** A choice that asks for values first (the pane's Custom): its fields open under its row when it is taken. */
+  readonly fields?: readonly ActChoiceField[];
 }
 
 /**
@@ -162,7 +230,22 @@ export function menuGroups(f: SelectionFacts, keys: DeskKeys): MenuRow[][] {
   const k = KEYS[keys];
   const near: MenuRow[] = [];
   if (missingOf(f) === undefined)
-    for (const act of f.menu) near.push({ id: `act:${act.id}`, label: act.label });
+    for (const act of f.menu) {
+      // its kind says it is disabled now (ICE I61): drawn, never taken — the kind says no why, so none is printed
+      if (act.enabled === false) {
+        near.push({ id: `act:${act.id}`, label: act.label, waits: "" });
+        continue;
+      }
+      // a choice act is one row, its current choice in the key's place; taking it shows its list in More's (ICE I62)
+      if (act.choices !== undefined)
+        near.push({
+          id: `act:${act.id}`,
+          label: act.label,
+          key: currentChoice(act.choices).current,
+          opens: true,
+        });
+      else near.push({ id: `act:${act.id}`, label: act.label });
+    }
   if (f.openable) near.push({ id: "open", label: "Open", key: k.open });
   if (f.downloadable) near.push({ id: "download", label: DOWNLOAD_LABEL });
   if (f.commentable) near.push({ id: "comment", label: "Comment" });
@@ -178,6 +261,37 @@ export function menuGroups(f: SelectionFacts, keys: DeskKeys): MenuRow[][] {
     [{ id: "delete", label: "Delete", key: k.delete, danger: true }],
   ];
 }
+
+/** A row's id for a choice of the list (`choice:<id>`), and the choice's id back from one. */
+export const choiceRowId = (id: string): string => `choice:${id}`;
+export const choiceOfRow = (row: string): string | undefined =>
+  row.startsWith("choice:") ? row.slice("choice:".length) : undefined;
+
+/**
+ * A CHOICE'S LIST (§8 "The bar grown" — "A choice's list"; ICE I62): the kind's choices nearest first in the kind's
+ * order, a new group where the kind's group changes; each row its label — with an ellipsis for one that asks for values
+ * first ("Custom…") — its hint in the key's place, its swatch, whether it is the current one, and its fields.
+ */
+export function choiceGroups(choices: readonly ActChoice[]): MenuRow[][] {
+  const groups: MenuRow[][] = [];
+  let group: string | undefined;
+  for (const [i, c] of choices.entries()) {
+    if (i === 0 || c.group !== group) groups.push([]);
+    group = c.group;
+    groups[groups.length - 1]?.push({
+      id: choiceRowId(c.id),
+      label: c.fields === undefined ? c.label : `${c.label}…`,
+      checked: c.current === true,
+      ...(c.hint === undefined ? {} : { key: c.hint }),
+      ...(c.swatch === undefined ? {} : { swatch: c.swatch }),
+      ...(c.fields === undefined ? {} : { fields: c.fields }),
+    });
+  }
+  return groups;
+}
+
+/** A choice's list's eyebrow, in the mat's print: the act's name ("DEVICE"). */
+export const choiceEyebrow = (label: string): string => label.toUpperCase();
 
 /**
  * The eyebrow at the menu's far end, in the mat's print (§8): what it acts on — the one object's name, a missing

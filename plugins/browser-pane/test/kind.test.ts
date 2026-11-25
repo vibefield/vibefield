@@ -117,7 +117,7 @@ describe("the browser pane's kind, judged by the kind-conformance harness WITH t
       "device",
       "sound",
     ]);
-    expect(type.menu.map((a) => a.label)).toEqual(["Device emulation", "Toggle sound"]);
+    expect(type.menu.map((a) => a.label)).toEqual(["Device", "Mute"]);
   });
 });
 

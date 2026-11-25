@@ -131,6 +131,9 @@ const T4_USES: Readonly<Record<string, number>> = {
   "packages/field-app/src/chat/chat-composer.css · .vf-chat-mic": 1,
   "packages/field-app/src/chat/new-spark-sheet.css · .vf-new-spark-menu-head[data-off]": 1,
   "packages/field-app/src/field/desk/bar/selection-bar.css · .vf-bar-cell[data-disabled]:active": 1,
+  // track OM (2026-11-25; DESIGN.md §8 "A choice that asks for values"): Use while a value does not fit — a control
+  // that is off, faint by ink as a disabled cell is
+  "packages/field-app/src/field/desk/bar/selection-bar.css · .vf-bar-use[data-waits]:active": 1,
   'packages/field-app/src/frame/composer.css · .vf-line-snapshot[aria-disabled="true"]:hover': 1,
   'packages/field-app/src/frame/composer.css · .vf-line-create[aria-disabled="true"]:hover': 1,
   "packages/field-app/src/frame/head.css · .vf-head-sep": 1,

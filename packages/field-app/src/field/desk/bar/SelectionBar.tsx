@@ -25,6 +25,9 @@ import { type HandCell, type HeldSlot, handCells, slotsKey } from "./bar-hand";
 import {
   type BarCell,
   barCells,
+  choiceEyebrow,
+  choiceGroups,
+  choiceOfRow,
   type DeskKeys,
   type MenuRow,
   menuEyebrow,
@@ -58,6 +61,12 @@ import { type PlaceAnchor, type SelectionBarHandle, SelectionBarView } from "./S
 // under the head whatever the selection's box; each tool used through `ops.useHeldTool(id)`, Done through
 // `ops.putDown()`. While the object flies home (`landing`) the bar steps aside, and comes back over it 200 ms after it
 // lands, as the bar over the selection again.
+//
+// A CHOICE (track OM, 2026-11-25; ICE I62; §8 "An act that is a choice", "A choice's list"): a kind's act or a held
+// action that offers choices is a pill; pressed, the SAME grown element shows its choices in More's place (`choosing`),
+// over a selection or under the head in hand — the frame's same open surface. A choice is taken through the engine's
+// op with it — `ops.runMenuAction(id, choice)` or `ops.useHeldTool(id, choice)` — its fields' values with it for one
+// that asks for values (the view holds them to their fields first; core holds them again).
 //
 // MAKE A CARD (HN-D3, where Send to… stood; §8 "Make a card"): four doors — the bar's pill, the grown menu's row, the
 // pill in hand, and ⌘C over the desk — run ONE act (copy/copy-to-hand.ts): the selection, or the object in hand, dealt
@@ -153,8 +162,17 @@ const keyOf = (entities: readonly Entity[]): string =>
 
 const menuKeyOf = (menu: readonly MenuSlot[] | undefined): string =>
   (menu ?? [])
-    .map((act) => `${act.id}:${act.label}:${JSON.stringify(act.glyph ?? null)}`)
+    .map(
+      (act) =>
+        `${act.id}:${act.label}:${JSON.stringify(act.glyph ?? null)}:${act.enabled === false ? "off" : ""}:${act.swatch ?? ""}:${JSON.stringify(act.choices ?? null)}`,
+    )
     .join("|");
+
+/** Whose choices the grown bar lists (ICE I62): a kind's act over a selection, or a tool in hand. */
+export interface Choosing {
+  readonly of: "act" | "tool";
+  readonly id: string;
+}
 
 /** The host's own read of the selection (§8 "The doors"): its types' words, whether the one selected opens, and
  * whether a comment pad can be laid here. */
@@ -289,6 +307,10 @@ function SelectionBarOn({
   surfaceRef.current = { surface, onSurfaceChange };
   /** A right-click asked to grow the menu for this selection once the desk has drawn it (R26). */
   const growFor = useRef<string | null>(null);
+  /** Whose choices the grown bar lists, or null for More's menu (ICE I62). */
+  const [choosing, setChoosing] = useState<Choosing | null>(null);
+  const choosingRef = useRef(choosing);
+  choosingRef.current = choosing;
 
   const fold = useCallback((): void => {
     const { surface: now, onSurfaceChange: change } = surfaceRef.current;
@@ -336,10 +358,16 @@ function SelectionBarOn({
   const shown = !hidden && (facts.inHand || (facts.count > 0 && facts.onScreen));
   const stepAside = facts.stepAside;
 
-  // R5: the menu closes on a gesture and when the bar goes — into the hand too
+  // R5: the menu closes on a gesture and when the bar goes — into the hand too, unless it is a tool in hand's choices
+  // that are listed (ICE I62); and a choice's list closes as its role goes (picked up, or put down)
+  const listFits = choosing === null ? !facts.inHand : (choosing.of === "tool") === facts.inHand;
   useEffect(() => {
-    if (open && (!shown || stepAside || facts.inHand)) fold();
-  }, [open, shown, stepAside, facts.inHand, fold]);
+    if (open && (!shown || stepAside || !listFits)) fold();
+  }, [open, shown, stepAside, listFits, fold]);
+  // folded, the bar lists More's menu again when it next grows
+  useEffect(() => {
+    if (!open) setChoosing(null);
+  }, [open]);
 
   // R5: a change of selection closes it — but a right-click's own selection is the one it grows for (R26)
   const keySeen = useRef(facts.key);
@@ -388,45 +416,101 @@ function SelectionBarOn({
   /** The travel the anchor last told while something was in hand (I20) — the way home keeps it after the hand is gone. */
   const travel = useRef(TRAVEL_MS);
   if (facts.hand?.travelMs !== undefined) travel.current = facts.hand.travelMs;
-  const groups = useMemo(() => menuGroups(facts.selection, keys), [facts.selection, keys]);
-  const eyebrow = useMemo(() => menuEyebrow(facts.selection), [facts.selection]);
+  /** The slot whose choices are listed, as the anchor last said it — its act's over a selection, its tool's in hand. */
+  const chosen = useMemo(() => {
+    if (choosing === null) return undefined;
+    const slots = choosing.of === "act" ? facts.selection.menu : (facts.hand?.tools ?? []);
+    const slot = slots.find((s) => s.id === choosing.id);
+    return slot?.choices === undefined ? undefined : { label: slot.label, choices: slot.choices };
+  }, [choosing, facts.selection, facts.hand]);
+  const groups = useMemo(
+    () => (chosen === undefined ? menuGroups(facts.selection, keys) : choiceGroups(chosen.choices)),
+    [chosen, facts.selection, keys],
+  );
+  const eyebrow = useMemo(
+    () => (chosen === undefined ? menuEyebrow(facts.selection) : choiceEyebrow(chosen.label)),
+    [chosen, facts.selection],
+  );
 
+  // More grows the bar into ITS menu — over a choice's list too, which gives way to it (§8 "A choice's list")
   const onOpenChange = useCallback(
     (next: boolean): void => {
-      if (next) surfaceRef.current.onSurfaceChange("selection");
-      else fold();
+      if (next) {
+        setChoosing(null);
+        surfaceRef.current.onSurfaceChange("selection");
+      } else fold();
     },
     [fold],
+  );
+  /** A choice's pill pressed: its list grows in the bar — or, open on it already, the bar folds (ICE I62). */
+  const onChoice = useCallback(
+    (next: Choosing): void => {
+      const now = choosingRef.current;
+      if (surfaceRef.current.surface === "selection" && now?.of === next.of && now.id === next.id) {
+        fold();
+        return;
+      }
+      setChoosing(next);
+      surfaceRef.current.onSurfaceChange("selection");
+    },
+    [fold],
+  );
+  /** A choice taken — with its fields' values for one that asks for them — through the engine's op (ICE I62). */
+  const take = useCallback(
+    (id: string, values?: Readonly<Record<string, number | string>>): void => {
+      const now = choosingRef.current;
+      if (now === null) return;
+      const taken = values === undefined ? { id } : { id, values };
+      if (now.of === "act") {
+        engine.ops.runMenuAction(now.id, taken);
+        return;
+      }
+      // biome-ignore lint/correctness/useHookAtTopLevel: the engine's op, not a hook
+      engine.ops.useHeldTool(now.id, taken);
+    },
+    [engine],
   );
   const onCell = useCallback(
     (cell: BarCell): void => {
       const locked = factsRef.current.locked;
       if (cell.kind === "copy") copySelection(desk, "bar");
+      else if (cell.kind === "choice") onChoice({ of: "act", id: cell.id });
       else if (cell.kind === "act") runBarAct(engine, `act:${cell.id}`, locked);
       else if (cell.kind === "desk" && cell.act !== "more") runBarAct(engine, cell.act, locked);
     },
-    [desk, engine],
+    [desk, engine, onChoice],
   );
   const onRow = useCallback(
-    (row: MenuRow): void => {
+    (row: MenuRow, values?: Readonly<Record<string, number | string>>): void => {
       if (row.waits !== undefined) return;
+      const choice = choiceOfRow(row.id);
+      if (choice !== undefined) {
+        take(choice, values);
+        return;
+      }
+      // More's row for a choice act: its list in More's place, the menu staying grown
+      if (row.opens === true && row.id.startsWith("act:")) {
+        setChoosing({ of: "act", id: row.id.slice("act:".length) });
+        return;
+      }
       if (row.id === "copy") copySelection(desk, "menu");
       else if (row.id === "download") void downloadPrint(desk);
       else runBarAct(engine, row.id as BarActId, factsRef.current.locked);
     },
-    [desk, engine],
+    [desk, engine, take],
   );
   // a tool in hand used through the engine — a mode taken up, an action run — Done, the object put down, or Copy, the
   // object copied while it stays in hand
   const onHand = useCallback(
     (cell: HandCell): void => {
       // Item 620 (2026-11-20): `useHeldTool` is the engine's op, not a React hook
+      if (cell.kind === "tool" && cell.look === "choice") onChoice({ of: "tool", id: cell.id });
       // biome-ignore lint/correctness/useHookAtTopLevel: the engine's op, not a hook
-      if (cell.kind === "tool") engine.ops.useHeldTool(cell.id);
+      else if (cell.kind === "tool") engine.ops.useHeldTool(cell.id);
       else if (cell.kind === "done") engine.ops.putDown();
       else if (cell.kind === "copy") copySelection(desk, "hand");
     },
-    [desk, engine],
+    [desk, engine, onChoice],
   );
 
   // ⌘C — Copy over the desk (HN-D3; product-chords' `desk-copy`): a product chord on the capture phase, claimed only
@@ -465,6 +549,7 @@ function SelectionBarOn({
       shown={shown}
       stepAside={stepAside}
       open={open && shown}
+      choosing={open && shown && chosen !== undefined ? choosing : null}
       onOpenChange={onOpenChange}
       onCell={onCell}
       onRow={onRow}

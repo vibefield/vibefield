@@ -4,8 +4,9 @@
 // (`buildRegistry`), and the desk's catalog finds the kind by its OBJECT, places it on the desk (never in a mini mat —
 // it has no chip yet), hangs it on a SHELF under the new `portals` category, and carries its DECLARED halves — the DOM
 // half that lends its head's raster, the opening (ICE's pick-up, its held tools the browser's acts since PT-3), its
-// DRIVER (PT-3: the hand on the editor), and its MENU: the device switch. Then the switch's whole road on a REAL engine and
-// document: Size, Position and the `device` prop re-cut in ONE transaction — and one undo step takes all three back. And
+// DRIVER (PT-3: the hand on the editor), and its MENU: Device, a choice, and Mute (track OM, OM-1). Then a device taken
+// from the list, on a REAL engine and document: Size, Position and the `device` prop re-cut in ONE transaction — and one
+// undo step takes all three back; Custom's size and agent, held to their bounds; Turn; and Mute to Unmute. And
 // (PT-3 ruling 9) a page's own navigation, written into its url never as an undo step, survives the undo of the desk's
 // edits to the pane: the url is a cell of its own.
 import {
@@ -38,7 +39,6 @@ import {
 import * as pane from "@vibefield/plugin-browser-pane";
 import { productPalette } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it, vi } from "vitest";
-import { bindPaneMenu } from "../../../plugins/browser-pane/src/menu-host";
 import { buildDevRegistry, buildRegistry, createFieldEngine } from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
 
@@ -61,31 +61,9 @@ const withPane = () =>
 
 const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
 
-/** The settings dialog submits through the real menu's document transaction. */
+/** A device taken from the pane's Device list, as the selection bar takes it: the engine's op with the choice (ICE I62). */
 function applyPreset(ce: ReturnType<typeof createFieldEngine>, id: pane.Device["id"]) {
-  let applied = false;
-  bindPaneMenu(ce.world, {
-    configure(api, entities) {
-      const device = pane.deviceOf(id);
-      applied = pane.applyPaneSettings(api, entities, {
-        device: id,
-        width: device.width,
-        height: device.height,
-        deviceScaleFactor: device.dpr,
-        inputMode: device.mobile ? "mobile" : "desktop",
-        userAgentMode: "device",
-        userAgent: "",
-        navigatorPlatform: "",
-      });
-    },
-    say() {},
-  });
-  try {
-    expect(ce.ops.runMenuAction("device")).toBe(true);
-    expect(applied).toBe(true);
-  } finally {
-    bindPaneMenu(ce.world, undefined);
-  }
+  expect(ce.ops.runMenuAction("device", { id })).toBe(true);
 }
 
 /** A fresh pane on a real document with ICE's real editor. Only the live-page producer is a test double. */
@@ -297,8 +275,8 @@ describe("the host compiles VibeField's browser pane as ICE compiles a built-in 
       ["device", "action", []],
       ["sound", "action", []],
     ]);
-    // the device switch on the selection menu
-    expect(widget?.menu.map((a) => a.label)).toEqual(["Device emulation", "Toggle sound"]);
+    // Device and Mute on the selection bar (OM-1)
+    expect(widget?.menu.map((a) => a.label)).toEqual(["Device", "Mute"]);
     // its interaction: carried by core's drag, resized by core's handles (they write Size — the viewport follows)
     const ce = createFieldEngine(withPane());
     ce.docs.create();
@@ -357,6 +335,99 @@ describe("the host compiles VibeField's browser pane as ICE compiles a built-in 
     expect(size()?.h).toBeCloseTo(before.size?.h ?? 0, 3);
     expect(pos()?.x).toBeCloseTo(before.pos?.x ?? 0, 3);
     expect(pos()?.y).toBeCloseTo(before.pos?.y ?? 0, 3);
+    ce.dispose();
+  });
+
+  it("CUSTOM, TURN and MUTE on a real document (OM-1): each one transaction, held to the choices now and their bounds", () => {
+    const registry = withPane();
+    const widget = registry.allWidgets().get(BROWSER_PANE_TYPE);
+    if (widget === undefined) throw new Error("the pane is not registered");
+    const ce = createFieldEngine(registry);
+    ce.docs.create();
+    ce.ops.spawnWidget(BROWSER_PANE_TYPE, { x: 0, y: 0, ...pane.PANE_SIZE, props: {} });
+    ce.world.sync();
+    let paneEntity: number | undefined;
+    ce.world.query(objectsQ).each((batch) => {
+      for (const row of batch) {
+        const e = batch.entity(row);
+        if (ce.world.get(e, PrefabId)?.id === BROWSER_PANE_TYPE) paneEntity = e as number;
+      }
+    });
+    if (paneEntity === undefined) throw new Error("no pane was laid");
+    const e = paneEntity as never;
+    const cell = widget.groups.find((g) => g.name === "props")?.component;
+    if (cell === undefined) throw new Error("no props cell");
+    const props = () => (ce.world.get(e, cell) ?? {}) as Record<string, unknown>;
+    const viewport = () =>
+      pane.viewportOf(ce.world.get(e, Size) ?? { w: 0, h: 0 }, pane.deviceForProps(props()));
+    ce.ops.setSelection([e]);
+
+    // Custom: the typed size at a laptop's density, the typed agent — one undo step takes it back
+    const AGENT = "VibeField-Emulation-Test/1.0";
+    expect(
+      ce.ops.runMenuAction("device", {
+        id: "custom",
+        values: { width: 960, height: 640, agent: ` ${AGENT} ` },
+      }),
+    ).toBe(true);
+    ce.world.sync();
+    expect(props()).toMatchObject({
+      device: "custom",
+      userAgentMode: "custom",
+      userAgent: AGENT,
+      deviceScaleFactor: 0,
+      inputMode: "device",
+    });
+    expect(viewport()).toEqual([960, 640]);
+    expect(pane.deviceForProps(props()).agent?.userAgent).toBe(AGENT);
+    expect(ce.docs.undo()).toBe(true);
+    ce.world.sync();
+    expect(props().device).toBe("laptop");
+    expect(viewport()).toEqual([1280, 800]);
+
+    // held to the field's bounds before the act runs (ICE's), and an agent a header cannot carry is the pane's to refuse
+    expect(
+      ce.ops.runMenuAction("device", { id: "custom", values: { width: 100, height: 640 } }),
+    ).toBe(false);
+    expect(ce.ops.runMenuAction("device", { id: "tablet-mini" })).toBe(false);
+    ce.ops.runMenuAction("device", {
+      id: "custom",
+      values: { width: 960, height: 640, agent: "Bad\u0007Agent" },
+    });
+    ce.world.sync();
+    expect(props().device).toBe("laptop");
+    // Custom with no agent: the browser's own
+    expect(
+      ce.ops.runMenuAction("device", {
+        id: "custom",
+        values: { width: 1024, height: 700, agent: "" },
+      }),
+    ).toBe(true);
+    ce.world.sync();
+    expect([props().userAgentMode, viewport()]).toEqual(["device", [1024, 700]]);
+    expect(pane.deviceForProps(props()).agent).toBeNull();
+
+    // a preset clears what Custom set; the phone turns, and back
+    applyPreset(ce, "phone");
+    ce.world.sync();
+    expect(props()).toMatchObject({ device: "phone", userAgentMode: "device", userAgent: "" });
+    expect(viewport()).toEqual([402, 874]);
+    expect(ce.ops.runMenuAction("device", { id: "portrait" })).toBe(false); // not offered upright
+    expect(ce.ops.runMenuAction("device", { id: "landscape" })).toBe(true);
+    ce.world.sync();
+    expect(viewport()).toEqual([874, 402]);
+    expect(ce.ops.runMenuAction("device", { id: "portrait" })).toBe(true);
+    ce.world.sync();
+    expect(viewport()).toEqual([402, 874]);
+
+    // Mute, then Unmute: one transaction each
+    expect(props().muted).toBe(false);
+    expect(ce.ops.runMenuAction("sound")).toBe(true);
+    ce.world.sync();
+    expect(props().muted).toBe(true);
+    expect(ce.ops.runMenuAction("sound")).toBe(true);
+    ce.world.sync();
+    expect(props().muted).toBe(false);
     ce.dispose();
   });
 

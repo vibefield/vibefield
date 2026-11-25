@@ -490,13 +490,15 @@
   white-space: nowrap;
 }
 
-/* the key at the row's end, said (FR-5): 11/500 in tertiary ink */
+/* the key at the row's end, said (FR-5): 11/500 in tertiary ink — a choice's hint stands in its place, its figures
+   tabular (track OM) */
 .vf-bar-key {
   flex: none;
   margin-left: auto;
   padding-left: 12px;
   color: var(--vf-text-tertiary);
   font: 500 11px / 1 var(--vf-font-sans);
+  font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
 }
 
@@ -526,6 +528,152 @@
   white-space: nowrap;
 }
 
+/* ── A KIND'S ACT NOW, AND A CHOICE (track OM, 2026-11-25; DESIGN.md §8 "What an act says now", "An act that is a
+   choice", "A choice's list"; ICE I61, I62) ──────────────────────────────────────────────────────────────────── */
+/* an act with a swatch in its glyph's place: the hand's dot, in a 32 cell; it grows 1.18× under the pointer */
+.vf-bar-swatch,
+.vf-bar-swatch:hover,
+.vf-bar-swatch:active {
+  background: transparent;
+  transform: none;
+}
+.vf-bar-swatch:hover .vf-bar-dot-ink {
+  transform: scale(1.18);
+}
+/* a choice's pill: its glyph at 16 in secondary ink, the current choice at 13/500 in primary ink, `chevron` 12 turned
+   down in tertiary ink — 32 tall, padded 0 8 0 9, gaps 6 and 4, corners 16; Mixed in secondary ink; the inverted solid
+   while its list is open (the cells' rule above, `aria-expanded`) */
+.vf-bar-choice {
+  width: auto;
+  gap: 6px;
+  padding: 0 8px 0 9px;
+}
+.vf-bar-choice-label {
+  color: var(--vf-text-primary);
+  white-space: nowrap;
+}
+.vf-bar-choice[data-mixed] .vf-bar-choice-label {
+  color: var(--vf-text-secondary);
+}
+.vf-bar-chevron {
+  flex: none;
+  margin-left: -2px;
+  color: var(--vf-text-tertiary);
+}
+.vf-bar-choice[aria-expanded="true"] .vf-bar-choice-label,
+.vf-bar-choice[aria-expanded="true"] .vf-bar-chevron,
+.vf-bar-choice[data-disabled] .vf-bar-choice-label,
+.vf-bar-choice[data-disabled] .vf-bar-chevron {
+  color: inherit;
+}
+/* a choice's row: `check` 14 at its start in primary ink, every row of the list keeping that 22 so the labels align */
+.vf-bar-check {
+  display: inline-flex;
+  width: 22px;
+  flex: none;
+  align-items: center;
+  color: var(--vf-text-primary);
+}
+/* a choice's swatch: a 12 dot before its label, the hand's inner ring */
+.vf-bar-swatch-dot {
+  width: 12px;
+  height: 12px;
+  flex: none;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--vf-bar-swatch, transparent);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+}
+.dark .vf-bar-swatch-dot {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 20%);
+}
+/* a choice that asks for values: its row and, open, its fields under it — one piece of the list */
+.vf-bar-choice-item {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 1px;
+}
+/* its fields: each label 11/500 in secondary ink over its field; a field 32 tall on the ready fill, corners 10, padded
+   0 10, 13/500 in primary ink; numbers 72 wide in tabular-nums side by side, a × in tertiary ink between them; a text the
+   list's width, its placeholder tertiary; a value that does not fit rings its field 1.5 in the danger ink and says why
+   under the fields in secondary ink; Use, Done's look, at their end — faint by ink while it waits */
+.vf-bar-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 10px 8px 32px;
+}
+.vf-bar-field-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.vf-bar-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+.vf-bar-field[data-kind="text"] {
+  width: 100%;
+}
+.vf-bar-field-label {
+  color: var(--vf-text-secondary);
+  font: 500 11px / 1.2 var(--vf-font-sans);
+}
+.vf-bar-input {
+  box-sizing: border-box;
+  width: 100%;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 10px;
+  outline: none;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  font: 500 13px / 1 var(--vf-font-sans);
+}
+.vf-bar-field[data-kind="number"] .vf-bar-input {
+  width: 72px;
+  font-variant-numeric: tabular-nums;
+}
+.vf-bar-input::placeholder {
+  color: var(--vf-text-tertiary);
+}
+.vf-bar-input:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+.vf-bar-input[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 1.5px var(--vf-ink-danger);
+}
+.vf-bar-times {
+  padding-bottom: 9px;
+  color: var(--vf-text-tertiary);
+  font: 500 13px / 1 var(--vf-font-sans);
+}
+.vf-bar-fields-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.vf-bar-field-why {
+  min-width: 0;
+  flex: 1;
+  color: var(--vf-text-secondary);
+  font: 500 11px / 1.3 var(--vf-font-sans);
+}
+.vf-bar-use[data-waits],
+.vf-bar-use[data-waits]:hover,
+.vf-bar-use[data-waits]:active {
+  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  cursor: default;
+}
 /* M6 (R8): no growth and no rise — the solid fades in WHOLE at its full size (and out, then folds unseen), every
    duration halved (the view's numbers) */
 .vf-bar[data-motion="fade"] .vf-bar-panel {
@@ -548,6 +696,7 @@
 }
 
 /* …and a dot does not pop (M6: fades only) */
-.vf-bar[data-motion="fade"] .vf-bar-dot:hover .vf-bar-dot-ink {
+.vf-bar[data-motion="fade"] .vf-bar-dot:hover .vf-bar-dot-ink,
+.vf-bar[data-motion="fade"] .vf-bar-swatch:hover .vf-bar-dot-ink {
   transform: none;
 }

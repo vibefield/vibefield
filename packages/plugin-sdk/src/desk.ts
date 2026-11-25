@@ -22,7 +22,9 @@
 //    read — I32), the fault ladder's constants. Never the host half: no
 //    `deskLayer`, no renderer, no profiler — those are the app's.
 //  - `@vibecook/ice` — the core types a kind's acts and tray entry speak: `HeldToolDef`,
-//    `MenuActionDef` and their APIs, `HeldGlyph`, `TrayEntry` (`hang` required), `Entity`, `World`;
+//    `MenuActionDef` and their APIs, what an act says now (`MenuActionState` and its context — ICE I61) and its
+//    choices (`ActChoice`, `ActChoiceField`, `ActChoiceTaken` — ICE I62; track OM, 2026-11-25), `HeldGlyph`,
+//    `TrayEntry` (`hang` required), `Entity`, `World`;
 //    and the two core names a kind's DOM HALF reads (DK-8 — VibeField's comment pad, the first plugin
 //    kind with a text part), exactly as ICE's own halves read them (the note's body, the calendar's
 //    line): `Camera` — the resource that says where the desk's one editor stands on screen (read,
@@ -42,6 +44,9 @@ import type { DriverFactory, ObjectDef, ObjectHost, ObjectKind } from "@vibecook
 import { type LiveInfo, serviceKey } from "@vibecook/ice/desk/kit";
 
 export type {
+  ActChoice,
+  ActChoiceField,
+  ActChoiceTaken,
   Entity,
   HeldGlyph,
   HeldToolApi,
@@ -50,6 +55,8 @@ export type {
   HeldToolStateContext,
   MenuActionApi,
   MenuActionDef,
+  MenuActionState,
+  MenuActionStateContext,
   TrayEntry,
   World,
 } from "@vibecook/ice";

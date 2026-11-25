@@ -7,12 +7,22 @@
  * face, its name and word where the acts would stand, Duplicate still offered. Tooltips the frame's way with the DESK's
  * keys — Make a card's ⌘C among them — a kind's act prints none. The menu, nearest first: the kind's acts · Open ·
  * Comment · Make a card | Duplicate · Bring to front · Send to back · Clean up | Tape | Delete; the eyebrow names what
- * it acts on. Item 578: Download… follows Open, for one print whose picture the desk holds.
+ * it acts on. Item 578: Download… follows Open, for one print whose picture the desk holds. Track OM (ICE I61, I62): an
+ * act says what it is now — disabled, a swatch — and an act that is a choice is a pill (its current choice, or Mixed),
+ * More's one row for it opening its list, the list's rows its choices nearest first: checked, hinted, grouped, a choice
+ * that asks for values with an ellipsis.
  */
+
+import type { ActChoice } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
+import { handCells } from "../src/field/desk/bar/bar-hand";
 import {
   type BarCell,
   barCells,
+  choiceEyebrow,
+  choiceGroups,
+  choiceOfRow,
+  MIXED_LABEL,
   menuEyebrow,
   menuGroups,
   type SelectionFacts,
@@ -48,6 +58,8 @@ const said = (cells: readonly BarCell[]): string[] =>
         return "|";
       case "act":
         return `act:${cell.id}`;
+      case "choice":
+        return `choice:${cell.id}:${cell.current}`;
       case "words":
         return `words:${cell.label}`;
       default:
@@ -257,5 +269,105 @@ describe("the bar grown — its rows, nearest first", () => {
     expect(menuEyebrow(facts())).toBe("NOTE");
     expect(menuEyebrow(facts({ count: 2, words: [note, clockOff] }))).toBe("2 OBJECTS");
     expect(menuEyebrow(facts({ words: [clockOff] }))).toBe("CLOCK · PLUGIN OFF");
+  });
+});
+
+describe("what an act says now, and an act that is a choice (track OM; ICE I61, I62)", () => {
+  const DEVICES: readonly ActChoice[] = [
+    { id: "laptop", label: "Laptop", hint: "1280 × 800", group: "devices", current: true },
+    { id: "phone", label: "iPhone 17 Pro", hint: "402 × 874", group: "devices" },
+    { id: "landscape", label: "Turn to landscape", group: "turn" },
+    {
+      id: "custom",
+      label: "Custom",
+      hint: "your size and agent",
+      group: "custom",
+      fields: [
+        { id: "width", label: "Width", kind: "number", value: 1280, min: 320, max: 8192, step: 1 },
+      ],
+    },
+  ];
+  const device = { id: "device", label: "Device", glyph: { path: "M0 0" }, choices: DEVICES };
+
+  it("a choice act is a pill: its glyph, its current choice and its tip — Mixed when none is current", () => {
+    const [pill] = barCells(facts({ menu: [device] }), "mac").filter((c) => c.kind === "choice");
+    expect(pill).toEqual({
+      kind: "choice",
+      id: "device",
+      label: "Device",
+      glyph: { path: "M0 0" },
+      current: "Laptop",
+      mixed: false,
+      tip: "Device: Laptop",
+    });
+    const mixed = barCells(
+      facts({ menu: [{ ...device, choices: DEVICES.map(({ current: _, ...c }) => c) }] }),
+      "mac",
+    ).find((c) => c.kind === "choice");
+    expect(mixed).toMatchObject({ current: MIXED_LABEL, mixed: true, tip: "Device: Mixed" });
+  });
+
+  it("an act its kind says is disabled is a disabled cell, one with a swatch carries it — and More draws the disabled one, never takes it", () => {
+    const menu = [
+      { id: "sound", label: "Mute", glyph: { path: "M1 1" }, enabled: false as const },
+      { id: "finish", label: "Finish", swatch: "#2b3c5c" },
+    ];
+    const cells = barCells(facts({ menu }), "mac").filter((c) => c.kind === "act");
+    expect(cells).toEqual([
+      { kind: "act", id: "sound", label: "Mute", glyph: { path: "M1 1" }, disabled: true },
+      { kind: "act", id: "finish", label: "Finish", glyph: undefined, swatch: "#2b3c5c" },
+    ]);
+    const [near] = menuGroups(facts({ menu }), "mac");
+    expect(near?.slice(0, 2)).toEqual([
+      { id: "act:sound", label: "Mute", waits: "" },
+      { id: "act:finish", label: "Finish" },
+    ]);
+  });
+
+  it("More lists a choice act as one row, its current choice in the key's place, taking it opening the list", () => {
+    const [near] = menuGroups(facts({ menu: [device] }), "mac");
+    expect(near?.[0]).toEqual({ id: "act:device", label: "Device", key: "Laptop", opens: true });
+  });
+
+  it("the list: the choices nearest first, a group per run of the kind's group, checked, hinted, an ellipsis for one that asks for values", () => {
+    const groups = choiceGroups(DEVICES);
+    expect(groups.map((g) => g.map((r) => [r.id, r.label, r.key, r.checked]))).toEqual([
+      [
+        ["choice:laptop", "Laptop", "1280 × 800", true],
+        ["choice:phone", "iPhone 17 Pro", "402 × 874", false],
+      ],
+      [["choice:landscape", "Turn to landscape", undefined, false]],
+      [["choice:custom", "Custom…", "your size and agent", false]],
+    ]);
+    expect(groups[2]?.[0]?.fields?.[0]?.id).toBe("width");
+    expect(choiceOfRow("choice:custom")).toBe("custom");
+    expect(choiceOfRow("act:device")).toBeUndefined();
+    expect(choiceEyebrow("Device")).toBe("DEVICE");
+    expect(choiceGroups([{ id: "a", label: "A", swatch: "#e0692a" }])[0]?.[0]?.swatch).toBe(
+      "#e0692a",
+    );
+  });
+
+  it("in hand, an action that is a choice is the same pill: its current choice in its cell and its tip", () => {
+    const cells = handCells(
+      {
+        tools: [
+          {
+            id: "device",
+            label: "Device",
+            kind: "action",
+            glyph: { path: "M0 0" },
+            choices: DEVICES,
+          },
+          { id: "sound", label: "Mute", kind: "action", glyph: { path: "M1 1" } },
+        ],
+        active: "",
+      },
+      "mac",
+    ).filter((c) => c.kind === "tool");
+    expect(cells.map((c) => (c.kind === "tool" ? [c.id, c.look, c.current, c.tip] : []))).toEqual([
+      ["device", "choice", "Laptop", "Device: Laptop"],
+      ["sound", "action", undefined, "Mute"],
+    ]);
   });
 });

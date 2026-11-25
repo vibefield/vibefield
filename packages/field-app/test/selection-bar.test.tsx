@@ -529,6 +529,212 @@ describe("the bar's keys and acts (R9; the engine's ops)", () => {
 // curve, its contents swapping by a 120 ms cross-fade over the travel's last 120 ms, and becomes the tools in hand: Copy
 // · rule · the kind's tools (dots, cells, faint) · the readout · rule · Done — each tool used through
 // `ops.useHeldTool`, Done through `ops.putDown`; hidden while the object flies home, back over it 200 ms after it lands.
+describe("a kind's act now, and a choice (track OM; ICE I61, I62)", () => {
+  const FIELDS = [
+    { id: "width", label: "Width", kind: "number", value: 1280, min: 320, max: 8192, step: 1 },
+    { id: "height", label: "Height", kind: "number", value: 800, min: 240, max: 8192, step: 1 },
+    {
+      id: "agent",
+      label: "User agent",
+      kind: "text",
+      value: "",
+      maxLength: 512,
+      placeholder: "The browser's own",
+    },
+  ] as const;
+  const CHOICES = [
+    { id: "laptop", label: "Laptop", hint: "1280 × 800", group: "devices", current: true },
+    { id: "phone", label: "iPhone 17 Pro", hint: "402 × 874", group: "devices" },
+    { id: "custom", label: "Custom", hint: "your size and agent", group: "custom", fields: FIELDS },
+  ] as const;
+  const DEVICE = {
+    id: "device",
+    label: "Device",
+    glyph: { path: "M3 5 H16 V15 H3 Z" },
+    choices: CHOICES,
+  };
+  const SOUND = { id: "sound", label: "Mute", glyph: { path: "M3 9 H7 L12 5 V19 L7 15 H3 Z" } };
+  const listRows = (): { row: string; checked: string | null }[] =>
+    [...bar().querySelectorAll<HTMLElement>(".vf-bar-list [data-row]")].map((el) => ({
+      row: el.dataset.row ?? "",
+      checked: el.getAttribute("aria-checked"),
+    }));
+  const listRow = (id: string): HTMLElement => {
+    const el = [...bar().querySelectorAll<HTMLElement>(".vf-bar-list [data-row]")].find(
+      (r) => r.dataset.row === id,
+    );
+    if (el === undefined) throw new Error(`no ${id} row`);
+    return el;
+  };
+  const field = (name: string): HTMLInputElement => {
+    const el = bar().querySelector<HTMLInputElement>(`[data-choice-fields] input[name="${name}"]`);
+    if (el === null) throw new Error(`no ${name} field`);
+    return el;
+  };
+  /** Typing into a field as a person does: its value set, its input event fired (React's change). */
+  const type = (input: HTMLInputElement, text: string): void => {
+    act(() => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(input, text);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  };
+  const withActs = (menu: NonNullable<SelectionAnchor["menu"]>): void => {
+    mount();
+    act(() => selection.publish({ menu }));
+  };
+
+  it("the pill says its current choice, Device: Laptop; pressed, the bar grows into its list — checked, under its eyebrow — and a press again folds it", () => {
+    withActs([DEVICE, SOUND]);
+    const pill = cell("act:device");
+    expect(pill.dataset.choice).toBe("");
+    expect(pill.textContent).toBe("Laptop");
+    expect(pill.getAttribute("aria-label")).toBe("Device: Laptop");
+    expect(pill.getAttribute("aria-haspopup")).toBe("menu");
+    act(() => pill.click());
+    expect(surfaceNow).toBe("selection");
+    expect(pill.getAttribute("aria-expanded")).toBe("true");
+    expect(listRows()).toEqual([
+      { row: "choice:laptop", checked: "true" },
+      { row: "choice:phone", checked: "false" },
+      { row: "choice:custom", checked: "false" },
+    ]);
+    expect(listRow("choice:custom").textContent).toBe("Custom…your size and agent");
+    expect(bar().querySelector(".vf-bar-eye")?.textContent).toBe("DEVICE");
+    expect(bar().querySelector(".vf-bar-list")?.getAttribute("data-choices")).toBe("device");
+    act(() => pill.click());
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("a choice taken runs the act WITH it through the engine's op, and the list folds", () => {
+    withActs([DEVICE]);
+    const run = vi.spyOn(ce.ops, "runMenuAction");
+    act(() => cell("act:device").click());
+    act(() => listRow("choice:phone").click());
+    expect(run).toHaveBeenLastCalledWith("device", { id: "phone" });
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("Custom… opens its fields under its row; a value that does not fit says why and Use waits; Return takes the values", () => {
+    withActs([DEVICE]);
+    const run = vi.spyOn(ce.ops, "runMenuAction");
+    act(() => cell("act:device").click());
+    act(() => listRow("choice:custom").click());
+    expect(run).not.toHaveBeenCalled();
+    expect(listRow("choice:custom").getAttribute("aria-expanded")).toBe("true");
+    expect([field("width").value, field("height").value, field("agent").value]).toEqual([
+      "1280",
+      "800",
+      "",
+    ]);
+    expect(field("agent").placeholder).toBe("The browser's own");
+    expect(document.activeElement).toBe(field("width"));
+    const use = (): HTMLElement =>
+      bar().querySelector<HTMLElement>('[data-act="use"]') as HTMLElement;
+    type(field("width"), "100");
+    expect(field("width").getAttribute("aria-invalid")).toBe("true");
+    expect(bar().querySelector(".vf-bar-field-why")?.textContent).toBe("Width is 320 to 8192");
+    expect(use().getAttribute("aria-disabled")).toBe("true");
+    act(() => use().click());
+    type(field("width"), "960.5");
+    expect(bar().querySelector(".vf-bar-field-why")?.textContent).toBe("Width is a whole number");
+    expect(run).not.toHaveBeenCalled();
+    type(field("width"), "960");
+    type(field("agent"), "VibeField-Emulation-Test/1.0");
+    expect(use().hasAttribute("aria-disabled")).toBe(false);
+    key("Enter", field("agent"));
+    expect(run).toHaveBeenLastCalledWith("device", {
+      id: "custom",
+      values: { width: 960, height: 800, agent: "VibeField-Emulation-Test/1.0" },
+    });
+    expect(surfaceNow).toBeNull();
+    expect(keymapHeard).toEqual([]);
+  });
+
+  it("Esc in a changed field puts its value back; Esc again folds the list (R5)", () => {
+    withActs([DEVICE]);
+    act(() => cell("act:device").click());
+    act(() => listRow("choice:custom").click());
+    type(field("width"), "1024");
+    key("Escape", field("width"));
+    expect(field("width").value).toBe("1280");
+    expect(surfaceNow).toBe("selection");
+    key("Escape", field("width"));
+    expect(surfaceNow).toBeNull();
+    expect(keymapHeard).not.toContain("Escape");
+  });
+
+  it("More over a choice's list shows ITS menu in the list's place; More's Device row shows the list in its place, the bar staying grown", () => {
+    withActs([DEVICE]);
+    act(() => cell("act:device").click());
+    act(() => cell("more").click());
+    expect(surfaceNow).toBe("selection");
+    expect(rows()[0]).toBe("act:device");
+    expect(bar().querySelector(".vf-bar-eye")?.textContent).toBe("NOTE");
+    expect(listRow("act:device").querySelector(".vf-bar-key")?.textContent).toBe("Laptop");
+    act(() => listRow("act:device").click());
+    expect(surfaceNow).toBe("selection");
+    expect(rows()).toEqual(["choice:laptop", "choice:phone", "choice:custom"]);
+  });
+
+  it("an act its kind says is disabled is faint and inert; one whose word changed says it (Mute → Unmute); a swatch is a dot", () => {
+    withActs([
+      { ...SOUND, enabled: false },
+      { id: "finish", label: "Finish", swatch: "#2b3c5c" },
+    ]);
+    const run = vi.spyOn(ce.ops, "runMenuAction");
+    expect(cell("act:sound").getAttribute("aria-disabled")).toBe("true");
+    act(() => cell("act:sound").click());
+    expect(run).not.toHaveBeenCalled();
+    expect(cell("act:finish").querySelector(".vf-bar-dot-ink")).not.toBeNull();
+    expect(cell("act:finish").style.getPropertyValue("--vf-bar-swatch")).toBe("#2b3c5c");
+    act(() =>
+      selection.publish({ menu: [{ ...SOUND, label: "Unmute", glyph: { path: "M1 1" } }] }),
+    );
+    expect(cell("act:sound").getAttribute("aria-label")).toBe("Unmute");
+    expect(cell("act:sound").hasAttribute("aria-pressed")).toBe(false);
+    act(() => cell("act:sound").click());
+    expect(run).toHaveBeenLastCalledWith("act:sound".slice(4));
+  });
+
+  it("IN HAND: the tool that is a choice is the same pill; its list grows under the head and a choice is used through ops.useHeldTool", () => {
+    vi.useFakeTimers();
+    mount();
+    const use = vi.spyOn(ce.ops, "useHeldTool");
+    const tools = [
+      {
+        id: "device",
+        label: "Device",
+        kind: "action",
+        glyph: { path: "M3 5 H16 V15 H3 Z" },
+        choices: CHOICES,
+      },
+      { id: "sound", label: "Mute", kind: "action", glyph: { path: "M1 1" } },
+    ] as NonNullable<SelectionAnchor["held"]>["tools"];
+    act(() =>
+      selection.publish({
+        held: { tools, active: "", landing: false, settled: true, travelMs: 560 } as NonNullable<
+          SelectionAnchor["held"]
+        >,
+      }),
+    );
+    act(() => vi.advanceTimersByTime(560 + 100));
+    const pill = [
+      ...bar().querySelectorAll<HTMLElement>('[data-face-row="hand"] [data-tool]'),
+    ].find((t) => t.dataset.tool === "device") as HTMLElement;
+    expect(pill.textContent).toBe("Laptop");
+    expect(pill.getAttribute("aria-label")).toBe("Device: Laptop");
+    act(() => pill.click());
+    expect(use).not.toHaveBeenCalled();
+    expect(surfaceNow).toBe("selection");
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    expect(pill.getAttribute("aria-expanded")).toBe("true");
+    expect(rows()).toEqual(["choice:laptop", "choice:phone", "choice:custom"]);
+    act(() => listRow("choice:phone").click());
+    expect(use).toHaveBeenLastCalledWith("device", { id: "phone" });
+    expect(surfaceNow).toBeNull();
+  });
+});
+
 describe("the tools in hand (DK-12)", () => {
   /** The notebook's slots as the anchor carries them (bar-hand's own test holds the real kinds' to the canon). */
   const NOTEBOOK: NonNullable<SelectionAnchor["held"]>["tools"] = [

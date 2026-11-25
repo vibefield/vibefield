@@ -1,6 +1,6 @@
 import type { HeldGlyph } from "@vibecook/ice";
 import type { HeldAnchor, HeldSlot } from "@vibecook/ice/desk";
-import { type DeskKeys, MAKE_CARD_LABEL, makeCardTip, tipOf } from "./bar-model";
+import { currentChoice, type DeskKeys, MAKE_CARD_LABEL, makeCardTip, tipOf } from "./bar-model";
 
 /** The hand as the anchor carries it (`SelectionAnchor["held"]`) and one of its slots — id, label, kind, hint, glyph,
  * swatch, plain data: ICE's own `HeldAnchor` and `HeldSlot`, exported from `@vibecook/ice/desk` since desk.5 (I36), handed
@@ -18,7 +18,9 @@ export type { HeldAnchor, HeldSlot };
 //   a slot with no `kind` (declared only) waits, faint by ink;
 //   a slot its kind says is DISABLED NOW (ICE I49 — `HeldSlot.enabled === false`: ‹ with no history) is dim the same
 //   way, `aria-disabled`, and its press does nothing — it keeps its look, and comes live again when the kind says so. Its
-//   label and glyph are already what the kind says now (↻ reads Stop while a page loads).
+//   label and glyph are already what the kind says now (↻ reads Stop while a page loads);
+//   an ACTION THAT IS A CHOICE (ICE I62; track OM — the browser pane's Device) the selection bar's choice pill: its
+//   glyph, the current choice's label and a chevron; pressed, its list grows from the bar, down from under the head.
 // Its glyph is drawn by §13's table through the bar's one path renderer (KindGlyph); a slot with neither a glyph nor
 // a swatch shows its label (R3). The readout is ONE slot after the tools — the string carries no position (R13) — and
 // a kind that says none shows none. Done puts it down (`ops.putDown()`).
@@ -27,7 +29,7 @@ export type { HeldAnchor, HeldSlot };
 export type HandRun = "page" | "ink" | "tool";
 
 /** What a slot looks like on the bar. */
-export type HandLook = "dot" | "mode" | "action" | "faint";
+export type HandLook = "dot" | "mode" | "action" | "choice" | "faint";
 
 export type HandCell =
   /** Copy — the bar's one word, as on the bar over a selection: the object IN HAND copied as ONE card, the object
@@ -51,6 +53,8 @@ export type HandCell =
       readonly gap: boolean;
       /** Its kind says it is disabled now (ICE I49): dim, `aria-disabled`, its press nothing. */
       readonly disabled: boolean;
+      /** A choice's pill (ICE I62): the current choice's label, which it prints after its glyph. */
+      readonly current?: string;
     }
   /** The kind's word in hand (I22 — "Page 1", "September", the clock's time). */
   | { readonly kind: "readout"; readonly text: string }
@@ -71,7 +75,7 @@ export function runOf(slot: HeldSlot): HandRun {
 export function lookOf(slot: HeldSlot): HandLook {
   if (slot.kind === undefined) return "faint";
   if (slot.kind === "mode") return slot.swatch !== undefined ? "dot" : "mode";
-  return "action";
+  return slot.choices !== undefined ? "choice" : "action";
 }
 
 /** Done's tooltip: the act and its key, the frame's way (§8: "Put it down  Esc"). */
@@ -93,11 +97,15 @@ export function handCells(
   for (const slot of held.tools) {
     const run = runOf(slot);
     const look = lookOf(slot);
+    const current =
+      look === "choice" && slot.choices !== undefined
+        ? currentChoice(slot.choices).current
+        : undefined;
     cells.push({
       kind: "tool",
       id: slot.id,
       label: slot.label,
-      tip: tipOf(slot.label, slot.hint),
+      tip: current === undefined ? tipOf(slot.label, slot.hint) : `${slot.label}: ${current}`,
       look,
       glyph: slot.glyph,
       swatch: look === "dot" ? slot.swatch : undefined,
@@ -105,6 +113,7 @@ export function handCells(
       run,
       gap: last !== undefined && run !== last,
       disabled: slot.enabled === false,
+      ...(current === undefined ? {} : { current }),
     });
     last = run;
   }
@@ -119,7 +128,7 @@ export function slotsKey(tools: readonly HeldSlot[]): string {
   return tools
     .map(
       (t) =>
-        `${t.id}\u0000${t.label}\u0000${t.kind ?? ""}\u0000${t.hint ?? ""}\u0000${JSON.stringify(t.glyph ?? null)}\u0000${t.swatch ?? ""}\u0000${t.enabled === false ? "off" : ""}`,
+        `${t.id}\u0000${t.label}\u0000${t.kind ?? ""}\u0000${t.hint ?? ""}\u0000${JSON.stringify(t.glyph ?? null)}\u0000${t.swatch ?? ""}\u0000${t.enabled === false ? "off" : ""}\u0000${JSON.stringify(t.choices ?? null)}`,
     )
     .join("\u0001");
 }

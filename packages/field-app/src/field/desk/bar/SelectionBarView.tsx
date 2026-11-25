@@ -33,6 +33,7 @@ import {
   travelTransition,
 } from "./bar-motion";
 import { barStats } from "./bar-stats";
+import { ChoiceFields, type ChoiceFieldsHandle } from "./ChoiceFields";
 import { KindGlyph } from "./KindGlyph";
 import { PaperCard } from "./PaperCard";
 import "./selection-bar.css";
@@ -57,6 +58,14 @@ import "./selection-bar.css";
 // the bar travels out with the stroke's draw-on, 780 ms on the island curve; when it turns off, back with the
 // stroke's retract, 460 ms on the retract curve — one transform transition, taken off one beat past its end as the
 // role change's is. A clearance that changes with the selection, an unseen bar and reduced motion (M6) place at once.
+//
+// A CHOICE (track OM, 2026-11-25; DESIGN.md §8 "An act that is a choice", "A choice's list"; ICE I61, I62): a kind's act
+// that offers choices is a PILL — its glyph, the current choice, a chevron turned down — and a tool in hand that does is
+// the same pill. Pressed, the controller names it (`choosing`) and the SAME grown element lists its choices in More's
+// place, over a selection or, in hand, down from under the head: the current one checked, a hint in the key's place, a
+// swatch's dot, a rule where the kind's group changes. A choice that asks for values opens its fields under its row
+// (ChoiceFields), and Use takes it with them. An act its kind says is disabled now is faint by ink and inert; one with a
+// swatch shows the hand's dot in its glyph's place.
 
 /** What the bar is placed from: the anchor's box, its count and the view (ICE's `SelectionAnchor`, narrowed). */
 export interface PlaceAnchor {
@@ -80,8 +89,12 @@ export type BarRole = "selection" | "hand";
 
 export interface SelectionBarViewProps {
   readonly cells: readonly BarCell[];
-  /** The grown menu's rows, nearest first, in their groups. */
+  /** The grown menu's rows, nearest first, in their groups — More's, or a choice's list (track OM). */
   readonly groups: readonly (readonly MenuRow[])[];
+  /** Whose choices the grown bar lists, while it lists a choice's (ICE I62): its pill is shown on, the list's rows are its. */
+  readonly choosing?: { readonly of: "act" | "tool"; readonly id: string } | null;
+  /** A plate's row whose fields stand open as it mounts (the catalog); the product opens them by taking the row. */
+  readonly expandedRow?: string;
   /** What the menu acts on, at its far end ("NOTE", "2 OBJECTS", "CLOCK · PLUGIN OFF"). */
   readonly eyebrow: string;
   /** A selection on screen to stand over — or an object in hand (false: the bar fades out, keeping what it said). */
@@ -93,8 +106,8 @@ export interface SelectionBarViewProps {
   readonly onOpenChange: (open: boolean) => void;
   /** A cell pressed (every act but More, which grows the bar). */
   readonly onCell: (cell: BarCell) => void;
-  /** A row taken. */
-  readonly onRow: (row: MenuRow) => void;
+  /** A row taken — a choice that asks for values with its fields' values. */
+  readonly onRow: (row: MenuRow, values?: Readonly<Record<string, number | string>>) => void;
   /** DK-12 — an object is in hand: the bar's role is the tools in hand under the head (else over the selection). */
   readonly held?: boolean;
   /** DK-12 — the tools in hand's cells (bar-hand.ts `handCells`). */
@@ -120,6 +133,7 @@ const cellKey = (cell: BarCell, index: number): string => {
     case "rule":
       return `rule-${cell.at}`;
     case "act":
+    case "choice":
       return `act-${cell.id}`;
     case "desk":
       return cell.act;
@@ -171,6 +185,8 @@ export function SelectionBarView({
   shown,
   stepAside,
   open,
+  choosing = null,
+  expandedRow,
   onOpenChange,
   onCell,
   onRow,
@@ -207,6 +223,13 @@ export function SelectionBarView({
   const [rover, setRover] = useState(0);
   const [handRover, setHandRover] = useState(0);
   const [hot, setHot] = useState<string | null>(null);
+  /** The row whose fields are open under it (a choice that asks for values), or null (ICE I62). */
+  const [expanded, setExpanded] = useState<string | null>(expandedRow ?? null);
+  /** The row a plate opened as it mounted: its fields take no focus (the person opened none). */
+  const seeded = useRef(expandedRow);
+  const fieldsRef = useRef<ChoiceFieldsHandle>(null);
+  const choosingRef = useRef(choosing);
+  choosingRef.current = choosing;
 
   // AWAY for a gesture and while a note is written (R8) — and, in hand, while the object flies home: out at once, back
   // `backMs` (200) after it ends
@@ -288,7 +311,8 @@ export function SelectionBarView({
     const anchor = lastAnchor.current;
     if (root === null) return;
     const set = (name: string, px: number): void => root.style.setProperty(name, `${px}px`);
-    if (!openRef.current || at === null || anchor === null || roleRef.current !== "selection") {
+    // grown over a selection — or in hand, for a tool's choices (the controller grows nothing else there)
+    if (!openRef.current || at === null || anchor === null) {
       for (const name of [
         "--vf-bar-grow-l",
         "--vf-bar-grow-r",
@@ -298,7 +322,7 @@ export function SelectionBarView({
         set(name, 0);
       return;
     }
-    const w = widthRef.current;
+    const w = roleRef.current === "hand" ? handWidthRef.current : widthRef.current;
     const g = growMenu({ x: at.x, y: at.y, width: w }, listNatural.current, anchor.view);
     const listOut = g.listHeight + 1; // the list and the strong hairline between it and the row
     set("--vf-bar-grow-l", at.x - g.x);
@@ -457,7 +481,7 @@ export function SelectionBarView({
     listNatural.current = listRef.current?.scrollHeight ?? 0;
     const anchor = fixed ?? lastAnchor.current;
     if (anchor !== null) place(anchor);
-  }, [cells, handShown, groups, eyebrow, fixed, place]);
+  }, [cells, handShown, groups, eyebrow, expanded, fixed, place]);
 
   // the grow follows `open`; the hot row is the nearest takeable one as it opens
   useLayoutEffect(() => {
@@ -469,6 +493,30 @@ export function SelectionBarView({
     const nearest = groups.flat().find((row) => row.waits === undefined);
     setHot(nearest?.id ?? null);
   }, [open, groups, layoutGrow]);
+  // a row's fields close with the list, and when another list takes its place (state kept from the last render)
+  const listOf = open ? `${choosing?.of ?? "more"}:${choosing?.id ?? ""}` : "";
+  const [listSeen, setListSeen] = useState(listOf);
+  if (listSeen !== listOf) {
+    setListSeen(listOf);
+    setExpanded(null);
+  }
+
+  /** Where the focus goes back to as the list folds from the keyboard: the pill whose list it was, else More. */
+  const focusOrigin = useCallback((): void => {
+    const now = choosingRef.current;
+    // found by its data, never by a selector built from the kind's id
+    const pill =
+      now === null
+        ? undefined
+        : now.of === "act"
+          ? [...(rowRef.current?.querySelectorAll<HTMLElement>("[data-act]") ?? [])].find(
+              (el) => el.dataset.act === `act:${now.id}`,
+            )
+          : [...(handRowRef.current?.querySelectorAll<HTMLElement>("[data-tool]") ?? [])].find(
+              (el) => el.dataset.tool === now.id,
+            );
+    (pill ?? moreRef.current)?.focus({ preventScroll: true });
+  }, []);
 
   // keyboard-opened: the hot row takes the focus once it can
   useEffect(() => {
@@ -509,10 +557,26 @@ export function SelectionBarView({
   const take = useCallback(
     (row: MenuRow): void => {
       if (row.waits !== undefined) return;
-      onOpenChange(false);
+      // a choice that asks for values opens its fields under its row; More's row for a choice act opens its list
+      if (row.fields !== undefined) {
+        seeded.current = undefined;
+        setExpanded((now) => (now === row.id ? null : row.id));
+        return;
+      }
+      if (row.opens !== true) onOpenChange(false);
       onRow(row);
     },
     [onOpenChange, onRow],
+  );
+  /** Use: the choice taken with its fields' values, the list folding. */
+  const use = useCallback(
+    (row: MenuRow, values: Readonly<Record<string, number | string>>): void => {
+      const inside = rootRef.current?.contains(document.activeElement) === true;
+      onOpenChange(false);
+      onRow(row, values);
+      if (inside) focusOrigin();
+    },
+    [onOpenChange, onRow, focusOrigin],
   );
 
   // OPEN: it closes on Esc — taken before the desk's Esc ladder (R5) — and on a press anywhere else; ↑ ↓ walk and
@@ -531,9 +595,16 @@ export function SelectionBarView({
       if (event.key === "Escape") {
         event.preventDefault();
         event.stopImmediatePropagation();
+        // in a choice's field: its value put back first; Esc again folds the list (§8 "A choice's list")
+        if (
+          typing &&
+          rootRef.current?.contains(target) === true &&
+          fieldsRef.current?.escape() === true
+        )
+          return;
         const inside = rootRef.current?.contains(document.activeElement) === true;
         onOpenChange(false);
-        if (inside) moreRef.current?.focus({ preventScroll: true });
+        if (inside) focusOrigin();
         return;
       }
       if (typing) return;
@@ -549,8 +620,12 @@ export function SelectionBarView({
         event.preventDefault();
         event.stopImmediatePropagation();
         take(row);
-        if (rootRef.current?.contains(document.activeElement))
-          moreRef.current?.focus({ preventScroll: true });
+        if (
+          row.fields === undefined &&
+          row.opens !== true &&
+          rootRef.current?.contains(document.activeElement)
+        )
+          focusOrigin();
       }
     };
     window.addEventListener("pointerdown", onPointerDown, true);
@@ -559,7 +634,7 @@ export function SelectionBarView({
       window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [open, onOpenChange, walk, take, takeable, hot]);
+  }, [open, onOpenChange, walk, take, takeable, hot, focusOrigin]);
 
   // THE TOOLBAR'S KEYS (R9): ← → between its cells, Home End to its ends, Esc back to the desk, Enter and Space
   // run the cell — each taken from the desk's keymap (its arrows nudge, its ⏎ opens, its Esc climbs out). In hand the
@@ -629,6 +704,11 @@ export function SelectionBarView({
           focusOnOpen.current = true;
           onOpenChange(true);
         }
+        // ↓ on a choice's pill grows its list from the keyboard, as on More
+        if (cell?.kind === "choice" && cell.disabled !== true && !open) {
+          focusOnOpen.current = true;
+          onCell(cell);
+        }
         return;
     }
   };
@@ -655,15 +735,26 @@ export function SelectionBarView({
   const press = (cell: BarCell, fromKeyboard: boolean): void => {
     if (cell.kind === "rule" || cell.kind === "words") return;
     if (cell.kind === "desk" && cell.act === "more") {
-      focusOnOpen.current = fromKeyboard && !open;
-      onOpenChange(!open);
+      // over a choice's list More shows its own menu in the list's place; else it grows or folds the bar
+      const over = open && choosing !== null;
+      focusOnOpen.current = fromKeyboard && (!open || over);
+      onOpenChange(over ? true : !open);
+      return;
+    }
+    // an act its kind says is disabled now does nothing (ICE I61)
+    if ((cell.kind === "act" || cell.kind === "choice") && cell.disabled === true) return;
+    // a choice's pill: the controller grows its list, or folds it when it is the one listed
+    if (cell.kind === "choice") {
+      focusOnOpen.current = fromKeyboard;
+      onCell(cell);
       return;
     }
     if (open) onOpenChange(false);
     onCell(cell);
   };
 
-  /** Copy, a tool used, or Done: never a faint slot, one its kind says is disabled (ICE I49), a rule or the readout. */
+  /** Copy, a tool used, or Done: never a faint slot, one its kind says is disabled (ICE I49), a rule or the readout. A
+   * choice's pill (ICE I62) grows its list under the head — the controller's to name. */
   const runHand = (cell: HandCell): void => {
     if (
       cell.kind === "copy" ||
@@ -708,20 +799,56 @@ export function SelectionBarView({
           <button
             key={cellKey(cell, index)}
             type="button"
-            className={cell.glyph === undefined ? "vf-bar-cell vf-bar-cell--text" : "vf-bar-cell"}
+            className={
+              cell.swatch !== undefined
+                ? "vf-bar-cell vf-bar-swatch"
+                : cell.glyph === undefined
+                  ? "vf-bar-cell vf-bar-cell--text"
+                  : "vf-bar-cell"
+            }
             data-act={`act:${cell.id}`}
             aria-label={cell.label}
             title={cell.label}
+            {...(cell.disabled === true ? { "aria-disabled": true, "data-disabled": "" } : {})}
+            {...(cell.swatch === undefined
+              ? {}
+              : { style: { "--vf-bar-swatch": cell.swatch } as CSSProperties })}
             onClick={() => press(cell, false)}
             {...stop}
           >
-            {cell.glyph === undefined ? (
+            {cell.swatch !== undefined ? (
+              <span className="vf-bar-dot-ink" aria-hidden="true" />
+            ) : cell.glyph === undefined ? (
               cell.label
             ) : (
               <KindGlyph glyph={cell.glyph} label={cell.label} />
             )}
           </button>
         );
+      case "choice": {
+        const on = open && choosing?.of === "act" && choosing.id === cell.id;
+        return (
+          <button
+            key={cellKey(cell, index)}
+            type="button"
+            className="vf-bar-cell vf-bar-choice"
+            data-act={`act:${cell.id}`}
+            data-choice=""
+            {...(cell.mixed ? { "data-mixed": "" } : {})}
+            aria-label={cell.tip}
+            title={cell.tip}
+            aria-haspopup="menu"
+            aria-expanded={on}
+            {...(cell.disabled === true ? { "aria-disabled": true, "data-disabled": "" } : {})}
+            onClick={() => press(cell, false)}
+            {...stop}
+          >
+            {cell.glyph === undefined ? null : <KindGlyph glyph={cell.glyph} label={cell.label} />}
+            <span className="vf-bar-choice-label">{cell.current}</span>
+            <FieldGlyph name="chevron" size={12} turn={90} className="vf-bar-chevron" />
+          </button>
+        );
+      }
       case "desk": {
         const more = cell.act === "more";
         return (
@@ -733,7 +860,9 @@ export function SelectionBarView({
             data-act={cell.act}
             aria-label={cell.label}
             title={cell.tip}
-            {...(more ? { "aria-haspopup": "menu" as const, "aria-expanded": open } : {})}
+            {...(more
+              ? { "aria-haspopup": "menu" as const, "aria-expanded": open && choosing === null }
+              : {})}
             onClick={() => press(cell, false)}
             {...stop}
           >
@@ -791,8 +920,11 @@ export function SelectionBarView({
         );
       case "tool": {
         const mode = cell.look === "dot" || cell.look === "mode";
-        const className =
-          cell.look === "dot"
+        const choice = cell.look === "choice";
+        const chosenNow = choice && open && choosing?.of === "tool" && choosing.id === cell.id;
+        const className = choice
+          ? "vf-bar-cell vf-bar-choice"
+          : cell.look === "dot"
             ? "vf-bar-cell vf-bar-dot"
             : cell.glyph === undefined
               ? "vf-bar-cell vf-bar-cell--text"
@@ -807,9 +939,10 @@ export function SelectionBarView({
             data-run={cell.run}
             {...(cell.gap ? { "data-gap": "" } : {})}
             {...(cell.on ? { "data-on": "" } : {})}
-            aria-label={cell.label}
+            aria-label={choice ? cell.tip : cell.label}
             title={cell.tip}
             {...(mode ? { "aria-pressed": cell.on } : {})}
+            {...(choice ? { "aria-haspopup": "menu" as const, "aria-expanded": chosenNow } : {})}
             {...(cell.look === "faint" || cell.disabled ? { "aria-disabled": true } : {})}
             {...(cell.disabled ? { "data-disabled": "" } : {})}
             {...(cell.swatch === undefined
@@ -818,7 +951,15 @@ export function SelectionBarView({
             onClick={() => runHand(cell)}
             {...stop}
           >
-            {cell.look === "dot" ? (
+            {choice ? (
+              <>
+                {cell.glyph === undefined ? null : (
+                  <KindGlyph glyph={cell.glyph} label={cell.label} />
+                )}
+                <span className="vf-bar-choice-label">{cell.current}</span>
+                <FieldGlyph name="chevron" size={12} turn={90} className="vf-bar-chevron" />
+              </>
+            ) : cell.look === "dot" ? (
               <span className="vf-bar-dot-ink" aria-hidden="true" />
             ) : cell.glyph === undefined ? (
               cell.label
@@ -840,18 +981,24 @@ export function SelectionBarView({
     for (const row of group) {
       const delay = rowDelay(motion, order);
       order += 1;
-      listNodes.push(
+      const choice = row.checked !== undefined;
+      const item = (
         <button
           key={row.id}
           type="button"
-          role="menuitem"
+          role={choice ? "menuitemradio" : "menuitem"}
           className="vf-bar-item"
           data-row={row.id}
+          {...(choice ? { "aria-checked": row.checked === true } : {})}
+          {...(row.fields === undefined ? {} : { "aria-expanded": expanded === row.id })}
           {...(row.id === hot ? { "data-hot": "" } : {})}
           {...(row.danger === true ? { "data-danger": "" } : {})}
           {...(row.waits === undefined
             ? {}
-            : { "aria-disabled": true, title: `${row.label} — ${row.waits}` })}
+            : {
+                "aria-disabled": true,
+                title: row.waits === "" ? row.label : `${row.label} — ${row.waits}`,
+              })}
           tabIndex={-1}
           style={{ "--vf-bar-delay": `${delay}ms` } as CSSProperties}
           onPointerEnter={() => {
@@ -859,9 +1006,41 @@ export function SelectionBarView({
           }}
           onClick={() => take(row)}
         >
+          {choice ? (
+            <span className="vf-bar-check" aria-hidden="true">
+              {row.checked === true ? <FieldGlyph name="check" size={14} /> : null}
+            </span>
+          ) : null}
+          {row.swatch === undefined ? null : (
+            <span
+              className="vf-bar-swatch-dot"
+              aria-hidden="true"
+              style={{ "--vf-bar-swatch": row.swatch } as CSSProperties}
+            />
+          )}
           <span className="vf-bar-item-label">{row.label}</span>
           {row.key === undefined ? null : <span className="vf-bar-key">{row.key}</span>}
-        </button>,
+        </button>
+      );
+      // a choice that asks for values: its row and its fields as one piece of the list, the fields UNDER the row
+      // whichever way the list reads (grown up, the list's column is reversed; this piece's is not)
+      listNodes.push(
+        row.fields === undefined ? (
+          item
+        ) : (
+          <div key={row.id} className="vf-bar-choice-item">
+            {item}
+            {expanded === row.id ? (
+              <ChoiceFields
+                key={`${row.id}-fields`}
+                fields={row.fields}
+                handleRef={fieldsRef}
+                autoFocus={seeded.current !== row.id}
+                onUse={(values) => use(row, values)}
+              />
+            ) : null}
+          </div>
+        ),
       );
     }
   });
@@ -912,6 +1091,7 @@ export function SelectionBarView({
         className="vf-bar-list"
         role="menu"
         aria-label={`${eyebrow.charAt(0)}${eyebrow.slice(1).toLowerCase()}`}
+        {...(choosing === null ? {} : { "data-choices": choosing.id })}
         inert={!open}
       >
         {listNodes}

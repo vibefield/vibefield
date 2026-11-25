@@ -40,7 +40,11 @@ export interface DeviceAgent {
 /** A touch device's fingers (`navigator.maxTouchPoints`): an iPhone's and an iPad's five. */
 export const TOUCH_POINTS = 5;
 
-export const DEVICE_IDS = ["laptop", "desktop", "tablet", "phone"] as const;
+/** The devices a pane is offered as presets (DESIGN.md §9 "The browser pane's acts"), in the device list's order. */
+export const PRESET_IDS = ["laptop", "desktop", "tablet", "phone"] as const;
+/** Every device a pane may be on: the presets, and CUSTOM — a size and an agent of the person's own (track OM, OM-1,
+ * 2026-11-25). The manifest's `device` options. */
+export const DEVICE_IDS = [...PRESET_IDS, "custom"] as const;
 export type DeviceId = (typeof DEVICE_IDS)[number];
 
 const IPHONE_UA =
@@ -132,7 +136,24 @@ export const deviceIdentity = (
   touchPoints: device.touch ? TOUCH_POINTS : 0,
   agent: device.agent,
 });
-export const deviceById = (id: string): Device | undefined => DEVICES.find((d) => d.id === id);
+/**
+ * CUSTOM (track OM, OM-1, 2026-11-25): a laptop's density, pixel ratio and pointer, and the engine's own agent unless
+ * one is typed (`userAgentMode: "custom"`). Its size is the pane's own — there is no custom size to go back to, so the
+ * width and height here are only a laptop's, for a pane cut to Custom with none typed.
+ */
+export const CUSTOM_DEVICE: Device = {
+  id: "custom",
+  name: "Custom",
+  width: 1280,
+  height: 800,
+  dpr: 2,
+  density: 0.2,
+  mobile: false,
+  touch: false,
+  agent: null,
+};
+export const deviceById = (id: string): Device | undefined =>
+  DEVICES.find((d) => d.id === id) ?? (id === CUSTOM_DEVICE.id ? CUSTOM_DEVICE : undefined);
 export const DEFAULT_DEVICE: Device = DEVICES[0] as Device;
 /** A prop's device, or the default (laptop) for one the pane does not know. */
 export const deviceOf = (id: unknown): Device =>

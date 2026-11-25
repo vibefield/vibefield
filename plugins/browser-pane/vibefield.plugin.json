@@ -58,7 +58,8 @@
               "laptop",
               "desktop",
               "tablet",
-              "phone"
+              "phone",
+              "custom"
             ]
           },
           "deviceScaleFactor": {

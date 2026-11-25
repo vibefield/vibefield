@@ -30,7 +30,7 @@ import {
   stringProp,
 } from "@vibefield/plugin-sdk/desk";
 import { displayOf, PROMPT } from "./address";
-import { configureDevice, DEVICE_GLYPH, SOUND_OFF, SOUND_ON, togglePaneSound } from "./device";
+import { PANE_HELD_ACTS } from "./device";
 import { deviceForProps, deviceIdentity } from "./devices";
 import { handOf } from "./hand";
 import { bandDensity, bandFor, headKey, headStateOf, pageStill, rungFor } from "./head";
@@ -107,8 +107,8 @@ const infoOf = (c: HeldToolStateContext): LiveInfo | undefined => pageOf(c)?.inf
 /** ↻ while the page loads: Stop — the head's ✕. */
 export const STOP_GLYPH = { path: "M7 7 L17 17 M17 7 L7 17" } as const;
 
-/** Navigation stays on the GPU header; hidden tool definitions retain standard browser shortcuts.
- * The object toolbar exposes device emulation and sound. A loading page offers Stop in place of Reload. */
+/** Navigation stays on the GPU header; hidden tool definitions retain standard browser shortcuts. The tools in hand
+ * show the pane's two acts, Device and Mute (device.ts; track OM, OM-1). A loading page offers Stop in place of Reload. */
 export const PANE_TOOLS: readonly HeldToolDef[] = [
   {
     id: "back",
@@ -158,22 +158,7 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
     glyph: { path: "M7 8.5 H17 A3.5 3.5 0 0 1 17 15.5 H7 A3.5 3.5 0 0 1 7 8.5 Z" },
     run: runControl("address"),
   },
-  {
-    id: "device",
-    label: "Device emulation",
-    kind: "action",
-    glyph: DEVICE_GLYPH,
-    run: (api) => configureDevice(api, [api.entity]),
-  },
-  {
-    id: "sound",
-    label: "Mute sound",
-    kind: "action",
-    glyph: SOUND_ON,
-    run: (api) => togglePaneSound(api, [api.entity]),
-    state: (c) =>
-      c.props().muted === true ? { label: "Unmute sound", glyph: SOUND_OFF } : undefined,
-  },
+  ...PANE_HELD_ACTS,
 ];
 
 /** The pane's program for a host's shader text (the kit's pieces from it; its own from shaders.ts): its pass on the root's mat. */

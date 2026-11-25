@@ -32,12 +32,10 @@ import {
 import { resolveAddress } from "./address";
 import { mountAddressEditor } from "./address-editor";
 import { propsCell, urlCell } from "./device";
-import { mountDeviceMenu } from "./device-menu";
 import { SAMPLE_URL } from "./ids";
 import { bandLayout, type HeldPart } from "./law";
 import { isPageUrl } from "./live";
 import type { PaneLocal } from "./local";
-import { bindPaneMenu } from "./menu-host";
 
 /** The pane's hand on a desk: its driver, which its DOM half joins at the mount. */
 export interface PaneHand extends KindDriver {
@@ -133,8 +131,18 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
   /** PI-1 (2026-11-24): the prop pane `e`'s address lives in: a run's pane's `runAddress`, a person's pane's `url`. */
   const addressProp = (e: Entity): "runAddress" | "url" => (isRun(e) ? "runAddress" : "url");
   let dom: ObjectDomHost | undefined;
-  let deviceMenu: ReturnType<typeof mountDeviceMenu> | undefined;
   let addressEditor: ReturnType<typeof mountAddressEditor> | undefined;
+  /** A FIELD OF THE HOST'S CHROME holds the keyboard (track OM, OM-1: the selection bar's Custom fields, in hand): the
+   * page does not take it back while the person types there — a press over the pane does. Only a field outside the
+   * desk's own container counts, and never the desk's one editor. */
+  const chromeTyping = (): boolean => {
+    const doc = dom?.container.ownerDocument;
+    const el = doc?.activeElement as HTMLElement | null | undefined;
+    if (dom === undefined || el == null || el === doc?.body || el === dom.editor.element)
+      return false;
+    if (dom.container.contains(el)) return false;
+    return el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/u.test(el.tagName);
+  };
   /** The pane the editor is lent for, and the lease holding it — the page's or the address's (two leases: ICE's editor keeps a
    * lease it already holds and never asks its value again, so a switch of mode is a hand-over from one lease to the other). */
   let leased: Entity | undefined;
@@ -161,7 +169,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
   };
   /** A press over the held pane keeps the editor's focus: its default would blur the field and end the lease mid-typing. */
   const onDown = (ev: PointerEvent): void => {
-    if (deviceMenu?.open || (current === addressLease && ev.target === dom?.editor.element)) return;
+    if (current === addressLease && ev.target === dom?.editor.element) return;
     const e = leased;
     const hand = h.hand();
     const at = e === undefined ? undefined : local()?.layout(e);
@@ -370,11 +378,6 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     join(d) {
       dom = d;
       addressEditor = mountAddressEditor(d);
-      const menu = () => (deviceMenu ??= mountDeviceMenu(d));
-      bindPaneMenu(h.world, {
-        configure: (api, entities) => menu().configure(api, entities),
-        say: (message) => menu().say(message),
-      });
       d.container.addEventListener("pointerdown", onDown, { capture: true });
       local()?.bind({ address: (e) => lend(e, addressLease) });
     },
@@ -391,7 +394,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
           write(e, url);
         }
       const e = inHand();
-      if (dom === undefined || e === undefined || deviceMenu?.open) return;
+      if (dom === undefined || e === undefined || chromeTyping()) return;
       const holding = dom.editor.lease();
       if (leased === e && (holding === pageLease || holding === addressLease)) return;
       lend(e, pageLease);
@@ -404,7 +407,7 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     idle: () => {
       for (const [e, url] of local()?.addressed() ?? []) if (written.get(e) !== url) return false;
       const e = inHand();
-      if (deviceMenu?.open) return true;
+      if (chromeTyping()) return true;
       if (e === undefined) return leased === undefined;
       // (the lease's end clears `leased` — `ended` — so a hand whose lease went is not idle until it lends again)
       if (leased !== e) return false;
@@ -412,8 +415,6 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     },
     dispose() {
       hands.delete(h.world);
-      bindPaneMenu(h.world, undefined);
-      deviceMenu?.dispose();
       dom?.container.removeEventListener("pointerdown", onDown, { capture: true });
       const holding = dom?.editor.lease();
       if (holding === pageLease || holding === addressLease) dom?.editor.release(holding);

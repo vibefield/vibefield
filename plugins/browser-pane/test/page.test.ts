@@ -7,16 +7,20 @@ import {
   BAND,
   bandDensity,
   bandFor,
+  CUSTOM_DEVICE,
   cutOf,
-  DEVICE_ACTS,
   DEVICES,
   deviceById,
+  deviceChoices,
   engraveSplit,
   GUTTER,
   headKey,
   headSize,
   headStateOf,
   PAGE_TEXELS_MAX,
+  PANE_ACTS,
+  PANE_HELD_ACTS,
+  type PaneOn,
   packRuns,
   pageTexels,
   rungFor,
@@ -237,14 +241,91 @@ describe("the device switch — re-cut to that screen about the pane's centre", 
     }
   });
 
-  it("its menu contains device emulation and sound, with navigation kept on the pane", () => {
-    expect(DEVICE_ACTS.map((a) => [a.id, a.label])).toEqual([
-      ["device", "Device emulation"],
-      ["sound", "Toggle sound"],
-    ]);
-    for (const a of DEVICE_ACTS) {
-      expect(typeof a.run).toBe("function");
-      expect(typeof a.glyph === "object" && a.glyph !== null && a.glyph.path.length > 0).toBe(true);
+  it("its acts are Device, a choice, and Mute, which says Unmute — on the bar and in hand (OM-1; navigation stays on the pane)", () => {
+    for (const acts of [PANE_ACTS, PANE_HELD_ACTS]) {
+      expect(acts.map((a) => [a.id, a.label])).toEqual([
+        ["device", "Device"],
+        ["sound", "Mute"],
+      ]);
+      for (const a of acts) {
+        expect(typeof a.run).toBe("function");
+        expect(typeof a.glyph === "object" && a.glyph !== null && a.glyph.path.length > 0).toBe(
+          true,
+        );
+      }
+      expect(typeof acts[0]?.choices).toBe("function");
+      expect(typeof acts[1]?.state).toBe("function");
     }
+    for (const t of PANE_HELD_ACTS) expect(t.kind).toBe("action");
+  });
+
+  it("Mute says Unmute, its speaker struck through, once every pane is muted — never while one can sound", () => {
+    const [, sound] = PANE_ACTS;
+    const ctx = (muted: boolean[]) => ({
+      world: undefined as never,
+      entities: muted.map((_, i) => i as never),
+      props: (e: unknown) => ({ muted: muted[e as number] }),
+      local: undefined,
+    });
+    expect(sound?.state?.(ctx([false]))).toBeUndefined();
+    expect(sound?.state?.(ctx([true, false]))).toBeUndefined();
+    const unmute = sound?.state?.(ctx([true, true]));
+    expect(unmute?.label).toBe("Unmute");
+    expect(unmute?.glyph).not.toEqual(sound?.glyph);
+    const [, held] = PANE_HELD_ACTS;
+    const one = (muted: boolean) => ({
+      world: undefined as never,
+      entity: 0 as never,
+      props: () => ({ muted }),
+      local: undefined,
+    });
+    expect(held?.state?.(one(false))).toBeUndefined();
+    expect(held?.state?.(one(true))?.label).toBe("Unmute");
+  });
+
+  it("the Device choices: every preset with its size, the current one marked, Turn for a phone, and Custom last with its fields", () => {
+    const on = (id: string, viewport: readonly [number, number], agent = ""): PaneOn => ({
+      device: deviceById(id) ?? CUSTOM_DEVICE,
+      viewport,
+      agent,
+    });
+    expect(deviceChoices([])).toBeUndefined();
+    const laptop = deviceChoices([on("laptop", [1280, 800])]) ?? [];
+    expect(laptop.map((c) => [c.id, c.label, c.hint, c.current === true, c.group])).toEqual([
+      ["laptop", "Laptop", "1280 × 800", true, "devices"],
+      ["desktop", "Desktop", "1440 × 900", false, "devices"],
+      ["tablet", "iPad Air 11″", "820 × 1180", false, "devices"],
+      ["phone", "iPhone 17 Pro", "402 × 874", false, "devices"],
+      ["custom", "Custom", "your size and agent", false, "custom"],
+    ]);
+    expect(laptop.at(-1)?.fields?.map((f) => [f.id, f.kind, f.value, f.min, f.max])).toEqual([
+      ["width", "number", 1280, 320, 8192],
+      ["height", "number", 800, 240, 8192],
+      ["agent", "text", "", undefined, undefined],
+    ]);
+    // a pane resized by its handles: still its device, Custom's fields hold its own viewport
+    expect(deviceChoices([on("laptop", [1400, 900])])?.at(-1)?.fields?.[0]?.value).toBe(1400);
+    // two panes on different devices: none is current (the bar says Mixed), and none turns
+    const mixed = deviceChoices([on("laptop", [1280, 800]), on("phone", [402, 874])]) ?? [];
+    expect(mixed.filter((c) => c.current === true)).toEqual([]);
+    expect(mixed.map((c) => c.id)).not.toContain("landscape");
+    // a phone turns, and says the other way once turned
+    expect(deviceChoices([on("phone", [402, 874])])?.find((c) => c.group === "turn")).toEqual({
+      id: "landscape",
+      label: "Turn to landscape",
+      group: "turn",
+    });
+    expect(deviceChoices([on("phone", [874, 402])])?.find((c) => c.group === "turn")).toEqual({
+      id: "portrait",
+      label: "Turn to portrait",
+      group: "turn",
+    });
+    // a pane on Custom: Custom current, its size in the hint, its agent in its field
+    const custom = deviceChoices([on("custom", [960, 640], "Test/1")])?.at(-1);
+    expect([custom?.current, custom?.hint, custom?.fields?.[2]?.value]).toEqual([
+      true,
+      "960 × 640",
+      "Test/1",
+    ]);
   });
 });

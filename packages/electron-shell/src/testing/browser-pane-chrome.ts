@@ -56,24 +56,73 @@ export function paneHeadControl(h: Pick<PaneHands, "js">, part: "back" | "reload
   })()`);
 }
 
-/** Select a device using the same configuration UI a person opens from the object menu. */
-export async function choosePaneDevice(
-  h: Pick<PaneHands, "js" | "until" | "pressSelector">,
-  device: string,
+/** The pane's Device pill (track OM, OM-1; DESIGN.md §8 "An act that is a choice"): on the selection bar, or the tool in
+ * hand. */
+const DEVICE_PILL = {
+  bar: '[data-selection-bar] [data-face-row="selection"] [data-act="act:device"]',
+  hand: '[data-selection-bar] [data-face-row="hand"] [data-tool="device"]',
+} as const;
+/** A row of the Device list, grown in the bar. */
+const deviceRow = (id: string): string =>
+  `[data-selection-bar][data-open] .vf-bar-list[data-choices="device"] [data-row="choice:${id}"]`;
+/** Custom's fields, open under its row. */
+const CUSTOM_FIELDS = "[data-selection-bar] [data-choice-fields]";
+const folded = `document.querySelector("[data-selection-bar]")?.hasAttribute("data-open") === false`;
+
+type DeviceHands = Pick<PaneHands, "js" | "until" | "pressSelector">;
+
+/** The Device list grown from its pill as a person grows it — the pill pressed — and its rows settled (they fade in
+ * nearest first), so a press lands on the row it aims at. */
+export async function openPaneDevices(
+  h: DeviceHands,
+  where: keyof typeof DEVICE_PILL = "bar",
 ): Promise<void> {
-  await h.pressSelector('[data-selection-bar] [data-act="act:device"]');
+  await h.pressSelector(DEVICE_PILL[where]);
   await h.until(
-    "device emulation settings",
+    "the device list",
     5000,
-    `document.querySelector('.vf-browser-device')?.open===true`,
+    `(() => { const r = document.querySelector(${JSON.stringify(deviceRow("custom"))}); return r !== null && getComputedStyle(r).opacity === "1"; })()`,
   );
+}
+
+/** Choose a device from the pane's Device list, as a person does (OM-1): the pill, then its row. */
+export async function choosePaneDevice(
+  h: DeviceHands,
+  device: string,
+  where: keyof typeof DEVICE_PILL = "bar",
+): Promise<void> {
+  await openPaneDevices(h, where);
+  await h.pressSelector(deviceRow(device));
+  await h.until("the device list folded", 5000, folded);
+}
+
+/** Custom's fields opened from the Device list: its row taken, the fields standing under it. */
+export async function openPaneCustom(
+  h: DeviceHands,
+  where: keyof typeof DEVICE_PILL = "bar",
+): Promise<void> {
+  await openPaneDevices(h, where);
+  await h.pressSelector(deviceRow("custom"));
+  await h.until(
+    "Custom's fields",
+    5000,
+    `document.querySelector(${JSON.stringify(`${CUSTOM_FIELDS} input[name="width"]`)}) !== null`,
+  );
+}
+
+/** Custom's fields typed: each value set and its input heard, as the page's own typing reaches React. */
+export async function typePaneCustom(
+  h: DeviceHands,
+  values: { readonly width: number; readonly height: number; readonly agent: string },
+): Promise<void> {
+  const typed = { width: String(values.width), height: String(values.height), agent: values.agent };
   await h.js(
-    `(()=>{const e=document.querySelector('.vf-browser-device [name="preset"]');e.value=${JSON.stringify(device)};e.dispatchEvent(new Event('change',{bubbles:true}));})()`,
+    `(() => { const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set; for (const [name, value] of Object.entries(${JSON.stringify(typed)})) { const e = document.querySelector(${JSON.stringify(CUSTOM_FIELDS)} + ' input[name="' + name + '"]'); set.call(e, value); e.dispatchEvent(new Event("input", { bubbles: true })); } })()`,
   );
-  await h.pressSelector('.vf-browser-device button[type="submit"]');
-  await h.until(
-    "device settings applied",
-    5000,
-    `document.querySelector('.vf-browser-device')?.open===false`,
-  );
+}
+
+/** Custom's Use pressed, the list folding. */
+export async function takePaneCustom(h: DeviceHands): Promise<void> {
+  await h.pressSelector(`${CUSTOM_FIELDS} [data-act="use"]`);
+  await h.until("Custom used", 5000, folded);
 }

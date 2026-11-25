@@ -1,7 +1,10 @@
+import type { ActChoice } from "@vibecook/ice";
 import { type ReactElement, useMemo, useState } from "react";
 import { type HeldAnchor, type HeldSlot, handCells } from "../field/desk/bar/bar-hand";
 import {
   barCells,
+  choiceEyebrow,
+  choiceGroups,
   menuEyebrow,
   menuGroups,
   type SelectionFacts,
@@ -17,7 +20,8 @@ import type { ObjectWords } from "../field/desk/desk-object-words";
 // lacks, and the bar grown — up under NOTE, down near the top, two with Clean up. What it replaces is only what a host
 // supplies: the desk's anchor (a box on the plate where the brackets would be) and the selection's facts. The
 // brackets themselves are the desk's GPU marks; the plate draws a stand-in outline so the bar has something to stand
-// over.
+// over. Track OM (2026-11-25; ICE I61, I62): the browser pane's bar — Device, a choice, and Mute — its device list grown,
+// Custom's fields open, two panes on different devices (Mixed), and an act its kind says is disabled beside a swatch.
 
 /** The clock's own act glyph (examples/plugins/desk-clock `SECONDS_GLYPH`): data, as a kind declares it. */
 const STOPWATCH = "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 13l3-3M10 2h4M12 2v3";
@@ -36,6 +40,54 @@ const CLOCK: ObjectWords = {
   label: "Clock",
 };
 const CLOCK_OFF: ObjectWords = { ...CLOCK, state: "plugin off", label: "Clock · plugin off" };
+const PANE: ObjectWords = {
+  type: "vibefield.browser-pane",
+  title: "Browser pane",
+  state: null,
+  label: "Browser pane",
+};
+
+/** The browser pane's own drawings (plugins/browser-pane `DEVICE_GLYPH`, `SOUND_ON`, `SOUND_OFF`): data, as its kind declares them. */
+const DEVICE_PATH = "M3 5 H16 V15 H3 Z M6 19 H12 M9 15 V19 M17 9 H21 V20 H14 V9 Z";
+const SOUND_PATH = "M3 9 H7 L12 5 V19 L7 15 H3 Z M16 8 C19 10 19 14 16 16 M18 5 C23 8 23 16 18 19";
+
+/** The pane's device choices as its kind says them (plugins/browser-pane `deviceChoices`), the laptop current. */
+const devices = (current: string | undefined): readonly ActChoice[] => [
+  ...[
+    ["laptop", "Laptop", "1280 × 800"],
+    ["desktop", "Desktop", "1440 × 900"],
+    ["tablet", "iPad Air 11″", "820 × 1180"],
+    ["phone", "iPhone 17 Pro", "402 × 874"],
+  ].map(([id = "", label = "", hint = ""]) => ({
+    id,
+    label,
+    hint,
+    group: "devices",
+    ...(id === current ? { current: true } : {}),
+  })),
+  {
+    id: "custom",
+    label: "Custom",
+    hint: "your size and agent",
+    group: "custom",
+    fields: [
+      { id: "width", label: "Width", kind: "number", value: 1280, min: 320, max: 8192, step: 1 },
+      { id: "height", label: "Height", kind: "number", value: 800, min: 240, max: 8192, step: 1 },
+      {
+        id: "agent",
+        label: "User agent",
+        kind: "text",
+        value: "",
+        maxLength: 512,
+        placeholder: "The browser's own",
+      },
+    ],
+  },
+];
+const paneActs = (current: string | undefined): SelectionFacts["menu"] => [
+  { id: "device", label: "Device", glyph: { path: DEVICE_PATH }, choices: devices(current) },
+  { id: "sound", label: "Mute", glyph: { path: SOUND_PATH } },
+];
 
 const facts = (over: Partial<SelectionFacts>): SelectionFacts => ({
   count: 1,
@@ -58,6 +110,11 @@ export const BAR_STATES = [
   "Grown down — near the top",
   "Grown — two, Clean up",
   "Grown — fitting neither way, the list scrolls",
+  "A choice — the pane's Device, and Mute",
+  "A choice's list — Device",
+  "Custom… — its fields open",
+  "Mixed — two panes on two devices",
+  "Disabled now, and a swatch",
 ] as const;
 export type BarState = (typeof BAR_STATES)[number];
 
@@ -73,6 +130,9 @@ interface Plate {
     readonly y1: number;
   };
   readonly open: boolean;
+  /** Grown on a choice's list (ICE I62): the act whose choices it lists, and a row whose fields stand open. */
+  readonly choosing?: string;
+  readonly expanded?: string;
 }
 
 const PLATES: Record<BarState, Plate> = {
@@ -145,6 +205,46 @@ const PLATES: Record<BarState, Plate> = {
     box: { x0: 200, y0: 240, x1: 360, y1: 290 },
     open: true,
   },
+  "A choice — the pane's Device, and Mute": {
+    facts: facts({ words: [PANE], menu: paneActs("laptop") }),
+    height: 400,
+    box: { x0: 120, y0: 200, x1: 440, y1: 380 },
+    open: false,
+  },
+  "A choice's list — Device": {
+    facts: facts({ words: [PANE], menu: paneActs("laptop") }),
+    height: 640,
+    box: { x0: 120, y0: 470, x1: 440, y1: 560 },
+    open: true,
+    choosing: "device",
+  },
+  "Custom… — its fields open": {
+    facts: facts({ words: [PANE], menu: paneActs("laptop") }),
+    height: 640,
+    box: { x0: 120, y0: 520, x1: 440, y1: 580 },
+    open: true,
+    choosing: "device",
+    expanded: "choice:custom",
+  },
+  "Mixed — two panes on two devices": {
+    facts: facts({ count: 2, words: [PANE], menu: paneActs(undefined) }),
+    height: 400,
+    box: { x0: 90, y0: 200, x1: 470, y1: 380 },
+    open: false,
+  },
+  "Disabled now, and a swatch": {
+    facts: facts({
+      words: [PANE],
+      menu: [
+        { id: "sound", label: "Mute", glyph: { path: SOUND_PATH }, enabled: false },
+        // a kind's own colour as its word (the simulator's finish); here the product palette's blue marker, no literal
+        { id: "finish", label: "Finish", swatch: inks(false).marker("blue") },
+      ],
+    }),
+    height: 400,
+    box: { x0: 160, y0: 220, x1: 400, y1: 360 },
+    open: false,
+  },
 };
 
 const WIDTH = 560;
@@ -154,8 +254,16 @@ export function SelectionBarPlate({ state }: { state: BarState }): ReactElement 
   const plate = PLATES[state];
   const [open, setOpen] = useState(plate.open);
   const cells = useMemo(() => barCells(plate.facts, "mac"), [plate]);
-  const groups = useMemo(() => menuGroups(plate.facts, "mac"), [plate]);
-  const eyebrow = useMemo(() => menuEyebrow(plate.facts), [plate]);
+  const chosen = plate.facts.menu.find((act) => act.id === plate.choosing);
+  const groups = useMemo(
+    () =>
+      chosen?.choices === undefined ? menuGroups(plate.facts, "mac") : choiceGroups(chosen.choices),
+    [plate, chosen],
+  );
+  const eyebrow = useMemo(
+    () => (chosen === undefined ? menuEyebrow(plate.facts) : choiceEyebrow(chosen.label)),
+    [plate, chosen],
+  );
   const anchor = useMemo<PlaceAnchor>(
     () => ({
       box: plate.box,
@@ -182,6 +290,10 @@ export function SelectionBarPlate({ state }: { state: BarState }): ReactElement 
         shown
         stepAside={false}
         open={open}
+        {...(open && plate.choosing !== undefined
+          ? { choosing: { of: "act" as const, id: plate.choosing } }
+          : {})}
+        {...(plate.expanded === undefined ? {} : { expandedRow: plate.expanded })}
         onOpenChange={setOpen}
         onCell={() => undefined}
         onRow={() => setOpen(false)}
