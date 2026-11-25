@@ -7835,6 +7835,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     is not a fact: places that cannot be read (the files service down) must not keep the room shut, and after it the
     room stands as it would have, the one bucket included. It holds the same way when History is opened during a
     reading begun elsewhere (the Setup Assistant's), with no card before it.
+    **When it lets go** (amended the same day, after a measured import in a development build): a project LISTED is
+    not yet a project DRAWN. The room draws its list a moment after fieldd hands it over (about half a second on a
+    busy renderer), and in that moment the room came up at 13% with the one bucket in it. So the hold stays until
+    the room's own list shows more than one project, or **1.5 seconds** have passed since the projects were listed,
+    whichever is first (a room with one project, or with its sections folded, takes the 1.5 seconds once).
     **Kept:** the develop, the press, the card, the sample's frost and its inertness, and the room's own hold where
     there is no glass (rosetta's own app).
   - **It lists your projects** (PJ-4, H1–H6 ruled (a) 2026-10-09; "we map, the room draws"): the

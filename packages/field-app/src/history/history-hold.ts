@@ -1,7 +1,15 @@
 import type { IndexPhase } from "@vibefield/contracts/agent-index";
 // the room's types only, which ride no chunk
 import type { ImportSign } from "@vibefield/rosetta-room";
-import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useImportSign } from "../frame/import-sign-door";
 import type { HistoryCatalogPort } from "./doors";
 
@@ -143,6 +151,51 @@ export function useHistoryHolding(catalog: HistoryCatalogPort): HistoryHolding |
   }, [holds]);
 
   return useMemo(() => (holds ? { phase } : null), [holds, phase]);
+}
+
+/** How long the hold may outlast the listing while the room draws it (DESIGN.md §8 "When it lets go"). */
+export const HISTORY_REVEAL_BOUND_MS = 1_500;
+
+/** Whether the room has drawn its projects: more than one row in its list. One row may be the room's own bucket
+ * for sessions no place holds, which is what the hold exists to keep out of sight. The class is the room's
+ * (rosetta-room `ProjectListItem`), read here as its sheet is styled in `history-room-glass.css`. */
+export function roomHasDrawnProjects(room: ParentNode): boolean {
+  return room.querySelectorAll(".ah-project-list-item").length > 1;
+}
+
+/**
+ * The hold, kept until the room has drawn what ended it. A project listed is not yet a project drawn: the room
+ * draws its list a moment after the catalog hands it over, and a view that let go at the listing showed the one
+ * bucket for that moment. So when the controller's hold ends, the view keeps its last one until the room's list
+ * shows its projects, or the bound has passed. `room` is the element the room is mounted in.
+ */
+export function useHeldUntilDrawn(
+  holding: HistoryHolding | null,
+  room: RefObject<HTMLElement | null>,
+): HistoryHolding | null {
+  // the last hold, kept through the commit in which the controller's ends (derived in render, so the view never
+  // commits once without it)
+  const [kept, setKept] = useState<HistoryHolding | null>(holding);
+  if (holding !== null && kept !== holding) setKept(holding);
+  useEffect(() => {
+    if (holding !== null || kept === null) return undefined;
+    const element = room.current;
+    if (element === null || roomHasDrawnProjects(element)) {
+      setKept(null);
+      return undefined;
+    }
+    const release = (): void => setKept(null);
+    const observer = new MutationObserver(() => {
+      if (roomHasDrawnProjects(element)) release();
+    });
+    observer.observe(element, { childList: true, subtree: true });
+    const timer = setTimeout(release, HISTORY_REVEAL_BOUND_MS);
+    return () => {
+      observer.disconnect();
+      clearTimeout(timer);
+    };
+  }, [holding, kept, room]);
+  return holding ?? kept;
 }
 
 /** The hold's words as they stand now: the import's sign is read here, by what draws them. */

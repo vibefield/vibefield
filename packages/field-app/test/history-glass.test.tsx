@@ -11,12 +11,18 @@ import type {
   ImportSign,
   RoomPorts,
 } from "@vibefield/rosetta-room";
-import { act, createElement, createRef, type ReactElement } from "react";
+import { act, createElement, createRef, type ReactElement, useRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { historyFixturePorts } from "../src/design-system/history-fixtures";
 import { publishImportSign } from "../src/frame/import-sign-door";
 import { HistoryRoomView } from "../src/history/HistoryRoomView";
+import {
+  HISTORY_REVEAL_BOUND_MS,
+  type HistoryHolding,
+  roomHasDrawnProjects,
+  useHeldUntilDrawn,
+} from "../src/history/history-hold";
 
 // HG-2 (track HG; HG-D1…HG-D6 ruled by James 2026-11-08; DESIGN.md §8 "History" — before its past, the room behind
 // glass; §5 History's sample; §6 History's motions): while the index waits for consent, the view stands the room
@@ -549,5 +555,85 @@ describe("History's sample in tokens.css (HG-2; DESIGN.md §5, projected)", () =
     // one value in both themes: the night block names no blur or saturation of its own
     expect(value(".dark", "--vf-history-sample-blur")).toBeUndefined();
     expect(value(".dark", "--vf-history-sample-saturate")).toBeUndefined();
+  });
+});
+
+// History QA (2026-11-24; DESIGN.md §8 "History", "When it lets go"): a project listed is not yet a project drawn.
+// Measured in a development build: the room came up at 13% with the one bucket in it, about half a second before
+// its list was drawn. The view keeps the hold until the room's own list shows its projects, or the bound passes.
+describe("the hold lets go when the room has drawn its projects (History QA, 2026-11-24)", () => {
+  const HOLD: HistoryHolding = { phase: "backfilling" };
+  let box: HTMLDivElement | null = null;
+  function Probe({ holding }: { holding: HistoryHolding | null }): ReactElement {
+    const room = useRef<HTMLDivElement | null>(null);
+    const held = useHeldUntilDrawn(holding, room);
+    return createElement("div", {
+      ref: (element: HTMLDivElement | null) => {
+        room.current = element;
+        box = element;
+      },
+      "data-held": held !== null ? "" : undefined,
+    });
+  }
+  const held = (): boolean => box?.hasAttribute("data-held") === true;
+  const row = (): HTMLElement => {
+    const item = document.createElement("div");
+    item.className = "ah-project-list-item";
+    return item;
+  };
+
+  it("reads the room's list: one row may be the bucket, more than one is the projects", () => {
+    const room = document.createElement("div");
+    expect(roomHasDrawnProjects(room)).toBe(false);
+    room.appendChild(row());
+    expect(roomHasDrawnProjects(room)).toBe(false);
+    room.appendChild(row());
+    expect(roomHasDrawnProjects(room)).toBe(true);
+  });
+
+  it("keeps the hold after the listing until the room's list is drawn", async () => {
+    await mount(createElement(Probe, { holding: HOLD }));
+    expect(held()).toBe(true);
+    // the bucket alone is drawn when the controller's hold ends: the view still holds
+    await act(async () => void box?.appendChild(row()));
+    await rerender(createElement(Probe, { holding: null }));
+    expect(held()).toBe(true);
+    await wait(60);
+    expect(held()).toBe(true);
+    // the room draws its projects: the hold lets go
+    await act(async () => void box?.appendChild(row()));
+    await until(() => (held() ? null : true), "the hold to let go once the list is drawn");
+  });
+
+  it("lets go at once when the list is already drawn, and never holds what was not held", async () => {
+    await mount(createElement(Probe, { holding: HOLD }));
+    await act(async () => {
+      box?.appendChild(row());
+      box?.appendChild(row());
+    });
+    await rerender(createElement(Probe, { holding: null }));
+    await until(() => (held() ? null : true), "the hold to let go");
+    await act(async () => root?.unmount());
+    root = null;
+    await mount(createElement(Probe, { holding: null }));
+    expect(held()).toBe(false);
+  });
+
+  it("lets go at the bound when the list never shows more than the bucket", async () => {
+    expect(HISTORY_REVEAL_BOUND_MS).toBe(1_500);
+    await mount(createElement(Probe, { holding: HOLD }));
+    await rerender(createElement(Probe, { holding: null }));
+    await wait(HISTORY_REVEAL_BOUND_MS - 400);
+    expect(held()).toBe(true);
+    await until(() => (held() ? null : true), "the hold to let go at the bound", 2_000);
+  });
+
+  it("holds again when a second reading begins before the first has let go", async () => {
+    await mount(createElement(Probe, { holding: HOLD }));
+    await rerender(createElement(Probe, { holding: null }));
+    expect(held()).toBe(true);
+    await rerender(createElement(Probe, { holding: { phase: "live" } }));
+    await wait(HISTORY_REVEAL_BOUND_MS + 200);
+    expect(held()).toBe(true);
   });
 });

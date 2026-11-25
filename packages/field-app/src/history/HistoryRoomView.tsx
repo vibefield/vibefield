@@ -23,7 +23,7 @@ import { COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
 import { type ViewKeys, viewKeysOf } from "../frame/views";
 // HG-2: History before its past — the view's own layer over the room while it waits for consent
 import { HistoryConsentMarker, HistoryGlass } from "./HistoryGlass";
-import type { HistoryHolding } from "./history-hold";
+import { type HistoryHolding, useHeldUntilDrawn } from "./history-hold";
 // HG-W1, HG-W4: the room's waits in VibeField's mark
 import { carriesOpening, historyWaitMark } from "./history-mark";
 // The room's own sheet enters HERE, with the room — one row, the package's own
@@ -209,10 +209,13 @@ export function HistoryRoomView({
     storage === undefined ? guardedLocalStorage() : storage,
   );
   const emptyPrompt = historyEmptyPrompt(keys ?? viewKeysOf(undefined));
+  // the hold lets go when the room has DRAWN its projects, not when they are listed (DESIGN.md §8 "When it lets go")
+  const roomBox = useRef<HTMLDivElement | null>(null);
+  const held = useHeldUntilDrawn(hold, roomBox);
   return (
     <div
       className="vf-history"
-      data-held={hold !== null ? "" : undefined}
+      data-held={held !== null ? "" : undefined}
       style={
         {
           "--vf-history-reserve": `${COVER_RESERVE_PX}px`,
@@ -220,7 +223,7 @@ export function HistoryRoomView({
         } as CSSProperties
       }
     >
-      <div className="vf-history-room">
+      <div className="vf-history-room" ref={roomBox}>
         <HistoryRoom
           ref={room}
           catalog={ports.catalog}
@@ -243,8 +246,8 @@ export function HistoryRoomView({
           importSign={importSign}
         />
       </div>
-      {(card !== null || hold !== null) && (
-        <HistoryGlass waiting={card !== null && waiting} hold={hold} shown={shown}>
+      {(card !== null || held !== null) && (
+        <HistoryGlass waiting={card !== null && waiting} hold={held} shown={shown}>
           {card}
         </HistoryGlass>
       )}
