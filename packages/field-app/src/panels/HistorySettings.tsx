@@ -26,8 +26,8 @@ import { SettingsSection } from "./settings-ui";
 // way to remove what was read: rosetta can drop no single agent's sessions
 // (RO-8).
 //
-// *2026-11-24 (HD-2; James: "just make them gray once toggled on so there is no
-// such thing as toggle off"):* A SWITCH THAT IS ON STAYS ON. It is drawn off
+// *2026-11-24 (HD-2, DECISIONS HD: once on, a switch is gray and there is no
+// turning it off):* A SWITCH THAT IS ON STAYS ON. It is drawn off
 // (§7 "Off": `disabled`, the kit's dimmed switch) and takes no press, and a
 // line under the rows says where the way back is. Stop reading, and its
 // question, are gone: turning one agent off kept everything it had read, which
