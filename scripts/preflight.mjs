@@ -305,47 +305,49 @@ const PIN_EXPECTATIONS = [
   // ring and running time, a session's usage carried by its host, and the Grok adapter's session title).
   // 0.4.14 since 2026-11-25 (v0.4.14 = bf77d643: a briefed Grok run's MCP servers stay on the session the native
   // viewer joins).
+  // 0.4.15 since 2026-11-25 (v0.4.15 = 629a447b: a long paste Claude Code wraps is confirmed, and a reply stopped
+  // with Esc ends its turn).
   // Anchored to the line's end like rosetta's.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-runtime":\s*0\.4\.14\s*$/m,
-    label: '"@vibefield/puppeteer-runtime": 0.4.14',
+    re: /"@vibefield\/puppeteer-runtime":\s*0\.4\.15\s*$/m,
+    label: '"@vibefield/puppeteer-runtime": 0.4.15',
     package: "@vibefield/puppeteer-runtime",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.4\.14\s*$/m,
-    label: '"@vibefield/puppeteer-builtin-providers": 0.4.14',
+    re: /"@vibefield\/puppeteer-builtin-providers":\s*0\.4\.15\s*$/m,
+    label: '"@vibefield/puppeteer-builtin-providers": 0.4.15',
     package: "@vibefield/puppeteer-builtin-providers",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-core":\s*0\.4\.14\s*$/m,
-    label: '"@vibefield/puppeteer-core": 0.4.14',
+    re: /"@vibefield\/puppeteer-core":\s*0\.4\.15\s*$/m,
+    label: '"@vibefield/puppeteer-core": 0.4.15',
     package: "@vibefield/puppeteer-core",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-record":\s*0\.4\.14\s*$/m,
-    label: '"@vibefield/puppeteer-record": 0.4.14',
+    re: /"@vibefield\/puppeteer-record":\s*0\.4\.15\s*$/m,
+    label: '"@vibefield/puppeteer-record": 0.4.15',
     package: "@vibefield/puppeteer-record",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-monitor":\s*0\.4\.14\s*$/m,
-    label: '"@vibefield/puppeteer-monitor": 0.4.14',
+    re: /"@vibefield\/puppeteer-monitor":\s*0\.4\.15\s*$/m,
+    label: '"@vibefield/puppeteer-monitor": 0.4.15',
     package: "@vibefield/puppeteer-monitor",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.4\.14\s*$/m,
-    label: '"@vibefield/puppeteer-view-sdk": 0.4.14',
+    re: /"@vibefield\/puppeteer-view-sdk":\s*0\.4\.15\s*$/m,
+    label: '"@vibefield/puppeteer-view-sdk": 0.4.15',
     package: "@vibefield/puppeteer-view-sdk",
   },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibefield\/puppeteer-views":\s*0\.4\.14\s*$/m,
-    label: '"@vibefield/puppeteer-views": 0.4.14',
+    re: /"@vibefield\/puppeteer-views":\s*0\.4\.15\s*$/m,
+    label: '"@vibefield/puppeteer-views": 0.4.15',
     package: "@vibefield/puppeteer-views",
   },
 ];

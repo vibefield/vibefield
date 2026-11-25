@@ -17,7 +17,9 @@ patchedDependencies:
   # EL8 2026-11-25: carried to 0.4.14 the same way. The published 0.4.13 and 0.4.14 of puppeteer-views differ in
   # their package.json's version lines alone (every `dist` file is byte for byte the same), so the patch itself is
   # unchanged.
-  "@vibefield/puppeteer-views@0.4.14": patches/@vibefield__puppeteer-views@0.4.14.patch
+  # EL8 2026-11-25 (0.4.15): carried the same way. The published 0.4.14 and 0.4.15 of puppeteer-views differ in
+  # their package.json's version lines alone, so the patch itself is unchanged.
+  "@vibefield/puppeteer-views@0.4.15": patches/@vibefield__puppeteer-views@0.4.15.patch
 allowBuilds:
   esbuild: true
   electron: true
@@ -473,16 +475,24 @@ overrides:
   # after the run stops). Every other published file is the same in 0.4.13 and 0.4.14 but core's
   # `PUPPETEER_VERSION` and each package.json's version lines. The seven rows change by version alone; the
   # re-bless moves the phone goldens by their stamp alone.
-  "@vibefield/puppeteer-runtime": 0.4.14
-  "@vibefield/puppeteer-builtin-providers": 0.4.14
-  "@vibefield/puppeteer-core": 0.4.14
-  "@vibefield/puppeteer-record": 0.4.14
-  "@vibefield/puppeteer-monitor": 0.4.14
+  # EL8 2026-11-25: 0.4.15 (v0.4.15 = 629a447b, the release #127, published 2026-11-25T15:33Z). Two changes, both in
+  # adapter-claude, both found by the Spark QA round of the same day on Claude Code 2.1.332. #124: a long paste
+  # that Claude Code wraps in `pasted_content` tags before `UserPromptSubmit` is confirmed (it read `uncertain`
+  # though it arrived), and its `turn:started` says the pasted words. #126: a reply stopped with Esc ends its turn
+  # at the `[Request interrupted by user]` row the transcript writes, as `turn:completed` with outcome
+  # `interrupted` (no Stop hook fires, so the run read `working` for good). Every other published file is the same
+  # in 0.4.14 and 0.4.15 but core's `PUPPETEER_VERSION` and each package.json's version lines. The seven rows
+  # change by version alone; the re-bless moves the phone goldens by their stamp alone.
+  "@vibefield/puppeteer-runtime": 0.4.15
+  "@vibefield/puppeteer-builtin-providers": 0.4.15
+  "@vibefield/puppeteer-core": 0.4.15
+  "@vibefield/puppeteer-record": 0.4.15
+  "@vibefield/puppeteer-monitor": 0.4.15
   # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
   # backend emits and the desk row mirrors; the renderer's adapter and replica
   # read it too). Types for fieldd; the replica's scheduler type for field-app.
-  "@vibefield/puppeteer-view-sdk": 0.4.14
-  "@vibefield/puppeteer-views": 0.4.14
+  "@vibefield/puppeteer-view-sdk": 0.4.15
+  "@vibefield/puppeteer-views": 0.4.15
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
   # mille, the file explorer engine behind the files service, entered as an
   # EXACT registry pin (EL8; ice's shape — packages ask for "*"). FS-1b
@@ -626,26 +636,28 @@ minimumReleaseAgeExclude:
   # install that rewrote the lock.
   # EL8 2026-11-25: reviewed 0.4.14 (published 2026-11-25T08:05Z); the 0.4.13 rows went after the install that
   # rewrote the lock.
-  - '@vibefield/puppeteer-adapter-acp@0.4.14'
-  - '@vibefield/puppeteer-adapter-antigravity@0.4.14'
-  - '@vibefield/puppeteer-adapter-claude@0.4.14'
-  - '@vibefield/puppeteer-adapter-codex@0.4.14'
-  - '@vibefield/puppeteer-adapter-copilot@0.4.14'
-  - '@vibefield/puppeteer-adapter-grok@0.4.14'
-  - '@vibefield/puppeteer-adapter-hermes@0.4.14'
-  - '@vibefield/puppeteer-adapter-kimi@0.4.14'
-  - '@vibefield/puppeteer-adapter-opencode@0.4.14'
-  - '@vibefield/puppeteer-adapter-pi@0.4.14'
-  - '@vibefield/puppeteer-builtin-providers@0.4.14'
-  - '@vibefield/puppeteer-core@0.4.14'
-  - '@vibefield/puppeteer-monitor@0.4.14'
-  - '@vibefield/puppeteer-native-observation@0.4.14'
-  - '@vibefield/puppeteer-react@0.4.14'
-  - '@vibefield/puppeteer-record@0.4.14'
-  - '@vibefield/puppeteer-runtime@0.4.14'
-  - '@vibefield/puppeteer-view-sdk@0.4.14'
-  - '@vibefield/puppeteer-views@0.4.14'
-  - '@vibefield/puppeteer-workspaces@0.4.14'
+  # EL8 2026-11-25: reviewed 0.4.15 (published 2026-11-25T15:33Z); the 0.4.14 rows went after the install that
+  # rewrote the lock.
+  - '@vibefield/puppeteer-adapter-acp@0.4.15'
+  - '@vibefield/puppeteer-adapter-antigravity@0.4.15'
+  - '@vibefield/puppeteer-adapter-claude@0.4.15'
+  - '@vibefield/puppeteer-adapter-codex@0.4.15'
+  - '@vibefield/puppeteer-adapter-copilot@0.4.15'
+  - '@vibefield/puppeteer-adapter-grok@0.4.15'
+  - '@vibefield/puppeteer-adapter-hermes@0.4.15'
+  - '@vibefield/puppeteer-adapter-kimi@0.4.15'
+  - '@vibefield/puppeteer-adapter-opencode@0.4.15'
+  - '@vibefield/puppeteer-adapter-pi@0.4.15'
+  - '@vibefield/puppeteer-builtin-providers@0.4.15'
+  - '@vibefield/puppeteer-core@0.4.15'
+  - '@vibefield/puppeteer-monitor@0.4.15'
+  - '@vibefield/puppeteer-native-observation@0.4.15'
+  - '@vibefield/puppeteer-react@0.4.15'
+  - '@vibefield/puppeteer-record@0.4.15'
+  - '@vibefield/puppeteer-runtime@0.4.15'
+  - '@vibefield/puppeteer-view-sdk@0.4.15'
+  - '@vibefield/puppeteer-views@0.4.15'
+  - '@vibefield/puppeteer-workspaces@0.4.15'
   # The truffle pins are exact and move together as one EL8 commit across the three places.
   # 0.7.19 → 0.7.22 (2026-10-25, with ghosttea 0.13.4): published 2026-10-25
   # 10:58Z, inside the release-age window on the day the pin moves. Sidecar
