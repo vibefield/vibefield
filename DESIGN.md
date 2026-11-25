@@ -5476,7 +5476,8 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     written (the anchor's `gesturing`, `editing`): out in 90ms, back 200ms after it ends, in over
     180ms (ICE's, as built). The card leaves from the selection while the bar stays (HN-3; Send
     to… stepped it aside while its chip flew). Deselected, it fades out over 120ms `ease-out` (R8).
-    Reduced motion (M6) halves every duration, fades only (R8).
+    Reduced motion (M6) halves every duration, fades only (R8). *Amended 2026-11-25 (ink-bar A):* while a note is
+    written the bar is away only until words on it are selected; then it comes to the words ("The words bar", below).
   - **A missing face** selected (below): the bar names the type where the kind's acts would stand.
 - **The bar grown — More, and right-click** (Chrome on the Mat §3.2; MC-D6 ruled through One Frame's
   lock; FC-D14 solid; R1, R4, R5, R6, R20, R23, R26; DK-D29, DK-D24; DK-11): **More grows the bar
@@ -5550,6 +5551,48 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
   list stands"):* a press that the desk's pick lands on another object **closes it at once** too, since that press is a
   change of selection. A press on the bare mat or on the selection itself folds it where it stands. A fold fades the
   list that stood open, its rows and eyebrow, and the pill's words fade with its fill.
+- **The words bar** (Editing the Ink, ink-bar A, ruled by James 2026-11-25; ICE I60): while a sheet is being written
+  and words on it are selected (a range in the one editor, not a caret), **the selection bar comes to the words**. It is
+  the same element (M1) with the words' row in place of the objects'; the brackets stay on the sheet.
+  - **Place** — centred over the selected words (the anchor's `words` box: the union of the selected letters' boxes on
+    screen, every line of a range that runs across lines), its foot **10** above them; flipped below at the safe top
+    **94** and kept **16** from each side, as over objects. While the press that selects is still down the bar waits; it
+    comes **200ms** after the release.
+  - **Size and material** — the selection bar's own: 40 tall, padding 4, gap 2, corners 20, the line's glass; cells 32.
+  - **Order** — **Pen** (a 44 × 32 cell: the words' pen as a 10 dot in its ink, then a ▾ 8 in secondary ink) ·
+    **Highlight** (44 × 32: the words' highlighter as a 14 × 6 stripe, hollow when there is none, then ▾) · rule ·
+    **Strike** (`strike`) · **Underline** (`underline`) · rule · **Clear** (`clear-marks`) · **More** (`ellipsis`). §13
+    gains the three new glyphs and `back`.
+  - **The rows** — Pen swaps the bar's row for the pens' (a row in the bar's place, never a menu): **Back** (`back`) ·
+    Felt · Ball · Fountain · Red, each a 32 cell holding a 12 dot of the pen's ink, the words' pen shown on when every
+    selected letter shares it. Choosing the sheet's own pen takes the letters' pen mark away (nothing is stored).
+    Highlight swaps in Back · Yellow · Green · Pink · Blue · Orange · None. A choice applies at once and the row stays, so a second
+    choice replaces the first; Back or Esc returns to the main row. The swap is a cross-fade, 120ms.
+  - **More** grows the bar into its menu as over objects ("The bar grown", below): Cut (⌘X) · Copy (⌘C) · Paste (⌘V) |
+    Select all (⌘A). **Right-click** on a written sheet grows the same menu at the words; at a caret alone it holds
+    Paste · Select all, at the caret.
+  - **Keys** — while a sheet is written the keys are the platform field's, so ⌘C copies the selected words, ⌘X cuts,
+    ⌘V pastes and ⌘A selects the sheet's words; Make a card's ⌘C stands down there, as it does today, and is the
+    bar's again while objects are selected. ⇧⌘X strikes, ⌘U underlines, ⇧⌘H highlights with the last highlighter
+    (yellow at first). Tooltips: "Strike  ⇧⌘X", "Underline  ⌘U", "Highlight  ⇧⌘H", "Cut  ⌘X", "Copy  ⌘C".
+  - **States** — the bar's (hover the ready fill, press 14% and 0.95, on the inverted solid, focus the 2px `--vf-select`
+    ring). Strike and Underline are TOGGLES, the words bar's only ones: shown on (`aria-pressed`) when every selected
+    letter carries the mark, and pressed again they take it away.
+  - **The wash** — the selected words lie under a wash of the pencil (ICE's `MARKS.inks.pencil`, the brackets' own
+    ink, `--vf-tutor`'s value) at 28%, square to each line and under the ink. It is a tint, never a glow, so §2.5's
+    "nothing else in VibeField glows blue" holds.
+  - **Marks** — what the bar does is drawn by the pen, as a letter is (The Desk's Pen, hand-moves A): a highlighter
+    stroked under the words left to right, a strike or an underline pulled through them, a new pen writing over the
+    letters along their own paths. Only when the mark is made — by you, an agent or a peer — never when a desk opens.
+    Reduced motion (M6) lays them at once.
+  - **The highlighters** — the desk's own five, the ones the desk calendar already marks its days with (ICE's
+    `HIGHLIGHTERS`, the calendar's `highlighters`): yellow `#F2D64F`, green `#B4D98A`, pink `#F0A9BF`, blue `#A3CDE8`,
+    orange `#F4B673` — the fluorescents a desk has, muted to sit on the paper under the mat's light — laid under the ink
+    by multiply at 62%, as a highlighter's dye is. One set for the whole desk: a sheet's words and a calendar's day are
+    marked by the same five, and a desk shows no highlighter the host never named.
+  - **Agents** — the bar's verbs reach an agent as three tools on every written object (ink-agent A): `read_writing`,
+    `edit_text` and `mark_text`; an agent names words by quoting them, and a quote found twice is refused with the
+    count. Each call is one step you can undo, drawn by the same pen.
 - **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
   readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
   `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element
