@@ -5554,10 +5554,26 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
 - **The words bar** (Editing the Ink, ink-bar A, ruled by James 2026-11-25; ICE I60): while a sheet is being written
   and words on it are selected (a range in the one editor, not a caret), **the selection bar comes to the words**. It is
   the same element (M1) with the words' row in place of the objects'; the brackets stay on the sheet.
-  - **Place** — centred over the selected words (the anchor's `words` box: the union of the selected letters' boxes on
-    screen, every line of a range that runs across lines), its foot **10** above them; flipped below at the safe top
-    **94** and kept **16** from each side, as over objects. While the press that selects is still down the bar waits; it
-    comes **200ms** after the release.
+  - **Place** — **off the writing, at the sheet's edge** (James, 2026-11-25, "Where the Words Bar Stands": B, "Always off
+    the writing"). VERTICALLY the bar stands where the objects' bar stands for that sheet: its foot **10** above the
+    sheet's brackets (the anchor's `box`, 6 out of the sheet), flipped to 10 below their foot when its top would cross the
+    safe top **94**, its top never lower than 660 — so it never stands over the sheet's writing. HORIZONTALLY it is centred
+    over the selected words (the anchor's `words` box: the union of the selected letters' boxes on screen, every line of a
+    range that runs across lines), kept **16** from each side, so it still comes to the words along the edge. On a turned
+    sheet the brackets' box is the box of their turned corners, as over objects: "above the top edge" is above the
+    sheet's highest corner. The bar's place is read from the sheet's box only while that sheet is the one selected
+    object; a sheet written without being selected (no brackets of its own) keeps the words' own box for both. While the
+    press that selects is still down the bar waits; it comes **200ms** after the release.
+    *(Amended 2026-11-25, IK at V7, on the ruling above: this said "centred over the selected words …, its foot 10 above
+    them; flipped below at the safe top 94". Seen on a running desk (the lane's QA desktop, 2026-11-25), a bar 10 above
+    the words stood over the neighbouring written line, took the pointer there (a double click on that line's word landed
+    on the bar), and its menus covered the words. Its cost, accepted with B: on a tall sheet the bar can stand several
+    lines from the words selected.)*
+    **The menus** grow from the bar as over objects ("The bar grown"): UPWARD from its row, away from a sheet it stands
+    above; DOWNWARD only when the list does not fit above it (a sheet near the top), the row heading it, and then it lies
+    over the sheet's top as the objects' menu lies over its object. A bar flipped BELOW the sheet grows its menu DOWNWARD
+    first, away from the sheet, and upward only when the list does not fit below. At a bare caret the bar that holds Paste ·
+    Select all stands by the same rule: at the sheet's edge, centred over the caret.
   - **Size and material** — the selection bar's own: 40 tall, padding 4, gap 2, corners 20, the line's glass; cells 32.
   - **Order** — **Pen** (a 44 × 32 cell: the words' pen as a 10 dot in its ink, then a ▾ 8 in secondary ink) ·
     **Highlight** (44 × 32: the words' highlighter as a 14 × 6 stripe, hollow when there is none, then ▾) · rule ·
@@ -5593,6 +5609,8 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     (shown on), standing over the caret's box and following it while the rows are open. No bar stands at a bare caret
     otherwise. The rows fold when the menu closes, the caret goes or words come (then the words' own bar). The bar comes
     after the words bar's own 200 ms, as it does after a press.)*
+    *(Corrected 2026-11-25, IK at V7: the caret's bar no longer stands "over the caret's box". It stands at the sheet's
+    edge, centred over the caret, by the words bar's Place above, so neither it nor its rows lie over the writing below.)*
   - **Keys** — while a sheet is written the keys are the platform field's, so ⌘C copies the selected words, ⌘X cuts,
     ⌘V pastes and ⌘A selects the sheet's words; Make a card's ⌘C stands down there, as it does today, and is the
     bar's again while objects are selected. ⇧⌘X strikes, ⌘U underlines, ⇧⌘H highlights with the last highlighter
