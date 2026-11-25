@@ -178,7 +178,7 @@ describe("the pad's words and their acts", () => {
       },
     });
     const kind = commentPadKind();
-    kind.theme?.(palette(1) as never);
+    kind.theme?.(palette(1) as never, "light");
     expect(swatches(INK_ACTS.pen)).toEqual(PENS.map((n, i) => [n, `rgb(${i} 0 1)`]));
     // the bound acts (the binding's own `menu`) read the same look, at each read
     const bound = commentPad.menu?.find((a) => a.id === INK_ACTS.highlight);
@@ -187,7 +187,7 @@ describe("the pad's words and their acts", () => {
       ["none", undefined],
     ]);
     // the theme changes: the colours follow
-    kind.theme?.(palette(2) as never);
+    kind.theme?.(palette(2) as never, "dark");
     expect(swatches(INK_ACTS.highlight)?.[0]).toEqual(["yellow", "rgb(0 0 2)"]);
   });
 
