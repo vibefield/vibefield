@@ -57,7 +57,9 @@ interface Census {
 /** fieldd's process makers, as read on 2026-11-10 at this commit. `bin.ts`'s "spawn passed" is the sealed floor's:
  * its options are native-bootstrap.ts's `SealedSpawnOptions`, whose `stdio` is written there (a pipe of its own).
  * item 537 (2026-11-18): `agent-typed-run.ts` reads the process table with `ps` under the agents' allow-list; its
- * `execFile` is Node's default, three pipes of the child's own (`execFile` takes no `stdio`; `ps` reads none). */
+ * `execFile` is Node's default, three pipes of the child's own (`execFile` takes no `stdio`; `ps` reads none).
+ * HD-3 (2026-11-24): `workspace/host/tree-size.ts` weighs a worktree's folder with `du` (through macOS's
+ * `taskpolicy`, which becomes it) in the files worker; its one `execFile` is Node's default, and neither reads fd 0. */
 const SITES: Record<string, Census> = {
   "agent-gateway.ts": { imports: ["execFile"], calls: ["execFile default"] },
   "agent-typed-run.ts": { imports: ["execFile"], calls: ["execFile default"] },
@@ -76,6 +78,7 @@ const SITES: Record<string, Census> = {
   "shell-absence.ts": { imports: ["spawn"], calls: ["spawn ignore"] },
   "transcripts/supervisor.ts": { imports: ["spawn"], calls: ["this.#spawn ignore"] },
   "workspace/host/git.ts": { imports: ["execFile"], calls: ["execFile default"] },
+  "workspace/host/tree-size.ts": { imports: ["execFile"], calls: ["execFile default"] },
   "workspace/supervisor.ts": { imports: ["spawn"], calls: ["this.#spawn ignore"] },
 };
 
