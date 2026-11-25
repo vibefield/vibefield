@@ -1369,6 +1369,13 @@ with its three addenda, `lanes/ob-build/ITEM-279-S2-PLAN.md` and `lanes/ob-build
   85defb042 2eb87202d: an agent never places a kind whose plugin requests a live page's, device's or app window's
   powers, and is
   told to ask the user; the window's live gate reads the same list of pairs).
+- Landed 11-25: **OB-D16, an object's sticker in its agent's Godview pane** (`20134db64`, with the mends `31aba07bd`
+  and `635f44c58`, M557; LANDED "OB-D16"): a kind an agent can hold declares its sticker
+  (`contributes.objects[].sticker`, its art in its own bundle, and `check` refuses one without), fieldd serves the
+  art (`plugins.stickers`), and Godview sticks it on the pane's bottom-right corner, saying its state by motion and
+  in words; a click goes to the desk. The click's look is the card door's until ICE's `ops.lookAt` (petition I58, in
+  ICE's draft PR #9) is released and pinned. `pnpm test` whole is green on it; the smokes, gate:landing and the test
+  Mac are NOT run.
 - Landed upstream: the desk tools for Codex and Grok, in puppeteer 0.4.2 (#85, squash `b8838194`, released as
   `325b6770`, #86); main pins 0.4.4, which carries them. Its first seven commits are OB's `ob/foundations`
   (`dd025774`). What VibeField does with them is CP-5b…5d (MT-7), CO's.

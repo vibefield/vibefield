@@ -68720,3 +68720,57 @@ a rosetta change; asked again with that said, he picked "Release now". The relea
   is replaced by hand is drawn STALE by a window started later: Vite serves a pre-bundled dependency as immutable
   under a hash of the lockfile and config, not of the package's files (his "why im not seeing the worktree
   changes", after a restart).
+
+## OB-D16 — the pane wears what its agent holds: each kind an agent can hold ships its sticker (M557)
+
+**2026-11-25 · on local main: `20134db64` and its two mends `31aba07bd` and `635f44c58`. NOT pushed.** James ruled
+on the page *Swapped Stickers* (its store, 2026-11-25 06:39:30Z to 06:39:36Z): the look A (cut to the object), the
+place B (stuck on the pane's bottom-right corner over its last rows), the state A (motion and words) and the touch A
+(pointing names it, a click goes to the desk). The first page's places in the pane's head were set aside on his word
+of 06:15:41Z, "the header area is too crowded, try design at right bottom area instead". Asked "build it and land it
+on local main once the checks pass?", he answered at 06:56:23Z: "yes, and things should be implemented properly, for
+example, there should be proper contract design in plugin and object kit so that an object intended for agent use
+needs to expose their sticker art for it properly, so each sticker art lives in their own plugin bundle. and for the
+click goes action, not sure if there is already api implemented in ICE that do this object look action, if not it
+should be implemented properly in ICE and cut release."
+
+- **The sticker is a kind's declaration** (`contributes.objects[].sticker`; contracts `stickers.ts`). It names its
+  art (an SVG under `./assets/` in the kind's own bundle), its cut, up to four paint slots filled from declared
+  props, and the prop that names one object. `vibefield-plugin check` refuses an agent half with no sticker
+  (`sticker-missing`), and art that is missing, too large, no SVG a sticker can be cut from, or unsafe. The same law
+  (`stickerArtProblems`) holds at fieldd's door, and the window draws the art only as an image on a data URL.
+- **fieldd's `plugins.stickers`** (`plugins.read`) serves each enabled plugin's sound art, read again after each
+  registry change. Refused art is left out whole and logged with its reasons. A pack already carries `assets/**`.
+- **The art:** browser-pane (its glass and page, named by its url), simulator (its phone in its own finish),
+  comment-pad (in its accent) and desk-clock, each in its bundle; the note, the print, the whiteboard and the mini
+  mat in field-app beside their window half.
+- **Godview:** `PaneToolStickers` sits on each pane's bottom-right corner. It shows three stickers, and past three
+  the first two and a count. It says each state by motion and in words: a band of light while the agent reads or
+  acts, a press each act, a lift and a ring while it needs you, one shiver when an act fails, grey under your hand,
+  a backing while it waits its turn, a peel when it lets go. It names an object when pointed at, and a click brings
+  Canvas forward with the object centred and selected. Godview's audit argues its two loops in by name (GT-D15.1).
+- **The mends.** `31aba07bd` came from rendering the shipped sheet, its tokens and its art offscreen at 1× to 8× in
+  both themes: a waiting sticker's clear backing let its dashes cross the sticker under it; the ring crossed its own
+  picture; the words stood on the pane's glass ground. `635f44c58` came from the land's whole `biome check .`: biome
+  holds every SVG file to a title (`noSvgWithoutTitle`), and the slice's own file-by-file check had passed a list
+  filtered by extension that left the eight art files out. Each now carries its kind's title.
+- **The click's look** is the desk card door's (a pan to the object's centre at the zoom you are at, then select)
+  until ICE's `ops.lookAt` (petition I58: a flight, a zoom the object reads at, an object inside a mini mat) is
+  released and pinned. Built on ICE's `ts/look-at` (three commits on `c004ddb3`) and pushed by VF-PM as
+  `feat/i58-look-at`, the draft PR 9; its docs commit waits on I57's merge, and its release on ICE's gate:landing
+  and a look on a running desk. The EL8 that follows swaps `lookAtObject` alone.
+- **Proof** (VF-PM's stage (a), in the lane, each stage alone after a lone load read under 20, nice 19,
+  `NX_PARALLEL=1`, vitest at 4, `CARGO_TARGET_DIR` the lane's own): field-native built once into the lane's target
+  (`cargo build -p field-native -j 4`, 2 m 34 s, at `31aba07bd`; no Rust moved after it). At the code tip
+  `635f44c58`: `pnpm typecheck` 28 projects, exit 0 (fresh at `31aba07bd`; at `635f44c58` 7 ran and 21 were that
+  run's cache); `biome check .` 4,179 files, no error, exit 0 (red at `31aba07bd` on the eight titles: the second
+  mend); `gen:check` exit 0; `bundle:assert` exit 0 (the shell and UI boundaries OK; initial 1017.8 KB raw, 271.7 KB
+  gz); `census:assert` no drift; `check:bundled-plugins` 3 of 3, its self-test 10 of 10; `pnpm test` 28 projects,
+  exit 0, in 10 m 37 s (26 ran; `sound` and `test-env` were this lane's cache): fieldd 345 files and 5,258 tests (5
+  and 34 skipped), field-app 401 and 5,884, electron-shell 219 and 3,343, contracts 83 and 2,395.
+- **Not run:** cargo fmt, clippy and `test:rust` (no Rust changed); any smoke; `gate:landing`; the test Mac (no V
+  row: it stood under its free-space floor). Nobody has seen the stickers in a running Godview.
+- **Shared with e8's `qa/godview-fixes`:** contracts `plugins.ts`, the browser-pane and simulator manifests,
+  plugin-cli's `refusals.ts` and `docs-generate.ts`, `tokens.css`, `GodviewDeck.tsx`, DESIGN.md and DECISIONS.md;
+  every edit additive. Whichever lands second re-bases.
+- **Owed ‹for James›:** his look at the stickers in a running Godview; the click's flight after I58's release.
