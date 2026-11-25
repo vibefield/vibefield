@@ -2,32 +2,18 @@ import { UiSwitch } from "@vibefield/design-kit/primitives";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import type { ReactElement } from "react";
 import { formatBytes } from "../format/bytes";
-import { firstReadingSentence, type HistoryAgentRow } from "./history-consent";
+import { firstReadingSentence, type HistoryAgentRow, lastUsedWords } from "./history-consent";
 import { HISTORY_WORDS } from "./history-words";
 import type { HistoryCensus } from "./use-history-census";
 import "./history-consent.css";
+
+export { lastUsedWords };
 
 // The History pane (track AO, AO-3; DESIGN.md §8 "The Setup Assistant's agent
 // chapter" — History). One face for every door that asks whose history is
 // read: the Setup Assistant's pane, History's own consent slot, Finish setting
 // up's sheet and Settings → History. Each host gives it its chrome; this is the
 // question itself — the rows, their switches, and the two sentences under them.
-
-/** "today", "yesterday", "in August", "in 2025": when an agent was last used,
- * as a person says it (the census knows the newest file, nothing finer). */
-export function lastUsedWords(newestModifiedMs: number, now: number): string {
-  const day = 86_400_000;
-  const startOfToday = new Date(now);
-  startOfToday.setHours(0, 0, 0, 0);
-  if (newestModifiedMs >= startOfToday.getTime()) return "today";
-  if (newestModifiedMs >= startOfToday.getTime() - day) return "yesterday";
-  if (newestModifiedMs >= startOfToday.getTime() - 6 * day) return "this week";
-  const then = new Date(newestModifiedMs);
-  if (then.getFullYear() === new Date(now).getFullYear()) {
-    return `in ${then.toLocaleString("en-US", { month: "long" })}`;
-  }
-  return `in ${then.getFullYear()}`;
-}
 
 export function HistoryConsentRows({
   rows,
@@ -36,6 +22,7 @@ export function HistoryConsentRows({
   now,
   disabled = false,
   locked,
+  notes,
 }: {
   rows: readonly HistoryAgentRow[];
   /** the kinds whose switch is on */
@@ -46,6 +33,9 @@ export function HistoryConsentRows({
   /** HD-2 — the kinds whose switch takes no press (Settings → History: one History already reads stays on); drawn
    * off (§7), as a disabled switch is. Absent where the pane only asks (nothing is read yet, every switch is free). */
   locked?: ReadonlySet<string> | undefined;
+  /** HD-7 — by kind, what a row says where its last use stands while its agent is brought in ("Importing · 188 MB
+   * read"); absent, or no entry: its last use */
+  notes?: ReadonlyMap<string, string> | undefined;
 }): ReactElement {
   return (
     <ul className="vf-history-consent-rows" aria-label="Past sessions on this Mac">
@@ -59,7 +49,8 @@ export function HistoryConsentRows({
             <span className="vf-history-consent-text">
               <span className="vf-history-consent-label">{row.label}</span>
               <span className="vf-history-consent-facts">
-                {formatBytes(row.bytes)} · last used {lastUsedWords(row.newestModifiedMs, now)} ·{" "}
+                {formatBytes(row.bytes)} ·{" "}
+                {notes?.get(row.kind) ?? `last used ${lastUsedWords(row.newestModifiedMs, now)}`} ·{" "}
                 <span className="vf-ui-mono">{row.root}</span>
               </span>
             </span>

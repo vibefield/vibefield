@@ -43,6 +43,22 @@ export function historyAgentRows(
     .sort((a, b) => order.indexOf(a.agent ?? "") - order.indexOf(b.agent ?? ""));
 }
 
+/** "today", "yesterday", "in August", "in 2025": when an agent was last used,
+ * as a person says it (the census knows the newest file, nothing finer). */
+export function lastUsedWords(newestModifiedMs: number, now: number): string {
+  const day = 86_400_000;
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  if (newestModifiedMs >= startOfToday.getTime()) return "today";
+  if (newestModifiedMs >= startOfToday.getTime() - day) return "yesterday";
+  if (newestModifiedMs >= startOfToday.getTime() - 6 * day) return "this week";
+  const then = new Date(newestModifiedMs);
+  if (then.getFullYear() === new Date(now).getFullYear()) {
+    return `in ${then.toLocaleString("en-US", { month: "long" })}`;
+  }
+  return `in ${then.getFullYear()}`;
+}
+
 /** Measured on James's M1 Max (2026-10-25): 13.3 GB listed in 4.1 s, read in 61 s
  * and searchable in 69 s on a quiet Mac — about 5.2 s a gigabyte to searchable. */
 const SECONDS_PER_GB = 69 / 13.3;

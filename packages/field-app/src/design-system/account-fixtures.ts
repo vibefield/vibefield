@@ -1,5 +1,6 @@
 import { AGENT_CATALOG, type IndexStatus } from "@vibefield/contracts";
 import type { AccountMe, AccountPerson } from "../account/use-account";
+import type { UnreadAgents } from "../frame/unread-agents";
 import type { HistoryAgentRow } from "../setup/history-consent";
 
 // Deterministic account data for the catalog's faces, Me menu and Settings
@@ -113,6 +114,15 @@ export const FIXTURE_NEW_AGENT_PAST = FIXTURE_HISTORY_CENSUS.rows[2] ?? null;
 export const FIXTURE_HISTORY_CONSENTED: ReadonlySet<string> = new Set(
   FIXTURE_HISTORY_CENSUS.rows.slice(0, 1).map((row) => row.kind),
 );
+
+/** HD-7 — the agents not in History as the import sign's panel lists them: the census's rows past the first, which
+ * is brought in. */
+export const FIXTURE_UNREAD_AGENTS: UnreadAgents = {
+  rows: FIXTURE_HISTORY_CENSUS.rows.slice(1),
+  bringing: null,
+  error: null,
+  onBringIn: () => undefined,
+};
 
 /** HD-1 — the index at rest as Settings → History reads it (`index.status`, this desktop's own window): the census's
  * first agent brought in, and rosetta's own measure of what it keeps (`storage`, `memory`). */

@@ -3,6 +3,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import type { FielddClient } from "@vibefield/fieldd-client";
+import { FielddProvider } from "@vibefield/fieldd-client/react";
 import type { ImportSign } from "@vibefield/rosetta-room";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -17,6 +19,9 @@ import {
   SIGN_OPEN_INTENT_MS,
 } from "../src/frame/HistoryImportSign";
 import { publishImportSign, readImportSign } from "../src/frame/import-sign-door";
+import { type UnreadAgents, unreadRowsOf } from "../src/frame/unread-agents";
+import { onHistoryRoomRefresh } from "../src/history/room-refresh";
+import type { HistoryAgentRow } from "../src/setup/history-consent";
 
 // History's import sign (track IM, IM-1; DESIGN.md §8 "History", the import's sign; §6 the arc). The room hands the
 // import out (R11, rosetta-room 0.1.9) and the frame draws it: the History circle one head gap left of search, the
@@ -147,6 +152,62 @@ afterEach(() => {
 });
 
 const render = (element: Parameters<Root["render"]>[0]): void => act(() => root.render(element));
+
+/** The catalog as `agent.catalog` answers it: the contracts' own fixture. */
+const CATALOG = JSON.parse(
+  readFileSync(join(HERE, "../../contracts/fixtures/agent-catalog.valid.json"), "utf8"),
+) as unknown;
+
+const NOW = new Date("2026-11-24T12:00:00").getTime();
+
+/** One census row as `index.discoveries` answers it. */
+const found = (kind: string, bytes: number, consented: boolean) => ({
+  kind,
+  agent: kind,
+  dataRoot: `~/.${kind}`,
+  installed: true,
+  files: 40,
+  bytes,
+  newestModifiedMs: NOW - 86_400_000,
+  consented,
+});
+
+/** A fieldd whose census is `census()` at each asking, and which records every request. */
+function fieldd(census: () => unknown): FielddClient & { calls: [string, unknown][] } {
+  const calls: [string, unknown][] = [];
+  return {
+    calls,
+    status: "ready",
+    onStatusChange: () => () => undefined,
+    subscribe: vi.fn(async () => {
+      throw new Error("no subscriptions here");
+    }),
+    request: vi.fn(async (method: string, params: unknown) => {
+      calls.push([method, params]);
+      if (method === "agent.catalog") return CATALOG;
+      if (method === "index.discoveries") return census();
+      return { ok: true };
+    }),
+  } as unknown as FielddClient & { calls: [string, unknown][] };
+}
+
+const NO_CENSUS = fieldd(() => ({ discoveries: [] }));
+
+/** The frame's circle, with the fieldd it asks its census of. */
+const circle = (
+  props: Parameters<typeof HistoryImportSign>[0],
+  client: FielddClient = NO_CENSUS,
+): Parameters<Root["render"]>[0] =>
+  createElement(FielddProvider, { client }, createElement(HistoryImportSign, props));
+
+/** Let asked doors answer and what they said be drawn. */
+async function answered(): Promise<void> {
+  for (let turn = 0; turn < 6; turn += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  }
+}
 const button = (): HTMLButtonElement => {
   const found = host.querySelector<HTMLButtonElement>(".vf-history-sign-button");
   if (found === null) throw new Error("no circle");
@@ -156,12 +217,12 @@ const panel = (): HTMLElement | null => host.querySelector(".vf-history-sign-pan
 
 describe("IM-1 — the History circle", () => {
   it("stands only under History, and only once the room has handed it a sign", () => {
-    render(createElement(HistoryImportSign, { shown: true }));
+    render(circle({ shown: true }));
     expect(host.querySelector(".vf-history-sign")).toBeNull();
     act(() => publishImportSign(READING));
     expect(readImportSign()).toBe(READING);
     expect(button().getAttribute("aria-label")).toBe(READING.label);
-    render(createElement(HistoryImportSign, { shown: false }));
+    render(circle({ shown: false }));
     expect(host.querySelector(".vf-history-sign")).toBeNull();
   });
 
@@ -352,11 +413,190 @@ describe("HD-1 — the panel's one act: History Settings…", () => {
 
   it("the frame's circle passes its door through", () => {
     const onOpenSettings = vi.fn();
-    render(createElement(HistoryImportSign, { shown: true, onOpenSettings }));
+    render(circle({ shown: true, onOpenSettings }));
     act(() => publishImportSign(REST));
     act(() => button().click());
     act(() => row()?.click());
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("HD-7 — the agents not in History, in the panel", () => {
+  const CODEX: HistoryAgentRow = {
+    kind: "codex",
+    agent: "codex",
+    label: "Codex",
+    root: "~/.codex",
+    bytes: 304_000_000,
+    newestModifiedMs: NOW - 86_400_000,
+    consented: false,
+  };
+  const unreadOf = (over: Partial<UnreadAgents> = {}): UnreadAgents => ({
+    rows: [CODEX],
+    bringing: null,
+    error: null,
+    onBringIn: () => undefined,
+    ...over,
+  });
+  const rows = (): HTMLElement[] => [
+    ...(panel()?.querySelectorAll<HTMLElement>('.vf-history-sign-agent[data-state="unread"]') ??
+      []),
+  ];
+  const toggle = (row: HTMLElement | undefined): HTMLButtonElement => {
+    const found = row?.querySelector<HTMLButtonElement>('[role="switch"]');
+    if (found === null || found === undefined) throw new Error("no switch");
+    return found;
+  };
+
+  it("under the agents History reads: a quiet line, then each one with the census's facts and a switch", () => {
+    const onBringIn = vi.fn();
+    render(
+      createElement(HistoryImportSignView, {
+        sign: REST,
+        initiallyOpen: true,
+        unread: unreadOf({ onBringIn }),
+        now: NOW,
+      }),
+    );
+    const section = panel()?.querySelector('[aria-label="Agents"]');
+    const group = section?.querySelector(".vf-history-sign-unread");
+    expect(group?.querySelector(".vf-history-sign-unread-word")?.textContent).toBe(
+      "Not in History",
+    );
+    // it stands after the agents History reads, inside their section
+    expect(section?.lastElementChild).toBe(group);
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]?.textContent).toContain("Codex");
+    expect(rows()[0]?.textContent).toContain("304 MB · last used yesterday");
+    const control = toggle(rows()[0]);
+    expect(control.getAttribute("aria-label")).toBe("Bring in Codex's history");
+    expect(control.getAttribute("aria-checked")).toBe("false");
+    act(() => control.click());
+    expect(onBringIn).toHaveBeenCalledWith("codex");
+    // the section's count is of the agents History reads, and no others
+    expect(section?.querySelector("h3")?.textContent).toContain(`of ${REST.agents.length} done`);
+  });
+
+  it("a switch being taken stands on and gray, and no other can be pressed meanwhile", () => {
+    const onBringIn = vi.fn();
+    const pi: HistoryAgentRow = { ...CODEX, kind: "pi", agent: "pi", label: "Pi" };
+    render(
+      createElement(HistoryImportSignView, {
+        sign: REST,
+        initiallyOpen: true,
+        unread: unreadOf({ rows: [CODEX, pi], bringing: "codex", onBringIn }),
+        now: NOW,
+      }),
+    );
+    const [first, second] = rows();
+    expect(toggle(first).getAttribute("aria-checked")).toBe("true");
+    expect(toggle(first).disabled).toBe(true);
+    expect(toggle(second).getAttribute("aria-checked")).toBe("false");
+    expect(toggle(second).disabled).toBe(true);
+    act(() => toggle(second).click());
+    expect(onBringIn).not.toHaveBeenCalled();
+  });
+
+  it("a refusal is said under the rows; with none unread, or no census, the group is not drawn", () => {
+    render(
+      createElement(HistoryImportSignView, {
+        sign: REST,
+        initiallyOpen: true,
+        unread: unreadOf({ error: "the agent index is restarting" }),
+        now: NOW,
+      }),
+    );
+    expect(panel()?.querySelector('.vf-history-sign-unread [role="alert"]')?.textContent).toBe(
+      "the agent index is restarting",
+    );
+    render(
+      createElement(HistoryImportSignView, {
+        key: "none",
+        sign: REST,
+        initiallyOpen: true,
+        unread: unreadOf({ rows: [] }),
+        now: NOW,
+      }),
+    );
+    expect(panel()?.querySelector(".vf-history-sign-unread")).toBeNull();
+    render(
+      createElement(HistoryImportSignView, { key: "absent", sign: REST, initiallyOpen: true }),
+    );
+    expect(panel()?.querySelector(".vf-history-sign-unread")).toBeNull();
+  });
+
+  it("with no agent History reads, the section still stands for the ones it could", () => {
+    render(
+      createElement(HistoryImportSignView, {
+        sign: { ...REST, agents: [] },
+        initiallyOpen: true,
+        unread: unreadOf(),
+        now: NOW,
+      }),
+    );
+    expect(panel()?.querySelector('[aria-label="Agents"]')).not.toBeNull();
+    expect(rows()).toHaveLength(1);
+  });
+
+  it("the rows are the census's, less what is consented and what the sign already names", () => {
+    const claude = { ...CODEX, kind: "claude-code", agent: "claude", label: "Claude Code" };
+    const consented = { ...CODEX, kind: "pi", agent: "pi", label: "Pi", consented: true };
+    expect(unreadRowsOf([claude, CODEX, consented], new Set(["claude-code"]))).toEqual([CODEX]);
+  });
+
+  it("the frame's circle asks the census when its panel opens, and a switch enrolls the complete set", async () => {
+    // Claude Code is read; Codex has past sessions and is not. After the switch the census says both.
+    let census = {
+      discoveries: [found("claude-code", 900_000_000, true), found("codex", 304_000_000, false)],
+    };
+    const client = fieldd(() => census);
+    const refreshed = vi.fn();
+    const undo = onHistoryRoomRefresh(refreshed);
+    render(circle({ shown: true }, client));
+    act(() =>
+      publishImportSign({ ...REST, agents: REST.agents.filter((agent) => agent.kind !== "codex") }),
+    );
+    // closed: nothing is asked
+    await answered();
+    expect(client.calls.filter(([method]) => method === "index.discoveries")).toHaveLength(0);
+    act(() => button().click());
+    await answered();
+    expect(rows()).toHaveLength(1);
+    expect(rows()[0]?.textContent).toContain("Codex");
+    // the switch: the complete set (what is consented, plus this one), then the room is asked to look again
+    act(() => toggle(rows()[0]).click());
+    census = {
+      discoveries: [found("claude-code", 900_000_000, true), found("codex", 304_000_000, true)],
+    };
+    await answered();
+    const enroll = client.calls.find(([method]) => method === "index.enroll");
+    expect(enroll?.[1]).toEqual({ kinds: ["claude-code", "codex"] });
+    expect(refreshed).toHaveBeenCalledTimes(1);
+    // the census now says Codex is read: its row leaves the group
+    expect(rows()).toHaveLength(0);
+    undo();
+  });
+
+  it("a refused switch comes back off and says why", async () => {
+    const client = fieldd(() => ({ discoveries: [found("codex", 304_000_000, false)] }));
+    (client.request as ReturnType<typeof vi.fn>).mockImplementation(async (method: string) => {
+      if (method === "agent.catalog") return CATALOG;
+      if (method === "index.discoveries")
+        return { discoveries: [found("codex", 304_000_000, false)] };
+      if (method === "index.enroll") throw new Error("the agent index is failed");
+      return { ok: true };
+    });
+    render(circle({ shown: true }, client));
+    act(() => publishImportSign({ ...REST, agents: [] }));
+    act(() => button().click());
+    await answered();
+    act(() => toggle(rows()[0]).click());
+    await answered();
+    expect(toggle(rows()[0]).getAttribute("aria-checked")).toBe("false");
+    expect(toggle(rows()[0]).disabled).toBe(false);
+    expect(panel()?.querySelector('.vf-history-sign-unread [role="alert"]')?.textContent).toBe(
+      "the agent index is failed",
+    );
   });
 });
 

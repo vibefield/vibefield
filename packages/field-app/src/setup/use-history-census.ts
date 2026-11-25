@@ -24,6 +24,29 @@ export type HistoryCensus =
       readonly consented: readonly string[];
     };
 
+/** One reading of the census: the rows worth asking about and every kind the record consents to. Throws while
+ * the index does not answer. */
+export async function readHistoryCensus(
+  client: FielddClient,
+): Promise<Extract<HistoryCensus, { kind: "found" }>> {
+  const [catalog, found] = await Promise.all([
+    client.request("agent.catalog", {}).then((answer) => AgentCatalogResult.parse(answer)),
+    client.request("index.discoveries", {}).then((answer) => IndexDiscoveriesResult.parse(answer)),
+  ]);
+  // The rows that offer history (a declined row never leaves fieldd), in
+  // the catalog's order: `index.enroll` refuses any other kind.
+  const labels = new Map(
+    catalog.catalog
+      .filter((row) => row.offers.history === true)
+      .map((row) => [row.id, row.label] as const),
+  );
+  return {
+    kind: "found",
+    rows: historyAgentRows(found.discoveries, labels),
+    consented: found.discoveries.filter((row) => row.consented).map((row) => row.kind),
+  };
+}
+
 const ASK_EVERY_MS = 1_000;
 const GIVE_UP_MS = 15_000;
 
@@ -41,25 +64,9 @@ export function useHistoryCensus(client: FielddClient): {
     const startedAt = Date.now();
     const ask = async (): Promise<void> => {
       try {
-        const [catalog, found] = await Promise.all([
-          client.request("agent.catalog", {}).then((answer) => AgentCatalogResult.parse(answer)),
-          client
-            .request("index.discoveries", {})
-            .then((answer) => IndexDiscoveriesResult.parse(answer)),
-        ]);
+        const found = await readHistoryCensus(client);
         if (stopped) return;
-        // The rows that offer history (a declined row never leaves fieldd), in
-        // the catalog's order: `index.enroll` refuses any other kind.
-        const labels = new Map(
-          catalog.catalog
-            .filter((row) => row.offers.history === true)
-            .map((row) => [row.id, row.label] as const),
-        );
-        setCensus({
-          kind: "found",
-          rows: historyAgentRows(found.discoveries, labels),
-          consented: found.discoveries.filter((row) => row.consented).map((row) => row.kind),
-        });
+        setCensus(found);
       } catch {
         if (stopped) return;
         if (Date.now() - startedAt >= GIVE_UP_MS) {

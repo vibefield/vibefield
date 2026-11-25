@@ -28,7 +28,30 @@ export type HistoryKept =
       readonly waiting: boolean;
       /** the profiles' own folders the record enrols: read by construction, so read again after a clear */
       readonly profiles: number;
+      /** HD-7 — the agents History is reading for the first time now, by kind, each in the page's words
+       * ("Importing · 188 MB read"); empty when none is */
+      readonly importing: ReadonlyMap<string, string>;
     };
+
+/** HD-7 — what a row says while its agent is read for the first time: "Importing · 188 MB read", and "Importing…"
+ * before its first figure. An import is on only while the index says so (its phase is not live): a runtime's board
+ * row outlives its import, so its state alone says nothing afterwards. */
+export function importingOf(status: IndexStatus): ReadonlyMap<string, string> {
+  const importing = new Map<string, string>();
+  if (status.phase === "live" || status.phase === "awaiting_consent") return importing;
+  for (const runtime of status.runtimes) {
+    const backfill = runtime.backfill;
+    if (runtime.provenance !== "discovered" || backfill === undefined || backfill.state === "done")
+      continue;
+    importing.set(
+      runtime.kind,
+      backfill.bytesStreamed > 0
+        ? `Importing · ${formatBytes(backfill.bytesStreamed)} read`
+        : "Importing…",
+    );
+  }
+  return importing;
+}
 
 /** The drawing's facts from one status. */
 export function historyKeptOf(status: IndexStatus): HistoryKept {
@@ -36,9 +59,10 @@ export function historyKeptOf(status: IndexStatus): HistoryKept {
   if (status.rosettad.phase !== "ready") return { kind: "unavailable" };
   const waiting = status.phase === "awaiting_consent";
   const profiles = status.enrollment.runtimes.length;
+  const importing = importingOf(status);
   const storage = status.storage;
   if (storage === undefined)
-    return { kind: "read", space: null, keptBytes: null, waiting, profiles };
+    return { kind: "read", space: null, keptBytes: null, waiting, profiles, importing };
   const inMemory = status.memory?.archiveBytes ?? null;
   const size = (bytes: number): string => (bytes > 0 ? formatBytes(bytes) : "—");
   const keptBytes =
@@ -48,6 +72,7 @@ export function historyKeptOf(status: IndexStatus): HistoryKept {
     keptBytes,
     waiting,
     profiles,
+    importing,
     space: {
       read: null,
       kept: formatBytes(keptBytes),
@@ -98,6 +123,8 @@ export function historyKeptOf(status: IndexStatus): HistoryKept {
 
 /** The page asks again this often while it is open: rosettad's own walk is paced behind its last (never under 5 s). */
 const ASK_EVERY_MS = 5_000;
+/** HD-7 — and this often while an agent imports: what it has read moves every second. */
+const ASK_IMPORTING_MS = 2_000;
 const ASK_TIMEOUT_MS = 5_000;
 
 /** The index's space while the page is open, and a way to ask now (after a clear, after a switch). */
@@ -108,6 +135,7 @@ export function useHistoryKept(client: FielddClient): { kept: HistoryKept; askNo
     let stopped = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let asking = false;
+    let every = ASK_EVERY_MS;
     const once = async (): Promise<void> => {
       if (asking) return;
       asking = true;
@@ -115,14 +143,20 @@ export function useHistoryKept(client: FielddClient): { kept: HistoryKept; askNo
         const status = IndexStatus.parse(
           await client.request("index.status", {}, { timeoutMs: ASK_TIMEOUT_MS }),
         );
-        if (!stopped) setKept(historyKeptOf(status));
+        const next = historyKeptOf(status);
+        // an index that is still looking for an agent just turned on is about to import, too
+        every =
+          (next.kind === "read" && next.importing.size > 0) || status.phase === "discovering"
+            ? ASK_IMPORTING_MS
+            : ASK_EVERY_MS;
+        if (!stopped) setKept(next);
       } catch {
         if (!stopped) setKept({ kind: "unavailable" });
       } finally {
         asking = false;
         if (!stopped) {
           clearTimeout(timer);
-          timer = setTimeout(() => void once(), ASK_EVERY_MS);
+          timer = setTimeout(() => void once(), every);
         }
       }
     };

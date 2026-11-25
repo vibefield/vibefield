@@ -1,5 +1,7 @@
 import { catalogIdForKind } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { UiSwitch } from "@vibefield/design-kit/primitives";
+import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 // the room's types only, which ride no chunk: this module is the frame's
 import type {
@@ -17,9 +19,12 @@ import {
   useRef,
   useState,
 } from "react";
+import { formatBytes } from "../format/bytes";
+import { lastUsedWords } from "../setup/history-consent";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "./frame-geometry";
 import { HistorySpace } from "./HistorySpace";
 import { useImportSign } from "./import-sign-door";
+import { type UnreadAgents, useUnreadAgents } from "./unread-agents";
 import "./menu.css";
 import "./history-import-sign.css";
 
@@ -30,6 +35,10 @@ import "./history-import-sign.css";
 // on this Mac. The words are rosetta's room's (R11, handed out through `import-sign-door.ts`); VibeField draws them.
 // Its one act is the frame's own (track HD, HD-1): History Settings…, a menu row at the panel's end, which opens
 // Settings → History, where what is kept can be cleared and whose sessions are read is chosen.
+//
+// *2026-11-24 (HD-7):* under the agents History reads, the panel lists THE AGENTS NOT IN HISTORY: the ones with past
+// sessions on this Mac that it does not read, each with the census's facts and a switch that brings it in, as its
+// switch in Settings → History does. They are fieldd's census, not the room's sign (`unread-agents.ts`).
 
 /** The pointer rests this long on the circle before the panel opens. */
 export const SIGN_OPEN_INTENT_MS = 120;
@@ -48,8 +57,27 @@ export function HistoryImportSign({
   onOpenSettings?: (() => void) | undefined;
 }): ReactElement | null {
   const sign = useImportSign();
+  const client = useFielddClient();
+  const [open, setOpen] = useState(false);
+  const standing = shown && sign !== null;
+  // HD-7 — the census is asked while the panel is open, and again when the agents the sign names change
+  const unread = useUnreadAgents(
+    client,
+    standing && open,
+    sign === null ? "" : sign.agents.map((agent) => agent.kind).join("\n"),
+  );
+  useEffect(() => {
+    if (!standing) setOpen(false);
+  }, [standing]);
   if (!shown || sign === null) return null;
-  return <HistoryImportSignView sign={sign} onOpenSettings={onOpenSettings} />;
+  return (
+    <HistoryImportSignView
+      sign={sign}
+      onOpenSettings={onOpenSettings}
+      unread={unread}
+      onOpenChange={setOpen}
+    />
+  );
 }
 
 /** The circle and its panel over one sign: what the frame draws, and what the catalog mounts. */
@@ -57,14 +85,26 @@ export function HistoryImportSignView({
   sign,
   initiallyOpen = false,
   onOpenSettings,
+  unread,
+  onOpenChange,
+  now = Date.now(),
 }: {
   sign: ImportSign;
   /** the panel stands open from the first frame (a still, a catalog plate) */
   initiallyOpen?: boolean;
   /** HD-1 — the panel's History Settings… row; absent: the panel draws no act */
   onOpenSettings?: (() => void) | undefined;
+  /** HD-7 — the agents not in History, each with its switch; absent: the panel lists none */
+  unread?: UnreadAgents | undefined;
+  /** HD-7 — the panel opened or closed (its host asks the census while it is open) */
+  onOpenChange?: ((open: boolean) => void) | undefined;
+  /** the clock "last used" is said against */
+  now?: number;
 }): ReactElement {
   const [open, setOpen] = useState(initiallyOpen);
+  useEffect(() => {
+    onOpenChange?.(open);
+  }, [open, onOpenChange]);
   // a press holds it open until a second press, Escape or a press outside
   const [held, setHeld] = useState(initiallyOpen);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -162,6 +202,8 @@ export function HistoryImportSignView({
         >
           <SignPanel
             sign={sign}
+            unread={unread}
+            now={now}
             onOpenSettings={
               onOpenSettings === undefined
                 ? undefined
@@ -252,10 +294,15 @@ function SignFace({ sign }: { sign: ImportSign }): ReactElement {
 function SignPanel({
   sign,
   onOpenSettings,
+  unread,
+  now,
 }: {
   sign: ImportSign;
   onOpenSettings?: (() => void) | undefined;
+  unread?: UnreadAgents | undefined;
+  now: number;
 }): ReactElement {
+  const unreadRows = unread !== undefined && unread.rows.length > 0;
   return (
     <>
       <header className="vf-history-sign-head">
@@ -272,7 +319,9 @@ function SignPanel({
           ))}
         </ol>
       </section>
-      {sign.agents.length > 0 && <AgentRows sign={sign} />}
+      {(sign.agents.length > 0 || unreadRows) && (
+        <AgentRows sign={sign} unread={unread} now={now} />
+      )}
       {sign.space !== null && <SpaceRows space={sign.space} />}
       {onOpenSettings !== undefined && (
         <div className="vf-history-sign-acts">
@@ -379,7 +428,15 @@ function AgentMarkOf({ kind }: { kind: string }): ReactElement {
   );
 }
 
-function AgentRows({ sign }: { sign: ImportSign }): ReactElement {
+function AgentRows({
+  sign,
+  unread,
+  now,
+}: {
+  sign: ImportSign;
+  unread?: UnreadAgents | undefined;
+  now: number;
+}): ReactElement {
   const working = sign.agents.filter((agent) => agent.state !== "done" && agent.state !== "live");
   const done = sign.agents.filter((agent) => agent.state === "done" || agent.state === "live");
   const resting = sign.tone === "rest";
@@ -413,7 +470,42 @@ function AgentRows({ sign }: { sign: ImportSign }): ReactElement {
               ))}
             </div>
           )}
+      {unread !== undefined && unread.rows.length > 0 && <UnreadRows unread={unread} now={now} />}
     </section>
+  );
+}
+
+/** HD-7 — the agents with past sessions on this Mac that History does not read: each with the census's facts and
+ * the switch that brings it in. A switch that is on stays on, so a row here is only ever off, or being taken. */
+function UnreadRows({ unread, now }: { unread: UnreadAgents; now: number }): ReactElement {
+  return (
+    <div className="vf-history-sign-unread">
+      <span className="vf-history-sign-unread-word">Not in History</span>
+      {unread.rows.map((row) => (
+        <div key={row.kind} className="vf-history-sign-agent" data-state="unread">
+          <AgentMarkOf kind={row.kind} />
+          <span className="vf-history-sign-agent-name">{row.label}</span>
+          <UiSwitch
+            label={`Bring in ${row.label}'s history`}
+            checked={unread.bringing === row.kind}
+            disabled={unread.bringing !== null}
+            onChange={(on) => {
+              if (on) unread.onBringIn(row.kind);
+            }}
+          />
+          <span className="vf-history-sign-agent-under">
+            <span className="vf-history-sign-line">
+              {formatBytes(row.bytes)} · last used {lastUsedWords(row.newestModifiedMs, now)}
+            </span>
+          </span>
+        </div>
+      ))}
+      {unread.error !== null && (
+        <p className="vf-history-sign-unread-error" role="alert">
+          {unread.error}
+        </p>
+      )}
+    </div>
   );
 }
 

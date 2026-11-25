@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import type { IndexStatus } from "@vibefield/contracts/agent-index";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -8,7 +9,7 @@ import {
   FIXTURE_HISTORY_KEPT_STATUS,
 } from "../src/design-system/account-fixtures";
 import { HistoryKeptView, HistorySettingsView } from "../src/panels/HistorySettings";
-import { type HistoryKept, historyKeptOf } from "../src/panels/history-space";
+import { type HistoryKept, historyKeptOf, importingOf } from "../src/panels/history-space";
 import type { HistoryCensus } from "../src/setup/use-history-census";
 
 // AO-3 (AO-D9; DESIGN.md §8 "Settings → History") — the home of whose history is
@@ -130,6 +131,75 @@ describe("Settings → History (AO-D9)", () => {
   });
 });
 
+// HD-7 (DESIGN.md §8 "Settings → History", While an agent is brought in) — a second agent turned on here showed
+// nothing: its row now says the import where its last use stood, from the status the page already reads.
+describe("Settings → History, while an agent is brought in (HD-7)", () => {
+  const [first, second] = FIXTURE_HISTORY_CENSUS.rows;
+  if (first === undefined || second === undefined) throw new Error("the census fixture lists two");
+  const runtime = (kind: string, state: string, bytesStreamed: number) => ({
+    runtimeId: `rt_${kind}`,
+    kind,
+    provenance: "discovered" as const,
+    watched: true,
+    backfill: {
+      state,
+      filesTotal: 535,
+      bytesTotal: 0,
+      filesSkimmed: 535,
+      bytesStreamed,
+      sessionsTotal: 248,
+      records: 0,
+    },
+  });
+  const status = (
+    phase: IndexStatus["phase"],
+    runtimes: ReturnType<typeof runtime>[],
+  ): IndexStatus => ({
+    ...FIXTURE_HISTORY_KEPT_STATUS,
+    phase,
+    runtimes,
+  });
+
+  it("says what the agent being read has read, and nothing of one that stands", () => {
+    const reading = importingOf(
+      status("backfilling", [
+        runtime(first.kind, "done", 0),
+        runtime(second.kind, "streaming", 188_000_000),
+      ]),
+    );
+    expect([...reading]).toEqual([[second.kind, "Importing · 188 MB read"]]);
+    // found and not yet read: no figure to say
+    expect(
+      importingOf(status("backfilling", [runtime(second.kind, "queued", 0)])).get(second.kind),
+    ).toBe("Importing…");
+    // a board row outlives its import: once the index is live nothing imports, whatever a row says
+    expect(importingOf(status("live", [runtime(second.kind, "queued", 0)])).size).toBe(0);
+    expect(importingOf(status("awaiting_consent", [])).size).toBe(0);
+    const kept = historyKeptOf(
+      status("backfilling", [runtime(second.kind, "streaming", 188_000_000)]),
+    );
+    expect(kept.kind === "read" && kept.importing.get(second.kind)).toBe("Importing · 188 MB read");
+  });
+
+  it("the row says the import where its last use stood, and its facts again once it is in", async () => {
+    const facts = (): string[] =>
+      Array.from(container?.querySelectorAll(".vf-history-consent-facts") ?? []).map(
+        (line) => line.textContent ?? "",
+      );
+    await mount({
+      consented: new Set([first.kind, second.kind]),
+      importing: new Map([[second.kind, "Importing · 188 MB read"]]),
+    });
+    expect(facts()[0]).toContain("last used");
+    expect(facts()[1]).toContain("Importing · 188 MB read");
+    expect(facts()[1]).not.toContain("last used");
+    await act(async () => root?.unmount());
+    container?.remove();
+    await mount({ consented: new Set([first.kind, second.kind]), importing: new Map() });
+    expect(facts()[1]).toContain("last used");
+  });
+});
+
 // HD-1 (DESIGN.md §8 "Settings → History", On this Mac) — what History keeps on this Mac, drawn as the import
 // sign's panel draws it, and Clear History…: asked once, saying what goes and what stays.
 
@@ -206,6 +276,7 @@ describe("Settings → History, On this Mac (HD-1)", () => {
       keptBytes: null,
       waiting: false,
       profiles: 0,
+      importing: new Map(),
     });
     expect(
       historyKeptOf({
@@ -298,7 +369,14 @@ describe("Settings → History, On this Mac (HD-1)", () => {
       [{ kind: "looking" }, "Measuring…", true],
       [{ kind: "unavailable" }, "History isn't available right now.", true],
       [
-        { kind: "read", space: null, keptBytes: null, waiting: false, profiles: 0 },
+        {
+          kind: "read",
+          space: null,
+          keptBytes: null,
+          waiting: false,
+          profiles: 0,
+          importing: new Map(),
+        },
         "History hasn't measured its space yet.",
         false,
       ],

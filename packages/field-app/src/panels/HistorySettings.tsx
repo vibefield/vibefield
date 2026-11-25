@@ -32,6 +32,10 @@ import { SettingsSection } from "./settings-ui";
 // line under the rows says where the way back is. Stop reading, and its
 // question, are gone: turning one agent off kept everything it had read, which
 // a switch does not say. Clear History… turns them all off.
+//
+// *2026-11-24 (HD-7):* WHILE AN AGENT IS BROUGHT IN its row says so where its
+// last use stood ("Importing · 188 MB read"), from the same `index.status` the
+// page reads its space from, asked every 2 s while one imports.
 
 const NO_ROWS: readonly HistoryAgentRow[] = [];
 
@@ -41,6 +45,7 @@ export function HistorySettingsView({
   busy,
   error,
   now,
+  importing,
   onTurnOn,
   onLookAgain,
 }: {
@@ -50,6 +55,8 @@ export function HistorySettingsView({
   busy: boolean;
   error: string | null;
   now: number;
+  /** HD-7 — by kind, what the row of an agent being read for the first time says ("Importing · 188 MB read") */
+  importing?: ReadonlyMap<string, string> | undefined;
   /** a switch that was off was pressed */
   onTurnOn: (kind: string) => void;
   onLookAgain: () => void;
@@ -80,6 +87,7 @@ export function HistorySettingsView({
             rows={rows}
             chosen={consented}
             locked={consented}
+            notes={importing}
             now={now}
             disabled={busy}
             onToggle={(kind, on) => {
@@ -250,6 +258,7 @@ export function HistorySettings(): ReactElement {
         busy={busy || clearing}
         error={error}
         now={Date.now()}
+        importing={kept.kind === "read" ? kept.importing : undefined}
         onTurnOn={(kind) => apply(new Set([...consented, kind]))}
         onLookAgain={lookAgain}
       />

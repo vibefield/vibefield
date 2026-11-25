@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 import { HistoryOpenFailedState, HistoryOpeningState } from "../../history/HistoryOpening";
+import { FIXTURE_UNREAD_AGENTS } from "../account-fixtures";
 import { Section, Specimen } from "../catalog-ui";
 import { HistoryImportSignPlate } from "../HistoryImportSignPreview";
 import { HistoryPreview, HistoryResumePlate } from "../HistoryPreview";
@@ -97,6 +98,13 @@ export function HistorySection(): ReactElement {
         bleed
       >
         <HistoryImportSignPlate moment="rest" />
+      </Specimen>
+      <Specimen
+        title="An agent not in History — under the ones it reads, with the census's facts and the switch that brings it in (HD-7)"
+        source="frame/HistoryImportSign.tsx"
+        bleed
+      >
+        <HistoryImportSignPlate moment="rest" unread={FIXTURE_UNREAD_AGENTS} />
       </Specimen>
 
       <Specimen

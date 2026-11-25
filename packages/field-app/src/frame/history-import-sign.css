@@ -357,6 +357,53 @@
   font-size: 12px;
 }
 
+/* The agents not in History (HD-7): under the ones it reads, one quiet line and a row each. A row takes the section's
+   grid; its name is in the secondary ink (it is not read), its facts ride under it clear of the switch's column. */
+.vf-history-sign-unread {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vf-history-sign-agent + .vf-history-sign-unread,
+.vf-history-sign-done + .vf-history-sign-unread {
+  padding-top: 8px;
+  border-top: 1px solid var(--vf-hairline);
+}
+
+.vf-history-sign-unread-word {
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+}
+
+.vf-history-sign-agent[data-state="unread"] {
+  row-gap: 0;
+}
+
+.vf-history-sign-agent[data-state="unread"] .vf-history-sign-agent-name {
+  color: var(--vf-text-secondary);
+}
+
+.vf-history-sign-agent[data-state="unread"] .vf-ui-switch {
+  grid-row: 1 / 3;
+  grid-column: 3;
+}
+
+.vf-history-sign-agent[data-state="unread"] .vf-history-sign-agent-under {
+  padding-bottom: 0;
+  grid-column: 2;
+}
+
+.vf-history-sign-agent[data-state="unread"] .vf-history-sign-line {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-history-sign-unread-error {
+  margin: 0;
+  color: var(--vf-ink-attention);
+  font-size: 12px;
+}
+
 /* The panel's one act (HD-1): History Settings…, a menu row (`menu.css`: 36 tall, 13/500, a 24 column for its mark)
    under a hairline at the panel's end, set out so its hot fill reaches 6 from the panel's edge as a menu's rows do. */
 .vf-history-sign-acts {
