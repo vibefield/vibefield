@@ -372,6 +372,10 @@
     "workspace",
     "roots.json"
   ],
+  "WORKSPACE_TREE_SIZES_FILE": [
+    "workspace",
+    "tree-sizes.json"
+  ],
   "PROJECTS_DIR": [
     "projects"
   ],

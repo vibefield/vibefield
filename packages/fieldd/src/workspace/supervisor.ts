@@ -120,6 +120,10 @@ export interface FilesHostSupervisorOptions {
    * `buildMadeView` op), handed to every generation in its `init`; absent,
    * the worker refuses every view */
   made?: MadeViewRoots;
+  /** HD-3 — where the worker keeps what worktree folders hold on disk
+   * (LAYOUT.WORKSPACE_TREE_SIZES_FILE under the data root), handed to every
+   * generation in its `init`; absent, figures live only as long as a worker */
+  treeSizesFile?: string;
   /** test seam */
   spawnProcess?: typeof nodeSpawn;
   /** test seam; production uses FILES_HOST_SUPERVISION */
@@ -551,10 +555,12 @@ export class FilesHostSupervisor extends EventEmitter {
     generation.startupTimer.unref?.();
     // the first word: the addon's explicit path (L1), and the made view's roots (DR-1b)
     const made = this.#opts.made;
+    const treeSizesFile = this.#opts.treeSizesFile;
     this.#send(generation, {
       t: "init",
       milleNative: launch.milleNative,
       ...(made !== undefined ? { made } : {}),
+      ...(treeSizesFile !== undefined ? { treeSizesFile } : {}),
     });
   }
 

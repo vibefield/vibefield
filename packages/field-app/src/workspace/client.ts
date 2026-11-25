@@ -8,7 +8,9 @@ import {
   WorkspaceRoot,
   WorkspaceRootsResult,
   WorkspaceSearchResult,
+  WorkspaceWorktreeSizesResult,
 } from "@vibefield/contracts";
+import { WORKSPACE_TREE_SIZE } from "@vibefield/contracts/registries";
 import type { WorktreeHostEvent, WorktreeHostPort } from "@vibefield/rosetta-room";
 import { COPY_DOOR_WORDS } from "../frame/cards/cards-words";
 import { writeClipboard } from "../frame/cards/copy-door";
@@ -338,6 +340,20 @@ export class WorkspaceClient implements WorktreeHostPort {
       await this.#door.request("workspace.gitFacts", {
         rootId: resolved.root.rootId,
         path: resolved.path,
+      }),
+    );
+  }
+  /** HD-3 — what these worktrees of the open root's repository hold on disk (the room's
+   * `WorktreeHostPort.worktreeSizes`, from the release after rosetta 0.1.10): the room names the
+   * rows it is showing, and each ask replaces what the last one queued. A stale root answers nothing. */
+  async worktreeSizes(root: string, generation: number, paths: readonly string[]) {
+    const resolved = this.#resolved;
+    if (!resolved || root !== this.#root || generation !== this.#generation) return [];
+    return WorkspaceWorktreeSizesResult.parse(
+      await this.#door.request("workspace.worktreeSizes", {
+        rootId: resolved.root.rootId,
+        path: resolved.path,
+        paths: paths.slice(0, WORKSPACE_TREE_SIZE.ASK_MAX),
       }),
     );
   }

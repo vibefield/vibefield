@@ -4268,6 +4268,9 @@ export async function bootstrap(
     api.register("workspace.list", (ctx, params) => workspace.doors.list(ctx, params));
     api.register("workspace.search", (ctx, params) => workspace.doors.search(ctx, params));
     api.register("workspace.gitFacts", (ctx, params) => workspace.doors.gitFacts(ctx, params));
+    api.register("workspace.worktreeSizes", (ctx, params) =>
+      workspace.doors.worktreeSizes(ctx, params),
+    );
     api.registerSubscription("workspace.subscribe", (ctx, params, emit) =>
       workspace.doors.subscribe(ctx, params, emit),
     );

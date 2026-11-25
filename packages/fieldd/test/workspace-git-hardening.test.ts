@@ -149,7 +149,7 @@ describe("the environment git sees is an allowlist", { timeout: 30_000 }, () => 
       }).trim(),
     ).toBe("elsewhere");
     withEnv({ GIT_DIR: join(other, ".git"), GIT_WORK_TREE: other });
-    const facts = await gitFacts(asked, { read: () => undefined });
+    const facts = await gitFacts(asked, { peek: () => undefined, ask: () => [] });
     expect(facts?.branch).toBe("main");
     expect(facts?.worktrees.map(({ path, branch, gone }) => ({ path, branch, gone }))).toEqual([
       { path: asked, branch: "main", gone: false },

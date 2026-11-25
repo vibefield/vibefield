@@ -98,6 +98,12 @@ async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
     case "gitFacts":
       await assertRootOf(ask);
       return await gitModule.gitFacts(String(ask["rootPath"]));
+    case "worktreeSizes":
+      await assertRootOf(ask);
+      return await gitModule.worktreeSizes(
+        String(ask["rootPath"]),
+        Array.isArray(ask["paths"]) ? ask["paths"].filter((p) => typeof p === "string") : [],
+      );
     case "placeFacts":
       // PJ-1 — the index's folders, not the exports: fieldd names them (one
       // trust domain, FS-D7), and the reads are git's hardened read-only ones
@@ -137,12 +143,17 @@ async function shutdown(code: number): Promise<never> {
   process.exit(code);
 }
 
-async function init(milleNative: string, made: MadeViewRoots | null): Promise<void> {
+async function init(
+  milleNative: string,
+  made: MadeViewRoots | null,
+  treeSizesFile: string | null,
+): Promise<void> {
   try {
     setMilleNativePath(milleNative);
     madeRoots = made;
     const engine: EngineModule = await import("./engine");
     gitModule = await import("./git");
+    gitModule.openTreeSizes(treeSizesFile);
     placesModule = await import("./places");
     madeViewModule = await import("./made-view");
     failureClass = engine.WorkerFailure;
@@ -186,7 +197,11 @@ export function runFilesHost(): void {
     if (message.t === "init") {
       if (initialized || typeof message.milleNative !== "string") return;
       initialized = true;
-      void init(message.milleNative, readMadeViewRoots(message.made));
+      void init(
+        message.milleNative,
+        readMadeViewRoots(message.made),
+        typeof message.treeSizesFile === "string" ? message.treeSizesFile : null,
+      );
       return;
     }
     if (message.t === "shutdown") {

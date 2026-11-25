@@ -19,6 +19,8 @@ import {
   type WorkspaceSearchResult,
   WorkspaceSearchResult as WorkspaceSearchResultSchema,
   WorkspaceSubscribeParams,
+  WorkspaceWorktreeSizesParams,
+  WorkspaceWorktreeSizesResult,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { CatalogTable, createRowsPump, type RowsEmit } from "../catalog-rows";
@@ -363,6 +365,31 @@ export class WorkspaceDoors {
       return this.#supervisor.request("gitFacts", { rootPath });
     });
     const answer = WorkspaceGitFactsResult.safeParse(value);
+    if (!answer.success)
+      throw new RpcCallError("INTERNAL", "the files service answered out of contract", false);
+    return answer.data;
+  }
+
+  /** HD-3 — `workspace.worktreeSizes {rootId, path?, paths}`: what the named worktrees of the root's
+   * repository hold on disk. The worker walks only a path git lists for that root; asking is what
+   * queues a walk, and each ask replaces the queue (`WORKSPACE_TREE_SIZE`). */
+  async worktreeSizes(ctx: CallerContext, params: unknown): Promise<WorkspaceWorktreeSizesResult> {
+    admitWorkspaceReader(ctx, "workspace.worktreeSizes");
+    const parsed = WorkspaceWorktreeSizesParams.safeParse(params ?? {});
+    if (!parsed.success)
+      throw new RpcCallError("PRECONDITION_FAILED", "expected { rootId, path?, paths }", false);
+    const root = this.#root(parsed.data.rootId);
+    const path = parseRelativePath(parsed.data.path);
+    if (!path.ok)
+      throw new RpcCallError("PRECONDITION_FAILED", relativePathRefusal(path.reason), false);
+    const value = await this.#ask(root, async () => {
+      const rootPath = await this.#supervisor.request("resolve", {
+        rootPath: root.path,
+        segments: path.segments,
+      });
+      return this.#supervisor.request("worktreeSizes", { rootPath, paths: parsed.data.paths });
+    });
+    const answer = WorkspaceWorktreeSizesResult.safeParse(value);
     if (!answer.success)
       throw new RpcCallError("INTERNAL", "the files service answered out of contract", false);
     return answer.data;

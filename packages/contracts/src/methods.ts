@@ -2720,6 +2720,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+  // HD-3 — what the named worktrees of a root's repository hold on disk. A read
+  // that may queue a background walk on THIS desktop (`WORKSPACE_TREE_SIZE`); a
+  // folder on another desktop is never opened in the room, so it is not forwarded.
+  defineMethod({
+    surface: "product",
+    method: "workspace.worktreeSizes",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
   // L3 — the roots as rows (DS-L3) at the stream floor: a place appears when
   // an agent is spawned in a new folder, a root flips `missing`, a volume
   // mounts. Roots move a few times a day; a phone's radio has no use for more.

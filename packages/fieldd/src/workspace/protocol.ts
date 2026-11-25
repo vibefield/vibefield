@@ -6,6 +6,7 @@ import type {
   WorkspaceEntryKind,
   WorkspaceGitFacts,
   WorkspaceListKinds,
+  WorkspaceWorktreeSize,
 } from "@vibefield/contracts";
 
 // FS-1a — fieldd ↔ its files worker: the CONTROL pipe, Node's child IPC
@@ -18,7 +19,7 @@ import type {
 // worker's own listener. This pipe is fieldd's and the worker's only: one
 // trust domain (FS-D7). FS-1b registers secret attach credentials on this pipe.
 //
-//   fieldd → worker  {t: "init", milleNative, made?}     first, once
+//   fieldd → worker  {t: "init", milleNative, made?, treeSizesFile?}     first, once
 //                    {t: "req", id, op, args}              a door's question
 //                    {t: "shutdown"}                       dispose the engines, exit 0
 //   worker → fieldd  {t: "ready", pid, port, mille}             the READY line of a generation
@@ -119,6 +120,12 @@ export interface GitFactsArgs {
 }
 
 export type GitFactsValue = WorkspaceGitFacts | null;
+
+/** HD-3 — the worktrees of `rootPath`'s repository whose folders are asked about. */
+export interface WorktreeSizesArgs {
+  rootPath: string;
+  paths: string[];
+}
 
 // PJ-1 (`thinking-project-places.md` §9; `build-pj.md` L3, L6) — PLACE FACTS:
 // what the worker reads of a batch of folders the index names, for fieldd's
@@ -367,6 +374,7 @@ export interface WorkerOps {
   list: { args: ListArgs; value: ListValue };
   search: { args: SearchArgs; value: SearchValue };
   gitFacts: { args: GitFactsArgs; value: GitFactsValue };
+  worktreeSizes: { args: WorktreeSizesArgs; value: WorkspaceWorktreeSize[] };
   placeFacts: { args: PlaceFactsArgs; value: PlaceFactsValue };
   stats: { args: Record<string, never>; value: StatsValue };
   buildMadeView: { args: BuildMadeViewArgs; value: BuildMadeViewValue };
@@ -378,6 +386,7 @@ export const WORKER_OPS: readonly WorkerOp[] = [
   "list",
   "search",
   "gitFacts",
+  "worktreeSizes",
   "placeFacts",
   "stats",
   "resolve",
@@ -389,7 +398,7 @@ export const WORKER_OPS: readonly WorkerOp[] = [
 ];
 
 export type ToWorker =
-  | { t: "init"; milleNative: string; made?: MadeViewRoots }
+  | { t: "init"; milleNative: string; made?: MadeViewRoots; treeSizesFile?: string }
   | { t: "req"; id: number; op: WorkerOp; args: unknown }
   | { t: "shutdown" };
 

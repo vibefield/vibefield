@@ -437,6 +437,7 @@ pub mod layout {
     pub const CUSTODY_KEY: &[&str] = &["shell", "custody.key"];
     pub const WORKSPACE_DIR: &[&str] = &["workspace"];
     pub const WORKSPACE_ROOTS_FILE: &[&str] = &["workspace", "roots.json"];
+    pub const WORKSPACE_TREE_SIZES_FILE: &[&str] = &["workspace", "tree-sizes.json"];
     pub const PROJECTS_DIR: &[&str] = &["projects"];
     pub const PROJECT_KEYS_FILE: &[&str] = &["projects", "keys.json"];
     pub const DRIVE_DIR: &[&str] = &["drive"];
@@ -541,6 +542,7 @@ pub mod layout {
         ("CUSTODY_KEY", CUSTODY_KEY),
         ("WORKSPACE_DIR", WORKSPACE_DIR),
         ("WORKSPACE_ROOTS_FILE", WORKSPACE_ROOTS_FILE),
+        ("WORKSPACE_TREE_SIZES_FILE", WORKSPACE_TREE_SIZES_FILE),
         ("PROJECTS_DIR", PROJECTS_DIR),
         ("PROJECT_KEYS_FILE", PROJECT_KEYS_FILE),
         ("DRIVE_DIR", DRIVE_DIR),

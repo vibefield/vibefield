@@ -1,5 +1,10 @@
 import { z } from "zod";
-import { WORKSPACE_GIT, WORKSPACE_LIMITS, WORKSPACE_SERVICE } from "./registries";
+import {
+  WORKSPACE_GIT,
+  WORKSPACE_LIMITS,
+  WORKSPACE_SERVICE,
+  WORKSPACE_TREE_SIZE,
+} from "./registries";
 import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 
 // FS-1a — the files service's DOOR TIER (`thinking-files-service.md` §3,
@@ -246,9 +251,12 @@ export const WorkspaceGitWorktree = z
     gone: z.boolean().optional(),
     /** HD-3 — what the folder holds on disk, as a walk of it counts
      * (`WORKSPACE_TREE_SIZE`): ignored files and build output included, a
-     * linked folder not followed, and not what removing it would free. null:
-     * being measured, and a later answer carries it. Absent: this desktop does
-     * not measure, or the folder could not be read. */
+     * linked folder not followed, and not what removing it would free. In
+     * `workspace.gitFacts` it is the figure this desktop already holds (kept
+     * on disk), and absent otherwise: git facts never start a walk. In
+     * `workspace.worktreeSizes` null says a walk is queued or running, and
+     * absent that no figure can be had (this desktop does not measure, the
+     * folder could not be read, or git does not list it for the root). */
     sizeBytes: z.number().int().nonnegative().nullable().optional(),
   })
   .passthrough();
@@ -270,6 +278,34 @@ export type WorkspaceGitFacts = z.infer<typeof WorkspaceGitFacts>;
 /** null: the root is not in a git repository. */
 export const WorkspaceGitFactsResult = WorkspaceGitFacts.nullable();
 export type WorkspaceGitFactsResult = z.infer<typeof WorkspaceGitFactsResult>;
+
+/** HD-3 — `workspace.worktreeSizes {rootId, path?, paths}`: what these worktrees of the root's
+ * repository hold on disk. `paths` are worktree paths as `workspace.gitFacts` answered them; the
+ * caller names only the rows it is showing, and each ask replaces what the last one queued
+ * (`WORKSPACE_TREE_SIZE`). */
+export const WorkspaceWorktreeSizesParams = z
+  .object({
+    rootId: WorkspaceRootId,
+    path: WorkspaceRelativePath.optional(),
+    paths: z
+      .array(z.string().min(1).max(WORKSPACE_LIMITS.PATH_CHARS))
+      .max(WORKSPACE_TREE_SIZE.ASK_MAX),
+  })
+  .passthrough();
+export type WorkspaceWorktreeSizesParams = z.infer<typeof WorkspaceWorktreeSizesParams>;
+
+/** One asked worktree: its figure, null while it is being walked, absent when none can be had. */
+export const WorkspaceWorktreeSize = z
+  .object({
+    path: z.string().min(1),
+    sizeBytes: z.number().int().nonnegative().nullable().optional(),
+  })
+  .passthrough();
+export type WorkspaceWorktreeSize = z.infer<typeof WorkspaceWorktreeSize>;
+
+/** The asked paths, in their order. */
+export const WorkspaceWorktreeSizesResult = z.array(WorkspaceWorktreeSize);
+export type WorkspaceWorktreeSizesResult = z.infer<typeof WorkspaceWorktreeSizesResult>;
 
 /** `workspace.subscribe {scope: "roots", since?, minIntervalMs?, device?}` — a
  * rows subscription of `WorkspaceRoot`s keyed by `rootId` (DS-L3): a place

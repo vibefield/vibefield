@@ -243,6 +243,8 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
       "workspace.list": true,
       "workspace.search": true,
       "workspace.gitFacts": true,
+      // HD-3: asking again answers the same figures and queues the same walks
+      "workspace.worktreeSizes": true,
       "workspace.subscribe": true,
     });
     // `local`: never forwarded, so the flag binds no receipt key

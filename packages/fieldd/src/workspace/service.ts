@@ -74,6 +74,7 @@ export function createWorkspaceService(config: WorkspaceServiceConfig): Workspac
     launch: launchSpecFor(config),
     ...(config.timings !== undefined ? { timings: config.timings } : {}),
     ...(config.made !== undefined ? { made: config.made } : {}),
+    treeSizesFile: join(config.dataDir, ...LAYOUT.WORKSPACE_TREE_SIZES_FILE),
     logger: config.logger.child({ component: "files_host" }),
   });
   const doors = new WorkspaceDoors({

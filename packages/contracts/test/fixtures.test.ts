@@ -472,6 +472,8 @@ import {
   WorkspaceSearchResult,
   WorkspaceSubscribeParams,
   WorkspaceUnavailableDetails,
+  WorkspaceWorktreeSizesParams,
+  WorkspaceWorktreeSizesResult,
 } from "../src/workspace";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
@@ -1124,6 +1126,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "workspace-search": WorkspaceSearchResult,
   "workspace-git-facts-params": WorkspaceGitFactsParams,
   "workspace-git-facts": WorkspaceGitFactsResult,
+  "workspace-worktree-sizes-params": WorkspaceWorktreeSizesParams,
+  "workspace-worktree-sizes": WorkspaceWorktreeSizesResult,
   "workspace-subscribe-params": WorkspaceSubscribeParams,
   "workspace-roots-open": WorkspaceRootsOpen,
   "workspace-roots-delta": WorkspaceRootsDelta,

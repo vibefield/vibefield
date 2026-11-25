@@ -44,6 +44,7 @@ import {
   WorkspaceRootsResult,
   WorkspaceSearchResult,
   WorkspaceUnavailableDetails,
+  WorkspaceWorktreeSizesResult,
 } from "@vibefield/contracts";
 import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -84,6 +85,7 @@ const DOORS = [
   ["workspace.list", { rootId: "r_x" }],
   ["workspace.search", { rootId: "r_x", q: "x" }],
   ["workspace.gitFacts", { rootId: "r_x" }],
+  ["workspace.worktreeSizes", { rootId: "r_x", paths: [] }],
 ] as const;
 
 interface World {
@@ -341,6 +343,23 @@ describe("the door tier, by principal (FS-D6 (a))", () => {
     expect(
       WorkspaceGitFactsResult.parse(await win.call("workspace.gitFacts", { rootId: home.rootId })),
     ).toBeNull();
+    // HD-3: the sizes door answers the asked worktrees in order; a path git does not list for the
+    // root answers with no figure, and is never walked
+    const repoPath = join(world.home, "Projects", "repo");
+    const sizes = WorkspaceWorktreeSizesResult.parse(
+      await win.call("workspace.worktreeSizes", {
+        rootId: rootIdFor("place", repoPath),
+        paths: [world.outside, repoPath],
+      }),
+    );
+    expect(sizes.map((row) => row.path)).toEqual([world.outside, repoPath]);
+    expect(sizes[0]).toEqual({ path: world.outside });
+    expect(sizes[1]?.sizeBytes === null || typeof sizes[1]?.sizeBytes === "number").toBe(true);
+    const refused = await win.callErr("workspace.worktreeSizes", {
+      rootId: rootIdFor("place", repoPath),
+      paths: Array.from({ length: 33 }, (_, i) => `/w${i}`),
+    });
+    expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
   });
 
   it("refuses a plugin (renderer or service), an MCP agent and a guest — whatever they hold", async () => {

@@ -3,10 +3,11 @@ import type {
   WorkspaceGitFacts,
   WorkspaceGitPortResponse,
   WorkspaceGitWorktree,
+  WorkspaceWorktreeSize,
 } from "@vibefield/contracts";
-import { WORKSPACE_GIT } from "@vibefield/contracts/registries";
+import { WORKSPACE_GIT, WORKSPACE_TREE_SIZE } from "@vibefield/contracts/registries";
 import { parseRelativePath } from "../paths";
-import { measureWithDu, type TreeSizeReader, TreeSizes } from "./tree-size";
+import { measureWithDu, TreeSizes } from "./tree-size";
 
 // FS-1a — the INTERIM git service under the files worker (FS-D8 RULED (a):
 // M5 is mille's own git spec, `GitService`; until its PR 8 lands, this is a
@@ -754,22 +755,56 @@ export function serveGitPort(port: GitPortLike, service: GitService): void {
   port.start?.();
 }
 
-/** HD-3 — the worker's one measurer of worktree folders (`tree-size.ts`): its
- * walks run with the git runner's own allowlisted environment. */
-const treeSizes = new TreeSizes({
-  measure: (folder, options) =>
-    measureWithDu(folder, { ...options, env: scrubbedEnvironment(process.env) }),
-});
+/** HD-3 — the worker's one measurer of worktree folders (`tree-size.ts`): its walks run with the git
+ * runner's own allowlisted environment. Opened once, at the worker's `init`, with the file its figures
+ * are kept in; before that (and in a test that never opens it) figures live in memory. */
+function treeSizesOver(file: string | null): TreeSizes {
+  return new TreeSizes({
+    file,
+    measure: (folder, options) =>
+      measureWithDu(folder, { ...options, env: scrubbedEnvironment(process.env) }),
+  });
+}
+let treeSizes = treeSizesOver(null);
 
-/** The worker is leaving: end the walk in flight. */
+/** The worker's `init`: read the kept figures and keep new ones there. */
+export function openTreeSizes(file: string | null): void {
+  treeSizes.dispose();
+  treeSizes = treeSizesOver(file);
+}
+
+/** The worker is leaving: end the walk in flight and write what is known. */
 export function stopTreeSizes(): void {
   treeSizes.dispose();
 }
 
-/** A root's git facts (rosetta's `gitFacts`): null when the folder is not in
- * a repository; every field nullable when git could not answer it. HD-3: each
- * worktree with its commit, whether its folder is gone, and what it holds on
- * disk as far as `sizes` has measured (asking is what queues a measurement). */
+/** What `gitFacts` and `worktreeSizes` need of the measurer (a test's own). */
+export type TreeSizeReader = Pick<TreeSizes, "peek" | "ask">;
+
+/** HD-3 — the worktrees a root's repository was last read to have and whose folders may be walked (not
+ * gone, not bare), so that an ask for sizes names only what git named and does not run git again for
+ * LIST_FRESH_MS. Kept for the few roots a window looks at. */
+const walkable = new Map<string, { at: number; paths: Set<string> }>();
+const WALKABLE_ROOTS = 16;
+
+function rememberWalkable(root: string, entries: readonly WorktreeEntry[]): Set<string> {
+  const paths = new Set(
+    entries.filter((entry) => !entry.prunable && !entry.bare).map((entry) => entry.path),
+  );
+  walkable.delete(root);
+  walkable.set(root, { at: Date.now(), paths });
+  while (walkable.size > WALKABLE_ROOTS) {
+    const oldest = walkable.keys().next().value;
+    if (oldest === undefined) break;
+    walkable.delete(oldest);
+  }
+  return paths;
+}
+
+/** A root's git facts (rosetta's `gitFacts`): null when the folder is not in a repository; every field
+ * nullable when git could not answer it. HD-3: each worktree with its commit, whether its folder is
+ * gone, and the figure this desktop already holds for it. Git facts never start a walk: a figure is
+ * measured only when `worktreeSizes` is asked for it by name. */
 export async function gitFacts(
   root: string,
   sizes: TreeSizeReader = treeSizes,
@@ -786,21 +821,47 @@ export async function gitFacts(
   const status = await git(root, ["status", "--porcelain=v2", "-z", "--untracked-files=all"]);
   const dirty = status.ok ? parseStatus(status.stdout).length : null;
   const listed = await git(root, ["worktree", "list", "--porcelain"], { timeoutMs: 4_000 });
-  const worktrees: WorkspaceGitWorktree[] = listed.ok
-    ? parseWorktreeList(listed.stdout).map((entry) => {
-        const worktree: WorkspaceGitWorktree = {
-          path: entry.path,
-          branch: entry.branch,
-          head: entry.head,
-          gone: entry.prunable,
-        };
-        // a folder that is gone holds nothing, and a bare repository is no
-        // working tree: neither is walked
-        const sizeBytes = entry.prunable || entry.bare ? undefined : sizes.read(entry.path);
-        return sizeBytes === undefined ? worktree : { ...worktree, sizeBytes };
-      })
-    : [];
+  const entries = listed.ok ? parseWorktreeList(listed.stdout) : [];
+  if (listed.ok) rememberWalkable(root, entries);
+  const worktrees: WorkspaceGitWorktree[] = entries.map((entry) => {
+    const worktree: WorkspaceGitWorktree = {
+      path: entry.path,
+      branch: entry.branch,
+      head: entry.head,
+      gone: entry.prunable,
+    };
+    // a folder that is gone holds nothing, and a bare repository is no working tree
+    const sizeBytes = entry.prunable || entry.bare ? undefined : sizes.peek(entry.path);
+    return sizeBytes === undefined ? worktree : { ...worktree, sizeBytes };
+  });
   return { branch, dirty, worktrees };
+}
+
+/** HD-3 — `workspace.worktreeSizes`: what the asked worktrees of `root`'s repository hold on disk, in
+ * the order asked. Only a path git lists for this root, with its folder there, is ever walked: any
+ * other answers with no figure. Asking is what queues a walk, and each ask replaces the queue
+ * (`TreeSizes.ask`), so the caller names the rows it is showing and nothing more. */
+export async function worktreeSizes(
+  root: string,
+  paths: readonly string[],
+  sizes: TreeSizeReader = treeSizes,
+): Promise<WorkspaceWorktreeSize[]> {
+  const asked = [...new Set(paths)].slice(0, WORKSPACE_TREE_SIZE.ASK_MAX);
+  let known = walkable.get(root);
+  if (known === undefined || Date.now() - known.at >= WORKSPACE_TREE_SIZE.LIST_FRESH_MS) {
+    const listed = await git(root, ["worktree", "list", "--porcelain"], { timeoutMs: 4_000 });
+    known = {
+      at: Date.now(),
+      paths: listed.ok ? rememberWalkable(root, parseWorktreeList(listed.stdout)) : new Set(),
+    };
+  }
+  const allowed = asked.filter((path) => known.paths.has(path));
+  const figures = sizes.ask(allowed);
+  return asked.map((path) => {
+    const at = allowed.indexOf(path);
+    const sizeBytes = at === -1 ? undefined : figures[at];
+    return sizeBytes === undefined ? { path } : { path, sizeBytes };
+  });
 }
 
 /** One entry of `git worktree list --porcelain`. The first is the main

@@ -1368,18 +1368,30 @@ export const WORKSPACE_GIT = {
   CONCURRENCY: 6,
 } as const;
 
-/** HD-3 (2026-11-24) — what a worktree's folder holds on disk, for the room's
- * worktree ledger (`WorkspaceGitWorktree.sizeBytes`). The files worker walks
- * one folder at a time with `du`, at NICE, only when a root's git facts are
- * asked for. TTL_MS: how long a figure stands before the next ask measures it
- * again (the old figure is answered meanwhile). TIMEOUT_MS: one walk's limit;
- * a walk that runs out is remembered as "no figure" for TTL_MS. KEPT: folders
- * remembered, the oldest dropped first. TS-only: no native reader. */
+/** HD-3 (2026-11-24) — what a worktree's folder holds on disk, for the room's worktree ledger
+ * (`workspace.worktreeSizes`, `WorkspaceGitWorktree.sizeBytes`). The files worker walks a folder with `du` only
+ * when it is asked for by name, one at a time, in the background (macOS: `taskpolicy -b`), and keeps each figure
+ * on disk (LAYOUT.WORKSPACE_TREE_SIZES_FILE). TTL_MS: how long a figure stands before an ask walks it again (the
+ * old figure is answered meanwhile). FAILED_TTL_MS: how long a failed or cut walk is remembered as "no figure".
+ * TIMEOUT_MS: one walk's limit. ASK_MAX: folders one ask may name, and so the longest the queue gets (an ask
+ * replaces the queue). REST_MIN_MS, REST_FACTOR: after a walk the queue rests REST_FACTOR times the walk's own
+ * time, REST_MIN_MS at least, so the walker never holds more than 1 / (1 + REST_FACTOR) of one core. KEPT:
+ * folders remembered, the oldest dropped first. SAVE_DELAY_MS: how long new figures wait to be written together.
+ * LIST_FRESH_MS: how long the worker trusts the worktrees it last read for a root before an ask reads git again.
+ *
+ * *Corrected 2026-11-24, the day it was built:* the first cut walked every worktree a root's git facts named and
+ * measured each again every ten minutes. A repository with 470 worktrees made that a walk without end and ran a
+ * laptop hot. TS-only: no native reader. */
 export const WORKSPACE_TREE_SIZE = {
-  TTL_MS: 10 * 60_000,
+  TTL_MS: 24 * 60 * 60_000,
+  FAILED_TTL_MS: 10 * 60_000,
   TIMEOUT_MS: 60_000,
-  NICE: 10,
-  KEPT: 256,
+  ASK_MAX: 32,
+  REST_MIN_MS: 200,
+  REST_FACTOR: 2,
+  KEPT: 4096,
+  SAVE_DELAY_MS: 2_000,
+  LIST_FRESH_MS: 60_000,
 } as const;
 
 /** PJ-1 (`thinking-project-places.md` §4.1, §9; `build-pj.md` L1–L3) — place
@@ -2980,6 +2992,10 @@ export const LAYOUT = {
    * home directory, the mounted volumes) are enumerated live, never kept. */
   WORKSPACE_DIR: ["workspace"],
   WORKSPACE_ROOTS_FILE: ["workspace", "roots.json"],
+  /** HD-3 — what each asked worktree's folder holds on disk, kept so that opening the room's worktree ledger
+   * again walks nothing (`WORKSPACE_TREE_SIZE`): `{v, sizes: {<absolute path>: {bytes, at}}}`, 0600, written by
+   * the files worker. A cache: removing it costs one walk per row shown. */
+  WORKSPACE_TREE_SIZES_FILE: ["workspace", "tree-sizes.json"],
   /** PJ-3 (D9) — the projects' key memory under this user: the last key each
    * place was seen in and the key moves inferred from it (`PROJECT_DOORS`),
    * fieldd-owned, written atomically, so a reader holding a key from before a

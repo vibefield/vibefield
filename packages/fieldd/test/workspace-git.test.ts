@@ -15,6 +15,7 @@ import {
   WorkspaceGitFactsResult,
   WorkspaceGitPortResponse,
   WorkspaceGitPortTranscript,
+  WorkspaceWorktreeSizesResult,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
@@ -22,6 +23,7 @@ import {
   createGitService,
   gitFacts,
   serveGitPort,
+  worktreeSizes,
 } from "../src/workspace/host/git";
 
 const FIXTURE = join(
@@ -80,13 +82,16 @@ function repo(): { root: string; worktree: string; head: string } {
 describe("gitFacts (the room's GitFacts, read-only)", () => {
   it("answers the branch, the dirty count and every worktree", async () => {
     const { root, worktree, head } = repo();
-    // HD-3: each worktree with its commit, its folder's standing, and what it
-    // holds on disk as far as the measurer has read (here: one figure, one owed)
-    const asked: string[] = [];
+    // HD-3: each worktree with its commit, its folder's standing, and the figure this desktop already
+    // holds for it. Git facts only PEEK: they never start a walk.
+    const peeked: string[] = [];
     const sizes = {
-      read: (folder: string) => {
-        asked.push(folder);
-        return folder === root ? 4096 : null;
+      peek: (folder: string) => {
+        peeked.push(folder);
+        return folder === root ? 4096 : undefined;
+      },
+      ask: () => {
+        throw new Error("git facts must not queue a walk");
       },
     };
     const facts = WorkspaceGitFactsResult.parse(await gitFacts(root, sizes));
@@ -95,10 +100,10 @@ describe("gitFacts (the room's GitFacts, read-only)", () => {
       dirty: 2,
       worktrees: [
         { path: root, branch: "main", head, gone: false, sizeBytes: 4096 },
-        { path: worktree, branch: "side", head, gone: false, sizeBytes: null },
+        { path: worktree, branch: "side", head, gone: false },
       ],
     });
-    expect(asked).toEqual([root, worktree]);
+    expect(peeked).toEqual([root, worktree]);
     const other = WorkspaceGitFactsResult.parse(await gitFacts(worktree));
     expect(other?.branch).toBe("side");
     expect(other?.dirty).toBe(0);
@@ -116,23 +121,52 @@ describe("gitFacts (the room's GitFacts, read-only)", () => {
     expect(facts?.dirty).toBe(0);
   });
 
-  it("HD-3: a worktree whose folder is gone says so and is never measured; an unmeasured desktop sends no size", async () => {
+  it("HD-3: a worktree whose folder is gone says so and is never peeked at", async () => {
     const { root, worktree, head } = repo();
     rmSync(worktree, { recursive: true, force: true });
-    const asked: string[] = [];
+    const peeked: string[] = [];
     const facts = WorkspaceGitFactsResult.parse(
       await gitFacts(root, {
-        read: (folder) => {
-          asked.push(folder);
+        peek: (folder) => {
+          peeked.push(folder);
           return undefined;
         },
+        ask: () => [],
       }),
     );
     expect(facts?.worktrees).toEqual([
       { path: root, branch: "main", head, gone: false },
       { path: worktree, branch: "side", head, gone: true },
     ]);
-    expect(asked).toEqual([root]);
+    expect(peeked).toEqual([root]);
+  });
+
+  it("HD-3: worktreeSizes asks only for what git lists for the root, in the order asked", async () => {
+    const { root, worktree } = repo();
+    const elsewhere = mkdtempSync(join(tmpdir(), "vf-elsewhere-"));
+    cleanup.push(() => rmSync(elsewhere, { recursive: true, force: true }));
+    const asked: string[][] = [];
+    const sizes = {
+      peek: () => undefined,
+      ask: (folders: readonly string[]) => {
+        asked.push([...folders]);
+        return folders.map((folder) => (folder === root ? 4096 : null));
+      },
+    };
+    const answer = WorkspaceWorktreeSizesResult.parse(
+      await worktreeSizes(root, [worktree, "/", elsewhere, root, worktree], sizes),
+    );
+    expect(answer).toEqual([
+      { path: worktree, sizeBytes: null },
+      { path: "/" },
+      { path: elsewhere },
+      { path: root, sizeBytes: 4096 },
+    ]);
+    expect(asked, "a stranger's path never reaches the measurer").toEqual([[worktree, root]]);
+    // a folder that is gone is not walked either
+    rmSync(worktree, { recursive: true, force: true });
+    await gitFacts(root, sizes);
+    expect(await worktreeSizes(root, [worktree], sizes)).toEqual([{ path: worktree }]);
   });
 
   it("a status takes no lock: the index is untouched by a read", async () => {
