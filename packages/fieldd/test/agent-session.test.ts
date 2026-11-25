@@ -2112,6 +2112,34 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     await box.daemon.agents.endRun(runId);
   }, 60_000);
 
+  // Spark QA F12 (2026-11-25) — found in real use: a spawn's task was pasted 10 ms after its terminal was spawned,
+  // into a TUI that had not started, and stayed an unsent draft. The scripted agent never says it started, so this row
+  // is the bound's: a born run turns a paste away as `starting` and takes it once the bound has passed.
+  it("Spark QA F12 — a run born here takes no input until it has started: a paste is turned away as starting, then taken", async () => {
+    const box = await setup({ floor: "real", start: { settleMs: 400, saidWithinMs: 1_500 } });
+    const { daemon } = box;
+    const win = await window(daemon, DECK, "f12");
+    const spawned = (await born(win, "agent.spawn", {
+      provider: "scripted",
+      cwd: box.envOut,
+      title: "a born run",
+    })) as AgentSpawnResult;
+    const runId = spawned.session.runtimeRunId;
+    expect(daemon.agents.isLive(runId)).toBe(true);
+    expect(daemon.agents.takesInput(runId)).toBe(false);
+    expect(await daemon.agents.submit(runId, "too early")).toEqual({
+      status: "rejected",
+      reason: "starting",
+    });
+    await catReady(box, spawned.terminal.sessionId);
+    expect(
+      await poll(async () => (daemon.agents.takesInput(runId) ? true : undefined), 5_000),
+    ).toBe(true);
+    expect(await daemon.agents.submit(runId, "in time")).toEqual({ status: "confirmed" });
+    // a run nobody holds takes none
+    expect(daemon.agents.takesInput("run-nobody")).toBe(false);
+  });
+
   // CP-2 — the talk room's two ports on the real floor. The queue's idle gate is agent-input-queue.test.ts's: the
   // scripted agent observes only its terminal, so its monitor never says idle on cue, and this row witnesses what the
   // queue hands the floor, not when.
