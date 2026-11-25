@@ -4826,12 +4826,40 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   never a count on the face, never on launch.
 - **Settings → History** (track AO, AO-D9 ruled 2026-10-27; AO-L5): the home of whose history is read,
   one page in the Workspace group after Agent Profiles. In order: the History pane's rows, each agent
-  with its mark, size, last use, where it lives and its switch, the switches meaning what they mean in
-  the pane (on: read; off: **Stop reading**, which keeps what was read and says so); **Look again**
+  with its mark, size, last use, where it lives and its switch; **Look again**
   (the census asked afresh, for an agent installed since); the space History's copy uses on this Mac;
-  and the room's own state while it imports, in the room's words. Changing a switch asks once more
-  only when it turns reading off. Profiles' own folders are read by construction and are listed with
-  their profile's name, not a switch.
+  and the room's own state while it imports, in the room's words. Profiles' own folders are read by
+  construction and are listed with their profile's name, not a switch.
+  *Corrected 2026-11-24 (HD-2, below):* this said the switches mean what they mean in the pane, "on: read; off:
+  **Stop reading**, which keeps what was read and says so", and that changing a switch asks once more when it turns
+  reading off. A switch that is on no longer turns off.
+    - **A switch that is on stays on** (track HD, HD-2; James, 2026-11-24, on HD-1's finding that no single agent's
+      history can be removed: "for the toggles, just make them gray once toggled on so there is no such thing as
+      toggle off"). Turning one on applies at once and brings that agent's history in. From then it is drawn off
+      (§7 "Off": `disabled`, the kit's dimmed switch, on and gray) and takes no press. While any is on, one line
+      stands under the rows: "An agent History reads stays on. Clear History, below, removes what was read and turns
+      them all off." Stop reading and its question are gone. In the panes that only ask (the Setup Assistant's,
+      History's own card), nothing is read yet and every switch is free.
+    - **On this Mac** (track HD, HD-1, 2026-11-24; James, the History QA: "there should be similar ingested cache space size
+      indicators uis like those in the hover menu, and there should be a button for user to clear the entire ingested
+      data, and the history room will go back to pre-ingested empty state"): the second section, under the rows. It
+      draws what History keeps exactly as the import sign's panel does, the one drawing (`HistorySpace`): **Kept on
+      disk**, one bar of the four parts on one scale over their legend, then the index's memory in use. The measure is
+      rosetta's (IM-D4), asked through `index.status` every 5 s while the page is open; the sizes are said as every
+      size on a Settings page is (§9, in thousands: "5.4 GB"), where the panel's are the room's own words ("5.40 GB").
+      It says its other states in a line: "Measuring…", "History isn't available right now.", "History hasn't
+      measured its space yet." (an index that does not say), "History keeps nothing on this Mac.".
+    - **Clear History…** is the section's act, a quiet pill beside its title, off while there is nothing to clear. It is
+      asked once, in the page: "Clear everything History read on this Mac? Its copy of your past
+      sessions (5.4 GB) is removed, and History asks before it reads again. Your agents' own files stay where they
+      are." with **Clear History** (the danger pill; "Clearing…" while it runs, §7's running press) and **Cancel**.
+      With a profile's folder enrolled it adds "Sessions from your agent profiles are read again right away.", since
+      those are read by construction. Clearing removes everything History read and turns every switch off, so History
+      is back before its first import and its room shows the pane that asks (§8 "History", before its past). A
+      refusal is said under the section in the attention ink.
+    - **Only Clear removes what was read.** rosetta can drop no single agent's sessions (RO-8: its record is per agent,
+      but what you browse, search and its media are shared), so there is no "remove this agent's history" beside a
+      switch, and no turning one off (HD-2).
 - **Settings → Sound** (track SD, SD-D19 and SD-D22 ruled 2026-11-05; built at SD-2, its foot's second sentence at
   SD-3; the law is §14): the field's
   sounds, one page in the Preferences group after Appearance, its rail glyph `sound` (§13), its line "How agents
@@ -7844,8 +7872,15 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       `memory`, rosetta 0.1.9), and fieldd passes them through `index.status` to this desktop's own windows only, as the
       per-project fold, and never on the pushed feed, where a figure that moves with every read would send a frame every
       tick. An index that does not say shows no space at all.
-    - **Pause waits** (IM-D5): the panel names no act. Pause and Resume come in their own slice, which needs the run's
-      state through fieldd and a door for it.
+    - **Pause waits** (IM-D5): the panel names no act of the import's. Pause and Resume come in their own slice, which
+      needs the run's state through fieldd and a door for it. *Amended 2026-11-24 (HD-1):* this said "the panel names
+      no act"; it names one now, the frame's own, below.
+    - **History Settings…** (track HD, HD-1, 2026-11-24; James, the History QA: "in the hover menu, there is should be
+      a button to open the history settings page"): the panel's one act, a menu row (§5, `menu.css`: 36 tall, 13/500,
+      the `gear` glyph in the row's 24 column, the hot fill on hover) under a hairline, after On this Mac and before
+      the foot, at every moment of the import and at rest. It closes the panel and opens Settings → History, where
+      what is kept can be cleared and whose sessions are read is chosen. The words are VibeField's; the room hands out
+      plain data and no act.
     - **An agent of unknown size** (IM-D6): while reading, the step's fraction counts the sizes that are known, and its
       line names the agents whose size is not ("Antigravity's size not known yet"); a build that knows no size draws no
       fraction.
