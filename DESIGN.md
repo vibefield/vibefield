@@ -5572,6 +5572,16 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
   - **More** grows the bar into its menu as over objects ("The bar grown", below): Cut (⌘X) · Copy (⌘C) · Paste (⌘V) |
     Select all (⌘A). **Right-click** on a written sheet grows the same menu at the words; at a caret alone it holds
     Paste · Select all, at the caret.
+    *(Amended 2026-11-25, IK at the build (V5b):* the rows run the desk's one editor's own items (ICE I60's
+    `DeskEditor.command`), inside the press, the field keeping its focus and its range; the menu's eyebrow says
+    **WORDS**. **Paste where the page cannot read the clipboard** — the desktop app, whose shell grants no Chromium
+    permission (ESP §7.4) — **waits**: drawn, never taken, its tooltip "Paste — the bar can't read the clipboard here;
+    ⌘V pastes" (the field's ⌘V pastes). The editor would lay there the last words copied or cut on this desk, whatever
+    the clipboard holds since, and a paste of stale words is worse than none; Paste runs where the page reads the
+    clipboard. A command that did nothing says so on the status line with its key ("Couldn't copy these words. ⌘C copies
+    them."). Right-click grows the menu from the bar over the words while words on the written sheet are selected; **at
+    a caret alone it is not built** — ICE's anchor says where the words lie, never where a caret stands. A slot's
+    declared keys are printed in its tip ("Strike  ⇧⌘X"); the bar binds none, ICE's written part handles them.*)
   - **Keys** — while a sheet is written the keys are the platform field's, so ⌘C copies the selected words, ⌘X cuts,
     ⌘V pastes and ⌘A selects the sheet's words; Make a card's ⌘C stands down there, as it does today, and is the
     bar's again while objects are selected. ⇧⌘X strikes, ⌘U underlines, ⇧⌘H highlights with the last highlighter
