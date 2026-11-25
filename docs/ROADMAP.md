@@ -1373,9 +1373,9 @@ with its three addenda, `lanes/ob-build/ITEM-279-S2-PLAN.md` and `lanes/ob-build
   and `635f44c58`, M557; LANDED "OB-D16"): a kind an agent can hold declares its sticker
   (`contributes.objects[].sticker`, its art in its own bundle, and `check` refuses one without), fieldd serves the
   art (`plugins.stickers`), and Godview sticks it on the pane's bottom-right corner, saying its state by motion and
-  in words; a click goes to the desk. The click's look is the card door's until ICE's `ops.lookAt` (petition I58, in
-  ICE's draft PR #9) is released and pinned. `pnpm test` whole is green on it; the smokes, gate:landing and the test
-  Mac are NOT run.
+  in words; a click goes to the desk. The click's look is ICE's `ops.lookAt` (petition I58) since the EL8 to ICE
+  0.21.0 of 11-25: the camera flies to the object. `pnpm test` whole was green on OB-D16; the smokes, gate:landing
+  and the test Mac are NOT run on it.
 - Landed upstream: the desk tools for Codex and Grok, in puppeteer 0.4.2 (#85, squash `b8838194`, released as
   `325b6770`, #86); main pins 0.4.4, which carries them. Its first seven commits are OB's `ob/foundations`
   (`dd025774`). What VibeField does with them is CP-5b…5d (MT-7), CO's.
@@ -2281,7 +2281,7 @@ waits James's word); sources `draft/card-stock/v5/`, `draft/card-stock/button/`)
 |---|---|---|
 | truffle | `truffle-core = "=0.7.28"` (Cargo.toml) + the five npm sidecars 0.7.28 (protocol 13) · Swift exact 0.7.29 (Package.swift's `truffleRelease`; lock `release.swift`), which ghosttea 0.16.1 declares (#109; 0.16.0, 0.15.0 and 0.14.0 declared 0.7.26) | the split, DECISIONS TB (a), `af3f3078f`; EL8-TRUFFLE (track DR, 2026-11-07) moved cargo and npm to 0.7.27, and the EL8 of 2026-11-18 (M363, `628233925`, `fc4434113`; DECISIONS TB) moved them to 0.7.28, protocol 13 standing; Swift rejoins at the first ghosttea declaring 0.7.27 · *Corrected 2026-11-18: this row still said `=0.7.27` and the sidecars 0.7.27 after M363 moved both to 0.7.28 (Cargo.toml:238; `apps/desktop/package.json`).* |
 | ghosttea | 0.16.3 on cargo (`=0.16.3`), npm and Swift. The desktop renderer keeps its canvas across session switches and reuses recent routed attachments. Swift uses Truffle 0.7.29, with control protocol 1.20 and libghostty-vt 1.0 (Ghostty `0fa3d577`). | the EL8 of 11-23 (0.16.2 on 11-22, 0.16.1 on 11-21, 0.16.0's: 11-18; 0.15.0's: 11-12; 0.14.0's: 11-02, LANDED "EL8 — Ghostty 1.4"); no checkout needed; `../ghosttea-0.11.2` is only the overlay's coordinate |
-| ICE | `@vibecook/ice` 0.20.0 exact (overrides row; the lock's `4ee930bd`, the release commit, and tag v0.20.0 on the merge `2a2a9355`) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | the EL8 of 11-20 (0.18.0's: 11-19) |
+| ICE | `@vibecook/ice` 0.21.0 exact (overrides row; the lock's `68a447b3`, the release commit, and tag v0.21.0 on the merge `75eb7a3d`) · strata 0.13.0 via ICE · `loro-crdt` ^1.13.8, one resolution | the EL8 of 11-25 (0.20.0's: 11-20) |
 | puppeteer | `@vibefield/puppeteer-*` 0.4.14 exact (the lock's `bf77d643`, v0.4.14, the release #123) | the EL8 of 11-25 (LANDED "EL8: puppeteer 0.4.14": a briefed Grok run's MCP servers stay on the session its native viewer joins), after the EL8 of 11-24 (LANDED "EL8: puppeteer 0.4.13": 0.4.12, never pinned here, rides with it: a pane's context ring and running time, a session's usage carried by its host, the Grok adapter's session title; and 0.4.13's own: the spend view names a row by its title, a resumed Codex thread keeps its name), after the EL8 of 11-23 (LANDED "EL8: puppeteer 0.4.11": a session's own title names its row), after the EL8 of the same day (LANDED "EL8: puppeteer 0.4.10": the runtime's identity monitor, a sign-in's plan read again as it ages), after the EL8 of 11-22 (LANDED "EL8: puppeteer 0.4.9": the Codex adapter names the model switch), after the EL8 of 11-21 (LANDED "EL8: puppeteer 0.4.8"), after the EL8 of 11-20 (LANDED "EL8: puppeteer 0.4.7": 0.4.5 and 0.4.6, never pinned here, ride with it), the EL8 of 2026-11-18 (M436, `9c9d0181b`; LANDED "EL8: puppeteer 0.4.4": 0.4.3, never pinned here, rides with it), the EL8 of 2026-11-17 (M356, `787552155`; LANDED "EL8: puppeteer 0.4.2": 0.4.1, never pinned here, rides with it) and the EL8 of 11-10 (LANDED "EL8 — puppeteer 0.4.0"; RD-5a-2 `a04850e29` took it exact at 0.2.3); `../puppeteer` is the overlay's coordinate · *Corrected 2026-11-18: this row still said 0.4.0 after M356 moved the pin to 0.4.2 on 2026-11-17.* |
 | rosetta | `@vibefield/rosetta-protocol` / `-room` 0.1.11 exact · the kit's `RosettaClient` 0.1.6 exact (`let rosettaRelease`; the dated split, DECISIONS RD: none of 0.1.7 to 0.1.11 changes a Swift path) · rosettad built from `../rosetta-pin` at `8beea2dbb` (protocol and store schema 30) · MIT | the EL8 of 11-24 (M556 `1359a8956`; LANDED "EL8: rosetta 0.1.11": the worktree ledger's two host doors, wrapped diff lines, an agent consented after the first import read as an import), after 0.1.10 at `83865a707` on 11-23 (`4968b7f26`: resumable ingestion and bounded shutdown) and the EL8 of 11-23 (M538; LANDED "EL8: rosetta 0.1.9, and IM-1": the room's `importSign`, `/api/status`'s `storage` and `memory`), after the EL8 of 11-21 (M495 `6383c825e`; LANDED "EL8 — rosetta 0.1.8": Antigravity 1.4.12's writer read) and EL8 11-14 (`ed67b0c5b`, M301; 0.1.6 at `31abf8792` → `ea26b0464`, M296, 11-13; 0.1.5 at `68b80fb95`, M230, 11-08); npm and the daemon archives released (v0.1.9), Swift at v0.1.6; adopting the archives remains RD-D7; the Swift row is PAID on vf-m2 by item 257 (M233 `b3a5930b2`); its exact-tree witness stays the old mini's · *Corrected 2026-11-23: this row still said 0.1.7 after M495 moved the pin to 0.1.8 on 2026-11-21.* · *Corrected 2026-11-24: this row still said 0.1.9 at `c5eaded1d` after `4968b7f26` moved the pin to 0.1.10 on 2026-11-23; "npm and the daemon archives released (v0.1.9)" in it is v0.1.11 now.* |
 | mille | `@vibecook/mille` and `mille-ui` 0.3.6 exact (the overrides rows; the lock's `85c35e7d`, tag v0.3.6) | the EL8 of 2026-11-17 (M359, `0d1e63b07`; LANDED "EL8 — mille 0.3.6"): RD-5's exit for mille's npm plane, and FS-1b's sibling window closed; `../mille-pin` is the overlay's coordinate · *Corrected 2026-11-18: this row still said `link:../mille-pin` at `c8160d5` and no release past v0.3.4 after M359 moved mille to npm 0.3.6 on 2026-11-17.* |
@@ -2337,10 +2337,14 @@ Petition status lives in `draft/petitions/README.md`. Still open or owed there:
 - **mille:** M11 (with WIN). **ICE:** I47, I48 (named, parked) · the remount edge (a pointer `leave` with no point; a
   candidate if presence UX needs it) · NodeNext portability. **strata:** S3/S4's residue (parked: a measured join or
   reload wall on a real desk document).
-- **ICE, upstream**: 0.20.0 (petition I56, a soft light) has been npm's `latest` since 2026-11-20, pinned here by the
-  EL8 of 11-20 with 0.19.0 (I55, the print opens) in the same event; 0.18.0 (I54, the board's set and its hidden
-  types) before them. A `gate:landing` on the goldens' Mac is owed upstream (its rigs, which need a console; the
-  last recorded green there is 0.16.0's); the plugin market's use of the set and the hidden types is MK's next slice.
+- **ICE, upstream**: 0.21.0 (petitions I57, a free slot for an object that comes with no pointer, and I58, a look at
+  an object) has been npm's `latest` since 2026-11-25, pinned here by the EL8 of 11-25; the desk's look door is
+  `ops.lookAt` from that event, and nothing here asks for a free slot yet. Before it: 0.20.0 (I56, a soft light) and
+  0.19.0 (I55, the print opens) in the EL8 of 11-20, and 0.18.0 (I54, the board's set and its hidden types). ICE's
+  `gate:landing` ran on the test Mac at its main and with I57 and I58 merged (11-25): 22 of its 27 stages green in
+  both, five red in both and equal. A `gate:landing` on the goldens' Mac is owed upstream (its rigs, which need a
+  console; the last recorded green there is 0.16.0's); the plugin market's use of the set and the hidden types is
+  MK's next slice.
 
 ## 8 Tracks
 

@@ -1077,7 +1077,8 @@ function deskOf(
     readOnly: options.readOnly ?? false,
     store: { resolve: (key: string) => (key === "k1" ? 77 : undefined) },
   };
-  const panned: Array<[number, number]> = [];
+  // the look door's one call (look-at-object.ts): ICE's `ops.lookAt`, which moves the camera and selects
+  const looked: unknown[] = [];
   // the pegboard's anchor as the desk reads it at each ask: a case may change it mid-play
   const tray = { open: options.open ?? false, held: options.held ?? false };
   const desk = {
@@ -1108,8 +1109,9 @@ function deskOf(
         setSelection: (ids: readonly unknown[]) => {
           selected.push([...ids]);
         },
-        panTo: (x: number, y: number) => {
-          panned.push([x, y]);
+        lookAt: (entity: unknown) => {
+          looked.push(entity);
+          return true;
         },
       },
     },
@@ -1124,7 +1126,7 @@ function deskOf(
     theme: "light",
     docId: "doc-1",
   } as unknown as MountedDesk;
-  return { desk, spawned, selected, arrived, tray, panned };
+  return { desk, spawned, selected, arrived, tray, looked };
 }
 
 describe("the desk takes a card (HN-D7)", () => {
@@ -1773,8 +1775,8 @@ describe("the desk plays the chosen face (OB-1b, §4.4)", () => {
     expect(spawned).toEqual([]);
   });
 
-  it("takes the camera to a ref's object and selects it, through `objects.resolve`", async () => {
-    const { desk, panned, selected } = deskOf();
+  it("looks at a ref's object (the camera to it, and it selected), through `objects.resolve`", async () => {
+    const { desk, looked, selected } = deskOf();
     const resolve = vi.fn(async () => ({ docId: "doc-1", key: "k1" }));
     const target = deskCardTarget(desk, { host: {}, resolve });
     await expect(target.play(MAP, "ref", { x: 400, y: 300 })).resolves.toEqual({
@@ -1782,13 +1784,13 @@ describe("the desk plays the chosen face (OB-1b, §4.4)", () => {
       note: OUTCOME_WORDS.onTheDesk,
     });
     expect(resolve).toHaveBeenCalledWith("vf:obj/7hk2qx4m");
-    // object (500, 300) 200 × 100, centre (600, 350); the view 1180 × 780 at zoom 2 shows 590 × 390
-    expect(panned).toEqual([[305, 155]]);
-    expect(selected).toEqual([[77]]);
+    // one look at the resolved object; the camera and the selection are the op's own (ICE's rows hold them)
+    expect(looked).toEqual([77]);
+    expect(selected).toEqual([]);
   });
 
   it("says so when the ref's object is gone, on another board, or fieldd cannot find it; the camera stays", async () => {
-    const { desk, panned } = deskOf();
+    const { desk, looked } = deskOf();
     const play = (resolve: () => Promise<{ docId: string; key: string } | null>) =>
       deskCardTarget(desk, { host: {}, resolve }).play(MAP, "ref", { x: 400, y: 300 });
     await expect(play(async () => null)).resolves.toEqual({
@@ -1803,7 +1805,7 @@ describe("the desk plays the chosen face (OB-1b, §4.4)", () => {
       ok: false,
       note: OUTCOME_WORDS.objectGone,
     });
-    expect(panned).toEqual([]);
+    expect(looked).toEqual([]);
   });
 
   it("places words made at the play as a note, and says gone when they cannot be", async () => {

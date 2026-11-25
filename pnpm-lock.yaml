@@ -42,7 +42,7 @@ catalogs:
 
 overrides:
   loro-crdt: ^1.13.8
-  '@vibecook/ice': 0.20.0
+  '@vibecook/ice': 0.21.0
   '@vibecook/ghosttea-client': 0.16.3
   '@vibecook/ghosttea-electron': 0.16.3
   '@vibecook/ghosttea-react': 0.16.3
@@ -114,8 +114,8 @@ importers:
   apps/plugin-playground:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.20.0
-        version: 0.20.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.21.0
+        version: 0.21.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -394,8 +394,8 @@ importers:
         specifier: 0.16.3
         version: 0.16.3(react@19.2.7)
       '@vibecook/ice':
-        specifier: 0.20.0
-        version: 0.20.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.21.0
+        version: 0.21.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibecook/mille':
         specifier: 0.3.6
         version: 0.3.6(react@19.2.7)
@@ -710,8 +710,8 @@ importers:
   packages/plugin-sdk:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.20.0
-        version: 0.20.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.21.0
+        version: 0.21.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -2350,8 +2350,8 @@ packages:
   '@vibecook/ghosttea@0.16.3':
     resolution: {integrity: sha512-tHXqwqzpcm69ItZfmyfV4uWbRoJymUBCxnla0mNon6rIfLV1i9PXdztIPMVBcewdj57/ZNUWESuKS610fJ+RHg==}
 
-  '@vibecook/ice@0.20.0':
-    resolution: {integrity: sha512-dft2vSPkDkBofnyAb2+SSzSis/SIw4jkZv95kljVwqKvjMHGZhSfXP6ofuUH8vKxtQCIFCWspqlLvQKEXQ6xZg==}
+  '@vibecook/ice@0.21.0':
+    resolution: {integrity: sha512-IQ8kjohmZOnf9Dja3LjCiqNx2KFm7Ba8xE5BQOP8WrFfDLbEbpc9oLOE6R/Zl395sodl7Y3zdfiM3JUpwjeYXA==}
     engines: {node: '>=20'}
     peerDependencies:
       react: '>=19'
@@ -5370,7 +5370,7 @@ snapshots:
     dependencies:
       '@vibecook/ghosttea-protocol': 0.16.3
 
-  '@vibecook/ice@0.20.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@vibecook/ice@0.21.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@vibecook/strata-ecs': 0.13.0(loro-crdt@1.13.8)(react@19.2.7)
       '@webgpu/types': 0.1.74

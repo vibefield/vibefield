@@ -7284,8 +7284,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       localhost:5173 · changing it ↗**, the kind's title, the object's own name where its kind names one, and the
       state's words. Clicking one brings Canvas forward with the object centred and selected
       (`thinking-objects-at-work.md` §7: "Selecting one navigates Canvas to that object"). The look is ICE's
-      `ops.lookAt` (petition I58: it flies, keeps a zoom the object reads at, and reaches an object inside a mini
-      mat) once its release is pinned; until then it is the desk's card door's, centred at the zoom you are at.
+      `ops.lookAt` (petition I58; amended 2026-11-25 at the EL8 to ICE 0.21.0, before which it was the desk's card
+      door's cut, centred at the zoom you were at): the camera flies to the object, keeps the zoom you are at where
+      the object reads and fits there, and reaches an object inside a mini mat. Reduced motion: it cuts.
     - **The art is the kind's** (OB-L2, one declaration per kind; James, 2026-11-25: "an object intended for agent
       use needs to expose their sticker art for it properly, so each sticker art lives in their own plugin bundle",
       06:56Z). A plugin kind declares `sticker` beside its agent half and ships its art, an SVG, in its own bundle

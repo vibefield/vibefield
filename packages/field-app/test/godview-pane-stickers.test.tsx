@@ -16,7 +16,6 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { Camera, Position, Size, Viewport } from "@vibecook/ice";
 import {
   DESK_KINDS,
   type ObjectPresence,
@@ -266,38 +265,24 @@ describe("the door to the desk", () => {
     docId = "doc-1",
   ): {
     desk: MountedDesk;
-    panTo: ReturnType<typeof vi.fn>;
-    setSelection: ReturnType<typeof vi.fn>;
+    lookAt: ReturnType<typeof vi.fn>;
   } => {
-    const panTo = vi.fn();
-    const setSelection = vi.fn();
     const entity = 7;
-    const values = new Map<unknown, unknown>([
-      [Position, { x: 100, y: 50 }],
-      [Size, { w: 200, h: 100 }],
-    ]);
-    const resources = new Map<unknown, unknown>([
-      [Viewport, { w: 1000, h: 600 }],
-      [Camera, { x: 0, y: 0, zoom: 2 }],
-    ]);
+    // ICE's `ops.lookAt` answers false, with nothing changed, for what is not an object of the scene
+    const lookAt = vi.fn((e: number) => e === entity);
     const engine = {
-      world: {
-        isAlive: (e: number) => e === entity,
-        get: (e: number, component: unknown) => (e === entity ? values.get(component) : undefined),
-        getResource: (resource: unknown) => resources.get(resource),
-      },
       docs: {
         current: () => ({
           store: { resolve: (key: string) => (key === "key-a" ? entity : undefined) },
         }),
       },
-      ops: { panTo, setSelection },
+      ops: { lookAt },
     };
-    return { desk: { engine, docId } as unknown as MountedDesk, panTo, setSelection };
+    return { desk: { engine, docId } as unknown as MountedDesk, lookAt };
   };
 
-  it("asks for Canvas, then centres the object at the zoom you are at and selects it", async () => {
-    const { desk, panTo, setSelection } = deskWith();
+  it("asks for Canvas, then looks at the object: one `ops.lookAt`, at its defaults", async () => {
+    const { desk, lookAt } = deskWith();
     let view = "godview";
     const requestView = vi.fn(async () => {
       view = "canvas";
@@ -308,21 +293,21 @@ describe("the door to the desk", () => {
     );
     expect(ok).toBe(true);
     expect(requestView).toHaveBeenCalledWith("canvas");
-    // its centre (200, 100) at the view's centre: 1000×600 at zoom 2 is 500×300 of the world
-    expect(panTo).toHaveBeenCalledWith(200 - 250, 100 - 150);
-    expect(setSelection).toHaveBeenCalledWith([7]);
+    // the flight, the zoom and the selection are the op's own (ICE's `core/test/look-at.test.ts` holds them)
+    expect(lookAt.mock.calls).toEqual([[7]]);
   });
 
   it("does nothing for a board this window has not mounted, or an object that is gone", async () => {
-    const { desk, panTo } = deskWith("doc-2");
+    const { desk, lookAt } = deskWith("doc-2");
     const deps = { activeView: () => "canvas" as never, desk: () => desk, settle: async () => {} };
     expect(await showOnDesk({ docId: "doc-1", key: "key-a" }, deps)).toBe(false);
     const mounted = deskWith();
     expect(
       await showOnDesk({ docId: "doc-1", key: "key-gone" }, { ...deps, desk: () => mounted.desk }),
     ).toBe(false);
+    expect(mounted.lookAt).not.toHaveBeenCalled();
     expect(lookAtObject(mounted.desk, 99 as never)).toBe(false);
-    expect(panTo).not.toHaveBeenCalled();
+    expect(lookAt).not.toHaveBeenCalled();
   });
 });
 

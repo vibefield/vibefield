@@ -1,28 +1,18 @@
-import { Camera, type Entity, Position, Size, Viewport } from "@vibecook/ice";
+import type { Entity } from "@vibecook/ice";
 import { getActiveView, requestView } from "../../frame/view-state";
 import { currentDesk, type MountedDesk } from "./desk-door";
 
 /**
  * THE ONE DOOR TO AN OBJECT ON THE DESK (thinking-objects-at-work.md §4.4 and §7; OB-D16, 2026-11-25): the person's eye
- * taken to it — its centre at the view's centre, at the zoom they are at — and it selected. A ref card played on the
- * desk comes here, and so does a sticker clicked in a Godview pane. ICE petition I58 adds `ops.lookAt`, which flies
- * there, keeps a zoom the object reads at and reaches an object inside a mini mat; the EL8 that brings it changes this
- * door alone. Until then it moves the camera at once, as the card door always has. False: nothing to look at.
+ * taken to it, and it selected. A ref card played on the desk comes here, and so does a sticker clicked in a Godview
+ * pane. It is ICE's `ops.lookAt` (petition I58, ICE 0.21.0; the EL8 of 2026-11-25) at its defaults: the camera flies
+ * to the object and centres it, keeping the zoom the person is at where the object reads and fits there (else in to
+ * a zoom it reads at, or out until it fits); an object inside a mini mat is reached in its own frame; the selection
+ * becomes the object alone. Reduced motion snaps. False, with nothing changed: nothing to look at (the object is
+ * gone or is no object of the scene, or the desk has no viewport yet).
  */
 export function lookAtObject(desk: MountedDesk, entity: Entity): boolean {
-  const { engine } = desk;
-  const at = engine.world.get(entity, Position);
-  const size = engine.world.get(entity, Size);
-  const view = engine.world.getResource(Viewport);
-  const camera = engine.world.getResource(Camera);
-  if (at === undefined || size === undefined || view === undefined || camera === undefined)
-    return false;
-  engine.ops.panTo(
-    at.x + size.w / 2 - view.w / (2 * camera.zoom),
-    at.y + size.h / 2 - view.h / (2 * camera.zoom),
-  );
-  engine.ops.setSelection([entity]);
-  return true;
+  return desk.engine.ops.lookAt(entity);
 }
 
 /** Where an at-work row says the object is: its board and its durable key there. */
