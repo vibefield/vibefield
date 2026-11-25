@@ -1240,7 +1240,7 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 | Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe); the left tray retired into the hand at HN-1 (2026-10-29), and the right twin, which wore it mirrored, into the pill's sheet at HN-8 (2026-10-30): no wearer since, and `--vf-shadow-edge`, `--vf-drop-edge` and `--vf-drop-island` stand in `tokens.css` until a token pass removes them, doc first |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
 | Search popup (the Peek, §8 "Search"; GV-D8, built 2026-10-08) | `0 40px 100px rgba(0,0,0,0.24), 0 12px 30px rgba(0,0,0,0.10)` · dark `0 40px 100px rgba(0,0,0,0.6)` and a 6% top light (`inset 0 1px 0` white/6) — ringed by the strong hairline |
-| Dialog (`--vf-shadow-dialog`; Settings, and the simulator's setup over the desk; written here 2026-11-19, the token older) | `0 42px 100px rgba(0,0,0,0.18), 0 12px 36px rgba(0,0,0,0.10)` · dark `0 48px 120px rgba(0,0,0,0.48), 0 14px 40px rgba(0,0,0,0.30)`, over the backdrop dim (below) |
+| Dialog (`--vf-shadow-dialog`; Settings; written here 2026-11-19, the token older; the simulator's setup over the desk wore it until OM-2, 2026-11-25, and is a sheet on its glass since, §9) | `0 42px 100px rgba(0,0,0,0.18), 0 12px 36px rgba(0,0,0,0.10)` · dark `0 48px 120px rgba(0,0,0,0.48), 0 14px 40px rgba(0,0,0,0.30)`, over the backdrop dim (below) |
 
 *Corrected 2026-10-28 (the housekeeping pass), recording DK-13 and DK-17:* the two card rows are the
 record of the DOM card, which retired with the 0.11 canvas (DK-17); their tokens stand in
@@ -5456,6 +5456,12 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     More is. Selected objects on different choices say **Mixed**, in secondary ink. Its tooltip and its accessible
     name say the act and the choice: "Device: Laptop". Pressed, the bar grows into **the choice's list** ("The bar
     grown", below), and a choice taken runs the act with it (`ops.runMenuAction(id, choice)`), one undo step.
+    *Added 2026-11-25 (track OM, OM-2):* a choice whose every choice carries a **swatch** is a **swatch pill**: the
+    current choice's dot (12, its 1px inner ring) and `chevron` 12 turned down, no words — 32 tall, padded 0 7 0 10,
+    gap 5, corners 16, with a cell's states. Its tooltip and accessible name say the act and the choice ("Finish:
+    Cosmic Orange"); objects on different choices show an empty ring in secondary ink and say "Finish: Mixed". While
+    its list is open, on the inverted solid, the dot's ring is that solid's own ink at 40%, so a dark finish by day and
+    a light one by night keep their edge.
   - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · Make a card,
     which rests on the ready fill, steps to 14% under the pointer and 0.97 pressed (R25) · More,
     its menu open, shown on — the inverted solid · Delete arms only while hovered:
@@ -13425,13 +13431,42 @@ every one is muted. The settings form these replace, which also set a pixel rati
 (James, 2026-11-25: "let's remove pixel ratio, input and ua selection"). A pane saved with one of those keeps it
 until a device is chosen.
 
-**The simulator's selection menu** offers **Simulator settings…** and **Finish**. Double-clicking a new simulator opens
-setup. Choose an installed iOS version and a compatible iPhone model to create a separate local device for each selected
-simulator. The device starts when visible. Copies get their own devices. Each pane keeps its apps and data for each
-model and iOS version, including when you switch away and return. VibeField shuts down devices it booted on quit or ten
-minutes after their last pane releases them. Reopening a pane during that time keeps its device warm.
-Finish cycles through the model's available finishes.
+**The simulator's acts** (track OM, OM-2, 2026-11-25; James's picks on the page *Pane and Phone Menus*: the settings
+picked up, A, and the finish a choice, A) are **Simulator settings…** and **Finish**, on the selection bar and in the
+tools in hand beside **Home**. **Simulator settings…** wears its own drawing (§13, a phone with a slider) and picks
+the phone up to reading size, as double-clicking a new simulator does, and its settings rise as **a sheet on its
+glass**: from under the Dynamic Island to the screen's foot, its top corners rounded, VibeField's chrome on the phone
+and never the window's dialog. The sheet is the solid material, padded 22 20 30: its heading at 19/650 with the kit's
+`close` 14 in a 28 round on the ready fill at its end; under it, 12 in tertiary ink, the Xcode on this Mac; its
+choices as **pills**, a label at 12/600 in secondary ink over a 36 pill on the ready fill, corners 12, the value at
+13/500 and `chevron` 12 turned down, which opens its list of the bar's rows in the sheet (§8 "A choice's list"); a
+link at 12 in secondary ink, underlined; a note; and at its foot the inverted solid as its one primary, 38 tall, with
+a link under it. Its states: **before Xcode**, the steps (Install Xcode; Install an iOS runtime), the current one's
+number on the inverted solid, with Open Mac App Store or Open Xcode and Check again; **ready**, Set up simulator, its
+iOS version and iPhone model, and **Create simulator**; **set up**, Simulator settings with **Switch simulator** and
+"Each configuration keeps its own apps and data."; and the repairs (Xcode's license, its command-line tools, a Mac
+that has none) in their own words. Create simulator boots it right there. The close glyph or Esc closes the sheet and
+the phone stays in hand; Done or Esc then puts it down. With several selected, the first is picked up and its sheet
+sets up every one of them, and says how many. Choose an installed iOS version and a compatible iPhone model to create
+a separate local device for each selected simulator. The device starts when visible. Copies get their own devices.
+Each pane keeps its apps and data for each model and iOS version, including when you switch away and return.
+VibeField shuts down devices it booted on quit or ten minutes after their last pane releases them. Reopening a pane
+during that time keeps its device warm. **Finish** is a choice (§8, a swatch pill in the phone's own colour): its
+list is the model's finishes by name, each with its dot, the current one checked, and a finish taken sets every
+selected phone in one undo step. Phones of different models share no list, so Finish stands faint; phones of one
+model in different finishes show the empty ring, Mixed.
+*Settled at the build (2026-11-25, OM-2):* the sheet's top corners are 2.6 mm of the display, as the page drew them,
+and its foot follows the display's own corners; it starts 2.5% of the display's height under the notch, or under the
+display's top on a phone with a Home button. A pill's list opens inline under it — the bar's rows in a ring of the
+strong hairline, no eyebrow — the pill on the pressed fill (14%) while it is open, and Esc folds the list before it
+closes the sheet. Notes and status lines are in secondary ink. With several phones the heading and the primary say how
+many ("Set up 3 simulators", "Create simulators"). Both acts stand faint until the kind's DOM half is mounted, and a
+finish every selected phone already wears writes nothing, so no empty undo step.
 *Renamed 2026-11-19 (item 572):* this paragraph was "The phone's selection menu".
+*Amended 2026-11-25 (track OM, OM-2):* it was "The simulator's selection menu". Simulator settings… opened a form in
+the window's dialog unless the phone was already in hand, where it lay on the glass; in the dialog the window's own
+reset (field-app's `tw.css` sets every margin to 0) took the dialog's centring, so it stood at the top left. Finish
+turned the phone to its model's next finish, one undo step for each phone. The superseded text is in git.
 
 *Amended 2026-11-19 (track PT; James's own commits `111f5bc6f` "feat(panes): integrate GPU browser controls and
 interactive iOS simulators", 2026-11-18 23:34Z, and the four after it to `87e71631c`, 2026-11-19 00:42Z):* the
@@ -14594,6 +14629,12 @@ size the SF Symbol had, and the swarm's CoreGraphics sprites are the Instrument 
 not an icon — the coin's marks (§2.8), the catalog's fixture stills (and the edge tray's notch and
 drawer, until HN-8 retired them, §8) — and, on the desk, two named exceptions: the bar's ONE path renderer for a kind's own drawing
 (R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
+*(2026-11-25, track OM:)* the drawings kinds hand that renderer, each its own path data stroked 2 in the 24 box with
+round caps and joins: the browser pane's **device** (a screen and a phone beside it), **sound** (a speaker with two
+arcs) and **sound off** (the speaker struck through, Unmute's) — OM-1's, drawn on the page *Pane and Phone Menus* and
+recorded here at OM-2 — and the simulator's **settings** (a phone with a slider: its body, its earpiece, and a knob on
+the slider's rail; OM-2). A kind draws its own only where the kit has no glyph for the act; the finish's dot is a
+swatch (§8), not a drawing.
 *(2026-11-18, item 550:)* the desk's at-work sticker (§8 "At work on the mat") needs neither: its agent's mark is the
 toolkit's `agentMark` path data (puppeteer-view-sdk), kept exact as the vendor marks below are (AR-L1), baked once into
 the overlay's own distance-field atlas and drawn on the GPU, never as an inline `<svg>`, and its form without WebGL2 is
