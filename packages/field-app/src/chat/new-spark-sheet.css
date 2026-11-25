@@ -139,15 +139,22 @@
   color: var(--vf-text-secondary);
 }
 
-/* the agent menu: a solid menu (§5), 300 wide */
+/* the agent menu: a solid menu (§5), 300 wide. It never runs past the window's foot (Spark QA F3, 2026-11-25): it
+   ends at most 8 short of the room the view lends it to the layer's foot (`--vf-new-spark-menu-room`,
+   NewSparkSheetView), as §5's menus end 8 short of the line, and scrolls inside past that, as the Peek's Filter menu
+   does in its popup. Nothing lent (laid out nowhere), the bound is no value and the menu takes its height. */
 .vf-new-spark-menu {
   position: absolute;
   inset-inline-start: 50%;
   inset-block-start: 380px;
   z-index: 2;
+  box-sizing: border-box;
   inline-size: 300px;
+  max-block-size: calc(var(--vf-new-spark-menu-room) - 8px);
   margin-inline-start: -150px;
   padding: 6px;
+  overflow: auto;
+  scrollbar-width: thin;
   border-radius: 18px;
   background: var(--vf-chrome-solid);
   box-shadow:

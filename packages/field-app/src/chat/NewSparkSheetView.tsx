@@ -29,6 +29,9 @@ import "./new-spark-sheet.css";
 // night's place, over the glass, the hatch drawing its sky and its face there — and the glass that grows around it;
 // the phase's motion is `portal.ts`'s.
 
+/** The room the agent menu is lent under it, to the layer's foot (new-spark-sheet.css; Spark QA F3, 2026-11-25). */
+const MENU_ROOM = "--vf-new-spark-menu-room";
+
 /** ES-3b — the portal, as the controller hands it: the night lent, and where the portal stands. */
 export interface SheetPortal {
   /** the night's place (its client rect): the window stands there and the glass grows from there */
@@ -229,6 +232,28 @@ export function NewSparkSheetView({
       for (const property of ["position", "left", "top"]) sheet.style.removeProperty(property);
     };
   }, [lent]);
+  // Spark QA F3, 2026-11-25 — the agent menu never runs past the window's foot: while it is open it is lent the room
+  // from where it stands to the layer's foot (the window's, or a plate's), and its stylesheet ends it 8 short of that
+  // and scrolls it inside past it, as the Peek's Filter menu is bounded by its popup. Read by offsets, which the
+  // sheet's rise (a transform) never moves; again as the window or the sheet resizes (the sheet stands centred, so
+  // its growth moves the menu). Laid out nowhere (no height), nothing is lent.
+  const menuRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
+    const sheet = sheetRef.current;
+    const menu = menuRef.current;
+    if (!menuOpen || !layer || !sheet || !menu) return;
+    const lend = (): void => {
+      const height = layer.clientHeight;
+      if (height <= 0) menu.style.removeProperty(MENU_ROOM);
+      else menu.style.setProperty(MENU_ROOM, `${height - sheet.offsetTop - menu.offsetTop}px`);
+    };
+    lend();
+    const resized = typeof ResizeObserver === "function" ? new ResizeObserver(lend) : null;
+    resized?.observe(layer);
+    resized?.observe(sheet);
+    return () => resized?.disconnect();
+  }, [menuOpen]);
   const phase = portal?.phase;
   const reduced = portal?.reduced ?? false;
   // folded is the fold run on (the night handed back under it): its motion is the fold's, never run again
@@ -328,7 +353,7 @@ export function NewSparkSheetView({
             </div>
           )}
           {menuOpen ? (
-            <div className="vf-new-spark-menu" role="menu">
+            <div ref={menuRef} className="vf-new-spark-menu" role="menu">
               {menu.map((row, index) => menuRow(row, index, onAgent, onModel))}
               {effort === undefined ? null : (
                 <div className="vf-new-spark-effort">

@@ -2486,6 +2486,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     - The pill opens the agent menu (§5: a solid menu, 300 wide), placed as a macOS pop-up so the chosen row lands on
       the pill. It holds each agent's models as its picker lists them (`agent.models`), the profile whose sign-in it
       thinks under on that agent's head, and Effort as a small segmented control.
+      - *Added 2026-11-25 (Spark QA F3):* it never runs past the window's foot. It ends at most 8 above it, as §5's
+        menus end 8 above the line, and scrolls inside past that, as the Filter menu does in its popup (§8 "Search —
+        the Peek"). It stays open while a model is chosen, so Effort is chosen in it.
     - The menu lists the agents the catalog lets be a spark first, then the ones installed here that it does not let
       yet, disabled, with why ("can't take VibeField's tools yet"). An agent not installed here is not listed. Both
       are read from `agent.providers[]`: `offers.spark`, fieldd's word on the catalog's spark claim for this device,

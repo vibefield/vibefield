@@ -195,6 +195,37 @@ describe("the New spark sheet", () => {
     expect(port.models).toHaveBeenCalledTimes(1);
   });
 
+  it("gives its agent menu the room under it to the window's foot, and the menu scrolls inside past that (Spark QA F3, 2026-11-25)", async () => {
+    const room = "--vf-new-spark-menu-room";
+    // laid out nowhere (no height): no bound is lent, so nothing is cut to nothing
+    await open(portOf());
+    await press($(".vf-new-spark-agent"));
+    expect($(".vf-new-spark-menu")?.style.getPropertyValue(room)).toBe("");
+    await press($(".vf-new-spark-agent"));
+    // a window 1035 tall, as real use found it: the sheet stands 202 down it and its menu 380 into the sheet
+    vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      return this.classList.contains("vf-new-spark") ? 1035 : 0;
+    });
+    vi.spyOn(HTMLElement.prototype, "offsetTop", "get").mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      if (this.classList.contains("vf-new-spark-sheet")) return 202;
+      return this.classList.contains("vf-new-spark-menu") ? 380 : 0;
+    });
+    await press($(".vf-new-spark-agent"));
+    expect($(".vf-new-spark-menu")?.style.getPropertyValue(room)).toBe(`${1035 - 202 - 380}px`);
+    // the menu ends 8 short of that room, as §5's menus end 8 short of the line, and scrolls inside past it
+    const css = readFileSync(join(process.cwd(), "src/chat/new-spark-sheet.css"), "utf8");
+    const rule = css.match(/^\.vf-new-spark-menu \{([^}]*)\}/m)?.[1] ?? "";
+    expect(rule).toMatch(/max-block-size: calc\(var\(--vf-new-spark-menu-room\) - 8px\);/);
+    expect(rule).toMatch(/overflow: auto;/);
+    // folded, it lends nothing more
+    await press($(".vf-new-spark-agent"));
+    expect($(".vf-new-spark-menu")).toBeNull();
+  });
+
   it("hatches what it asked, flies the face to its row in Chat, and folds", async () => {
     const port = portOf();
     const row = document.createElement("div");
