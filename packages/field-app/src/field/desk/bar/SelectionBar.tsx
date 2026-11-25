@@ -118,6 +118,9 @@ import {
 // the desk's one editor's `command` inside the press (bar-acts.ts `runWordsCommand`) — and a RIGHT-CLICK on the sheet being
 // written, while words on it are selected, grows the same menu from the bar over the words (ICE keeps the field's focus
 // through a right press on its writing). A right-click anywhere else is the objects' as before.
+// AT A BARE CARET (round two; the anchor's `caret`): no bar stands there, but a right-click on the sheet being written grows
+// Paste | Select all AT THE CARET — the same bar, its row More alone, standing over the caret's box while the rows are
+// open and following it; they fold when the menu closes, the caret goes or words come.
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -166,6 +169,11 @@ interface BarFacts {
   readonly wordsLive: boolean;
   /** IK — those words are on screen. */
   readonly wordsOnScreen: boolean;
+  /** IK round two — a sheet is written with a bare CARET (the anchor's `caret`): a right-click there grows Paste and Select
+   * all at the caret; no bar stands there otherwise. */
+  readonly caretLive: boolean;
+  /** IK round two — that caret is on screen. */
+  readonly caretOnScreen: boolean;
 }
 
 /** IK — the words as the bar says them: the object's words acts (the anchor's `words.menu`), and their run. */
@@ -182,6 +190,16 @@ const liveWords = (anchor: SelectionAnchor) => {
   const words = anchor.words;
   return words !== undefined && words.menu.length > 0 && !inHand(anchor) ? words : undefined;
 };
+
+/** IK round two — the anchor's bare caret while a sheet is written and no words are selected, and nothing is in hand. */
+const liveCaret = (anchor: SelectionAnchor) =>
+  anchor.caret !== undefined && liveWords(anchor) === undefined && !inHand(anchor)
+    ? anchor.caret
+    : undefined;
+
+/** IK round two — the bar at the caret: the words' row of a sheet with no words acts — More alone — which the caret's rows
+ * grow from (§8). */
+const CARET_ROW: WordsRow = { cells: wordsCells([], {}), run: 0 };
 
 /** IK — the words as of this anchor: the live ones (`prev`'s own when nothing the bar says moved), else the last ones while
  * the bar is not to show the objects' row (`keep`), else none. */
@@ -290,6 +308,9 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
   const live = liveWords(anchor);
   const wordsLive = live !== undefined;
   const wordsOnScreen = live !== undefined && !offScreen(live.box, anchor.view);
+  const caret = liveCaret(anchor);
+  const caretLive = caret !== undefined;
+  const caretOnScreen = caret !== undefined && !offScreen(caret.box, anchor.view);
   // in hand the tools stay through a stroke or a line being written; only the flight home steps them aside — and a sheet
   // being written sends the bar away only while no words on it are selected (IK: then it comes to them)
   const stepAside =
@@ -317,6 +338,8 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     prev.words === words &&
     prev.wordsLive === wordsLive &&
     prev.wordsOnScreen === wordsOnScreen &&
+    prev.caretLive === caretLive &&
+    prev.caretOnScreen === caretOnScreen &&
     savable
   ) {
     return prev;
@@ -342,6 +365,8 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     words,
     wordsLive,
     wordsOnScreen,
+    caretLive,
+    caretOnScreen,
     // deselected, the bar fades out still saying what it said (R8): its content stays the last selection's
     selection:
       prev !== null && (same || anchor.count === 0)
@@ -402,6 +427,10 @@ function SelectionBarOn({
   const [choosing, setChoosing] = useState<Choosing | null>(null);
   const choosingRef = useRef(choosing);
   choosingRef.current = choosing;
+  /** IK round two — a right-click at the bare caret grew the caret's rows: the bar stands at the caret while they are open. */
+  const [caretOpen, setCaretOpen] = useState(false);
+  const caretOpenRef = useRef(false);
+  caretOpenRef.current = caretOpen;
   /** IK — the words a words act runs on, as the last publish said them (never a render's copy: E7's M13). */
   const rangeRef = useRef<{
     readonly entity: Entity;
@@ -432,10 +461,14 @@ function SelectionBarOn({
       const live = liveWords(anchor);
       rangeRef.current =
         live === undefined ? null : { entity: live.entity, from: live.from, to: live.to };
+      // round two: with the caret's rows open the bar stands at the caret
+      const caret = caretOpenRef.current ? liveCaret(anchor) : undefined;
       const at: PlaceAnchor =
-        live === undefined
-          ? { ...anchor, clear, selection: next.key }
-          : { box: live.box, count: 1, view: anchor.view };
+        caret !== undefined
+          ? { box: caret.box, count: 1, view: anchor.view }
+          : live === undefined
+            ? { ...anchor, clear, selection: next.key }
+            : { box: live.box, count: 1, view: anchor.view };
       if (next !== prev) {
         factsRef.current = next;
         // what it SAYS changed — the selection's cells, the hand's, or the words' — so it is placed once it has re-rendered:
@@ -461,9 +494,11 @@ function SelectionBarOn({
       }
       // in hand it stands under the head whatever the selection's box; over words or a selection, only where it can stand
       const placing =
-        next.inHand ||
-        (!next.stepAside &&
-          (next.wordsLive ? next.wordsOnScreen : next.count > 0 && next.onScreen));
+        caret !== undefined
+          ? next.caretOnScreen
+          : next.inHand ||
+            (!next.stepAside &&
+              (next.wordsLive ? next.wordsOnScreen : next.count > 0 && next.onScreen));
       barRef.current?.place(at, placing);
     };
     read(false);
@@ -478,12 +513,18 @@ function SelectionBarOn({
     };
   }, [source, desk, fold]);
 
-  // over words, while they are on screen (IK); over a selection on screen; or in hand
+  // IK round two — at the caret: its rows open over a bare caret (a right-click on the sheet being written)
+  const atCaret = caretOpen && facts.caretLive;
+  // at the caret, while it is on screen; over words, while they are on screen (IK); over a selection on screen; or in hand
   const shown =
     !hidden &&
-    (facts.inHand || (facts.wordsLive ? facts.wordsOnScreen : facts.count > 0 && facts.onScreen));
-  const stepAside = facts.stepAside;
-  const overWords = facts.words !== null;
+    (atCaret
+      ? facts.caretOnScreen
+      : facts.inHand ||
+        (facts.wordsLive ? facts.wordsOnScreen : facts.count > 0 && facts.onScreen));
+  // at the caret the bar does not step aside for the writing it stands in
+  const stepAside = atCaret ? false : facts.stepAside;
+  const overWords = !atCaret && facts.words !== null;
 
   // R5: the menu closes on a gesture and when the bar goes — into the hand too, unless it is a tool in hand's choices
   // that are listed (ICE I62); and a choice's list closes as its role goes (picked up, or put down)
@@ -495,14 +536,24 @@ function SelectionBarOn({
   useEffect(() => {
     if (!open) setChoosing(null);
   }, [open]);
-  // IK — and when the bar changes between the objects' row and the words': each menu is its own row's (R5's change of
-  // selection: the words came, or went)
-  const wordsSeen = useRef(overWords);
+  // IK — and when the bar changes between the objects' row, the words' and the caret's: each menu is its own row's (R5's
+  // change of selection: the words came, or went). The caret's rows open by their own right-click, so a change INTO them
+  // folds nothing.
+  const rowSaid = atCaret ? "caret" : overWords ? "words" : "objects";
+  const rowSeen = useRef(rowSaid);
   useEffect(() => {
-    if (overWords === wordsSeen.current) return;
-    wordsSeen.current = overWords;
-    if (surfaceRef.current.surface === "selection") fold();
-  }, [overWords, fold]);
+    if (rowSaid === rowSeen.current) return;
+    rowSeen.current = rowSaid;
+    if (rowSaid !== "caret" && surfaceRef.current.surface === "selection") fold();
+  }, [rowSaid, fold]);
+  // round two: the caret's rows last while their menu is open and the caret stands; then no bar is at the caret
+  useEffect(() => {
+    if (!caretOpen) return;
+    if (!open || !facts.caretLive) {
+      setCaretOpen(false);
+      if (open) fold();
+    }
+  }, [caretOpen, open, facts.caretLive, fold]);
 
   // R26: a right-click's own selection is the one the menu grows for, once the desk has drawn it (any other change of
   // selection folded it in the read, above)
@@ -529,8 +580,19 @@ function SelectionBarOn({
       if (hit === null) return;
       // IK — on the sheet being written, with words on it selected: the words' menu, from the bar over the words; the
       // selection is not touched (the sheet's words are what it acts on)
-      const words = liveWords(source.anchor());
+      const anchor = source.anchor();
+      const words = liveWords(anchor);
       if (words !== undefined && hit.entity === words.entity) {
+        surfaceRef.current.onSurfaceChange("selection");
+        return;
+      }
+      // round two — at a bare caret on the sheet being written: Paste and Select all, at the caret (§8); the bar stands
+      // there only while they are open
+      const caret = liveCaret(anchor);
+      if (caret !== undefined && hit.entity === caret.entity) {
+        caretOpenRef.current = true;
+        setCaretOpen(true);
+        barRef.current?.place({ box: caret.box, count: 1, view: anchor.view }, false);
         surfaceRef.current.onSurfaceChange("selection");
         return;
       }
@@ -589,17 +651,20 @@ function SelectionBarOn({
   // door (round two) and waits only where there is none (the browser catalog)
   const paste = wordsPasteOf(peekHost());
   const wordsGroups = useMemo(() => wordsMenuGroups(keys, paste), [keys, paste]);
-  const groups = overWords ? wordsGroups : objectGroups;
-  const eyebrow = overWords ? WORDS_EYEBROW : objectEyebrow;
+  const caretGroups = useMemo(() => wordsMenuGroups(keys, paste, "caret"), [keys, paste]);
+  const groups = atCaret ? caretGroups : overWords ? wordsGroups : objectGroups;
+  const eyebrow = atCaret || overWords ? WORDS_EYEBROW : objectEyebrow;
   // IK — the words' row, its swatches in the desk's own palette as the theme dresses it (the stage's `deskLook`)
   const theme = useAppTheme().resolved;
   const palette = useMemo(() => deskLook(theme).palette, [theme]);
   const wordsRow = useMemo<WordsRow | null>(
     () =>
-      facts.words === null
-        ? null
-        : { cells: wordsCells(facts.words.menu, palette), run: facts.words.run },
-    [facts.words, palette],
+      atCaret
+        ? CARET_ROW
+        : facts.words === null
+          ? null
+          : { cells: wordsCells(facts.words.menu, palette), run: facts.words.run },
+    [atCaret, facts.words, palette],
   );
   // IK — a words act runs on the words as the anchor last said them, through the bar's one words run (bar-acts.ts)
   const onWords = useCallback(

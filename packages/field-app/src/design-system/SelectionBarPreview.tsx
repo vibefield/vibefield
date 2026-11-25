@@ -604,6 +604,7 @@ export const WORDS_STATES = [
   "Words — the highlighters",
   "Words — More",
   "Words — More with no clipboard door: Paste waits",
+  "Words — at a bare caret: Paste | Select all",
 ] as const;
 export type WordsState = (typeof WORDS_STATES)[number];
 
@@ -616,6 +617,8 @@ const WORDS_PLATES: Record<
     readonly open?: string;
     /** The words' More grown, by the page's road to the clipboard. */
     readonly more?: WordsPaste;
+    /** Round two: the caret's rows grown at a bare caret (a right-click on the sheet being written). */
+    readonly caret?: true;
   }
 > = {
   "Words — the fountain pen, yellow, underlined": { menu: MARKED },
@@ -626,7 +629,12 @@ const WORDS_PLATES: Record<
   "Words — the highlighters": { menu: MARKED, open: "ink.highlight" },
   "Words — More": { menu: MARKED, more: "door" },
   "Words — More with no clipboard door: Paste waits": { menu: MARKED, more: "none" },
+  // at a caret no words are selected, so no acts: the row is a words row with none (More alone), as the product's
+  "Words — at a bare caret: Paste | Select all": { menu: [], more: "door", caret: true },
 };
+
+/** The bare caret on the caret plate: as wide as the part says, a line tall. */
+const CARET_BOX = { x0: 260, y0: 244, x1: 262, y1: 266 } as const;
 
 /** A plate whose menu grows stands its sheet this much lower, and is this tall, so the menu grows UP as it does mid-desk. */
 const MORE_DROP = 130;
@@ -653,16 +661,24 @@ export function WordsPlate({ state, dark }: { state: WordsState; dark: boolean }
   );
   const [open, setOpen] = useState(plate.more !== undefined);
   const groups = useMemo(
-    () => (plate.more === undefined ? NO_GROUPS : wordsMenuGroups("mac", plate.more)),
+    () =>
+      plate.more === undefined
+        ? NO_GROUPS
+        : wordsMenuGroups("mac", plate.more, plate.caret ? "caret" : "words"),
     [plate],
   );
   const drop = plate.more === undefined ? 0 : MORE_DROP;
   const height = plate.more === undefined ? 400 : MORE_HEIGHT;
   const sheet = at(SHEET_BOX, drop);
-  const wordsBox = at(WORDS_BOX, drop);
+  const wordsBox = at(plate.caret ? CARET_BOX : WORDS_BOX, drop);
+  const caret = plate.caret === true;
   const anchor = useMemo<PlaceAnchor>(
-    () => ({ box: at(WORDS_BOX, drop), count: 1, view: { width: WIDTH, height } }),
-    [drop, height],
+    () => ({
+      box: at(caret ? CARET_BOX : WORDS_BOX, drop),
+      count: 1,
+      view: { width: WIDTH, height },
+    }),
+    [caret, drop, height],
   );
   return (
     <div className="vf-ds-bar-plate" data-state={state} style={{ height }}>
@@ -684,15 +700,18 @@ export function WordsPlate({ state, dark }: { state: WordsState; dark: boolean }
           height: sheet.y1 - sheet.y0,
         }}
       />
-      <div
-        className="vf-ds-bar-wash"
-        style={{
-          left: wordsBox.x0,
-          top: wordsBox.y0,
-          width: wordsBox.x1 - wordsBox.x0,
-          height: wordsBox.y1 - wordsBox.y0,
-        }}
-      />
+      {caret ? null : (
+        // the words' wash, which the desk draws in the product (none at a bare caret: nothing is selected)
+        <div
+          className="vf-ds-bar-wash"
+          style={{
+            left: wordsBox.x0,
+            top: wordsBox.y0,
+            width: wordsBox.x1 - wordsBox.x0,
+            height: wordsBox.y1 - wordsBox.y0,
+          }}
+        />
+      )}
       <SelectionBarView
         cells={NO_CELLS}
         groups={groups}

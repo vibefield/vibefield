@@ -811,10 +811,11 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "ink.highlight",
       "main",
       "main",
+      "main",
     ]);
     expect(
       wordsPlates.map((p) => p.querySelector("[data-selection-bar]")?.hasAttribute("data-words")),
-    ).toEqual([true, true, true, true, true, true]);
+    ).toEqual([true, true, true, true, true, true, true]);
     expect(
       [...(shownWords(wordsPlates[0])?.children ?? [])].map((el) =>
         el.classList.contains("vf-bar-rule") ? "|" : el.getAttribute("data-act"),
@@ -862,7 +863,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       );
     expect(
       wordsPlates.map((p) => p.querySelector("[data-selection-bar]")?.hasAttribute("data-open")),
-    ).toEqual([false, false, false, false, true, true]);
+    ).toEqual([false, false, false, false, true, true, true]);
     expect(rows(wordsPlates[4])).toEqual([
       "words:cut",
       "words:copy",
@@ -876,6 +877,12 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "words:selectAll",
     ]);
     expect(wordsPlates[4]?.querySelector(".vf-bar-eye")?.textContent).toBe("WORDS");
+    // round two — at a bare caret: the words' row More alone, the menu Paste | Select all, no wash
+    expect(rows(wordsPlates[6])).toEqual(["words:paste", "words:selectAll"]);
+    expect(
+      [...(shownWords(wordsPlates[6])?.children ?? [])].map((el) => el.getAttribute("data-act")),
+    ).toEqual(["more"]);
+    expect(wordsPlates[6]?.querySelector(".vf-ds-bar-wash")).toBeNull();
     expect(
       wordsPlates[4]
         ?.querySelector('[data-words-row="main"] [data-act="more"]')

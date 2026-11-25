@@ -20,7 +20,8 @@
  *     has no editor) with the field's focus kept; a command that did nothing is said on the status line; in the app (a host
  *     that reads the clipboard through main) Paste reads through that door and hands the words in (round two), and with no
  *     door it waits and says ⌘V; a right-click anywhere else is the objects' as before;
- *     a slot's declared `keys` printed in its tip.
+ *     a slot's declared `keys` printed in its tip; at a bare CARET (round two, the anchor's `caret`) a right-click on the sheet
+ *     grows Paste | Select all at the caret, and no bar stands there otherwise.
  * No kind on the desk declares words acts yet (ICE's ink acts arrive with the note's next slice): the anchors are fixtures.
  */
 import { type CanvasEngine, type Entity, setWidgetProps } from "@vibecook/ice";
@@ -933,13 +934,110 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
     expect(surfaceNow).toBeNull();
   });
 
-  it("at a CARET alone a right-click grows nothing (as before): the bar is away while no words are selected — §8's caret rows are not built", () => {
+  it("with NO caret on the anchor (the editor lent to nothing) a right-click on the note grows nothing: the bar is away while it is written", () => {
     selection.publish({ words: undefined });
     mount();
     pick.mockReturnValue({ entity: note });
     rightClick();
     expect(bar().hasAttribute("data-open")).toBe(false);
     expect(bar().dataset.shown).toBe("false");
+  });
+
+  /** A bare caret on the note, as ICE publishes it while the editor is lent and nothing is selected (round two). */
+  const CARET = { box: { x0: 500, y0: 330, x1: 502, y1: 350 }, entity: 0 as Entity, at: 7 };
+  const caretOn = () => ({ ...CARET, entity: note });
+
+  it("AT A BARE CARET (round two): no bar stands there; a right-click on the sheet being written grows Paste | Select all AT THE CARET, the selection untouched", () => {
+    vi.useFakeTimers();
+    ce.ops.setSelection([]);
+    selection.publish({ words: undefined, caret: caretOn() });
+    mount();
+    // no bar at a bare caret
+    expect(bar().dataset.shown).toBe("false");
+    const select = vi.spyOn(ce.ops, "setSelection");
+    pick.mockReturnValue({ entity: note });
+    const event = rightClick();
+    expect(event.defaultPrevented).toBe(true);
+    expect(surfaceNow).toBe("selection");
+    expect(select).not.toHaveBeenCalled();
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(bar().dataset.shown).toBe("true");
+    // the bar stands at the caret: its foot 10 above the caret's box, centred on it
+    expect(bar().style.transform).toContain("translate(501.0px, 280.0px)");
+    // its row is More alone, shown on; the menu Paste | Select all, the words' eyebrow
+    expect(wordsSaid()).toEqual(["more"]);
+    expect(cell("more").getAttribute("aria-expanded")).toBe("true");
+    expect(menuSaid()).toEqual(["words:paste ⌘V", "|", "words:selectAll ⌘A", "eyebrow WORDS"]);
+    // the caret moves (a key typed): the bar follows it, no render
+    act(() =>
+      selection.publish({
+        caret: { ...caretOn(), at: 8, box: { x0: 510, y0: 330, x1: 512, y1: 350 } },
+      }),
+    );
+    expect(bar().style.transform).toContain("translate(511.0px, 280.0px)");
+  });
+
+  it("the caret's rows run as the words' do — Paste through the door, Select all — the field's focus kept; then the menu folds and no bar stays at the caret", async () => {
+    selection.publish({ words: undefined, caret: caretOn() });
+    mount();
+    act(() => field.focus());
+    pick.mockReturnValue({ entity: note });
+    rightClick();
+    const paste = menuRow("words:paste");
+    const down = new PointerEvent("pointerdown", { bubbles: true, cancelable: true });
+    act(() => {
+      paste.dispatchEvent(down);
+    });
+    expect(down.defaultPrevented).toBe(true);
+    act(() => paste.click());
+    await settle();
+    expect(commands).toEqual(["paste:words"]);
+    expect(document.activeElement).toBe(field);
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-open")).toBe(false);
+    expect(wordsSaid).toThrow(); // no words' row: the bar is not at the caret any more
+    rightClick();
+    act(() => menuRow("words:selectAll").click());
+    await settle();
+    expect(commands).toEqual(["paste:words", "selectAll"]);
+    expect(surfaceNow).toBeNull();
+  });
+
+  it("the caret's rows fold when the caret goes, when words come (the words' own bar then), and on a right-click elsewhere; Esc folds them ahead of the field", () => {
+    selection.publish({ words: undefined, caret: caretOn() });
+    mount();
+    pick.mockReturnValue({ entity: note });
+    rightClick();
+    expect(surfaceNow).toBe("selection");
+    // the editor let go: no caret
+    act(() => selection.publish({ caret: undefined }));
+    expect(surfaceNow).toBeNull();
+    // again, then words come (Select all, a drag): the caret's menu folds, the words' row stands
+    act(() => selection.publish({ caret: caretOn() }));
+    rightClick();
+    expect(surfaceNow).toBe("selection");
+    act(() => selection.publish({ caret: undefined, words: words() }));
+    expect(surfaceNow).toBeNull();
+    expect(wordsSaid()[0]).toBe("word:ink.pen");
+    // back at a caret, Esc folds the rows and the field never hears it
+    act(() => selection.publish({ words: undefined, caret: caretOn() }));
+    act(() => field.focus());
+    rightClick();
+    expect(surfaceNow).toBe("selection");
+    fieldHeard = [];
+    expect(key("Escape", field).defaultPrevented).toBe(true);
+    expect(fieldHeard).toEqual([]);
+    expect(surfaceNow).toBeNull();
+    // a right-click on another object is the objects' as before: it is selected first, no caret's rows
+    const select = vi.spyOn(ce.ops, "setSelection").mockImplementation(() => undefined);
+    const other = (note + 1000) as Entity;
+    pick.mockReturnValue({ entity: other });
+    rightClick();
+    expect(select).toHaveBeenCalledWith([other]);
+    expect(surfaceNow).toBeNull();
   });
 
   it("the words going — or coming — folds an open menu: each menu is its own row's", () => {

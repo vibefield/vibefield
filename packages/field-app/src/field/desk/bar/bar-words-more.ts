@@ -46,11 +46,19 @@ const WORDS_KEYS = {
 export const pasteWaits = (keys: DeskKeys): string =>
   `the bar can't read the clipboard here; ${WORDS_KEYS[keys].paste} pastes`;
 
+/** Where the words' menu stands: over words selected, or at a bare CARET (round two: its rows are Paste and Select all). */
+export type WordsMenuAt = "words" | "caret";
+
 /**
- * The words' menu, NEAREST FIRST: Cut · Copy · Paste | Select all (§8), each with the platform field's key. Paste waits where
- * the bar has no road to the clipboard (`none`), and says the key that pastes.
+ * The words' menu, NEAREST FIRST: Cut · Copy · Paste | Select all (§8), each with the platform field's key; at a CARET alone
+ * Paste | Select all (§8: nothing is selected to cut or copy). Paste waits where the bar has no road to the clipboard
+ * (`none`), and says the key that pastes.
  */
-export function wordsMenuGroups(keys: DeskKeys, paste: WordsPaste): MenuRow[][] {
+export function wordsMenuGroups(
+  keys: DeskKeys,
+  paste: WordsPaste,
+  at: WordsMenuAt = "words",
+): MenuRow[][] {
   const k = WORDS_KEYS[keys];
   const row = (name: EditorCommand): MenuRow => ({
     id: `${WORDS_ROW}${name}`,
@@ -59,6 +67,7 @@ export function wordsMenuGroups(keys: DeskKeys, paste: WordsPaste): MenuRow[][] 
   });
   const pasteRow: MenuRow =
     paste === "none" ? { ...row("paste"), waits: pasteWaits(keys) } : row("paste");
+  if (at === "caret") return [[pasteRow], [row("selectAll")]];
   return [[row("cut"), row("copy"), pasteRow], [row("selectAll")]];
 }
 

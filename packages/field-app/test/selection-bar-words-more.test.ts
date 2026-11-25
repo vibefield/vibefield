@@ -58,6 +58,19 @@ describe("the words' menu (§8 'The words bar' — More)", () => {
     expect(pasteWaits("other")).toBe("the bar can't read the clipboard here; Ctrl+V pastes");
   });
 
+  it("AT A BARE CARET (round two): Paste | Select all, nothing to cut or copy; Paste waits there too with no door", () => {
+    expect(said(wordsMenuGroups("mac", "door", "caret"))).toEqual([
+      ["words:paste Paste ⌘V"],
+      ["words:selectAll Select all ⌘A"],
+    ]);
+    expect(said(wordsMenuGroups("other", "none", "caret"))).toEqual([
+      ["words:paste Paste Ctrl+V waits"],
+      ["words:selectAll Select all Ctrl+A"],
+    ]);
+    // over words, as ever
+    expect(wordsMenuGroups("mac", "door", "words")).toEqual(wordsMenuGroups("mac", "door"));
+  });
+
   it("the road by the host: one with the clipboard door (main's read) is the door; none, or one without it, no road", () => {
     const clipboard = { readText: async () => "", writeImage: async () => undefined };
     expect(wordsPasteOf({ clipboard } as Pick<FieldHost, "clipboard">)).toBe("door");
