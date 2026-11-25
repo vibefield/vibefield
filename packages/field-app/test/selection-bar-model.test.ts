@@ -10,7 +10,8 @@
  * it acts on. Item 578: Download… follows Open, for one print whose picture the desk holds. Track OM (ICE I61, I62): an
  * act says what it is now — disabled, a swatch — and an act that is a choice is a pill (its current choice, or Mixed),
  * More's one row for it opening its list, the list's rows its choices nearest first: checked, hinted, grouped, a choice
- * that asks for values with an ellipsis.
+ * that asks for values with an ellipsis. OM-2: a choice whose every choice carries a swatch is a swatch pill — the
+ * current one's swatch, none while Mixed — over a selection and in hand.
  */
 
 import type { ActChoice } from "@vibecook/ice";
@@ -369,5 +370,101 @@ describe("what an act says now, and an act that is a choice (track OM; ICE I61, 
       ["device", "choice", "Laptop", "Device: Laptop"],
       ["sound", "action", undefined, "Mute"],
     ]);
+  });
+});
+
+describe("a swatch choice — the simulator's Finish (track OM, OM-2; DESIGN.md §8 'An act that is a choice')", () => {
+  // the iPhone 17 Pro's finishes, each with its band's colour (DESIGN.md §5.1), Cosmic Orange current
+  const FINISHES: readonly ActChoice[] = [
+    { id: "cosmic-orange", label: "Cosmic Orange", swatch: "#e0692a", current: true },
+    { id: "deep-blue", label: "Deep Blue", swatch: "#2b3c5c" },
+    { id: "silver-17p", label: "Silver", swatch: "#dededb" },
+  ];
+  const finish = { id: "finish", label: "Finish", choices: FINISHES };
+  const unmarked = FINISHES.map(({ current: _, ...c }) => c);
+
+  it("a choice whose every choice carries a swatch is a swatch pill: the current one's swatch, and its tip the act and the choice", () => {
+    const pill = barCells(facts({ menu: [finish] }), "mac").find((c) => c.kind === "choice");
+    expect(pill).toEqual({
+      kind: "choice",
+      id: "finish",
+      label: "Finish",
+      glyph: undefined,
+      current: "Cosmic Orange",
+      mixed: false,
+      tip: "Finish: Cosmic Orange",
+      swatches: true,
+      swatch: "#e0692a",
+    });
+  });
+
+  it('phones of one model on different finishes: Mixed, no swatch — the empty ring — and "Finish: Mixed"', () => {
+    const pill = barCells(
+      facts({ count: 2, menu: [{ ...finish, choices: unmarked }] }),
+      "mac",
+    ).find((c) => c.kind === "choice");
+    expect(pill).toMatchObject({
+      swatches: true,
+      mixed: true,
+      current: MIXED_LABEL,
+      tip: "Finish: Mixed",
+    });
+    expect(pill).not.toHaveProperty("swatch");
+  });
+
+  it("a choice that leaves a swatch out anywhere is the label pill, its current choice's swatch never drawn", () => {
+    const some = [...FINISHES, { id: "clear", label: "Clear" }];
+    const pill = barCells(facts({ menu: [{ ...finish, choices: some }] }), "mac").find(
+      (c) => c.kind === "choice",
+    );
+    expect(pill).toMatchObject({ current: "Cosmic Orange", tip: "Finish: Cosmic Orange" });
+    expect(pill).not.toHaveProperty("swatches");
+    expect(pill).not.toHaveProperty("swatch");
+  });
+
+  it("its list: the model's finishes by name, each with its dot, the current one checked — and More's row names it", () => {
+    expect(choiceGroups(FINISHES)).toEqual([
+      [
+        { id: "choice:cosmic-orange", label: "Cosmic Orange", checked: true, swatch: "#e0692a" },
+        { id: "choice:deep-blue", label: "Deep Blue", checked: false, swatch: "#2b3c5c" },
+        { id: "choice:silver-17p", label: "Silver", checked: false, swatch: "#dededb" },
+      ],
+    ]);
+    expect(choiceEyebrow("Finish")).toBe("FINISH");
+    expect(menuGroups(facts({ menu: [finish] }), "mac")[0]?.[0]).toEqual({
+      id: "act:finish",
+      label: "Finish",
+      key: "Cosmic Orange",
+      opens: true,
+    });
+  });
+
+  it("in hand, a held action that is a swatch choice is the same pill: the current one's swatch, Mixed with none marked", () => {
+    const home = { id: "home", label: "Home", kind: "action", glyph: { path: "M0 0" } } as const;
+    const tools = (choices: readonly ActChoice[]) =>
+      handCells(
+        { tools: [{ id: "finish", label: "Finish", kind: "action", choices }, home], active: "" },
+        "mac",
+      ).filter((c) => c.kind === "tool");
+    const [pill, other] = tools(FINISHES);
+    expect(pill).toMatchObject({
+      id: "finish",
+      look: "choice",
+      current: "Cosmic Orange",
+      tip: "Finish: Cosmic Orange",
+      swatches: true,
+      swatch: "#e0692a",
+    });
+    expect(pill).not.toHaveProperty("mixed");
+    expect(other).toMatchObject({ id: "home", look: "action", swatch: undefined });
+    expect(other).not.toHaveProperty("swatches");
+    const [mixed] = tools(unmarked);
+    expect(mixed).toMatchObject({
+      current: MIXED_LABEL,
+      tip: "Finish: Mixed",
+      mixed: true,
+      swatches: true,
+      swatch: undefined,
+    });
   });
 });

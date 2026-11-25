@@ -20,7 +20,9 @@ export type { HeldAnchor, HeldSlot };
 //   way, `aria-disabled`, and its press does nothing — it keeps its look, and comes live again when the kind says so. Its
 //   label and glyph are already what the kind says now (↻ reads Stop while a page loads);
 //   an ACTION THAT IS A CHOICE (ICE I62; track OM — the browser pane's Device) the selection bar's choice pill: its
-//   glyph, the current choice's label and a chevron; pressed, its list grows from the bar, down from under the head.
+//   glyph, the current choice's label and a chevron; pressed, its list grows from the bar, down from under the head. A
+//   choice whose every choice carries a swatch (OM-2 — the simulator's Finish) is the bar's swatch pill: the current
+//   choice's dot, or an empty ring while Mixed, and the chevron.
 // Its glyph is drawn by §13's table through the bar's one path renderer (KindGlyph); a slot with neither a glyph nor
 // a swatch shows its label (R3). The readout is ONE slot after the tools — the string carries no position (R13) — and
 // a kind that says none shows none. Done puts it down (`ops.putDown()`).
@@ -44,7 +46,7 @@ export type HandCell =
       readonly tip: string;
       readonly look: HandLook;
       readonly glyph: HeldGlyph | undefined;
-      /** A dot's ink (CSS, the kind's own look). */
+      /** A dot's ink (CSS, the kind's own look): a mode with a swatch's, or a swatch pill's current choice's (OM-2). */
       readonly swatch: string | undefined;
       /** The mode in hand (`HeldAnchor.active`): the dot's ring, the cell's inverted solid, `aria-pressed`. */
       readonly on: boolean;
@@ -55,6 +57,11 @@ export type HandCell =
       readonly disabled: boolean;
       /** A choice's pill (ICE I62): the current choice's label, which it prints after its glyph. */
       readonly current?: string;
+      /** A choice's pill whose kind marks no choice current: Mixed, in secondary ink. */
+      readonly mixed?: true;
+      /** A SWATCH PILL (OM-2): every choice carries a swatch — the current one's dot (an empty ring while Mixed) and the
+       * chevron, no words; `swatch` its dot's ink. */
+      readonly swatches?: true;
     }
   /** The kind's word in hand (I22 — "Page 1", "September", the clock's time). */
   | { readonly kind: "readout"; readonly text: string }
@@ -97,23 +104,24 @@ export function handCells(
   for (const slot of held.tools) {
     const run = runOf(slot);
     const look = lookOf(slot);
-    const current =
-      look === "choice" && slot.choices !== undefined
-        ? currentChoice(slot.choices).current
-        : undefined;
+    const choice =
+      look === "choice" && slot.choices !== undefined ? currentChoice(slot.choices) : undefined;
     cells.push({
       kind: "tool",
       id: slot.id,
       label: slot.label,
-      tip: current === undefined ? tipOf(slot.label, slot.hint) : `${slot.label}: ${current}`,
+      tip: choice === undefined ? tipOf(slot.label, slot.hint) : `${slot.label}: ${choice.current}`,
       look,
       glyph: slot.glyph,
-      swatch: look === "dot" ? slot.swatch : undefined,
+      // a swatch pill's dot wears its current choice's swatch (OM-2); a label pill has none
+      swatch: look === "dot" ? slot.swatch : choice?.swatch,
       on: slot.kind === "mode" && slot.id === held.active,
       run,
       gap: last !== undefined && run !== last,
       disabled: slot.enabled === false,
-      ...(current === undefined ? {} : { current }),
+      ...(choice === undefined ? {} : { current: choice.current }),
+      ...(choice?.mixed === true ? { mixed: true as const } : {}),
+      ...(choice?.swatches === true ? { swatches: true as const } : {}),
     });
     last = run;
   }

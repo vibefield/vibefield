@@ -31,6 +31,7 @@ import {
   phoneById,
   pointAt,
   SCREEN_OFF,
+  SETTINGS_GLYPH,
   SIMULATOR_TOOLS,
   type SimulatorGeometry,
   seen,
@@ -89,7 +90,7 @@ describe("the phone's kind, judged by the kind-conformance harness WITH the prod
     expect(refusals(r)).toEqual([]);
   });
 
-  it("the host's compile takes it: a desk kind named by its type, things, its opening, its one tool and its menu — Attach and Finish", () => {
+  it("the host's compile takes it: a desk kind named by its type, things, its opening, its tools and its menu — Simulator settings… and Finish", () => {
     const kind = simulator.kind;
     expect(isObjectKind(kind)).toBe(true);
     expect(kind.name).toBe(row?.type);
@@ -105,11 +106,18 @@ describe("the phone's kind, judged by the kind-conformance harness WITH the prod
     expect(objectKindOf(type)?.name).toBe("vibefield.simulator");
     expect(type.openable).toBe(true);
     expect(simulator.kind.open?.wheel).toBe("kind");
-    expect(type.heldTools.map((t) => t.id)).toEqual(["home", "simulator-settings"]);
-    // PT-S2 — its menu (R11: the attach, and the finish; no Model act), each in the words DESIGN.md §9 says, with no glyph
+    // track OM, OM-2 (2026-11-25): in hand, Home and the phone's two acts — Simulator settings… in its own drawing, and Finish
+    // a choice (a swatch pill, no glyph)
+    expect(type.heldTools.map((t) => t.id)).toEqual(["home", "simulator-settings", "finish"]);
+    expect(type.heldTools.map((t) => t.glyph)).toEqual([undefined, SETTINGS_GLYPH, undefined]);
+    expect(type.heldTools.map((t) => t.kind)).toEqual(["action", "action", "action"]);
+    expect(typeof type.heldTools.find((t) => t.id === "finish")?.choices).toBe("function");
+    // its menu (no Model act), each in the words DESIGN.md §9 says: Simulator settings… wears its own drawing (§13, a phone
+    // with a slider), Finish a choice (a swatch pill, no glyph)
     expect(type.menu.map((a) => a.id)).toEqual(["simulator-settings", "finish"]);
     expect(type.menu.map((a) => a.label)).toEqual(["Simulator settings…", "Finish"]);
-    expect(type.menu.map((a) => a.glyph)).toEqual([undefined, undefined]);
+    expect(type.menu.map((a) => a.glyph)).toEqual([SETTINGS_GLYPH, undefined]);
+    expect(typeof type.menu.find((a) => a.id === "finish")?.choices).toBe("function");
     // and its driver factory is the menu's bridge alone: core's drag carries the phone, no driver of its own is made
     expect(typeof simulator.drivers).toBe("function");
     expect(simulator.drivers?.({ world: {}, local: undefined } as never)).toBeUndefined();
@@ -366,7 +374,11 @@ describe("the phone's world half", () => {
     // the one tool: touch, declared and DISABLED, saying View only (ICE I49) — IN WORDS: neither it nor its state names a
     // glyph, so the bar draws the state's label as the slot's text (field-app's bar, R3), never a pictogram with "View only"
     // only in its tooltip
-    expect(SIMULATOR_TOOLS.map((tool) => tool.id)).toEqual(["home", "simulator-settings"]);
+    expect(SIMULATOR_TOOLS.map((tool) => tool.id)).toEqual([
+      "home",
+      "simulator-settings",
+      "finish",
+    ]);
     const tool = SIMULATOR_TOOLS[0];
     const state = tool?.state?.({} as HeldToolStateContext);
     expect(state).toEqual({ enabled: false, label: VIEW_ONLY });

@@ -2,25 +2,47 @@ import type {
   DriverFactory,
   Entity,
   KindDriver,
-  MenuActionApi,
-  MenuActionDef,
   ObjectDomHost,
   World,
 } from "@vibefield/plugin-sdk/desk";
 import { liveSimulatorFace } from "@vibefield/plugin-sdk/desk";
-import { DEFAULT_MODEL, PROP } from "./ids";
-import { finishOf, modelOf } from "./law";
+import { PROP } from "./ids";
 import type { SimulatorLocal } from "./local";
 import { mountSimulatorSetup } from "./setup-dialog";
 
-/** The phones' local on each desk, by the world it acts on — what a menu act (handed the world, never the desk) reaches. */
-const locals = new WeakMap<World, SimulatorLocal>();
-const setupByWorld = new WeakMap<World, (entities: readonly Entity[]) => void>();
-export function configureSimulators(world: World, entities: readonly Entity[]): void {
-  setupByWorld.get(world)?.(entities);
+/** The cell the phone's props live in (the type's one group: the manifest declares no other). */
+export type PhoneCell = ObjectDomHost["object"]["groups"][number]["component"];
+
+/**
+ * A desk's phones as the acts reach them (a menu act is handed the world, never the desk), by the world they act on: the
+ * desk's local, the cell its DOM half read the props from, the sheet on the glass, and Simulator settings…'s pick-up (track
+ * OM, OM-2, 2026-11-25).
+ */
+interface PhoneDesk {
+  readonly local: SimulatorLocal;
+  cell: PhoneCell | undefined;
+  /** The sheet opened on the phone in hand for `entities`, the first of them that phone; false where it is not in hand. */
+  configure(entities: readonly Entity[]): boolean;
+  /** Simulator settings… from the selection: the first picked up through the desk's hold, its sheet to rise on its glass for
+   * every one of them once it is in hand. False where the desk lends no hold or refuses the phone. */
+  settings(entities: readonly Entity[]): boolean;
 }
+const desks = new WeakMap<World, PhoneDesk>();
+
+/** The sheet opened on the phone in hand for `entities` (the first of them that phone). False: no sheet on this desk yet, or
+ * that phone is not in hand. */
+export const configureSimulators = (world: World, entities: readonly Entity[]): boolean =>
+  desks.get(world)?.configure(entities) ?? false;
+/** Simulator settings… from the selection on `world`'s desk: the first phone picked up, the sheet to rise for them all. */
+export const simulatorSettings = (world: World, entities: readonly Entity[]): boolean =>
+  desks.get(world)?.settings(entities) ?? false;
 /** The phones' local on `world`'s desk, or undefined: no desk of it has made the phone's kind. */
-export const phoneLocalOf = (world: World): SimulatorLocal | undefined => locals.get(world);
+export const phoneLocalOf = (world: World): SimulatorLocal | undefined => desks.get(world)?.local;
+/** The cell the phones' props live in on `world`'s desk, read by its DOM half; undefined until that half is mounted. */
+export const phoneCellOf = (world: World): PhoneCell | undefined => desks.get(world)?.cell;
+
+/** How many frames a pick-up asked by Simulator settings… waits for the phone to come into the hand (3 s at 60 Hz). */
+const PICKUP_FRAMES = 180;
 
 /** THE PHONE'S DRIVER FACTORY — the bridge, made once per desk: the desk's local and its scoped keyboard driver. */
 export interface PhoneDriver extends KindDriver {
@@ -30,16 +52,41 @@ export interface PhoneDriver extends KindDriver {
 export const phoneDrivers: DriverFactory = (h) => {
   const local = h.local as SimulatorLocal | undefined;
   if (local === undefined) return undefined;
-  locals.set(h.world, local);
   const held = new Map<string, { e: Entity; key: string }>();
   let document: Document | undefined;
   let setup: ReturnType<typeof mountSimulatorSetup> | undefined;
   let previouslyHeld: Entity | undefined;
   let checkedFailure = false;
+  /** Simulator settings… asked from the selection: the phone it picked up, every phone its sheet sets up, and the frames left
+   * for the hand to take it. */
+  let pending:
+    | { readonly entity: Entity; readonly phones: readonly Entity[]; frames: number }
+    | undefined;
   const heldPhone = () => {
     const hand = h.hand();
     return hand && !hand.landing && h.isKind(hand.entity) ? hand.entity : undefined;
   };
+  const desk: PhoneDesk = {
+    local,
+    cell: undefined,
+    configure: (entities) => setup?.configure(entities) ?? false,
+    settings(entities) {
+      const first = entities[0];
+      if (first === undefined || setup === undefined) return false;
+      // already in hand: its sheet rises now
+      if (heldPhone() === first) return setup.configure(entities);
+      const hold = local.hold();
+      if (hold === undefined) return false;
+      pending = { entity: first, phones: [...entities], frames: PICKUP_FRAMES };
+      if (!hold.pickUp(first)) {
+        pending = undefined;
+        return false;
+      }
+      h.wake();
+      return true;
+    },
+  };
+  desks.set(h.world, desk);
   const release = (): void => {
     for (const [code, { e, key }] of held)
       local?.send(e, { kind: "key", phase: "up", key, code, mods: 0, repeat: false });
@@ -86,11 +133,19 @@ export const phoneDrivers: DriverFactory = (h) => {
         release();
         previouslyHeld = entity;
         checkedFailure = false;
-        if (entity !== undefined && setup && !setup.configured(entity)) {
+        // the phone Simulator settings… picked up is in hand: its sheet rises for every phone the act was run on (track OM,
+        // OM-2, 2026-11-25); the hand holding another lets the ask go
+        const asked =
+          pending !== undefined && pending.entity === entity ? pending.phones : undefined;
+        if (entity !== undefined) pending = undefined;
+        if (asked !== undefined && setup?.configure(asked)) checkedFailure = true;
+        else if (entity !== undefined && setup && !setup.configured(entity)) {
           checkedFailure = true;
           setup.configure([entity]);
         }
       }
+      // a pick-up the hand never took is let go after its frames
+      if (pending !== undefined && --pending.frames <= 0) pending = undefined;
       const problem = setupProblem(entity);
       if (entity !== undefined && problem) {
         checkedFailure = true;
@@ -98,10 +153,18 @@ export const phoneDrivers: DriverFactory = (h) => {
         else void setup?.recover(entity);
       }
     },
-    idle: () => heldPhone() === previouslyHeld && !setupProblem(previouslyHeld),
+    // An open sheet follows the phone every frame: Simulator settings… on the bar opens it while the phone is still rising
+    // into the hand, and a driver that idled there left it where the rise was (track OM, OM-2, 2026-11-26).
+    idle: () =>
+      pending === undefined &&
+      heldPhone() === previouslyHeld &&
+      !setupProblem(previouslyHeld) &&
+      !(setup?.showing() ?? false),
     join(dom) {
       setup = mountSimulatorSetup(dom, local.devices());
-      setupByWorld.set(h.world, setup.configure);
+      desk.cell = dom.object.groups.find(
+        (group) => group.name === dom.object.propToGroup[PROP.finish],
+      )?.component;
       document = dom.container.ownerDocument;
       document.addEventListener("keydown", key, true);
       document.addEventListener("keyup", key, true);
@@ -113,57 +176,10 @@ export const phoneDrivers: DriverFactory = (h) => {
       document?.removeEventListener("keyup", key, true);
       document?.defaultView?.removeEventListener("blur", release);
       setup?.dispose();
-      setupByWorld.delete(h.world);
-      locals.delete(h.world);
+      setup = undefined;
+      pending = undefined;
+      desks.delete(h.world);
     },
   };
   return driver;
 };
-
-export const SETUP_ACT = "simulator-settings";
-export const FINISH_ACT = "finish";
-
-type PhoneActApi = Pick<MenuActionApi, "world" | "entities" | "props" | "setProps">;
-
-/** The phone's model as its props hold it — a free string (an id this build's catalog lacks stays the phone's own); none, the default. */
-const modelProp = (props: Readonly<Record<string, unknown>>): string => {
-  const model = props[PROP.model];
-  return typeof model === "string" && model.length > 0 ? model : DEFAULT_MODEL;
-};
-
-/** The next of `model`'s launch colours after the one `finish` names (its model's first, where it names none of them), or
- * undefined: the model has one colour, or none. */
-export function nextFinish(model: string, finish: string): string | undefined {
-  const m = modelOf(model);
-  if (m.finishes.length < 2) return undefined;
-  const at = m.finishes.indexOf(finishOf(m, finish));
-  return m.finishes[(at + 1) % m.finishes.length];
-}
-
-/** FINISH — each phone of `api.entities` turned to its model's next launch colour (one undo step a phone). How many were written. */
-export function finishPhones(api: PhoneActApi): number {
-  let wrote = 0;
-  for (const e of api.entities) {
-    const props = api.props(e);
-    const finish = props[PROP.finish];
-    const next = nextFinish(modelProp(props), typeof finish === "string" ? finish : "");
-    if (next === undefined || next === finish) continue;
-    if (api.setProps(e, { [PROP.finish]: next })) wrote += 1;
-  }
-  return wrote;
-}
-
-export const PHONE_ACTS: readonly MenuActionDef[] = [
-  {
-    id: SETUP_ACT,
-    label: "Simulator settings…",
-    run: (api) => configureSimulators(api.world, api.entities),
-  },
-  {
-    id: FINISH_ACT,
-    label: "Finish",
-    run: (api) => {
-      finishPhones(api);
-    },
-  },
-];

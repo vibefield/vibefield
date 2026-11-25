@@ -1,4 +1,5 @@
-import { configureSimulators, phoneLocalOf, SETUP_ACT } from "./attach";
+import { PHONE_HELD_ACTS } from "./acts";
+import { phoneLocalOf } from "./attach";
 import { iosLabel } from "./setup";
 // THE PHONE as a kind (PT-S1 — PORTALS' iOS Simulator, written exactly as a third party writes a kind: through
 // `@vibefield/plugin-sdk/desk` alone, ICE design-016 K-L1/K-L2): its RENDER half (`simulatorProgram` — its own pass and WGSL,
@@ -10,7 +11,8 @@ import { iosLabel } from "./setup";
 // eye sees it), its look from the palette (theme.ts), its desk state (local.ts) and its OPENING: USE — double-click or ⏎, as
 // the notebook, the board and the pane open (the PT-S design §6 Q-2) — picked up into the hand at the reading size, its
 // stream requested at native size. The held phone routes touch, keyboard and Home to its own guest when device input is
-// available. An unconfigured phone opens its model and iOS picker on pickup.
+// available. An unconfigured phone opens its model and iOS picker on pickup, a sheet on its glass; in hand its tools are
+// Home, Simulator settings… and Finish (acts.ts; track OM, OM-2, 2026-11-25).
 
 import {
   type HeldToolDef,
@@ -94,7 +96,8 @@ export const simulatorSpec = (
 export const nativeOf = (binding: Binding, model: PhoneModel): readonly [number, number] =>
   (phoneById(binding.deviceType) ?? model).screen.px;
 
-/** Home is a hardware action on the held device. A window-only capture has no input connection. */
+/** Home is a hardware action on the held device. A window-only capture has no input connection. Beside it the phone's two
+ * acts, Simulator settings… and Finish (acts.ts). */
 export const SIMULATOR_TOOLS: readonly HeldToolDef[] = [
   {
     id: "home",
@@ -114,12 +117,7 @@ export const SIMULATOR_TOOLS: readonly HeldToolDef[] = [
         ? { enabled: true, label: "Home" }
         : { enabled: false, label: VIEW_ONLY },
   },
-  {
-    id: SETUP_ACT,
-    label: "Simulator settings…",
-    kind: "action",
-    run: (api) => configureSimulators(api.world, [api.entity]),
-  },
+  ...PHONE_HELD_ACTS,
 ];
 
 /** The phone's program for a host's shader text (the kit's pieces from it; its own from shaders.ts): its pass on the root's mat. */

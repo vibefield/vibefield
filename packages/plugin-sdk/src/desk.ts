@@ -39,7 +39,7 @@
 // singletons, PA-29): at load the host's import map binds it to the app's own copy, so a plugin kind
 // runs on the host's one ICE — one loro, one strata, one catalog.
 
-import type { MenuActionDef } from "@vibecook/ice";
+import type { Entity, MenuActionDef } from "@vibecook/ice";
 import type { DriverFactory, ObjectDef, ObjectHost, ObjectKind } from "@vibecook/ice/desk";
 import { type LiveInfo, serviceKey } from "@vibecook/ice/desk/kit";
 
@@ -554,6 +554,22 @@ export interface SimulatorRuntimeOption {
 
 /** The key the host lends a simulator kind this Mac's devices under (`KindHost.use(SIMULATOR_DEVICES)`). */
 export const SIMULATOR_DEVICES = serviceKey<SimulatorDevices>("vibefield.simulator.devices");
+
+/**
+ * THE DESK'S HOLD, lent to kinds (track OM, OM-2, 2026-11-25): a kind's act picks one of the person's selected objects
+ * up, the same pick-up a double-click makes (ICE's `ops.open`), so the object comes to reading size and its tools travel
+ * with it. The simulator's Simulator settings… opens its sheet on the phone it picked up. The desk refuses an object
+ * that is not among the selected or that cannot be opened. What it does not know: which kind asks, or whether a person
+ * just pressed. A kind calls it from an act the person ran; one that called it at another time could only pick up an
+ * object the person had selected, which a press of their own would put down.
+ */
+export interface DeskHold {
+  /** Picks `entity`, one of the selected, up; the selection becomes it alone. True when the desk took it up. */
+  pickUp(entity: Entity): boolean;
+}
+
+/** The key the host lends the desk's hold under (`KindHost.use(DESK_HOLD)`). */
+export const DESK_HOLD = serviceKey<DeskHold>("vibefield.desk.hold");
 
 // docs:begin agent-half
 /** What a kind's agent handler reads an object through. A host-built view: no `world`, no entity, and no write of any kind,

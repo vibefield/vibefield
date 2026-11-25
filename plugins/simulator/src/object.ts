@@ -7,8 +7,9 @@
 // while the held phone routes its glass and keyboard to its own simulator device.
 
 import { type ObjectBinding, service } from "@vibefield/plugin-sdk/desk";
+import { PHONE_ACTS } from "./acts";
 import { simulatorAgent } from "./agent";
-import { PHONE_ACTS, type PhoneDriver, phoneDrivers } from "./attach";
+import { type PhoneDriver, phoneDrivers } from "./attach";
 import { type SimulatorGeometry, simulatorKind } from "./kind";
 import type { PhoneInstance, PhoneLookValues } from "./layout";
 import { WORDS_RASTER } from "./notice";

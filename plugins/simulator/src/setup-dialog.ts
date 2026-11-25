@@ -1,3 +1,10 @@
+// THE SIMULATOR'S SETTINGS, A SHEET ON ITS GLASS (track OM, OM-2, 2026-11-25; DESIGN.md §9 "The simulator's acts"): it
+// rises only on the phone in hand — Simulator settings… picks the phone up first, as double-clicking a new simulator does
+// — from just under the Dynamic Island to the screen's foot, at the display's width, and follows the phone as it travels;
+// never the window's dialog. With several phones it sets up every one and says how many. Its states and words are the
+// form's before it: before Xcode, its steps; ready, the iOS version and the iPhone model as pills over their lists
+// (setup-choice.ts) and Create simulator; set up, Switch simulator; the repairs in their own words. The close glyph or Esc
+// closes it and the phone stays in hand; an open list folds first.
 import {
   type Entity,
   type ObjectDomHost,
@@ -8,9 +15,40 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { bindingOf } from "./binding";
 import { DEFAULT_MODEL, PROP } from "./ids";
-import { modelOf, shapeOf } from "./law";
+import { MM, modelOf, type PhoneShape, shapeOf } from "./law";
 import { configurationPatch, iosLabel, simulatorChoice } from "./setup";
+import { type SheetOption, sheetChoice } from "./setup-choice";
 import { setupMarkup, setupStyles, showPrerequisite } from "./setup-view";
+
+/** Below the sensor housing the sheet leaves this much of the display's height clear (DESIGN.md §9: "from under the
+ * Dynamic Island"). */
+const SHEET_GAP = 0.025;
+/** Its top corners: 2.6 mm of the phone's display, as the page drew them (DESIGN.md §9, "Settled at the build
+ * (2026-11-25, OM-2)") — about 16 of a 17 Pro's points. Every model's display is drawn at the desk's one scale (law.ts
+ * `MM`, world units a millimetre), so every phone's sheet gets the same 2.6 mm. */
+const SHEET_CORNER_MM = 2.6;
+
+/** Where the sheet stands on the phone in hand, CSS px (DESIGN.md §9, "Settled at the build (2026-11-25, OM-2)"): from just
+ * under its sensor housing (the Dynamic Island's foot, a notch's, or the display's top edge on a phone with a Home button)
+ * plus 2.5% of the display's height, to the display's foot, at its full width; its top corners 2.6 mm of the display, its
+ * foot the display's own corners. */
+export function sheetOn(
+  shape: PhoneShape,
+  frame: { readonly cx: number; readonly cy: number; readonly s: number },
+) {
+  const [hx, hy] = shape.display;
+  const { pill, notch } = shape.housing;
+  const housing = pill !== null ? pill.top + 2 * pill.hh : notch !== null ? notch.depth : 0;
+  const below = housing + SHEET_GAP * 2 * hy;
+  return {
+    left: frame.cx - hx * frame.s,
+    top: frame.cy + (below - hy) * frame.s,
+    width: 2 * hx * frame.s,
+    height: (2 * hy - below) * frame.s,
+    corner: SHEET_CORNER_MM * MM * frame.s,
+    foot: shape.displayCorner.extent * frame.s,
+  };
+}
 
 export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevices | undefined) {
   const doc = dom.container.ownerDocument;
@@ -21,8 +59,14 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
   dialog.setAttribute("aria-label", "Simulator settings");
   dialog.innerHTML = setupMarkup;
   dom.container.append(style, dialog);
-  const runtime = dialog.querySelector<HTMLSelectElement>('[name="runtime"]')!;
-  const model = dialog.querySelector<HTMLSelectElement>('[name="model"]')!;
+  const runtime = sheetChoice(dialog, "runtime", () =>
+    fillModels(model.value || String(firstProps()?.[PROP.model] ?? DEFAULT_MODEL)),
+  );
+  const model = sheetChoice(dialog, "model", () => update());
+  const choices = [
+    ["runtime", runtime],
+    ["model", model],
+  ] as const;
   const status = dialog.querySelector<HTMLElement>("[role=status]")!;
   const submit = dialog.querySelector<HTMLButtonElement>("[type=submit]")!;
   const refresh = dialog.querySelector<HTMLButtonElement>("[data-refresh]")!;
@@ -54,63 +98,67 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
   let checks = 0;
   let timer: number | undefined;
   let held: Entity | undefined;
+  /** What had the focus when the sheet opened: a sheet shown beside the page (never modal) gives none back on its own. */
+  let opener: HTMLElement | undefined;
   let placement = "";
   let disposed = false;
   const clearTimer = () => {
     view.clearTimeout(timer);
     timer = undefined;
   };
+  /** Any open list folded (the focus back on its pill); true when one was open. */
+  const foldLists = (): boolean => choices.map(([, c]) => c.fold(true)).some(Boolean);
   const place = () => {
     if (held === undefined) return;
     const hand = dom.hand();
     if (!hand || hand.entity !== held || hand.landing) return;
-    const shape = shapeOf(modelOf(String(props(held)?.[PROP.model] ?? DEFAULT_MODEL)));
-    const { cx, cy, s } = hand.frame;
-    const width = 2 * shape.display[0] * s;
-    const height = 2 * shape.display[1] * s;
-    const rect = [cx - width / 2, cy - height / 2, width, height, shape.displayCorner.extent * s];
-    const next = rect.join(",");
+    const r = sheetOn(
+      shapeOf(modelOf(String(props(held)?.[PROP.model] ?? DEFAULT_MODEL))),
+      hand.frame,
+    );
+    const next = [r.left, r.top, r.width, r.height, r.corner, r.foot].join(",");
     if (placement === next) return;
     placement = next;
-    const [left, top, w, h, radius] = rect.map((n) => `${n}px`);
-    Object.assign(dialog.style, { left, top, width: w, height: h, borderRadius: radius });
-  };
-  const option = (value: string, text: string) => {
-    const item = doc.createElement("option");
-    item.value = value;
-    item.textContent = text;
-    return item;
+    Object.assign(dialog.style, {
+      left: `${r.left}px`,
+      top: `${r.top}px`,
+      width: `${r.width}px`,
+      height: `${r.height}px`,
+      borderRadius: `${r.corner}px ${r.corner}px ${r.foot}px ${r.foot}px`,
+    });
   };
   const firstProps = () => target?.phones[0] && props(target.phones[0].entity);
   const update = () => {
     const choice = simulatorChoice(rows, runtime.value, model.value);
     const phones = target?.phones ?? [];
+    const several = phones.length > 1;
     const fresh = phones.every(({ entity }) => !bindingOf(props(entity) ?? {})?.dedicated);
     const changed =
       choice && phones.some(({ entity }) => configurationPatch(props(entity) ?? {}, choice));
     submit.disabled = !choice;
     submit.textContent = fresh
-      ? phones.length > 1
+      ? several
         ? "Create simulators"
         : "Create simulator"
       : changed
-        ? "Switch simulator"
+        ? several
+          ? "Switch simulators"
+          : "Switch simulator"
         : "Done";
     status.textContent =
       choice && changed && !fresh ? "Each configuration keeps its own apps and data." : "";
   };
   const fillModels = (prefer: string, preserve = false) => {
     const models = rows.find((row) => row.runtime === runtime.value)?.models ?? [];
-    model.replaceChildren(...models.map((m) => option(m.deviceType, m.name)));
-    model.disabled = !models.length;
-    if (models[0]) model.value = models[0].deviceType;
-    if (models.some((m) => m.deviceType === prefer)) model.value = prefer;
+    const options: SheetOption[] = models.map((m) => ({ value: m.deviceType, label: m.name }));
+    let taken = models[0]?.deviceType ?? "";
+    if (models.some((m) => m.deviceType === prefer)) taken = prefer;
     else if (preserve && models.length) {
-      const unavailable = option("", "Choose an available iPhone");
-      unavailable.disabled = true;
-      model.prepend(unavailable);
-      model.value = "";
+      options.unshift({ value: "", label: "Choose an available iPhone", disabled: true });
+      taken = "";
     }
+    model.fill(options, taken);
+    model.disabled = !models.length;
     update();
   };
   const fillCatalog = (installed: readonly SimulatorRuntimeOption[], xcodeVersion?: string) => {
@@ -131,17 +179,23 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
     version.textContent = xcodeVersion ? `Xcode ${xcodeVersion}` : "";
     manage.hidden = !devices?.setup;
     components.hidden = !!devices?.setup && !openedDestination;
-    runtime.replaceChildren(...rows.map((row) => option(row.runtime, iosLabel(row.runtime))));
-    runtime.disabled = !rows.length;
-    if (rows[0]) runtime.value = rows[0].runtime;
+    const options: SheetOption[] = rows.map((row) => ({
+      value: row.runtime,
+      label: iosLabel(row.runtime),
+    }));
+    let taken = rows[0]?.runtime ?? "";
     if (preferredRuntime && rows.some((row) => row.runtime === preferredRuntime))
-      runtime.value = preferredRuntime;
+      taken = preferredRuntime;
     else if (preferredRuntime && rows.length) {
-      const unavailable = option("", `${iosLabel(preferredRuntime)} (unavailable)`);
-      unavailable.disabled = true;
-      runtime.prepend(unavailable);
-      runtime.value = "";
+      options.unshift({
+        value: "",
+        label: `${iosLabel(preferredRuntime)} (unavailable)`,
+        disabled: true,
+      });
+      taken = "";
     }
+    runtime.fill(options, taken);
+    runtime.disabled = !rows.length;
     fillModels(preferredModel, prior?.runtime === runtime.value);
     if (!rows.length) status.textContent = "No compatible iOS simulator runtime is installed.";
     else if (runtime.value && !model.value)
@@ -162,8 +216,10 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
       return;
     }
     rows = [];
-    picker.hidden = submit.hidden = true;
-    runtime.disabled = model.disabled = submit.disabled = true;
+    picker.hidden = submit.hidden = version.hidden = true;
+    runtime.disabled = true;
+    model.disabled = true;
+    submit.disabled = true;
     const hasSteps = stage !== "unavailable" && stage !== "unsupported";
     guide.hidden = primary.hidden = !hasSteps;
     if (hasSteps && previous !== stage) {
@@ -200,7 +256,9 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
       if (devices?.setup) showIfCurrent({ stage: "unavailable" });
       else if (token === revision && dialog.open) {
         rows = [];
-        runtime.disabled = model.disabled = submit.disabled = true;
+        runtime.disabled = true;
+        model.disabled = true;
+        submit.disabled = true;
         status.textContent =
           "Couldn't read the simulator runtimes. Check the desktop connection and refresh.";
       }
@@ -261,38 +319,37 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
   view.addEventListener("focus", onReturn);
   view.addEventListener("resize", place);
   doc.addEventListener("visibilitychange", onReturn);
-  runtime.addEventListener("change", () =>
-    fillModels(model.value || String(firstProps()?.[PROP.model] ?? DEFAULT_MODEL)),
-  );
-  model.addEventListener("change", update);
   refresh.addEventListener("click", () => void load());
   dialog.querySelector("[data-cancel]")!.addEventListener("click", () => dialog.close());
   dialog.addEventListener("keydown", (event) => {
     event.stopPropagation();
+    // Esc folds an open list first, then closes the sheet: the phone stays in hand
     if (event.key === "Escape") {
       event.preventDefault();
-      dialog.close();
+      if (!foldLists()) dialog.close();
     }
   });
   dialog.addEventListener("wheel", (e) => e.stopPropagation(), { passive: true });
   dialog.addEventListener("pointerdown", (e) => {
     e.stopPropagation();
-    if (e.target !== dialog) return;
-    const rect = dialog.getBoundingClientRect();
-    if (
-      e.clientX < rect.left ||
-      e.clientX > rect.right ||
-      e.clientY < rect.top ||
-      e.clientY > rect.bottom
-    )
-      dialog.close();
+    // a press elsewhere in the sheet folds a list it is not in
+    const at = e.target as Element | null;
+    for (const [name, c] of choices) if (!at?.closest(`[data-choice="${name}"]`)) c.fold();
   });
   dialog.addEventListener("close", () => {
     if (dialog.open) return;
     ++revision;
     clearTimer();
+    for (const [, c] of choices) c.fold();
     held = undefined;
     target = undefined;
+    // every close (Esc, the close glyph, Create, Switch or Done, the phone let go): the focus goes back where it was when the
+    // sheet opened, if that is still in the page — unless the person has since put it somewhere else
+    const back = opener;
+    opener = undefined;
+    const now = doc.activeElement;
+    if (back?.isConnected && (now === null || now === doc.body || dialog.contains(now)))
+      back.focus({ preventScroll: true });
     dom.wake();
   });
   dialog.querySelector("form")!.addEventListener("submit", (event) => {
@@ -329,40 +386,52 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
       });
     dialog.close();
   });
-  const configure = (entities: readonly Entity[], initial?: SimulatorSetupStatus) => {
-    if (!entities.length || dialog.open || disposed) return;
+  /** The sheet opened on the phone in hand for `entities`, the first of them that phone (never over the window: no modal). */
+  const configure = (entities: readonly Entity[], initial?: SimulatorSetupStatus): boolean => {
+    const first = entities[0];
+    const hand = dom.hand();
+    if (first === undefined || dialog.open || disposed) return false;
+    if (!hand || hand.landing || hand.entity !== first) return false;
     ++revision;
     const store = currentStore();
     target = { store, phones: entities.map((entity) => ({ entity, key: store?.keyOf(entity) })) };
     const configured = target.phones.some(
       ({ entity }) => bindingOf(props(entity) ?? {})?.dedicated,
     );
-    heading.textContent = configured ? "Simulator settings" : "Set up simulator";
-    runtime.replaceChildren();
-    model.replaceChildren();
+    const n = entities.length;
+    heading.textContent = configured
+      ? n > 1
+        ? `Settings for ${n} simulators`
+        : "Simulator settings"
+      : n > 1
+        ? `Set up ${n} simulators`
+        : "Set up simulator";
+    runtime.fill([], "");
+    model.fill([], "");
     rows = [];
     checks = 0;
     stage = undefined;
     loading = openedDestination = false;
-    runtime.disabled = model.disabled = submit.disabled = true;
+    runtime.disabled = true;
+    model.disabled = true;
+    submit.disabled = true;
     guide.hidden = primary.hidden = picker.hidden = submit.hidden = refresh.hidden = true;
+    version.hidden = true;
     manage.disabled = primary.disabled = false;
-    submit.textContent = configured ? "Done" : "Create simulator";
-    const hand = dom.hand();
-    held =
-      entities.length === 1 && hand && !hand.landing && hand.entity === entities[0]
-        ? hand.entity
-        : undefined;
+    submit.textContent = configured ? "Done" : n > 1 ? "Create simulators" : "Create simulator";
+    held = first;
     placement = "";
     dialog.removeAttribute("style");
-    dialog.toggleAttribute("data-held", held !== undefined);
-    if (held !== undefined) {
-      place();
-      dialog.show();
-    } else dialog.showModal();
+    dialog.setAttribute("data-held", "");
+    place();
+    const active = doc.activeElement as HTMLElement | null;
+    opener =
+      active !== null && active !== doc.body && !dialog.contains(active) ? active : undefined;
+    dialog.show();
     heading.focus({ preventScroll: true });
     void load(initial);
     dom.wake();
+    return true;
   };
   return {
     configure,
@@ -381,6 +450,10 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
     configured(entity: Entity) {
       return bindingOf(props(entity) ?? {}) !== undefined;
     },
+    /** Whether the sheet stands open: while it does, its driver keeps following the phone's frame (`follow` places it). */
+    showing() {
+      return dialog.open;
+    },
     dispose() {
       disposed = true;
       clearTimer();
@@ -389,6 +462,7 @@ export function mountSimulatorSetup(dom: ObjectDomHost, devices: SimulatorDevice
       doc.removeEventListener("visibilitychange", onReturn);
       ++revision;
       target = undefined;
+      opener = undefined;
       dialog.remove();
       style.remove();
     },

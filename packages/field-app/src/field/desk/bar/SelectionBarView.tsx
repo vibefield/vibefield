@@ -65,7 +65,8 @@ import "./selection-bar.css";
 // place, over a selection or, in hand, down from under the head: the current one checked, a hint in the key's place, a
 // swatch's dot, a rule where the kind's group changes. A choice that asks for values opens its fields under its row
 // (ChoiceFields), and Use takes it with them. An act its kind says is disabled now is faint by ink and inert; one with a
-// swatch shows the hand's dot in its glyph's place.
+// swatch shows the hand's dot in its glyph's place. OM-2: a choice whose every choice carries a swatch is a SWATCH PILL —
+// the current choice's dot (an empty ring while Mixed) and the chevron, no words — over a selection and in hand alike.
 
 /** What the bar is placed from: the anchor's box, its count and the view (ICE's `SelectionAnchor`, narrowed). */
 export interface PlaceAnchor {
@@ -177,6 +178,32 @@ export function clearanceTransition(out: boolean): string {
 }
 
 const NO_HAND: readonly HandCell[] = [];
+
+/**
+ * A choice's pill inside (§8 "An act that is a choice"), over a selection and in hand: its glyph, the current choice's
+ * label and `chevron` 12 turned down — or a SWATCH PILL's (track OM, OM-2, 2026-11-25): the current choice's dot, its ink
+ * the pill's `--vf-bar-swatch` (an empty ring while Mixed, the stylesheet's), and the chevron, no words.
+ */
+function choiceFace(
+  swatches: boolean,
+  glyph: Extract<BarCell, { kind: "choice" }>["glyph"],
+  label: string,
+  current: string,
+): ReactElement {
+  return (
+    <>
+      {swatches ? (
+        <span className="vf-bar-dot-ink" aria-hidden="true" />
+      ) : (
+        <>
+          {glyph === undefined ? null : <KindGlyph glyph={glyph} label={label} />}
+          <span className="vf-bar-choice-label">{current}</span>
+        </>
+      )}
+      <FieldGlyph name="chevron" size={12} turn={90} className="vf-bar-chevron" />
+    </>
+  );
+}
 
 export function SelectionBarView({
   cells,
@@ -834,18 +861,20 @@ export function SelectionBarView({
             className="vf-bar-cell vf-bar-choice"
             data-act={`act:${cell.id}`}
             data-choice=""
+            {...(cell.swatches === true ? { "data-swatch": "" } : {})}
             {...(cell.mixed ? { "data-mixed": "" } : {})}
             aria-label={cell.tip}
             title={cell.tip}
             aria-haspopup="menu"
             aria-expanded={on}
             {...(cell.disabled === true ? { "aria-disabled": true, "data-disabled": "" } : {})}
+            {...(cell.swatch === undefined
+              ? {}
+              : { style: { "--vf-bar-swatch": cell.swatch } as CSSProperties })}
             onClick={() => press(cell, false)}
             {...stop}
           >
-            {cell.glyph === undefined ? null : <KindGlyph glyph={cell.glyph} label={cell.label} />}
-            <span className="vf-bar-choice-label">{cell.current}</span>
-            <FieldGlyph name="chevron" size={12} turn={90} className="vf-bar-chevron" />
+            {choiceFace(cell.swatches === true, cell.glyph, cell.label, cell.current)}
           </button>
         );
       }
@@ -939,6 +968,8 @@ export function SelectionBarView({
             data-run={cell.run}
             {...(cell.gap ? { "data-gap": "" } : {})}
             {...(cell.on ? { "data-on": "" } : {})}
+            {...(cell.swatches === true ? { "data-swatch": "" } : {})}
+            {...(cell.mixed === true ? { "data-mixed": "" } : {})}
             aria-label={choice ? cell.tip : cell.label}
             title={cell.tip}
             {...(mode ? { "aria-pressed": cell.on } : {})}
@@ -952,13 +983,7 @@ export function SelectionBarView({
             {...stop}
           >
             {choice ? (
-              <>
-                {cell.glyph === undefined ? null : (
-                  <KindGlyph glyph={cell.glyph} label={cell.label} />
-                )}
-                <span className="vf-bar-choice-label">{cell.current}</span>
-                <FieldGlyph name="chevron" size={12} turn={90} className="vf-bar-chevron" />
-              </>
+              choiceFace(cell.swatches === true, cell.glyph, cell.label, cell.current ?? "")
             ) : cell.look === "dot" ? (
               <span className="vf-bar-dot-ink" aria-hidden="true" />
             ) : cell.glyph === undefined ? (

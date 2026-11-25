@@ -733,6 +733,114 @@ describe("a kind's act now, and a choice (track OM; ICE I61, I62)", () => {
     expect(use).toHaveBeenLastCalledWith("device", { id: "phone" });
     expect(surfaceNow).toBeNull();
   });
+
+  // OM-2 (DESIGN.md §8 "An act that is a choice", its swatch pill; §9 "The simulator's acts"): a choice whose every choice
+  // carries a swatch — the simulator's Finish — is the current choice's dot and the chevron, no words; Mixed, an empty ring
+  describe("a swatch choice — the simulator's Finish (OM-2)", () => {
+    const FINISHES = [
+      { id: "cosmic-orange", label: "Cosmic Orange", swatch: "#e0692a", current: true },
+      { id: "deep-blue", label: "Deep Blue", swatch: "#2b3c5c" },
+      { id: "silver-17p", label: "Silver", swatch: "#dededb" },
+    ] as const;
+    const FINISH = { id: "finish", label: "Finish", choices: FINISHES };
+    const UNMARKED = FINISHES.map(({ id, label, swatch }) => ({ id, label, swatch }));
+    /** A list row's swatch dot's ink, or null for a row with none. */
+    const rowSwatch = (id: string): string | null =>
+      listRow(id)
+        .querySelector<HTMLElement>(".vf-bar-swatch-dot")
+        ?.style.getPropertyValue("--vf-bar-swatch") ?? null;
+
+    it("is the current choice's dot and the chevron, no words — its tip and its name the act and the choice", () => {
+      withActs([FINISH]);
+      const pill = cell("act:finish");
+      expect(pill.dataset.choice).toBe("");
+      expect(pill.hasAttribute("data-swatch")).toBe(true);
+      expect(pill.hasAttribute("data-mixed")).toBe(false);
+      expect(pill.textContent).toBe("");
+      expect(pill.querySelector(".vf-bar-choice-label")).toBeNull();
+      expect(pill.querySelector(".vf-bar-dot-ink")).not.toBeNull();
+      expect(pill.querySelector(".vf-bar-chevron")).not.toBeNull();
+      expect(pill.style.getPropertyValue("--vf-bar-swatch")).toBe("#e0692a");
+      expect(pill.getAttribute("aria-label")).toBe("Finish: Cosmic Orange");
+      expect(pill.getAttribute("title")).toBe("Finish: Cosmic Orange");
+      expect(pill.getAttribute("aria-haspopup")).toBe("menu");
+    });
+
+    it("phones on different finishes: the empty ring — no ink of its own — and Finish: Mixed", () => {
+      withActs([{ ...FINISH, choices: UNMARKED }]);
+      const pill = cell("act:finish");
+      expect(pill.hasAttribute("data-swatch")).toBe(true);
+      expect(pill.hasAttribute("data-mixed")).toBe(true);
+      expect(pill.textContent).toBe("");
+      expect(pill.querySelector(".vf-bar-dot-ink")).not.toBeNull();
+      expect(pill.style.getPropertyValue("--vf-bar-swatch")).toBe("");
+      expect(pill.getAttribute("aria-label")).toBe("Finish: Mixed");
+    });
+
+    it("pressed, its list: the finishes by name, each with its dot, the current one checked; a finish taken runs the act with it", () => {
+      withActs([FINISH]);
+      const run = vi.spyOn(ce.ops, "runMenuAction");
+      act(() => cell("act:finish").click());
+      expect(surfaceNow).toBe("selection");
+      expect(cell("act:finish").getAttribute("aria-expanded")).toBe("true");
+      expect(listRows()).toEqual([
+        { row: "choice:cosmic-orange", checked: "true" },
+        { row: "choice:deep-blue", checked: "false" },
+        { row: "choice:silver-17p", checked: "false" },
+      ]);
+      expect(listRow("choice:deep-blue").textContent).toBe("Deep Blue");
+      expect(listRow("choice:cosmic-orange").querySelector(".vf-bar-check svg")).not.toBeNull();
+      expect(listRow("choice:deep-blue").querySelector(".vf-bar-check svg")).toBeNull();
+      expect(
+        ["choice:cosmic-orange", "choice:deep-blue", "choice:silver-17p"].map(rowSwatch),
+      ).toEqual(["#e0692a", "#2b3c5c", "#dededb"]);
+      expect(bar().querySelector(".vf-bar-eye")?.textContent).toBe("FINISH");
+      act(() => listRow("choice:deep-blue").click());
+      expect(run).toHaveBeenLastCalledWith("finish", { id: "deep-blue" });
+      expect(surfaceNow).toBeNull();
+    });
+
+    it("IN HAND beside Home: the same swatch pill; its list grows under the head and a finish is used through ops.useHeldTool", () => {
+      vi.useFakeTimers();
+      mount();
+      const use = vi.spyOn(ce.ops, "useHeldTool");
+      const tools = [
+        { id: "home", label: "Home", kind: "action", glyph: { path: "M1 1" } },
+        { id: "finish", label: "Finish", kind: "action", choices: FINISHES },
+      ] as NonNullable<SelectionAnchor["held"]>["tools"];
+      act(() =>
+        selection.publish({
+          held: { tools, active: "", landing: false, settled: true, travelMs: 560 } as NonNullable<
+            SelectionAnchor["held"]
+          >,
+        }),
+      );
+      act(() => vi.advanceTimersByTime(560 + 100));
+      const pill = [
+        ...bar().querySelectorAll<HTMLElement>('[data-face-row="hand"] [data-tool]'),
+      ].find((t) => t.dataset.tool === "finish") as HTMLElement;
+      expect(pill.dataset.look).toBe("choice");
+      expect(pill.hasAttribute("data-swatch")).toBe(true);
+      expect(pill.textContent).toBe("");
+      expect(pill.querySelector(".vf-bar-dot-ink")).not.toBeNull();
+      expect(pill.querySelector(".vf-bar-chevron")).not.toBeNull();
+      expect(pill.style.getPropertyValue("--vf-bar-swatch")).toBe("#e0692a");
+      expect(pill.getAttribute("aria-label")).toBe("Finish: Cosmic Orange");
+      act(() => pill.click());
+      expect(use).not.toHaveBeenCalled();
+      expect(surfaceNow).toBe("selection");
+      expect(pill.getAttribute("aria-expanded")).toBe("true");
+      expect(listRows().map((r) => r.row)).toEqual([
+        "choice:cosmic-orange",
+        "choice:deep-blue",
+        "choice:silver-17p",
+      ]);
+      expect(rowSwatch("choice:silver-17p")).toBe("#dededb");
+      act(() => listRow("choice:silver-17p").click());
+      expect(use).toHaveBeenLastCalledWith("finish", { id: "silver-17p" });
+      expect(surfaceNow).toBeNull();
+    });
+  });
 });
 
 describe("the tools in hand (DK-12)", () => {

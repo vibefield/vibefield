@@ -566,6 +566,31 @@
 .vf-bar-choice[data-disabled] .vf-bar-chevron {
   color: inherit;
 }
+/* a SWATCH PILL (OM-2): a choice whose every choice carries a swatch — the current choice's dot (the hand's: 12, its 1px
+   inner ring) and `chevron` 12 turned down, no words; 32 tall, padded 0 7 0 10, gap 5, corners 16, with a cell's states.
+   Mixed: an empty ring in secondary ink — taking the pill's own ink while its list is open or it is disabled, as the label
+   pill's Mixed does */
+.vf-bar-choice[data-swatch] {
+  gap: 5px;
+  padding: 0 7px 0 10px;
+}
+.vf-bar-choice[data-swatch] .vf-bar-chevron {
+  margin-left: 0;
+}
+/* its list open, the pill on the inverted solid (over a selection and in hand): the dot's 1px inner ring in the solid's
+   own ink at 40%, instead of the theme's black/14 (white/20 by night), so a dark finish by day and a light one by night
+   keep their edge */
+.vf-bar-choice[data-swatch][aria-expanded="true"] .vf-bar-dot-ink {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--vf-foreground-inverse) 40%, transparent);
+}
+.vf-bar-choice[data-swatch][data-mixed] .vf-bar-dot-ink {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--vf-text-secondary);
+}
+.vf-bar-choice[data-swatch][data-mixed][aria-expanded="true"] .vf-bar-dot-ink,
+.vf-bar-choice[data-swatch][data-mixed][data-disabled] .vf-bar-dot-ink {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
 /* a choice's row: `check` 14 at its start in primary ink, every row of the list keeping that 22 so the labels align */
 .vf-bar-check {
   display: inline-flex;

@@ -1395,11 +1395,18 @@ export async function stoppedWord(
   };
 }
 
-/** SIM-ATTACH: ONE undo step binds; ONE undoes; Finish cycles and reverts. */
+/** SIM-ATTACH: ONE undo step binds; ONE undoes; a Finish taken from its list sets it and ONE ⌘Z reverts it (track OM,
+ * OM-2, 2026-11-25: Simulator settings… picks the phone up and its sheet rises on its glass; Finish is a choice). */
 export interface AttachSeen {
   readonly bound: { readonly deviceType: string; readonly runtime: string } | null;
   readonly undone: { readonly deviceType: string; readonly runtime: string } | null;
-  readonly finish: { readonly before: unknown; readonly after: unknown; readonly undone: unknown };
+  readonly finish: {
+    readonly before: unknown;
+    readonly after: unknown;
+    readonly undone: unknown;
+    /** The finish whose row was taken from the list (none: the row's id was not read). */
+    readonly taken?: string;
+  };
   readonly want: { readonly deviceType: string; readonly runtime: string };
 }
 
@@ -1411,6 +1418,10 @@ export function judgeAttach(s: AttachSeen): string[] {
     out.push(`SIM-ATTACH: one ⌘Z left the binding ${JSON.stringify(s.undone)}`);
   if (s.finish.after === s.finish.before)
     out.push("SIM-ATTACH: Finish did not move the phone's finish");
+  else if (s.finish.taken !== undefined && s.finish.after !== s.finish.taken)
+    out.push(
+      `SIM-ATTACH: Finish took ${JSON.stringify(s.finish.taken)}, and the phone wears ${JSON.stringify(s.finish.after)}`,
+    );
   if (s.finish.undone !== s.finish.before)
     out.push("SIM-ATTACH: one ⌘Z did not take the finish back");
   return out;
@@ -3315,31 +3326,105 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         if (gate.stop !== null)
           throw new PhoneStop(`SIM-ATTACH: the door's attach gate: ${gate.stop}`);
         await h.pressSelector(act("simulator-settings"));
-        const form = "dialog.vf-sim-setup[open]";
+        // track OM, OM-2 (2026-11-25): the act picks the phone up, and its settings rise as a sheet on its glass
+        const sheet = "dialog.vf-sim-setup[open][data-held]";
+        const pill = (name: string): string => `${sheet} [data-pill="${name}"]`;
+        const rowOf = (name: string, value: string): string =>
+          `${sheet} [data-list="${name}"] [role="menuitemradio"][data-value=${JSON.stringify(value)}]`;
+        const pillValue = (name: string): Promise<string | null> =>
+          js<string | null>(
+            `document.querySelector(${JSON.stringify(pill(name))})?.getAttribute("data-value") ?? null`,
+          );
+        // in hand and settled: the sheet travels with the phone, so its pills are pressed once it stands still
         await until(
-          "the installed simulator configurations",
+          "the phone in hand",
           10_000,
-          `document.querySelector(${JSON.stringify(`${form} select[name="runtime"]`)})?.disabled === false`,
+          `(() => { const h = globalThis.__vfDesk.held(); return h !== null && h.entity === ${e} && h.frame?.settled === true; })()`,
         );
-        const selected = await js<boolean>(`(() => {
-          const form = document.querySelector(${JSON.stringify(form)});
-          const runtime = form.querySelector('[name="runtime"]');
-          const model = form.querySelector('[name="model"]');
-          runtime.value = ${JSON.stringify(env.runtime)};
-          runtime.dispatchEvent(new Event('change'));
-          model.value = ${JSON.stringify(typeOf(3))};
-          model.dispatchEvent(new Event('change'));
-          return !!runtime.value && !!model.value;
-        })()`);
+        await until(
+          "the held sheet's installed simulator configurations",
+          10_000,
+          `document.querySelector(${JSON.stringify(pill("runtime"))})?.disabled === false`,
+        );
+        /** A press on the sheet as a person makes it: what is pressed first brought into the sheet's own view (the sheet
+         * scrolls where the phone's screen is short), never by scrolling anything else. */
+        const pressSheet = async (selector: string): Promise<void> => {
+          await js(`(() => {
+            const el = document.querySelector(${JSON.stringify(selector)});
+            const box = el?.closest("dialog");
+            if (!el || !box) return;
+            const r = el.getBoundingClientRect(), b = box.getBoundingClientRect();
+            if (r.top < b.top) box.scrollTop -= b.top - r.top;
+            else if (r.bottom > b.bottom) box.scrollTop += r.bottom - b.bottom;
+          })()`);
+          await sleep(100);
+          await h.pressSelector(selector);
+        };
+        /** A value chosen as a person chooses it: its pill pressed, its list open in the sheet, its row pressed. */
+        const choose = async (name: string, value: string): Promise<boolean> => {
+          if ((await pillValue(name)) === value) return true;
+          await pressSheet(pill(name));
+          try {
+            await until(
+              `the sheet's ${name} list`,
+              5_000,
+              `document.querySelector(${JSON.stringify(`${sheet} [data-list="${name}"]`)})?.hidden === false`,
+            );
+          } catch {
+            return false;
+          }
+          if (
+            !(await js<boolean>(
+              `document.querySelector(${JSON.stringify(rowOf(name, value))}) !== null`,
+            ))
+          )
+            return false;
+          await pressSheet(rowOf(name, value));
+          return (await pillValue(name)) === value;
+        };
+        const selected =
+          (await choose("runtime", env.runtime)) && (await choose("model", typeOf(3)));
         if (!selected) throw new PhoneStop("The fixture model and iOS version are unavailable");
-        await h.pressSelector(`${form} button[type="submit"]`);
+        await pressSheet(`${sheet} button[type="submit"]`);
         await sleep(1_000);
         const bound = bindingRead((await props())["binding"]);
+        // the sheet closed and the phone stays in hand: Esc puts it down (a second Esc where the first only took the focus
+        // back to the desk), and the selection bar stands over it again
+        if (!(await putDown()) && !(await putDown()))
+          throw new Error("SIM-ATTACH: the phone stayed in hand after its sheet closed");
         await undoKey();
         await sleep(800);
         const undone = bindingRead((await props())["binding"]);
+        // FINISH, a choice (track OM, OM-2): the bar's swatch pill, a row of another finish, one undo step
+        const finishPill =
+          '[data-selection-bar] [data-face-row="selection"] [data-act="act:finish"]';
+        const finishList = '[data-selection-bar][data-open] .vf-bar-list[data-choices="finish"]';
+        const finishShown = `document.querySelector(${JSON.stringify(finishPill)}) !== null && document.querySelector("[data-selection-bar]")?.getAttribute("data-shown") === "true"`;
+        if (!(await js<boolean>(finishShown))) {
+          const again = await placeOf(a);
+          if (again === null) throw new Error("φA left the board");
+          await press({ x: off.left + again.cx, y: off.top + again.cy });
+        }
+        await until("the bar's Finish", 5_000, finishShown);
         const finish0 = (await props())["finish"];
-        await h.pressSelector(act("finish"));
+        await h.pressSelector(finishPill);
+        /** A row of the list settled where it stands (the rows fade and rise in, nearest first). */
+        const settled = (selector: string): string =>
+          `(() => { const r = document.querySelector(${JSON.stringify(selector)}); return r !== null && getComputedStyle(r).opacity === "1"; })()`;
+        await until("the finish list", 5_000, settled(`${finishList} [role="menuitemradio"]`));
+        const otherFinish = await js<string | null>(
+          `document.querySelector(${JSON.stringify(`${finishList} [role="menuitemradio"]:not([aria-checked="true"])`)})?.getAttribute("data-row") ?? null`,
+        );
+        if (otherFinish === null)
+          throw new PhoneStop("SIM-ATTACH: the fixture model has one finish");
+        const finishRow = `${finishList} [data-row=${JSON.stringify(otherFinish)}]`;
+        await until("the finish row", 5_000, settled(finishRow));
+        await h.pressSelector(finishRow);
+        await until(
+          "the finish list folded",
+          5_000,
+          `document.querySelector("[data-selection-bar]")?.hasAttribute("data-open") === false`,
+        );
         await sleep(800);
         const finish1 = (await props())["finish"];
         await undoKey();
@@ -3347,7 +3432,12 @@ export async function phoneRows(d: PhoneRowsDriver): Promise<string[]> {
         const seen: AttachSeen = {
           bound,
           undone,
-          finish: { before: finish0, after: finish1, undone: (await props())["finish"] },
+          finish: {
+            before: finish0,
+            after: finish1,
+            undone: (await props())["finish"],
+            taken: otherFinish.replace(/^choice:/u, ""),
+          },
           want: { deviceType: typeOf(3), runtime: env.runtime },
         };
         await keyPress("Escape");

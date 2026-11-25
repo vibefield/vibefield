@@ -22,6 +22,7 @@ import type { ObjectWords } from "../field/desk/desk-object-words";
 // brackets themselves are the desk's GPU marks; the plate draws a stand-in outline so the bar has something to stand
 // over. Track OM (2026-11-25; ICE I61, I62): the browser pane's bar — Device, a choice, and Mute — its device list grown,
 // Custom's fields open, two panes on different devices (Mixed), and an act its kind says is disabled beside a swatch.
+// OM-2: the simulator's Finish, a swatch choice — the swatch pill, its current finish's dot and the chevron.
 
 /** The clock's own act glyph (examples/plugins/desk-clock `SECONDS_GLYPH`): data, as a kind declares it. */
 const STOPWATCH = "M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16ZM12 13l3-3M10 2h4M12 2v3";
@@ -89,6 +90,30 @@ const paneActs = (current: string | undefined): SelectionFacts["menu"] => [
   { id: "sound", label: "Mute", glyph: { path: SOUND_PATH } },
 ];
 
+const PHONE: ObjectWords = {
+  type: "vibefield.simulator",
+  title: "iOS Simulator",
+  state: null,
+  label: "iOS Simulator",
+};
+
+/** The iPhone 17 Pro's finishes as the simulator's kind says them (track OM, OM-2, 2026-11-25): by name, each with its
+ * swatch. The phone's own colours are the plugin's (DESIGN.md §5.1's finishes table), which the catalog may not import
+ * and holds no colour literal of, so its swatches here are stand-ins from the product's tokens: the shape is the plate's
+ * subject, not the colours. */
+const PRO_FINISHES = [
+  ["cosmic-orange", "Cosmic Orange", "var(--vf-orange)"],
+  ["deep-blue", "Deep Blue", "var(--vf-ink-info)"],
+  ["silver-17p", "Silver", "var(--vf-text-tertiary)"],
+] as const;
+const finishes = (current: string): readonly ActChoice[] =>
+  PRO_FINISHES.map(([id, label, swatch]) => ({
+    id,
+    label,
+    swatch,
+    ...(id === current ? { current: true } : {}),
+  }));
+
 const facts = (over: Partial<SelectionFacts>): SelectionFacts => ({
   count: 1,
   locked: false,
@@ -115,6 +140,7 @@ export const BAR_STATES = [
   "Custom… — its fields open",
   "Mixed — two panes on two devices",
   "Disabled now, and a swatch",
+  "A swatch choice — the simulator's Finish",
 ] as const;
 export type BarState = (typeof BAR_STATES)[number];
 
@@ -243,6 +269,16 @@ const PLATES: Record<BarState, Plate> = {
     }),
     height: 400,
     box: { x0: 160, y0: 220, x1: 400, y1: 360 },
+    open: false,
+  },
+  // one phone, on Cosmic Orange: its Finish the swatch pill — the current finish's dot and the chevron, no words
+  "A swatch choice — the simulator's Finish": {
+    facts: facts({
+      words: [PHONE],
+      menu: [{ id: "finish", label: "Finish", choices: finishes("cosmic-orange") }],
+    }),
+    height: 400,
+    box: { x0: 225, y0: 156, x1: 335, y1: 392 },
     open: false,
   },
 };

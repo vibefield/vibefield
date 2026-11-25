@@ -138,6 +138,18 @@ describe("the SDK's /desk door", () => {
     );
   });
 
+  it("OM-2: keys the desk's HOLD beside them — its own name, never another service's — a pick-up of one object saying whether it took", () => {
+    // the simulator's Simulator settings… picks its phone up through it (track OM, OM-2, 2026-11-25)
+    expect(door.DESK_HOLD.name).toBe("vibefield.desk.hold");
+    for (const other of [door.LIVE, door.BROWSER_NAVIGATION, door.SIMULATOR_DEVICES]) {
+      expect(door.DESK_HOLD).not.toBe(other);
+      expect(door.DESK_HOLD.name).not.toBe(other.name);
+    }
+    expectTypeOf(door.DESK_HOLD).toEqualTypeOf<iceKit.ServiceKey<door.DeskHold>>();
+    expectTypeOf<door.DeskHold["pickUp"]>().toEqualTypeOf<(entity: iceRoot.Entity) => boolean>();
+    expectTypeOf<keyof door.DeskHold>().toEqualTypeOf<"pickUp">();
+  });
+
   it("hands over the kind contract, the placement keys and the service keys", () => {
     expect(door.defineObject).toBe(iceDesk.defineObject);
     expect(door.isObjectKind).toBe(iceDesk.isObjectKind);

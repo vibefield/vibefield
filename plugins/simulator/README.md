@@ -12,8 +12,8 @@ it needs lives in the app, outside this folder (below).
 - Xcode's license accepted, and its first launch finished.
 - At least one iOS runtime, installed from Xcode Settings → Components.
 
-The plugin's setup dialog has the app check these in turn, and offers the next step: Install Xcode, Select Xcode,
-Accept the Xcode license, Finish setting up Xcode, Install an iOS runtime.
+The plugin's settings sheet, on the phone's own glass, has the app check these in turn, and offers the next step:
+Install Xcode, Select Xcode, Accept the Xcode license, Finish setting up Xcode, Install an iOS runtime.
 
 ## Its powers
 
@@ -26,7 +26,7 @@ It holds no other power.
 
 ## What lives outside this folder
 
-The plugin draws the iPhone, its faces and its setup dialog. The app does the rest, which no plugin package can
+The plugin draws the iPhone, its faces and its settings sheet. The app does the rest, which no plugin package can
 carry:
 
 - **The simulator service**, in the app's main process (`packages/electron-shell/src/main/live-surfaces/`). It is
@@ -38,6 +38,10 @@ carry:
   screen, and it sends your taps and keys to the device.
 - **The SDK's setup door**, `SimulatorSetup` (`packages/plugin-sdk/src/desk.ts`).
 - **The desk's lending of devices** to the object (`packages/field-app/src/surfaces/live/simulator-devices.ts`).
+- **The desk's hold**, the SDK's `DESK_HOLD` (`packages/plugin-sdk/src/desk.ts`), lent by the desk
+  (`packages/field-app/src/field/desk/desk-layer.ts`). Simulator settings… picks the phone up through it, as a
+  double-click does, and its settings sheet rises on the phone's glass. Where the desk lends no hold, the act stands
+  faint.
 
 So the plugin works only inside a VibeField that carries these. That is why it comes with VibeField: a copy from a
 market alone would not have them.
@@ -77,7 +81,8 @@ Each maker's header says how to run it.
 | `src/model.ts` | what one iPhone model is, as data |
 | `src/binding.ts`, `src/live.ts` | the device an iPhone is bound to (a model and an iOS version), and its screen |
 | `src/face.ts`, `src/notice.ts` | the honest faces, in DESIGN.md §9's words |
-| `src/setup-dialog.ts`, `src/setup-view.ts` | the setup dialog: what this Mac lacks, and the model and version picker |
+| `src/acts.ts` | the iPhone's two acts, on the selection bar and in hand: Simulator settings… and Finish |
+| `src/setup-dialog.ts`, `src/setup-view.ts`, `src/setup-choice.ts` | the settings sheet on the phone's glass: what this Mac lacks, and the model and version pills |
 | `playground/states.ts` | the states the kit's harness and the stills drive it through |
 | `test/still.golden.json` | the stills' golden, made on one Mac |
 

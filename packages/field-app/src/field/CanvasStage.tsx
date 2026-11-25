@@ -46,7 +46,7 @@ import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { deskCensus, installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
 import { type DeskFeed, feedDesk } from "./desk/desk-feed";
 import { deskGpu, HEAL_DELAYS_MS, type HealKind, healDelay, healKind } from "./desk/desk-gpu";
-import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
+import { deskHold, deskLook, fieldDeskLayer } from "./desk/desk-layer";
 import { useDeskLight } from "./desk/desk-light-live";
 import { announceMissing } from "./desk/desk-notices";
 import { objectWords, stagedTitles } from "./desk/desk-object-words";
@@ -278,6 +278,9 @@ export function CanvasStage({
       },
       ...(live === undefined ? {} : { live }),
       ...(devices === undefined ? {} : { devices }),
+      // track OM, OM-2 (2026-11-25) — THE DESK'S HOLD over this engine's ops: a kind's act picks one of the selected up
+      // (the simulator's Simulator settings… its phone, its sheet opening on the glass)
+      deskHold: deskHold(ce),
     });
     // the kinds of what is ON (DK-9): a plugin that is off has its types left out of the catalog the
     // layer is mounted with — read once, at the mount, as ICE reads it

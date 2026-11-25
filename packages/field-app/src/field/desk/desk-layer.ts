@@ -1,4 +1,4 @@
-import type { CanvasEngine } from "@vibecook/ice";
+import { type CanvasEngine, selectedEntities } from "@vibecook/ice";
 import {
   DEFAULT_MAT_CONFIG,
   type DeskLayerFactory,
@@ -13,6 +13,8 @@ import { type DeskLightValues, deskLightValues } from "@vibefield/contracts";
 import {
   BROWSER_NAVIGATION,
   type BrowserNavigation,
+  DESK_HOLD as DESK_HOLD_KEY,
+  type DeskHold,
   SIMULATOR_DEVICES,
   type SimulatorDevices,
 } from "@vibefield/plugin-sdk/desk";
@@ -107,6 +109,31 @@ export interface FieldDeskLayerOptions {
   /** PT-S2 (R11) — this Mac's Simulator devices as a phone's attach reads them (`surfaces/live/simulator-devices.ts`), lent
    * beside them under `SIMULATOR_DEVICES`: the device a phone binds to, answered from the host's last read. */
   readonly devices?: SimulatorDevices;
+  /** Track OM, OM-2 (2026-11-25) — the desk's hold (`deskHold` below), lent beside them under the SDK's `DESK_HOLD`: a
+   * kind's act picks one of the selected up (the simulator's Simulator settings… its phone, to open its sheet there). */
+  readonly deskHold?: DeskHold;
+}
+
+/**
+ * THE DESK'S HOLD (track OM, OM-2, 2026-11-25; the SDK's `DESK_HOLD`), over the engine's ops: a kind's act picks one of the
+ * selected objects up — ICE's own pick-up (`ops.open`), the one a double-click makes — and the selection becomes it alone.
+ * Refused, nothing changed: an object that is not among the selected, and what core refuses itself (its type does not open,
+ * or another object is in hand — `open` throws before it writes, as the bar's Open is refused, bar-acts.ts).
+ */
+export function deskHold(engine: CanvasEngine): DeskHold {
+  return {
+    pickUp(entity) {
+      if (!selectedEntities(engine.world).includes(entity)) return false;
+      try {
+        engine.ops.open(entity);
+      } catch {
+        return false;
+      }
+      // `open` selected it alone as it took it up; said again for an object already in hand, which `open` leaves as it is
+      engine.ops.setSelection([entity]);
+      return true;
+    },
+  };
 }
 
 /**
@@ -115,13 +142,21 @@ export interface FieldDeskLayerOptions {
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
  * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
  * pegboard's bottom fade (`tray`, DK-13), the wind's window (`ambientIdleMs`, Q4), and the desk's LIVE pages when the stage lends them (PT-2:
- * `services` — a portal kind's face; PT-S2, this Mac's Simulator devices beside them — a phone's attach; the kv service
- * rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
+ * `services` — a portal kind's face; PT-S2, this Mac's Simulator devices beside them — a phone's attach; OM-2, the desk's hold
+ * — a kind's act picking an object up; the kv service rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
  * "Peers on the mat"; ICE I26): `cursors: false`, so the host mounts no remote cursors of ICE's and nobody is drawn twice —
  * the desk's children draw each peer by face (`peers/PeersOnTheMat.tsx`), and their observers arm the world.
  */
 export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
   const light = opts.light ?? deskLightValues(undefined);
+  const services = [
+    ...(opts.live === undefined ? [] : [service(LIVE, opts.live)]),
+    ...(opts.live?.navigation === undefined
+      ? []
+      : [service(BROWSER_NAVIGATION, opts.live.navigation)]),
+    ...(opts.devices === undefined ? [] : [service(SIMULATOR_DEVICES, opts.devices)]),
+    ...(opts.deskHold === undefined ? [] : [service(DESK_HOLD_KEY, opts.deskHold)]),
+  ];
   return deskLayer({
     ...deskLook(opts.theme),
     objects: [],
@@ -139,16 +174,6 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
     ...(opts.onDevice === undefined ? {} : { onDevice: opts.onDevice }),
-    ...(opts.live === undefined && opts.devices === undefined
-      ? {}
-      : {
-          services: [
-            ...(opts.live === undefined ? [] : [service(LIVE, opts.live)]),
-            ...(opts.live?.navigation === undefined
-              ? []
-              : [service(BROWSER_NAVIGATION, opts.live.navigation)]),
-            ...(opts.devices === undefined ? [] : [service(SIMULATOR_DEVICES, opts.devices)]),
-          ],
-        }),
+    ...(services.length === 0 ? {} : { services }),
   });
 }

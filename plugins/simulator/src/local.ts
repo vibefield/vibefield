@@ -11,10 +11,13 @@ import { type PhoneGeometry, pickPhone } from "./law";
 //    charged to the desk's raster budget under the kind's name (`notice <key>`) and let go at its eviction — laid again from
 //    its record when the phone is next drawn;
 //  - In hand, status actions own their presses. The live glass forwards pointer and wheel input in guest coordinates.
-//  - Simulator settings reads compatible iPhone models and installed iOS runtimes through the host's device service.
+//  - Simulator settings reads compatible iPhone models and installed iOS runtimes through the host's device service, and
+//    (track OM, OM-2, 2026-11-25) picks the phone up through the desk's hold (`DESK_HOLD`), its sheet rising on the glass.
 // A loop at rest ticks the kind only when it is due: nothing is polled.
 
 import {
+  DESK_HOLD,
+  type DeskHold,
   type Entity,
   type HeldEvent,
   type KindHost,
@@ -94,6 +97,8 @@ export interface SimulatorLocal extends KindLocal {
   interactive(e: Entity): boolean;
   send(e: Entity, event: LiveInput): void;
   devices(): SimulatorDevices | undefined;
+  /** Track OM, OM-2 (2026-11-25): the desk's hold as the host lends it (`DESK_HOLD`), or undefined: none lent on this desk. */
+  hold(): DeskHold | undefined;
   /** Words drawn, and acts run, since the desk was made (a test's witness). */
   readonly notices: number;
   readonly acts: number;
@@ -218,6 +223,7 @@ export function createSimulatorLocal(host: KindHost | undefined): SimulatorLocal
     morphs: () => morphs.stats(),
     faces: () => live.stats(),
     devices: () => host?.use?.(SIMULATOR_DEVICES),
+    hold: () => host?.use?.(DESK_HOLD),
     get notices() {
       return notices;
     },

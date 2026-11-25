@@ -50,7 +50,7 @@ const HANG = 0.4;
  * no mini mat yet — no chip); and its tray entry — a phone on a shelf under a NEW category, `devices`, its specimen drawn by
  * its own pass with the screen off (a specimen is bound to nothing). Its CAPABILITIES (PT-S2; item 569):
  * `surface.attach` and `surface.simulator` — a bound device's own display, never another app's window: the desk's
- * `LIVE` service opens a Simulator only for an object whose plugin is granted both. The setup dialog reads compatible
+ * `LIVE` service opens a Simulator only for an object whose plugin is granted both. The settings sheet reads compatible
  * models and installed runtimes from the host on demand.
  * The code half is the export `binding.kind` names (object.ts). Emitted to
  * `vibefield.plugin.json` by `pnpm gen:manifest`.

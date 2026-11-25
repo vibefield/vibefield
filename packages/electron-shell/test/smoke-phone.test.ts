@@ -44,6 +44,7 @@ import {
   idleVerdict,
   idleWait,
   isOwnDevice,
+  judgeAttach,
   judgeCap,
   judgeGone,
   judgeIdle,
@@ -1377,7 +1378,9 @@ describe("PT-S3 — SIM-STOPPED's word (P8 amended)", () => {
 });
 
 describe("the simulator setup smoke", () => {
-  it("selects the staged runtime and model before committing through the real form", () => {
+  // track OM, OM-2 (2026-11-25): Simulator settings… picks the phone up and its settings rise as a sheet on its glass,
+  // chosen through its pills' lists; Finish is the bar's choice, a row taken from its list
+  it("picks the phone up, chooses the staged runtime and model through the held sheet's pills, then commits and undoes", () => {
     const row = SOURCE.slice(
       SOURCE.indexOf('await row("SIM-ATTACH"'),
       SOURCE.indexOf('await row("SIM-GONE"'),
@@ -1385,10 +1388,21 @@ describe("the simulator setup smoke", () => {
     const stages = [
       'door.row("SIM-ATTACH", "press"',
       'h.pressSelector(act("simulator-settings"))',
-      "JSON.stringify(env.runtime)",
-      "JSON.stringify(typeOf(3))",
+      'const sheet = "dialog.vf-sim-setup[open][data-held]"',
+      '"the phone in hand"',
+      'JSON.stringify(pill("runtime"))})?.disabled === false',
+      "await h.pressSelector(selector);",
+      "await pressSheet(pill(name));",
+      "await pressSheet(rowOf(name, value));",
+      'choose("runtime", env.runtime)',
+      'choose("model", typeOf(3))',
       "if (!selected) throw",
-      "await h.pressSelector(",
+      "await pressSheet(`",
+      'sheet} button[type="submit"]`);',
+      "await putDown()",
+      "await undoKey()",
+      "await h.pressSelector(finishPill);",
+      "await h.pressSelector(finishRow);",
       "await undoKey()",
     ];
     let start = 0;
@@ -1397,6 +1411,28 @@ describe("the simulator setup smoke", () => {
       expect(at, stage).toBeGreaterThanOrEqual(start);
       start = at + stage.length;
     }
+    // the form's selects are gone: nothing sets a value behind the sheet's back
+    expect(row).not.toMatch(/select\[name=|\.dispatchEvent\(new Event\('change'\)\)/u);
+  });
+
+  it("judges the finish by the row taken: moved, worn as taken, and back after one ⌘Z", () => {
+    const want = { deviceType: "t", runtime: "r" };
+    const ok = {
+      bound: want,
+      undone: null,
+      finish: { before: "a", after: "b", undone: "a", taken: "b" },
+      want,
+    };
+    expect(judgeAttach(ok)).toEqual([]);
+    expect(judgeAttach({ ...ok, finish: { ...ok.finish, after: "c" } })).toEqual([
+      'SIM-ATTACH: Finish took "b", and the phone wears "c"',
+    ]);
+    expect(judgeAttach({ ...ok, finish: { ...ok.finish, after: "a" } })).toEqual([
+      "SIM-ATTACH: Finish did not move the phone's finish",
+    ]);
+    expect(judgeAttach({ ...ok, finish: { ...ok.finish, undone: "b" } })).toEqual([
+      "SIM-ATTACH: one ⌘Z did not take the finish back",
+    ]);
   });
 });
 

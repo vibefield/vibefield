@@ -5,7 +5,9 @@
 // it names another only by its registry name). What it may name: the SDK's root and `/desk`, the contracts (the manifest's
 // types and the binding's schema — the ONE reader it shares with PT-S2's resolver), and its own modules — its `.wgsl` files
 // among them. Unlike the pane it writes no `Position` or `Size` (a phone is never resized), so `/canvas` is refused
-// everywhere. Its authoring-time trees (scripts/, test/, playground/) may add the build kit, the SDK's testing door, the runner
+// everywhere. Track OM, OM-2 (2026-11-25): its settings sheet draws its own DOM and wears the kit's `close`, `chevron` and
+// `check` (DESIGN.md §13), so it may name `/ui-dom`, the SDK's door for a plugin that draws its own DOM (item 570), too.
+// Its authoring-time trees (scripts/, test/, playground/) may add the build kit, the SDK's testing door, the runner
 // and Node's builtins — and ONE widening, held to the one file that needs it, as the pane's is:
 //  - `@napi-rs/canvas` in scripts/make-face-words.ts alone (authoring time, never shipped): the committed words a Node still
 //    draws are made with the product's own `drawWords` on a Node canvas (the orchestrator's R2 Q1, 2026-10-29).
@@ -25,10 +27,11 @@ import { describe, expect, it } from "vitest";
 
 const PKG = resolve(import.meta.dirname, "..");
 
-/** What the shipped modules may name besides their own. */
+/** What the shipped modules may name besides their own. `/ui-dom` since track OM, OM-2 (2026-11-25): the sheet's glyphs. */
 const SHIPPED = new Set([
   "@vibefield/plugin-sdk",
   "@vibefield/plugin-sdk/desk",
+  "@vibefield/plugin-sdk/ui-dom",
   "@vibefield/contracts",
 ]);
 /** What the authoring-time trees may add. */
@@ -116,8 +119,20 @@ describe("the phone reaches ICE through the SDK's doors alone (K-L1)", () => {
     expect(shipped.length).toBeGreaterThan(12);
     const named = shipped.flatMap((f) => specifiersOf(readFileSync(f, "utf8")));
     expect(new Set(named.filter((s) => s.startsWith("@vibefield/plugin-sdk")))).toEqual(
-      new Set(["@vibefield/plugin-sdk", "@vibefield/plugin-sdk/desk"]),
+      new Set([
+        "@vibefield/plugin-sdk",
+        "@vibefield/plugin-sdk/desk",
+        "@vibefield/plugin-sdk/ui-dom",
+      ]),
     );
+    // track OM, OM-2 (2026-11-25): the DOM door is named by the sheet's look alone
+    expect(
+      shipped
+        .filter((f) =>
+          specifiersOf(readFileSync(f, "utf8")).includes("@vibefield/plugin-sdk/ui-dom"),
+        )
+        .map((f) => relative(PKG, f)),
+    ).toEqual(["src/setup-view.ts"]);
     expect(named.filter((s) => s.endsWith(".wgsl")).sort()).toEqual([
       "./phone-pass.wgsl",
       "./phone.wgsl",
@@ -162,12 +177,14 @@ describe("the phone reaches ICE through the SDK's doors alone (K-L1)", () => {
       "node:fs",
       "vitest",
       "@vibefield/plugin-sdk/canvas",
+      "@vibefield/plugin-sdk/ui",
       "@vibefield/plugin-browser-pane",
     ])
       expect(violation(f, spec, false), spec).not.toBeNull();
     for (const spec of [
       "@vibefield/plugin-sdk/desk",
       "@vibefield/plugin-sdk",
+      "@vibefield/plugin-sdk/ui-dom",
       "@vibefield/contracts",
       "./law",
       "./phone.wgsl",

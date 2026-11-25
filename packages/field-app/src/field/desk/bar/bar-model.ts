@@ -13,7 +13,8 @@ import { eyebrowOf, type ObjectWords } from "../desk-object-words";
 // desk holds; it is the host's act (the save is main's), prints no key, and has no cell on the bar itself.
 // Track OM (2026-11-25; ICE I61, I62): a kind's act says what it is NOW — disabled, another label and drawing, a swatch —
 // and an act may be a CHOICE: a pill with the current choice's label, whose list grows from the bar as More's menu does
-// (`choiceGroups`, `choiceEyebrow`), a choice that asks for values reading with an ellipsis there.
+// (`choiceGroups`, `choiceEyebrow`), a choice that asks for values reading with an ellipsis there. OM-2: a choice whose
+// every choice carries a swatch is a SWATCH PILL — the current choice's dot, or an empty ring while Mixed, and no words.
 
 /** The desk's keys as this platform spells them (the frame's way, FR-5: said, never a cap). */
 export type DeskKeys = "mac" | "other";
@@ -95,6 +96,11 @@ export type BarCell =
       /** Its tooltip and accessible name: the act and the choice ("Device: Laptop"). */
       readonly tip: string;
       readonly disabled?: boolean;
+      /** A SWATCH PILL (§8, track OM, OM-2): every choice carries a swatch, so the pill is the current choice's dot — an
+       * empty ring while Mixed — and the chevron, no words ("Finish: Cosmic Orange" its tip). */
+      readonly swatches?: true;
+      /** A swatch pill's current choice's swatch (CSS, the kind's own word), its dot's ink; absent while Mixed. */
+      readonly swatch?: string;
     }
   /** A missing face selected: the type's name and its word where the kind's acts would stand — a label. */
   | { readonly kind: "words"; readonly label: string }
@@ -109,21 +115,33 @@ export type BarCell =
 /** What a choice pill says when the selected objects stand on different choices (§8 "An act that is a choice"). */
 export const MIXED_LABEL = "Mixed";
 
-/** A choice act's current choice as its pill says it — the label of the one marked current, or Mixed with none. */
+/**
+ * A choice act's current choice as its pill says it — the label of the one marked current, or Mixed with none — and
+ * whether it is a SWATCH PILL (track OM, OM-2): every choice carries a swatch, and the pill draws the current one's
+ * (none while Mixed).
+ */
 export function currentChoice(choices: readonly ActChoice[]): {
   readonly current: string;
   readonly mixed: boolean;
+  readonly swatches: boolean;
+  readonly swatch?: string;
 } {
   const on = choices.find((c) => c.current === true);
-  return on === undefined
-    ? { current: MIXED_LABEL, mixed: true }
-    : { current: on.label, mixed: false };
+  const swatches = choices.length > 0 && choices.every((c) => c.swatch !== undefined);
+  const swatch = swatches ? on?.swatch : undefined;
+  return {
+    current: on === undefined ? MIXED_LABEL : on.label,
+    mixed: on === undefined,
+    swatches,
+    ...(swatch === undefined ? {} : { swatch }),
+  };
 }
 
-/** A kind's act as the bar prints it: a choice pill when it offers choices, else a cell (ICE I61, I62). */
+/** A kind's act as the bar prints it: a choice pill when it offers choices — a swatch pill when every choice carries a
+ * swatch (OM-2) — else a cell (ICE I61, I62). */
 export function actCell(act: MenuSlot): BarCell {
   if (act.choices !== undefined) {
-    const { current, mixed } = currentChoice(act.choices);
+    const { current, mixed, swatches, swatch } = currentChoice(act.choices);
     return {
       kind: "choice",
       id: act.id,
@@ -133,6 +151,8 @@ export function actCell(act: MenuSlot): BarCell {
       mixed,
       tip: `${act.label}: ${current}`,
       ...(act.enabled === false ? { disabled: true } : {}),
+      ...(swatches ? { swatches: true as const } : {}),
+      ...(swatch === undefined ? {} : { swatch }),
     };
   }
   return {

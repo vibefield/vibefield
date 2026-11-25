@@ -3,9 +3,12 @@
 // demands it was sent), a host lending `LIVE` and the words' raster (or not) and counting its doors (the durable key, wake,
 // redraw, remake, the desk's frames), the root pass's words doors, a raster budget the test reads, and an object's context;
 // and for the fixture's live source (fixture-live.ts): the host's clock and timer, and its writers. PT-S2: the host's device
-// list for the attach (`SIMULATOR_DEVICES`), when a test hands one.
+// list for the attach (`SIMULATOR_DEVICES`), when a test hands one. Track OM, OM-2 (2026-11-25): the desk's hold
+// (`DESK_HOLD`), when a test hands one — Simulator settings… picks the phone up through it.
 import {
   DEFAULT_GRID,
+  DESK_HOLD,
+  type DeskHold,
   type Entity,
   type KindHost,
   kindPalette,
@@ -127,8 +130,9 @@ export function fakeWords() {
   return { raster, asked };
 }
 
-/** A host lending `LIVE` (its own fake faces, or the `sources` a test hands it), the words' raster (or not) and — PT-S2 — this
- * Mac's devices under `SIMULATOR_DEVICES` (when a test hands them), its doors counted; the desk's frames moved by the test. */
+/** A host lending `LIVE` (its own fake faces, or the `sources` a test hands it), the words' raster (or not), — PT-S2 — this
+ * Mac's devices under `SIMULATOR_DEVICES` and — track OM, OM-2 — the desk's hold under `DESK_HOLD` (each when a test hands
+ * it), its doors counted; the desk's frames moved by the test. */
 export function fakeHost(
   opts: {
     live?: boolean;
@@ -138,6 +142,7 @@ export function fakeHost(
     words?: WordsRaster;
     pass?: boolean;
     devices?: SimulatorDevices;
+    hold?: DeskHold;
   } = {},
 ) {
   const pass = {
@@ -206,7 +211,9 @@ export function fakeHost(
           ? (opts.words as T)
           : opts.devices !== undefined && key.name === SIMULATOR_DEVICES.name
             ? (opts.devices as T)
-            : undefined,
+            : opts.hold !== undefined && key.name === DESK_HOLD.name
+              ? (opts.hold as T)
+              : undefined,
     keyOf: (e: Entity) => keys[e as number],
     wake: () => {
       n.wake += 1;
