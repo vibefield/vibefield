@@ -35,6 +35,7 @@ export function HistoryConsentRows({
   onToggle,
   now,
   disabled = false,
+  locked,
 }: {
   rows: readonly HistoryAgentRow[];
   /** the kinds whose switch is on */
@@ -42,6 +43,9 @@ export function HistoryConsentRows({
   onToggle: (kind: string, on: boolean) => void;
   now: number;
   disabled?: boolean;
+  /** HD-2 — the kinds whose switch takes no press (Settings → History: one History already reads stays on); drawn
+   * off (§7), as a disabled switch is. Absent where the pane only asks (nothing is read yet, every switch is free). */
+  locked?: ReadonlySet<string> | undefined;
 }): ReactElement {
   return (
     <ul className="vf-history-consent-rows" aria-label="Past sessions on this Mac">
@@ -62,7 +66,7 @@ export function HistoryConsentRows({
             <UiSwitch
               label={`Bring in ${row.label}'s history`}
               checked={on}
-              disabled={disabled}
+              disabled={disabled || locked?.has(row.kind) === true}
               onChange={(checked) => onToggle(row.kind, checked)}
             />
           </li>

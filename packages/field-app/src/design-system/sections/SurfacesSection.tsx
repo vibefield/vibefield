@@ -16,7 +16,8 @@ import {
   type DevicesSheet,
   type RemoveStep,
 } from "../../panels/DevicesSection";
-import { HistorySettingsView } from "../../panels/HistorySettings";
+import { HistoryKeptView, HistorySettingsView } from "../../panels/HistorySettings";
+import { historyKeptOf } from "../../panels/history-space";
 import {
   SettingsDialog,
   type SettingsPage,
@@ -31,6 +32,7 @@ import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
 import {
   FIXTURE_HISTORY_CENSUS,
   FIXTURE_HISTORY_CONSENTED,
+  FIXTURE_HISTORY_KEPT_STATUS,
   FIXTURE_ME,
   FIXTURE_OTHERS_WAITING,
   FIXTURE_SETUP_LEDGER,
@@ -71,6 +73,8 @@ export function SurfacesSection(): ReactElement {
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   // A press on a nav item returns to that page's top (the Agents shelf).
   const [settingsVisit, setSettingsVisit] = useState(0);
+  // HD-1 — Settings → History's Clear History… asked, in the specimen
+  const [historyClearAsked, setHistoryClearAsked] = useState(false);
   const [settingsSubpage, setSettingsSubpage] = useState<SettingsSubpage | null>(null);
   // AO-D10 — Finish setting up under the account, until Hide is pressed here.
   const [finishHidden, setFinishHidden] = useState(false);
@@ -134,19 +138,28 @@ export function SurfacesSection(): ReactElement {
                 onSubpage={setSettingsSubpage}
               />
             ) : settingsPage === "history" ? (
-              // AO-3 — Settings → History, the shipping view on a fixture census.
-              <HistorySettingsView
-                census={FIXTURE_HISTORY_CENSUS}
-                consented={FIXTURE_HISTORY_CONSENTED}
-                stopping={null}
-                busy={false}
-                error={null}
-                now={Date.parse("2026-10-27T12:00:00Z")}
-                onToggle={() => undefined}
-                onConfirmStop={() => undefined}
-                onCancelStop={() => undefined}
-                onLookAgain={() => undefined}
-              />
+              // AO-3 — Settings → History, the shipping views on a fixture census; HD-1 — and On this Mac under
+              // it, on a fixture reading of what History keeps (Clear History… asks, as it does in the product).
+              <div className="space-y-4">
+                <HistorySettingsView
+                  census={FIXTURE_HISTORY_CENSUS}
+                  consented={FIXTURE_HISTORY_CONSENTED}
+                  busy={false}
+                  error={null}
+                  now={Date.parse("2026-10-27T12:00:00Z")}
+                  onTurnOn={() => undefined}
+                  onLookAgain={() => undefined}
+                />
+                <HistoryKeptView
+                  kept={historyKeptOf(FIXTURE_HISTORY_KEPT_STATUS)}
+                  asking={historyClearAsked}
+                  clearing={false}
+                  error={null}
+                  onAsk={() => setHistoryClearAsked(true)}
+                  onConfirm={() => setHistoryClearAsked(false)}
+                  onCancel={() => setHistoryClearAsked(false)}
+                />
+              </div>
             ) : settingsPage === "terminal" ? (
               <TerminalSettingsPreview
                 key={settingsVisit}

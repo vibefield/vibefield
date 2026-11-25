@@ -624,6 +624,55 @@ export class RosettadSupervisor extends EventEmitter {
     return this.launch();
   }
 
+  /** HD-1 — a restart with work done WHILE NOTHING OF ROSETTAD'S RUNS (`index.clear` moves the projection away in
+   * it): a rebuild in flight and the live generation are put down, `between` runs, and one fresh generation is
+   * launched. The whole of it is one launch, as a rebuild and its serve are: `stop()`, a requested restart and a
+   * retry that fires meanwhile wait on it instead of spawning under `between`'s hands. A generation that would not
+   * die is refused (its writer may still hold the projection) and `between` is not run. A `between` that throws
+   * still gets its daemon back, over whatever `between` left, and the throw is this call's. Null once stopped. */
+  async restartAround(between: () => void | Promise<void>, detail: string): Promise<string | null> {
+    if (this.stopped) return null;
+    const rebuild = this.rebuildProc;
+    if (rebuild !== null) await this.putDownChild(rebuild);
+    while (this.launching !== null) await this.launching.catch(() => null);
+    if (this.stopped) return null;
+    this.restartStamps = [];
+    this.attempts = 0;
+    this.rebuilt = false;
+    this.clearRetry();
+    const generation = this.current;
+    const failures: unknown[] = [];
+    const run = (async (): Promise<Generation | null> => {
+      this.publish({ phase: "restarting", origin: null, announce: null, detail });
+      if (generation !== null) {
+        generation.onExit = "settle";
+        await this.terminate(generation);
+        if (generation.proc.exitCode === null && generation.proc.signalCode === null) {
+          const words = "rosettad did not exit; its files were left as they are";
+          failures.push(new Error(words));
+          this.publish({ phase: "failed", origin: null, pid: null, announce: null, detail: words });
+          return null;
+        }
+      }
+      if (this.stopped) return null;
+      try {
+        await between();
+      } catch (error) {
+        failures.push(error);
+      }
+      if (this.stopped) return null;
+      return this.spawnGeneration();
+    })();
+    const launching: Promise<Generation | null> = run.finally(() => {
+      if (this.launching === launching) this.launching = null;
+    });
+    this.launching = launching;
+    const next = await launching;
+    const origin = next === null ? null : await next.ready;
+    if (failures.length > 0) throw failures[0];
+    return origin;
+  }
+
   /** SIGINT, then SIGKILL after the shutdown budget; resolves after the child
    * has actually exited (or immediately when none is alive). */
   async stop(): Promise<void> {

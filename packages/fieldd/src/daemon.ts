@@ -103,6 +103,7 @@ import {
   IndexArtifactsResult,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
+  IndexClearParams,
   IndexEnrollParams,
   IndexProjectDayParams,
   IndexProjectParams,
@@ -1330,6 +1331,14 @@ export async function bootstrap(
     supervisor: rosettad,
     store: enrollment,
     expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+    // HD-1 — what `index.clear` leaves in the index directory: fieldd's own three (the record, the announce
+    // directory, the per-start credentials). Every other entry there is rosettad's.
+    files: {
+      dir: join(config.dataDir, ...LAYOUT.INDEX_DIR),
+      keep: [LAYOUT.INDEX_ENROLLMENT_FILE, LAYOUT.INDEX_DAEMONS_DIR, LAYOUT.INDEX_AUTH_DIR].map(
+        (parts) => parts[parts.length - 1] as string,
+      ),
+    },
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
     logger: logger.child({ component: "index_service" }),
   });
@@ -4782,6 +4791,18 @@ export async function bootstrap(
         },
         () => index.retire(parsed.data.runtimeId),
         (result) => ({ attrs: { changed: result.changed, phase: result.status.phase } }),
+      );
+    });
+    // HD-1 — everything History read on this Mac goes, and it asks again before it reads (`IndexService.clear`).
+    // Audited as the consent acts beside it are: it withdraws consent too.
+    api.register("index.clear", async (ctx, params) => {
+      if (!IndexClearParams.safeParse(params ?? {}).success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected {}", false);
+      return await audit.required(
+        ctx,
+        { action: "index.clear", target: { kind: "index", id: "data" } },
+        () => index.clear(),
+        (result) => ({ attrs: { phase: result.status.phase } }),
       );
     });
     // AR-2 — the agent runtime doors (thinking-ar-data-topology.md §4;
@@ -10411,6 +10432,9 @@ export async function bootstrap(
     indexMesh?.start(); // DS-6 — the replicas load, then follow the roster
     appsMesh?.start(); // MA-3e — the made apps' replicas, the same way
     void rosettad?.start();
+    // HD-1 — a clear a previous fieldd moved aside and did not finish removing: in the background, out of the
+    // daemon's sight either way
+    void index.removeClearedLeftovers();
     // FS-1a — boot has committed: the files worker starts with the daemon
     // (FS-D11 (b), always on; readiness is a transition, never a boot gate),
     // and the places this user's runs already recorded are seeded once.

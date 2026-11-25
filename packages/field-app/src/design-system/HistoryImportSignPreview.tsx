@@ -21,7 +21,7 @@ export function HistoryImportSignPlate({ moment }: { moment: ImportSignMoment })
   return (
     <div className="vf-ds-history-plate" data-state={`import-${moment}`}>
       <HistoryRoomView ports={ports} storage={null} keys="mac" importSign={importSign} />
-      {sign !== null && <HistoryImportSignView sign={sign} initiallyOpen />}
+      {sign !== null && <HistoryImportSignView sign={sign} initiallyOpen onOpenSettings={noop} />}
       <PeekButtonView keys="mac" open={false} onPress={noop} />
     </div>
   );

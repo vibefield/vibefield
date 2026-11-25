@@ -524,6 +524,22 @@ export const IndexMutationResult = z
   .passthrough();
 export type IndexMutationResult = z.infer<typeof IndexMutationResult>;
 
+/** `index.clear` (track HD, HD-1) — everything History read on this Mac is removed, and it asks again before it reads:
+ * the daemon is put down, its projection, ledger, search and media are deleted, consent for the discovered kinds is
+ * withdrawn in the record, and a fresh daemon starts and waits for consent. The agents' own folders are never
+ * touched. A profile's own folder is read by construction (AR-D19), so its sessions are read again by the fresh
+ * daemon. Whole only: rosetta has no purge of one runtime (RO-8), so there is no `kinds` here. */
+export const IndexClearParams = z.object({}).passthrough();
+export type IndexClearParams = z.infer<typeof IndexClearParams>;
+
+export const IndexClearResult = z
+  .object({
+    /** the index as the fresh daemon reports it (`awaiting_consent` when no profile's folder is enrolled) */
+    status: IndexStatus,
+  })
+  .passthrough();
+export type IndexClearResult = z.infer<typeof IndexClearResult>;
+
 // ── rosetta's session rows, as fieldd READS them (AR-4) ──
 //
 // The one INBOUND rosetta shape VibeField parses instead of casting. It is the

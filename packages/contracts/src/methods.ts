@@ -2428,6 +2428,13 @@ export const METHODS: MethodDef[] = [
     idempotent: true, // retiring a retired runtime is a no-op
     locality: "local",
   }),
+  defineMethod({
+    surface: "product",
+    method: "index.clear",
+    scope: "index.manage",
+    idempotent: false, // it deletes: a repeat after a new import began would delete that too
+    locality: "local",
+  }),
   // SP-3 (thinking-sync-planes.md §5.4, §6; thinking-desktop-sync-plane.md
   // §6.4; design-06 §6, §8) — the DIRECT PLANE's door, DECLARED: a session's
   // transcript read at the OWNER's rosettad, as rosetta's own stream, with

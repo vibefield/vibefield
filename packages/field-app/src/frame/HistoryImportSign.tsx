@@ -5,7 +5,6 @@ import { AgentIcon } from "@vibefield/puppeteer-view-sdk/react";
 import type {
   ImportSign,
   ImportSignAgent,
-  ImportSignPart,
   ImportSignSpace,
   ImportSignStep,
 } from "@vibefield/rosetta-room";
@@ -19,7 +18,9 @@ import {
   useState,
 } from "react";
 import { COVER_RESERVE_PX, HEAD_BAND_PX } from "./frame-geometry";
+import { HistorySpace } from "./HistorySpace";
 import { useImportSign } from "./import-sign-door";
+import "./menu.css";
 import "./history-import-sign.css";
 
 // THE HISTORY CIRCLE (track IM, IM-1; DESIGN.md §8 "History", the import's sign; §6 the arc; §8 "The head").
@@ -27,6 +28,8 @@ import "./history-import-sign.css";
 // the `history` glyph under the arc while the import works, a rim of four quarters (one per step, never summed), and a
 // dot for what needs you. Its panel, the solid menu, says what each step opens, each agent, and what is read and kept
 // on this Mac. The words are rosetta's room's (R11, handed out through `import-sign-door.ts`); VibeField draws them.
+// Its one act is the frame's own (track HD, HD-1): History Settings…, a menu row at the panel's end, which opens
+// Settings → History, where what is kept can be cleared and whose sessions are read is chosen.
 
 /** The pointer rests this long on the circle before the panel opens. */
 export const SIGN_OPEN_INTENT_MS = 120;
@@ -36,20 +39,30 @@ export const SIGN_CLOSE_GRACE_MS = 220;
 const PANEL_TOP_PX = HEAD_BAND_PX + 10;
 
 /** The circle in the frame's head while History is the view shown and the room has a sign to give. */
-export function HistoryImportSign({ shown }: { shown: boolean }): ReactElement | null {
+export function HistoryImportSign({
+  shown,
+  onOpenSettings,
+}: {
+  shown: boolean;
+  /** HD-1 — the panel's History Settings…: Settings → History */
+  onOpenSettings?: (() => void) | undefined;
+}): ReactElement | null {
   const sign = useImportSign();
   if (!shown || sign === null) return null;
-  return <HistoryImportSignView sign={sign} />;
+  return <HistoryImportSignView sign={sign} onOpenSettings={onOpenSettings} />;
 }
 
 /** The circle and its panel over one sign: what the frame draws, and what the catalog mounts. */
 export function HistoryImportSignView({
   sign,
   initiallyOpen = false,
+  onOpenSettings,
 }: {
   sign: ImportSign;
   /** the panel stands open from the first frame (a still, a catalog plate) */
   initiallyOpen?: boolean;
+  /** HD-1 — the panel's History Settings… row; absent: the panel draws no act */
+  onOpenSettings?: (() => void) | undefined;
 }): ReactElement {
   const [open, setOpen] = useState(initiallyOpen);
   // a press holds it open until a second press, Escape or a press outside
@@ -147,7 +160,18 @@ export function HistoryImportSignView({
           onPointerEnter={enter}
           onPointerLeave={leave}
         >
-          <SignPanel sign={sign} />
+          <SignPanel
+            sign={sign}
+            onOpenSettings={
+              onOpenSettings === undefined
+                ? undefined
+                : () => {
+                    // the panel goes first: Settings opens over the frame, and a panel left open would stand under it
+                    close();
+                    onOpenSettings();
+                  }
+            }
+          />
         </div>
       )}
     </>
@@ -225,7 +249,13 @@ function SignFace({ sign }: { sign: ImportSign }): ReactElement {
 
 /* ── the panel ──────────────────────────────────────────────────────────── */
 
-function SignPanel({ sign }: { sign: ImportSign }): ReactElement {
+function SignPanel({
+  sign,
+  onOpenSettings,
+}: {
+  sign: ImportSign;
+  onOpenSettings?: (() => void) | undefined;
+}): ReactElement {
   return (
     <>
       <header className="vf-history-sign-head">
@@ -244,6 +274,16 @@ function SignPanel({ sign }: { sign: ImportSign }): ReactElement {
       </section>
       {sign.agents.length > 0 && <AgentRows sign={sign} />}
       {sign.space !== null && <SpaceRows space={sign.space} />}
+      {onOpenSettings !== undefined && (
+        <div className="vf-history-sign-acts">
+          <button type="button" className="vf-menu-row" onClick={onOpenSettings}>
+            <span className="vf-menu-ico" aria-hidden="true">
+              <FieldGlyph name="gear" size={16} />
+            </span>
+            <span className="vf-menu-label">History Settings…</span>
+          </button>
+        </div>
+      )}
       <footer className="vf-history-sign-foot">
         <span>{sign.footer}</span>
         {sign.elapsed !== null && <span>{sign.elapsed}</span>}
@@ -393,76 +433,11 @@ function AgentRow({ agent }: { agent: ImportSignAgent }): ReactElement {
   );
 }
 
-/** The bar's share of one part: its bytes over the scale every part is drawn on. */
-function share(bytes: number, scale: number): string {
-  return `${((bytes / scale) * 100).toFixed(2)}%`;
-}
-
 function SpaceRows({ space }: { space: ImportSignSpace }): ReactElement {
-  const scale = Math.max(
-    1,
-    space.parts.reduce((sum, part) => sum + part.disk + part.memory, 0),
-  );
   return (
     <section className="vf-history-sign-section" aria-label="On this Mac">
       <h3 className="vf-history-sign-eye">On this Mac</h3>
-      <div className="vf-history-sign-figures">
-        {space.read !== null && (
-          <div>
-            <span>Read from your agents</span>
-            <b>{space.read}</b>
-          </div>
-        )}
-        <div>
-          <span>Kept on disk</span>
-          <b>
-            {space.kept}
-            {space.inMemory !== null && <small> + {space.inMemory} in memory</small>}
-          </b>
-        </div>
-      </div>
-      <span className="vf-history-sign-bar" aria-hidden="true">
-        {space.parts.flatMap((part) => [
-          part.disk > 0 ? (
-            <i
-              key={`${part.key}-disk`}
-              data-part={part.key}
-              style={{ width: share(part.disk, scale) }}
-            />
-          ) : null,
-          part.memory > 0 ? (
-            <i
-              key={`${part.key}-memory`}
-              data-part={part.key}
-              data-memory=""
-              style={{ width: share(part.memory, scale) }}
-            />
-          ) : null,
-        ])}
-      </span>
-      <ul className="vf-history-sign-legend">
-        {space.parts.map((part) => (
-          <PartRow key={part.key} part={part} />
-        ))}
-      </ul>
-      {space.memory !== null && (
-        <p className="vf-history-sign-memory">
-          <span>Memory in use</span>
-          <b>{space.memory}</b>
-        </p>
-      )}
+      <HistorySpace space={space} />
     </section>
-  );
-}
-
-function PartRow({ part }: { part: ImportSignPart }): ReactElement {
-  return (
-    <li data-part={part.key} {...(part.memory > 0 && part.disk === 0 ? { "data-memory": "" } : {})}>
-      <i aria-hidden="true" />
-      <span>
-        {part.name} <small>· {part.note}</small>
-      </span>
-      <b>{part.size}</b>
-    </li>
   );
 }

@@ -114,6 +114,28 @@ export const FIXTURE_HISTORY_CONSENTED: ReadonlySet<string> = new Set(
   FIXTURE_HISTORY_CENSUS.rows.slice(0, 1).map((row) => row.kind),
 );
 
+/** HD-1 — the index at rest as Settings → History reads it (`index.status`, this desktop's own window): the census's
+ * first agent brought in, and rosetta's own measure of what it keeps (`storage`, `memory`). */
+export const FIXTURE_HISTORY_KEPT_STATUS: IndexStatus = {
+  phase: "live",
+  rosettad: { phase: "ready", detail: null, pid: 51207, protocolVersion: 20 },
+  enrollment: {
+    enabledKinds: FIXTURE_HISTORY_CENSUS.rows.slice(0, 1).map((row) => row.kind),
+    runtimes: [],
+    retired: [],
+    updatedAt: null,
+  },
+  runtimes: [],
+  storage: {
+    recordBytes: 1_180_000_000,
+    archiveBytes: 3_700_000_000,
+    searchBytes: 420_000_000,
+    mediaBytes: 96_000_000,
+    measuredAt: Date.parse("2026-10-27T11:59:30Z"),
+  },
+  memory: { footprintBytes: 212_000_000, archiveBytes: null },
+};
+
 /** AO-4b — History's first reading as Setting up hears it pushed: the census's
  * first agent brought in, its skim at 1,215 of 5,912 files; then landed (rosetta
  * queues a skimmed agent again to stream it), 4,441 sessions in 74 projects. */

@@ -69,6 +69,7 @@ import { HistoryNewAgentPast } from "./NewAgentPast";
 import { useHistoryOpenAt } from "./open-at";
 import { type ResumeReading, readResume } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
+import { onHistoryRoomRefresh } from "./room-refresh";
 import { productHistoryPorts } from "./window-ports";
 
 // HISTORY'S CONTROLLER (AR-8c). It holds the room's ports — the WINDOW's
@@ -486,6 +487,9 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   // than at the consent pause's next poll.
   const room = useRef<HistoryRoomHandle | null>(null);
   const onGranted = useCallback(() => room.current?.refreshStatus(), []);
+  // HD-1 — an act outside the room (Settings → History's Clear, or a switch there) restarted the history service:
+  // the room asks its status now, not at its next poll
+  useEffect(() => onHistoryRoomRefresh(() => room.current?.refreshStatus()), []);
 
   return (
     <HistoryRoomMount
@@ -495,8 +499,10 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
       act={
         <>
           {indexPhase === "failed" ? <HistoryIndexRestart client={fieldd} /> : null}
-          {/* AO-6b — a new agent with a past, once per agent, at History's head */}
-          <HistoryNewAgentPast />
+          {/* AO-6b — a new agent with a past, once per agent, at History's head. HD-1: not while the room
+              asks for consent, whose card lists that agent with every other (after a clear the two stood
+              one over the other) */}
+          {indexPhase === "awaiting_consent" ? null : <HistoryNewAgentPast />}
         </>
       }
       consent={<HistoryConsent onGranted={onGranted} />}

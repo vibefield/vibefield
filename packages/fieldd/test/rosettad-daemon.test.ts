@@ -26,6 +26,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  type IndexClearResult,
   type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   type IndexMutationResult,
@@ -471,6 +472,79 @@ describe("the index doors (AR-1) — against the scripted rosettad", () => {
     expect(daemon.health().rosettad.pid).not.toBe(firstPid);
     expect(readRecord(dataDir).enabled_kinds).toEqual([]);
     expect(auditText(dataDir)).toContain('"action":"index.retire"');
+  });
+
+  it("index.clear: rosettad's files go and fieldd's stay, consent is withdrawn, a fresh daemon waits for consent, the act is audited", async () => {
+    const { dataDir, daemon } = await setup({ enrollment: { enabled_kinds: ["claude-code"] } });
+    const { pid: firstPid } = await ready(daemon);
+    const { win } = await shellAndWindow(daemon, ["index.read", "index.manage"], "c1");
+    const reader = await shellAndWindow(daemon, ["index.read"], "c2");
+    expect((await reader.win.callErr("index.clear", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
+
+    // what a rosettad leaves beside its projection (the names are rosetta's; the door knows none of them)
+    const dir = join(dataDir, ...LAYOUT.INDEX_DIR);
+    const db = join(dataDir, ...LAYOUT.INDEX_DB);
+    for (const file of [db, `${db}-wal`, `${db}.lock`, `${db}.ingestion.json`])
+      writeFileSync(file, "x");
+    for (const folder of [
+      `${db}.assets`,
+      `${db}.search`,
+      join(dir, "rosetta.ledger", "claude-code"),
+    ]) {
+      mkdirSync(folder, { recursive: true });
+      writeFileSync(join(folder, "member"), "x");
+    }
+    // a clear a fieldd that died did not finish removing
+    mkdirSync(join(dir, ".cleared-1"), { recursive: true });
+    writeFileSync(join(dir, ".cleared-1", "rosetta.db"), "x");
+    writeFileSync(join(dir, "enrollment.json.unreadable-1"), "{");
+
+    const result = (await win.call("index.clear", {})) as IndexClearResult;
+    expect(result.status.phase).toBe("awaiting_consent");
+    expect(result.status.enrollment.enabledKinds).toEqual([]);
+    expect(result.status.runtimes).toEqual([]);
+    const nextPid = daemon.health().rosettad.pid as number;
+    expect(nextPid).not.toBe(firstPid);
+    expect(alive(firstPid)).toBe(false);
+    expect(readRecord(dataDir).enabled_kinds).toEqual([]);
+    // fieldd's own entries, and nothing else
+    expect(readdirSync(dir).sort()).toEqual([
+      "auth",
+      "daemons",
+      "enrollment.json",
+      "enrollment.json.unreadable-1",
+    ]);
+    const audit = auditText(dataDir);
+    expect(audit).toContain('"action":"index.clear"');
+    // the room asks again: the census answers, and nothing is consented
+    const found = (await win.call("index.discoveries", {})) as IndexDiscoveriesResult;
+    expect(found.discoveries[0]).toMatchObject({ kind: "claude-code", consented: false });
+
+    // a second clear finds nothing of rosettad's and still answers
+    const again = (await win.call("index.clear", {})) as IndexClearResult;
+    expect(again.status.phase).toBe("awaiting_consent");
+  });
+
+  it("index.clear: a profile's own folder stays enrolled (it is read by construction), so the fresh daemon reads it again", async () => {
+    const root = mkdtempSync(join(tmpdir(), "vf-rosettad-persona-"));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const { dataDir, daemon } = await setup({
+      enrollment: {
+        enabled_kinds: ["claude-code"],
+        runtimes: [{ kind: "claude-code", data_root: root, label: "Work" }],
+      },
+    });
+    await ready(daemon);
+    const { win } = await shellAndWindow(daemon, ["index.read", "index.manage"], "c3");
+    const db = join(dataDir, ...LAYOUT.INDEX_DB);
+    writeFileSync(db, "x");
+
+    const result = (await win.call("index.clear", {})) as IndexClearResult;
+    expect(existsSync(db)).toBe(false);
+    expect(result.status.enrollment.enabledKinds).toEqual([]);
+    expect(result.status.enrollment.runtimes).toEqual([{ kind: "claude-code", label: "Work" }]);
+    expect(result.status.phase).toBe("live");
+    expect(readRecord(dataDir).runtimes).toHaveLength(1);
   });
 
   it("an enrolled root (a persona, AR-2's path) rides the file: labelled, provenance enrolled, its path never projected; retiring keeps the persona named", async () => {

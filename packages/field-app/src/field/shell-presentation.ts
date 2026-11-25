@@ -21,6 +21,8 @@ export interface ShellPresentationState {
     | "updates"
     | "whats-new"
     | "agents"
+    /** HD-1 — the import sign's History Settings…: Settings → History */
+    | "history"
     /** UM-3 (ruling 9) — Godview's profiles column: a popover's Sign in and
      * Agent Profiles… open Agent Profiles on that profile's page */
     | { readonly profile: string };
@@ -75,7 +77,13 @@ export function settingsOpening(target: ShellPresentationState["target"]): {
   profiles?: ProfilesRoute;
   atNotes?: boolean;
 } {
-  if (target === "account" || target === "devices" || target === "updates" || target === "agents")
+  if (
+    target === "account" ||
+    target === "devices" ||
+    target === "updates" ||
+    target === "agents" ||
+    target === "history"
+  )
     return { page: target };
   if (typeof target === "object") {
     return { page: "profiles", profiles: { kind: "profile", set: target.profile } };

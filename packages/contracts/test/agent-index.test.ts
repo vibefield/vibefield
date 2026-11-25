@@ -130,6 +130,7 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
+      { method: "index.clear", scope: "index.manage", idempotent: false, locality: "local" },
       // SP-3 — the direct plane's door, declared (it answers
       // `direct-plane-unbuilt` until DS-7): a MINT at the owner, so not
       // idempotent, and it leaves the device by definition — a transcript is

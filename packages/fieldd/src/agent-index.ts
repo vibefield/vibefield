@@ -20,6 +20,7 @@ import {
   type IndexAdmissionCourse,
   IndexAdmissionCourse as IndexAdmissionCourseSchema,
   IndexArtifactPageResponse,
+  type IndexClearResult,
   IndexContributionResponse,
   IndexDayUsageResponse,
   type IndexDiscoveriesResult,
@@ -72,6 +73,7 @@ import type {
   RuntimesResponse,
   StatusResponse,
 } from "@vibefield/rosetta-protocol";
+import { type IndexFiles, removeCleared, setIndexAside } from "./index-clear";
 import { projectTimelineRow } from "./index-timeline";
 import { RpcCallError } from "./native-link";
 import {
@@ -412,6 +414,9 @@ export interface IndexServiceOptions {
   requestTimeoutMs?: number;
   /** AC-3 test seam: the catalog (default: THE table) — the kind → id column */
   catalog?: readonly AgentCatalogEntry[];
+  /** HD-1 — the index directory and fieldd's own entries in it: what `index.clear` leaves (`index-clear.ts`).
+   * Absent (a unit seam): the door answers that there is nothing it can clear. */
+  files?: IndexFiles;
   logger?: Logger;
 }
 
@@ -654,6 +659,8 @@ export class IndexService {
   /** QL — `index.recent`'s join tables, per daemon generation (see RECENT_TABLE_TTL_MS) */
   private recentProjects: RecentTable<readonly IndexProjectRow[]> | null = null;
   private recentRuntimes: RecentTable<ReadonlyMap<string, RecentRuntime>> | null = null;
+  /** HD-1 — the clear in flight: a second ask joins it */
+  private clearing: Promise<IndexClearResult> | null = null;
 
   constructor(private readonly opts: IndexServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
@@ -903,6 +910,88 @@ export class IndexService {
   async retireEnrolled(spec: { kind: string; dataRoot: string }): Promise<IndexMutationResult> {
     const changed = this.opts.store.retireRuntime({ kind: spec.kind, data_root: spec.dataRoot });
     return await this.settle(changed);
+  }
+
+  /** HD-1 — CLEAR: everything History read on this Mac goes, and it asks again before it reads. The daemon is
+   * held down while consent for the discovered kinds is withdrawn in the record and rosettad's files are moved out
+   * of its sight (`index-clear.ts`); the daemon that starts next finds no projection and no consent, which is the
+   * state it waits for consent in. The files themselves are removed after it is back, before this answers, so
+   * "cleared" is true of the disk when it is said. What stays: the agents' own folders (never touched), and the
+   * record's managed roots, since a profile's folder is read by construction (AR-D19; the ready-time reconcile
+   * would enrol them again anyway), so their sessions are read afresh. One at a time: a second ask joins the first.
+   *
+   * Whole only. rosettad has no purge of one runtime (RO-8): its ledger is per runtime, but its projection, its
+   * search and its media are shared, and the one way to drop a runtime today is to delete its ledger and replay
+   * every other runtime's into a new projection. */
+  clear(): Promise<IndexClearResult> {
+    this.clearing ??= this.clearOnce().finally(() => {
+      this.clearing = null;
+    });
+    return this.clearing;
+  }
+
+  private async clearOnce(): Promise<IndexClearResult> {
+    const { supervisor, files, store } = this.opts;
+    if (supervisor === null || files === undefined) {
+      throw new RpcCallError("UNAVAILABLE", "the agent index is unconfigured", false, {
+        service: "index",
+        state: "unconfigured",
+      });
+    }
+    let aside: string | null = null;
+    try {
+      await supervisor.restartAround(() => {
+        // consent first: a fieldd that dies between the two leaves a History that reads nothing new, never one
+        // that reads everything again unasked
+        const before = store.snapshot().enabled_kinds;
+        if (store.setEnabledKinds([])) store.publish();
+        try {
+          aside = setIndexAside(files);
+        } catch (error) {
+          // the files are where they were: so is the consent
+          if (store.setEnabledKinds(before)) store.publish();
+          throw error;
+        }
+      }, "clearing History");
+    } catch (error) {
+      this.logger.warn("fieldd.index.clear_failed", "History was not cleared", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "History could not be cleared. Nothing was removed.",
+        true,
+        { service: "index", state: "clear-failed" },
+      );
+    }
+    this.rollCall = null;
+    this.recentProjects = null;
+    this.recentRuntimes = null;
+    this.logger.info("fieldd.index.cleared", "History's index was cleared", {
+      moved: aside !== null,
+      runtimes: store.snapshot().runtimes.length,
+    });
+    try {
+      await removeCleared(files);
+    } catch (error) {
+      // out of the daemon's sight already, and the next clear or the next start takes it
+      this.logger.warn("fieldd.index.clear_left", "A cleared index folder could not be removed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+    return { status: await this.status() };
+  }
+
+  /** HD-1 — a clear a previous fieldd did not finish removing (it died between the move and the end). */
+  async removeClearedLeftovers(): Promise<void> {
+    if (this.opts.files === undefined) return;
+    try {
+      await removeCleared(this.opts.files);
+    } catch (error) {
+      this.logger.warn("fieldd.index.clear_left", "A cleared index folder could not be removed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
 
   /** The record as it stands (a copy) — what a reconcile compares personas

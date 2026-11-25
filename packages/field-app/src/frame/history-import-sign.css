@@ -357,121 +357,23 @@
   font-size: 12px;
 }
 
-/* On this Mac: what was read and what is kept, one bar of the four parts on one scale. The parts are the foreground at
-   four strengths — the record darkest (kept for good), then the archive, search and media — and the archive's share
-   still in memory is hatched. */
-.vf-history-sign-figures {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
+/* The panel's one act (HD-1): History Settings…, a menu row (`menu.css`: 36 tall, 13/500, a 24 column for its mark)
+   under a hairline at the panel's end, set out so its hot fill reaches 6 from the panel's edge as a menu's rows do. */
+.vf-history-sign-acts {
+  /* the panel's 14 gap stands above its hairline; under the row the foot's own hairline follows at 6 */
+  margin-bottom: -8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--vf-hairline);
 }
 
-.vf-history-sign-figures > div {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.vf-history-sign-figures span {
-  color: var(--vf-text-tertiary);
-  font-size: 11px;
-}
-
-.vf-history-sign-figures b {
-  font-size: 15px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-
-.vf-history-sign-figures small {
-  color: var(--vf-text-secondary);
-  font-size: 11px;
+.vf-history-sign-acts > .vf-menu-row {
+  width: calc(100% + 20px);
+  margin: 0 -10px;
   font-weight: 500;
 }
 
-.vf-history-sign-bar {
-  display: flex;
-  height: 8px;
-  overflow: hidden;
-  gap: 1px;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--vf-foreground) 6%, transparent);
-}
-
-.vf-history-sign-bar > i {
-  display: block;
-  height: 100%;
-}
-
-.vf-history-sign-bar > i[data-part="record"],
-.vf-history-sign-legend > li[data-part="record"] > i {
-  background: color-mix(in srgb, var(--vf-foreground) 70%, transparent);
-}
-
-.vf-history-sign-bar > i[data-part="archive"],
-.vf-history-sign-legend > li[data-part="archive"] > i {
-  background: color-mix(in srgb, var(--vf-foreground) 45%, transparent);
-}
-
-.vf-history-sign-bar > i[data-part="search"],
-.vf-history-sign-legend > li[data-part="search"] > i {
-  background: color-mix(in srgb, var(--vf-foreground) 28%, transparent);
-}
-
-.vf-history-sign-bar > i[data-part="media"],
-.vf-history-sign-legend > li[data-part="media"] > i {
-  background: color-mix(in srgb, var(--vf-foreground) 16%, transparent);
-}
-
-.vf-history-sign-bar > i[data-memory],
-.vf-history-sign-legend > li[data-memory] > i {
-  background: repeating-linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--vf-foreground) 45%, transparent) 0 2px,
-    transparent 2px 4px
-  );
-}
-
-.vf-history-sign-legend {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.vf-history-sign-legend > li {
-  display: grid;
-  align-items: center;
-  grid-template-columns: 10px minmax(0, 1fr) auto;
-  column-gap: 8px;
-  font-size: 12px;
-}
-
-.vf-history-sign-legend > li > i {
-  width: 10px;
-  height: 8px;
-  border-radius: 2px;
-}
-
-.vf-history-sign-legend small {
-  color: var(--vf-text-tertiary);
-  font-size: 11px;
-}
-
-.vf-history-sign-legend b,
-.vf-history-sign-memory b {
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-}
-
-.vf-history-sign-memory {
-  display: flex;
-  justify-content: space-between;
-  margin: 4px 0 0;
-  color: var(--vf-text-secondary);
-  font-size: 12px;
+.vf-history-sign-acts > .vf-menu-row:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
 }
 
 .vf-history-sign-foot {

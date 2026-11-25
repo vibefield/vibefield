@@ -404,6 +404,59 @@ describe("RosettadSupervisor — the index daemon's kill matrix (AR-0 S2)", () =
     await sup.stop();
   });
 
+  it("HD-1 — restartAround runs its work while nothing of rosettad's runs, as one launch; a throw still gets the daemon back", async () => {
+    const { sup, transitions } = rig("ok", { timings: { ...T, RESTART_MAX: 1 } });
+    await sup.start();
+    const firstPid = sup.state().pid as number;
+    let seen: { alive: boolean; pid: number | null; joined: boolean } | null = null;
+    let joined: Promise<string | null> | null = null;
+    const ORIGIN = /^http:\/\/127\.0\.0\.1:\d+$/;
+    await sup.restartAround(async () => {
+      // a requested restart that arrives meanwhile joins this launch: it spawns nothing under the work
+      joined = sup.requestRestart();
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      seen = {
+        alive: alive(firstPid),
+        pid: sup.state().pid,
+        joined: sup.state().phase === "restarting",
+      };
+    }, "clearing History");
+    expect(seen).toEqual({ alive: false, pid: null, joined: true });
+    expect(
+      transitions.some((t) => t.phase === "restarting" && t.detail === "clearing History"),
+    ).toBe(true);
+    // the restart that waited then runs its own bounce, over the generation this launched
+    expect(await (joined as unknown as Promise<string | null>)).toMatch(ORIGIN);
+    expect(sup.state().phase).toBe("ready");
+    const bouncedPid = sup.state().pid as number;
+    expect(bouncedPid).not.toBe(firstPid);
+    // alone, it answers the fresh generation's origin
+    expect(await sup.restartAround(() => undefined, "clearing History")).toMatch(ORIGIN);
+    const secondPid = sup.state().pid as number;
+    expect(secondPid).not.toBe(bouncedPid);
+    expect(alive(bouncedPid)).toBe(false);
+
+    // work that throws: the throw is the caller's, and a daemon is serving again
+    await expect(
+      sup.restartAround(() => {
+        throw new Error("the move failed");
+      }, "clearing History"),
+    ).rejects.toThrow("the move failed");
+    expect(sup.state().phase).toBe("ready");
+    expect(sup.state().pid).not.toBe(secondPid);
+    expect(alive(secondPid)).toBe(false);
+    // uncharged: one real crash after it still comes back (RESTART_MAX 1)
+    const thirdPid = sup.state().pid as number;
+    process.kill(thirdPid, "SIGKILL");
+    await until(
+      () => sup.state().phase === "ready" && sup.state().pid !== thirdPid,
+      4_000,
+      "a generation after one real crash",
+    );
+    await sup.stop();
+    expect(await sup.restartAround(() => undefined, "clearing History")).toBeNull();
+  });
+
   it("an orphan rosettad over the same projection (a dead fieldd's child) is put down before the new generation starts", async () => {
     const root = tmp();
     const left = await orphan(FAKE, root, { FAKE_ROSETTAD_MODE: "ok" });

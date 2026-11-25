@@ -226,6 +226,8 @@ export function ChromeLayer({
   const openProfile = useCallback((profile: string) => openSettings({ profile }), [openSettings]);
   // track ES — the night's Open Agents settings, while no agent here can be a spark: Settings → Agents
   const openAgents = useCallback(() => openSettings("agents"), [openSettings]);
+  // HD-1 — the import sign's History Settings…: Settings → History
+  const openHistorySettings = useCallback(() => openSettings("history"), [openSettings]);
   // ES-2 — the first job a starter on Chat's night hands the frame as it opens the sheet, for that opening alone
   const firstJob = useFirstJob(surface);
   const carryFirstJob = firstJob.carry;
@@ -470,7 +472,7 @@ export function ChromeLayer({
       {/* HISTORY'S IMPORT SIGN (track IM, IM-1; DESIGN.md §8 "History", the import's sign): the History circle,
           one head gap left of the search button while History is the view shown, and its panel under it. The
           room hands it the import (R11) through `import-sign-door.ts`; the frame draws it. */}
-      <HistoryImportSign shown={view === "history"} />
+      <HistoryImportSign shown={view === "history"} onOpenSettings={openHistorySettings} />
 
       {/* PLUGINS — THE FRAME'S SECOND POPUP (MK-4a; DESIGN.md §8 "Plugins —
           the frame's second popup"): drawn on the document's body over the

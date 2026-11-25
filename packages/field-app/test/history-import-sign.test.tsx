@@ -309,9 +309,54 @@ describe("IM-1 — its panel", () => {
     expect(space?.textContent).toContain("+ 2.10 GB in memory");
     expect(space?.textContent).toContain("Memory in use");
     // the archive still in memory is hatched, on the one scale of the four parts
-    const memory = space?.querySelector(".vf-history-sign-bar > i[data-memory]");
+    const memory = space?.querySelector(".vf-history-space-bar > i[data-memory]");
     expect(memory?.getAttribute("data-part")).toBe("archive");
     expect(shown?.querySelector(".vf-history-sign-foot")?.textContent).toContain("12.0 MB/s");
+  });
+});
+
+describe("HD-1 — the panel's one act: History Settings…", () => {
+  const row = (): HTMLButtonElement | null =>
+    panel()?.querySelector<HTMLButtonElement>(".vf-history-sign-acts > .vf-menu-row") ?? null;
+
+  it("a menu row at the panel's end opens Settings → History, and the panel goes first", () => {
+    const onOpenSettings = vi.fn();
+    render(
+      createElement(HistoryImportSignView, { sign: REST, initiallyOpen: true, onOpenSettings }),
+    );
+    expect(row()?.textContent).toBe("History Settings…");
+    // it stands after what is kept and before the foot
+    const order = [...(panel()?.children ?? [])].map((child) => child.className);
+    expect(order.slice(-2)).toEqual(["vf-history-sign-acts", "vf-history-sign-foot"]);
+    act(() => row()?.click());
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
+    expect(panel()).toBeNull();
+    expect(button().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("stands while the import runs too, and a panel handed no door draws no act", () => {
+    render(
+      createElement(HistoryImportSignView, {
+        sign: READING,
+        initiallyOpen: true,
+        onOpenSettings: () => undefined,
+      }),
+    );
+    expect(row()).not.toBeNull();
+    render(
+      createElement(HistoryImportSignView, { key: "none", sign: READING, initiallyOpen: true }),
+    );
+    expect(panel()).not.toBeNull();
+    expect(row()).toBeNull();
+  });
+
+  it("the frame's circle passes its door through", () => {
+    const onOpenSettings = vi.fn();
+    render(createElement(HistoryImportSign, { shown: true, onOpenSettings }));
+    act(() => publishImportSign(REST));
+    act(() => button().click());
+    act(() => row()?.click());
+    expect(onOpenSettings).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -334,7 +379,7 @@ describe("IM-1 — the catalog's plates: the room's own reading over the package
     expect(space?.textContent).toContain("Read from your agents");
     expect(space?.textContent).toContain("in memory");
     expect(
-      space?.querySelector(".vf-history-sign-bar > i[data-memory]")?.getAttribute("data-part"),
+      space?.querySelector(".vf-history-space-bar > i[data-memory]")?.getAttribute("data-part"),
     ).toBe("archive");
     // the room's own import card retires under the sign (IM-D3); the frame says the import alone
     expect(host.querySelector(".ah-ingest-status")).toBeNull();
@@ -344,7 +389,7 @@ describe("IM-1 — the catalog's plates: the room's own reading over the package
     render(createElement(HistoryImportSignPlate, { moment: "search" }));
     await settle(() => panel() !== null);
     expect(button().getAttribute("aria-label")).toMatch(/^Importing history · step 4 of 4: /u);
-    expect(panel()?.querySelector(".vf-history-sign-bar > i[data-memory]")).toBeNull();
+    expect(panel()?.querySelector(".vf-history-space-bar > i[data-memory]")).toBeNull();
   });
 
   it("after the import the circle stays, at rest (IM-D2)", async () => {

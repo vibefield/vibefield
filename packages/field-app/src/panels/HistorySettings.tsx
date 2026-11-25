@@ -1,49 +1,61 @@
 import { UiButton } from "@vibefield/design-kit";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type ReactElement, useEffect, useState } from "react";
+import { HistorySpace } from "../frame/HistorySpace";
+import { requestHistoryRoomRefresh } from "../history/room-refresh";
 import { enrollmentFor } from "../setup/consent-act";
 import { HistoryConsentRows } from "../setup/HistoryConsentView";
 import type { HistoryAgentRow } from "../setup/history-consent";
 import { HISTORY_WORDS } from "../setup/history-words";
 import { answerSetupStep } from "../setup/ledger";
 import { type HistoryCensus, useHistoryCensus } from "../setup/use-history-census";
+import { type HistoryKept, useHistoryKept } from "./history-space";
 import { SettingsSection } from "./settings-ui";
 
 // Settings → History (track AO, AO-3; AO-D9; DESIGN.md §8 "Settings → History"):
-// the home of whose history is read. The History pane's rows, each switch
-// meaning what it says — on: read; off: Stop reading, which keeps what was
-// read and says so, asked once — and Look again for an agent installed since.
-// A change applies at once, as Settings' changes do: one `index.enroll` with
-// the complete set, so the history service restarts once.
+// the home of whose history is read. The History pane's rows, each with its
+// switch, and Look again for an agent installed since. Turning one on applies
+// at once, as Settings' changes do: one `index.enroll` with the complete set,
+// so the history service restarts once.
+//
+// *2026-11-24 (track HD, HD-1):* under the rows stands **On this Mac**: what
+// History keeps here, drawn as the import sign's panel draws it (the one
+// `HistorySpace`), and **Clear History…**, asked once. Clearing removes
+// everything History read and withdraws every switch, so History is back where
+// it was before its first import and asks before it reads again. It is the one
+// way to remove what was read: rosetta can drop no single agent's sessions
+// (RO-8).
+//
+// *2026-11-24 (HD-2; James: "just make them gray once toggled on so there is no
+// such thing as toggle off"):* A SWITCH THAT IS ON STAYS ON. It is drawn off
+// (§7 "Off": `disabled`, the kit's dimmed switch) and takes no press, and a
+// line under the rows says where the way back is. Stop reading, and its
+// question, are gone: turning one agent off kept everything it had read, which
+// a switch does not say. Clear History… turns them all off.
 
 const NO_ROWS: readonly HistoryAgentRow[] = [];
 
 export function HistorySettingsView({
   census,
   consented,
-  stopping,
   busy,
   error,
   now,
-  onToggle,
-  onConfirmStop,
-  onCancelStop,
+  onTurnOn,
   onLookAgain,
 }: {
   census: HistoryCensus;
-  /** the listed kinds History reads now */
+  /** the listed kinds History reads now: each one's switch is on, and stays on */
   consented: ReadonlySet<string>;
-  /** the agent whose Stop reading is being asked, or null */
-  stopping: HistoryAgentRow | null;
   busy: boolean;
   error: string | null;
   now: number;
-  onToggle: (kind: string, on: boolean) => void;
-  onConfirmStop: () => void;
-  onCancelStop: () => void;
+  /** a switch that was off was pressed */
+  onTurnOn: (kind: string) => void;
   onLookAgain: () => void;
 }): ReactElement {
   const rows = census.kind === "found" ? census.rows : NO_ROWS;
+  const anyOn = rows.some((row) => consented.has(row.kind));
   return (
     <SettingsSection
       title="Past sessions"
@@ -63,25 +75,97 @@ export function HistorySettingsView({
           No past sessions on this Mac yet. New ones appear in History as you work.
         </p>
       ) : (
-        <HistoryConsentRows
-          rows={rows}
-          chosen={consented}
-          now={now}
-          disabled={busy || stopping !== null}
-          onToggle={onToggle}
-        />
+        <>
+          <HistoryConsentRows
+            rows={rows}
+            chosen={consented}
+            locked={consented}
+            now={now}
+            disabled={busy}
+            onToggle={(kind, on) => {
+              if (on) onTurnOn(kind);
+            }}
+          />
+          {anyOn && (
+            <p className="vf-history-settings-note vf-history-settings-locked">
+              An agent History reads stays on. Clear History, below, removes what was read and turns
+              them all off.
+            </p>
+          )}
+        </>
       )}
-      {stopping !== null && (
-        <div className="vf-history-settings-stop" role="alertdialog" aria-label="Stop reading">
+      {error !== null && (
+        <p className="vf-history-settings-error" role="alert">
+          {error}
+        </p>
+      )}
+    </SettingsSection>
+  );
+}
+
+/** On this Mac: what History keeps, and Clear History… asked once. */
+export function HistoryKeptView({
+  kept,
+  asking,
+  clearing,
+  error,
+  onAsk,
+  onConfirm,
+  onCancel,
+}: {
+  kept: HistoryKept;
+  /** Clear History… was pressed: the question stands */
+  asking: boolean;
+  /** the clear runs */
+  clearing: boolean;
+  error: string | null;
+  onAsk: () => void;
+  onConfirm: () => void;
+  onCancel: () => void;
+}): ReactElement {
+  // nothing to clear: an index that waits for consent and keeps nothing
+  const empty = kept.kind === "read" && kept.waiting && (kept.keptBytes ?? 0) === 0;
+  const holds = kept.kind === "read" && kept.space !== null && (kept.keptBytes ?? 0) > 0;
+  return (
+    <SettingsSection
+      title="On this Mac"
+      description="What History keeps on this Mac from the sessions it read. Your agents' own files are not part of it."
+      action={
+        <UiButton onClick={onAsk} disabled={kept.kind !== "read" || empty || asking || clearing}>
+          Clear History…
+        </UiButton>
+      }
+    >
+      {kept.kind === "looking" ? (
+        <p className="vf-history-settings-note">Measuring…</p>
+      ) : kept.kind === "unavailable" ? (
+        <p className="vf-history-settings-note">History isn't available right now.</p>
+      ) : holds && kept.space !== null ? (
+        <div className="vf-history-settings-space">
+          <HistorySpace space={kept.space} />
+        </div>
+      ) : kept.space === null ? (
+        <p className="vf-history-settings-note">History hasn't measured its space yet.</p>
+      ) : (
+        <p className="vf-history-settings-note">History keeps nothing on this Mac.</p>
+      )}
+      {(asking || clearing) && (
+        <div className="vf-history-settings-stop" role="alertdialog" aria-label="Clear History">
           <p>
-            Stop reading {stopping.label}'s history? What was read stays in History; new sessions
-            won't come in.
+            Clear everything History read on this Mac?{" "}
+            {kept.kind === "read" && kept.space !== null && (kept.keptBytes ?? 0) > 0
+              ? `Its copy of your past sessions (${kept.space.kept}) is removed`
+              : "Its copy of your past sessions is removed"}
+            , and History asks before it reads again. Your agents' own files stay where they are.
+            {kept.kind === "read" && kept.profiles > 0
+              ? " Sessions from your agent profiles are read again right away."
+              : ""}
           </p>
           <div className="vf-history-settings-stop-acts">
-            <UiButton variant="danger" onClick={onConfirmStop} disabled={busy}>
-              Stop reading
+            <UiButton variant="danger" onClick={onConfirm} running={clearing}>
+              {clearing ? "Clearing…" : "Clear History"}
             </UiButton>
-            <UiButton onClick={onCancelStop} disabled={busy}>
+            <UiButton onClick={onCancel} disabled={clearing}>
               Cancel
             </UiButton>
           </div>
@@ -99,11 +183,14 @@ export function HistorySettingsView({
 export function HistorySettings(): ReactElement {
   const client = useFielddClient();
   const { census, lookAgain } = useHistoryCensus(client);
+  const { kept, askNow } = useHistoryKept(client);
+  const [askingClear, setAskingClear] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [clearError, setClearError] = useState<string | null>(null);
   const [consented, setConsented] = useState<ReadonlySet<string>>(new Set());
   useEffect(() => {
     if (census.kind === "found") setConsented(new Set(census.consented));
   }, [census]);
-  const [stopping, setStopping] = useState<HistoryAgentRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -119,8 +206,10 @@ export function HistorySettings(): ReactElement {
       .then(
         () => {
           setConsented(next);
-          setStopping(null);
           setBusy(false);
+          // the history service restarted with the set: the room and this page's space read it now
+          requestHistoryRoomRefresh();
+          askNow();
           // a choice made here answers the Setup Assistant's question too
           answerSetupStep(client, "history", "answered").catch(() => undefined);
         },
@@ -131,30 +220,51 @@ export function HistorySettings(): ReactElement {
       );
   };
 
+  const clear = (): void => {
+    setClearing(true);
+    setClearError(null);
+    client.request("index.clear", {}).then(
+      () => {
+        setClearing(false);
+        setAskingClear(false);
+        // every switch is off now, and the room is back before its first import
+        setConsented(new Set());
+        lookAgain();
+        askNow();
+        requestHistoryRoomRefresh();
+      },
+      (cause: unknown) => {
+        setClearing(false);
+        setClearError(cause instanceof Error ? cause.message : String(cause));
+        askNow();
+        requestHistoryRoomRefresh();
+      },
+    );
+  };
+
   return (
-    <HistorySettingsView
-      census={census}
-      consented={consented}
-      stopping={stopping}
-      busy={busy}
-      error={error}
-      now={Date.now()}
-      onToggle={(kind, on) => {
-        if (on) {
-          apply(new Set([...consented, kind]));
-          return;
-        }
-        const row = census.kind === "found" ? census.rows.find((r) => r.kind === kind) : undefined;
-        if (row !== undefined) setStopping(row);
-      }}
-      onConfirmStop={() => {
-        if (stopping === null) return;
-        const next = new Set(consented);
-        next.delete(stopping.kind);
-        apply(next);
-      }}
-      onCancelStop={() => setStopping(null)}
-      onLookAgain={lookAgain}
-    />
+    <div className="space-y-4">
+      <HistorySettingsView
+        census={census}
+        consented={consented}
+        busy={busy || clearing}
+        error={error}
+        now={Date.now()}
+        onTurnOn={(kind) => apply(new Set([...consented, kind]))}
+        onLookAgain={lookAgain}
+      />
+      <HistoryKeptView
+        kept={kept}
+        asking={askingClear}
+        clearing={clearing}
+        error={clearError}
+        onAsk={() => {
+          setClearError(null);
+          setAskingClear(true);
+        }}
+        onConfirm={clear}
+        onCancel={() => setAskingClear(false)}
+      />
+    </div>
   );
 }
