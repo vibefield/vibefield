@@ -5562,10 +5562,11 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
   - **Order** — **Pen** (a 44 × 32 cell: the words' pen as a 10 dot in its ink, then a ▾ 8 in secondary ink) ·
     **Highlight** (44 × 32: the words' highlighter as a 14 × 6 stripe, hollow when there is none, then ▾) · rule ·
     **Strike** (`strike`) · **Underline** (`underline`) · rule · **Clear** (`clear-marks`) · **More** (`ellipsis`). §13
-    gains the three new glyphs and `back`.
-  - **The rows** — Pen swaps the bar's row for the pens' (a row in the bar's place, never a menu): **Back** (`back`) ·
-    Felt · Ball · Fountain · Red, each a 32 cell holding a 12 dot of the pen's ink, the words' pen shown on when every
-    selected letter shares it. Choosing the sheet's own pen takes the letters' pen mark away (nothing is stored).
+    gains the three new glyphs. *(Amended 2026-11-25, IK at the build: this said "the three new glyphs and `back`", and
+    Back below wore `back`; Back wears the `chevron` turned 180, the set's one drawing for going back, §13.)*
+  - **The rows** — Pen swaps the bar's row for the pens' (a row in the bar's place, never a menu): **Back** (`chevron`
+    turned 180) · Felt · Ball · Fountain · Red, each a 32 cell holding a 12 dot of the pen's ink, the words' pen shown on
+    when every selected letter shares it. Choosing the sheet's own pen takes the letters' pen mark away (nothing is stored).
     Highlight swaps in Back · Yellow · Green · Pink · Blue · Orange · None. A choice applies at once and the row stays, so a second
     choice replaces the first; Back or Esc returns to the main row. The swap is a cross-fade, 120ms.
   - **More** grows the bar into its menu as over objects ("The bar grown", below): Cut (⌘X) · Copy (⌘C) · Paste (⌘V) |
@@ -5577,7 +5578,10 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     (yellow at first). Tooltips: "Strike  ⇧⌘X", "Underline  ⌘U", "Highlight  ⇧⌘H", "Cut  ⌘X", "Copy  ⌘C".
   - **States** — the bar's (hover the ready fill, press 14% and 0.95, on the inverted solid, focus the 2px `--vf-select`
     ring). Strike and Underline are TOGGLES, the words bar's only ones: shown on (`aria-pressed`) when every selected
-    letter carries the mark, and pressed again they take it away.
+    letter carries the mark, and pressed again they take it away. *(Amended 2026-11-25, IK at the build: a SWATCH shown
+    on — the words' pen in the pens' row, their highlighter in the highlighters' — wears the ring the pen in hand wears
+    ("Tools in hand", below), 1.5 in the foreground 2 off it, never the inverted solid, where the felt and the ball inks
+    sink into the day's ink and the highlighters into the night's.)*
   - **The wash** — the selected words lie under a wash of the pencil (ICE's `MARKS.inks.pencil`, the brackets' own
     ink, `--vf-tutor`'s value) at 28%, square to each line and under the ink. It is a tint, never a glow, so §2.5's
     "nothing else in VibeField glows blue" holds.
@@ -14479,14 +14483,14 @@ Every functional icon the chrome draws — the line's create and the views track
 pill and its chevron and package, the package circle, the 40px round buttons, the Settings rail, the
 agent rows, the plugins' toolbars (and the edge trays, until HN-8), the phone's composer and keypad, the swarm's
 marks, the desk's bar, the tools in hand and the wrapper around Godview's terminals — is one of
-**68 named glyphs** in one **24-unit box**,
+**71 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
 the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
 I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (58) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (61) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **One thing on the chrome is not a glyph: the paper card** (CS-D12 E, ruled by James 2026-11-09, *The
@@ -14509,7 +14513,7 @@ weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn poin
 *turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
 *flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
 outward · link · return · backspace · ellipsis · start · resume · jump · duplicate · tape · lift · trash ·
-pen · eraser · today · minimize · maximize · restore · sparkle; navigation: chevron · arrow; places and objects:
+pen · eraser · today · strike · underline · clear-marks · minimize · maximize · restore · sparkle; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
 mic · scantext · snippets · prompt · sound · document · type-text · type-image · type-ref; signals: message · key · question · exclaim · flame · missing · importing;
@@ -14587,6 +14591,13 @@ its own act and tool glyphs beyond the set** (MC-D8) — ICE's `{ path }` drawin
 construction (the 24-unit box, one 2-unit stroke, `currentColor`) and drawn as the set's are, never as
 an inline `<svg>` in product code; the mini mat's "Change the vinyl" is the first built-in to (the
 example plugin's clock draws five).
+**The words bar's three** (2026-11-25, IK; §8 "The words bar") are the marks it lays on the selected words, each an
+Instrument drawing and its Hardware record drawn, not shipped: **`strike`** — the S with a line through it; **`underline`**
+— the U with a line under it; **`clear-marks`** — the text's T with the × of its marks taken off (never `eraser`, the held
+kinds' eraser). A kind's words acts name them (the table below). They made the set 71, so every 68 above was true when it
+was written; they are the desktop's alone, not among the phone's picks. **Back**, the pens' and the highlighters' row's way
+home, needs no glyph of its own: it is the `chevron` turned 180, the set's one drawing for going back, as the New spark
+sheet's "All agents" row wears it (§8) — so `back` is not a fourth drawing.
 **ICE's glyph names, mapped** (R2 — the orchestrator's Phase 4 rulings, 2026-10-03): a kind declares
 a glyph by a NAME of ICE's set or by its own drawing (`HeldGlyph = string | { path, fill? }`), and
 the desk's chrome draws it from this set by this table, never by a guess:
@@ -14598,6 +14609,7 @@ the desk's chrome draws it from this set by this table, never by a guess:
 | `pen` · `eraser` · `today` | `pen` · `eraser` · `today` |
 | `duplicate` · `lock` · `unlock` · `trash` | `duplicate` · `tape` · `lift` · `trash` |
 | `agents` · `ellipsis` · `check` | `agents` · `ellipsis` · `check` |
+| `strike` · `underline` · `clear-marks` (a kind's words acts, IK) | `strike` · `underline` · `clear-marks` |
 | `{ path }` · `{ path, fill: true }` | the bar's own path renderer: the path in the 24-unit box, stroked 2 in the bar's ink, or filled |
 | any other name | **`missing`** — said once, never another glyph |
 
