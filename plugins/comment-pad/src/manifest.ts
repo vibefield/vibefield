@@ -1,4 +1,4 @@
-import type { PluginManifestV1 } from "@vibefield/contracts";
+import { INK_TOOLS, type PluginManifestV1 } from "@vibefield/contracts";
 import { COMMENT_PAD_TYPE, PAD_ACCENTS, PAD_PENS, PAD_SIZE } from "./ids";
 import { COMMENT_PAD_PALETTE } from "./theme";
 
@@ -93,6 +93,8 @@ export const commentPadManifest: PluginManifestV1 = {
                 required: ["comments"],
               },
             },
+            // IK (2026-11-25): the three every written kind shares (contracts' ink-tools.ts)
+            ...INK_TOOLS,
           ],
         },
         // OB-D16 (2026-11-25): the likeness Godview's pane wears while an agent holds one, in its accent (its art ships in assets/)

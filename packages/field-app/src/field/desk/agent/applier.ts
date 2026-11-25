@@ -18,6 +18,7 @@ import {
   setWidgetProps,
   Viewport,
 } from "@vibecook/ice";
+import { inkTypingOn } from "@vibecook/ice/desk/kit";
 import {
   AGENT_PLACEABLE_LIVE,
   DeskInverse,
@@ -38,6 +39,7 @@ import {
   type AgentHalf,
   agentActStillHolds,
   agentReadApi,
+  isAgentToolRefusal,
   recordAgentAct,
 } from "@vibefield/plugin-sdk/desk";
 import { getActiveView } from "../../../frame/view-state";
@@ -604,15 +606,44 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     );
   };
 
+  /** IK (2026-11-25): the words a person is typing into an object are its typing's DRAFT, not yet its cell's. They land
+   * first, as the person's own step (undone as theirs), so an act reads, and quotes, the words the person sees, and the
+   * draft's later landing cannot write over the act. A kind with no written part has no typing to find. */
+  const landDrafts = (type: string, e: Entity): void => {
+    for (const group of engine.catalog.widget(type)?.groups ?? []) {
+      const typing = inkTypingOn(world, e, group.name);
+      if (typing?.open() === true) typing.commit();
+    }
+  };
+
+  /** A handler run: its honest no (`AgentToolRefusal`) is the agent's bad input, in its words; any other throw is the
+   * desk's failure (`apply`'s). */
+  const run = <T>(
+    intent: ObjectIntent,
+    handler: () => T,
+  ): { readonly said: T } | { readonly refusal: ObjectIntentAnswer } => {
+    try {
+      return { said: handler() };
+    } catch (cause) {
+      if (isAgentToolRefusal(cause))
+        return { refusal: refused(intent, "bad-input", cause.message) };
+      throw cause;
+    }
+  };
+
   const act = (intent: Extract<ObjectIntent, { op: "act" }>, e: Entity): ObjectIntentAnswer => {
     const type = typeOf(e);
     const handler = type === undefined ? undefined : halves(type)?.act?.[intent.tool];
-    if (handler === undefined) return refused(intent, "no-tool", WORDS.noTool(intent.tool));
+    if (type === undefined || handler === undefined)
+      return refused(intent, "no-tool", WORDS.noTool(intent.tool));
     const session = engine.docs.current();
     if (session === undefined || session.readOnly)
       return refused(intent, "needs-you", WORDS.readOnly);
+    landDrafts(type, e);
     const recording = recordAgentAct(declaredProps(engine, e));
-    const result = handler(recording.api, intent.input);
+    const ran = run(intent, () => handler(recording.api, intent.input));
+    if ("refusal" in ran) return ran.refusal;
+    const result = ran.said;
     if (bytesOf(result?.value) > OBJECT_LIMITS.TOOL_BYTES)
       return refused(intent, "failed", WORDS.tooBig);
     const change = recording.inverse();
@@ -631,7 +662,10 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     const type = typeOf(e);
     const handler = type === undefined ? undefined : halves(type)?.read?.[intent.tool];
     if (handler === undefined) return refused(intent, "no-tool", WORDS.noTool(intent.tool));
-    const value = handler(agentReadApi(declaredProps(engine, e)), intent.input);
+    // a read writes nothing, so an open draft stays the person's: the read is of the words the board holds
+    const ran = run(intent, () => handler(agentReadApi(declaredProps(engine, e)), intent.input));
+    if ("refusal" in ran) return ran.refusal;
+    const value = ran.said;
     if (bytesOf(value) > OBJECT_LIMITS.TOOL_BYTES) return refused(intent, "failed", WORDS.tooBig);
     return answered(intent, value ?? null);
   };

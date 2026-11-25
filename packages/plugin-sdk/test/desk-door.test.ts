@@ -30,6 +30,8 @@ describe("the SDK's /desk door", () => {
         "@vibecook/ice/desk",
         "@vibecook/ice/desk/kit",
         "@vibecook/ice/desk/engine",
+        // IK (2026-11-25): the ink tools' declarations and an answer's limit, which fieldd reads too (no ICE of its own)
+        "@vibefield/contracts",
       ]),
     );
     expect(SOURCE).not.toMatch(/["']@vibecook\/ice\/desk\/objects["']/);

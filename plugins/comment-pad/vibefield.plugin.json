@@ -75,6 +75,267 @@
                 "type": "object"
               },
               "readOnly": false
+            },
+            {
+              "description": "Read everything written here and how it is marked: the text, the sheet's own pen, and each marked run of words with its pen, highlighter, strike or underline. Words not listed in a run are plain, in the sheet's own pen.",
+              "input": {
+                "additionalProperties": false,
+                "properties": {},
+                "type": "object"
+              },
+              "name": "read_writing",
+              "output": {
+                "properties": {
+                  "more": {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "pen": {
+                    "enum": [
+                      "felt",
+                      "ball",
+                      "fountain",
+                      "red"
+                    ],
+                    "type": "string"
+                  },
+                  "runs": {
+                    "items": {
+                      "properties": {
+                        "from": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "highlight": {
+                          "enum": [
+                            "yellow",
+                            "green",
+                            "pink",
+                            "blue",
+                            "orange"
+                          ],
+                          "type": "string"
+                        },
+                        "pen": {
+                          "enum": [
+                            "felt",
+                            "ball",
+                            "fountain",
+                            "red"
+                          ],
+                          "type": "string"
+                        },
+                        "strike": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "enum": [
+                                "felt",
+                                "ball",
+                                "fountain",
+                                "red"
+                              ],
+                              "type": "string"
+                            }
+                          ]
+                        },
+                        "text": {
+                          "type": "string"
+                        },
+                        "to": {
+                          "minimum": 0,
+                          "type": "integer"
+                        },
+                        "underline": {
+                          "anyOf": [
+                            {
+                              "type": "boolean"
+                            },
+                            {
+                              "enum": [
+                                "felt",
+                                "ball",
+                                "fountain",
+                                "red"
+                              ],
+                              "type": "string"
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "from",
+                        "to",
+                        "text"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "text",
+                  "runs"
+                ],
+                "type": "object"
+              },
+              "readOnly": true
+            },
+            {
+              "description": "Replace some words with others. Quote the words to change exactly; the new words keep the marks the old ones all shared. If the quote is written more than once, say which with `occurrence`. The user can undo it.",
+              "input": {
+                "additionalProperties": false,
+                "properties": {
+                  "occurrence": {
+                    "description": "Which time the quote is meant, counting from 1 at the start, when the same words are written more than once.",
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "quote": {
+                    "description": "Words written on it, copied exactly as `read_writing` gives them, spaces and line breaks included.",
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "with": {
+                    "description": "The words to write in their place. Empty removes the quoted words.",
+                    "maxLength": 20000,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "quote",
+                  "with"
+                ],
+                "type": "object"
+              },
+              "name": "edit_text",
+              "output": {
+                "properties": {
+                  "at": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "chars": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "at",
+                  "chars"
+                ],
+                "type": "object"
+              },
+              "readOnly": false
+            },
+            {
+              "description": "Mark some words: write them in another pen, highlight them, strike them through, underline them, or clear their marks. Quote the words exactly, and say which time with `occurrence` if they are written more than once. The user can undo it.",
+              "input": {
+                "additionalProperties": false,
+                "properties": {
+                  "clear": {
+                    "const": true,
+                    "description": "Lift every mark first: the pen, the highlight, the strike and the underline.",
+                    "type": "boolean"
+                  },
+                  "highlight": {
+                    "description": "The highlighter to colour them with, or none to lift a highlight.",
+                    "enum": [
+                      "yellow",
+                      "green",
+                      "pink",
+                      "blue",
+                      "orange",
+                      "none"
+                    ],
+                    "type": "string"
+                  },
+                  "occurrence": {
+                    "description": "Which time the quote is meant, counting from 1 at the start, when the same words are written more than once.",
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  "pen": {
+                    "description": "The pen to write the words in. The sheet's own pen undoes another.",
+                    "enum": [
+                      "felt",
+                      "ball",
+                      "fountain",
+                      "red"
+                    ],
+                    "type": "string"
+                  },
+                  "quote": {
+                    "description": "Words written on it, copied exactly as `read_writing` gives them, spaces and line breaks included.",
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "strike": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "enum": [
+                          "felt",
+                          "ball",
+                          "fountain",
+                          "red"
+                        ],
+                        "type": "string"
+                      }
+                    ],
+                    "description": "true strikes them through in their own pen, a pen's name in that pen, false lifts it."
+                  },
+                  "underline": {
+                    "anyOf": [
+                      {
+                        "type": "boolean"
+                      },
+                      {
+                        "enum": [
+                          "felt",
+                          "ball",
+                          "fountain",
+                          "red"
+                        ],
+                        "type": "string"
+                      }
+                    ],
+                    "description": "true underlines them in their own pen, a pen's name in that pen, false lifts it."
+                  }
+                },
+                "required": [
+                  "quote"
+                ],
+                "type": "object"
+              },
+              "name": "mark_text",
+              "output": {
+                "properties": {
+                  "at": {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "chars": {
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "at",
+                  "chars"
+                ],
+                "type": "object"
+              },
+              "readOnly": false
             }
           ]
         },

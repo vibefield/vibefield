@@ -121,7 +121,7 @@ state code, and what passes:
 
 | code | what passes |
 | --- | --- |
-| `state-agent-failed` | agent handlers that answer every declared state without throwing, in JSON within their limits, setting only declared props to valid values; a tool that needs a real input takes one from `agentInputs` |
+| `state-agent-failed` | agent handlers that answer every declared state without throwing (an `AgentToolRefusal` is an answer), in JSON within their limits, setting only declared props to valid values; a tool that needs a real input takes one from `agentInputs` |
 | `state-draw-ill-formed` | set the pipeline your create made, and a bind group of its layout at every index, before each draw |
 | `state-hit-missed` | a hit that answers a part (`content`) somewhere in the object's own box — what is picked is what is drawn |
 | `state-invalid` | props the row declares, each of its declared kind |

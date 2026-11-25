@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   type AgentActApi,
   type AgentHalf,
+  AgentToolRefusal,
   agentActStillHolds,
   agentReadApi,
   recordAgentAct,
@@ -243,6 +244,18 @@ describe("runKindConformance drives the agent half over each fixture", () => {
     expect(report.verdicts.find((v) => v.code === "state-agent-failed")?.detail).toContain(
       "tool color_of threw: no color here",
     );
+  });
+
+  it("takes a tool's honest no to a state's input as its answer (IK)", async () => {
+    const report = await conform({
+      ...HALF,
+      act: {
+        paint: () => {
+          throw new AgentToolRefusal("This disc has no such colour.");
+        },
+      },
+    });
+    expect(refusalsOf(report.verdicts)).toEqual([]);
   });
 
   it("says a summary is too large to open", async () => {

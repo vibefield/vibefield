@@ -15,6 +15,7 @@ import {
   type KindDriverHost,
   type ObjectBinding,
   type ObjectDomHost,
+  withInkTools,
 } from "@vibefield/plugin-sdk/desk";
 import { createPadSheet, type PadDriver } from "./body";
 import { commentPadKind } from "./kind";
@@ -42,38 +43,41 @@ const padText = (api: AgentReadApi): string => {
   return typeof text === "string" ? text : "";
 };
 
-/** The pad's marks as its cell holds them (a cell stored before the marks: none). */
-const padMarks = (api: AgentReadApi): string => {
-  const marks = api.props()["marks"];
-  return typeof marks === "string" ? marks : "";
-};
-
 const commentsOf = (text: string): number => (text === "" ? 0 : text.split("\n").length);
 
-/** What an agent can do with a pad (OB-2): read its comments and add one. It writes the cell's `text` and `marks` together: the
- * seeds it leaves are the lines already there, each still in its own hand, and a new line draws from the pad's `seed`; the marks
- * stay on the letters they were made on, read as the cell holds them against the words it had, and the new line is unmarked
- * (IK, 2026-11-25 — the ink cell's three fields move as one). */
-export const commentPadAgent: AgentHalf = {
-  summary: (api) => {
-    const text = padText(api);
-    return { comments: commentsOf(text), text: text.slice(0, 2_000) };
-  },
-  faces: { words: padText },
-  read: { read_text: (api) => ({ text: padText(api) }) },
-  act: {
-    add_comment: (api, input) => {
-      const line = String(input["text"]).replaceAll("\n", " ");
-      const was = padText(api);
-      const text = was === "" ? line : `${was}\n${line}`;
-      if (text.length > PAD_TEXT_MAX) throw new Error("this pad is full");
-      // the marks of the words already there, as the cell reads them against those words — the new line's tail unmarked
-      const marks = encodeMarks(decodeMarks(padMarks(api), was));
-      api.setProps({ text, marks });
-      return { value: { comments: commentsOf(text) }, changed: "Added a comment" };
+/** What an agent can do with a pad (OB-2): read its comments and add one, and the three tools every written kind shares
+ * (IK, 2026-11-25: `withInkTools` — read_writing, edit_text, mark_text). `add_comment` writes the words and, where the pad
+ * keeps marks, the marks they hold, read against the words already there: the seeds it leaves are those lines' own, each
+ * still in its own hand, and a new line draws from the pad's `seed` and is written unmarked — so no mark a stale cell
+ * carried past its words lands on the new line. */
+export const commentPadAgent: AgentHalf = withInkTools(
+  {
+    summary: (api) => {
+      const text = padText(api);
+      return { comments: commentsOf(text), text: text.slice(0, 2_000) };
+    },
+    faces: { words: padText },
+    read: { read_text: (api) => ({ text: padText(api) }) },
+    act: {
+      add_comment: (api, input) => {
+        const line = String(input["text"]).replaceAll("\n", " ");
+        const was = padText(api);
+        const text = was === "" ? line : `${was}\n${line}`;
+        if (text.length > PAD_TEXT_MAX) throw new Error("this pad is full");
+        const props = api.props();
+        const stored = props["marks"];
+        api.setProps({
+          text,
+          ...("marks" in props
+            ? { marks: encodeMarks(decodeMarks(typeof stored === "string" ? stored : "", was)) }
+            : {}),
+        });
+        return { value: { comments: commentsOf(text) }, changed: "Added a comment" };
+      },
     },
   },
-};
+  { max: PAD_TEXT_MAX, noun: "pad" },
+);
 
 // docs:begin binding
 /** THE BINDING — the pad's kind, its driver and its sheet (the text part the desk's one editor is lent to). */

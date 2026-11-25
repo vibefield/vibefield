@@ -54,6 +54,7 @@ import {
   type AgentToolInput,
   agentActStillHolds,
   agentReadApi,
+  isAgentToolRefusal,
   recordAgentAct,
 } from "./desk";
 import { type GpuProblem, holdGpuConstants, type RecordingGpu, recordingGpu } from "./kind-gpu";
@@ -190,7 +191,7 @@ export const KIND_EXPECTED: Readonly<Record<KindRefusalCode | KindNoteCode, stri
   "state-render-failed":
     "a pass whose prepare answers how many of the records it was handed will draw (0 … n) and whose drawRange draws them, neither throwing",
   "state-agent-failed":
-    "agent handlers that answer every declared state without throwing, in JSON within their limits, setting only declared props to valid values; a tool that needs a real input takes one from `agentInputs`",
+    "agent handlers that answer every declared state without throwing (an `AgentToolRefusal` is an answer), in JSON within their limits, setting only declared props to valid values; a tool that needs a real input takes one from `agentInputs`",
   "state-draw-ill-formed":
     "set the pipeline your create made, and a bind group of its layout at every index, before each draw",
   "object-wgsl-not-compiled":
@@ -1210,7 +1211,8 @@ function driveAgentHalf(
         else if (!sameJsonRoundTrip(value)) problems.push(`${what} answered something not JSON`);
       }
     } catch (error) {
-      problems.push(`${what} threw: ${messageOf(error)}`);
+      // IK (2026-11-25): an honest no to this state's input (a quote it does not hold) is an answer, not a fault
+      if (!isAgentToolRefusal(error)) problems.push(`${what} threw: ${messageOf(error)}`);
     }
   };
   drive("summary", OBJECT_LIMITS.NOW_BYTES, (h) => h.summary());

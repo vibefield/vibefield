@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { INK_TOOLS } from "./ink-tools";
 import type { ObjectConcurrency } from "./objects";
 import type { ObjectAgentFace, ObjectAgentTool } from "./plugins";
 
@@ -59,7 +60,7 @@ const NOTE_TOOLS: readonly ObjectAgentTool[] = [
     readOnly: false,
     destructive: true,
     description:
-      "Replace everything written on this note with this text. The user can undo it. Read it first if the words already on it matter.",
+      "Replace everything written on this note with this text, unmarked. The user can undo it. Read it first if the words already on it matter; to change some words and keep the rest, use edit_text.",
     input: {
       type: "object",
       properties: { text: { type: "string", maxLength: NOTE_TEXT_MAX } },
@@ -72,6 +73,8 @@ const NOTE_TOOLS: readonly ObjectAgentTool[] = [
       required: ["chars"],
     },
   },
+  // IK (2026-11-25): the three every written kind shares (`ink-tools.ts`)
+  ...INK_TOOLS,
 ];
 
 const MINIMAT_TOOLS: readonly ObjectAgentTool[] = [
@@ -97,14 +100,14 @@ export const DESK_KINDS: readonly DeskKind[] = [
   {
     type: "desk.note",
     title: "Note",
-    version: 1,
+    version: 2,
     placeable: true,
     agent: {
       summary: "A paper note: a few lines written by hand.",
       concurrency: "many",
       faces: [LIVE, { type: "text", id: "words", label: "Its words", format: "plain" }, PICTURE],
       guide:
-        "A note holds one piece of plain text. `object_open` shows what it says now; `read_text` gives you all of it. `write_text` replaces the whole note, so read it first and write back everything you want to keep. Keep it short: a note is a small square of paper.",
+        "A note holds a few lines written by hand, and its words can be marked: written in another pen, highlighted, struck through or underlined. `object_open` shows what it says now; `read_text` gives you all of it as plain text, and `read_writing` gives it with its marks. To change some words, `edit_text` them by quoting them exactly; to mark words, `mark_text` them the same way. `write_text` replaces the whole note and its marks, so read it first and write back everything you want to keep. Keep it short: a note is a small square of paper.",
       tools: [...NOTE_TOOLS],
     },
   },

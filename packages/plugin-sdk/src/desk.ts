@@ -41,7 +41,31 @@
 
 import type { Entity, MenuActionDef } from "@vibecook/ice";
 import type { DriverFactory, ObjectDef, ObjectHost, ObjectKind } from "@vibecook/ice/desk";
-import { type LiveInfo, serviceKey } from "@vibecook/ice/desk/kit";
+import {
+  encodeMarks,
+  findQuote,
+  freshSeed,
+  HIGHLIGHTERS,
+  type HighlighterName,
+  type InkChange,
+  type InkValue,
+  inkCells,
+  inkOf,
+  type LiveInfo,
+  mark,
+  PENS,
+  type PenName,
+  readWriting,
+  replace,
+  serviceKey,
+} from "@vibecook/ice/desk/kit";
+import {
+  INK_NO_HIGHLIGHT,
+  INK_TOOL_NAMES,
+  INK_TOOLS,
+  INK_WORDS_MAX,
+  OBJECT_LIMITS,
+} from "@vibefield/contracts";
 
 export type {
   ActChoice,
@@ -682,6 +706,260 @@ export function agentActStillHolds(
   inverse: Pick<AgentActInverse, "after">,
 ): boolean {
   return Object.entries(inverse.after).every(([name, value]) => sameAgentValue(props[name], value));
+}
+
+/**
+ * AN AGENT TOOL'S HONEST NO (IK, 2026-11-25): the input asks for what the object cannot do — a quote it does not hold, a
+ * pen the desk has no such name for. A handler throws one, in words the agent can act on; nothing is written, the host
+ * answers it as the agent's bad input (never as the desk failing), and the kit's conformance takes it as an answer.
+ */
+export class AgentToolRefusal extends Error {
+  override readonly name = "AgentToolRefusal";
+}
+
+/** Whether a handler's throw is an honest no (`AgentToolRefusal`), by its name: a plugin's copy of the class reads so too. */
+export const isAgentToolRefusal = (error: unknown): error is AgentToolRefusal =>
+  error instanceof Error && error.name === "AgentToolRefusal";
+
+/** The three tools every written kind shares, as a manifest's `agent.tools` lists them (contracts' `ink-tools.ts`). */
+export { INK_TOOL_NAMES, INK_TOOLS };
+
+/**
+ * How a written kind keeps its ink, for `withInkTools`. Every name has the ink cell's default (ICE's
+ * `groups: { ink: ["text", "seeds", "marks"] }`, the sheet's `seed` and `pen`); a kind whose props are called otherwise
+ * names them here — `{ cell: { text: "body" } }` for a kind whose words are its `body`. A kind that declares no `marks`
+ * prop (a cell written before marks existed) reads unmarked, edits its words and seeds alone, and refuses a mark.
+ */
+export interface InkToolsOptions {
+  /** The props of the ink cell: its words, each glyph's hand, each glyph's mark. */
+  readonly cell?: { readonly text?: string; readonly seeds?: string; readonly marks?: string };
+  /** The prop holding the sheet's own seed (the hand of a glyph with no stored one). Default `seed`; absent, 0. */
+  readonly seed?: string;
+  /** The prop holding the sheet's own pen (a word in no pen of its own is in it). Default `pen`. */
+  readonly pen?: string;
+  /** The most characters the kind's words hold (its manifest's `maxLength`). Default `INK_WORDS_MAX`. */
+  readonly max?: number;
+  /** What an agent is told the object is, in its refusals: "note", "pad". Default "sheet". */
+  readonly noun?: string;
+  /** A fresh seed for a glyph just written (ICE's `freshSeed` unless a test says). */
+  readonly fresh?: () => number;
+}
+
+const refuse = (words: string): never => {
+  throw new AgentToolRefusal(words);
+};
+
+const stringOf = (v: unknown): string => (typeof v === "string" ? v : "");
+
+/** Words as an agent is told them back: one line, short. */
+const quoted = (words: string): string => {
+  const line = words.replaceAll("\n", " ");
+  return `"${line.length <= 40 ? line : `${line.slice(0, 39)}…`}"`;
+};
+
+const isPen = (v: unknown): v is PenName =>
+  typeof v === "string" && (PENS as readonly string[]).includes(v);
+const isHighlighter = (v: unknown): v is HighlighterName =>
+  typeof v === "string" && (HIGHLIGHTERS as readonly string[]).includes(v);
+
+/** How many times `quote` is written in `text`, overlapping starts counted (`findQuote`'s count). */
+const timesIn = (text: string, quote: string): number => {
+  const at = findQuote(text, quote);
+  if (!("error" in at)) return 1;
+  return at.error === "ambiguous" ? at.count : 0;
+};
+
+/** What a mark_text input asks, as one change for ICE's `mark` (every field it names, `clear` first), and its words. */
+function changeOf(
+  input: AgentToolInput,
+  own: PenName | undefined,
+  noun: string,
+): { readonly change: InkChange; readonly words: readonly string[] } {
+  const change: Record<string, unknown> = {};
+  const words: string[] = [];
+  if (input["clear"] !== undefined) {
+    if (input["clear"] !== true) refuse("`clear` is true, or left out.");
+    change["clear"] = true;
+    words.push("its marks cleared");
+  }
+  const pen = input["pen"];
+  if (pen !== undefined) {
+    if (!isPen(pen))
+      refuse(`The desk has no pen called ${String(pen)}. Its pens: ${PENS.join(", ")}.`);
+    // the sheet's own pen is no pen of the words' own (the words' menu does the same)
+    change["pen"] = pen === own ? null : pen;
+    words.push(pen === own ? `in the ${noun}'s own pen` : `in the ${pen} pen`);
+  }
+  const highlight = input["highlight"];
+  if (highlight !== undefined) {
+    if (highlight !== INK_NO_HIGHLIGHT && !isHighlighter(highlight))
+      refuse(
+        `The desk has no highlighter called ${String(highlight)}. Its highlighters: ${HIGHLIGHTERS.join(", ")}, or ${INK_NO_HIGHLIGHT}.`,
+      );
+    change["highlight"] = highlight === INK_NO_HIGHLIGHT ? null : highlight;
+    words.push(highlight === INK_NO_HIGHLIGHT ? "unhighlighted" : `highlighted ${highlight}`);
+  }
+  for (const [line, on] of [
+    ["strike", "struck through"],
+    ["underline", "underlined"],
+  ] as const) {
+    const v = input[line];
+    if (v === undefined) continue;
+    if (typeof v !== "boolean" && !isPen(v))
+      refuse(`\`${line}\` is true, false or one of the pens: ${PENS.join(", ")}.`);
+    change[line] = v;
+    words.push(v === false ? `not ${on}` : v === true ? on : `${on} in the ${v} pen`);
+  }
+  if (words.length === 0)
+    refuse("Say how to mark the words: `pen`, `highlight`, `strike`, `underline` or `clear`.");
+  // ICE's `InkChange` is one field's change; `mark` sets every field a change names, `clear` first
+  return { change: change as InkChange, words };
+}
+
+/**
+ * THE INK TOOLS (IK, 2026-11-25; ink-agent A) — a written kind's agent half with the three tools every written kind
+ * shares added to its own (`INK_TOOLS`; the kind's manifest lists them beside its own tools, and `vibefield-plugin check`
+ * holds the two together). An agent names words by QUOTING them, never by an index:
+ *  - `read_writing` → the words with their marks, as ICE's `readWriting` reads them (the text, the sheet's own pen, and
+ *    each marked run by its pen, highlighter, strike and underline), its runs bounded to what one answer may carry
+ *    (`more`: how many were left off);
+ *  - `edit_text { quote, with, occurrence? }` → ICE's `findQuote`, then `replace`, which keeps the marks the replaced
+ *    letters all shared; the words, their hands and their marks written as ONE cell;
+ *  - `mark_text { quote, occurrence?, pen?, highlight?, strike?, underline?, clear? }` → `findQuote`, then `mark`, by the
+ *    kit's names (`PENS`, `HIGHLIGHTERS`, `none`); the sheet's own pen lifts another.
+ * A quote not found, found more than once with no `occurrence`, or a name the desk does not have is an `AgentToolRefusal`
+ * that says which. Each write is the kind's act like its others: one change, recorded for its separate undo, said in
+ * words. An object being typed in lands its open draft before any act reaches it (the host's applier does it, by ICE's
+ * `inkTypingOn`), so a quote is found among the words the person sees.
+ */
+export function withInkTools(half: AgentHalf, opts: InkToolsOptions = {}): AgentHalf {
+  for (const name of Object.values(INK_TOOL_NAMES))
+    if (half.read?.[name] !== undefined || half.act?.[name] !== undefined)
+      throw new Error(`withInkTools: the kind already has a tool called ${name}`);
+  const TEXT = opts.cell?.text ?? "text";
+  const SEEDS = opts.cell?.seeds ?? "seeds";
+  const MARKS = opts.cell?.marks ?? "marks";
+  const SEED = opts.seed ?? "seed";
+  const PEN = opts.pen ?? "pen";
+  const max = opts.max ?? INK_WORDS_MAX;
+  const noun = opts.noun ?? "sheet";
+  const fresh = opts.fresh ?? freshSeed;
+
+  /** Whether the kind keeps marks: its props name the cell's marks (every declared prop is in `props()`, set or not). */
+  const keepsMarks = (props: Readonly<Record<string, unknown>>): boolean => MARKS in props;
+  const inkIn = (props: Readonly<Record<string, unknown>>): InkValue => {
+    const seed = props[SEED];
+    return inkOf(
+      {
+        text: stringOf(props[TEXT]),
+        seeds: stringOf(props[SEEDS]),
+        marks: keepsMarks(props) ? stringOf(props[MARKS]) : "",
+      },
+      typeof seed === "number" && Number.isFinite(seed) ? seed : 0,
+    );
+  };
+  const ownPen = (props: Readonly<Record<string, unknown>>): PenName | undefined => {
+    const pen = props[PEN];
+    return isPen(pen) ? pen : undefined;
+  };
+
+  /** Where the agent's quote is, or its honest no. */
+  const where = (
+    text: string,
+    input: AgentToolInput,
+  ): { readonly quote: string; readonly from: number; readonly to: number } => {
+    const quote = input["quote"];
+    if (typeof quote !== "string" || quote === "")
+      return refuse("Quote the words you mean, exactly as `read_writing` gives them.");
+    const occurrence = input["occurrence"];
+    if (occurrence !== undefined && !(Number.isInteger(occurrence) && (occurrence as number) >= 1))
+      return refuse("`occurrence` counts from 1, the first time the words are written.");
+    const at = findQuote(text, quote, occurrence as number | undefined);
+    if (!("error" in at)) return { quote, from: at.from, to: at.to };
+    if (at.error === "ambiguous")
+      return refuse(
+        `${quoted(quote)} is written ${at.count} times on this ${noun}. Say which with \`occurrence\`, 1 to ${at.count}.`,
+      );
+    const times = timesIn(text, quote);
+    if (times > 0)
+      return refuse(
+        `${quoted(quote)} is written on this ${noun} only ${times === 1 ? "once" : `${times} times`}.`,
+      );
+    return refuse(
+      `This ${noun} does not say ${quoted(quote)}. Read it with \`read_writing\` and quote its words exactly.`,
+    );
+  };
+
+  const readWritingTool = (api: AgentReadApi): unknown => {
+    const props = api.props();
+    const { text, runs } = readWriting(inkIn(props));
+    const pen = ownPen(props);
+    const head = { text, ...(pen === undefined ? {} : { pen }) };
+    // the runs an answer may carry beside the words (the host refuses an answer past OBJECT_LIMITS.TOOL_BYTES)
+    let room =
+      OBJECT_LIMITS.TOOL_BYTES - new TextEncoder().encode(JSON.stringify(head)).byteLength - 64;
+    const kept = [];
+    for (const run of runs) {
+      const bytes = new TextEncoder().encode(JSON.stringify(run)).byteLength + 1;
+      if (bytes > room) break;
+      room -= bytes;
+      kept.push(run);
+    }
+    return {
+      ...head,
+      runs: kept,
+      ...(kept.length < runs.length ? { more: runs.length - kept.length } : {}),
+    };
+  };
+
+  const editText = (api: AgentActApi, input: AgentToolInput): AgentActAnswer => {
+    const props = api.props();
+    const words = input["with"];
+    if (typeof words !== "string")
+      return refuse("Say the words to write in their place with `with`; empty removes them.");
+    const ink = inkIn(props);
+    const { quote, from, to } = where(ink.text, input);
+    if (words === quote) return { value: { at: from, chars: ink.text.length } };
+    const next = replace(ink, from, to, words, fresh);
+    if (next.text.length > max)
+      return refuse(
+        `This ${noun} holds at most ${max} characters, and that would make it ${next.text.length}.`,
+      );
+    const cells = inkCells(next);
+    // the WHOLE cell in one step: the words, their hands and their marks moved together
+    api.setProps({
+      [TEXT]: cells.text,
+      [SEEDS]: cells.seeds,
+      ...(keepsMarks(props) ? { [MARKS]: cells.marks } : {}),
+    });
+    return {
+      value: { at: from, chars: next.text.length },
+      changed:
+        words === "" ? `Removed ${quoted(quote)}` : `Changed ${quoted(quote)} to ${quoted(words)}`,
+    };
+  };
+
+  const markText = (api: AgentActApi, input: AgentToolInput): AgentActAnswer => {
+    const props = api.props();
+    if (!keepsMarks(props))
+      return refuse(`This ${noun} keeps no marks: its words can be changed, not marked.`);
+    const { change, words } = changeOf(input, ownPen(props), noun);
+    const ink = inkIn(props);
+    const { quote, from, to } = where(ink.text, input);
+    const next = mark(ink, from, to, change);
+    // a mark moves the marks alone: the words and their hands stay as they are (the cell is still written whole)
+    api.setProps({ [MARKS]: encodeMarks(next.marks) });
+    return {
+      value: { at: from, chars: to - from },
+      changed: `Marked ${quoted(quote)}: ${words.join(", ")}`,
+    };
+  };
+
+  return {
+    ...half,
+    read: { ...half.read, [INK_TOOL_NAMES.read]: readWritingTool },
+    act: { ...half.act, [INK_TOOL_NAMES.edit]: editText, [INK_TOOL_NAMES.mark]: markText },
+  };
 }
 
 // docs:begin object-binding

@@ -7,7 +7,10 @@ import {
   agentHalfProblems,
   DESK_KINDS,
   deskKind,
+  INK_TOOL_NAMES,
+  INK_TOOLS,
   OBJECT_LIMITS,
+  ObjectAgentTool,
   validatePluginManifest,
 } from "../src";
 
@@ -148,6 +151,10 @@ describe("the built-in kinds' durable halves", () => {
     expect(deskKind("desk.note")?.agent.tools.map((tool) => [tool.name, tool.readOnly])).toEqual([
       ["read_text", true],
       ["write_text", false],
+      // IK: the three every written kind shares
+      ["read_writing", true],
+      ["edit_text", false],
+      ["mark_text", false],
     ]);
     expect(deskKind("desk.note")?.agent.faces.map((face) => face.label)).toEqual([
       "Live",
@@ -157,5 +164,27 @@ describe("the built-in kinds' durable halves", () => {
     expect(deskKind("desk.minimat")?.agent.tools.map((tool) => tool.name)).toEqual(["rename"]);
     expect(deskKind("desk.photo")?.placeable).toBe(false);
     expect(deskKind("no.such.kind")).toBeUndefined();
+  });
+});
+
+// IK (2026-11-25): the three tools every written kind shares, declared once
+describe("the ink tools", () => {
+  it("are one read and two acts, each a tool the manifest's law takes", () => {
+    expect(INK_TOOLS.map((tool) => [tool.name, tool.readOnly])).toEqual([
+      [INK_TOOL_NAMES.read, true],
+      [INK_TOOL_NAMES.edit, false],
+      [INK_TOOL_NAMES.mark, false],
+    ]);
+    for (const tool of INK_TOOLS) expect(ObjectAgentTool.safeParse(tool).success).toBe(true);
+    expect(agentHalfProblems({ faces: [{ type: "ref" }], tools: INK_TOOLS })).toEqual([]);
+  });
+
+  it("name words by a quote, never an index", () => {
+    for (const tool of INK_TOOLS.filter((t) => !t.readOnly)) {
+      const input = tool.input as { properties: Record<string, unknown>; required: string[] };
+      expect(input.required).toContain("quote");
+      expect(Object.keys(input.properties)).not.toContain("from");
+      expect(Object.keys(input.properties)).not.toContain("index");
+    }
   });
 });

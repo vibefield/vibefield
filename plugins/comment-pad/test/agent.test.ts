@@ -1,5 +1,6 @@
 // OB-2 — a plugin's agent half, witnessed: the comment pad's tools run over its declared states with no desk.
-import { encodeMarks, highlightOf, inkOf, mark } from "@vibefield/plugin-sdk/desk";
+import type { ObjectContribution } from "@vibefield/contracts";
+import { decodeMarks, highlightOf, inkCells, inkOf, mark } from "@vibefield/plugin-sdk/desk";
 import {
   agentToolHarness,
   productPalette,
@@ -44,26 +45,74 @@ describe("the comment pad's agent half", () => {
     expect(pad.props()).toMatchObject({ text: "first\ntwo lines", seeds: "kept" });
   });
 
-  it("keeps the marks on the words they were made on: the new line comes unmarked, the cell's marks read against the words it had", () => {
-    const words = inkOf({ text: "first" }, 0);
-    const marks = encodeMarks(mark(words, 0, 5, { highlight: "yellow" }).marks);
-    const pad = agentToolHarness(commentPadAgent, row, { text: "first", marks });
-    pad.act("add_comment", { text: "second" });
-    const after = pad.props();
-    const ink = inkOf({ text: String(after["text"]), marks: String(after["marks"]) }, 0);
-    expect(ink.marks.slice(0, 5).map(highlightOf)).toEqual([1, 1, 1, 1, 1]);
-    expect(ink.marks.slice(5)).toEqual(Array(7).fill(0)); // the break and "second"
-    // a stranger's cell whose marks ran past its words: read against them (cut), so the new line never takes the excess
-    const long = encodeMarks(mark(inkOf({ text: "firstXX" }, 0), 0, 7, { strike: true }).marks);
-    const odd = agentToolHarness(commentPadAgent, row, { text: "first", marks: long });
-    odd.act("add_comment", { text: "two" });
-    const read = inkOf({ text: "first\ntwo", marks: String(odd.props()["marks"]) }, 0);
-    expect(read.marks.slice(5)).toEqual([0, 0, 0, 0]);
-  });
-
   it("says when the pad is full, and writes nothing", () => {
     const pad = agentToolHarness(commentPadAgent, row, { text: "x".repeat(19_999) });
     expect(() => pad.act("add_comment", { text: "more" })).toThrow("this pad is full");
     expect(pad.props()["text"]).toHaveLength(19_999);
+  });
+});
+
+// IK (2026-11-25): the shipped row carries the pad's marks (its adoption of the ink: `marks` beside `text` and `seeds` in its
+// one `ink` group). A row without them — the pad as declared before the adoption — keeps the honest no witnessed.
+const { marks: _marks, ...unmarkedProps } = row.props;
+const unmarked: ObjectContribution = {
+  ...row,
+  props: unmarkedProps,
+  groups: { ink: ["text", "seeds"] },
+};
+
+describe("the comment pad's ink tools (IK)", () => {
+  it("lists the three every written kind shares beside its own two, and answers each", () => {
+    expect(row.agent?.tools.map((tool) => tool.name)).toEqual([
+      "read_text",
+      "add_comment",
+      "read_writing",
+      "edit_text",
+      "mark_text",
+    ]);
+    expect(Object.keys(commentPadAgent.read ?? {}).sort()).toEqual(["read_text", "read_writing"]);
+    expect(Object.keys(commentPadAgent.act ?? {}).sort()).toEqual([
+      "add_comment",
+      "edit_text",
+      "mark_text",
+    ]);
+  });
+
+  it("marks a comment's words and changes them by quote, on a pad that keeps marks", () => {
+    const pad = agentToolHarness(commentPadAgent, row, { text: "ship it\nnot yet" });
+    pad.act("mark_text", { quote: "not yet", highlight: "pink", strike: true });
+    expect(pad.read("read_writing")).toEqual({
+      text: "ship it\nnot yet",
+      pen: "ball",
+      runs: [{ from: 8, to: 15, text: "not yet", highlight: "pink", strike: true }],
+    });
+    const { changed } = pad.act("edit_text", { quote: "ship it", with: "ship it today" });
+    expect(changed).toBe('Changed "ship it" to "ship it today"');
+    expect((pad.read("read_writing") as { runs: unknown[] }).runs).toEqual([
+      { from: 14, to: 21, text: "not yet", highlight: "pink", strike: true },
+    ]);
+  });
+
+  it("says a pad that keeps no marks cannot be marked (the row as declared before the pad adopted the ink)", () => {
+    const pad = agentToolHarness(commentPadAgent, unmarked, { text: "one" });
+    expect(() => pad.act("mark_text", { quote: "one", pen: "red" })).toThrow(
+      "This pad keeps no marks: its words can be changed, not marked.",
+    );
+  });
+
+  it("adds a comment whose marks stay with the words they were on, the new line unmarked", () => {
+    // a highlighted last line, and a stale cell whose marks run past its words
+    const ink = mark(inkOf({ text: "first\nsecond" }, 0), 6, 12, { highlight: "yellow" });
+    const cells = inkCells(ink);
+    const pad = agentToolHarness(commentPadAgent, row, {
+      text: "first\nsec",
+      seeds: "",
+      marks: cells.marks,
+    });
+    pad.act("add_comment", { text: "third" });
+    const p = pad.props();
+    expect(p["text"]).toBe("first\nsec\nthird");
+    const marks = decodeMarks(String(p["marks"]), String(p["text"]));
+    expect(marks.map(highlightOf)).toEqual([0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0]);
   });
 });
