@@ -1717,7 +1717,18 @@ export interface HistoryPortsOptions {
   readonly sessions?: SessionPortOptions;
   readonly assets?: AssetSourceOptions;
   readonly workspace?: WorkspaceClientOptions;
+  /** HD-4 — the window's copy door, for every copy the room makes itself (a
+   * message, a code block, an anchor, a commit's id, a worktree's name): the
+   * room's `HostPort.copyText`. Absent: the room writes the page's clipboard,
+   * which the shell denies by law (ESP §7.4), so each such copy is refused. */
+  readonly copyText?: (text: string) => Promise<void>;
 }
+
+/** HD-4 — the room's host port with its copy door. `HostPort.copyText` is the
+ * room's from the release after 0.1.10; until this repo's pin carries it the
+ * field is declared here, and the room at the pin does not read it. The
+ * intersection goes at that EL8. */
+type HostPortWithCopy = HostPort & { copyText?: (text: string) => Promise<void> };
 
 /** The room's ports over one fieldd client. */
 export function historyPortsOver(
@@ -1739,11 +1750,16 @@ export function historyPortsOver(
   );
   const assets = assetSourceOver(sessions, options.assets);
   const workspace = new WorkspaceClient(client, options.workspace);
+  const host: HostPortWithCopy = {
+    ...hostPortOver(options.platform, options.home ?? null),
+    worktree: workspace,
+    ...(options.copyText === undefined ? {} : { copyText: options.copyText }),
+  };
   return {
     catalog,
     sessions,
     assets,
-    host: { ...hostPortOver(options.platform, options.home ?? null), worktree: workspace },
+    host,
     dispose() {
       workspace.dispose();
       catalog.dispose();

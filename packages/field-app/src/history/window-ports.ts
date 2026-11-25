@@ -32,8 +32,9 @@ export function windowHistoryPorts(
   return held.ports;
 }
 
-/** HN-5 — a copy History's room makes through its workspace port (a file's path, from its
- * room or the Peek's reader of it) is a copy like any other: on the system clipboard through
+/** HN-5 — a copy History's room makes (through its workspace port: a file's path, from its
+ * room or the Peek's reader of it; HD-4, through its host port: a message, a code block, an
+ * anchor, a commit's id, a worktree's name) is a copy like any other: on the system clipboard through
  * the one copy door, then a text card in the hand (DESIGN.md §8 "The hand"). No button's box
  * reaches the port, so the card rises into its place, and it says History, where it came
  * from. The room keeps its own receipts ("Path copied"); a refusal rejects with Copy's whole
@@ -50,6 +51,7 @@ export function productHistoryPorts(client: HistoryDoorClient): HistoryPorts {
     platform: getHost().platform ?? null,
     home: terminalBootstrapHome(),
     workspace: { copyText: copyFromHistory },
+    copyText: copyFromHistory,
   }));
 }
 

@@ -1776,6 +1776,25 @@ describe("MA-4b — the room's library: index.artifacts as rosetta's ArtifactPag
     ]);
     ports.dispose();
   });
+
+  it("HD-4: the window's ports hand the room's host the copy door they were given, and none otherwise", async () => {
+    const door = client({});
+    const copied: string[] = [];
+    const withDoor = historyPortsOver(door, {
+      platform: "darwin",
+      copyText: async (text) => {
+        copied.push(text);
+      },
+    });
+    const host = withDoor.host as { copyText?: (text: string) => Promise<void> };
+    await host.copyText?.("wt-10bfix");
+    expect(copied).toEqual(["wt-10bfix"]);
+    expect(withDoor.host.worktree).toBeDefined();
+    withDoor.dispose();
+    const without = historyPortsOver(door, { platform: "darwin" });
+    expect("copyText" in without.host).toBe(false);
+    without.dispose();
+  });
 });
 
 /** rosettad's REST for the page rows: a page's content route answers

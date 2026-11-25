@@ -76,7 +76,11 @@ describe("History's workspace copy port (HN-5)", () => {
   it("is the port the window's History ports hand the room", () => {
     copyHost();
     productHistoryPorts({} as never);
-    const options = made.options.at(-1)?.() as { workspace?: { copyText?: unknown } } | undefined;
+    const options = made.options.at(-1)?.() as
+      | { workspace?: { copyText?: unknown }; copyText?: unknown }
+      | undefined;
     expect(options?.workspace?.copyText).toBe(copyFromHistory);
+    // HD-4: and the door for the room's own copies (a commit's id, a worktree's name)
+    expect(options?.copyText).toBe(copyFromHistory);
   });
 });
