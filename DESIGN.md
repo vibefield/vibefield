@@ -8035,6 +8035,12 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
       hover. The shown one carries the select dot. A row being measured says "…" after the
       measured ones; one whose folder is gone says "gone", last. **A press copies the name**, with
       a receipt ("worktree name copied"); it switches nothing, which stays the head's list.
+      The copy goes through the one copy door, as every copy the room makes itself now does (a
+      message, a code block, an anchor, a commit's id): the room asks its host (HD-4), and a
+      text card is dealt as for any copy. *Correction, 2026-11-24:* until HD-4 those copies wrote
+      the page's own clipboard, which the shell denies by law (§7.4 of the shell's plan), so in
+      VibeField each was refused and the room said so; only its workspace copies (a file's
+      path) reached the door.
       The size is what the folder holds as a walk counts it (packages and build output included),
       measured in the background one folder at a time and kept ten minutes. It is not what removing
       the worktree would free, and the row does not claim so.
