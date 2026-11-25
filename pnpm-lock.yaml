@@ -50,18 +50,18 @@ overrides:
   '@vibecook/ghosttea-frame': 0.16.3
   '@vibefield/rosetta-protocol': 0.1.11
   '@vibefield/rosetta-room': 0.1.11
-  '@vibefield/puppeteer-runtime': 0.4.13
-  '@vibefield/puppeteer-builtin-providers': 0.4.13
-  '@vibefield/puppeteer-core': 0.4.13
-  '@vibefield/puppeteer-record': 0.4.13
-  '@vibefield/puppeteer-monitor': 0.4.13
-  '@vibefield/puppeteer-view-sdk': 0.4.13
-  '@vibefield/puppeteer-views': 0.4.13
+  '@vibefield/puppeteer-runtime': 0.4.14
+  '@vibefield/puppeteer-builtin-providers': 0.4.14
+  '@vibefield/puppeteer-core': 0.4.14
+  '@vibefield/puppeteer-record': 0.4.14
+  '@vibefield/puppeteer-monitor': 0.4.14
+  '@vibefield/puppeteer-view-sdk': 0.4.14
+  '@vibefield/puppeteer-views': 0.4.14
   '@vibecook/mille': 0.3.6
   '@vibecook/mille-ui': 0.3.6
 
 patchedDependencies:
-  '@vibefield/puppeteer-views@0.4.13': bfa4081684fb25f23f33ce65d11882ac70d61c66300f392931f751131f6e191c
+  '@vibefield/puppeteer-views@0.4.14': bfa4081684fb25f23f33ce65d11882ac70d61c66300f392931f751131f6e191c
 
 importers:
 
@@ -427,17 +427,17 @@ importers:
         specifier: workspace:*
         version: link:../plugin-sdk
       '@vibefield/puppeteer-core':
-        specifier: 0.4.13
-        version: 0.4.13
+        specifier: 0.4.14
+        version: 0.4.14
       '@vibefield/puppeteer-monitor':
-        specifier: 0.4.13
-        version: 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+        specifier: 0.4.14
+        version: 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/puppeteer-view-sdk':
-        specifier: 0.4.13
-        version: 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+        specifier: 0.4.14
+        version: 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/puppeteer-views':
-        specifier: 0.4.13
-        version: 0.4.13(patch_hash=bfa4081684fb25f23f33ce65d11882ac70d61c66300f392931f751131f6e191c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+        specifier: 0.4.14
+        version: 0.4.14(patch_hash=bfa4081684fb25f23f33ce65d11882ac70d61c66300f392931f751131f6e191c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/rosetta-protocol':
         specifier: 0.1.11
         version: 0.1.11
@@ -536,23 +536,23 @@ importers:
         specifier: workspace:*
         version: link:../plugin-sdk
       '@vibefield/puppeteer-builtin-providers':
-        specifier: 0.4.13
-        version: 0.4.13(zod@4.6.7)
+        specifier: 0.4.14
+        version: 0.4.14(zod@4.6.7)
       '@vibefield/puppeteer-core':
-        specifier: 0.4.13
-        version: 0.4.13
+        specifier: 0.4.14
+        version: 0.4.14
       '@vibefield/puppeteer-monitor':
-        specifier: 0.4.13
-        version: 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+        specifier: 0.4.14
+        version: 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/puppeteer-record':
-        specifier: 0.4.13
-        version: 0.4.13
+        specifier: 0.4.14
+        version: 0.4.14
       '@vibefield/puppeteer-runtime':
-        specifier: 0.4.13
-        version: 0.4.13
+        specifier: 0.4.14
+        version: 0.4.14
       '@vibefield/puppeteer-view-sdk':
-        specifier: 0.4.13
-        version: 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+        specifier: 0.4.14
+        version: 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@vibefield/rosetta-protocol':
         specifier: 0.1.11
         version: 0.1.11
@@ -2484,78 +2484,78 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@vibefield/puppeteer-adapter-acp@0.4.13':
-    resolution: {integrity: sha512-y7GQMnRpqGYrGYpb8M+LRDpM+wIkE5y5FFKm1sy173Kp2bQWTkReg0nLJuMvdnVhnNEUrqMDUjzE7zdpfHJ0Og==}
+  '@vibefield/puppeteer-adapter-acp@0.4.14':
+    resolution: {integrity: sha512-y6yYsfdBlY9EzxKovq53EKMYY8Kx34L020wVz6BA67hSPVQYB+in8/T4Qev0Od/jDkGy7aoM6T9qcA4IEXr6WA==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-antigravity@0.4.13':
-    resolution: {integrity: sha512-wF1nYMcfkvUPjR79nAi4UXXLgsVK980mKAdQJKVyAJzpXIUOInuVt1DAhNuhV85fXk9EeUgQnPKhtaVyy87I7g==}
+  '@vibefield/puppeteer-adapter-antigravity@0.4.14':
+    resolution: {integrity: sha512-I6x8sS3r4ZPO9tovkRnPWU5D8+JfPp+QKtm2yNEpytQB1j9XrZmpXD6sQZkP+dbvVTuBQumUtpLm9NIXQSIr9g==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-claude@0.4.13':
-    resolution: {integrity: sha512-X1y5iktFnt7tSjbti+AtCL4I2AaZR3yNycA8iJHquwPKlItuL25e5vGdDUXEn+CVv5uypga2+OnN9BeTRCl0bA==}
+  '@vibefield/puppeteer-adapter-claude@0.4.14':
+    resolution: {integrity: sha512-CX8CuIJQ2kE0b0zEOgusI8A8xsvlapBaSmugf5JLMJsrjVjtB5dmtQT87/JN2/EkSi+itmzzcrtqW1K+rd9H6Q==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-codex@0.4.13':
-    resolution: {integrity: sha512-EbQMFkRtugdy76Nf6Y5q6aCaGHugIDdaNTu4w5mgIU0aLzuw4vZpSzDd5ZNqWg7fI9Obznebv3vSc/MDUBW7vw==}
+  '@vibefield/puppeteer-adapter-codex@0.4.14':
+    resolution: {integrity: sha512-WO00VE1zrYR0/OtLVWA3ZkFBOFpsIhpc6eyyqPLk+OdTTVPtOItgz3wg2AoERGlXo6uwcI/wNEP/pWmYKtO2EA==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-copilot@0.4.13':
-    resolution: {integrity: sha512-si9Z6AmZUEN3uhQnuOPxIfLZqfrWa5sXuWmP2+BTVBfYLkqYJauNFADonorgVDGaYDfA9Q7KY79pWUze7XAVlQ==}
+  '@vibefield/puppeteer-adapter-copilot@0.4.14':
+    resolution: {integrity: sha512-EOsREvQDGj1eL5EIszEgtZ9TcPlcJulGzOogqesHfTmV92e/Ev2RBjG21GwpCj2KFeoDIX/f0hfKEXO3ENblnw==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-grok@0.4.13':
-    resolution: {integrity: sha512-BWJxwwoupbruYOqtu3RQUeURmRxvkUCd89aaMOqxcaMhTlfbKO3SpWB2PbdxbktcVFE8K1gN816tVkMQcxUgfw==}
+  '@vibefield/puppeteer-adapter-grok@0.4.14':
+    resolution: {integrity: sha512-EvGOo4UJWAFmxkB9Fl8EW48cCbv0xO+HAKMi9ZeRp8bpbb5ddz1PFVMGYS1XbapBvFfMy3adK38NdzA3kvcwHg==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-hermes@0.4.13':
-    resolution: {integrity: sha512-f415ybVooCbH3TJjUENcyTdXNSEFqxq/GOvIibzMP+D96MHGYu80plxrGgbSV6fEtHlM7puvAhCuZYNSuSmcgw==}
+  '@vibefield/puppeteer-adapter-hermes@0.4.14':
+    resolution: {integrity: sha512-uptdN0LecnU59Ou7NH8IWTbyuKDklI1BYFs575r28HGCAimtFjLNBJ9sQ1AQlmIp4MBLtrH/eBhW3SGYTo8R1Q==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-kimi@0.4.13':
-    resolution: {integrity: sha512-yBVxQU3gd9ADNYKUk8DVcJ7Lx3jqoXfE2kp7d/doTPiZ4LgUSU0SNtrlYf/3XB8Jn8wTWAlKdw7p8TSuSmkZgw==}
+  '@vibefield/puppeteer-adapter-kimi@0.4.14':
+    resolution: {integrity: sha512-+POrgrsXR10A3l0HMnpkXhrHQWGjm28IVQRKc2h2gLIdDAS6zapSoQu6HdHCSQKCovlbdASqHBBFW/XGoNTiIQ==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-opencode@0.4.13':
-    resolution: {integrity: sha512-o3TpFYr4Ra8eQA/KNM2m4IHIVwfRMLGLB0wF2ism95jQk+bOvsZBBgkR7pPv6IfpIa7SJf9BRw404QZb7xQnPg==}
+  '@vibefield/puppeteer-adapter-opencode@0.4.14':
+    resolution: {integrity: sha512-lmYq1DkPCy/Pt95YE9x6B9sWaAsNZjKJGi087nnk8cQGSGV8Oz7o7VdfxJlr9iSgnPfh6TH9RgHn/B9r3mT0XA==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-adapter-pi@0.4.13':
-    resolution: {integrity: sha512-62DaOumHTctXIAU7OvsWe6EAwxJqw1Isdf6XIqQ6S+VltoWxxJtiPr+F9iedwOHnlcJ0hJ8H00160pDa9amV4Q==}
+  '@vibefield/puppeteer-adapter-pi@0.4.14':
+    resolution: {integrity: sha512-BsQvnv7lifnoIKXV83ewbx2Fk0GOW8A7espTEOHmTYkzjCcR7kAJYQDGJ7ytJOqzq8OAXLnG8CkEP4KRWoFAyA==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-builtin-providers@0.4.13':
-    resolution: {integrity: sha512-A6JylPaR1JbuPVqXXN4VdAW9wAqHGqOBCqjBMpug4OZmUuwU842rYdZFwacQ4/JsrlKzH3D8zEY81C+lZnZgxQ==}
+  '@vibefield/puppeteer-builtin-providers@0.4.14':
+    resolution: {integrity: sha512-EhAqIhlmWlxYjpXD8iVniT3cTyvP2VQKgdXGO1X0GgFkwjOR0ngat1o/Kugr2upcUOqBvQEKQGnAqsYLb0OXbQ==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-core@0.4.13':
-    resolution: {integrity: sha512-ajTX9RnwLnaiIXBIVr3tYEkeySdcry12CkVnWgZLrf3aXJhugOqSU/7wm4lP6UwVCMRBd3LyVNMGcsCiQ+pchw==}
+  '@vibefield/puppeteer-core@0.4.14':
+    resolution: {integrity: sha512-N5v93ppwZow77/JdA+eq2IIOBTg+5gXM9cBLscBGG+vL5YLI+GCr6XLw5RxvsblZORk4KMLEOZhnMdOM2PmXuQ==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-monitor@0.4.13':
-    resolution: {integrity: sha512-eMm+7oDarKqOigmjJSYbB62OF/FfaqFlXltaTlAJokN3nQTXNHqwNwpxatoTCGkd19QxF9Y3sdIDRUPSlSG2NQ==}
+  '@vibefield/puppeteer-monitor@0.4.14':
+    resolution: {integrity: sha512-QjVAMY5ltgsfRhPN9kManDbfduc38X+HWWHKCN0S5LVx75B5yCereQPjunJ2ed1XtZUQyy/JMWHWyOUs/USaXw==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-native-observation@0.4.13':
-    resolution: {integrity: sha512-T7SDfruuNA/KAD08ukit5oAjKQeJgtfJHgVIPzHQyr3xfT3c8Fm3xAKbF/4+LtKSzRO7PCpIp7f4kGJyesMRkA==}
+  '@vibefield/puppeteer-native-observation@0.4.14':
+    resolution: {integrity: sha512-zVxTIgdLJPQduc5F9egoVHe3W5+tqa0kP5KghK4wkpvesf2bMLtg1SBEtwMTimTkqyCeG3BwDJdlysSoOTRnKA==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-react@0.4.13':
-    resolution: {integrity: sha512-P49I+fSZ2HXrmf+BCUC9P1dB4NC/6XhkWwoNEb4jWLslAKdFpdqDTG7Qcc4pB2Z4/n1x9Z+DnoDti1CWsPXVlA==}
+  '@vibefield/puppeteer-react@0.4.14':
+    resolution: {integrity: sha512-mmk4K4aIswPeNaDQQUwpNWw33TUg8qTyg2nQDDGdiYL/BS5cWkFz6kjkzM1oP85ftF2okMzgnL6PQgLsxvkx4A==}
     engines: {node: '>=22.18.0'}
     peerDependencies:
       react: '>=18 <20'
 
-  '@vibefield/puppeteer-record@0.4.13':
-    resolution: {integrity: sha512-wH/q5IrCpXJhvExhJ6vBn/8iME8YR7U8m0pKfthaZpBe+gmw7YYL5HgMc3qleKGMmMlUd91RFmef/gmK4QcTGA==}
+  '@vibefield/puppeteer-record@0.4.14':
+    resolution: {integrity: sha512-mu+CQQb2QkfHgUoGE2T0htdfI1qssqSX30cXhH9j0B1GAy+1dQLtx1fF4Rg5ihE+jCwrYw5qug+yUUlPPidv9w==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-runtime@0.4.13':
-    resolution: {integrity: sha512-kR7QxDCUsXDMrcBJTI0KZL4TUh0yU0QTCoUFIGxb0W9KHJeqr70+adnhcul6kmUQp0evcB5c76nvpNffnWoxcw==}
+  '@vibefield/puppeteer-runtime@0.4.14':
+    resolution: {integrity: sha512-u/uhtpGWW+VXuCBGIXAn9gh97HNN3FemPywoDU7I0zedrobTXZ01tysjbcIpnWTymcpOOHB6aFmjcx0SD1BCBQ==}
     engines: {node: '>=22.18.0'}
 
-  '@vibefield/puppeteer-view-sdk@0.4.13':
-    resolution: {integrity: sha512-/GTgs17Zoh8Nlobi6PlErcF5OGAgt4spn9Fi0Sckhg1ZDEL0ddWBbrxOU4ZAk7rrDzAfGXs96tDX5dEzqNDGsQ==}
+  '@vibefield/puppeteer-view-sdk@0.4.14':
+    resolution: {integrity: sha512-quWUpgRSrVDxHrW5RXlH58t2TTfgoUYB9Jq5U1fCb4qzwujOxu/1fC5WA37kIMMOgw99G9G6W/pkAbvlklqDqA==}
     engines: {node: '>=22.18.0'}
     peerDependencies:
       react: '>=18 <20'
@@ -2569,15 +2569,15 @@ packages:
       vitest:
         optional: true
 
-  '@vibefield/puppeteer-views@0.4.13':
-    resolution: {integrity: sha512-IY5lGl8XT4CvwkspejpItVRn8frurr4FtuwraJyE1W1vwkLXyhtv3ddo57EQdAkYKzhNnuk7L4AC3RKm0ZS5Kg==}
+  '@vibefield/puppeteer-views@0.4.14':
+    resolution: {integrity: sha512-1lV2R0tCL34nvF8YGsoX4yFMOTGdlOLTXyK3dhwOPUWpOxKIlDDMJdXMEGnJPP0myr7PBdcsUqHv5eBxmzdU4g==}
     engines: {node: '>=22.18.0'}
     peerDependencies:
       react: '>=18 <20'
       react-dom: '>=18 <20'
 
-  '@vibefield/puppeteer-workspaces@0.4.13':
-    resolution: {integrity: sha512-SBnhIzZ8ZFlW8DTexaRvnUIGVG2RPy3Iu6/eZE6GO0wiap5twhLy5MN1vLmeEfvxIleB6Ev4GV/P2nLESMqtKg==}
+  '@vibefield/puppeteer-workspaces@0.4.14':
+    resolution: {integrity: sha512-/d55u0bpjoqb7zy0LHkxM8rnE+yzOB2Y1QQUnhQTelfVIoOcfw+Xaf+wl6Yx+TCtML+Vk9aPBODIJZQuyZKfJg==}
     engines: {node: '>=22.18.0'}
 
   '@vibefield/rosetta-protocol@0.1.11':
@@ -5447,132 +5447,132 @@ snapshots:
   '@vibecook/truffle-sidecar-win32-x64@0.7.28':
     optional: true
 
-  '@vibefield/puppeteer-adapter-acp@0.4.13(zod@4.6.7)':
+  '@vibefield/puppeteer-adapter-acp@0.4.14(zod@4.6.7)':
     dependencies:
       '@agentclientprotocol/sdk': 1.2.1(zod@4.6.7)
-      '@vibefield/puppeteer-core': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
     transitivePeerDependencies:
       - zod
 
-  '@vibefield/puppeteer-adapter-antigravity@0.4.13':
+  '@vibefield/puppeteer-adapter-antigravity@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-claude@0.4.13':
+  '@vibefield/puppeteer-adapter-claude@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-codex@0.4.13':
+  '@vibefield/puppeteer-adapter-codex@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-copilot@0.4.13':
+  '@vibefield/puppeteer-adapter-copilot@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-grok@0.4.13':
+  '@vibefield/puppeteer-adapter-grok@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-adapter-acp': 0.4.13(zod@4.6.7)
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-adapter-acp': 0.4.14(zod@4.6.7)
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-hermes@0.4.13':
+  '@vibefield/puppeteer-adapter-hermes@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-kimi@0.4.13':
+  '@vibefield/puppeteer-adapter-kimi@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-opencode@0.4.13':
+  '@vibefield/puppeteer-adapter-opencode@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       jsonc-parser: 3.3.1
       zod: 4.6.7
 
-  '@vibefield/puppeteer-adapter-pi@0.4.13':
+  '@vibefield/puppeteer-adapter-pi@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-native-observation': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-native-observation': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-builtin-providers@0.4.13(zod@4.6.7)':
+  '@vibefield/puppeteer-builtin-providers@0.4.14(zod@4.6.7)':
     dependencies:
-      '@vibefield/puppeteer-adapter-acp': 0.4.13(zod@4.6.7)
-      '@vibefield/puppeteer-adapter-antigravity': 0.4.13
-      '@vibefield/puppeteer-adapter-claude': 0.4.13
-      '@vibefield/puppeteer-adapter-codex': 0.4.13
-      '@vibefield/puppeteer-adapter-copilot': 0.4.13
-      '@vibefield/puppeteer-adapter-grok': 0.4.13
-      '@vibefield/puppeteer-adapter-hermes': 0.4.13
-      '@vibefield/puppeteer-adapter-kimi': 0.4.13
-      '@vibefield/puppeteer-adapter-opencode': 0.4.13
-      '@vibefield/puppeteer-adapter-pi': 0.4.13
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-runtime': 0.4.13
+      '@vibefield/puppeteer-adapter-acp': 0.4.14(zod@4.6.7)
+      '@vibefield/puppeteer-adapter-antigravity': 0.4.14
+      '@vibefield/puppeteer-adapter-claude': 0.4.14
+      '@vibefield/puppeteer-adapter-codex': 0.4.14
+      '@vibefield/puppeteer-adapter-copilot': 0.4.14
+      '@vibefield/puppeteer-adapter-grok': 0.4.14
+      '@vibefield/puppeteer-adapter-hermes': 0.4.14
+      '@vibefield/puppeteer-adapter-kimi': 0.4.14
+      '@vibefield/puppeteer-adapter-opencode': 0.4.14
+      '@vibefield/puppeteer-adapter-pi': 0.4.14
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-runtime': 0.4.14
     transitivePeerDependencies:
       - zod
 
-  '@vibefield/puppeteer-core@0.4.13':
+  '@vibefield/puppeteer-core@0.4.14':
     dependencies:
       zod: 4.6.7
 
-  '@vibefield/puppeteer-monitor@0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vibefield/puppeteer-monitor@0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-view-sdk': 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-view-sdk': 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
     transitivePeerDependencies:
       - react
       - react-dom
       - vitest
 
-  '@vibefield/puppeteer-native-observation@0.4.13': {}
+  '@vibefield/puppeteer-native-observation@0.4.14': {}
 
-  '@vibefield/puppeteer-react@0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vibefield/puppeteer-react@0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-monitor': 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-monitor': 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       react: 19.2.7
     transitivePeerDependencies:
       - react-dom
       - vitest
 
-  '@vibefield/puppeteer-record@0.4.13':
+  '@vibefield/puppeteer-record@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
 
-  '@vibefield/puppeteer-runtime@0.4.13':
+  '@vibefield/puppeteer-runtime@0.4.14':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-record': 0.4.13
-      '@vibefield/puppeteer-workspaces': 0.4.13
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-record': 0.4.14
+      '@vibefield/puppeteer-workspaces': 0.4.14
       zod: 4.6.7
 
-  '@vibefield/puppeteer-view-sdk@0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vibefield/puppeteer-view-sdk@0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
     optionalDependencies:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
       vitest: 3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(supports-color@7.2.0)(tsx@4.23.1)(yaml@2.9.0)
 
-  '@vibefield/puppeteer-views@0.4.13(patch_hash=bfa4081684fb25f23f33ce65d11882ac70d61c66300f392931f751131f6e191c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
+  '@vibefield/puppeteer-views@0.4.14(patch_hash=bfa4081684fb25f23f33ce65d11882ac70d61c66300f392931f751131f6e191c)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))':
     dependencies:
-      '@vibefield/puppeteer-core': 0.4.13
-      '@vibefield/puppeteer-react': 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
-      '@vibefield/puppeteer-view-sdk': 0.4.13(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+      '@vibefield/puppeteer-core': 0.4.14
+      '@vibefield/puppeteer-react': 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
+      '@vibefield/puppeteer-view-sdk': 0.4.14(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(vitest@3.2.7(@types/debug@4.1.13)(@types/node@24.13.3)(happy-dom@20.11.0)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.23.1)(yaml@2.9.0))
       '@webgpu/types': 0.1.72
       matter-js: 0.19.0
       react: 19.2.7
@@ -5580,7 +5580,7 @@ snapshots:
     transitivePeerDependencies:
       - vitest
 
-  '@vibefield/puppeteer-workspaces@0.4.13': {}
+  '@vibefield/puppeteer-workspaces@0.4.14': {}
 
   '@vibefield/rosetta-protocol@0.1.11': {}
 
