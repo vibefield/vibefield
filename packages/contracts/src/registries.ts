@@ -581,6 +581,14 @@ export const AGENT_START = {
   SAID_WITHIN_MS: 12_000,
 } as const;
 
+/** Spark QA F10 (2026-11-25) — how long a run's ask stands before its spark is told "is asking you" (fieldd's
+ * `agent-waker.ts`). An agent whose own permission mode approves a tool raises the ask and answers it itself within
+ * milliseconds; told at once, each such flash cost the spark a turn. PROVISIONAL: the flashes measured were under
+ * 150 ms (Grok 1.0.92), and an ask a person must answer stands for seconds. */
+export const AGENT_WAKE = {
+  ASK_STANDS_MS: 1_500,
+} as const;
+
 /** CP-4 (step0-cp4.md §5.1; the round's CP-4 marks, ruled 2026-11-04 at the leans) — a flow run's bounds, each
  * PROVISIONAL until measured on James's runs, as AGENT_STOP's is:
  *  - SCRIPT_MAX_BYTES: a flow file's bytes, read, approved, proposed inline (`flow_propose`) or sent as text

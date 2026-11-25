@@ -1,4 +1,4 @@
-import type { AgentSessionOrigin } from "@vibefield/contracts";
+import { AGENT_WAKE, type AgentSessionOrigin } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { AgentInputQueues } from "./agent-input-queue";
 
@@ -9,6 +9,11 @@ import type { AgentInputQueues } from "./agent-input-queue";
 // spark reads the words itself with agent_read. A wake joins the spark's own input queue like any input, and wakes that
 // wait there join into one line (AgentInputQueues.wake). A spark with no live session keeps its wakes until one opens.
 // SP-1e4 (S4, 2026-11-19) — a turn the person's Pause ended is said as paused by the user, never as finished.
+// Spark QA F10 (2026-11-25) — an ask is told once it STANDS. An agent whose own permission mode approves a tool raises
+// the ask and answers it itself within milliseconds (seen with Grok 1.0.92: one small task, "is asking you" told two
+// times, nothing ever pending), and each told ask cost the spark a turn. So "asking" waits AGENT_WAKE.ASK_STANDS_MS,
+// and is told only if the run still asks then; a run that left the ask meanwhile is read from the state before it,
+// so working, a flash of asking, idle is still told as finished.
 
 /** A run's state as the monitor says it, in the four words a wake can carry. */
 export type RunState = "working" | "idle" | "asking" | "failed";
@@ -51,6 +56,8 @@ export interface WakerOptions {
   /** SP-1e4 (S4) — the run's current turn was ended by the person's Pause (the runtime's own record, never a mark a
    * door sets): its idle is told as paused by the user. Absent: no turn is told paused. */
   pausedTurn?(runtimeRunId: string): boolean;
+  /** how long an ask stands before it is told (absent: AGENT_WAKE.ASK_STANDS_MS; zero: told at once) */
+  readonly askStandsMs?: number | undefined;
   readonly logger?: Logger;
 }
 
@@ -60,6 +67,8 @@ export class AgentWaker {
   readonly #state = new Map<string, RunState>();
   /** spark → wakes held while it has no live session */
   readonly #held = new Map<string, string[]>();
+  /** run → its ask that has not stood yet (Spark QA F10): the timer that tells it */
+  readonly #asking = new Map<string, NodeJS.Timeout>();
   readonly #logger: Logger;
 
   constructor(private readonly opts: WakerOptions) {
@@ -74,10 +83,36 @@ export class AgentWaker {
     else this.#watchers.delete(runtimeRunId);
   }
 
-  /** A run's monitor row changed: a change of state is a wake for whoever it wakes. */
+  /** A run's monitor row changed: a change of state is a wake for whoever it wakes. An ask is a state once it has
+   * stood (Spark QA F10): until then the run is read as it was before it. */
   onMonitor(runtimeRunId: string, row: MonitorRow | undefined): void {
     if (row === undefined) return;
     const next = stateOf(row);
+    const stands = this.opts.askStandsMs ?? AGENT_WAKE.ASK_STANDS_MS;
+    const prev = this.#state.get(runtimeRunId);
+    // a run's first row is a state nobody is told of, an ask as any other
+    if (next === "asking" && stands > 0 && prev !== undefined && prev !== "asking") {
+      if (this.#asking.has(runtimeRunId)) return;
+      const timer = setTimeout(() => {
+        this.#asking.delete(runtimeRunId);
+        this.#settle(runtimeRunId, "asking");
+      }, stands);
+      timer.unref?.();
+      this.#asking.set(runtimeRunId, timer);
+      return;
+    }
+    this.#unask(runtimeRunId);
+    this.#settle(runtimeRunId, next);
+  }
+
+  #unask(runtimeRunId: string): void {
+    const timer = this.#asking.get(runtimeRunId);
+    if (timer === undefined) return;
+    clearTimeout(timer);
+    this.#asking.delete(runtimeRunId);
+  }
+
+  #settle(runtimeRunId: string, next: RunState): void {
     const prev = this.#state.get(runtimeRunId);
     this.#state.set(runtimeRunId, next);
     if (prev === undefined || prev === next) return;
@@ -97,6 +132,7 @@ export class AgentWaker {
 
   /** A run ended: its last wake, and it is forgotten. */
   onEnded(runtimeRunId: string): void {
+    this.#unask(runtimeRunId);
     this.#tell(runtimeRunId, `${this.opts.label(runtimeRunId)} ended`);
     this.#state.delete(runtimeRunId);
     this.#watchers.delete(runtimeRunId);

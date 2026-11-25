@@ -1,5 +1,5 @@
-import type { AgentSessionOrigin } from "@vibefield/contracts";
-import { describe, expect, it } from "vitest";
+import { AGENT_WAKE, type AgentSessionOrigin } from "@vibefield/contracts";
+import { describe, expect, it, vi } from "vitest";
 import type { AgentInputQueues } from "../src/agent-input-queue";
 import { AgentWaker, isIdleRow, sparkOfOrigin, stateOf } from "../src/agent-waker";
 
@@ -16,6 +16,8 @@ function harness(
   live: Record<string, string> = { "sp-vela": "run-vela" },
   /** each run's origin (R35b): spawnerOf then reads it through sparkOfOrigin, as daemon.ts's does from slice 15 */
   origins?: Readonly<Record<string, AgentSessionOrigin>>,
+  /** Spark QA F10 — how long an ask stands before it is told; these rows tell it at once unless one asks */
+  askStandsMs = 0,
 ) {
   const woken: { run: string; fact: string }[] = [];
   const queues = {
@@ -31,6 +33,7 @@ function harness(
     sparkSession: (spark: string) => live[spark],
     label: (run: string) => ({ "run-ada": "Ada", "run-ben": "Ben" })[run] ?? run,
     pausedTurn: (run: string) => paused.has(run),
+    askStandsMs,
   };
   const waker = new AgentWaker(options);
   return { waker, woken, live, paused };
@@ -206,5 +209,80 @@ describe("a flow run's spark: its step wakes no spark as its spawner, and its fa
       { run: "run-vela", fact: "fact-1" },
       { run: "run-wren", fact: "fact-2" },
     ]);
+  });
+
+  // Spark QA F10 (2026-11-25) — found in real use: Grok approves its own tools, so each one raised an ask and
+  // answered it within milliseconds, and the spark was told "is asking you" with nothing ever pending
+  describe("an ask is told once it stands (Spark QA F10)", () => {
+    const standing = () => harness(undefined, undefined, AGENT_WAKE.ASK_STANDS_MS);
+
+    it("an ask the agent answered itself is never told, and the turn's end is still told as finished", () => {
+      vi.useFakeTimers();
+      try {
+        const h = standing();
+        h.waker.onMonitor("run-ada", row("working"));
+        h.waker.onMonitor("run-ada", row("working", "permission"));
+        vi.advanceTimersByTime(100);
+        h.waker.onMonitor("run-ada", row("working"));
+        vi.advanceTimersByTime(60_000);
+        expect(h.woken).toEqual([]);
+        // the flash, then the end with no row between: read from the state before the ask
+        h.waker.onMonitor("run-ada", row("blocked", "permission"));
+        h.waker.onMonitor("run-ada", row("idle"));
+        vi.advanceTimersByTime(60_000);
+        expect(h.woken).toEqual([{ run: "run-vela", fact: "Ada finished" }]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("an ask that stands is told once, however many rows it comes in", () => {
+      vi.useFakeTimers();
+      try {
+        const h = standing();
+        h.waker.onMonitor("run-ada", row("working"));
+        h.waker.onMonitor("run-ada", row("blocked", "permission"));
+        vi.advanceTimersByTime(AGENT_WAKE.ASK_STANDS_MS - 1);
+        h.waker.onMonitor("run-ada", row("blocked", "permission"));
+        expect(h.woken).toEqual([]);
+        vi.advanceTimersByTime(1);
+        expect(h.woken).toEqual([{ run: "run-vela", fact: "Ada is asking you" }]);
+        h.waker.onMonitor("run-ada", row("blocked", "permission"));
+        vi.advanceTimersByTime(60_000);
+        expect(h.woken).toHaveLength(1);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a failure is told at once, an ask's wait or none; an ended run's ask is never told", () => {
+      vi.useFakeTimers();
+      try {
+        const h = standing();
+        h.waker.onMonitor("run-ada", row("working"));
+        h.waker.onMonitor("run-ada", row("blocked", "permission"));
+        h.waker.onMonitor("run-ada", row("blocked", "failure"));
+        expect(h.woken).toEqual([{ run: "run-vela", fact: "Ada failed" }]);
+        h.waker.onMonitor("run-ada", row("working"));
+        h.waker.onMonitor("run-ada", row("blocked", "permission"));
+        h.waker.onEnded("run-ada");
+        vi.advanceTimersByTime(60_000);
+        expect(h.woken.map((w) => w.fact)).toEqual(["Ada failed", "Ada ended"]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it("a run whose first row asks tells nobody, as every first row", () => {
+      vi.useFakeTimers();
+      try {
+        const h = standing();
+        h.waker.onMonitor("run-ada", row("blocked", "permission"));
+        vi.advanceTimersByTime(60_000);
+        expect(h.woken).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
   });
 });
