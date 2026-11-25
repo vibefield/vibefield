@@ -5587,6 +5587,12 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     editor (ICE's `DeskEditor.command("paste", { text })`), which reads no clipboard itself and lays the desk's last copied
     piece, marks and all, only when its words are exactly those. Paste waits only where no such door exists (the browser
     catalog), with the same tooltip; a read the door refused says "Couldn't read the clipboard. ⌘V pastes from it.")*
+    *(Corrected 2026-11-25, IK round two, at its source: the right-click rows **at a caret alone are built**. ICE's anchor
+    now carries the caret's place (`caret { box, entity, at }`, while the editor is lent and nothing is selected). A
+    right-click on the sheet being written there grows **Paste · Select all at the caret**: the same bar, its row More alone
+    (shown on), standing over the caret's box and following it while the rows are open. No bar stands at a bare caret
+    otherwise. The rows fold when the menu closes, the caret goes or words come (then the words' own bar). The bar comes
+    after the words bar's own 200 ms, as it does after a press.)*
   - **Keys** — while a sheet is written the keys are the platform field's, so ⌘C copies the selected words, ⌘X cuts,
     ⌘V pastes and ⌘A selects the sheet's words; Make a card's ⌘C stands down there, as it does today, and is the
     bar's again while objects are selected. ⇧⌘X strikes, ⌘U underlines, ⇧⌘H highlights with the last highlighter
