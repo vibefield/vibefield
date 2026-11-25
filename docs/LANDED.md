@@ -68616,3 +68616,107 @@ these apps in their network and have access anywhere with their devices like the
 - **Owed ‹for James›:** his press of a tile (the tab); the draft words in DESIGN.md §9 "A Mac that is not
   connected"; whether the pill's sheet grows too; MA-L7's dated words at their source
   (`draft/thinking-mini-apps.md` §3), which wait for his own `pnpm commit-draft`.
+
+## HD — History's data: what is kept, the way to clear it, the worktree ledger, an agent brought in later (M555)
+
+**2026-11-24 · on local main: `4950ca039` … `ce1ba2283` (HD-1 … HD-7, the doc commit before each code commit)
+and, after the EL8 below, three mends: `4f83293c1` (HD-4), `c8cb044f9` (HD-3) and `b1f6fe936` (HD-2, a comment).**
+James, in the History room's manual QA of 2026-11-24 (the same QA desktop and cut of his own agent data as
+M553's), asked for each of these in chat. "HD" is that QA's own numbering, not a ratified track. Each commit's
+body carries its measurements.
+
+- **What is kept, and the way to clear it (HD-1; `4950ca039`, `db2656460`).** His words: "in the history ingest
+  indicator button, in the hover menu, there is should be a button to open the history settings page", "in the
+  history settings page, there should be similar ingested cache space size indicators uis like those in the hover
+  menu, and there should be a button for user to clear the entire ingested data, and the history room will go back
+  to pre-ingested empty state", and "check if it is possible for user to clear ingested data per agent". Built: the
+  panel's row History Settings…; Settings → History's section On this Mac, the panel's own drawing
+  (`frame/HistorySpace.tsx`); Clear History…, asked once. The new door `index.clear` holds rosettad down, withdraws
+  consent, moves what is rosettad's in the index folder aside, starts a fresh daemon and removes the folder.
+  **Per agent: not possible.** rosetta has no delete of any kind (RO-8); what is browsed, searched and its media are
+  shared between agents.
+- **A switch that is on stays on (HD-2, in the same commits).** His ruling on that finding: "for the toggles, just
+  make them gray once toggled on so there is no such thing as toggle off". In Settings → History a switch that is
+  on takes no press, Stop reading and its question are gone, and Clear History… is the way back. The asking panes'
+  switches are unchanged.
+- **The worktree list is a ledger of disk (HD-3 `0d8d569bd`, `816037951`; HD-5 `aa952c39d`, `e2da10a0c`; HD-6
+  `a972ff18a`).** On the drawn options (page "The Worktree List", three layouts): "i choose size ledger, and user
+  should be able to one click copy the worktree name". fieldd says each worktree's commit, whether its folder is
+  gone, and what it holds on disk; the list itself is rosetta's (the EL8 below). **Corrected the day it was built,
+  twice.** The first cut weighed every worktree a repository lists and each again after ten minutes; on his
+  repository with 470 that ran his laptop hot ("this reading process is cooking my macbook … it should load
+  gradually as user scroll", "the size should be preserved so next time opening will not do the heavy work again").
+  Since HD-5 a folder is walked only when asked for by name (`workspace.worktreeSizes`, the rows on screen), one at
+  a time, and the figure is kept for a day (`workspace/tree-sizes.json`). HD-5 then ran the walk at background
+  quality of service, which throttles the disk ("this walk seems very slow": a cold 0.87 GB checkout in 32 s
+  against 0.9 s); HD-6 clamps to utility and rests as long as the walk took.
+- **Every copy the room makes goes through the copy door (HD-4 `ad14bdc7c`, `35a8b47f3`, `4f83293c1`).** Found on
+  his "apply to the window": a press on a worktree row was refused (`clipboard-sanitized-write`), as every copy the
+  room made itself had been. The window hands the room `copyFromHistory`.
+- **Agents not in History, and one brought in later (HD-7 `3039c3833`, `ce1ba2283`).** His words: "in the ingest
+  status hover menu, it only shows this one agent is done ingested, but it does not show the rest agent that are
+  not ingested, we should design those not ingested agents here properly so user can also opt in them here like
+  using the toggle in settings", and of a second agent turned on later: "nothing seems happens, the ingest
+  indicator shows nothing". The panel lists the agents the census finds unread, each with its facts and a switch
+  (one `index.enroll` with the complete set); Settings → History says "Importing" on the row being read and asks
+  every 2 s meanwhile. The cause of the silence was the service's and the room's: both are in the EL8 below.
+- **Proof, on this set re-based onto M554's tip:** tsc for contracts, field-app, fieldd and electron-shell;
+  `biome check` on the changed files; `check:walls`; `pnpm preflight`; `check:ios-fixtures`; `pnpm gen:check`;
+  `check-agent-catalog --enforce --require-rosetta` and `--literals`; field-native's `layout_vector` test (1
+  passed), which reads the regenerated `registries.rs`. `pnpm test` whole (28 projects, one at a time): 27 green,
+  among them contracts (82 files, 2,385 passed), field-app (400 files, 5,868 passed, 3 skipped) and electron-shell
+  (219 files, 3,343 passed, 3 skipped), and fieldd RED at one row; with the mend, fieldd whole (344 files, 5,254
+  passed, 34 skipped; 5 files skipped).
+- **A red this set carried from HD-3 to its last commit.** `child-stdin.test.ts` reads fieldd's source and fails
+  on any unlisted file that makes a process; HD-3's `tree-size.ts` runs `du` and was not listed. Every slice ran
+  named test files and never fieldd's whole suite, so it stood unseen until the whole `pnpm test`. `c8cb044f9`
+  lists it (`execFile`'s default: pipes of the child's own, never fieldd's fd 0).
+- **Seen, in a production-mode QA desktop on a 410 MB cut of his history:** a clear took 0.36 s and the room
+  returned to its consent card; a re-import came back whole. One agent imported first, the second switched on in
+  the panel: the circle said it within half a second, readable conversations went from 104 to 191 and what is kept
+  from 139 MB to 292 MB as it read, then "all set" (on the lane's own build of the service and the room, the code
+  0.1.11 carries).
+- **Not run:** `pnpm verify` whole (its lint whole, clippy, the bundle assertion), the Rust suite beyond the row
+  above, any smoke, `gate:landing`, on any commit of the set.
+- **Not seen or not measured:** a clear over a full-size index (the removal of its media is awaited before the
+  door answers and was not timed there); Settings' "Importing" row in a running window (its tests alone); the
+  machine's heat under HD-6's clamp; a later bring-in at real size.
+- **Open, found here and not fixed:** an agent cannot be removed from History alone (rosetta's; RO-8). The size is
+  what a walk counts, not what removing the worktree would free. Windows measures nothing (no `du`).
+- **Owed ‹for James›:** his look at the worktree ledger and at a later bring-in in a window on the released
+  0.1.11; the page's two unanswered picks for the ledger, built as: a worktree's state on hover only, and a press
+  that copies and switches nothing.
+
+## EL8: rosetta 0.1.11 — the worktree ledger, wrapped diffs, and an agent brought in later read as an import (M556)
+
+**2026-11-24 · on local main: `1359a8956`. Upstream: vibefield/rosetta #66 (`8beea2dbb`), tags v0.1.11 and
+npm-v0.1.11 at it; published 2026-11-25T04:29Z and 04:31Z on npm and 04:41Z on GitHub, rosettad's four archives on
+the release.** James, 2026-11-24: "good, now release rosetta changes, include another agent's rosetta changes, do
+one release and bump rosetta pin in this vibefield worktree after released". Five sessions were asked and none held
+a rosetta change; asked again with that said, he picked "Release now". The release carries this QA's changes alone.
+
+- **The pin's places, one commit:** the overrides rows `@vibefield/rosetta-protocol` and `-room` 0.1.10 → 0.1.11;
+  preflight's `PIN_EXPECTATIONS`; `minimumReleaseAgeExclude` (the 0.1.10 rows kept through the install that
+  regenerated the lock, then removed); `pnpm-lock.yaml` by `pnpm install`; `siblings.lock.json`'s rosetta `sha`
+  83865a707 → 8beea2dbb and its `release.npm`. The kit's Swift row stays 0.1.6: 0.1.11 changes no Swift path. No
+  protocol version or store schema moves. By exact edits, never `pnpm siblings:pin`.
+- **What 0.1.11 brings here:** the room's worktree list as HD-3 to HD-6 answer it (`WorktreeHostPort.worktreeSizes`,
+  `HostPort.copyText`); a diff's long lines wrap inside their own rows, and a diff no longer ends in a phantom
+  blank row (his screenshot of the git history popup; "fix in rosetta"); rosettad reports an agent consented after
+  the first import as an import (with a published index it started warm and read that agent's whole past on its
+  live lane, saying `live` throughout), newest conversations first; the room polls such an import twice a second
+  where it asked every 30 s.
+- **What the land needs in the checkout main lives in:** `../rosetta-pin` moved to 8beea2dbb and rosettad rebuilt
+  there, and a `pnpm install` (the lock and `pnpm-workspace.yaml` move), before any pnpm script. Every other lane
+  that links `../rosetta-pin` reads the move.
+- **Proof:** upstream, #66's CI green on every check (Rust tests on macOS and Linux, Rust quality, the Swift
+  client, the npm packages and app, ground truth), and the tag runs' own. Here, on the re-based tip: the rows of
+  HD's proof above, the whole `pnpm test` among them, with rosettad built from 8beea2dbb in the lane's own pin
+  checkout (`cargo build --release --locked -p rosettad`).
+- **Not run:** `pnpm verify` whole, the Rust suite beyond `layout_vector`, any smoke, the desk gates,
+  `package:verify:history`. fieldd's ICE1 fixtures are untouched (no ICE move).
+- **Findings:** rosetta's test fixtures had borrowed names from this repository (a branch name, a commit id, a
+  scratch path); they were made neutral before the push, the repository being public. A room whose installed dist
+  is replaced by hand is drawn STALE by a window started later: Vite serves a pre-bundled dependency as immutable
+  under a hash of the lockfile and config, not of the package's files (his "why im not seeing the worktree
+  changes", after a restart).

@@ -500,6 +500,17 @@ laws — users-and-accounts §6** (W6's pane-2 signal amended 2026-09-22, v0.3: 
   `importSign`, the daemon's `storage` and `memory`), its release #61 (0.1.9), and #62 (#60's pace sentences
   corrected). Defined in `DESIGN.md` §8 "History" (the import's sign), §6 (the arc) and §8
   "The head". **LANDED 2026-11-23 (M538)**; unseen in a running History.
+- **HD-1 … HD-7** — History's data (2026-11-24, James in chat during the History room's manual QA; "HD" is that
+  QA's own numbering, not a ratified track, and no page holds a slate for it). His rulings: **the switches**, "for
+  the toggles, just make them gray once toggled on so there is no such thing as toggle off" (a switch that is on
+  takes no press; Clear History… is the way back; an agent cannot be removed alone, RO-8); **the worktree list**, on
+  the page *The Worktree List* (three layouts): "i choose size ledger, and user should be able to one click copy the
+  worktree name", then "it should load gradually as user scroll" and "the size should be preserved" (weighed for the
+  rows on screen, kept a day); **the agents not in History**, "so user can also opt in them here like using the
+  toggle in settings" (the import sign's panel). The page's two other picks were not answered and are built at the
+  lean: a worktree's state on hover only, a press that copies and switches nothing. Defined in `DESIGN.md` §8
+  "History" (the import's sign; ③'s foot) and "Settings → History". Upstream rosetta #66 (0.1.11). **LANDED
+  2026-11-24 (M555; the EL8, M556)**; the ledger and a later bring-in unseen by him on the released 0.1.11.
 
 ## Petitions
 
