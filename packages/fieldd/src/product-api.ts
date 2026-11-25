@@ -613,6 +613,18 @@ export class ProductApi extends EventEmitter {
     >;
   }
 
+  /** MA-D16 (2026-11-24) — a made app's local view, opened as a file in the
+   * default browser: `artifact.open`'s road on a desktop with no linked login.
+   * Internal, like openLink: main sees fieldd, never the window that asked,
+   * and it is told the app and its page's digest, never a path. */
+  openMadeApp(
+    params: import("@vibefield/contracts").ShellOpenMadeAppParams,
+  ): Promise<import("@vibefield/contracts").ShellOpenMadeAppResult> {
+    return this.shellProvider.callInternal("shell.openMadeApp", params) as Promise<
+      import("@vibefield/contracts").ShellOpenMadeAppResult
+    >;
+  }
+
   /** GT-7 — a native open dialog for one file, locked to one purpose.
    * Internal: only the terminal service enters, and it reads the file the user
    * picked — main returns a path, never bytes. */

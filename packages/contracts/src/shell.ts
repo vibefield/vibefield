@@ -1,5 +1,13 @@
 import { z } from "zod";
-import { ARTIFACT_LIMITS, ArtifactId, ArtifactTitle, MadeAppReach, Sha256Hex } from "./artifacts";
+import {
+  ARTIFACT_LIMITS,
+  ArtifactId,
+  ArtifactTitle,
+  Blake3Hex,
+  MadeAppId,
+  MadeAppReach,
+  Sha256Hex,
+} from "./artifacts";
 import { CustodyLevel } from "./custody";
 import { ClientKind, SemverString } from "./envelope";
 import { ErrorKind, UnavailableDetails } from "./errors";
@@ -953,6 +961,13 @@ export const SHELL_INTERNAL_PROVIDER_METHODS = [
   // what that policy sends. `shell.openExternal` keeps its HTTPS-only rule for
   // the callers that rely on it.
   "shell.openLink",
+  // MA-D16 (2026-11-24) — a made app's LOCAL view, opened as a file in the
+  // default browser: the road of a desktop with no linked login, where no
+  // serve can carry the app. Internal: only fieldd's `artifact.open` dispatches
+  // it, for a view its own files worker just wrote. It names the app and the
+  // page's digest, never a path, so main opens one file of one folder it
+  // derives itself and nothing a caller could spell.
+  "shell.openMadeApp",
 ] as const;
 export const SHELL_PROVIDER_METHODS = [
   ...SHELL_CLIENT_PROVIDER_METHODS,
@@ -1093,6 +1108,18 @@ export type ShellOpenLinkParams = z.infer<typeof ShellOpenLinkParams>;
 
 export const ShellOpenLinkResult = z.object({ opened: z.literal(true) }).passthrough();
 export type ShellOpenLinkResult = z.infer<typeof ShellOpenLinkResult>;
+
+/** MA-D16 (2026-11-24) — the made app whose local view `shell.openMadeApp` hands the default browser: the app's id
+ * and its page's digest, each 64 lowercase hex. Main derives the one file they name
+ * (`artifacts/made/<appId>/<digest>/` + MADE_APP_VIEW.LOCAL_FILE under its own user's root) and holds it to that
+ * folder before it opens it: neither word can spell a path, and no caller hands main one. */
+export const ShellOpenMadeAppParams = z
+  .object({ appId: MadeAppId, digest: Blake3Hex })
+  .passthrough();
+export type ShellOpenMadeAppParams = z.infer<typeof ShellOpenMadeAppParams>;
+
+export const ShellOpenMadeAppResult = z.object({ opened: z.literal(true) }).passthrough();
+export type ShellOpenMadeAppResult = z.infer<typeof ShellOpenMadeAppResult>;
 
 /** GT-7 — a native open dialog for one file, locked to one purpose. */
 export const ShellDialogPickFileParams = z

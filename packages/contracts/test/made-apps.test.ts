@@ -32,6 +32,7 @@ import {
   artifactRootUrlClaim,
   Blake3Hex,
   MADE_APP_FOLD_KEY_CHARS,
+  MADE_APP_OPEN_STATES,
   MADE_APP_PORT_DOMAIN,
   MADE_APP_PREVIEWS_PORT_DOMAIN,
   MadeAppFoldKey,
@@ -496,6 +497,14 @@ describe("the acts: artifact.open's answers and refusals, artifact.mark's set se
     const serving = ArtifactOpenResult.parse(fixture("artifact-open.serving"));
     expect(serving.url).toBe("https://studio.tail1234.ts.net:13377");
     expect(serving.reach).toEqual(["cdn.jsdelivr.net", "cdnjs.cloudflare.com", "unpkg.com"]);
+  });
+
+  it("MA-D16: answers `local` for an app opened here as a file, with no URL", () => {
+    expect(MADE_APP_OPEN_STATES).toEqual(["serving", "starting", "local"]);
+    const local = ArtifactOpenResult.parse(fixture("artifact-open.local"));
+    expect(local.state).toBe("local");
+    expect(local.url).toBeUndefined();
+    expect(local.reach).toEqual(["cdn.jsdelivr.net"]);
   });
 
   it("names its refusals in MADE_APP_OPEN's words, each an UNAVAILABLE naming its desktop", () => {

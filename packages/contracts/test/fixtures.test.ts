@@ -348,6 +348,7 @@ import {
   AppPreferences,
   CommunityStatement,
   FielddLinkUnavailable,
+  ShellOpenMadeAppParams,
   ShellSurfacesControlParams,
   ShellSurfacesControlResult,
   ShellWebContentsCaptureArtifactPreviewParams,
@@ -567,6 +568,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // headers and the view are vectors, pinned by made-app-network.test.ts.
   "vibefield-app-manifest": VibefieldAppManifest,
   "shell-capture-preview-params": ShellWebContentsCaptureArtifactPreviewParams,
+  // MA-D16 (2026-11-24) — a made app's local view, named by its app and its page's digest, never by a path.
+  "shell-open-made-app-params": ShellOpenMadeAppParams,
   "shell-capture-preview-result": ShellWebContentsCaptureArtifactPreviewResult,
   // EY-0 — an agent's call on a page (`shell.surfaces.control`, TS-only): a read, an act and the run-level open, and
   // three answers (done, held, needs-you). fieldd's room and main's broker parse them through these schemas.

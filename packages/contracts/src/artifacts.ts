@@ -479,8 +479,13 @@ export const ArtifactOpenParams = z
   .passthrough();
 export type ArtifactOpenParams = z.infer<typeof ArtifactOpenParams>;
 
-/** `artifact.open`'s two answers: `serving`, its listener up, or `starting`, still on its way up. */
-export const MADE_APP_OPEN_STATES = ["serving", "starting"] as const;
+/** `artifact.open`'s answers: `serving`, its listener up; `starting`, still on its way up; and `local` (MA-D16,
+ * 2026-11-24), opened on this desktop as a file, with nothing served.
+ *  - `local` is answered only to a `reveal` of this desktop's own window, on a desktop with no linked login: no serve
+ *    can carry the app there (MADE_APP_OPEN.STATE_NOT_LINKED), so the home builds the app's local view
+ *    (MADE_APP_VIEW.LOCAL_FILE) and its shell hands that file to the browser (`shell.openMadeApp`). It carries no
+ *    `url`: nothing listens. An ask with no `reveal` is still refused `not-linked`: there is no one to open it for. */
+export const MADE_APP_OPEN_STATES = ["serving", "starting", "local"] as const;
 
 /** What `artifact.open` answers.
  *  - state: a state this build cannot read is `starting`, which promises nothing is up.

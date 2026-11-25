@@ -48,6 +48,8 @@ import {
   ShellOpenExternalParams,
   ShellOpenLinkParams,
   ShellOpenLinkResult,
+  ShellOpenMadeAppParams,
+  ShellOpenMadeAppResult,
   ShellProviderCallParams,
   ShellProviderOutcome,
   ShellProviderRegisterParams,
@@ -970,6 +972,28 @@ describe("AH-3/AH-4 static shell provider", () => {
     expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(SHELL_PROVIDER_METHODS).toContain("shell.openLink");
     expect(METHODS.some((method) => method.method === "shell.openLink")).toBe(false);
+  });
+
+  it("MA-D16: a made app's local view opens through an INTERNAL provider verb that takes no path", () => {
+    expect(SHELL_INTERNAL_PROVIDER_METHODS).toContain("shell.openMadeApp");
+    expect(SHELL_PROVIDER_METHODS).toContain("shell.openMadeApp");
+    expect(METHODS.some((method) => method.method === "shell.openMadeApp")).toBe(false);
+    const hex = (digit: string) => digit.repeat(64);
+    expect(ShellOpenMadeAppParams.safeParse({ appId: hex("a"), digest: hex("b") }).success).toBe(
+      true,
+    );
+    for (const refused of [
+      { appId: hex("a") },
+      { appId: hex("a"), digest: "../../etc" },
+      { appId: `${hex("a").slice(0, 60)}/../x`, digest: hex("b") },
+      { appId: hex("A"), digest: hex("b") },
+      { digest: hex("b"), path: "/tmp/x.html" },
+    ]) {
+      expect(ShellOpenMadeAppParams.safeParse(refused).success, JSON.stringify(refused)).toBe(
+        false,
+      );
+    }
+    expect(ShellOpenMadeAppResult.parse({ opened: true })).toEqual({ opened: true });
   });
 
   it("PT-S2 (R11); item 569: the attach's device list is a local `surface.simulator` read, carried by an INTERNAL provider verb, and its rows never hold a UDID", () => {

@@ -84,6 +84,7 @@ function call(
     | "shell.dialog.saveFile"
     | "shell.openExternal"
     | "shell.openLink"
+    | "shell.openMadeApp"
     | "shell.revealPath"
     | "shell.webcontents.captureArtifactPreview"
     | "shell.renderer.requestReplacement"
@@ -114,6 +115,7 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
     documentsPath: vi.fn(() => "/Users/test/Documents"),
     openExternal: vi.fn(async () => undefined),
     revealPath: vi.fn(),
+    openMadeApp: vi.fn(async () => undefined),
     captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
     requestRendererReplacement: vi.fn(() => ({ requested: true })),
     enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),
@@ -157,6 +159,7 @@ describe("RecoveringShellProvider", () => {
         documentsPath: () => "/Users/test/Documents",
         openExternal: vi.fn(async () => undefined),
         revealPath: vi.fn(),
+        openMadeApp: vi.fn(async () => undefined),
         captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
         requestRendererReplacement: vi.fn(() => ({ requested: true })),
         enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),
@@ -238,6 +241,80 @@ describe("RecoveringShellProvider", () => {
       );
     }
     expect(native.openExternal).toHaveBeenCalledTimes(1);
+    expect(native.revealPath).not.toHaveBeenCalled();
+    provider.dispose();
+  });
+
+  it("MA-D16: hands a made app's local view to the browser by its app and its page's digest, never a path, and says a file that is not there", async () => {
+    const appId = "a".repeat(64);
+    const digest = "b".repeat(64);
+    const openMadeApp = vi.fn(async (params: { appId: string; digest: string }) => {
+      // main's own rule (made-app-local.ts) refuses a view that is not on the disk
+      if (params.digest === "c".repeat(64)) throw { kind: "NOT_FOUND" };
+    });
+    const { client, native, provider } = await fixture({ openMadeApp });
+    client.emit(
+      "shell.provider.call",
+      call("shell-madeaaaaaaaaaaaa", "shell.openMadeApp", { appId, digest, path: "/etc/passwd" }),
+    );
+    // exactly the two words the contract names reach the native side: a stray `path` is dropped
+    await vi.waitFor(() => expect(openMadeApp).toHaveBeenCalledWith({ appId, digest }));
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: { callId: "shell-madeaaaaaaaaaaaa", outcome: { result: { opened: true } } },
+      }),
+    );
+    // main's own re-check of the grammar: each refused before anything is looked for
+    const refusals = [
+      {},
+      { appId },
+      { appId, digest: "../../../../etc/passwd" },
+      { appId: `${"a".repeat(60)}/../`, digest },
+      { appId: appId.toUpperCase(), digest },
+      { path: "/tmp/page.html" },
+    ];
+    for (const [index, refused] of refusals.entries()) {
+      const callId = `shell-maderefused${index}xxxx`;
+      client.emit("shell.provider.call", call(callId, "shell.openMadeApp", refused));
+      await vi.waitFor(() =>
+        expect(client.requests).toContainEqual({
+          method: "shell.provider.resolve",
+          params: {
+            callId,
+            outcome: {
+              error: {
+                kind: "PRECONDITION_FAILED",
+                message: "the desktop operation failed",
+                retryable: false,
+              },
+            },
+          },
+        }),
+      );
+    }
+    expect(openMadeApp).toHaveBeenCalledTimes(1);
+    // a view the disk does not hold: the refusal names no path
+    client.emit(
+      "shell.provider.call",
+      call("shell-madegoneaaaaaaaaaa", "shell.openMadeApp", { appId, digest: "c".repeat(64) }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual({
+        method: "shell.provider.resolve",
+        params: {
+          callId: "shell-madegoneaaaaaaaaaa",
+          outcome: {
+            error: {
+              kind: "NOT_FOUND",
+              message: "that app has no local view to open",
+              retryable: false,
+            },
+          },
+        },
+      }),
+    );
+    expect(native.openExternal).not.toHaveBeenCalled();
     expect(native.revealPath).not.toHaveBeenCalled();
     provider.dispose();
   });
@@ -758,6 +835,7 @@ describe("RecoveringShellProvider", () => {
       documentsPath: () => "/Users/test/Documents",
       openExternal: vi.fn(async () => undefined),
       revealPath: vi.fn(),
+      openMadeApp: vi.fn(async () => undefined),
       captureArtifactPreview: vi.fn(async () => ({ captured: true as const })),
       requestRendererReplacement: vi.fn(() => ({ requested: true })),
       enumerateSurfaceSources: vi.fn(async () => ({ sources: [] })),

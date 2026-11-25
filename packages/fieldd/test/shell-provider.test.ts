@@ -347,4 +347,47 @@ describe("ShellProviderBroker", () => {
     });
     await expect(opening).resolves.toEqual({ opened: true });
   });
+
+  it("MA-D16: holds a made app's local open to an app and a digest before main is asked, never a path", async () => {
+    const broker = new ShellProviderBroker();
+    const lane = transport();
+    broker.register(shellContext(), lane, { methods: METHODS });
+    const appId = "a".repeat(64);
+    const digest = "b".repeat(64);
+    for (const params of [
+      {},
+      { appId },
+      { appId, digest: "../../../etc/passwd" },
+      { appId: "../x", digest },
+      { appId: appId.toUpperCase(), digest },
+      { path: "/tmp/page.html" },
+    ]) {
+      await expect(
+        broker.callInternal("shell.openMadeApp", params as never),
+        JSON.stringify(params),
+      ).rejects.toMatchObject({ kind: "PRECONDITION_FAILED" });
+    }
+    expect(lane.notifications).toEqual([]);
+
+    const before = Date.now();
+    const opening = broker.callInternal("shell.openMadeApp", { appId, digest });
+    expect(lane.notifications[0]).toMatchObject({
+      method: "shell.provider.call",
+      params: {
+        method: "shell.openMadeApp",
+        params: { appId, digest },
+        caller: { kind: "local-token", clientKind: "fieldd" },
+      },
+    });
+    // the same OS hand-off as openLink, with the same five seconds
+    const notified = lane.notifications[0]?.params as { deadlineAt?: number } | undefined;
+    const deadlineAt = notified?.deadlineAt ?? Number.NaN;
+    expect(deadlineAt).toBeGreaterThanOrEqual(before + 5_000);
+    expect(deadlineAt).toBeLessThanOrEqual(Date.now() + 5_000);
+    broker.resolve(shellContext(), lane, {
+      callId: notificationCallId(lane, 0),
+      outcome: { result: { opened: true } },
+    });
+    await expect(opening).resolves.toEqual({ opened: true });
+  });
 });

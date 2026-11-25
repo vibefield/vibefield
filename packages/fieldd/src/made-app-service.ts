@@ -24,6 +24,13 @@
 //    read).
 //  - the capture: owed at the first serve and on a new page digest, run at the next open on this desktop (L11; no
 //    window-show event, never a timer). An open that answered `starting` captures when its own listener reports.
+//  - `openLocal` (MA-D16, 2026-11-24): the road of a desktop with no linked login, where no serve can carry an app.
+//    The same refusals as `open` but `not-linked`, the same export, and then ONLY the app's local view
+//    (MADE_APP_VIEW.LOCAL_FILE, beside the served one), whose head carries the page's policy because no response
+//    header reaches a file the browser opens (MA-L7). It makes and changes no serve record, reserves no port and
+//    declares nothing. A failure never removes the folders a serve record's export names, and a success removes the
+//    app's other digest folders. The daemon asks it only for a `reveal` from this desktop's own window, and its
+//    shell opens the file.
 // `artifact.mark` (the person's intent, slice 3h) and `reveal` (the home's shell.openLink, slice 3e) are NOT this
 // service's. It never handles page or image bytes (EL2): it names folders, and Electron and truffle move the bytes.
 //
@@ -411,6 +418,15 @@ export interface MadeAppOpenParams {
   presentationId?: string;
 }
 
+/** What `openLocal` answers (MA-D16, 2026-11-24): the app and the page whose local view now stands on this desktop
+ * (`artifacts/made/<appId>/<digest>/` + MADE_APP_VIEW.LOCAL_FILE), which is all the shell is told, and the hosts that
+ * view's own policy admits (the open answer's `reach`). */
+export interface MadeAppLocalOpen {
+  appId: string;
+  digest: string;
+  reach: string[];
+}
+
 export interface MadeAppServiceHealth {
   /** apps with a serve record (a reservation for life) */
   apps: number;
@@ -593,6 +609,12 @@ export class MadeAppService {
     return this.#enqueue(() => this.#openNow(params), true).then((appId) => this.#answer(appId));
   }
 
+  /** MA-D16 (2026-11-24) — open a made app as a FILE on this desktop: refuse honestly, export, and build its local
+   * view. Nothing is served, recorded or reserved (module header). The daemon asks it only with no linked login. */
+  openLocal(params: MadeAppOpenParams): Promise<MadeAppLocalOpen> {
+    return this.#enqueue(() => this.#openLocalNow(params), true);
+  }
+
   /** Re-derive every serve's audience from the linked login (the daemon calls this on `links.changed`). */
   relink(): Promise<void> {
     return this.#enqueue(async () => {
@@ -713,15 +735,7 @@ export class MadeAppService {
   async #openNow(params: MadeAppOpenParams): Promise<string> {
     const { appId } = params;
     const device = this.#deviceId;
-    const row = this.#rows.get(appId);
-    if (row === undefined) {
-      // a partial table is not the library's word (DS-L8): the app may sit on a page not read yet
-      if (!this.#rows.speaks()) throw madeAppRefusal(MADE_APP_OPEN.STATE_READING, device);
-      throw notFound();
-    }
-    const target = await this.#target(row, params.presentationId);
-    const refusal = availabilityRefusal(target.availability);
-    if (refusal !== undefined) throw madeAppRefusal(refusal, device);
+    const { row, target } = await this.#admit(params);
     const login = this.#linkedLogin();
     if (login === null) throw madeAppRefusal(MADE_APP_OPEN.STATE_NOT_LINKED, device);
     const existing = this.#registry.apps.get(appId);
@@ -734,12 +748,7 @@ export class MadeAppService {
       );
     }
     this.#evictionsFor(existing); // the ceiling refuses before any export
-    // The folder is named by the digest the library expects, known before the export.
-    // It names a folder before anything parses it, so only rosetta's blake3 grammar may (never a path, EL7).
-    const digest = target.digest;
-    if (digest === undefined || !Blake3Hex.safeParse(digest).success) {
-      throw madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_FAILED, device);
-    }
+    const digest = this.#digestOf(target);
     const folder = this.#folder(row.appId, digest);
     const exported =
       existing?.exportedDigest === digest &&
@@ -796,6 +805,82 @@ export class MadeAppService {
     return appId;
   }
 
+  /** What every open asks first, on either road and in this order: the app's row (a partial table is not the
+   * library's word, so an app it does not hold yet is `library-reading`, never NOT_FOUND), the presentation the open
+   * names, and that presentation's availability. */
+  async #admit(params: MadeAppOpenParams): Promise<{ row: IndexCatalogApp; target: OpenTarget }> {
+    const device = this.#deviceId;
+    const row = this.#rows.get(params.appId);
+    if (row === undefined) {
+      // a partial table is not the library's word (DS-L8): the app may sit on a page not read yet
+      if (!this.#rows.speaks()) throw madeAppRefusal(MADE_APP_OPEN.STATE_READING, device);
+      throw notFound();
+    }
+    const target = await this.#target(row, params.presentationId);
+    const refusal = availabilityRefusal(target.availability);
+    if (refusal !== undefined) throw madeAppRefusal(refusal, device);
+    return { row, target };
+  }
+
+  /** The page's digest, which names its folders. The folder is named by the digest the library expects, known before
+   * the export. It names a folder before anything parses it, so only rosetta's blake3 grammar may (never a path,
+   * EL7). */
+  #digestOf(target: OpenTarget): string {
+    const digest = target.digest;
+    if (digest === undefined || !Blake3Hex.safeParse(digest).success) {
+      throw madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_FAILED, this.#deviceId);
+    }
+    return digest;
+  }
+
+  /** The local road's whole open, inside the mutation chain (MA-D16, 2026-11-24): the shared refusals, then the
+   * export and the local view, every time. Placing the same page again is rosetta's no-op, and the view is rebuilt
+   * so it always carries this build's policy for the page. No record is read for reuse, made or changed. */
+  async #openLocalNow(params: MadeAppOpenParams): Promise<MadeAppLocalOpen> {
+    const { row, target } = await this.#admit(params);
+    const digest = this.#digestOf(target);
+    const exported = await this.#export(
+      target,
+      digest,
+      row.appId,
+      this.#folder(row.appId, digest),
+      true,
+    );
+    this.#pruneLocal(row.appId, digest);
+    return { appId: row.appId, digest, reach: exported.reach };
+  }
+
+  /** After a local open: the app's other digest folders go, in both roots, but the one a serve record's export
+   * names (its served view lives there, and a link that comes back serves it). Nothing is removed while that record
+   * still retires a serve or the service's own prune is owed for the app (`#pruneFolders` waits for the
+   * retirements), or while a capture's serve stands on it. Best effort: a folder that will not go is left and said. */
+  #pruneLocal(appId: string, digest: string): void {
+    const record = this.#registry.apps.get(appId);
+    if (
+      (record !== undefined && record.retiringServeIds.length > 0) ||
+      this.#prune.has(appId) ||
+      this.#transient?.appId === appId
+    ) {
+      return;
+    }
+    try {
+      for (const root of [this.#madeRoot, this.#exportRoot]) {
+        const dir = join(root, appId);
+        if (!isDirectory(dir)) continue;
+        for (const name of readdirSync(dir)) {
+          if (name === digest || name === record?.exportedDigest) continue;
+          rmSync(join(dir, name), { recursive: true, force: true });
+        }
+      }
+    } catch (error) {
+      this.#logger.info(
+        "fieldd.made_apps.prune_deferred",
+        "A made app's older export folders will be removed later",
+        { appId, error: errorName(error) },
+      );
+    }
+  }
+
   /** The presentation an open serves: the newest unless it names another, which must be one of the app's. */
   async #target(row: IndexCatalogApp, presentationId: string | undefined): Promise<OpenTarget> {
     if (presentationId === undefined || presentationId === row.presentationId) {
@@ -820,17 +905,24 @@ export class MadeAppService {
    * refusal words pass through, named for this desktop; anything else, an answer for another digest, a policy that
    * composes no headers or a view that cannot be built is `export-failed`, and the folders it was making go. Answers
    * what the record keeps of the page's environment: the hosts flat, as `reach`, and by directive, as the headers'
-   * input. */
+   * input.
+   * `local` (MA-D16, 2026-11-24) builds the app's LOCAL view instead, under the same policy, and leaves the served
+   * view as it is. On that road a failure never removes the folders a serve record's export names for this page:
+   * the served view lives there, with the page it was built from, and a link that comes back serves it. */
   async #export(
     target: OpenTarget,
     digest: string,
     appId: string,
     folder: string,
+    local = false,
   ): Promise<{ reach: string[]; network: Record<string, string[]> }> {
     const into = join(this.#exportRoot, appId, digest);
+    const recorded = local && this.#registry.apps.get(appId)?.exportedDigest === digest;
     const failed = () => {
-      this.#discardFolder(into);
-      this.#discardFolder(folder);
+      if (!recorded) {
+        this.#discardFolder(into);
+        this.#discardFolder(folder);
+      }
       return madeAppRefusal(MADE_APP_OPEN.STATE_EXPORT_FAILED, this.#deviceId);
     };
     let answer: MadeAppExport;
@@ -844,7 +936,7 @@ export class MadeAppService {
     } catch (error) {
       const state = refusalStateOf(error);
       if (state !== undefined) {
-        this.#discardFolder(into);
+        if (!recorded) this.#discardFolder(into);
         throw madeAppRefusal(state, this.#deviceId);
       }
       this.#logger.info("fieldd.made_apps.export_failed", "A made app's export failed", {
@@ -884,10 +976,12 @@ export class MadeAppService {
         folder,
         theme: { colorScheme: "light", variables: environment.variables },
         blake3: digest,
+        ...(local ? { local: { policy: environment.policy } } : {}),
       });
     } catch (error) {
       this.#logger.info("fieldd.made_apps.view_failed", "A made app's view could not be built", {
         error: errorName(error),
+        local,
       });
       throw failed();
     }

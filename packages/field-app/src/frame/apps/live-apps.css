@@ -268,6 +268,24 @@
   margin: -0.25rem 0 1rem;
 }
 
+/* An empty Live is one row (MA-D16, 2026-11-24; §8 "Artifacts — the Artifacts shelf's contents", as
+   amended that day): its line in the secondary ink and Publish… at the row's end, 32 high. */
+.vf-artifact-empty-row {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 0 0 2px;
+  color: var(--vf-text-secondary);
+  font-size: 12px;
+}
+
+.vf-artifact-empty-row > button {
+  height: 28px;
+  flex: none;
+}
+
 .vf-artifact-quiet {
   min-height: 50vh;
 }

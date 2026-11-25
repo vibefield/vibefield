@@ -409,18 +409,17 @@ export function LiveApps({ client }: { client: MadeAppsClient }): ReactElement {
     }
     if (artifacts.length === 0) {
       // The empty catalog draws no Publish… tile, so its one button is the act, in the act's name:
-      // one Publish… on screen (VibeField DESIGN.md §8 "Artifacts").
+      // one Publish… on screen (VibeField DESIGN.md §8 "Artifacts"). MA-D16 (2026-11-24): it is ONE
+      // ROW, its line and Publish… at its end. The quiet state it was (its art, the heading "No apps
+      // yet" and a primary button) filled the open sheet above the person's own apps, and the
+      // heading was false while those stood below.
       return (
-        <QuietState title="No apps yet" detail="Publish a proxy or a folder">
-          <UiButton
-            variant="primary"
-            className="vf-artifact-button"
-            disabled={pending !== null}
-            onClick={beginAdd}
-          >
+        <div className="vf-artifact-empty-row">
+          <span>Publish a proxy or a folder</span>
+          <UiButton className="vf-artifact-button" disabled={pending !== null} onClick={beginAdd}>
             Publish…
           </UiButton>
-        </QuietState>
+        </div>
       );
     }
     return (

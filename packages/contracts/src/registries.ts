@@ -972,16 +972,25 @@ export const SERVE_HEADER_LIMITS = {
  *  - PAGE_MAX_BYTES: the largest page a view embeds, rosetta's own bound on a captured page.
  *  - VARIABLES, VARIABLE_NAME_BYTES, VALUE_BYTES: one theme's variables, a name (with its `--`) and a value.
  *  - REFUSED_THEME: `madeAppViewHead`'s refusal of a theme it cannot read.
+ *  - LOCAL_FILE (MA-D16, 2026-11-24): the LOCAL view's name, beside FILE in the same folder. A desktop with no linked
+ *    login has no serve to carry an app, so an open there hands the browser this file (`artifact.open`'s `local`). No
+ *    response header reaches a page opened as a file, so its head carries the page's policy itself
+ *    (`madeAppLocalViewHead`, made-app-network.ts), and MA-L7 holds on that road too. It is written at each local open,
+ *    never kept across a policy change, and it is one more name on the app's own origin once a serve stands: the same
+ *    page under the same policy, twice over.
+ *  - REFUSED_LOCAL_POLICY: `madeAppLocalViewHead`'s refusal of a policy it cannot compose.
  * The theme's values are an INPUT, never VibeField's for any platform (AR-L1, MA-L9). Whose values a view carries is
  * DR-D14, open on the page (the critic's second gap). TS-only. */
 export const MADE_APP_VIEW = {
   FILE: "index.html",
+  LOCAL_FILE: "local.html",
   VERSION: 1,
   PAGE_MAX_BYTES: 16 * 1024 * 1024,
   VARIABLES: 64,
   VARIABLE_NAME_BYTES: 64,
   VALUE_BYTES: 256,
   REFUSED_THEME: "theme-unreadable",
+  REFUSED_LOCAL_POLICY: "policy-unreadable",
 } as const;
 
 /** DR-2a (`draft/thinking-drive.md` v0.3, DR-L8: "a drive still copying, an object not yet held, a desktop out of

@@ -11,6 +11,8 @@ import {
   ShellOpenExternalResult,
   ShellOpenLinkParams,
   ShellOpenLinkResult,
+  ShellOpenMadeAppParams,
+  ShellOpenMadeAppResult,
   type ShellProviderCallParams,
   ShellProviderCallParams as ShellProviderCallParamsSchema,
   type ShellProviderError,
@@ -65,6 +67,10 @@ export interface ShellProviderNative {
    * fieldd names only paths it owns: one of its inventoried installs, or (GT-7)
    * the terminal overlay the floor reports. */
   revealPath(path: string): void;
+  /** MA-D16 (2026-11-24) — hand a made app's local view to the default browser. Main finds the
+   * file itself from the app and its page's digest (made-app-local.ts) and refuses, as `{kind}`,
+   * one that is not there or is not what it derived; it is never handed a path. */
+  openMadeApp(params: ShellOpenMadeAppParams): Promise<void>;
   captureArtifactPreview(
     params: ShellWebContentsCaptureArtifactPreviewParams,
     signal: AbortSignal,
@@ -133,7 +139,9 @@ function safeProviderError(
                 : "the primary window is unavailable"
           : kind === "RESOURCE_EXHAUSTED"
             ? "the preview could not fit within the image budget"
-            : "the desktop operation failed",
+            : kind === "NOT_FOUND" && method === "shell.openMadeApp"
+              ? "that app has no local view to open"
+              : "the desktop operation failed",
     retryable: kind === "UNAVAILABLE" || kind === "TIMEOUT" || kind === "CONFLICT",
   };
 }
@@ -334,6 +342,16 @@ export class RecoveringShellProvider {
       if (!params.success) throw { kind: "PRECONDITION_FAILED" };
       await this.native.openExternal(params.data.url);
       return ShellOpenLinkResult.parse({ opened: true });
+    }
+    // MA-D16 (2026-11-24) — a made app's local view, on a desktop with no linked login: fieldd's
+    // files worker has just written it, and names it by its app and its page's digest. Main
+    // re-checks the grammar it owns, then finds and holds the file itself (made-app-local.ts)
+    // before the browser is handed it. No path arrives here, and none is answered.
+    if (call.method === "shell.openMadeApp") {
+      const params = ShellOpenMadeAppParams.safeParse(call.params);
+      if (!params.success) throw { kind: "PRECONDITION_FAILED" };
+      await this.native.openMadeApp({ appId: params.data.appId, digest: params.data.digest });
+      return ShellOpenMadeAppResult.parse({ opened: true });
     }
     // MA-3c: a made app's `allowHosts` rides the parsed params to the capture unchanged, and its
     // `digest` is validated on the way out. A hidden window still refuses; fieldd runs an owed

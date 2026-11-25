@@ -14,7 +14,10 @@
 //   · a rename refused after the temp is written: the temp removed, what was there kept;
 //   · a worker with no roots, relative roots or roots that overlap refuses every view as internal
 //     (its own configuration); a root that is not there is root-missing (any other refusal of a
-//     root is internal), and the worker makes neither (fieldd makes both).
+//     root is internal), and the worker makes neither (fieldd makes both);
+//   · MA-D16 (2026-11-24), the LOCAL view: written as MADE_APP_VIEW.LOCAL_FILE under the head the
+//     contracts' local vector pins (the page's policy in its head), the served view beside it
+//     untouched; a policy that head cannot compose refused, with nothing written.
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -38,6 +41,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import {
   MADE_APP_VIEW,
   MADE_APP_VIEW_TAIL,
+  type MadeAppNetworkPolicy,
   type MadeAppViewTheme,
   madeAppViewHead,
 } from "@vibefield/contracts";
@@ -63,6 +67,17 @@ function fixture(name: string): unknown {
 }
 
 const VECTOR = fixture("made-app-view.vector.json") as ViewVector;
+/** MA-D16 — the local view's heads, as the contracts pin them. */
+const LOCAL_VECTOR = fixture("made-app-local-view.vector.json") as {
+  views: Array<{
+    case: string;
+    theme: MadeAppViewTheme;
+    policy: MadeAppNetworkPolicy;
+    csp: string;
+    head: string;
+  }>;
+  refused: Array<{ case: string; theme: MadeAppViewTheme; policy: unknown; refused: string }>;
+};
 const APP = "app-01";
 const DIGEST = "a".repeat(64);
 const VIEW = MADE_APP_VIEW.FILE;
@@ -543,4 +558,98 @@ describe("a made app's view (DR-1b), built by the real files worker", () => {
       `MA-3f: a ${MADE_APP_VIEW.PAGE_MAX_BYTES}-byte page: ${performance.now() - started} ms`,
     );
   }, 60_000);
+});
+
+describe("a made app's LOCAL view (MA-D16, 2026-11-24), built by the real files worker", () => {
+  const LOCAL = MADE_APP_VIEW.LOCAL_FILE;
+  const local = (
+    supervisor: FilesHostSupervisor,
+    source: string,
+    folder: string,
+    theme: MadeAppViewTheme,
+    policy: unknown,
+  ): Promise<{ bytes: number }> =>
+    supervisor.request("buildMadeView", {
+      source,
+      folder,
+      theme,
+      blake3: digestOf(source),
+      local: { policy: policy as MadeAppNetworkPolicy },
+    });
+
+  it("writes the local file under the head the contracts pin, 0600, and leaves the served view", async () => {
+    const { roots, source, folder } = layout();
+    const supervisor = await ready(roots);
+    // the served view first, as an app opened while linked leaves it
+    await build(supervisor, source, folder, VECTOR.embed.theme);
+    const served = readFileSync(join(folder, VIEW));
+    for (const row of LOCAL_VECTOR.views) {
+      const answer = await local(supervisor, source, folder, row.theme, row.policy);
+      const expected = viewOf(row.head, readFileSync(source));
+      const written = readFileSync(join(folder, LOCAL));
+      expect(written.equals(expected), row.case).toBe(true);
+      expect(answer).toEqual({ bytes: expected.length });
+      // the page's policy stands in the HEAD, before the page's own bytes
+      const text = written.toString("utf8");
+      const meta = text.indexOf(`<meta http-equiv="Content-Security-Policy" content="${row.csp}">`);
+      expect(meta, row.case).toBeGreaterThan(0);
+      expect(meta, row.case).toBeLessThan(text.indexOf("</head><body>"));
+    }
+    // two views in the folder, no temp, the served one byte for byte as it was
+    expect(readdirSync(folder).sort()).toEqual([VIEW, LOCAL].sort());
+    expect(readFileSync(join(folder, VIEW)).equals(served)).toBe(true);
+    const mode = statSync(join(folder, LOCAL)).mode & 0o777;
+    if (process.platform !== "win32") expect(mode).toBe(0o600);
+    expect(readdirSync(dirname(source))).toEqual(["index.html"]);
+  });
+
+  it("builds the local view alone in a folder with no served view, and makes none", async () => {
+    const { roots, source, folder } = layout();
+    const supervisor = await ready(roots);
+    const row = LOCAL_VECTOR.views[0];
+    if (row === undefined) throw new Error("made-app-local-view.vector.json has no views row");
+    await local(supervisor, source, folder, row.theme, row.policy);
+    expect(readdirSync(folder)).toEqual([LOCAL]);
+    expect(readdirSync(dirname(folder))).toEqual([DIGEST]);
+  });
+
+  it("refuses a policy or a theme its head cannot compose before it touches anything", async () => {
+    const { roots, source, folder } = layout();
+    const supervisor = await ready(roots);
+    for (const row of LOCAL_VECTOR.refused) {
+      const refused = await refusal(local(supervisor, source, folder, row.theme, row.policy));
+      expect(refused.error.code, row.case).toBe("invalid");
+      expect(refused.message, row.case).toContain(row.refused);
+    }
+    // a `local` that names no policy is a malformed ask too
+    const bare = await refusal(
+      supervisor.request("buildMadeView", {
+        source,
+        folder,
+        theme: VECTOR.embed.theme,
+        blake3: digestOf(source),
+        local: {} as { policy: MadeAppNetworkPolicy },
+      }),
+    );
+    expect(bare.error.code).toBe("invalid");
+    expect(existsSync(folder)).toBe(false);
+  });
+
+  it("holds the local view to the page's digest, as the served view is held", async () => {
+    const { roots, source, folder } = layout();
+    const supervisor = await ready(roots);
+    const row = LOCAL_VECTOR.views[0];
+    if (row === undefined) throw new Error("made-app-local-view.vector.json has no views row");
+    const refused = await refusal(
+      supervisor.request("buildMadeView", {
+        source,
+        folder,
+        theme: row.theme,
+        blake3: "b".repeat(64),
+        local: { policy: row.policy },
+      }),
+    );
+    expect(refused.error.code).toBe("mismatch");
+    expect(existsSync(join(folder, LOCAL))).toBe(false);
+  });
 });

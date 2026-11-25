@@ -18,9 +18,17 @@ import type { MadeAppsClient } from "./made-apps";
 // image transport (the catalog has no tailnet, so its stills are pictures it draws itself, as the
 // hand's plates draw theirs). The markup, the interaction state, the accessibility and the CSS are
 // the product's. Its states: populated, fallback icons, a library still reading, the apps a desktop
-// cannot write out yet (MA-4's witness; since MA-3f, one on an older build), and empty.
+// cannot write out yet (MA-4's witness; since MA-3f, one on an older build), empty, and a Mac that
+// is not connected (MA-D16, 2026-11-24): the connect row, this Mac's own word on its tiles, the
+// three kinds of app by what a press opens, and the periods past yesterday.
 
-export type MadeAppsPreviewState = "populated" | "fallback" | "reading" | "unbuilt" | "empty";
+export type MadeAppsPreviewState =
+  | "populated"
+  | "fallback"
+  | "reading"
+  | "unbuilt"
+  | "empty"
+  | "unconnected";
 
 export const MADE_APPS_PREVIEW_STATES: readonly MadeAppsPreviewState[] = [
   "populated",
@@ -28,6 +36,7 @@ export const MADE_APPS_PREVIEW_STATES: readonly MadeAppsPreviewState[] = [
   "reading",
   "unbuilt",
   "empty",
+  "unconnected",
 ];
 
 /** The plates' clock: 2026-11-05 at 15:00 on the viewer's own clock, since the days are local
@@ -138,6 +147,16 @@ const MINI_SOURCE: IndexAppsSource = {
   libraryReady: true,
 };
 const SOURCES: readonly IndexAppsSource[] = [STUDIO_SOURCE, MINI_SOURCE];
+/** This Mac with no connection: the field's one desktop, named as the OS names it, serving no
+ * previews (MA-D16). */
+const UNCONNECTED_SOURCE: IndexAppsSource = {
+  device: STUDIO,
+  name: "Studios-MacBook-Pro.local",
+  self: true,
+  state: "live",
+  rows: 6,
+  libraryReady: true,
+};
 
 const HOSTED = "https://claude.ai/public/artifacts/7d0c2f3a-1b4e-4f6a-9c8d-2e5b7a9c1d3f";
 
@@ -194,6 +213,37 @@ function fixtureAnswer(state: MadeAppsPreviewState): IndexAppsResult {
       };
     case "empty":
       return { rows: [], sources: [{ ...STUDIO_SOURCE, rows: 0 }] };
+    case "unconnected":
+      // one desktop, no previews and no serve: a page kept here, a page and a link, a link alone,
+      // and neither, across the periods a shelf past yesterday shows
+      return {
+        rows: [
+          fixtureApp(10, { title: "Release notes, 0.9", at: hoursAgo(2), project: 0 }),
+          fixtureApp(11, {
+            title: "Bundle size",
+            at: hoursAgo(26),
+            project: 0,
+            hostedUrl: HOSTED,
+          }),
+          fixtureApp(12, {
+            title: "Palette study",
+            at: hoursAgo(4 * 24),
+            availability: "missing",
+            openable: false,
+            hostedUrl: `${HOSTED}-palette`,
+          }),
+          fixtureApp(13, {
+            title: "Search ranking",
+            at: hoursAgo(5 * 24),
+            project: 1,
+            availability: "missing",
+            openable: false,
+          }),
+          fixtureApp(14, { title: "Onboarding copy", at: hoursAgo(12 * 24), project: 1 }),
+          fixtureApp(15, { title: "Launch checklist", at: hoursAgo(45 * 24), project: 0 }),
+        ],
+        sources: [{ ...UNCONNECTED_SOURCE }],
+      };
   }
 }
 
@@ -217,6 +267,9 @@ export function madeAppsPreviewClient(state: MadeAppsPreviewState): MadeAppsClie
     },
   };
 }
+
+/** A plate's connect and its link tile's press reach nothing: no Settings, no browser. */
+const NO_ACT = (): void => undefined;
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -265,6 +318,7 @@ export function MadeAppsPreview({
       now={MADE_APPS_FIXTURE_NOW}
       locale="en-US"
       previewSrc={(app) => (app.preview === undefined ? undefined : fixtureStill(app))}
+      {...(state === "unconnected" ? { connect: NO_ACT, openLink: NO_ACT } : {})}
     />
   );
 }

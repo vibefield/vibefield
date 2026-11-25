@@ -1,0 +1,76 @@
+{
+  "//": "MA-D16 (2026-11-24) — a made app's LOCAL view, the file a desktop with no linked login hands the browser (MADE_APP_VIEW.LOCAL_FILE): `madeAppLocalViewHead(theme, policy)`, then the page's bytes, then MADE_APP_VIEW_TAIL. No response header reaches a page opened as a file, so the head carries the app's policy in a `<meta http-equiv>` before anything it governs, and the serve's referrer policy beside it. Each `views` row composes exactly `head`, and its `csp` is `madeAppServeHeaders`' own value for the same policy less `frame-ancestors`, which a meta cannot carry. Every `refused` row composes nothing. The expected strings were written by hand from the head's text, not by the code.",
+  "views": [
+    {
+      "case": "no host: the page reaches nothing but itself",
+      "theme": {
+        "colorScheme": "light",
+        "variables": []
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": {}
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "head": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'\"><meta name=\"referrer\" content=\"no-referrer\"><style>:root{color-scheme:light}</style></head><body>"
+    },
+    {
+      "case": "a captured page's hosts, each in its own directive, and the theme's variables",
+      "theme": {
+        "colorScheme": "light",
+        "variables": [["--surface", "#fff"], ["--ink", "#1d1d1b"]]
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "script": ["unpkg.com", "cdn.jsdelivr.net"],
+          "connect": ["api.example.com"]
+        }
+      },
+      "csp": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://api.example.com wss://api.example.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'",
+      "head": "<!doctype html><html><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><meta http-equiv=\"Content-Security-Policy\" content=\"default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; media-src 'self' data: blob:; connect-src 'self' https://api.example.com wss://api.example.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'\"><meta name=\"referrer\" content=\"no-referrer\"><style>:root{color-scheme:light;--surface:#fff;--ink:#1d1d1b}</style></head><body>"
+    }
+  ],
+  "refused": [
+    {
+      "case": "a theme the view cannot carry",
+      "theme": {
+        "colorScheme": "light",
+        "variables": [["--x", "url(https://evil.example/x.png)"]]
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": {}
+      },
+      "refused": "theme-unreadable"
+    },
+    {
+      "case": "hosts keyed by a directive's CSP name: an environment's, never a policy's",
+      "theme": {
+        "colorScheme": "light",
+        "variables": []
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "script-src": ["cdn.jsdelivr.net"]
+        }
+      },
+      "refused": "policy-unreadable"
+    },
+    {
+      "case": "a host that is no public name",
+      "theme": {
+        "colorScheme": "light",
+        "variables": []
+      },
+      "policy": {
+        "source": "captured",
+        "hosts": {
+          "connect": ["localhost"]
+        }
+      },
+      "refused": "policy-unreadable"
+    }
+  ]
+}

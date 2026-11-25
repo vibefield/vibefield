@@ -735,9 +735,12 @@
     inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
+/* MA-D16 (2026-11-24; §8 "Artifacts — the Artifacts shelf's contents", as amended that day): the
+   circle's sheet holds Apps alone, so it opens to 600 where the pill's keeps 420 (the pill's turns
+   between Fields and Apps in place and never regrows). Its width stays the Hub's. */
 .vf-head-sheet[data-open="true"] {
   width: min(56%, 34rem);
-  height: min(420px, calc(100% - 88px));
+  height: min(600px, calc(100% - 88px));
   border-radius: 22px 22px 40px 40px;
   background: var(--vf-chrome-surface);
   backdrop-filter: blur(64px);
@@ -907,7 +910,7 @@
   .vf-head-sheet[data-bar][data-open="false"] {
     top: 8px;
     width: min(56%, 34rem);
-    height: min(420px, calc(100% - 88px));
+    height: min(600px, calc(100% - 88px));
     border-radius: 22px 22px 40px 40px;
     background: var(--vf-chrome-surface);
     backdrop-filter: blur(64px);

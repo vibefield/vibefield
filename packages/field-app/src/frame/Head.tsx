@@ -21,6 +21,7 @@ import { emitZoomKeyMarker, emitZoomMenuMarker } from "../development-console";
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { useReducedMotion } from "../field/desk/bar/bar-motion";
+import { requestShellPresentation } from "../field/shell-presentation";
 import { relativeTime } from "../format/relative-time";
 import { SurfaceErrorBoundary } from "../hud/PluginSurfaceSlot";
 import { getRendererLogger } from "../logging";
@@ -36,7 +37,7 @@ import {
   SHEET_FOLD_MS,
   useLingering,
 } from "./HeadView";
-import { useArtifactsDot, useHeadAppsClient } from "./head-artifacts";
+import { useArtifactsDot, useHeadAppsClient, useHeadOffersConnect } from "./head-artifacts";
 import type { HeadCanvas } from "./head-canvas";
 import { useFindStep } from "./Peek";
 import type { ViewKeys } from "./views";
@@ -201,6 +202,8 @@ export function Head({
   // The shelf's two groups, Live and From your agents: asked over the window's own client, which
   // the head's feed hands in; none where no daemon is asked (the catalog, the tests).
   const appsClient = useHeadAppsClient();
+  // MA-D16: while this Mac is not connected the made group offers the link (§8 "Asking again", a row)
+  const offersConnect = useHeadOffersConnect();
   const artifactsHeld = useLingering(shelf === "artifacts", SHEET_FOLD_MS);
   // PL-D2 with GV-D11 — while Godview's terminals are maximized the package stands in their
   // title bar, and the covered sheet is shut into that control: read as the circle reads it,
@@ -486,6 +489,7 @@ export function Head({
   const current = syncStatuses.find((s) => s.docId === state.doc?.docId);
   const currentId = state.doc?.docId ?? null;
 
+  const openConnect = useCallback(() => requestShellPresentation("open-connect"), []);
   // The Apps shelf's contents while it shows, and through its fold (DESIGN.md §8 "Artifacts —
   // the Artifacts shelf's contents", as amended 2026-11-09): Live, then From your agents, so each
   // asks only while the shelf shows. A Live that throws is held to its own group.
@@ -498,7 +502,9 @@ export function Head({
               <LiveApps client={appsClient} />
             </SurfaceErrorBoundary>
           ),
-          made: <MadeApps client={appsClient} />,
+          made: (
+            <MadeApps client={appsClient} {...(offersConnect ? { connect: openConnect } : {})} />
+          ),
         };
 
   return (

@@ -1047,7 +1047,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
     // the chrome playground's, the workbench's, and the view frame's stage (FR-1)
     expect(container?.querySelectorAll('[data-ground-renderer="unavailable"]')).toHaveLength(3);
-    expect(container?.textContent).toContain("No apps yet");
+    expect(container?.textContent).toContain("Publish a proxy or a folder");
 
     await act(async () => {
       button("populated").click();

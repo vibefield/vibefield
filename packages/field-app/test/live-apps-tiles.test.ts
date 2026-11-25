@@ -157,4 +157,11 @@ describe("the Artifact Hub on the Artifacts shelf (HN-8, PL-D3)", () => {
     expect(CSS).not.toContain(".vf-artifact-close");
     expect(CSS.match(/@container/g)).toHaveLength(1);
   });
+
+  it("MA-D16: says an empty catalog in one row 32 high, its line and Publish… at the two ends", () => {
+    const row = base(".vf-artifact-empty-row");
+    expect(row).toContain("min-height: 32px;");
+    expect(row).toContain("justify-content: space-between;");
+    expect(row).toContain("color: var(--vf-text-secondary);");
+  });
 });

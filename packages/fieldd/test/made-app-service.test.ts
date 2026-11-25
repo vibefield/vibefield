@@ -27,6 +27,7 @@ import {
   MADE_APP_PORT_DOMAIN,
   MADE_APP_PREVIEWS_PORT_DOMAIN,
   MADE_APP_REGISTRY_FILE,
+  MADE_APP_SERVE_POLICY,
   MADE_APP_VIEW,
   MadeAppRegistry,
   type MadeAppServeRecord,
@@ -330,7 +331,8 @@ class FakeExporter implements MadeAppExporter {
   }
 }
 
-/** The files worker's view: it records what it was asked and writes the served folder. */
+/** The files worker's view: it records what it was asked and writes the served folder. Asked for the LOCAL view
+ * (MA-D16) it writes that file instead and leaves the served one, as the worker does. */
 class FakeView implements MadeAppViewBuilder {
   calls: BuildMadeViewArgs[] = [];
   failWith: unknown = null;
@@ -339,7 +341,14 @@ class FakeView implements MadeAppViewBuilder {
     this.calls.push(structuredClone(args));
     if (this.failWith !== null) throw this.failWith;
     mkdirSync(args.folder, { recursive: true });
-    writeFileSync(join(args.folder, MADE_APP_VIEW.FILE), "<!doctype html><title>view</title>");
+    if (args.local === undefined) {
+      writeFileSync(join(args.folder, MADE_APP_VIEW.FILE), "<!doctype html><title>view</title>");
+    } else {
+      writeFileSync(
+        join(args.folder, MADE_APP_VIEW.LOCAL_FILE),
+        "<!doctype html><title>local</title>",
+      );
+    }
     return { bytes: 34 };
   }
 }
@@ -2616,5 +2625,290 @@ describe("item 588: a made app's preview is drawn when it is published", () => {
     await svc.settled();
     expect(p.capture.calls, "drawn at the next open").toHaveLength(2);
     expect(recordOf(p, row.appId)?.preview?.capturedAt).toBe(T0 + 601_000);
+  });
+});
+
+describe("MA-D16 (2026-11-24): a desktop with no linked login opens an app as a file", () => {
+  const SERVED = MADE_APP_VIEW.FILE;
+  const LOCAL = MADE_APP_VIEW.LOCAL_FILE;
+
+  /** What a local open came to, as `opened` shows an open's. */
+  async function openedLocal(
+    svc: MadeAppService,
+    appId: string,
+    presentationId?: string,
+  ): Promise<unknown> {
+    try {
+      return {
+        resolved: await svc.openLocal(
+          presentationId === undefined ? { appId } : { appId, presentationId },
+        ),
+      };
+    } catch (error) {
+      if (error instanceof RpcCallError) {
+        return { kind: error.kind, retryable: error.retryable, details: error.details };
+      }
+      return { threw: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  const names = (folder: string) => (existsSync(folder) ? readdirSync(folder).sort() : []);
+
+  it("builds the local view under the page's own policy, and makes no record, reservation or serve", async () => {
+    const p = parts({ login: null });
+    const row = p.rows.add(appRow(1));
+    const svc = made(p);
+    await svc.start();
+    const declaresAtStart = p.bridge.declared.length;
+    // the served road refuses here: no serve can carry the app
+    expect(await opened(svc, row.appId)).toEqual(refused("not-linked", true));
+    expect(p.exporter.calls, "the refusal exported nothing").toEqual([]);
+
+    expect(await openedLocal(svc, row.appId)).toEqual({
+      resolved: { appId: row.appId, digest: digestOf(row), reach: HOSTS },
+    });
+    // rosetta placed the page where every open has it placed
+    expect(p.exporter.calls).toEqual([
+      {
+        sessionId: row.sessionId,
+        publicationId: row.presentationId,
+        into: exportFolder(p, row),
+      },
+    ]);
+    // ONE view was built: the local one, from that page, held to its digest, under the policy the environment names
+    expect(p.view.calls).toHaveLength(1);
+    expect(p.view.calls[0]).toMatchObject({
+      source: join(exportFolder(p, row), SERVED),
+      folder: madeFolder(p, row),
+      blake3: digestOf(row),
+      theme: { colorScheme: "light", variables: [["--color-text-primary", "#111"]] },
+      local: { policy: { source: "captured", hosts: { script: HOSTS } } },
+    });
+    expect(names(madeFolder(p, row)), "the local view alone: no served view was written").toEqual([
+      LOCAL,
+    ]);
+    // nothing durable and nothing on the floor: no record, no port held, no declare, no removal
+    expect(readRegistry(p)?.apps ?? []).toEqual([]);
+    expect([...svc.reservedPorts()]).toEqual([]);
+    expect(svc.health()).toMatchObject({ apps: 0, open: 0, retiring: 0 });
+    expect(p.bridge.declared, "the local open declared nothing").toHaveLength(declaresAtStart);
+    expect(svc.desiredServes()).toEqual([]);
+    expect(p.bridge.removeAttempts).toEqual([]);
+    await svc.settled();
+    expect(p.capture.calls, "no serve, so nothing is drawn").toEqual([]);
+  });
+
+  it("refuses as an open does, in the same order, and never `not-linked`", async () => {
+    const p = parts({ login: null });
+    const svc = made(p);
+    await svc.start();
+    // no row while the table does not speak: the library is still reading; once it speaks: no such app
+    p.rows.walked = false;
+    expect(await openedLocal(svc, hex("nowhere"))).toEqual(refused("library-reading", true));
+    p.rows.walked = true;
+    expect(await openedLocal(svc, hex("nowhere"))).toMatchObject({ kind: "NOT_FOUND" });
+    // the page's availability, before anything is exported
+    const cases: Array<[string, string]> = [
+      ["not_captured", "not-kept"],
+      ["missing", "not-kept"],
+      ["changed_during_read", "not-kept"],
+      ["too_large", "too-large"],
+      ["unsupported", "unsupported"],
+    ];
+    for (const [index, [availability, state]] of cases.entries()) {
+      const row = p.rows.add(appRow(10 + index, { availability }));
+      expect(await openedLocal(svc, row.appId), availability).toEqual(refused(state, false));
+    }
+    // a digest that is not rosetta's grammar names no folder
+    const odd = p.rows.add(appRow(30, { digest: undefined }));
+    expect(await openedLocal(svc, odd.appId)).toEqual(refused("export-failed", true));
+    expect(p.exporter.calls, "no refusal exported anything").toEqual([]);
+    expect(p.view.calls).toEqual([]);
+    // rosetta's own refusal passes through, named for this desktop
+    const row = p.rows.add(appRow(31));
+    p.exporter.failWith = madeAppRefusal("not-kept");
+    expect(await openedLocal(svc, row.appId)).toEqual(refused("not-kept", false));
+    expect(existsSync(exportFolder(p, row))).toBe(false);
+  });
+
+  it("is the same act twice: each open places the page and rebuilds the file, and leaves one file", async () => {
+    const p = parts({ login: null });
+    const row = p.rows.add(appRow(2));
+    const svc = made(p);
+    await svc.start();
+    const first = await openedLocal(svc, row.appId);
+    const second = await openedLocal(svc, row.appId);
+    expect(second).toEqual(first);
+    expect(p.exporter.calls.map((call) => call.into)).toEqual([
+      exportFolder(p, row),
+      exportFolder(p, row),
+    ]);
+    expect(p.view.calls.map((call) => call.local !== undefined)).toEqual([true, true]);
+    expect(names(madeFolder(p, row))).toEqual([LOCAL]);
+    expect(names(join(p.dataDir, "artifacts", "made", row.appId))).toEqual([digestOf(row)]);
+    expect(readRegistry(p)?.apps ?? []).toEqual([]);
+  });
+
+  it("opens the version it names, and the newest when it names none", async () => {
+    const p = parts({ login: null });
+    const row = p.rows.add(appRow(3, { versions: 2 }));
+    const older = { presentationId: hex("presentation-3-0"), digest: hex("page-3-0") };
+    p.rows.versions.set(`${row.appId}:${older.presentationId}`, {
+      presentationId: older.presentationId,
+      sessionId: "ses-3-old",
+      digest: older.digest,
+      availability: "captured",
+    });
+    const svc = made(p);
+    await svc.start();
+    expect(await openedLocal(svc, row.appId, older.presentationId)).toEqual({
+      resolved: { appId: row.appId, digest: older.digest, reach: HOSTS },
+    });
+    expect(p.exporter.calls[0]).toEqual({
+      sessionId: "ses-3-old",
+      publicationId: older.presentationId,
+      into: exportFolder(p, row, older.digest),
+    });
+    expect(names(madeFolder(p, row, older.digest))).toEqual([LOCAL]);
+    // a version that is not this app's is no such app
+    expect(await openedLocal(svc, row.appId, hex("another-app's"))).toMatchObject({
+      kind: "NOT_FOUND",
+    });
+  });
+
+  it("leaves a recorded app's served view and record as they were, and stands its file beside it", async () => {
+    const p = parts();
+    const row = p.rows.add(appRow(4));
+    const svc = made(p);
+    await svc.start();
+    expect(await opened(svc, row.appId)).toMatchObject({ resolved: { state: "serving" } });
+    await svc.settled();
+    const recorded = recordOf(p, row.appId);
+    expect(recorded?.exportedDigest).toBe(digestOf(row));
+    // the link goes: the serve retires, the record and its folders stay
+    p.login = null;
+    await svc.relink();
+    expect(svc.desiredServes()).toEqual([]);
+    const afterUnlink = recordOf(p, row.appId);
+    const servedBytes = readFileSync(join(madeFolder(p, row), SERVED));
+
+    expect(await openedLocal(svc, row.appId)).toEqual({
+      resolved: { appId: row.appId, digest: digestOf(row), reach: HOSTS },
+    });
+    expect(names(madeFolder(p, row))).toEqual([SERVED, LOCAL].sort());
+    expect(readFileSync(join(madeFolder(p, row), SERVED)).equals(servedBytes)).toBe(true);
+    expect(recordOf(p, row.appId), "the local open wrote no record").toEqual(afterUnlink);
+    expect(svc.desiredServes()).toEqual([]);
+  });
+
+  it("a failure never removes the folders a serve record's export names; with no record, what it made goes", async () => {
+    const p = parts();
+    const kept = p.rows.add(appRow(5));
+    const svc = made(p);
+    await svc.start();
+    await svc.open({ appId: kept.appId });
+    await svc.settled();
+    p.login = null;
+    await svc.relink();
+
+    // the view cannot be built: the recorded app keeps its served view and the page it was built from
+    p.view.failWith = new Error("the worker is down");
+    expect(await openedLocal(svc, kept.appId)).toEqual(refused("export-failed", true));
+    expect(names(madeFolder(p, kept))).toEqual([SERVED]);
+    expect(names(exportFolder(p, kept))).toEqual(["index.html"]);
+    // rosetta's export fails: the same
+    p.view.failWith = null;
+    p.exporter.failWith = new Error("rosettad is down");
+    expect(await openedLocal(svc, kept.appId)).toEqual(refused("export-failed", true));
+    expect(names(madeFolder(p, kept))).toEqual([SERVED]);
+    expect(names(exportFolder(p, kept))).toEqual(["index.html"]);
+    expect(recordOf(p, kept.appId)?.exportedDigest).toBe(digestOf(kept));
+
+    // an app with no record: a failed local open leaves nothing behind
+    p.exporter.failWith = null;
+    p.view.failWith = new Error("the worker is down");
+    const fresh = p.rows.add(appRow(6));
+    expect(await openedLocal(svc, fresh.appId)).toEqual(refused("export-failed", true));
+    expect(existsSync(madeFolder(p, fresh))).toBe(false);
+    expect(existsSync(exportFolder(p, fresh))).toBe(false);
+    // and the next one heals
+    p.view.failWith = null;
+    expect(await openedLocal(svc, fresh.appId)).toMatchObject({
+      resolved: { digest: digestOf(fresh) },
+    });
+    expect(names(madeFolder(p, fresh))).toEqual([LOCAL]);
+  });
+
+  it("a page that names more hosts than a policy holds opens under the bound, as it is served", async () => {
+    const p = parts({ login: null });
+    const row = p.rows.add(appRow(7));
+    const svc = made(p);
+    await svc.start();
+    const { UNION_HOSTS } = MADE_APP_SERVE_POLICY;
+    p.exporter.hosts = Array.from({ length: UNION_HOSTS + 1 }, (_, i) => `h${i}.example.com`);
+    const answer = await openedLocal(svc, row.appId);
+    // the environment's reader bounds the union, so a page that names too many hosts opens under the bound
+    expect(answer).toMatchObject({ resolved: { digest: digestOf(row) } });
+    const reach = (answer as { resolved: { reach: string[] } }).resolved.reach;
+    expect(reach.length).toBeLessThanOrEqual(UNION_HOSTS);
+    expect(p.view.calls.at(-1)?.local?.policy.hosts.script).toHaveLength(reach.length);
+  });
+
+  it("removes the app's other digest folders once it has opened, but the one a record names", async () => {
+    // no record: each new page replaces the last one's folders, in both roots
+    const p = parts({ login: null });
+    const first = p.rows.add(appRow(8));
+    const svc = made(p);
+    await svc.start();
+    await svc.openLocal({ appId: first.appId });
+    const second = p.rows.add(
+      appRow(8, { presentationId: hex("presentation-8-2"), digest: hex("page-8-2"), versions: 2 }),
+    );
+    await svc.openLocal({ appId: second.appId });
+    const madeRoot = join(p.dataDir, "artifacts", "made", second.appId);
+    const importRoot = join(p.dataDir, "drive", "import", second.appId);
+    expect(names(madeRoot)).toEqual([digestOf(second)]);
+    expect(names(importRoot)).toEqual([digestOf(second)]);
+
+    // a record's page stays: the app opened while linked at one page, then locally at a newer one
+    const q = parts();
+    const served = q.rows.add(appRow(9));
+    const other = made(q);
+    await other.start();
+    await other.open({ appId: served.appId });
+    await other.settled();
+    q.login = null;
+    await other.relink();
+    const newer = q.rows.add(
+      appRow(9, { presentationId: hex("presentation-9-2"), digest: hex("page-9-2"), versions: 2 }),
+    );
+    await other.openLocal({ appId: newer.appId });
+    const keptRoot = join(q.dataDir, "artifacts", "made", newer.appId);
+    expect(names(keptRoot)).toEqual([digestOf(served), digestOf(newer)].sort());
+    expect(names(join(keptRoot, digestOf(served)))).toEqual([SERVED]);
+    expect(names(join(keptRoot, digestOf(newer)))).toEqual([LOCAL]);
+    expect(recordOf(q, newer.appId)?.exportedDigest, "the record still names its own page").toBe(
+      digestOf(served),
+    );
+    // a third page: the second's folders go, the record's stay
+    const newest = q.rows.add(
+      appRow(9, { presentationId: hex("presentation-9-3"), digest: hex("page-9-3"), versions: 3 }),
+    );
+    await other.openLocal({ appId: newest.appId });
+    expect(names(keptRoot)).toEqual([digestOf(served), digestOf(newest)].sort());
+  });
+
+  it("runs on the mutation chain and refuses once the service stops", async () => {
+    const p = parts({ login: null });
+    const row = p.rows.add(appRow(11));
+    const svc = made(p);
+    await svc.start();
+    // two at once land one after the other: two exports, one file, never a half-built folder
+    const both = await Promise.all([openedLocal(svc, row.appId), openedLocal(svc, row.appId)]);
+    expect(both[0]).toEqual(both[1]);
+    expect(p.exporter.calls).toHaveLength(2);
+    expect(names(madeFolder(p, row))).toEqual([LOCAL]);
+    await svc.dispose();
+    expect(await openedLocal(svc, row.appId)).toMatchObject({ kind: "UNAVAILABLE" });
   });
 });

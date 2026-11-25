@@ -1,5 +1,6 @@
 import type { IndexApp } from "@vibefield/contracts";
 import { projectInk, StatusDot } from "@vibefield/design-kit";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from "react";
 import {
   MADE_APP_OPENING_LATE_MS,
@@ -20,6 +21,11 @@ import {
 // (James, 2026-11-13).
 // The face is pressable in every state, so a tile that cannot open says why (the group's notice)
 // rather than lying inert; it waits only while an act of its own is under way.
+// MA-D16 (2026-11-24; §8 as amended that day): the third line says WHERE A PRESS GOES. A page: the
+// status dot, its desktop's name and the state's word, the name giving way with an ellipsis and the
+// word always whole (the word was cut off behind a long name on every tile that had one). A hosted
+// link with no page: §13's `outward` and the link's host, no dot. Why a tile has no preview is the
+// first line of its menu, and its own day is in its tooltip, since the group is laid out by when.
 
 export interface MadeAppTileProps {
   readonly app: IndexApp;
@@ -32,6 +38,10 @@ export interface MadeAppTileProps {
   readonly muted: boolean;
   /** the preview image's address (`madeAppImageUrl`), absent before a preview */
   readonly imageUrl: string | undefined;
+  /** its own day ("Today", "Thu, Nov 19"), for the tooltip; null with no time */
+  readonly day: string | null;
+  /** why it has no preview (`madeAppPreviewNote`), for the menu's first line; null with nothing to say */
+  readonly previewNote: string | null;
   /** kept, by the door's row or this window's last mark */
   readonly kept: boolean;
   /** an act of the group is under way: the tile's acts wait */
@@ -48,6 +58,8 @@ export function MadeAppTile({
   state,
   muted,
   imageUrl,
+  day,
+  previewNote,
   kept,
   busy,
   onOpen,
@@ -56,6 +68,12 @@ export function MadeAppTile({
 }: MadeAppTileProps): ReactElement {
   const menu = useRef<HTMLDetailsElement>(null);
   const host = madeAppHost(app.hostedUrl);
+  const says =
+    state.link !== undefined
+      ? `Open ${app.title} in ${state.link.host}`
+      : state.opens
+        ? `Open ${app.title}`
+        : (state.why?.title ?? app.title);
   const close = (): void => {
     if (menu.current !== null) menu.current.open = false;
   };
@@ -69,24 +87,34 @@ export function MadeAppTile({
         type="button"
         className="vf-apps-tile__open"
         disabled={busy}
-        aria-disabled={state.opens ? undefined : "true"}
+        aria-disabled={state.opens || state.link !== undefined ? undefined : "true"}
         onClick={onOpen}
-        title={state.opens ? `Open ${app.title}` : (state.why?.title ?? app.title)}
+        title={day === null ? says : `${says} · ${day}`}
       >
         <MadeAppWell app={app} imageUrl={imageUrl} />
         <span className="vf-apps-tile__facts">
           <strong>{app.title}</strong>
           <small>{facts}</small>
-          <span className="vf-apps-status">
-            <StatusDot tone={state.tone} />
-            {state.opening === true ? (
-              <MadeAppOpening desktop={desktop} />
-            ) : state.word === null ? (
-              desktop
-            ) : (
-              `${desktop} · ${state.word}`
-            )}
-          </span>
+          {state.link !== undefined ? (
+            <span className="vf-apps-status" data-link="true">
+              <FieldGlyph name="outward" size={11} />
+              <span className="vf-apps-status__name">{state.link.host}</span>
+            </span>
+          ) : (
+            <span className="vf-apps-status">
+              <StatusDot tone={state.tone} />
+              {state.opening === true ? (
+                <MadeAppOpening desktop={desktop} />
+              ) : (
+                <>
+                  <span className="vf-apps-status__name">{desktop}</span>
+                  {state.word !== null && (
+                    <span className="vf-apps-status__word"> · {state.word}</span>
+                  )}
+                </>
+              )}
+            </span>
+          )}
         </span>
       </button>
       <details className="vf-apps-menu" ref={menu}>
@@ -94,6 +122,7 @@ export function MadeAppTile({
           •••
         </summary>
         <div>
+          {previewNote !== null && <p className="vf-apps-menu__note">{previewNote}</p>}
           <button type="button" onClick={shut(onKeep)} disabled={busy}>
             {kept ? "Stop keeping" : "Keep"}
           </button>
@@ -120,7 +149,7 @@ function MadeAppOpening({ desktop }: { readonly desktop: string }): ReactElement
     const timer = window.setTimeout(() => setLate(true), MADE_APP_OPENING_LATE_MS);
     return () => window.clearTimeout(timer);
   }, []);
-  if (!late) return <>{desktop}</>;
+  if (!late) return <span className="vf-apps-status__name">{desktop}</span>;
   return <span className="vf-apps-status__late">Opening on {desktop}…</span>;
 }
 

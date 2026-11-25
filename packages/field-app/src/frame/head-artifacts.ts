@@ -1,6 +1,7 @@
 import { ArtifactView } from "@vibefield/contracts";
 import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import { useEffect, useSyncExternalStore } from "react";
+import { useOffersConnect } from "../account/use-link-door";
 import { getRendererLogger } from "../logging";
 import type { MadeAppsClient } from "./apps/made-apps";
 
@@ -107,6 +108,35 @@ export function useHeadAppsClient(): MadeAppsClient | null {
   return useSyncExternalStore(subscribeHeadAppsClient, readHeadAppsClient);
 }
 
+// Whether this Mac is in the ordinary unconnected state (MA-D16, 2026-11-24; DESIGN.md §8 "Asking
+// again", a row): the made group's connect row stands while it is, and its own apps are named by
+// this desktop's word. A module store as the client's: FED by the same feed, inside FielddProvider
+// (the link's subscription lives there), READ by the head's controller. False where no daemon is
+// asked, so the catalog and the tests draw no row unless they hand one.
+let offersConnect = false;
+const connectListeners = new Set<() => void>();
+
+/** Test seam + boot reset as well — the feed owns it in the running app. */
+export function setHeadOffersConnect(offers: boolean): void {
+  if (offers === offersConnect) return;
+  offersConnect = offers;
+  for (const fn of connectListeners) fn();
+}
+
+function subscribeHeadOffersConnect(fn: () => void): () => void {
+  connectListeners.add(fn);
+  return () => connectListeners.delete(fn);
+}
+
+function readHeadOffersConnect(): boolean {
+  return offersConnect;
+}
+
+/** Whether the made group offers the connect row (`useOffersConnect`, through the feed). */
+export function useHeadOffersConnect(): boolean {
+  return useSyncExternalStore(subscribeHeadOffersConnect, readHeadOffersConnect);
+}
+
 /** Mount ONCE inside FielddProvider: streams the catalog into the store, and hands the window's
  * client to the shelf's two groups for as long as it is mounted (MA-4c, FL-2). A reconnect
  * replays a fresh snapshot (the client's P5 law), so the dot heals with it. */
@@ -123,6 +153,11 @@ export function useArtifactCatalogFeed(): void {
       if (appsClient === client) setHeadAppsClient(null);
     };
   }, [client]);
+  const offers = useOffersConnect();
+  useEffect(() => {
+    setHeadOffersConnect(offers);
+    return () => setHeadOffersConnect(false);
+  }, [offers]);
 }
 
 /** The package's dot: the words its tooltip and name say while it stands; null while none. */

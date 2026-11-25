@@ -148,6 +148,7 @@ import {
   shellIdentity,
   spawnPersonPathChild,
 } from "./login-shell";
+import { madeAppLocalFile } from "./made-app-local";
 import { hearMainFaults } from "./main-faults";
 import {
   CHAT_NIGHT_FLAG,
@@ -1490,6 +1491,15 @@ async function main(
         revealPath: (path) => {
           if (harnessShellOpens === null) return shell.showItemInFolder(path);
           harnessShellOpens.revealed.push(path);
+        },
+        // MA-D16 (2026-11-24): a made app's local view, found under THIS user's root by its app and its page's digest
+        // (made-app-local.ts), then handed to the default browser through the same gate as every other open: a smoke
+        // records the file's URL and opens nothing
+        openMadeApp: async (params) => {
+          const file = await madeAppLocalFile(userRoot, params);
+          if (!file.ok) throw { kind: file.kind };
+          if (harnessShellOpens === null) return shell.openExternal(file.url);
+          harnessShellOpens.opened.push(file.url);
         },
         captureArtifactPreview: (params, signal) => artifactPreviewCapture.capture(params, signal),
         requestRendererReplacement: ({ rendererParticipant }) => ({

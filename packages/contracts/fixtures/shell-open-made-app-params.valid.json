@@ -1,0 +1,5 @@
+{
+  "//": "MA-D16 (2026-11-24) — fieldd asks its shell to hand a made app's local view to the default browser: the app's id and its page's digest, never a path. Main derives the one file they name under its own user's root.",
+  "appId": "3b1f0c5e9a7d42618e0f6b2c4d8a1e35f7092b6c4d1e8a3f5b7c9d0e2f4a6b81",
+  "digest": "9f2c4e6a8b0d1f3a5c7e9b1d3f5a7c9e0b2d4f6a8c0e1b3d5f7a9c1e3b5d7f90"
+}

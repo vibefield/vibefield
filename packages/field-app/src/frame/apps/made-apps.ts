@@ -31,6 +31,12 @@ import { getRendererLogger } from "../../logging";
 // - OPEN is `artifact.open {appId, device, reveal: true}`: the HOME opens the URL it validated
 //   through its shell's `shell.openLink` (RULINGS L4, C1, C2). The window never holds `shell.open`
 //   and never calls `shell.openExternal`.
+// - WHERE A PRESS GOES (MA-D16, 2026-11-24; DESIGN.md §8 "Artifacts — the Artifacts shelf's
+//   contents", as amended that day): an app is one of three by what it holds. A page kept on its
+//   desktop opens as the app: served, or, on a desktop with no linked login, as a file its own
+//   desktop hands the browser (the home decides, and answers `local`). A hosted link with no page
+//   opens the link (`MadeAppState.link`), where it said "not kept" and opened nothing. Both: the
+//   page, with Open in ‹host› in its menu.
 // - KEEP is `artifact.mark {foldKey, kept}`, ONCE: the person's intent, written at the home and
 //   replicated (RULINGS L8, C5), never a call per holder in `devices`. (Hide was dropped, James
 //   2026-11-13.)
@@ -54,6 +60,13 @@ export interface MadeAppsClient {
 
 /** The group's heading (DESIGN.md §9 "Apps": the desktop's groups are Live and From your agents). */
 export const FROM_YOUR_AGENTS = "From your agents";
+/** The connect row (MA-D16, 2026-11-24; DESIGN.md §8, §9 "Apps": a draft, owed to James): what a Mac
+ * that is not connected is told, once, at the head of the group. */
+export const MADE_APPS_CONNECT = {
+  title: "These apps open on this Mac only.",
+  detail: "Connect your devices to open them on your phone and your other computers.",
+  act: "Connect…",
+} as const;
 /** The search field's words (§9: "The shelf's field says "Search apps""). */
 export const SEARCH_APPS = "Search apps";
 
@@ -107,6 +120,16 @@ export interface MadeAppState {
   readonly why: { readonly title: string; readonly detail: string | null } | null;
   /** this window's open is in flight: the tile says §9's "Opening on ‹desktop›…", late */
   readonly opening?: true;
+  /** MA-D16, the desk's tile alone (`madeAppTileStateOf`): the app holds no page its desktop can
+   * open and has a hosted link, so a press opens the link in the browser, and the tile's third line
+   * says its host */
+  readonly link?: MadeAppLink;
+}
+
+/** An app's hosted link as a press opens it: the https URL as recorded, and its host for the words. */
+export interface MadeAppLink {
+  readonly url: string;
+  readonly host: string;
 }
 
 /** One line the group says of a library still reading, keyed by the desktop it is about. */
@@ -122,8 +145,8 @@ export interface MadeAppVersionsRead {
   readonly canonicalReady: boolean;
 }
 
-/** One day of the group, newest first. */
-export interface MadeAppDay {
+/** One period of the group, newest first (`madeAppPeriods`). */
+export interface MadeAppPeriod {
   readonly label: string;
   readonly apps: readonly IndexApp[];
 }
@@ -157,18 +180,49 @@ export function madeAppDayWords(at: number, now: number, locale?: string): strin
   return at > 0 ? dayWords(at, now, locale) : NO_DATE;
 }
 
-/** The group's days, newest first: "Today", "Yesterday", then the weekday and the date (Chat's
- * `dayWords`), and an app with no time last, under "No date". The door's own order breaks a tie. */
-export function madeAppDays(apps: readonly IndexApp[], now: number, locale?: string): MadeAppDay[] {
+/** The local midnight a time's day starts at. */
+function dayStart(at: number): number {
+  const day = new Date(at);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+
+/** The heading an app stands under (MA-D16, 2026-11-24; DESIGN.md §8, "laid out by when, in six
+ * words at most, never by day"): Today, Yesterday, Previous 7 days, Previous 30 days, then its
+ * month, with the year once it is not this year's; "No date" for an app with no time. Whole local
+ * days are counted, so a clock change never moves an app across a heading. */
+export function madeAppPeriodWords(at: number, now: number, locale?: string): string {
+  if (at <= 0) return NO_DATE;
+  const days = Math.round((dayStart(now) - dayStart(at)) / 86_400_000);
+  if (days <= 0) return "Today";
+  if (days === 1) return "Yesterday";
+  if (days <= 7) return "Previous 7 days";
+  if (days <= 30) return "Previous 30 days";
+  const day = new Date(at);
+  const thisYear = day.getFullYear() === new Date(now).getFullYear();
+  return day.toLocaleDateString(
+    locale,
+    thisYear ? { month: "long" } : { month: "long", year: "numeric" },
+  );
+}
+
+/** The group's periods, newest first (`madeAppPeriodWords`), an app with no time last. The door's
+ * own order breaks a tie. A day's heading over one tile is what made the shelf long: 44 apps stood
+ * under 23 of them. */
+export function madeAppPeriods(
+  apps: readonly IndexApp[],
+  now: number,
+  locale?: string,
+): MadeAppPeriod[] {
   const ordered = [...apps].sort((a, b) => madeAppAt(b) - madeAppAt(a));
-  const days: { label: string; apps: IndexApp[] }[] = [];
+  const periods: { label: string; apps: IndexApp[] }[] = [];
   for (const app of ordered) {
-    const label = madeAppDayWords(madeAppAt(app), now, locale);
-    const last = days[days.length - 1];
+    const label = madeAppPeriodWords(madeAppAt(app), now, locale);
+    const last = periods[periods.length - 1];
     if (last !== undefined && last.label === label) last.apps.push(app);
-    else days.push({ label, apps: [app] });
+    else periods.push({ label, apps: [app] });
   }
-  return days;
+  return periods;
 }
 
 /** The agent's label through the catalog's readers (R23b): the row's `provider`, else its `kind`;
@@ -213,6 +267,14 @@ export function madeAppHost(hostedUrl: string | undefined): string | undefined {
   }
 }
 
+/** An app's hosted link as a press opens it, or undefined with none a browser may be handed. */
+export function madeAppLinkOf(app: Pick<IndexApp, "hostedUrl">): MadeAppLink | undefined {
+  const host = madeAppHost(app.hostedUrl);
+  return host === undefined || app.hostedUrl === undefined
+    ? undefined
+    : { url: app.hostedUrl, host };
+}
+
 /** The app's desktop's standing in the answer, by its serving row's device. */
 export function madeAppSourceOf(
   app: Pick<IndexApp, "device">,
@@ -232,12 +294,16 @@ export function madeAppImageUrl(
   return base === undefined ? undefined : madeAppPreviewUrl(base, app.preview);
 }
 
-/** A desktop's name as the field names it, and this desktop's own word when the roster names none. */
+/** A desktop's name as the field names it, and this desktop's own word when the roster names none.
+ * `alone` (MA-D16): this Mac is not connected, so it is the field's only desktop and its roster
+ * name is the one the OS gave it; its own apps say this desktop's own word ("This Mac"). */
 export function madeAppDesktop(
   source: IndexAppsSource | undefined,
   _device: string,
   here: string,
+  alone = false,
 ): string {
+  if (alone && source?.self === true) return here;
   const name = source?.name?.trim();
   if (name !== undefined && name !== "") return name;
   return source?.self === true ? here : ANOTHER_DESKTOP;
@@ -381,6 +447,41 @@ export function madeAppStateOf(
   return muted(null, true);
 }
 
+/** rosetta's words for an app with no page a desktop could open: not kept, too large, or one it
+ * cannot keep. `unknown` is not among them (a word this build cannot read says nothing of a page),
+ * and neither is a kept page its desktop cannot write out yet. */
+function pageless(availability: IndexApp["availability"]): boolean {
+  switch (availability) {
+    case "not_captured":
+    case "missing":
+    case "changed_during_read":
+    case "too_large":
+    case "unsupported":
+      return true;
+    default:
+      return false;
+  }
+}
+
+/** THE DESK'S TILE (MA-D16, 2026-11-24; DESIGN.md §8 "Artifacts — the Artifacts shelf's contents",
+ * as amended that day): the shared reading, and over it where a press goes on the desktop. A tile
+ * whose app holds no page and has a hosted link opens the link, whatever its desktop's standing: the
+ * link is not on that desktop. Every other tile is `madeAppStateOf`'s, unchanged.
+ * It is a layer and not a branch of `madeAppStateOf` because the phone's port is held to that
+ * reading byte for byte (`made-app-goldens.test.ts`, the kit's `MadeAppFacts`), and the phone's
+ * shelf does not change with this. One of an app's versions is never judged here: it is its own
+ * page, never the app's link. */
+export function madeAppTileStateOf(
+  app: IndexApp,
+  source: IndexAppsSource | undefined,
+  act: MadeAppAct | undefined,
+  desktop: string,
+): MadeAppState {
+  const link = pageless(app.availability) ? madeAppLinkOf(app) : undefined;
+  if (link !== undefined) return { tone: "muted", word: null, opens: false, why: null, link };
+  return madeAppStateOf(app, source, act, desktop);
+}
+
 const NOT_KEPT = muted("not kept", false, { title: "This page wasn't kept", detail: null });
 const TOO_LARGE = muted("too large", false, { title: "Too large to keep", detail: null });
 const CANT_BE_KEPT = muted("can't be kept", false, {
@@ -417,11 +518,36 @@ function refusedState(state: MadeAppRefusalState, app: IndexApp, desktop: string
         why: { title: `${desktop} couldn't open ${app.title}`, detail: "Try again." },
       };
     case MADE_APP_OPEN.STATE_NOT_LINKED:
-      return muted("not linked", true, {
+      // MA-D16: this desktop's own window is answered `local` instead, so this is another desktop's
+      // word, or an older home's (DESIGN.md §9 "Apps": "tailnet" stays in Network details)
+      return muted("not connected", true, {
         title: `Can't reach ${desktop}`,
-        detail: "It isn't connected to your tailnet yet.",
+        detail: "It isn't connected to your devices yet.",
       });
   }
+}
+
+/** Why a tile has no preview, for its menu's first line (MA-D16, 2026-11-24; DESIGN.md §9 "Apps",
+ * About's lines and the unconnected one), or null when it has one or holds no page to draw.
+ * `alone`: this Mac is not connected, so nothing is drawn (the capture loads the app from its
+ * serve). On its own desktop an owed drawing is under way, never waiting for VibeField to open. */
+export function madeAppPreviewNote(
+  app: IndexApp,
+  source: IndexAppsSource | undefined,
+  desktop: string,
+  alone: boolean,
+  hasImage: boolean,
+): string | null {
+  if (hasImage || pageless(app.availability)) return null;
+  if (alone && source?.self === true)
+    return "No preview yet — previews are drawn once your devices are connected";
+  if (app.previewState === "failed")
+    return `No preview — it couldn't be drawn. It's drawn again the next time the app opens on ${desktop}`;
+  if (app.previewState === "owed")
+    return source?.self === true
+      ? "No preview yet — it's being drawn"
+      : `No preview yet — it's drawn the next time VibeField is open on ${desktop}`;
+  return "No preview yet — it's drawn the first time the app opens";
 }
 
 /** An error's kind, as the window's client throws it (`FielddRpcError.kind`); "" for any other. */

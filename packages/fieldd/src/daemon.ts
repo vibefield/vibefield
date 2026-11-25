@@ -9933,6 +9933,18 @@ export async function bootstrap(
     //  - The open is audited where it is ANSWERED (`artifact.made.open`, its
     //    attempt before its effect): on the origin, as the window or the phone
     //    behind the carrier (`onBehalfOf`, recorded, never authority: DS-L7).
+    //  - THE LOCAL ROAD (MA-D16, 2026-11-24): a desktop with no linked login
+    //    has no serve to carry an app, so its own window's `reveal` is answered
+    //    by a FILE: the service builds the app's local view (its head carries
+    //    the page's policy, MA-L7) and this desktop's shell hands that file to
+    //    the browser through `shell.openMadeApp`, told the app and its page's
+    //    digest and never a path. The answer is `local`, with no URL: nothing
+    //    listens. Both acts are audited as the served road's are
+    //    (`artifact.made.open` with its state, then `artifact.made.reveal`). An
+    //    open with no `reveal` is still refused `not-linked` by the service:
+    //    there is no one to open it for. A login that links between this check
+    //    and the service's turn costs nothing: the file opens, and the next
+    //    open serves.
     const revealsFor = (ctx: CallerContext): boolean =>
       (ctx.principal.kind === "local-token" || ctx.principal.kind === "shell-main") &&
       ctx.transport === "ws-loopback";
@@ -9981,10 +9993,26 @@ export async function bootstrap(
       const { appId, presentationId, reveal } = parsed.data;
       refuseReveal(ctx, reveal === true);
       const service = requireMadeApps();
+      const asked = { appId, ...(presentationId !== undefined ? { presentationId } : {}) };
+      if (reveal === true && revealsFor(ctx) && linkedLogin() === null) {
+        const local = await audit.required(
+          ctx,
+          { action: "artifact.made.open", target: { kind: "made-app", id: appId } },
+          () => service.openLocal(asked),
+          () => ({ outcome: "succeeded", attrs: { state: "local" } }),
+        );
+        await audit.required(
+          ctx,
+          { action: "artifact.made.reveal", target: { kind: "made-app", id: appId } },
+          () => api.openMadeApp({ appId: local.appId, digest: local.digest }),
+          () => ({ outcome: "succeeded" }),
+        );
+        return { state: "local", reach: local.reach };
+      }
       const answer = await audit.required(
         ctx,
         { action: "artifact.made.open", target: { kind: "made-app", id: appId } },
-        () => service.open({ appId, ...(presentationId !== undefined ? { presentationId } : {}) }),
+        () => service.open(asked),
         (opened) => ({ outcome: "succeeded", attrs: { state: opened.state } }),
       );
       // this desktop answered its own window: the home is the origin, and the

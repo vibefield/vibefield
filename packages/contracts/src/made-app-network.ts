@@ -369,13 +369,17 @@ export function madeAppServeHeaders(policy: MadeAppNetworkPolicy): MadeAppServeH
   return { ok: true, headers };
 }
 
-function contentSecurityPolicy(hosts: MadeAppNetworkHosts): string {
+/** The policy as one CSP value. `omit` names fixed directives to leave out, by their names: the local view's, which a
+ * `<meta>` cannot carry (`madeAppLocalViewHead`). */
+function contentSecurityPolicy(hosts: MadeAppNetworkHosts, omit: readonly string[] = []): string {
   const widened = MADE_APP_SERVE_POLICY.FETCH.map(({ key, directive, sources, schemes }) => {
     const each: readonly string[] = schemes;
     const sourced = (host: string) => each.map((scheme) => `${scheme}://${host}`);
     return [directive, sources, ...canonical(hosts[key] ?? []).flatMap(sourced)].join(" ");
   });
-  const fixed: readonly string[] = MADE_APP_SERVE_POLICY.FIXED_DIRECTIVES;
+  const fixed = MADE_APP_SERVE_POLICY.FIXED_DIRECTIVES.filter(
+    (directive) => !omit.includes(directive.split(" ")[0] ?? ""),
+  );
   return [`default-src ${MADE_APP_SERVE_POLICY.DEFAULT_SRC}`, ...widened, ...fixed].join("; ");
 }
 
@@ -478,6 +482,52 @@ export function madeAppViewHead(theme: MadeAppViewTheme): MadeAppViewHeadAnswer 
   ];
   const style = `<style>:root{${declarations.join(";")}}</style>`;
   return { ok: true, head: `${VIEW_HEAD_OPEN}${style}</head><body>` };
+}
+
+/** The fixed directives a `<meta http-equiv="Content-Security-Policy">` cannot carry: a browser ignores them there
+ * and says so in its console (CSP3, "the meta element"), so the local view's policy leaves them out rather than write
+ * one that does nothing. A page opened as a file has no ancestor to refuse. */
+export const MADE_APP_LOCAL_VIEW_OMITS = ["frame-ancestors"] as const;
+
+export type MadeAppLocalViewHeadAnswer =
+  | { ok: true; head: string }
+  | {
+      ok: false;
+      refused: typeof MADE_APP_VIEW.REFUSED_THEME | typeof MADE_APP_VIEW.REFUSED_LOCAL_POLICY;
+    };
+
+/** The head of a made app's LOCAL view (MA-D16, 2026-11-24): the view a desktop with no linked login hands the browser
+ * as a file (MADE_APP_VIEW.LOCAL_FILE), because no serve can carry the app there. No response header reaches a page
+ * opened as a file, so this head carries what the serve's headers do, as far as a head can:
+ *  - the app's Content-Security-Policy, in a `<meta http-equiv>` BEFORE anything it governs: `madeAppServeHeaders`'
+ *    own value for the same policy, less MADE_APP_LOCAL_VIEW_OMITS. The page reaches the hosts it was written for and
+ *    nothing else, on this road as on the serve's (MA-L7);
+ *  - the serve's `Referrer-Policy: no-referrer`, as a `<meta name="referrer">`.
+ * Then the theme's one style rule and `<body>`, as `madeAppViewHead` writes them. The local view is this head, the
+ * stored page's bytes, then MADE_APP_VIEW_TAIL. Pinned by `fixtures/made-app-local-view.vector.json`.
+ * It refuses a theme it cannot read (REFUSED_THEME) and a policy the serve's headers would refuse
+ * (REFUSED_LOCAL_POLICY), so no host reaches the bytes unless it is a policy's. The value sits in a double-quoted
+ * attribute: a policy host holds no `"`, `&`, `<` or `>` (`MadeAppNetworkHost`), VibeField's own sources hold none,
+ * and a value that held one is refused rather than escaped. */
+export function madeAppLocalViewHead(
+  theme: MadeAppViewTheme,
+  policy: MadeAppNetworkPolicy,
+): MadeAppLocalViewHeadAnswer {
+  const themed = madeAppViewHead(theme);
+  if (!themed.ok) return themed;
+  const read = MadeAppNetworkPolicyShape.safeParse(policy);
+  const refused = { ok: false, refused: MADE_APP_VIEW.REFUSED_LOCAL_POLICY } as const;
+  if (!read.success || !withinUnionCap(read.data)) return refused;
+  const csp = contentSecurityPolicy(read.data.hosts, MADE_APP_LOCAL_VIEW_OMITS);
+  if (/["&<>]/.test(csp)) return refused;
+  const referrer = MADE_APP_SERVE_POLICY.FIXED_HEADERS.find(
+    (header) => header.name === "Referrer-Policy",
+  );
+  const metas = [
+    `<meta http-equiv="${MADE_APP_SERVE_POLICY.CSP_HEADER}" content="${csp}">`,
+    ...(referrer === undefined ? [] : [`<meta name="referrer" content="${referrer.value}">`]),
+  ].join("");
+  return { ok: true, head: `${VIEW_HEAD_OPEN}${metas}${themed.head.slice(VIEW_HEAD_OPEN.length)}` };
 }
 
 // ── a captured page's environment ──

@@ -1,0 +1,5 @@
+{
+  "//": "MA-D16 (2026-11-24) — this desktop has no linked login, so no serve can carry the app: its own window's `reveal` was answered by opening the app's local view as a file in the browser. Nothing listens, so there is no URL. `reach` is the hosts the file's own policy admits (MA-L7, MA-L9).",
+  "state": "local",
+  "reach": ["cdn.jsdelivr.net"]
+}

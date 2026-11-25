@@ -4,7 +4,12 @@ import { type FileHandle, lstat, mkdir, open, realpath, rename, rm } from "node:
 import { basename, dirname, isAbsolute, join, relative, sep } from "node:path";
 import { blake3 } from "@noble/hashes/blake3.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
-import { Blake3Hex, MADE_APP_VIEW_TAIL, madeAppViewHead } from "@vibefield/contracts";
+import {
+  Blake3Hex,
+  MADE_APP_VIEW_TAIL,
+  madeAppLocalViewHead,
+  madeAppViewHead,
+} from "@vibefield/contracts";
 import { MADE_APP_VIEW } from "@vibefield/contracts/registries";
 import { isWithin } from "../paths";
 import type { BuildMadeViewArgs, BuildMadeViewValue, MadeViewRoots } from "../protocol";
@@ -16,6 +21,14 @@ import { WorkerFailure } from "./engine";
 // the stored page's bytes, then MADE_APP_VIEW_TAIL, written as
 // MADE_APP_VIEW.FILE in the app's served folder. A desktop builds its own view
 // and never syncs it, so a theme change rebuilds views and makes no object.
+//
+// THE LOCAL VIEW (MA-D16, 2026-11-24): asked with `local`, the same build
+// writes MADE_APP_VIEW.LOCAL_FILE instead, in the same folder, under the head
+// `madeAppLocalViewHead(theme, policy)` writes: the served head, and the page's
+// policy in a `<meta>` before anything it governs, because the file is opened
+// by a browser with no serve in front of it and no response header reaches it.
+// A policy that head cannot compose is `invalid`, before anything is touched,
+// as an unreadable theme is. The served view beside it is not written.
 //
 // TWO ROOTS, named by fieldd at `init` (`MadeViewRoots`): the export-source
 // root, where rosetta's export places a page and nothing is served, and the
@@ -108,10 +121,22 @@ export async function buildMadeView(
     throw new WorkerFailure("invalid", "a view names its page and its folder by their paths");
   if (!Blake3Hex.safeParse(args.blake3).success)
     throw new WorkerFailure("invalid", "a view names its page's digest in lowercase blake3 hex");
-  // the theme first: a theme the view cannot carry touches nothing
-  const head = madeAppViewHead(args.theme);
+  // the theme first (and the local view's policy): a head the view cannot carry touches nothing
+  const local = args.local;
+  if (local !== undefined && (typeof local !== "object" || local === null))
+    throw new WorkerFailure("invalid", "a local view names its policy");
+  const head =
+    local === undefined
+      ? madeAppViewHead(args.theme)
+      : madeAppLocalViewHead(args.theme, local.policy);
   if (!head.ok)
-    throw new WorkerFailure("invalid", `the view's theme is unreadable (${head.refused})`);
+    throw new WorkerFailure(
+      "invalid",
+      head.refused === MADE_APP_VIEW.REFUSED_THEME
+        ? `the view's theme is unreadable (${head.refused})`
+        : `the local view's policy is unreadable (${head.refused})`,
+    );
+  const file = local === undefined ? MADE_APP_VIEW.FILE : MADE_APP_VIEW.LOCAL_FILE;
   const pageSegments = segmentsBelow(roots.sourceRoot, args.source, "page");
   const folderSegments = segmentsBelow(roots.servedRoot, args.folder, "folder");
   if (overlap(roots.sourceRoot, roots.servedRoot)) throw overlapping();
@@ -121,7 +146,7 @@ export async function buildMadeView(
   const page = await openPage(sourceRoot, pageSegments);
   try {
     const folder = await viewFolder(servedRoot, folderSegments);
-    return { bytes: await writeView(servedRoot, folder, head.head, page, args.blake3) };
+    return { bytes: await writeView(servedRoot, folder, file, head.head, page, args.blake3) };
   } finally {
     await page.close();
   }
@@ -218,12 +243,13 @@ async function viewFolder(root: string, segments: readonly string[]): Promise<st
 }
 
 /** Stream the view into a 0600 temp beside the folder, fsync, hold the folder's
- * real path inside the served root again, rename the temp over the view and
- * fsync the folder; anything before the rename leaves the old view whole.
- * Answers the view's size. */
+ * real path inside the served root again, rename the temp over the view (`file`:
+ * the served view's name, or the local view's) and fsync the folder; anything
+ * before the rename leaves the old view whole. Answers the view's size. */
 async function writeView(
   root: string,
   folder: string,
+  file: string,
   head: string,
   page: FileHandle,
   digest: string,
@@ -243,7 +269,7 @@ async function writeView(
     // is caught here, before the view lands (the residual race, module header)
     if (!isWithin(root, await realpath(folder), process.platform))
       throw new WorkerFailure("not-found", FOLDER_UNREACHED);
-    await rename(temp, join(folder, MADE_APP_VIEW.FILE));
+    await rename(temp, join(folder, file));
   } catch (error) {
     await out?.close().catch(() => undefined);
     await rm(temp, { force: true }).catch(() => undefined);

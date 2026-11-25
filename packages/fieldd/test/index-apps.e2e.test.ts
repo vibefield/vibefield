@@ -29,12 +29,24 @@
 //   · `index.artifacts` carries the publish request's description and dropped files (rosetta
 //     0.1.4) as the library wrote them; rosetta's nulls, and an entry that leaves both keys out
 //     (a tolerant reader), carry neither; a description past the contract's bound costs that
-//     fact, never the entry.
+//     fact, never the entry;
+//   · MA-D16 (2026-11-24): a desk with NO linked login answers its own window's `reveal` by a
+//     file: the app's local view is built and the desk's shell is asked `shell.openMadeApp` with
+//     the app and its page's digest, never a path or a URL; the answer is `local`; nothing is
+//     served; and an open with no `reveal` is still refused `not-linked`.
 // Every row boots daemons: they run on the mini (a9), never under the MacBook's HOLD. Each
 // wait is BOUNDED and asserted on (`settle`), so a red row fails on its assertion.
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -47,6 +59,8 @@ import {
   IndexSessionsResult,
   MADE_APP_LIMITS,
   MADE_APP_OPEN,
+  MADE_APP_REGISTRY_FILE,
+  MADE_APP_VIEW,
   madeAppFoldKey,
   type PlaceFacts,
   type Scope,
@@ -215,11 +229,13 @@ const servingExporter = (hosts: string[]): MadeAppExporter => ({
 });
 
 /** The files worker's view (the test seam `madeApps.view`): these rows' digests are not the bytes'
- * blake3, and the real worker is held to that in workspace-made-view.test.ts. */
+ * blake3, and the real worker is held to that in workspace-made-view.test.ts. Asked for the local
+ * view (MA-D16) it writes that file and leaves the served one, as the worker does. */
 const madeView: MadeAppViewBuilder = {
-  build: async ({ folder }) => {
+  build: async ({ folder, local }) => {
     mkdirSync(folder, { recursive: true });
-    writeFileSync(join(folder, "index.html"), "<!doctype html><title>view</title>");
+    const file = local === undefined ? MADE_APP_VIEW.FILE : MADE_APP_VIEW.LOCAL_FILE;
+    writeFileSync(join(folder, file), "<!doctype html><title>view</title>");
     return { bytes: 34 };
   },
 };
@@ -334,11 +350,13 @@ async function prepareDesk(
   name: "a" | "b",
   script: DeskScript,
   peerName: string,
+  linked = true,
 ): Promise<Omit<Desk, "daemon">> {
   // a SHORT root: the mock mgmt socket must stay inside macOS's sun_path
   const dataDir = mkdtempSync(join(tmpdir(), `vf-ma3${name}-`));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
-  writeLinkFixture(dataDir, TEST_LOGIN);
+  // MA-D16: a desk with no link fixture has no linked login, as a desktop nobody connected
+  if (linked) writeLinkFixture(dataDir, TEST_LOGIN);
   const files: DeskFiles = {
     sessions: join(dataDir, "sessions.json"),
     projects: join(dataDir, "projects.json"),
@@ -1202,5 +1220,142 @@ describe("MA-3e — the made apps across two real daemons", () => {
       expect(entry, `${name}: no description`).not.toHaveProperty("description");
       expect(entry, `${name}: no dropped files`).not.toHaveProperty("droppedFiles");
     }
+  }, 120_000);
+});
+
+describe("MA-D16 (2026-11-24) — a desk with no linked login opens its app as a file", () => {
+  /** One desk, never linked, with the made apps' seams and a count of what its exporter was asked. */
+  async function bootUnlinked(): Promise<{ A: Desk; exports: () => number }> {
+    let exports = 0;
+    const exporter = servingExporter(["cdn.example.com"]);
+    const pre = await prepareDesk("a", SCRIPT_A, B_NAME, false);
+    const daemon = await bootDaemon(pre, sidecar(new Map(), "node-a", []), {
+      madeApps: {
+        exporter: {
+          export: async (request) => {
+            exports += 1;
+            return await exporter.export(request);
+          },
+        },
+        view: madeView,
+      },
+    });
+    const A: Desk = { ...pre, daemon };
+    // the table speaks once A's library has been walked: until then an open is `library-reading`
+    const win = await windowOn(A);
+    const listed = await settleAsync(async () => {
+      const page = await win.attempt("index.apps.list", { scope: "local" });
+      return page.ok && IndexAppsResult.parse(page.result).rows.some((r) => r.appId === APP);
+    }, 20_000);
+    expect(listed, "A's own apps table holds its app").toBe(true);
+    return { A, exports: () => exports };
+  }
+
+  const APP = appIdOf("one");
+  const DIGEST = digestOf("one");
+  const localFile = (desk: Desk) =>
+    join(desk.dataDir, "artifacts", "made", APP, DIGEST, MADE_APP_VIEW.LOCAL_FILE);
+  const madeOf = async (desk: Desk, action: string) =>
+    (await auditRecords(desk.daemon)).filter((record) => record.action === action);
+
+  it("its own window's reveal is answered `local`: the local view is built, its shell is asked shell.openMadeApp with the app and the page's digest and nothing else, both acts are audited, and nothing is served", async () => {
+    const { A, exports } = await bootUnlinked();
+    const shell = await shellOn(A);
+    const win = await windowOn(A);
+    const opening = win.call("artifact.open", { appId: APP, reveal: true }).then(
+      (result) => ({ ok: true as const, result }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+    const asked = await settle(() => providerCalls(shell).length > 0, 15_000);
+    expect(asked, "A asks its own shell to open the file").toBe(true);
+    const calls = providerCalls(shell);
+    expect(calls.map((call) => call.method)).toEqual(["shell.openMadeApp"]);
+    expect(calls[0]).toMatchObject({
+      method: "shell.openMadeApp",
+      caller: { clientKind: "fieldd" },
+    });
+    expect(calls[0]?.params, "the app and its page's digest: no path, no URL").toEqual({
+      appId: APP,
+      digest: DIGEST,
+    });
+    // the file stands before the shell is asked for it, and the served view was never built
+    expect(existsSync(localFile(A))).toBe(true);
+    expect(readdirSync(dirname(localFile(A)))).toEqual([MADE_APP_VIEW.LOCAL_FILE]);
+    await shell.call("shell.provider.resolve", {
+      callId: calls[0]?.callId,
+      outcome: { result: { opened: true } },
+    });
+    const settled = await opening;
+    expect(settled.ok, "the open answers once the browser has the file").toBe(true);
+    const raw = settled.ok ? (settled.result as Record<string, unknown>) : {};
+    expect(raw).toEqual({ state: "local", reach: ["cdn.example.com"] });
+    expect(ArtifactOpenResult.parse(raw).url).toBeUndefined();
+    expect(exports()).toBe(1);
+    // nothing listens: no made serve was declared, and no registry holds a port for the app
+    expect(A.daemon.health().mesh.serves.filter((s) => s.name.startsWith("made-app"))).toEqual([]);
+    expect(existsSync(join(A.dataDir, "registries", MADE_APP_REGISTRY_FILE))).toBe(false);
+    // both acts audited, the open with its state, neither with a path
+    const opens = await madeOf(A, "artifact.made.open");
+    expect(opens.map((r) => [r.phase, r.outcome ?? null, r.attrs?.state ?? null])).toEqual([
+      ["attempt", null, null],
+      ["outcome", "succeeded", "local"],
+    ]);
+    const reveals = await madeOf(A, "artifact.made.reveal");
+    expect(reveals.map((r) => [r.phase, r.outcome ?? null])).toEqual([
+      ["attempt", null],
+      ["outcome", "succeeded"],
+    ]);
+    for (const record of [...opens, ...reveals]) {
+      expect(record.target).toEqual({ kind: "made-app", id: APP });
+    }
+    expect(JSON.stringify([...opens, ...reveals])).not.toContain(A.dataDir);
+  }, 120_000);
+
+  it("an open with no reveal is still refused not-linked, exporting nothing and asking the shell nothing; a shell that refuses the file fails the open with its word, and the next open heals", async () => {
+    const { A, exports } = await bootUnlinked();
+    const shell = await shellOn(A);
+    const win = await windowOn(A);
+    const bare = await win.attempt("artifact.open", { appId: APP });
+    expect(bare.ok).toBe(false);
+    if (!bare.ok) {
+      expect(bare.error.data?.kind).toBe("UNAVAILABLE");
+      expect(bare.error.data?.details).toMatchObject({
+        service: MADE_APP_OPEN.SERVICE,
+        state: MADE_APP_OPEN.STATE_NOT_LINKED,
+      });
+    }
+    expect(exports()).toBe(0);
+    expect(providerCalls(shell)).toEqual([]);
+    expect(existsSync(localFile(A))).toBe(false);
+
+    // the shell refuses (the file is gone, or it will not open it): the open fails with that word
+    const refused = win.attempt("artifact.open", { appId: APP, reveal: true });
+    expect(await settle(() => providerCalls(shell).length === 1, 15_000)).toBe(true);
+    await shell.call("shell.provider.resolve", {
+      callId: providerCalls(shell)[0]?.callId,
+      outcome: { error: { kind: "NOT_FOUND", message: "that app has no local view to open" } },
+    });
+    const failed = await refused;
+    expect(failed.ok).toBe(false);
+    if (!failed.ok) expect(failed.error.data?.kind).toBe("NOT_FOUND");
+    // asked again, it places the page and builds the file again, and opens
+    const again = win.attempt("artifact.open", { appId: APP, reveal: true });
+    expect(await settle(() => providerCalls(shell).length === 2, 15_000)).toBe(true);
+    await shell.call("shell.provider.resolve", {
+      callId: providerCalls(shell)[1]?.callId,
+      outcome: { result: { opened: true } },
+    });
+    expect(await again).toEqual({
+      ok: true,
+      result: { state: "local", reach: ["cdn.example.com"] },
+    });
+    expect(exports()).toBe(2);
+    const reveals = await madeOf(A, "artifact.made.reveal");
+    expect(reveals.map((r) => [r.phase, r.outcome ?? null])).toEqual([
+      ["attempt", null],
+      ["outcome", "failed"],
+      ["attempt", null],
+      ["outcome", "succeeded"],
+    ]);
   }, 120_000);
 });

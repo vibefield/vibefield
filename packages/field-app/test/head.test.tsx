@@ -1675,7 +1675,9 @@ describe('MA-4c — From your agents beside the Hub (DESIGN.md §8 "Artifacts �
     mount({ open: "artifacts" });
     await settle();
     const live = liveIn(shelf("artifacts"));
-    expect(live?.textContent).toContain("No apps yet");
+    // MA-D16 (2026-11-24): an empty Live is its header and one row, so the made group starts in sight
+    expect(live?.textContent).toContain("Publish a proxy or a folder");
+    expect(live?.textContent).not.toContain("No apps yet");
     expect(live?.parentElement?.children.length, "Live and From your agents").toBe(2);
     expect(live?.nextElementSibling, "From your agents right after Live").toBe(
       madeIn(shelf("artifacts")),
@@ -1782,7 +1784,7 @@ describe("under a cover — the same sheet, grown from the package circle (PL-D2
     expect($(".vf-head-dim")?.dataset.open).toBe("false");
   });
 
-  it("grows from the circle's own box — 40 at x 96, top 8 — to the pill's sheet's size, at 62, its dim at 61", () => {
+  it("grows from the circle's own box — 40 at x 96, top 8 — to the pill's sheet's width and 600 high, at 62, its dim at 61", () => {
     const shut = ruleIn(HEAD_CSS, ".vf-head-sheet");
     for (const measure of [
       "z-index: 62;",
@@ -1798,7 +1800,11 @@ describe("under a cover — the same sheet, grown from the package circle (PL-D2
     }
     const open = ruleIn(HEAD_CSS, '.vf-head-sheet[data-open="true"]');
     expect(open).toContain("width: min(56%, 34rem);");
-    expect(open).toContain("height: min(420px, calc(100% - 88px));");
+    // MA-D16 (2026-11-24): the circle's sheet holds Apps alone, so it opens to 600; the pill's keeps 420
+    expect(open).toContain("height: min(600px, calc(100% - 88px));");
+    expect(ruleIn(HEAD_CSS, '.vf-head-place[data-open="true"]')).toContain(
+      "height: min(420px, calc(100% - 88px));",
+    );
     expect(open).toContain("border-radius: 22px 22px 40px 40px;");
     expect(ruleIn(HEAD_CSS, ".vf-head-dim[data-covered]")).toContain("z-index: 61;");
     // its head row: the package 6 in, the shelf's name 8 after it, at 13/600

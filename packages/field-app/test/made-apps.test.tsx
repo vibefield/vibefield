@@ -45,6 +45,7 @@ import {
   MADE_APP_OPENING_LATE_MS,
   MADE_APP_PREVIEW_RETRY_DELAYS_MS,
   MADE_APP_SERVING_HELD_MS,
+  MADE_APPS_CONNECT,
   MADE_APPS_MAX_PAGES,
   MADE_APPS_PAGE_LIMIT,
   MADE_APPS_QUERY_MAX,
@@ -54,17 +55,21 @@ import {
   madeAppAgentLabel,
   madeAppAt,
   madeAppAway,
-  madeAppDays,
   madeAppDesktop,
   madeAppErrorWords,
   madeAppFacts,
   madeAppHost,
   madeAppImageUrl,
   madeAppInitial,
+  madeAppLinkOf,
+  madeAppPeriods,
+  madeAppPeriodWords,
+  madeAppPreviewNote,
   madeAppProjectNames,
   madeAppRefusalOf,
   madeAppStateOf,
   madeAppsReadingLines,
+  madeAppTileStateOf,
   madeAppVersions,
   markMadeApp,
   openMadeApp,
@@ -328,31 +333,57 @@ describe("the group's reading (pure)", () => {
     expect(madeAppAt(undated)).toBe(0);
   });
 
-  it("groups newest first by day — Today, Yesterday, the weekday and date — and an undated app last", () => {
+  it("MA-D16: groups newest first by WHEN, never by day — Today, Yesterday, the two spans, then months — and an undated app last", () => {
     const { publishedAt: _none, ...undated } = app(9, { title: "Undated" });
-    const days = madeAppDays(
+    const daysAgo = (d: number): number => new Date(2026, 10, 5 - d, 12, 0).getTime();
+    const periods = madeAppPeriods(
       [
         app(2, { title: "An hour ago", publishedAt: hoursAgo(1) }),
         app(3, { title: "Two hours ago", publishedAt: hoursAgo(2) }),
         app(4, { title: "Yesterday's", publishedAt: hoursAgo(26) }),
-        app(5, { title: "Last week's", publishedAt: hoursAgo(72) }),
+        app(5, { title: "Three days ago", publishedAt: daysAgo(3) }),
+        app(6, { title: "A week ago", publishedAt: daysAgo(7) }),
+        app(7, { title: "Eight days ago", publishedAt: daysAgo(8) }),
+        app(8, { title: "Thirty days ago", publishedAt: daysAgo(30) }),
+        app(10, { title: "In September", publishedAt: new Date(2026, 8, 20, 9, 0).getTime() }),
+        app(11, { title: "Also September", publishedAt: new Date(2026, 8, 2, 9, 0).getTime() }),
+        app(12, { title: "Last December", publishedAt: new Date(2025, 11, 24, 9, 0).getTime() }),
         undated,
       ],
       NOW,
       "en-US",
     );
-    expect(days.map((day) => day.label)).toEqual([
+    expect(periods.map((period) => period.label)).toEqual([
       "Today",
       "Yesterday",
-      dayWords(hoursAgo(72), NOW, "en-US"),
+      "Previous 7 days",
+      "Previous 30 days",
+      "September",
+      "December 2025",
       "No date",
     ]);
-    expect(days.map((day) => day.apps.map((one) => one.title))).toEqual([
+    expect(periods.map((period) => period.apps.map((one) => one.title))).toEqual([
       ["An hour ago", "Two hours ago"],
       ["Yesterday's"],
-      ["Last week's"],
+      ["Three days ago", "A week ago"],
+      ["Eight days ago", "Thirty days ago"],
+      ["In September", "Also September"],
+      ["Last December"],
       ["Undated"],
     ]);
+  });
+
+  it("MA-D16: counts whole local days, so the hour never moves an app across a heading", () => {
+    const at = (day: number, hour: number, minute = 0): number =>
+      new Date(2026, 10, day, hour, minute).getTime();
+    // 00:05 today, seen at 23:55: still today; 23:55 yesterday, seen at 00:05: yesterday, ten minutes on
+    expect(madeAppPeriodWords(at(5, 0, 5), at(5, 23, 55), "en-US")).toBe("Today");
+    expect(madeAppPeriodWords(at(4, 23, 55), at(5, 0, 5), "en-US")).toBe("Yesterday");
+    expect(madeAppPeriodWords(at(3, 23, 55), at(5, 0, 5), "en-US")).toBe("Previous 7 days");
+    // a time ahead of this clock (another desktop's) reads today, never a heading of its own
+    expect(madeAppPeriodWords(at(6, 9), at(5, 15), "en-US")).toBe("Today");
+    expect(madeAppPeriodWords(0, at(5, 15), "en-US")).toBe("No date");
+    expect(dayWords(at(3, 23, 55), at(5, 0, 5), "en-US")).not.toBe("Previous 7 days");
   });
 
   it("names the agent by the catalog's label — the provider, else the kind — and no literal (R23b)", () => {
@@ -628,9 +659,9 @@ describe("a made tile's state (§8: serving green, failed red, the rest muted, e
       madeAppStateOf(release, STUDIO_SOURCE, { kind: "refused", state: "not-linked" }, "studio"),
     ).toEqual({
       tone: "muted",
-      word: "not linked",
+      word: "not connected",
       opens: true,
-      why: { title: "Can't reach studio", detail: "It isn't connected to your tailnet yet." },
+      why: { title: "Can't reach studio", detail: "It isn't connected to your devices yet." },
     });
     expect(
       madeAppStateOf(
@@ -1697,6 +1728,250 @@ describe("the made tile's form (made-apps.css; tokens only)", () => {
   });
 });
 
+// ── MA-D16: where a press goes, and a Mac that is not connected ─────────────────────────────────
+
+describe("MA-D16 (2026-11-24) — where a press goes (pure)", () => {
+  const PAGELESS = [
+    "missing",
+    "not_captured",
+    "changed_during_read",
+    "too_large",
+    "unsupported",
+  ] as const;
+  const LINK = { url: HOSTED, host: "claude.ai" };
+
+  it("opens the hosted link of an app that holds no page, whatever its desktop's standing", () => {
+    for (const availability of PAGELESS) {
+      const linked = app(2, { availability, openable: false, hostedUrl: HOSTED });
+      const expected = { tone: "muted", word: null, opens: false, why: null, link: LINK };
+      expect(madeAppTileStateOf(linked, STUDIO_SOURCE, undefined, "studio"), availability).toEqual(
+        expected,
+      );
+      expect(
+        madeAppTileStateOf(linked, { ...MINI_SOURCE, state: "asleep" }, undefined, "mini"),
+        `${availability}, its desktop asleep`,
+      ).toEqual(expected);
+      // the shared reading, which the phone's port is held to, says what it always said
+      expect(madeAppStateOf(linked, STUDIO_SOURCE, undefined, "studio").link).toBeUndefined();
+      expect(madeAppStateOf(linked, STUDIO_SOURCE, undefined, "studio").opens).toBe(false);
+    }
+    expect(madeAppLinkOf({ hostedUrl: HOSTED })).toEqual(LINK);
+    expect(madeAppLinkOf({})).toBeUndefined();
+  });
+
+  it("keeps its own words with a page, with no link, with a link no browser may be handed, and for a version", () => {
+    const state = (over: Partial<IndexApp>) =>
+      madeAppTileStateOf(app(2, over), STUDIO_SOURCE, undefined, "studio");
+    // a page and a link: it opens as the app, and Open in ‹host› stays in its menu
+    expect(state({ hostedUrl: HOSTED })).toEqual({
+      tone: "muted",
+      word: null,
+      opens: true,
+      why: null,
+    });
+    // neither: it says why, as before
+    expect(state({ availability: "missing", openable: false }).word).toBe("not kept");
+    expect(state({ availability: "missing", openable: false }).link).toBeUndefined();
+    const plain = { availability: "missing", openable: false, hostedUrl: "http://claude.ai/x" };
+    expect(state(plain as Partial<IndexApp>).link).toBeUndefined();
+    // a word this build cannot read, and a kept page its desktop cannot write out, say their own
+    expect(state({ availability: "unknown", hostedUrl: HOSTED }).word).toBe("unknown");
+    expect(state({ openable: false, hostedUrl: HOSTED }).word).toBe("not written out yet");
+    // one of its versions is judged by its own page (the shared reading), never sent to the app's link
+    const version = madeAppStateOf(
+      app(2, { availability: "missing", openable: false, hostedUrl: HOSTED }),
+      STUDIO_SOURCE,
+      undefined,
+      "studio",
+      { availability: "missing" },
+    );
+    expect(version.link).toBeUndefined();
+    expect(version.word).toBe("not kept");
+  });
+
+  it("names this Mac's own apps by this desktop's word while it is not connected", () => {
+    expect(madeAppDesktop(STUDIO_SOURCE, STUDIO, "This Mac", true)).toBe("This Mac");
+    expect(madeAppDesktop(STUDIO_SOURCE, STUDIO, "This Mac")).toBe("studio");
+    expect(madeAppDesktop(MINI_SOURCE, MINI, "This Mac", true)).toBe("mini");
+  });
+
+  it("says why a tile has no preview: About's lines, its own desktop's, and the unconnected one", () => {
+    const note = (over: Partial<IndexApp>, source: IndexAppsSource, alone = false, image = false) =>
+      madeAppPreviewNote(app(2, over), source, source.name ?? "", alone, image);
+    expect(note({ preview: preview(2) }, STUDIO_SOURCE, false, true)).toBeNull();
+    expect(note({ previewState: "owed" }, STUDIO_SOURCE, true)).toBe(
+      "No preview yet — previews are drawn once your devices are connected",
+    );
+    expect(note({ previewState: "owed" }, STUDIO_SOURCE)).toBe("No preview yet — it's being drawn");
+    expect(note({ previewState: "owed", device: MINI }, MINI_SOURCE)).toBe(
+      "No preview yet — it's drawn the next time VibeField is open on mini",
+    );
+    expect(note({ previewState: "failed" }, STUDIO_SOURCE)).toBe(
+      "No preview — it couldn't be drawn. It's drawn again the next time the app opens on studio",
+    );
+    expect(note({}, STUDIO_SOURCE)).toBe(
+      "No preview yet — it's drawn the first time the app opens",
+    );
+    // an app with no page has nothing to draw, so nothing is promised
+    expect(note({ availability: "missing", openable: false }, STUDIO_SOURCE, true)).toBeNull();
+  });
+});
+
+describe("<MadeApps> — MA-D16: a Mac that is not connected, and where a press goes", () => {
+  async function mountWith(
+    client: MadeAppsClient,
+    extra: { connect?: () => void; openLink?: (url: string) => void } = {},
+  ): Promise<void> {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <MadeApps client={client} now={NOW} locale="en-US" here="This Mac" {...extra} />,
+      );
+    });
+    await settle();
+  }
+  const rowsOf = (...rows: IndexApp[]) => ({
+    "index.apps.list": () => ({ rows, sources: [STUDIO_SOURCE] }) satisfies IndexAppsResult,
+  });
+  const connectRow = (): Element | null => container?.querySelector(".vf-apps-connect") ?? null;
+
+  it("draws the connect row only while a connect is handed, in §9's words, and Connect… calls it", async () => {
+    const fake = fakeClient(rowsOf(app(2, { title: "Release notes" })));
+    await mountWith(fake.client);
+    expect(connectRow(), "connected: no row").toBeNull();
+    expect(statusOf("Release notes")).toBe("studio");
+    act(() => root?.unmount());
+    container?.remove();
+
+    const connect = vi.fn();
+    await mountWith(fake.client, { connect });
+    expect(connectRow()?.querySelector("strong")?.textContent).toBe(MADE_APPS_CONNECT.title);
+    expect(connectRow()?.querySelector("small")?.textContent).toBe(MADE_APPS_CONNECT.detail);
+    expect(MADE_APPS_CONNECT).toEqual({
+      title: "These apps open on this Mac only.",
+      detail: "Connect your devices to open them on your phone and your other computers.",
+      act: "Connect…",
+    });
+    expect(
+      connectRow()?.querySelector("svg"),
+      "the kit's glyph, never a vendor's mark",
+    ).not.toBeNull();
+    expect(connectRow()?.querySelector(".vf-ts-mark")).toBeNull();
+    await press(actIn(connectRow() ?? undefined, "Connect…"));
+    expect(connect).toHaveBeenCalledTimes(1);
+    // the row stands at the group's head, above the tiles
+    const order = [...(container?.querySelector(".vf-apps")?.children ?? [])].map(
+      (child) => child.className,
+    );
+    expect(order.indexOf("vf-apps-connect")).toBeGreaterThan(order.indexOf("vf-apps-head"));
+    expect(order.indexOf("vf-apps-connect")).toBeLessThan(order.indexOf("vf-apps-days"));
+  });
+
+  it("names this Mac's tiles This Mac while it is not connected, the state's word whole after it", async () => {
+    const fake = fakeClient(
+      rowsOf(
+        app(2, { title: "Release notes" }),
+        app(3, { title: "Bundle size", availability: "missing", openable: false }),
+      ),
+    );
+    await mountWith(fake.client, { connect: () => undefined });
+    expect(statusOf("Release notes")).toBe("This Mac");
+    expect(statusOf("Bundle size")).toBe("This Mac · not kept");
+    const status = tileOf("Bundle size")?.querySelector(".vf-apps-status");
+    expect(status?.querySelector(".vf-apps-status__name")?.textContent).toBe("This Mac");
+    expect(status?.querySelector(".vf-apps-status__word")?.textContent).toBe(" · not kept");
+  });
+
+  it("a link tile says its host after `outward`, opens the link itself and asks no open", async () => {
+    const fake = fakeClient(
+      rowsOf(
+        app(2, {
+          title: "Release notes",
+          availability: "missing",
+          openable: false,
+          hostedUrl: HOSTED,
+        }),
+      ),
+    );
+    const openLink = vi.fn();
+    await mountWith(fake.client, { openLink });
+    const status = tileOf("Release notes")?.querySelector(".vf-apps-status");
+    expect(status?.getAttribute("data-link")).toBe("true");
+    expect(status?.textContent).toBe("claude.ai");
+    expect(status?.querySelector("svg"), "§13's outward").not.toBeNull();
+    expect(status?.querySelector(".vf-ui-status-dot"), "a link has no dot").toBeNull();
+    expect(openOf("Release notes")?.getAttribute("aria-disabled")).toBeNull();
+    expect(openOf("Release notes")?.getAttribute("title")).toBe(
+      "Open Release notes in claude.ai · Today",
+    );
+    await press(openOf("Release notes"));
+    expect(openLink).toHaveBeenCalledTimes(1);
+    expect(openLink).toHaveBeenCalledWith(HOSTED);
+    expect(fake.callsOf("artifact.open")).toEqual([]);
+    expect(notice()).toBeUndefined();
+    // its menu keeps Open in ‹host›
+    expect(actIn(tileOf("Release notes"), "Open in claude.ai")?.getAttribute("href")).toBe(HOSTED);
+  });
+
+  it("an open answered `local` opened the page here as a file: the tile rests, and nothing is said", async () => {
+    const fake = fakeClient({
+      ...rowsOf(app(2, { title: "Release notes" })),
+      "artifact.open": () => ({ state: "local", reach: ["cdn.jsdelivr.net"] }),
+    });
+    await mountWith(fake.client, { connect: () => undefined });
+    await press(openOf("Release notes"));
+    expect(fake.callsOf("artifact.open").map((call) => call.params["reveal"])).toEqual([true]);
+    expect(statusOf("Release notes")).toBe("This Mac");
+    expect(toneOf("Release notes")).toBe("muted");
+    expect(notice()).toBeUndefined();
+    expect(container?.querySelector(".vf-apps-error")).toBeNull();
+    expect(openOf("Release notes")?.disabled, "it opens again").toBe(false);
+    // a second press asks again: nothing was held
+    await press(openOf("Release notes"));
+    expect(fake.callsOf("artifact.open")).toHaveLength(2);
+  });
+
+  it("holds what a press could not open to the top of the shelf, where the person is", async () => {
+    const fake = fakeClient(
+      rowsOf(app(2, { title: "Bundle size", availability: "missing", openable: false })),
+    );
+    await mountWith(fake.client);
+    expect(container?.querySelector(".vf-apps-alerts"), "nothing to say: no band").toBeNull();
+    await press(openOf("Bundle size"));
+    expect(notice()?.parentElement?.className).toBe("vf-apps-alerts");
+    expect(notice()?.textContent).toContain("This page wasn't kept");
+    expect(rule(".vf-apps-alerts")).toContain("position: sticky;");
+    expect(rule(".vf-apps-alerts")).toContain("top: 0;");
+    expect(rule(".vf-apps-alerts")).toContain("background: var(--vf-chrome-solid);");
+  });
+
+  it("lets the desktop's name give way with an ellipsis and never the state's word (made-apps.css)", () => {
+    const name = rule(".vf-apps-status__name");
+    expect(name).toContain("min-width: 0;");
+    expect(name).toContain("text-overflow: ellipsis;");
+    expect(name).toContain("flex: 0 1 auto;");
+    expect(CSS).toMatch(/\.vf-apps-status__word,\s*\.vf-apps-status > svg \{\s*flex: none;/u);
+  });
+
+  it("says why a tile has no preview as its menu's first line, and says nothing with one", async () => {
+    const fake = fakeClient(
+      rowsOf(
+        app(2, { title: "Release notes", previewState: "owed" }),
+        app(3, { title: "Bundle size", preview: preview(3) }),
+      ),
+    );
+    await mountWith(fake.client, { connect: () => undefined });
+    const menuOf = (title: string) => tileOf(title)?.querySelector(".vf-apps-menu > div");
+    expect(menuOf("Release notes")?.firstElementChild?.className).toBe("vf-apps-menu__note");
+    expect(menuOf("Release notes")?.firstElementChild?.textContent).toBe(
+      "No preview yet — previews are drawn once your devices are connected",
+    );
+    expect(menuOf("Bundle size")?.querySelector(".vf-apps-menu__note")).toBeNull();
+  });
+});
+
 // ── the catalog's plate ─────────────────────────────────────────────────────────────────────────
 
 describe("the catalog's made-apps plate (docs/UI_SYSTEM.md: the shipping view on a fixture adapter)", () => {
@@ -1712,13 +1987,14 @@ describe("the catalog's made-apps plate (docs/UI_SYSTEM.md: the shipping view on
     await settle();
   }
 
-  it("PIN: offers the five states the plan names, on the plates' fixed clock (15:00 on the viewer's own)", () => {
+  it("PIN: offers the five states the plan names and MA-D16's sixth, on the plates' fixed clock (15:00 on the viewer's own)", () => {
     expect(MADE_APPS_PREVIEW_STATES).toEqual([
       "populated",
       "fallback",
       "reading",
       "unbuilt",
       "empty",
+      "unconnected",
     ]);
     expect(MADE_APPS_FIXTURE_NOW).toBe(new Date(2026, 10, 5, 15, 0).getTime());
   });
@@ -1751,6 +2027,25 @@ describe("the catalog's made-apps plate (docs/UI_SYSTEM.md: the shipping view on
     expect(container?.querySelector(".vf-apps-quiet strong")?.textContent).toBe(
       "No apps from your agents yet",
     );
+
+    // MA-D16: a Mac that is not connected — the row, this Mac's own word, the three kinds, the periods
+    await plate("unconnected");
+    expect(container?.querySelector(".vf-apps-connect strong")?.textContent).toBe(
+      MADE_APPS_CONNECT.title,
+    );
+    expect(dayHeadings()).toEqual([
+      "Today",
+      "Yesterday",
+      "Previous 7 days",
+      "Previous 30 days",
+      "September",
+    ]);
+    expect(statusOf("Release notes, 0.9")).toBe("This Mac");
+    expect(statusOf("Bundle size"), "a page and a link: it opens as the app").toBe("This Mac");
+    expect(actIn(tileOf("Bundle size"), "Open in claude.ai")).toBeDefined();
+    expect(statusOf("Palette study"), "a link alone").toBe("claude.ai");
+    expect(statusOf("Search ranking"), "neither").toBe("This Mac · not kept");
+    expect(text()).not.toContain("Studios-MacBook-Pro.local");
   });
 
   it("PIN: its client answers a fieldd act with nothing, so an open on a plate never settles", async () => {

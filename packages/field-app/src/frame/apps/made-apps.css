@@ -59,6 +59,75 @@
   font-weight: 600;
 }
 
+/* The connect row (MA-D16; §8 "Asking again", a row): on a Mac that is not connected, one card in
+   the fill at the head of the group — `mesh` at 18, the heading and its line, Connect… at its end. */
+.vf-apps-connect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--vf-fill);
+  color: var(--vf-text-secondary);
+}
+
+.vf-apps-connect > svg {
+  flex: none;
+}
+
+.vf-apps-connect > span {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.vf-apps-connect__title {
+  color: var(--vf-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.vf-apps-connect__line {
+  color: var(--vf-text-secondary);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.vf-apps-connect > button {
+  height: 28px;
+  flex: none;
+}
+
+/* What a press could not open is said where the person is (MA-D16): the notice and the error hold
+   to the top of the shelf while the list scrolls under them, on the sheet's own solid surface from
+   edge to edge (the shelf pads 20 at each side), a hairline under them. */
+.vf-apps-alerts {
+  position: sticky;
+  z-index: 4;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 -20px;
+  padding: 8px 20px;
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 1px 0 var(--vf-hairline);
+}
+
+/* The shelf pads 12 above its content, and a held band rests at the content's edge: the same
+   surface covers that strip, so no tile shows through above the band. */
+.vf-apps-alerts::before {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  left: 0;
+  height: 12px;
+  background: inherit;
+  content: "";
+}
+
 /* Why a pressed tile did not open, with Open in ‹host› when the app is hosted. */
 .vf-apps-notice {
   display: flex;
@@ -265,8 +334,12 @@
   white-space: nowrap;
 }
 
+/* The third line says where a press goes (MA-D16, 2026-11-24; §8 as amended that day). The name
+   gives way with an ellipsis and the state's word is always whole: a long desktop name had cut the
+   word off on every tile that had one. A link's line is §13's `outward` and its host, no dot. */
 .vf-apps-status {
   display: flex;
+  min-width: 0;
   max-width: 100%;
   overflow: hidden;
   align-items: center;
@@ -275,6 +348,18 @@
   color: var(--vf-text-secondary);
   font-size: 10px;
   white-space: nowrap;
+}
+
+.vf-apps-status__name {
+  min-width: 0;
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.vf-apps-status__word,
+.vf-apps-status > svg {
+  flex: none;
 }
 
 /* §9's "Opening on ‹desktop›…", LATE as History's opening words are: the tile holds its desktop's
@@ -338,6 +423,17 @@
   box-shadow:
     var(--vf-shadow-island),
     0 0 0 1px var(--vf-hairline);
+}
+
+/* Why the tile has no preview (MA-D16; §9 "Apps"): the menu's first line, in the tertiary ink. */
+.vf-apps-menu__note {
+  margin: 0 0 3px;
+  padding: 5px 8px 7px;
+  box-shadow: 0 1px 0 var(--vf-hairline);
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: normal;
 }
 
 .vf-apps-tile:nth-child(3n + 1) .vf-apps-menu > div {

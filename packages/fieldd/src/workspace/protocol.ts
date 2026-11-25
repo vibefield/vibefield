@@ -1,4 +1,5 @@
 import type {
+  MadeAppNetworkPolicy,
   MadeAppViewTheme,
   PlaceKind,
   WorkspaceEntry,
@@ -332,6 +333,14 @@ export interface BuildMadeViewArgs {
    * lowercase hex, as rosetta's export named it: checked while the page is
    * copied, and a page that is not this digest writes no view (`mismatch`) */
   blake3: string;
+  /** MA-D16 (2026-11-24) — build the app's LOCAL view instead: the file a
+   * desktop with no linked login hands the browser, since no serve can carry
+   * the app there. Its head is `madeAppLocalViewHead(theme, policy)`, which
+   * carries the page's policy itself (no response header reaches a file), and
+   * it is written as MADE_APP_VIEW.LOCAL_FILE in the same folder, by the same
+   * temp and rename. The served view beside it is not touched. Absent: the
+   * served view, as before. */
+  local?: { policy: MadeAppNetworkPolicy };
 }
 
 export interface BuildMadeViewValue {

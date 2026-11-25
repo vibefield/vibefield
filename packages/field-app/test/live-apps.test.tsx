@@ -215,13 +215,14 @@ describe("LiveApps", () => {
     expect(button("Proxy")).not.toBeNull();
   });
 
-  it("says an empty catalog in the act's name — Publish a proxy or a folder — with one Publish…, which opens the step (HN-8, ruling 11)", async () => {
+  it("says an empty catalog in ONE ROW, in the act's name — Publish a proxy or a folder — with one Publish…, which opens the step (HN-8, ruling 11; MA-D16)", async () => {
     await mount(client([]));
-    const quiet = container?.querySelector(".vf-artifact-quiet");
-    expect(quiet?.querySelector(".vf-ui-empty-state__title")?.textContent).toBe("No apps yet");
-    expect(quiet?.querySelector(".vf-ui-empty-state__description")?.textContent).toBe(
-      "Publish a proxy or a folder",
-    );
+    // MA-D16 (2026-11-24): no quiet state, no art and no heading: they filled the open sheet above the
+    // person's own apps, and "No apps yet" was false while those stood below
+    expect(container?.querySelector(".vf-artifact-quiet")).toBeNull();
+    expect(container?.textContent).not.toContain("No apps yet");
+    const quiet = container?.querySelector(".vf-artifact-empty-row");
+    expect(quiet?.querySelector("span")?.textContent).toBe("Publish a proxy or a folder");
     const buttons = [...(quiet?.querySelectorAll("button") ?? [])];
     expect(buttons.map((found) => found.textContent)).toEqual(["Publish…"]);
     // the empty catalog draws no Publish… tile beside it: one Publish… on screen

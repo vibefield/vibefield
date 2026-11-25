@@ -6,6 +6,7 @@ import {
   uiButtonClass,
   uiFieldClass,
 } from "@vibefield/design-kit";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import { thisDeviceWord } from "../../account/link";
 import { MadeAppTile } from "./MadeAppTile";
@@ -13,6 +14,7 @@ import {
   FROM_YOUR_AGENTS,
   MADE_APP_OPEN_RETRY_DELAYS_MS,
   MADE_APP_SERVING_HELD_MS,
+  MADE_APPS_CONNECT,
   MADE_APPS_QUERY_MAX,
   MADE_APPS_SEARCH_DEBOUNCE_MS,
   type MadeAppAct,
@@ -21,7 +23,6 @@ import {
   madeAppActBasis,
   madeAppAt,
   madeAppAway,
-  madeAppDays,
   madeAppDayWords,
   madeAppDesktop,
   madeAppErrorKind,
@@ -29,12 +30,15 @@ import {
   madeAppFacts,
   madeAppHost,
   madeAppImageUrl,
+  madeAppPeriods,
+  madeAppPreviewNote,
   madeAppReadingLine,
   madeAppRefusalOf,
   madeAppSourceOf,
   madeAppStateOf,
   madeAppsClippedLine,
   madeAppsFeedReadingLines,
+  madeAppTileStateOf,
   madeAppVersions,
   markMadeApp,
   openMadeApp,
@@ -44,8 +48,10 @@ import {
 import "./made-apps.css";
 
 // FROM YOUR AGENTS — the group (DESIGN.md §8 "Artifacts — the Artifacts shelf's contents", as amended
-// 2026-11-05; §9 "Apps"): its head (the heading and the "Search apps" field that searches it), its
-// days newest first, each a row of made tiles three across at the shelf's width, its honest states
+// 2026-11-05 and 2026-11-24; §9 "Apps"): its head (the heading and the "Search apps" field that
+// searches it), the connect row on a Mac that is not connected, its periods newest first (Today,
+// Yesterday, Previous 7 days, Previous 30 days, then by month), each a grid of made tiles three across
+// at the shelf's width, its honest states
 // (reading, empty, unreadable, a desktop asleep or on another build, an app not written out yet with
 // "Open in ‹host›"), and the in-place Versions step. A controller-free view over a client: the
 // shelf's host (4c) hands it the window's FielddClient, the catalog its fixture adapter
@@ -59,7 +65,12 @@ import "./made-apps.css";
 //   serve nobody opens lives (`MADE_APP_SERVING_HELD_MS`, the origin's idle close).
 // - A press on a tile that cannot open asks nothing and says why in the group's notice, with
 //   "Open in ‹host›" when the app is hosted: an https link the window's own policy hands the system
-//   browser (main's `decideWindowOpen`), so it needs no `shell.open` either.
+//   browser (main's `decideWindowOpen`), so it needs no `shell.open` either. The notice and the
+//   error hold to the top of the shelf while the list scrolls (made-apps.css), so a press far down
+//   the list is answered in sight (MA-D16, 2026-11-24: it was said at the group's head, out of view).
+// - A tile whose app holds a hosted link and no page opens the link itself, through the same
+//   policy (MA-D16). An open the home answers `local` opened the page as a file on this Mac: nothing
+//   serves, so the tile rests.
 // - Keep asks `artifact.mark` once by the fold key. The home's answer stands until the next
 //   reading lands; until slice 3h the door refuses, and the group says so. (Hide was dropped,
 //   James 2026-11-13.)
@@ -75,6 +86,19 @@ export interface MadeAppsProps {
   /** the image transport: the product derives `madeAppImageUrl`; the catalog, which has no tailnet,
    * hands its own stills */
   readonly previewSrc?: (app: IndexApp, sources: readonly IndexAppsSource[]) => string | undefined;
+  /** MA-D16: this Mac is in the ordinary unconnected state (`useOffersConnect`), and this opens
+   * Settings → Devices and begins the link there (`open-connect`). Present, the group draws the
+   * connect row and names this Mac's own apps by this desktop's word; absent, neither. */
+  readonly connect?: () => void;
+  /** opens a hosted link in the person's browser (the window's own policy; a test's or the catalog's
+   * records it) */
+  readonly openLink?: (url: string) => void;
+}
+
+/** A hosted link, opened as every link out of the window is: a new browsing context the shell denies
+ * and hands the OS (main's `decideWindowOpen`, https only), with no opener and no referrer. */
+function openInBrowser(url: string): void {
+  window.open(url, "_blank", "noopener,noreferrer");
 }
 
 /** This window's last open of an app, or of one of its versions, and the row it was about
@@ -120,7 +144,10 @@ export function MadeApps({
   here = thisDeviceWord(undefined),
   locale,
   previewSrc = madeAppImageUrl,
+  connect,
+  openLink = openInBrowser,
 }: MadeAppsProps): ReactElement {
+  const alone = connect !== undefined;
   const [query, setQuery] = useState("");
   const [q, setQ] = useState("");
   const { feed, projects, retry, refresh } = useMadeAppsFeed(client, q);
@@ -184,7 +211,8 @@ export function MadeApps({
 
   const sources = feed.phase === "live" ? feed.sources : [];
   const sourceOf = (app: IndexApp): IndexAppsSource | undefined => madeAppSourceOf(app, sources);
-  const desktopOf = (app: IndexApp): string => madeAppDesktop(sourceOf(app), app.device, here);
+  const desktopOf = (app: IndexApp): string =>
+    madeAppDesktop(sourceOf(app), app.device, here, alone);
   const markOf = (app: IndexApp): Mark | undefined => {
     const mark = marks.get(app.foldKey);
     return mark !== undefined && mark.over === landed ? mark : undefined;
@@ -198,6 +226,9 @@ export function MadeApps({
       : undefined;
   };
   const stateOf = (app: IndexApp, presentationId?: string) => {
+    // the tile's own state, with where a press goes on the desk (MA-D16); a version is its own page
+    if (presentationId === undefined)
+      return madeAppTileStateOf(app, sourceOf(app), actOf(app), desktopOf(app));
     const read = versions?.read;
     const entry =
       presentationId === undefined || read === null || read === "failed" || read === undefined
@@ -262,6 +293,11 @@ export function MadeApps({
     }
     try {
       const answer = await openMadeApp(client, app, presentationId);
+      if (answer.state === "local") {
+        // opened on this Mac as a file: nothing serves, so the tile rests
+        setAct(key, undefined);
+        return;
+      }
       if (answer.state === "serving") {
         setAct(key, held({ kind: "serving" }));
         // green no longer than a serve nobody opens lives: past it the row's rest stands
@@ -294,6 +330,11 @@ export function MadeApps({
     const key = actKey(app.appKey, presentationId);
     const state = stateOf(app, presentationId);
     setError(null);
+    if (state.link !== undefined) {
+      setNotice(null);
+      openLink(state.link.url);
+      return;
+    }
     if (!state.opens) {
       setNotice(state.why === null ? null : { appKey: app.appKey, presentationId });
       return;
@@ -353,8 +394,9 @@ export function MadeApps({
   const noticed = notice === null ? undefined : noticedApp(notice);
   const why = noticed === undefined ? null : stateOf(noticed, notice?.presentationId).why;
 
-  const alerts = (
-    <>
+  const showsNotice = noticed !== undefined && why !== null;
+  const alerts = (showsNotice || error !== null) && (
+    <div className="vf-apps-alerts">
       {noticed !== undefined && why !== null && (
         <MadeAppNotice
           title={why.title}
@@ -368,7 +410,7 @@ export function MadeApps({
           {error}
         </InlineNotice>
       )}
-    </>
+    </div>
   );
 
   if (versions !== null) {
@@ -447,6 +489,16 @@ export function MadeApps({
           onChange={(event) => setQuery(event.target.value)}
         />
       </div>
+      {connect !== undefined && (
+        <div className="vf-apps-connect">
+          <FieldGlyph name="mesh" size={18} />
+          <span>
+            <strong className="vf-apps-connect__title">{MADE_APPS_CONNECT.title}</strong>
+            <small className="vf-apps-connect__line">{MADE_APPS_CONNECT.detail}</small>
+          </span>
+          <UiButton onClick={connect}>{MADE_APPS_CONNECT.act}</UiButton>
+        </div>
+      )}
       {alerts}
       {reading.map((line) => (
         <p key={line.key} className="vf-apps-reading" role="status">
@@ -473,13 +525,19 @@ export function MadeApps({
       )}
       {apps.length > 0 && (
         <div className="vf-apps-days">
-          {madeAppDays(apps, clock, locale).map((day, index) => (
-            <section key={`${index}:${day.label}`} className="vf-apps-day" aria-label={day.label}>
-              <h3>{day.label}</h3>
+          {madeAppPeriods(apps, clock, locale).map((period, index) => (
+            <section
+              key={`${index}:${period.label}`}
+              className="vf-apps-day"
+              aria-label={period.label}
+            >
+              <h3>{period.label}</h3>
               <ul className="vf-apps-tiles">
-                {day.apps.map((app) => {
+                {period.apps.map((app) => {
                   const source = sourceOf(app);
                   const kept = markOf(app)?.kept ?? app.kept === true;
+                  const imageUrl = previewSrc(app, sources);
+                  const at = madeAppAt(app);
                   return (
                     <MadeAppTile
                       key={app.appKey}
@@ -488,7 +546,15 @@ export function MadeApps({
                       desktop={desktopOf(app)}
                       state={stateOf(app)}
                       muted={madeAppAway(source)}
-                      imageUrl={previewSrc(app, sources)}
+                      imageUrl={imageUrl}
+                      day={at > 0 ? madeAppDayWords(at, clock, locale) : null}
+                      previewNote={madeAppPreviewNote(
+                        app,
+                        source,
+                        desktopOf(app),
+                        alone,
+                        imageUrl !== undefined,
+                      )}
                       kept={kept}
                       busy={busy.has(app.appKey)}
                       onOpen={() => open(app)}

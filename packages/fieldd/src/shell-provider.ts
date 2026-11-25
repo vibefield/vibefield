@@ -15,6 +15,8 @@ import {
   ShellOpenExternalResult,
   ShellOpenLinkParams,
   ShellOpenLinkResult,
+  ShellOpenMadeAppParams,
+  ShellOpenMadeAppResult,
   type ShellProviderCallParams,
   type ShellProviderMethod,
   ShellProviderRegisterParams,
@@ -149,6 +151,16 @@ const METHOD_CONTRACTS: Record<ShellProviderMethod, MethodContract> = {
   "shell.openLink": {
     input: ShellOpenLinkParams,
     output: ShellOpenLinkResult,
+    deadlineMs: OPEN_EXTERNAL_DEADLINE_MS,
+  },
+  // MA-D16 (2026-11-24) — a made app's local view, as a file in the default
+  // browser (internal; `artifact.open`'s local road dispatches it for a view
+  // its own files worker just wrote). The ask names the app and its page's
+  // digest, never a path: main derives the file. The same OS hand-off as
+  // openLink, so the same deadline.
+  "shell.openMadeApp": {
+    input: ShellOpenMadeAppParams,
+    output: ShellOpenMadeAppResult,
     deadlineMs: OPEN_EXTERNAL_DEADLINE_MS,
   },
 };

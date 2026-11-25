@@ -5,11 +5,13 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { MadeAppReach } from "../src/artifacts";
 import {
+  MADE_APP_LOCAL_VIEW_OMITS,
   MADE_APP_VIEW_TAIL,
   MadeAppNetworkHost,
   MadeAppNetworkHosts,
   MadeAppNetworkPolicy,
   type MadeAppViewTheme,
+  madeAppLocalViewHead,
   madeAppPolicyFromManifest,
   madeAppReachOf,
   madeAppServeHeaders,
@@ -80,6 +82,17 @@ interface HeadersVector {
   };
 }
 
+interface LocalViewVector {
+  views: {
+    case: string;
+    theme: MadeAppViewTheme;
+    policy: MadeAppNetworkPolicy;
+    csp: string;
+    head: string;
+  }[];
+  refused: { case: string; theme: MadeAppViewTheme; policy: unknown; refused: string }[];
+}
+
 interface ViewVector {
   tail: string;
   views: { case: string; theme: MadeAppViewTheme; head: string }[];
@@ -108,6 +121,7 @@ interface EnvironmentRow {
 
 const HEADERS = vector<HeadersVector>("made-app-headers.vector");
 const VIEWS = vector<ViewVector>("made-app-view.vector");
+const LOCAL_VIEWS = vector<LocalViewVector>("made-app-local-view.vector");
 const MANIFESTS = vector<{ rows: ManifestRow[] }>("vibefield-app-manifest-hostile.vector");
 const ENVIRONMENTS = vector<{ rows: EnvironmentRow[] }>("made-app-environment.vector");
 
@@ -466,12 +480,68 @@ describe("the DR-1a rows are pinned (a move is a deliberate edit)", () => {
   it("pins the view's file, version and bounds", () => {
     expect(MADE_APP_VIEW).toEqual({
       FILE: "index.html",
+      LOCAL_FILE: "local.html",
       VERSION: 1,
       PAGE_MAX_BYTES: 16 * 1024 * 1024,
       VARIABLES: 64,
       VARIABLE_NAME_BYTES: 64,
       VALUE_BYTES: 256,
       REFUSED_THEME: "theme-unreadable",
+      REFUSED_LOCAL_POLICY: "policy-unreadable",
     });
+  });
+});
+
+describe("the local view (MA-D16, 2026-11-24): the page's policy rides in its own head", () => {
+  for (const row of LOCAL_VIEWS.views) {
+    it(`composes the head: ${row.case}`, () => {
+      expect(madeAppLocalViewHead(row.theme, row.policy)).toEqual({ ok: true, head: row.head });
+      expect(row.head).toContain(`content="${row.csp}"`);
+    });
+
+    it(`names the serve's own policy, less what a meta cannot carry: ${row.case}`, () => {
+      const served = madeAppServeHeaders(row.policy);
+      if (!served.ok) throw new Error(`refused ${served.refused}`);
+      const header = served.headers[0]?.value ?? "";
+      const carried = header
+        .split("; ")
+        .filter(
+          (directive) => !MADE_APP_LOCAL_VIEW_OMITS.some((name) => directive.startsWith(name)),
+        );
+      expect(row.csp).toBe(carried.join("; "));
+      expect(header.split("; ").length - carried.length).toBe(MADE_APP_LOCAL_VIEW_OMITS.length);
+    });
+
+    it(`is the served head with the policy before the style: ${row.case}`, () => {
+      const served = madeAppViewHead(row.theme);
+      const local = madeAppLocalViewHead(row.theme, row.policy);
+      if (!served.ok || !local.ok) throw new Error("refused");
+      const metas = `<meta http-equiv="Content-Security-Policy" content="${row.csp}"><meta name="referrer" content="no-referrer">`;
+      expect(local.head.replace(metas, "")).toBe(served.head);
+      expect(local.head.indexOf(metas)).toBeLessThan(local.head.indexOf("<style>"));
+    });
+  }
+
+  for (const row of LOCAL_VIEWS.refused) {
+    it(`refuses: ${row.case}`, () => {
+      expect(madeAppLocalViewHead(row.theme, row.policy as MadeAppNetworkPolicy)).toEqual({
+        ok: false,
+        refused: row.refused,
+      });
+    });
+  }
+
+  it("refuses a policy past the union cap, as the serve's headers do", () => {
+    const hosts = Array.from({ length: MADE_APP_SERVE_POLICY.UNION_HOSTS + 1 }, (_, i) =>
+      host(i, 20),
+    );
+    expect(
+      madeAppLocalViewHead({ colorScheme: "light", variables: [] }, everywhere(hosts)),
+    ).toEqual({ ok: false, refused: MADE_APP_VIEW.REFUSED_LOCAL_POLICY });
+  });
+
+  it("names its file beside the served view's, never the same name", () => {
+    expect(MADE_APP_VIEW.LOCAL_FILE).not.toBe(MADE_APP_VIEW.FILE);
+    expect(MADE_APP_VIEW.LOCAL_FILE).toMatch(/^[a-z]+\.html$/);
   });
 });
