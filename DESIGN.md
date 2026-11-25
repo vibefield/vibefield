@@ -5443,6 +5443,19 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     `locked`: every selected object taped): no Duplicate, and the tape act becomes **Lift the
     tape**, wearing `lift` — an ACTION whose name changes, never a toggle and never `aria-pressed`
     (R10).
+  - **What an act says now** *(added 2026-11-25, track OM; ICE I61)* — a kind may say, with the anchor, what one of
+    its acts is at this moment (the slot's `enabled`, `label`, `glyph` and `swatch`), and the bar prints it and adds
+    nothing: **disabled**, faint by ink, `aria-disabled` and inert (`ops.runMenuAction` refuses it, its key too);
+    **another label and drawing** — the browser pane's **Mute** becomes **Unmute**, its speaker struck through: an
+    ACTION whose name changes, never a toggle and never `aria-pressed` (R10), as Lift the tape is; or **a swatch** in
+    place of its glyph, the tools in hand's dot (12, with its 1px inner ring) in a 32 cell.
+  - **An act that is a choice** *(added 2026-11-25, track OM; ICE I62)* — a kind's act may offer one of several now
+    (the slot's `choices`): the browser pane's device. On the bar it is a **choice pill**: its glyph at 16 in secondary
+    ink, the current choice's label at 13/500 in primary ink, and `chevron` 12 turned down in tertiary ink — 32 tall,
+    padded 0 8 0 9, gaps 6 and 4, corners 16, with a cell's states, and the inverted solid while its list is open, as
+    More is. Selected objects on different choices say **Mixed**, in secondary ink. Its tooltip and its accessible
+    name say the act and the choice: "Device: Laptop". Pressed, the bar grows into **the choice's list** ("The bar
+    grown", below), and a choice taken runs the act with it (`ops.runMenuAction(id, choice)`), one undo step.
   - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · Make a card,
     which rests on the ready fill, steps to 14% under the pointer and 0.97 pressed (R25) · More,
     its menu open, shown on — the inverted solid · Delete arms only while hovered:
@@ -5505,6 +5518,25 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
   desk holds it, never re-encoded. The status line says **"Saved to ‹folder›"**, or **"Couldn't save this
   picture. Try again, or choose another place."**, with the reason in the log; a cancelled panel says nothing. It has
   no key and no place in the tools in hand until §13 has a glyph for it.
+  *Added 2026-11-25 (track OM; ICE I62):* **A choice's list** grows from its pill as the menu grows from More — the
+  same element, material, place, motion, keys and closing — and More, open, gives way to it, as it gives way to More.
+  Its **eyebrow** is the act's name (DEVICE). Its **rows** are the kind's choices, nearest first in the kind's order,
+  and where the kind's group changes a hairline stands, as between More's groups. The current one wears `check` 14 at
+  the row's start in primary ink, and every row keeps that 22 so the labels align (`menuitemradio`, `aria-checked`).
+  A choice's **hint** stands at the row's end in the key's place, 11/500 `tabular-nums` in tertiary ink
+  ("1280 × 800"), and a **swatch** is a 12 dot before its label. In More the act is one row, its name with its current
+  choice in the key's place; taking it shows the choice's list in More's place.
+  **A choice that asks for values** (the kind's fields: the browser pane's Custom) reads with an ellipsis in the list,
+  "Custom…" — the host's, as the voice asks of a command that asks before it acts; its pill says "Custom". Taken, **its
+  fields open under its row**, 32 in so they stand under the labels, and the list grows to hold them, on the grow's
+  curve; the first field takes the focus with its value selected. Each field's label is
+  11/500 in secondary ink over the field; the field is 32 tall on the ready fill, corners 10, padded 0 10, 13/500 in
+  primary ink. Numbers are 72 wide in `tabular-nums`, side by side, with a × in tertiary ink between a width and a
+  height; a text is the list's width less its padding, its placeholder in tertiary ink. **Use**, at their end, is
+  VibeField's primary at 32, Done's look. Return in a field takes them; Esc in a field puts its value back, and Esc
+  again folds the list (R5). A value outside its field's bounds or off its step, or a text too long, marks its field
+  with a 1.5px ring in `--vf-ink-danger` and says why under the fields in secondary ink — "Width is 320 to 8192" —
+  and Use waits, faint by ink, until every value fits. The fields open with the first selected object's values.
 - **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
   readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
   `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element
@@ -5525,7 +5557,10 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
   off the dot — the ring the notch's pin wore (§8 "Edge trays", retired at HN-8); a dot grows 1.18× under the pointer (160ms, pop). A **mode
   without one** (the eraser) is a 32 cell, the inverted solid while it is the
   one in hand (`aria-pressed`); an **action** (`kind: "action"` — undo) is a 32
-  cell; a slot with no `kind` waits, faint by ink. Glyphs by §13's table (R2). **The readout**
+  cell; a slot with no `kind` waits, faint by ink. *Added 2026-11-25 (track OM; ICE I62):* **an action that is a
+  choice** is the selection bar's choice pill among the tools, and its list grows from it as it does over a selection
+  — downward here, the bar's own row heading it (R6) — each choice taken through `ops.useHeldTool(id, choice)`. Glyphs
+  by §13's table (R2). **The readout**
   (MC-D9, I22's `HeldAnchor.readout` — a clock's time) is ONE slot after the tools, before
   Done, since the string carries no position (R13): 12/500 `tabular-nums` in secondary ink, at
   least 44 wide, padded 0 4; a kind that says none shows none. **Done** is VibeField's primary at
@@ -13375,6 +13410,20 @@ under the words. With a direct device connection, a held simulator accepts taps,
 | live | the stream | — |
 | at rest | its last frame, with the rest mark | — |
 | stopped | "The Simulator stopped", over its still | "Try again" |
+
+**The browser pane's acts** (track OM, OM-1, 2026-11-25) are **Device** and **Mute**, on the selection bar and in the
+tools in hand. **Device** is a choice (§8, "An act that is a choice"): each device in its list with its size — **Laptop**
+1280 × 800, **Desktop** 1440 × 900, **iPad Air 11″** 820 × 1180, **iPhone 17 Pro** 402 × 874 — and **Custom…** last,
+which asks for a **Width** (320 to 8192), a **Height** (240 to 8192) and a **User agent**, whose empty field says
+"The browser's own". A device carries its own pixel ratio, its own input (touch on the iPad and the iPhone) and the
+user agent it reports; Custom keeps a laptop's ratio and its pointer. Choosing one cuts the pane to its size about its
+centre, one undo step. A phone or a tablet adds **Turn to landscape**, and **Turn to portrait** once turned. The pane's
+handles still resize it, its device unchanged; choosing its device again puts the device's own size back. Panes on
+different devices say **Mixed**, and a choice sets them all. **Mute** silences the page and becomes **Unmute**, its
+speaker struck through; with several panes selected, Mute mutes them all while any can sound, and Unmute stands once
+every one is muted. The settings form these replace, which also set a pixel ratio, an input and a user agent, is gone
+(James, 2026-11-25: "let's remove pixel ratio, input and ua selection"). A pane saved with one of those keeps it
+until a device is chosen.
 
 **The simulator's selection menu** offers **Simulator settings…** and **Finish**. Double-clicking a new simulator opens
 setup. Choose an installed iOS version and a compatible iPhone model to create a separate local device for each selected
