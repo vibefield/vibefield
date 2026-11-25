@@ -380,6 +380,8 @@ export async function floor(config: FloorConfig): Promise<Floor> {
           rosettadHome: indexHome,
           agentResumeWhenIdle: config.index,
         }),
+    // Spark QA F12 — the scripted agent has no TUI to wait for: a born run takes input at once
+    agentStart: { settleMs: 0, saidWithinMs: 0 },
     ...(config.stopHeardWithinMs !== undefined
       ? { agentStopHeardWithinMs: config.stopHeardWithinMs }
       : {}),

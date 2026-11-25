@@ -88,6 +88,7 @@ import {
   type SpawnAgentResult,
 } from "@vibefield/puppeteer-runtime";
 import type { ProcessTable } from "@vibefield/puppeteer-runtime/spawn-through";
+import { RunBoots } from "./agent-boot";
 import { sparkHatchRefusal } from "./agent-briefing";
 import { requireOffered as offeredBy, requireVisible as visibleBy } from "./agent-catalog-gates";
 import {
@@ -519,6 +520,9 @@ export interface AgentRuntimeServiceOptions {
   index: IndexService;
   /** the index daemon's supervisor, for the reconcile on every ready; null = no daemon */
   supervisor: RosettadSupervisor | null;
+  /** Spark QA F12 (2026-11-25) — a born run's wait before it takes input (`agent-boot.ts`); absent: contracts'
+   * AGENT_START. A seam for tests whose stand-in agent has no TUI to wait for. */
+  start?: { settleMs?: number; saidWithinMs?: number } | undefined;
   /** AR-3 — the terminal service the host spawns through, LATE-BOUND (the
    * daemon builds the runtime before the floor's service); null = no floor,
    * and every spawn refuses typed. Ignored when `host` is given. */
@@ -973,6 +977,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private readonly sparkTurnedListeners = new Set<(spark: SparkId, at: string) => void>();
   /** TH-1, CP-4a2b — each run as it enters (`onRunEntered`): a spark's transcript, a flow's steps */
   private readonly runEnteredListeners = new Set<(entered: RunEntered) => void>();
+  /** Spark QA F12 (2026-11-25) — the runs born under this fieldd that do not take input yet (`agent-boot.ts`) */
+  private readonly boots: RunBoots;
   private publishTimer: NodeJS.Timeout | null = null;
   private disposed = false;
   /** Item 192 (RV #6) — a consented stop of fieldd's own holds the launches closed while it compares its census
@@ -982,6 +988,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   constructor(private readonly opts: AgentRuntimeServiceOptions) {
     this.logger = opts.logger ?? createNoopLogger();
+    this.boots = new RunBoots({
+      onTakesInput: (runtimeRunId) => {
+        const entry = this.managed.get(runtimeRunId);
+        if (entry !== undefined && !entry.exiting) this.tellRunMonitor(entry);
+      },
+      ...(opts.start !== undefined ? opts.start : {}),
+      logger: this.logger,
+    });
     this.now = opts.now ?? (() => new Date());
     this.home = opts.home ?? homedir();
     this.helperRoots = new RunHelperRoots({ floor: opts.helperRoots, logger: this.logger });
@@ -2507,6 +2521,8 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   ): Promise<{ status: "confirmed" | "rejected" | "uncertain"; reason?: string }> {
     const entry = this.managed.get(runtimeRunId);
     if (entry === undefined || entry.exiting) return { status: "rejected", reason: "not-live" };
+    // Spark QA F12 (2026-11-25) — a paste into a TUI that has not started is kept as a draft, never submitted
+    if (!this.boots.takesInput(runtimeRunId)) return { status: "rejected", reason: "starting" };
     const receipt = await entry.agent.submitPrompt({ text, mode: "paste-and-submit" });
     return receipt.status === "confirmed"
       ? { status: "confirmed" }
@@ -2516,6 +2532,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** CP-2 — a live run's monitor row: the input queue's idle test and the waker's state. */
   monitorOf(runtimeRunId: string): AgentMonitorMirror | undefined {
     return this.managed.get(runtimeRunId)?.mirror;
+  }
+
+  /** Spark QA F12 (2026-11-25) — the run takes input: it is live, and it is not still starting (`agent-boot.ts`). The
+   * input queue's idle reads it beside the monitor's row, whose first word for a new run is already `idle`. */
+  takesInput(runtimeRunId: string): boolean {
+    const entry = this.managed.get(runtimeRunId);
+    return entry !== undefined && !entry.exiting && this.boots.takesInput(runtimeRunId);
   }
 
   /** CP-2 — the run is live under this daemon: it can take input, a stop or an end. */
@@ -3403,6 +3426,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       this.ledgerTimer = null;
     }
     this.keepLedger();
+    this.boots.dispose();
     this.disposed = true;
     if (this.onTransition !== null) this.opts.supervisor?.off("transition", this.onTransition);
     for (const unsubscribe of this.unsubscribeMonitor) unsubscribe();
@@ -3767,6 +3791,9 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (typeof turnedAt === "string") this.sparkTurned(entry, turnedAt);
     // TH-1, CP-4a2b — every run is heard by its listeners from here: a spark's transcript, a flow's steps
     this.runEntered(entry, agent, launch);
+    // Spark QA F12 (2026-11-25) — a run born here (spawned or resumed) takes input once its agent has said it started;
+    // one that was alive before this fieldd (re-attached, adopted) always did
+    if (launch.reattached === undefined && launch.adopted === undefined) this.awaitStart(agent);
     const current = this.runtime.monitorState(info.runtimeRunId);
     if (current !== undefined) this.applyMonitor(entry, current);
     this.logger.info(
@@ -5787,20 +5814,34 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (entry === undefined) return;
     this.applyMonitor(entry, state);
     this.publish();
+    this.tellRunMonitor(entry);
+  }
+
+  /** A run's monitor listeners are told its row: at each change of it, and when a born run begins to take input
+   * (Spark QA F12, 2026-11-25), which changes no row and is the input queue's moment all the same. */
+  private tellRunMonitor(entry: ManagedEntry): void {
+    const runtimeRunId = entry.info.runtimeRunId;
     for (const listener of this.runMonitorListeners) {
       try {
-        listener(state.runtimeRunId, entry.mirror);
+        listener(runtimeRunId, entry.mirror);
       } catch (err) {
         this.logger.warn(
           "fieldd.agents.monitor_listener_failed",
           "A run's monitor listener threw",
-          {
-            runtimeRunId: state.runtimeRunId,
-            reason: (err as Error).message,
-          },
+          { runtimeRunId, reason: (err as Error).message },
         );
       }
     }
+  }
+
+  /** Spark QA F12 (2026-11-25) — a born run's wait for its agent's own start line (`agent-boot.ts`). */
+  private awaitStart(agent: Agent): void {
+    const runtimeRunId = agent.info.runtimeRunId;
+    const lifecycle = agent.state.lifecycle;
+    this.boots.born(runtimeRunId, lifecycle !== "preparing" && lifecycle !== "starting");
+    agent.on("session:started", () => this.boots.said(runtimeRunId));
+    agent.on("session:ready", () => this.boots.said(runtimeRunId));
+    agent.on("turn:started", () => this.boots.turned(runtimeRunId));
   }
 
   /** CP-2, item 201 — a run left this daemon's fold for good: a managed run's exit, a held run's exit, withdrawal or
@@ -5812,6 +5853,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // OB custody (rule 6) — nothing more is said to the floor for a run that ended: its one timer stops. What launch
     // memory holds for it stays (`bornFor` answers for the process's whole life)
     this.forgetUntold(runtimeRunId);
+    this.boots.forget(runtimeRunId);
     for (const listener of this.runEndedListeners) {
       try {
         listener(runtimeRunId);

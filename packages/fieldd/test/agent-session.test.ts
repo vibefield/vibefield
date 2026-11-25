@@ -767,6 +767,8 @@ interface SetupConfig {
   modelSwitch?: boolean;
   /** ST — how long a sent Stop waits to be heard (default: `AGENT_STOP.HEARD_WITHIN_MS`) */
   stopHeardWithinMs?: number;
+  /** Spark QA F12 — a born run's wait before it takes input (absent: none) */
+  start?: { settleMs?: number; saidWithinMs?: number };
   /** item 121 — the route snapshot THIS boot's class placement reads (default: the snapshot itself) */
   classRoutes?: (routes: TerminalRouteSnapshot) => TerminalRouteSnapshot;
   /** RV #1 (item 203) — the scripted adapter refuses every launch with this code and sentence */
@@ -916,6 +918,8 @@ async function setup(config: SetupConfig): Promise<Box> {
       ];
     },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
+    // Spark QA F12 — the scripted agent has no TUI to wait for: a born run takes input at once, unless a row asks
+    agentStart: config.start ?? { settleMs: 0, saidWithinMs: 0 },
     ...(config.stopHeardWithinMs !== undefined
       ? { agentStopHeardWithinMs: config.stopHeardWithinMs }
       : {}),

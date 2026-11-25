@@ -570,6 +570,17 @@ export const AGENT_STOP = {
   HEARD_WITHIN_MS: 3_000,
 } as const;
 
+/** Spark QA F12 (2026-11-25) — a run that was just spawned or resumed takes no input until its agent has said it
+ * started and SETTLE_MS has passed since (fieldd's `agent-boot.ts`): a task pasted into a TUI that has not started is
+ * kept as an unsent draft. A run that has not said it started within SAID_WITHIN_MS takes input from then, as every
+ * run did before. PROVISIONAL, as AGENT_STOP's bound is: both are stand-ins for a fact the terminal engine has (the
+ * pane's program turned bracketed paste on) and does not give fieldd yet, measured on Claude Code 2.1.332, Codex
+ * 0.172.0 and Grok 1.0.92 on 2026-11-25. */
+export const AGENT_START = {
+  SETTLE_MS: 2_500,
+  SAID_WITHIN_MS: 12_000,
+} as const;
+
 /** CP-4 (step0-cp4.md §5.1; the round's CP-4 marks, ruled 2026-11-04 at the leans) — a flow run's bounds, each
  * PROVISIONAL until measured on James's runs, as AGENT_STOP's is:
  *  - SCRIPT_MAX_BYTES: a flow file's bytes, read, approved, proposed inline (`flow_propose`) or sent as text

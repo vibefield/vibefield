@@ -710,6 +710,8 @@ export interface FielddConfig {
   /** OB custody test seam: how long until a started-for set the floor did not take is said again (production:
    * the runtime's `STARTED_FOR_RETRY_MS`). */
   agentStartedForRetryMs?: AgentRuntimeServiceOptions["startedForRetryMs"];
+  /** Spark QA F12 test seam: a born run's wait before it takes input (production: `AGENT_START`). */
+  agentStart?: AgentRuntimeServiceOptions["start"];
   /** AR-5d test/product seam: the account-usage polling cadence. Unset ⇒ each
    * adapter's own `refresh.pollIntervalMs` (the provider knows its quota). */
   agentUsage?: AccountUsagePollOptions;
@@ -1603,6 +1605,7 @@ export async function bootstrap(
     vibefieldRoot: config.vibefieldRoot ?? null,
     index,
     supervisor: rosettad,
+    ...(config.agentStart !== undefined ? { start: config.agentStart } : {}),
     sparkBriefing: (spark, provider) => briefings.prepare(spark, provider),
     runBriefing: (provider) => briefings.forRun(provider),
     helperRoots: {
@@ -3766,7 +3769,9 @@ export async function bootstrap(
         transcriptRecorder.expectPrompt(runtimeRunId, text);
         return agents.submit(runtimeRunId, text);
       },
-      isIdle: (runtimeRunId) => isIdleRow(agents.monitorOf(runtimeRunId)),
+      // Spark QA F12 (2026-11-25) — and the run takes input: a new run's first row already reads idle
+      isIdle: (runtimeRunId) =>
+        isIdleRow(agents.monitorOf(runtimeRunId)) && agents.takesInput(runtimeRunId),
       onOutcome: (runtimeRunId, input, outcome, reason) => {
         // IOS-12a — the person's own words: their receipt (`compose.sparks.say` answers it again by request id)
         sayReceipts.heard(input, outcome);
@@ -4158,12 +4163,12 @@ export async function bootstrap(
           ),
         indexSessionFor: async (nativeSessionId) =>
           (await index.sessionByNativeId(nativeSessionId))?.id,
+        indexPhase: async () => (await index.status()).phase,
         indexSessionProfile: async (sessionId) => ({
           profileId: (await index.session(sessionId)).session.profileId,
         }),
         timeline: (sessionId, cursor, limit) =>
           index.timeline({ sessionId, cursor, limit, boundedBelow: true }),
-        indexPhase: async () => (await index.status()).phase,
         search: (q, runtime, limit, afterMs) =>
           index.search({ q, runtime, limit, ...(afterMs !== undefined ? { afterMs } : {}) }),
       },
