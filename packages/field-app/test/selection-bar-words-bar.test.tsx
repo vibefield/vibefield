@@ -290,9 +290,10 @@ describe("the words bar: the model and its place (IK)", () => {
     const objects = bar().querySelector<HTMLElement>('[data-face-row="selection"]');
     expect(objects?.hasAttribute("inert")).toBe(true);
     expect(objects?.getAttribute("aria-hidden")).toBe("true");
-    // centred over the words, its foot 10 above them (happy-dom lays nothing out: the bar's own width reads 0)
+    // V7 (B): centred over the words, its foot 10 above the SHEET's brackets (the anchor's box) — off the writing
+    // (happy-dom lays nothing out: the bar's own width reads 0)
     expect(bar().style.transform).toBe(
-      `translate(${((450 + 570) / 2).toFixed(1)}px, ${(320 - 10 - 40).toFixed(1)}px) translateX(-50%)`,
+      `translate(${((450 + 570) / 2).toFixed(1)}px, ${(BOX.y0 - 10 - 40).toFixed(1)}px) translateX(-50%)`,
     );
     expect(bar().dataset.below).toBe("false");
   });
@@ -367,7 +368,8 @@ describe("the words bar: the model and its place (IK)", () => {
         words: words({ from: 0, to: 4, box: { x0: 300, y0: 400, x1: 380, y1: 422 } }),
       }),
     );
-    expect(bar().style.transform).toBe("translate(340.0px, 350.0px) translateX(-50%)");
+    // the new range's centre, at the sheet's edge (V7)
+    expect(bar().style.transform).toBe("translate(340.0px, 250.0px) translateX(-50%)");
     act(() => vi.advanceTimersByTime(199));
     expect(bar().dataset.shown).toBe("false");
     act(() => vi.advanceTimersByTime(1));
@@ -375,13 +377,43 @@ describe("the words bar: the model and its place (IK)", () => {
     expect(bar().style.transition).toBe("opacity 180ms ease-out");
   });
 
-  it("flips below at the safe top (94) and keeps 16 from the sides, as over objects; words off-screen hide it", () => {
+  it("a sheet at the safe top (94): flipped 10 below the SHEET's foot, as over objects, kept 16 from the sides; words off-screen hide it", () => {
     mount();
-    act(() => selection.publish({ words: words({ box: { x0: -20, y0: 60, x1: 10, y1: 80 } }) }));
-    expect(bar().style.transform).toBe("translate(16.0px, 94.0px) translateX(-50%)");
+    act(() =>
+      selection.publish({
+        box: { x0: 0, y0: 60, x1: 200, y1: 200 },
+        words: words({ box: { x0: -20, y0: 70, x1: 10, y1: 90 } }),
+      }),
+    );
+    expect(bar().style.transform).toBe("translate(16.0px, 210.0px) translateX(-50%)");
     expect(bar().dataset.below).toBe("true");
     act(() => selection.publish({ words: words({ box: { x0: -90, y0: 300, x1: -20, y1: 320 } }) }));
     expect(bar().dataset.shown).toBe("false");
+  });
+
+  it("V7: a sheet written WITHOUT being the one selected object keeps the words' own box (no brackets of its own to stand off)", () => {
+    ce.ops.setSelection([]);
+    mount();
+    expect(bar().style.transform).toBe(
+      `translate(${((450 + 570) / 2).toFixed(1)}px, ${(320 - 10 - 40).toFixed(1)}px) translateX(-50%)`,
+    );
+  });
+
+  it("V7: the words' menu grows AWAY from the sheet — upward from a bar above it, DOWNWARD from a bar flipped below it", () => {
+    mount();
+    act(() => cell("more").click());
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    expect(bar().dataset.dir).toBe("up");
+    act(() => cell("more").click());
+    act(() =>
+      selection.publish({
+        box: { x0: 300, y0: 60, x1: 600, y1: 260 },
+        words: words({ box: { x0: 350, y0: 80, x1: 450, y1: 102 } }),
+      }),
+    );
+    expect(bar().dataset.below).toBe("true");
+    act(() => cell("more").click());
+    expect(bar().dataset.dir).toBe("down");
   });
 
   it("goes for a gesture as now — out at once, back 200 ms after it ends", () => {
@@ -949,7 +981,6 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
 
   it("AT A BARE CARET (round two): no bar stands there; a right-click on the sheet being written grows Paste | Select all AT THE CARET, the selection untouched", () => {
     vi.useFakeTimers();
-    ce.ops.setSelection([]);
     selection.publish({ words: undefined, caret: caretOn() });
     mount();
     // no bar at a bare caret
@@ -965,8 +996,8 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
       vi.advanceTimersByTime(250);
     });
     expect(bar().dataset.shown).toBe("true");
-    // the bar stands at the caret: its foot 10 above the caret's box, centred on it
-    expect(bar().style.transform).toContain("translate(501.0px, 280.0px)");
+    // the bar stands at the sheet's edge (V7): its foot 10 above the sheet's brackets, centred over the caret
+    expect(bar().style.transform).toContain("translate(501.0px, 250.0px)");
     // its row is More alone, shown on; the menu Paste | Select all, the words' eyebrow
     expect(wordsSaid()).toEqual(["more"]);
     expect(cell("more").getAttribute("aria-expanded")).toBe("true");
@@ -977,7 +1008,7 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
         caret: { ...caretOn(), at: 8, box: { x0: 510, y0: 330, x1: 512, y1: 350 } },
       }),
     );
-    expect(bar().style.transform).toContain("translate(511.0px, 280.0px)");
+    expect(bar().style.transform).toContain("translate(511.0px, 250.0px)");
   });
 
   it("the caret's rows run as the words' do — Paste through the door, Select all — the field's focus kept; then the menu folds and no bar stays at the caret", async () => {

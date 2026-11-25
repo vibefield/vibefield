@@ -637,8 +637,8 @@ const WORDS_PLATES: Record<
 const CARET_BOX = { x0: 260, y0: 244, x1: 262, y1: 266 } as const;
 
 /** A plate whose menu grows stands its sheet this much lower, and is this tall, so the menu grows UP as it does mid-desk. */
-const MORE_DROP = 130;
-const MORE_HEIGHT = 520;
+const MORE_DROP = 180;
+const MORE_HEIGHT = 560;
 
 /** The sheet on the plate (its brackets 6 out of it), and the words selected on it. */
 const SHEET_BOX = { x0: 170, y0: 190, x1: 390, y1: 350 } as const;
@@ -672,9 +672,12 @@ export function WordsPlate({ state, dark }: { state: WordsState; dark: boolean }
   const sheet = at(SHEET_BOX, drop);
   const wordsBox = at(plate.caret ? CARET_BOX : WORDS_BOX, drop);
   const caret = plate.caret === true;
+  // V7 (§8 "The words bar" — Place, B): the bar's height from the sheet's brackets, centred over the words or the caret —
+  // the product's own place, read by the view from this anchor as the controller hands it
   const anchor = useMemo<PlaceAnchor>(
     () => ({
-      box: at(caret ? CARET_BOX : WORDS_BOX, drop),
+      box: at(SHEET_BOX, drop),
+      across: at(caret ? CARET_BOX : WORDS_BOX, drop),
       count: 1,
       view: { width: WIDTH, height },
     }),

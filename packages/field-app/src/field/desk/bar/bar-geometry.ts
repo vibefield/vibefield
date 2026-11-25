@@ -88,15 +88,29 @@ export const offScreen = (box: ScreenBox, view: ViewSize): boolean =>
  * Over an object at work (item 550, 2026-11-18; §8 "The selection bar", Place) the foot stands `clear` off the
  * selected objects' edge — the reach of their marks, `atWorkBarClear` — and flipped, as far below; never nearer than
  * the 10 above the brackets. With no clearance (0) the place is the one above, number for number.
+ *
+ * THE WORDS BAR (V7, 2026-11-25; §8 "The words bar" — Place, B): `across` is the box it is CENTRED over — the selected
+ * words, or a bare caret — while `box`, the sheet's brackets, says its height by the rule above, so it stands at the
+ * sheet's edge and never over the writing. Absent, the bar is centred over `box`, as over objects.
  */
 export function placeBar(
-  anchor: { readonly box: ScreenBox | null; readonly count: number; readonly view: ViewSize },
+  anchor: {
+    readonly box: ScreenBox | null;
+    readonly count: number;
+    readonly view: ViewSize;
+    readonly across?: ScreenBox;
+  },
   width: number,
   clear = 0,
 ): BarPlace | null {
   const { box, view } = anchor;
   if (box === null || anchor.count === 0 || offScreen(box, view)) return null;
-  const x = clamp((box.x0 + box.x1) / 2 - width / 2, BAR.sides, view.width - BAR.sides - width);
+  const centre = anchor.across ?? box;
+  const x = clamp(
+    (centre.x0 + centre.x1) / 2 - width / 2,
+    BAR.sides,
+    view.width - BAR.sides - width,
+  );
   const lowest = view.height - BAR.lowest;
   const gap = anchor.count === 1 ? BAR.bracketGap : BAR.unionGap;
   const above = clear > 0 ? Math.max(BAR.above, clear - gap) : BAR.above;
@@ -126,16 +140,20 @@ export interface MenuPlace {
  * the sides; UPWARD from the bar's own row, or DOWNWARD when its top would cross the safe top (94), the row then
  * heading it; when it fits neither way the list scrolls inside it, clamped between the safe top and the line's
  * reserve, on the side with the more room. The bar's row never moves (M2): the menu is placed from it.
+ * `first: "down"` (V7: the words bar flipped BELOW its sheet) tries downward first, away from the sheet, then upward.
  */
 export function growMenu(
   bar: { readonly x: number; readonly y: number; readonly width: number },
   list: number,
   view: ViewSize,
+  opts: { readonly first?: "up" | "down" } = {},
 ): MenuPlace {
   const width = Math.max(GROWN.minWidth, bar.width);
   const x = clamp(bar.x + bar.width / 2 - width / 2, BAR.sides, view.width - BAR.sides - width);
   const roomUp = bar.y - GROWN.hairline - BAR.safeTop;
   const roomDown = view.height - BAR.foot - (bar.y + BAR.height + GROWN.hairline);
+  if (opts.first === "down" && list <= roomDown)
+    return { x, width, up: false, listHeight: list, scroll: false };
   if (list <= roomUp) return { x, width, up: true, listHeight: list, scroll: false };
   if (list <= roomDown) return { x, width, up: false, listHeight: list, scroll: false };
   const up = roomUp >= roomDown;

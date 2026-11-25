@@ -31,7 +31,7 @@ import {
   runWordsAct,
   runWordsCommand,
 } from "./bar-acts";
-import { offScreen } from "./bar-geometry";
+import { offScreen, type ScreenBox } from "./bar-geometry";
 import { type HandCell, type HeldSlot, handCells, slotsKey } from "./bar-hand";
 import {
   type BarCell,
@@ -196,6 +196,22 @@ const liveCaret = (anchor: SelectionAnchor) =>
   anchor.caret !== undefined && liveWords(anchor) === undefined && !inHand(anchor)
     ? anchor.caret
     : undefined;
+
+/**
+ * V7 (2026-11-25; DESIGN.md §8 "The words bar" — Place, B "Always off the writing"): where the words bar (or the caret's)
+ * stands — its HEIGHT from the sheet's brackets (the anchor's `box`) by the objects' bar's own rule, so it never stands over
+ * the writing; CENTRED over the words or the caret (`across`). The sheet's box is the anchor's only while that sheet is the
+ * one selected object (`key` is the selection's, as `keyOf` writes it); a sheet written without being selected has no
+ * brackets of its own, and the bar keeps the words' own box for both.
+ */
+function offTheWriting(
+  anchor: SelectionAnchor,
+  key: string,
+  written: { readonly box: ScreenBox; readonly entity: Entity },
+): PlaceAnchor {
+  const sheet = anchor.box !== null && key === keyOf([written.entity]) ? anchor.box : written.box;
+  return { box: sheet, across: written.box, count: 1, view: anchor.view };
+}
 
 /** IK round two — the bar at the caret: the words' row of a sheet with no words acts — More alone — which the caret's rows
  * grow from (§8). */
@@ -463,12 +479,13 @@ function SelectionBarOn({
         live === undefined ? null : { entity: live.entity, from: live.from, to: live.to };
       // round two: with the caret's rows open the bar stands at the caret
       const caret = caretOpenRef.current ? liveCaret(anchor) : undefined;
+      // V7: over words or a caret the bar stands at the sheet's edge, centred over them (`offTheWriting`)
       const at: PlaceAnchor =
         caret !== undefined
-          ? { box: caret.box, count: 1, view: anchor.view }
+          ? offTheWriting(anchor, next.key, caret)
           : live === undefined
             ? { ...anchor, clear, selection: next.key }
-            : { box: live.box, count: 1, view: anchor.view };
+            : offTheWriting(anchor, next.key, live);
       if (next !== prev) {
         factsRef.current = next;
         // what it SAYS changed — the selection's cells, the hand's, or the words' — so it is placed once it has re-rendered:
@@ -592,7 +609,7 @@ function SelectionBarOn({
       if (caret !== undefined && hit.entity === caret.entity) {
         caretOpenRef.current = true;
         setCaretOpen(true);
-        barRef.current?.place({ box: caret.box, count: 1, view: anchor.view }, false);
+        barRef.current?.place(offTheWriting(anchor, factsRef.current.key, caret), false);
         surfaceRef.current.onSurfaceChange("selection");
         return;
       }

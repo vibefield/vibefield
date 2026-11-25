@@ -92,6 +92,8 @@ export interface PlaceAnchor {
    * (absent or 0: above the brackets, as ever), and the selection it was read for — its entities, as one key. */
   readonly clear?: number;
   readonly selection?: string;
+  /** V7 — the words bar: the box it is centred over (the selected words, a bare caret); `box` (the sheet) its height. */
+  readonly across?: ScreenBox;
 }
 
 export interface SelectionBarHandle {
@@ -453,7 +455,10 @@ export function SelectionBarView({
     grownOver.current = anchor.selection;
     delete root.dataset.cut;
     const w = rowWidth(roleRef.current === "hand");
-    const g = growMenu({ x: at.x, y: at.y, width: w }, listNatural.current, anchor.view);
+    // V7: the words bar flipped below its sheet grows away from it, downward first
+    const g = growMenu({ x: at.x, y: at.y, width: w }, listNatural.current, anchor.view, {
+      first: wordsModeRef.current && at.below ? "down" : "up",
+    });
     const listOut = g.listHeight + 1; // the list and the strong hairline between it and the row
     set("--vf-bar-grow-l", at.x - g.x);
     set("--vf-bar-grow-r", g.x + g.width - (at.x + w));

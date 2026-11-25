@@ -80,6 +80,83 @@ describe("where the selection bar stands (R7)", () => {
   });
 });
 
+describe("THE WORDS BAR stands at the sheet's edge, off the writing (V7; DESIGN.md §8 'The words bar' — Place; B, 2026-11-25)", () => {
+  // a tall sheet's brackets (6 out of the sheet), and words selected on its lines, one line 26 tall every 30
+  const SHEET = { x0: 400, y0: 200, x1: 700, y1: 560 };
+  const line = (n: number, x0 = 430, x1 = 520) => ({ x0, y0: 220 + 30 * n, x1, y1: 246 + 30 * n });
+  const FIRST = line(0);
+  const MIDDLE = line(5, 480, 640);
+  const LAST = line(10, 430, 600);
+  const W = 300;
+  const words = (sheet: typeof SHEET, across: typeof FIRST) => ({
+    box: sheet,
+    across,
+    count: 1,
+    view,
+  });
+
+  it("a FIRST-line selection: the bar's foot 10 above the sheet's brackets, centred over the words", () => {
+    expect(placeBar(words(SHEET, FIRST), W)).toEqual({
+      x: 475 - W / 2,
+      y: 200 - 10 - 40,
+      below: false,
+    });
+  });
+
+  it("a LAST-line selection: the same height — the sheet's edge, never the line above the words", () => {
+    expect(placeBar(words(SHEET, LAST), W)).toEqual({ x: 515 - W / 2, y: 150, below: false });
+  });
+
+  it("a MIDDLE line of a tall sheet: several lines from the words (the accepted cost), centred over them", () => {
+    const at = placeBar(words(SHEET, MIDDLE), W);
+    expect(at).toEqual({ x: 560 - W / 2, y: 150, below: false });
+    expect(MIDDLE.y0 - ((at?.y ?? 0) + BAR.height)).toBe(180);
+  });
+
+  it("a sheet at the SAFE TOP: flipped 10 below the sheet's foot, as over objects — not below the words", () => {
+    const high = { x0: 400, y0: 120, x1: 700, y1: 480 };
+    const first = { x0: 430, y0: 140, x1: 520, y1: 166 };
+    expect(placeBar(words(high, first), W)).toEqual({ x: 475 - W / 2, y: 480 + 10, below: true });
+  });
+
+  it("a selection near the view's side: kept 16 in, as today (the clamp reads the words' centre)", () => {
+    const left = { x0: 0, y0: 200, x1: 300, y1: 560 };
+    expect(placeBar(words(left, { x0: 20, y0: 220, x1: 60, y1: 246 }), W)?.x).toBe(BAR.sides);
+    const right = { x0: 900, y0: 200, x1: 1180, y1: 560 };
+    expect(placeBar(words(right, { x0: 1120, y0: 220, x1: 1170, y1: 246 }), W)?.x).toBe(
+      view.width - BAR.sides - W,
+    );
+  });
+
+  it("for EVERY one of them the bar's box and the sheet's box do not overlap: it never stands over the writing", () => {
+    const high = { x0: 400, y0: 120, x1: 700, y1: 480 };
+    const cases: [typeof SHEET, typeof FIRST][] = [
+      [SHEET, FIRST],
+      [SHEET, MIDDLE],
+      [SHEET, LAST],
+      [high, { x0: 430, y0: 140, x1: 520, y1: 166 }],
+      [
+        { x0: 0, y0: 200, x1: 300, y1: 560 },
+        { x0: 20, y0: 220, x1: 60, y1: 246 },
+      ],
+      [
+        { x0: 900, y0: 200, x1: 1180, y1: 560 },
+        { x0: 1120, y0: 220, x1: 1170, y1: 246 },
+      ],
+    ];
+    for (const [sheet, across] of cases) {
+      const at = placeBar(words(sheet, across), W);
+      if (at === null) throw new Error("no bar");
+      const clear = at.y + BAR.height <= sheet.y0 || at.y >= sheet.y1;
+      expect(clear, JSON.stringify({ sheet, at })).toBe(true);
+    }
+  });
+
+  it("with no `across` it is the objects' bar, centred over its box as before", () => {
+    expect(placeBar(one(SHEET), W)).toEqual({ x: 550 - W / 2, y: 150, below: false });
+  });
+});
+
 describe("the bar grown (R6, R20)", () => {
   it("at least 244 wide, the bar's width when wider — centred on the bar", () => {
     expect(growMenu({ x: 500, y: 400, width: 200 }, 200, view)).toMatchObject({
@@ -130,6 +207,23 @@ describe("the bar grown (R6, R20)", () => {
 // DK-12 — THE TOOLS IN HAND (§8 "Tools in hand"; R13; ICE I20): under the head, top y 64 (centre 84), centred on the
 // window; the held object's reading fit keeps 116 above it (the bar's foot, 104, + 12) and 100 below (the line's 88 +
 // 12); the travel 560 ms on the island curve, the cross-fade its last 120 ms; reduced motion a fade only, halved.
+describe("the words bar's menu grows AWAY from its sheet (V7)", () => {
+  it("over a bar flipped BELOW its sheet, DOWNWARD first (away from it), upward only when the list does not fit below", () => {
+    const bar = { x: 400, y: 300, width: 260 };
+    // the objects' rule: upward while it fits
+    expect(growMenu(bar, 180, view).up).toBe(true);
+    // the words bar below its sheet: downward, away from the writing
+    expect(growMenu(bar, 180, view, { first: "down" })).toMatchObject({ up: false, scroll: false });
+    // not room below (a bar low in the view): upward after all
+    expect(growMenu({ ...bar, y: 560 }, 180, view, { first: "down" })).toMatchObject({
+      up: true,
+      scroll: false,
+    });
+    // fitting neither way: the side with the more room, as ever
+    expect(growMenu(bar, 900, view, { first: "down" }).scroll).toBe(true);
+  });
+});
+
 describe("where the tools in hand stand, and what the layer reserves for them (DK-12)", () => {
   it("under the head — top y 64, its centre 84 — centred on the window, whatever the selection's box", () => {
     expect(placeHand(view, 420)).toEqual({ x: (1180 - 420) / 2, y: 64, below: false });
