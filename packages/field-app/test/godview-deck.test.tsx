@@ -17,6 +17,9 @@
  * loop driven by event ORDER.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import { act, type ComponentType, type ReactElement, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -812,6 +815,50 @@ describe("the restore consent gate (GT-3)", () => {
       requests.filter((method) => method === "terminal.create").length,
       "no shell is born beside the resumed conversation",
     ).toBe(before);
+  });
+
+  // LR, 2026-11-25 — the gate over live sessions: an agent Chat already woke elsewhere left its
+  // old pane in the saved layout, and the restore refilled it with a bare shell where it was
+  it("leaves the pane of an agent that is not coming back: never a new shell in its place (LR)", async () => {
+    const left = JSON.parse(
+      readFileSync(
+        join(
+          dirname(fileURLToPath(import.meta.url)),
+          "../../contracts/fixtures/agent-last-run.left.json",
+        ),
+        "utf8",
+      ),
+    ) as { gone: Array<{ kind: string }> };
+    // the agent on `pty-s9` is no longer gone: only the bare shell is
+    const resumedElsewhere = { ...left, gone: left.gone.filter((row) => row.kind === "terminal") };
+    saveLayout(["dead-1", "pty-s9"]);
+    floor = [];
+    const answers = fieldd.request;
+    vi.spyOn(fieldd, "request").mockImplementation((method: string, params?: unknown) =>
+      method === "agent.lastRun" ? Promise.resolve(resumedElsewhere) : answers(method, params),
+    );
+    await mountDeck();
+    expect(lastRunState().phase).toBe("asking");
+    await answer("restore");
+    await settle();
+    const rehydrate = workspaceMounts[0]?.["onRehydratePane"] as
+      | ((context: { meta: unknown; sessionId: string; paneId: string }) => Promise<unknown>)
+      | undefined;
+    expect(rehydrate, "armed by the window's restore").toBeTypeOf("function");
+    const before = requests.filter((method) => method === "terminal.create").length;
+    const agentPane = await act(async () =>
+      rehydrate?.({ meta: { cwd: "/repo/pty-s9" }, sessionId: "pty-s9", paneId: "pane-1" }),
+    );
+    expect(agentPane, "the library drops a pane answered with nothing").toBeNull();
+    expect(
+      requests.filter((method) => method === "terminal.create").length,
+      "no shell is born where the agent was",
+    ).toBe(before);
+    // the shell's own pane still comes back, as a new shell in its folder
+    await act(async () =>
+      rehydrate?.({ meta: { cwd: "/repo/dead-1" }, sessionId: "dead-1", paneId: "pane-0" }),
+    );
+    expect(requests.filter((method) => method === "terminal.create").length).toBe(before + 1);
   });
 
   it("restore mounts the workspace with rehydration armed, layout intact", async () => {

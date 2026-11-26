@@ -38,6 +38,8 @@ import {
   askLastRun,
   curtainQuestion,
   dismissLastRun,
+  refreshLastRun,
+  rereadLastRun,
   restoreLastRun,
   startCleanLastRun,
   stillBoardPort,
@@ -192,11 +194,22 @@ export function GodviewOverlay({
    * first opens (`last-run.ts`): every view draws last run's picture, still,
    * through a feed of its own (the window's subscription stays open beside it
    * for the deck), and the curtain stands over the stage until it is
-   * answered. The deck waits on the same answer. */
+   * answered, or until nothing is left to ask (read again while it stands, LR,
+   * 2026-11-25). The deck waits on the same answer. */
   const lastRun = useLastRun();
   useEffect(() => {
     if (everOpened) void askLastRun(fieldd);
   }, [everOpened, fieldd]);
+  // LR, 2026-11-25 — while it stands the question is read again: as sessions are born (Chat
+  // waking a spark, a crew) the count is what is still gone, and nothing left lifts the curtain.
+  // The client by ref, so a new client object is not a new subscription.
+  const fielddNow = useRef(fieldd);
+  fielddNow.current = fieldd;
+  const asking = lastRun.phase === "asking";
+  useEffect(() => {
+    if (!asking) return;
+    return rereadLastRun(() => refreshLastRun(fielddNow.current), open);
+  }, [asking, open]);
   const question = curtainQuestion(lastRun);
   const picture = question?.board;
   const stillPort = useMemo(

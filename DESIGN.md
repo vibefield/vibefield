@@ -7103,7 +7103,9 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   away, and nothing asked of them — no pane, no shell born — until something calls them (the one
   question a launch can put is the window's, below). **The first call brings last run's panes back
   with the session it called**, placed by the rule for a session with no pane (below): beside the
-  focused pane, or in its place with three showing. While the last run's question waits, an act
+  focused pane, or in its place with three showing. *(Superseded 2026-10-18: GV-D4's re-ruling,
+  "A session with no pane" below, governs: the focused pane, whatever the count. Pointer added
+  2026-11-25, LR.)* While the last run's question waits, an act
   that called the terminals waits with the person, and its bound is the deck's time, never theirs
   (§8 "History"). *Amended 2026-10-15 (LR, James): the deck's own face — "this deck had N panes
   last time" · restore · start clean, asked at its first call — is retired; the question is the
@@ -7113,7 +7115,20 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   in each view … a semi transparent overlay on top"). When the last run ended with sessions this
   launch no longer has — agents its records can resume, panes whose shells are gone — **Godview
   opens on last run's picture**: every view draws the board as the last run left it (fieldd keeps
-  ONE picture of its model board and holds it until answered — never a history), **still** — no
+  ONE picture of its model board and holds it until answered — never a history; *corrected
+  2026-11-25 (LR): this said fieldd holds the picture until answered. It also lets the picture go
+  with no answer, in three ways. First, by itself, with no read at all: once the restart has
+  settled, the first time its picture's writer runs after that (it runs once at fieldd's start and
+  again whenever the board moves, while the floor is up), fieldd looks once at the picture it holds, and when nothing in it is
+  gone (no bare shell missing, no agent its record can still resume) it lets the picture go and
+  removes its held file, `left-board.json` (`settleOnce`). Second, an `agent.lastRun` read that
+  finds nothing gone drops the picture the same way and answers `none`. Third, when a read, at
+  Godview's first opening or again while the curtain stands, leaves nothing a restore could bring back (no agent still gone, no dead pane that showed a shell; bare
+  shells no pane showed do not count), the window answers the question itself: the curtain lifts,
+  the deck mounts without restoring, and then, if fieldd still held a picture, the window asks it
+  to forget (`agent.lastRunForget`). A forget fieldd does not hear asks again at the next
+  launch. While the curtain stands, its still board is the window's copy of the picture, kept
+  when fieldd has let its own go*), **still** — no
   motion, no verb, no pointer — and over the whole stage stands **the curtain**: a veil of the
   monitor's own ground at the readouts' 62%, the picture reading through it; in the window's middle
   a mono eyebrow, **Last run · 15:39** (the moment the picture was taken; the day too when it was
@@ -7127,11 +7142,23 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   (30) — it wears the scanlines — and the head (31), whose **view circles stay live** so each
   view's picture can be looked at before answering. **Restore** resumes every agent at once, each into its own
   conversation in its folder under its profile with its launch model, and hands each its old pane;
-  the curtain says *Resuming 2 agents…* with both answers held, and lifts when they have started —
+  a pane that showed an agent is the agent's, and one whose agent the restore no longer has to
+  resume (resumed elsewhere, ended, or left no record to resume) goes: it is never counted as a
+  terminal and never reopened as a new shell (*added 2026-11-25, LR*); the curtain says *Resuming 2 agents…* with both
+  answers held, and lifts when they have started —
   or says, before it lifts, which could not and why in fieldd's words (*1 of 2 agents resumed* ·
   *Claude Code in vibe-field — its profile is signed out* · **Continue**). **Start clean** forgets
   the deck's layout and the picture; nothing still running is touched. A restart the floor
-  survived asks nothing (the silence of GT-3). Motion: the curtain fades in over 240ms (`ease`),
+  survived asks nothing (the silence of GT-3). *Amended 2026-11-25 (LR, the curtain over live
+  sessions):* the curtain's numbers are what fieldd says is still gone, read again each time
+  Godview opens onto it (a session born while the curtain is in view is counted at the next
+  opening, or sooner when this window reads its list of sessions again): an agent Chat woke or
+  History resumed into its own conversation leaves the count (one woken by a fresh start keeps
+  its old record, which a restore can still resume, so it stays), and when nothing is left that
+  this launch no longer has, the curtain lifts by itself, as a restart the floor survived asks
+  nothing. A read again keeps the picture the person is answering about, and one that cannot read
+  the list of sessions keeps the question as it stands. Motion: the
+  curtain fades in over 240ms (`ease`),
   its words rising 8px on the island curve (480ms); reduced motion fades only, 120ms. **A first call that
   is a new terminal** — ⌘T, the bloom's birth — on a deck with nothing to bring back finds the
   workspace's own first shell, and that shell is the terminal: one pane, never a second born
@@ -7836,8 +7863,11 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     its own door in 10 s), so an act's turn queued behind one still comes inside its 20 s. **The
     person's time is never the deck's** (W7): an act whose call brought the terminals up from a
     launch can meet the restore question (§8, the deck, "The monitor alone at launch"); while it
-    is asked the act's clock stands, the note says **"Waiting in Godview — restore last time's
-    panes, or start clean"**, and once answered the clock runs on from where it stood.
+    is asked the act's clock stands, the note says **"Waiting in Godview — restore the last run,
+    or start clean"**, and once answered the clock runs on from where it stood.
+    > **Errata (2026-11-25, LR):** this said "Waiting in Godview — restore last time's panes, or
+    > start clean", W7's words of 2026-10-11. From 2026-10-15 (LR, `2f6196562`) the note as built
+    > says "restore the last run" (`WAITING_ON_PERSON_NOTE`, `line-door.ts`).
   - **Its honest states are said inside the frame** (§9; the tolerant reader). An index that cannot
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",

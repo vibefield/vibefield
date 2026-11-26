@@ -90,6 +90,7 @@ import { useDeckPaneLook } from "./deck-theme";
 import { getDeckWrapperFacts, subscribeDeckWrapperFacts } from "./deck-wrapper-witness";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import {
+  agentPaneLeft,
   askingPerson,
   askLastRun,
   consentFacts,
@@ -933,6 +934,9 @@ export function GodviewDeck({
       // terminal takes the pane, never a shell beside the conversation it was
       const resumed = resumedPaneSession(context.sessionId);
       if (resumed !== undefined) return resumed;
+      // LR, 2026-11-25 — a pane that showed an agent which is not coming back (resumed elsewhere,
+      // or ended) is the agent's: it goes, never a bare shell where the agent was
+      if (agentPaneLeft(context.sessionId)) return null;
       // `paneCwd` and not `meta.cwd`: what the floor calls a cwd is the OSC 7
       // URL the shell announced, and a spawn given `file://host/Users/x` cannot
       // chdir into it. Home is the honest fallback for a pane whose shell never

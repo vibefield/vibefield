@@ -40,11 +40,16 @@ import {
   runSystemControl,
 } from "../src/frame/system-control-door";
 import { resetActiveViewForTest } from "../src/frame/view-state";
+import { composeLastRun, lastRunState, resetLastRunForTests } from "../src/godview/last-run";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { type FieldHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
-import { configureTerminalPool, disposeTerminalPool } from "../src/terminal/pool";
+import {
+  configureTerminalPool,
+  disposeTerminalPool,
+  refreshTerminalRoster,
+} from "../src/terminal/pool";
 import { advanceChromeClock, holdChromeClock, nextTask } from "./chrome-clock-fixture";
 import { managedSummary } from "./managed-session-fixture";
 import { type ScriptedModelBoard, scriptedModelBoard } from "./model-board-fixture";
@@ -62,6 +67,11 @@ const stand = vi.hoisted(() => ({
   door: null as unknown,
   tick: 0,
   ticked: new Set<() => void>(),
+  /** LR, 2026-11-25 — what fieldd's `agent.lastRun` answers: by default nothing this build
+   * parses, so the window asks nothing, as every case here assumed before */
+  lastRun: {} as unknown,
+  /** how many times the window read it */
+  lastRunReads: 0,
 }));
 
 /** The deck, stood in: it builds its door on mount and withdraws it on unmount,
@@ -110,7 +120,13 @@ vi.mock("../src/godview/GodviewDeckEdge", async (importOriginal) => {
 });
 
 vi.mock("@vibefield/fieldd-client/react", () => ({
-  useFielddClient: () => ({ request: vi.fn(async () => ({})) }),
+  useFielddClient: () => ({
+    request: vi.fn(async (method: string) => {
+      if (method !== "agent.lastRun") return {};
+      stand.lastRunReads += 1;
+      return stand.lastRun;
+    }),
+  }),
   // AO-6b3 — the limit moment reads the setup ledger by subscription; here it
   // never answers, so the moment stays silent rather than failing its boundary
   useSubscription: () => ({ status: "loading", data: null, error: null }),
@@ -225,6 +241,8 @@ beforeEach(() => {
   stand.tick = 0;
   stand.ticked.clear();
   stand.door = fakeDoor();
+  stand.lastRun = {};
+  stand.lastRunReads = 0;
   markers = [];
   localStorage.clear();
   // each case is a launch: the terminals' state is kept for the run (L3)
@@ -277,6 +295,8 @@ afterEach(() => {
   container = null;
   board?.dispose();
   board = null;
+  // LR — the window's restore question is a per-window module store: each case is a launch
+  resetLastRunForTests();
   disposeTerminalPool();
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   vi.restoreAllMocks();
@@ -496,5 +516,66 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     expect(parts.view?.isConnected).toBe(true);
     expect(host.querySelector(".deck-stand-in")).not.toBeNull();
     expect(latest()?.localState).toBe("live");
+  });
+});
+
+describe("the last run's curtain over live sessions (LR, 2026-11-25)", () => {
+  const LEFT = JSON.parse(
+    readFileSync(
+      join(
+        dirname(fileURLToPath(import.meta.url)),
+        "../../contracts/fixtures/agent-last-run.left.json",
+      ),
+      "utf8",
+    ),
+  ) as unknown;
+  /** past the question's trailing wait (about 500 ms), on the real clock */
+  async function pastTheWait(): Promise<void> {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+    });
+    await settle();
+  }
+
+  it("lifts by itself on a change of the window's roster, once nothing the last run left is still gone", async () => {
+    // the agent `run-studio-q` is gone, its pane `pty-s9` saved: one agent to resume
+    stand.lastRun = LEFT;
+    const question = composeLastRun(LEFT as never, ["pty-s9"], new Set());
+    if (question === null) throw new Error("fixture");
+    resetLastRunForTests({ phase: "asking", question });
+    const host = await mountOverlay();
+    expect(host.querySelector(".vf-last-run"), "the curtain asks").not.toBeNull();
+    // Godview opened onto it: read again, and the agent is still gone
+    await pastTheWait();
+    expect(host.querySelector(".vf-last-run")).not.toBeNull();
+    // Chat woke it: fieldd finds nothing gone now, and the window's roster moves
+    stand.lastRun = { state: "none" };
+    await act(async () => {
+      await refreshTerminalRoster();
+    });
+    await pastTheWait();
+    expect(host.querySelector(".vf-last-run"), "nothing is left to ask about").toBeNull();
+  });
+
+  // LR (mend), 2026-11-25 — the real path: the window's roster does not move when Chat wakes a
+  // spark, so the read that counts is the one made as Godview opens onto the curtain again
+  it("is read again as Godview opens onto it, and not while another view shows", async () => {
+    stand.lastRun = LEFT;
+    const question = composeLastRun(LEFT as never, ["pty-s9"], new Set());
+    if (question === null) throw new Error("fixture");
+    resetLastRunForTests({ phase: "asking", question });
+    const host = await mountOverlay();
+    await pastTheWait();
+    expect(stand.lastRunReads, "read as Godview opened").toBe(1);
+    await setView("canvas");
+    // Chat woke the agent while the canvas showed; nothing touches the window's roster
+    stand.lastRun = { state: "none" };
+    await pastTheWait();
+    expect(stand.lastRunReads, "nothing is read while another view shows").toBe(1);
+    expect(lastRunState().phase).toBe("asking");
+    await setView("godview");
+    await pastTheWait();
+    expect(stand.lastRunReads, "read again as Godview opened onto it").toBe(2);
+    expect(host.querySelector(".vf-last-run"), "nothing is left to ask about").toBeNull();
   });
 });

@@ -17,13 +17,29 @@ vi.mock("../src/terminal/pool", () => ({
     const sessionId = (raw as { sessionId: string }).sessionId;
     return { sessionId, session: { id: sessionId } };
   },
-  refreshTerminalRoster: async () => roster,
-  terminalPoolSnapshot: () => ({ rosterState: rosterState }),
+  // the pool publishes on every roster read, as the real one does, whether or not it moved
+  refreshTerminalRoster: async () => {
+    const read = await rosterRead();
+    poolMoved();
+    return read;
+  },
+  subscribeTerminalPool: (listener: () => void) => {
+    poolListeners.add(listener);
+    return () => poolListeners.delete(listener);
+  },
+  terminalPoolSnapshot: () => ({ rosterState: rosterState, roster }),
 }));
+const poolListeners = new Set<() => void>();
+function poolMoved(): void {
+  for (const listener of [...poolListeners]) listener();
+}
 let roster: Array<{ sessionId: string; health: string }> = [];
 let rosterState = "observed";
+/** the roster read itself: a row may hold it, as a slow fieldd would */
+let rosterRead: () => Promise<typeof roster> = async () => roster;
 
 const {
+  agentPaneLeft,
   askLastRun,
   composeLastRun,
   consentFacts,
@@ -31,6 +47,8 @@ const {
   dismissLastRun,
   lastRunState,
   pictureOpen,
+  refreshLastRun,
+  rereadLastRun,
   resetLastRunForTests,
   restoreLastRun,
   resumedPaneSession,
@@ -49,6 +67,28 @@ const SPAWNED = JSON.parse(readFileSync(join(FIXTURES, "agent-spawn.valid.json")
   terminal: { sessionId: string };
 };
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
+if (LEFT.state !== "left") throw new Error("fixture");
+/** LR, 2026-11-25 — the same picture once Chat (or History) resumed the agent elsewhere: its
+ * record is no longer the last run's to continue, so fieldd's gone list holds the shell alone */
+const RESUMED_ELSEWHERE = { ...LEFT, gone: LEFT.gone.filter((row) => row.kind === "terminal") };
+/** the picture with a second agent, `run-two` on `pty-s10`, left beside the first */
+const AGENT_ROW = LEFT.board.rows.find((row) => row.runtimeRunId === "run-studio-q");
+if (AGENT_ROW === undefined || AGENT_ROW.terminal === undefined) throw new Error("fixture");
+const TWO_AGENTS = {
+  ...LEFT,
+  board: {
+    ...LEFT.board,
+    rows: [
+      ...LEFT.board.rows,
+      {
+        ...AGENT_ROW,
+        runtimeRunId: "run-two",
+        terminal: { ...AGENT_ROW.terminal, runtimeSessionId: "pty-s10" },
+      },
+    ],
+  },
+  gone: [...LEFT.gone, { id: "run-two", kind: "agent" as const, sessionId: "pty-s10" }],
+};
 
 function saveLayout(ids: string[]): void {
   const leaf = (id: string, index: number) => ({
@@ -90,6 +130,7 @@ beforeEach(() => {
   adopted.length = 0;
   roster = [];
   rosterState = "observed";
+  rosterRead = async () => roster;
 });
 
 describe("LR — the question, as arithmetic", () => {
@@ -119,6 +160,17 @@ describe("LR — the question, as arithmetic", () => {
 
   it("counts a pane saved twice once", () => {
     expect(composeLastRun(null, ["a", "a"], new Set())?.shells).toBe(1);
+  });
+
+  // LR, 2026-11-25 — the gate over live sessions: the spark Chat woke was counted "1 terminal"
+  it("never counts an agent's pane as a terminal, when its agent is no longer gone", () => {
+    const question = composeLastRun(RESUMED_ELSEWHERE, ["pty-s9", "pane-shell"], new Set());
+    expect(question?.agents).toEqual([]);
+    expect(question?.shells, "an agent's pane is the agent's, never a terminal").toBe(1);
+  });
+
+  it("asks nothing when the only dead pane showed an agent that is no longer gone", () => {
+    expect(composeLastRun(RESUMED_ELSEWHERE, ["pty-s9"], new Set())).toBeNull();
   });
 });
 
@@ -296,6 +348,374 @@ describe("LR — asking, restoring, starting clean", () => {
     expect(fieldd.calls.map(([method]) => method)).not.toContain("agent.resume");
     expect(fieldd.calls.at(-1)?.[0]).toBe("agent.lastRunForget");
     expect(deckAnswer()).toEqual({ rehydrate: false });
+  });
+});
+
+describe("LR — the question read again while it stands (2026-11-25)", () => {
+  /** fieldd whose picture moves under the question: `left` is what its next read answers */
+  function moving(first: unknown) {
+    let left: unknown = first;
+    const fieldd = client({
+      "agent.lastRun": async () => {
+        if (left instanceof Error) throw left;
+        return left;
+      },
+      "agent.lastRunForget": async () => ({ forgotten: true }),
+      "agent.resume": async () => SPAWNED,
+    });
+    return {
+      fieldd,
+      answer: (next: unknown) => {
+        left = next;
+      },
+      reads: () => fieldd.calls.filter(([method]) => method === "agent.lastRun").length,
+    };
+  }
+
+  it("lifts the curtain by itself once nothing the last run left is still gone", async () => {
+    saveLayout(["pty-s9"]);
+    roster = [];
+    const door = moving(LEFT);
+    await askLastRun(door.fieldd);
+    expect(consentFacts()).toEqual({ agents: 1, shells: 0, unplaced: 1 });
+    // Chat woke the agent: fieldd finds nothing gone (and lets its picture go), and a session is born
+    door.answer({ state: "none" });
+    roster = [{ sessionId: "pty-new", health: "live" }];
+    await refreshLastRun(door.fieldd);
+    expect(lastRunState()).toEqual({ phase: "answered", rehydrate: false });
+    expect(deckAnswer(), "the deck mounts unarmed, as a launch with nothing to ask").toEqual({
+      rehydrate: false,
+    });
+    expect(door.fieldd.calls.map(([method]) => method)).not.toContain("agent.lastRunForget");
+  });
+
+  it("shrinks the count to what is still gone, and the agent that left takes its pane with it", async () => {
+    saveLayout(["pty-s9", "pty-s10"]);
+    roster = [];
+    const door = moving(TWO_AGENTS);
+    await askLastRun(door.fieldd);
+    expect(consentFacts()).toEqual({ agents: 2, shells: 0, unplaced: 1 });
+    door.answer({
+      ...TWO_AGENTS,
+      gone: TWO_AGENTS.gone.filter((row) => row.id !== "run-studio-q"),
+    });
+    await refreshLastRun(door.fieldd);
+    expect(consentFacts()).toEqual({ agents: 1, shells: 0, unplaced: 1 });
+    const state = lastRunState();
+    expect(state.phase).toBe("asking");
+    if (state.phase === "asking") {
+      expect(state.question.agents.map((agent) => agent.id)).toEqual(["run-two"]);
+    }
+    expect(agentPaneLeft("pty-s9"), "its agent is not coming back").toBe(true);
+    expect(agentPaneLeft("pty-s10"), "a restore resumes its agent into it").toBe(false);
+    // the same numbers again publish nothing: the question is the same object
+    const asked = lastRunState();
+    await refreshLastRun(door.fieldd);
+    expect(door.reads()).toBe(3);
+    expect(lastRunState()).toBe(asked);
+  });
+
+  it("names an agent's pane left only while its agent is not among the gone", async () => {
+    saveLayout(["pty-s9", "pane-shell"]);
+    roster = [];
+    await askLastRun(moving(RESUMED_ELSEWHERE).fieldd);
+    expect(consentFacts()).toEqual({ agents: 0, shells: 1, unplaced: 1 });
+    expect(agentPaneLeft("pty-s9")).toBe(true);
+    expect(agentPaneLeft("pane-shell"), "a shell's pane is a shell's").toBe(false);
+    resetLastRunForTests();
+    expect(agentPaneLeft("pty-s9"), "cleared with the store").toBe(false);
+    await askLastRun(moving(LEFT).fieldd);
+    expect(agentPaneLeft("pty-s9"), "its agent is the restore's to resume").toBe(false);
+  });
+
+  it("reads once and keeps the question when fieldd does not answer", async () => {
+    saveLayout(["pty-s9"]);
+    const door = moving(LEFT);
+    await askLastRun(door.fieldd);
+    const asked = lastRunState();
+    door.answer(Object.assign(new Error("starting"), { retryable: true }));
+    await refreshLastRun(door.fieldd);
+    expect(door.reads(), "one read, no retry loop").toBe(2);
+    expect(lastRunState()).toBe(asked);
+  });
+
+  it("reads nothing while a restore is in flight, and never races one", async () => {
+    const question = composeLastRun(LEFT, ["pty-s9"], new Set());
+    if (question === null) throw new Error("fixture");
+    resetLastRunForTests({ phase: "restoring", question });
+    const door = moving({ state: "none" });
+    await refreshLastRun(door.fieldd);
+    expect(door.fieldd.calls).toEqual([]);
+    expect(lastRunState().phase).toBe("restoring");
+  });
+
+  it("drops a read that lands after the person answered", async () => {
+    saveLayout(["pty-s9"]);
+    let land: (left: unknown) => void = () => undefined;
+    let held = false;
+    const fieldd = client({
+      "agent.lastRun": () =>
+        held ? new Promise((resolve) => (land = resolve)) : Promise.resolve(LEFT),
+      "agent.resume": async () => SPAWNED,
+      "agent.lastRunForget": async () => ({ forgotten: true }),
+    });
+    await askLastRun(fieldd);
+    held = true;
+    const refreshing = refreshLastRun(fieldd);
+    await restoreLastRun(fieldd);
+    expect(lastRunState()).toEqual({ phase: "answered", rehydrate: true });
+    // a picture that would ask again, and differently: two agents where the answer was about one
+    land(TWO_AGENTS);
+    await refreshing;
+    expect(lastRunState(), "the person's answer stands").toEqual({
+      phase: "answered",
+      rehydrate: true,
+    });
+  });
+
+  it("drops a read whose roster lands after the person answered", async () => {
+    saveLayout(["pty-s9"]);
+    const door = moving(LEFT);
+    await askLastRun(door.fieldd);
+    door.answer(TWO_AGENTS);
+    let land: (() => void) | null = null;
+    rosterRead = () =>
+      new Promise((resolve) => {
+        land = () => resolve(roster);
+      });
+    const refreshing = refreshLastRun(door.fieldd);
+    await vi.waitFor(() => expect(land, "the read waits on the roster").not.toBeNull());
+    await restoreLastRun(door.fieldd);
+    expect(lastRunState()).toEqual({ phase: "answered", rehydrate: true });
+    (land as (() => void) | null)?.();
+    await refreshing;
+    expect(lastRunState(), "the person's answer stands").toEqual({
+      phase: "answered",
+      rehydrate: true,
+    });
+  });
+
+  // LR (mend), 2026-11-25 — GT-3's "a roster this window could not read says nothing is dead" is
+  // the launch's rule; read again, it would unsay the terminals the person was just told
+  it("keeps the question as it stands when the roster cannot be read again", async () => {
+    saveLayout(["pty-s9", "pane-shell"]);
+    const door = moving(LEFT);
+    await askLastRun(door.fieldd);
+    expect(consentFacts()).toEqual({ agents: 1, shells: 1, unplaced: 1 });
+    const asked = lastRunState();
+    rosterState = "unavailable";
+    // an agent still gone: the count keeps its terminal
+    await refreshLastRun(door.fieldd);
+    expect(lastRunState(), "the terminal is not unsaid").toBe(asked);
+    // Chat woke the agent: only the terminal is left, and it is not let go unread
+    door.answer(RESUMED_ELSEWHERE);
+    await refreshLastRun(door.fieldd);
+    expect(lastRunState(), "never half of Start clean").toBe(asked);
+    expect(door.fieldd.calls.map(([method]) => method)).not.toContain("agent.lastRunForget");
+  });
+
+  it("keeps the question as it stands when the deck's layout cannot be read again", async () => {
+    saveLayout(["pty-s9", "pane-shell"]);
+    const door = moving(LEFT);
+    await askLastRun(door.fieldd);
+    const asked = lastRunState();
+    door.answer(RESUMED_ELSEWHERE);
+    const read = vi.spyOn(localStorage, "getItem").mockImplementation(() => {
+      throw new Error("storage is blocked");
+    });
+    try {
+      await refreshLastRun(door.fieldd);
+      expect(read, "the layout was asked for").toHaveBeenCalled();
+    } finally {
+      read.mockRestore();
+    }
+    expect(lastRunState()).toBe(asked);
+    expect(door.fieldd.calls.map(([method]) => method)).not.toContain("agent.lastRunForget");
+  });
+
+  it("lets a read that began before another, and lands after it, go", async () => {
+    saveLayout(["pty-s9", "pty-s10"]);
+    const door = moving(TWO_AGENTS);
+    await askLastRun(door.fieldd);
+    expect(consentFacts()).toEqual({ agents: 2, shells: 0, unplaced: 1 });
+    // the first read is slow, and answers what was gone when it was asked: both agents
+    let land: (left: unknown) => void = () => undefined;
+    const answers = door.fieldd.request;
+    door.fieldd.request = (method, params) => {
+      if (method !== "agent.lastRun") return answers(method, params);
+      door.fieldd.calls.push([method, params]);
+      return new Promise((resolve) => {
+        land = resolve;
+      });
+    };
+    const first = refreshLastRun(door.fieldd);
+    door.fieldd.request = answers;
+    // the second is asked after Chat woke run-studio-q, and answers at once
+    door.answer({
+      ...TWO_AGENTS,
+      gone: TWO_AGENTS.gone.filter((row) => row.id !== "run-studio-q"),
+    });
+    await refreshLastRun(door.fieldd);
+    expect(consentFacts()).toEqual({ agents: 1, shells: 0, unplaced: 1 });
+    land(TWO_AGENTS);
+    await first;
+    const state = lastRunState();
+    expect(state.phase).toBe("asking");
+    if (state.phase === "asking") {
+      expect(
+        state.question.agents.map((agent) => agent.id),
+        "the later read stands",
+      ).toEqual(["run-two"]);
+    }
+    expect(agentPaneLeft("pty-s9")).toBe(true);
+  });
+
+  it("lifts before it lets fieldd's picture go, so a stale question is never answered", async () => {
+    saveLayout(["pty-s9"]);
+    const door = moving(LEFT);
+    await askLastRun(door.fieldd);
+    expect(consentFacts()).toEqual({ agents: 1, shells: 0, unplaced: 1 });
+    // Chat woke the agent; fieldd still holds a picture of the bare shell no pane showed
+    door.answer(RESUMED_ELSEWHERE);
+    let heard: () => void = () => undefined;
+    const answers = door.fieldd.request;
+    door.fieldd.request = (method, params) => {
+      if (method !== "agent.lastRunForget") return answers(method, params);
+      door.fieldd.calls.push([method, params]);
+      return new Promise((resolve) => {
+        heard = () => resolve({ forgotten: true });
+      });
+    };
+    const refreshing = refreshLastRun(door.fieldd);
+    await vi.waitFor(() =>
+      expect(door.fieldd.calls.map(([method]) => method)).toContain("agent.lastRunForget"),
+    );
+    expect(lastRunState(), "answered while fieldd hears the forget").toEqual({
+      phase: "answered",
+      rehydrate: false,
+    });
+    // a Restore pressed on the curtain as it lifts finds nothing to answer
+    await restoreLastRun(door.fieldd);
+    heard();
+    await refreshing;
+    expect(door.fieldd.calls.map(([method]) => method)).not.toContain("agent.resume");
+    expect(lastRunState()).toEqual({ phase: "answered", rehydrate: false });
+    expect(agentPaneLeft("pty-s9")).toBe(true);
+  });
+
+  it("keeps the picture the person is answering about when fieldd lets it go", async () => {
+    saveLayout(["pty-s9", "pane-shell"]);
+    const door = moving(LEFT);
+    await askLastRun(door.fieldd);
+    const before = lastRunState();
+    if (before.phase !== "asking") throw new Error("asking");
+    // Chat woke the agent: fieldd finds nothing gone and lets its picture go, but the shell's
+    // pane is still dead, so the question stands without the agent
+    door.answer({ state: "none" });
+    await refreshLastRun(door.fieldd);
+    const after = lastRunState();
+    // the bare shell no pane showed is no longer gone either, or fieldd would still hold it
+    expect(consentFacts()).toEqual({ agents: 0, shells: 1, unplaced: 0 });
+    if (after.phase !== "asking") throw new Error("asking");
+    expect(after.question.asOf, "the eyebrow keeps its moment").toBe(before.question.asOf);
+    expect(after.question.board, "the still picture does not move").toBe(before.question.board);
+  });
+});
+
+describe("LR — the question read again, on the window's clock (2026-11-25)", () => {
+  // LR (mend), 2026-11-25 — the overlay's trigger, in its own rows: the wait, one read at a time,
+  // the roster's key (never its identity, or every read would schedule the next), and the stop
+  let stop: () => void = () => undefined;
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    stop();
+    stop = () => undefined;
+    poolListeners.clear();
+    vi.useRealTimers();
+  });
+  const born = (...ids: string[]) => {
+    roster = ids.map((sessionId) => ({ sessionId, health: "live" }));
+    poolMoved();
+  };
+
+  it("reads once for a burst of births, after the wait", async () => {
+    const read = vi.fn(async () => undefined);
+    stop = rereadLastRun(read, false);
+    born("pty-a");
+    await vi.advanceTimersByTimeAsync(200);
+    born("pty-a", "pty-b");
+    await vi.advanceTimersByTimeAsync(200);
+    born("pty-a", "pty-b", "pty-c");
+    await vi.advanceTimersByTimeAsync(499);
+    expect(read, "the wait trails the last birth").not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(read).toHaveBeenCalledOnce();
+  });
+
+  it("reads nothing more when a read's own roster read finds the same floor", async () => {
+    roster = [{ sessionId: "pty-a", health: "live" }];
+    // the pool publishes a new roster on every read, as the real one does: the floor is the same
+    const read = vi.fn(async () => poolMoved());
+    stop = rereadLastRun(read, true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(read).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(read, "no read schedules the next").toHaveBeenCalledOnce();
+    // a session that exited is not a birth
+    roster = [...roster, { sessionId: "pty-z", health: "exited" }];
+    poolMoved();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(read).toHaveBeenCalledOnce();
+  });
+
+  it("reads once more after a read in flight when the roster moved under it", async () => {
+    let land: () => void = () => undefined;
+    const read = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          land = resolve;
+        }),
+    );
+    stop = rereadLastRun(read, true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(read).toHaveBeenCalledOnce();
+    born("pty-a");
+    born("pty-a", "pty-b");
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(read, "one read at a time").toHaveBeenCalledOnce();
+    land();
+    await vi.advanceTimersByTimeAsync(500);
+    expect(read).toHaveBeenCalledTimes(2);
+    land();
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(read, "once more, not once per change").toHaveBeenCalledTimes(2);
+  });
+
+  it("reads as Godview opens onto it, and only then, with nothing moving", async () => {
+    const opened = vi.fn(async () => undefined);
+    stop = rereadLastRun(opened, true);
+    await vi.advanceTimersByTimeAsync(500);
+    expect(opened).toHaveBeenCalledOnce();
+    stop();
+    const closed = vi.fn(async () => undefined);
+    stop = rereadLastRun(closed, false);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(closed).not.toHaveBeenCalled();
+  });
+
+  it("reads nothing once stopped, and leaves no wait behind", async () => {
+    const read = vi.fn(async () => undefined);
+    stop = rereadLastRun(read, true);
+    born("pty-a");
+    expect(vi.getTimerCount()).toBe(1);
+    stop();
+    expect(vi.getTimerCount(), "the wait is cancelled").toBe(0);
+    born("pty-a", "pty-b");
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(read).not.toHaveBeenCalled();
+    expect(poolListeners.size, "and the roster is no longer heard").toBe(0);
   });
 });
 
