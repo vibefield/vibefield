@@ -239,7 +239,18 @@ overrides:
   # `ops.runMenuAction(id, taken)` or `ops.useHeldTool(id, taken)`. The browser pane's Device and Mute (OM-1) are
   # their first use. Additive: no existing op moves. Published from 348f6b73 (the lock's sha, the release commit; tag
   # v0.22.0 is on the merge 1c41927f). strata 0.13.0 and loro ^1.13.8 are unchanged.
-  "@vibecook/ice": 0.22.0
+  # EL8 2026-11-26: 0.22.0 → 0.23.0 (petitions I59 and I60). I59, the desk's pen: the handwriting is read from a
+  # distance-field atlas in each kind's own shader, with no bitmap per object and no raster per zoom rung
+  # (`@vibecook/ice/desk/bake` bakes a face into an `ice-hand/1` atlas; a host lends its faces with
+  # `deskLayer({ hand })`). I60, editing the ink: the words on a written object are selected, cut, copied and pasted,
+  # written in another pen, highlighted, struck through and underlined, a mark a glyph in the object's `ink` cell
+  # (`inkPart`, `inkTyping`, `inkActs`). The desk's faces, the words bar, the comment pad's ink and the agents' three
+  # ink tools (track IK) are their first use, in the commits on this one. NOT only additive: ICE's CHANGELOG lists
+  # seven entries under 0.23.0's `### Changed` (`DeskEditor` gains three required members; a press on a lent part's
+  # writing is the editor's; an act `on: "words"` is never the selection's; the note's `ink` group gains `marks`; and
+  # three more). Published from b7c740b0 (the lock's sha, the release commit; tag v0.23.0 is on the merge 4151e4a8).
+  # strata 0.13.0 and loro ^1.13.8 are unchanged.
+  "@vibecook/ice": 0.23.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -592,6 +603,9 @@ verifyDepsBeforeRun: prompt
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
+  # EL8 2026-11-26: reviewed ICE 0.23.0 (published 2026-11-26T17:46:40Z, inside the release-age window, which ends
+  # 2026-11-27T17:46:40Z; a one-row commit drops this row then). 0.22.0's row was dropped before this event.
+  - '@vibecook/ice@0.23.0'
   # EL8 2026-11-17: reviewed mille 0.3.6 (tag v0.3.6 = 85c35e7d, published 2026-11-12). (Corrected 2026-11-18,
   # item 531: this said "inside the window". The registry dates 0.3.6 at 2026-11-12T06:40:04Z, read 2026-11-18:
   # five days before the EL8, and this file sets no minimumReleaseAge, so pnpm 11.13.1's default of 1440 minutes

@@ -194,11 +194,13 @@ const PIN_EXPECTATIONS = [
   // the hand, and 0.20.0 (2026-11-20, petition I56) adds a soft light. 0.21.0 (2026-11-25,
   // petitions I57 and I58) adds a free slot for an object that comes with no pointer and a look
   // at an object (`ops.lookAt`). 0.22.0 (2026-11-25, petitions I61 and I62) lets an act say its
-  // state and be a choice. The anchor rejects prereleases and longer version suffixes.
+  // state and be a choice. 0.23.0 (2026-11-26, petitions I59 and I60) gives the desk a pen read
+  // from a baked atlas and makes its ink editable. The anchor rejects prereleases and longer
+  // version suffixes.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.22\.0\s*$/m,
-    label: '"@vibecook/ice": 0.22.0',
+    re: /"@vibecook\/ice":\s*0\.23\.0\s*$/m,
+    label: '"@vibecook/ice": 0.23.0',
   },
   // The EL8 to ghosttea 0.13.1 (2026-10-22/23): the five ghosttea rows move together, and since this event each is
   // anchored to the line's end like ice's, so a later `0.13.1-…` never passes for the release. The cargo row and the
