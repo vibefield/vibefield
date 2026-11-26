@@ -1,6 +1,7 @@
 import type { ObjectIntent, ObjectManual } from "@vibefield/contracts";
 import { OBJECT_LIMITS, TOOL_SCHEMAS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DeskKind } from "../src/objects/kinds";
 import { createDeskVerbs, type DeskVerbs } from "../src/tool-plane/rooms/desk/verbs";
 import {
   type Answer,
@@ -194,6 +195,64 @@ describe("the manual (§5.4, OB-L3)", () => {
     await expect(verbs.canvas_kinds(A, {})).resolves.toEqual({
       kinds: [{ kind: "desk.note", title: "Note", summary: "A note on the desk.", tools: true }],
     });
+  });
+});
+
+/** R-2: a kind whose agent tools are the pages room's rows: the browser pane's kind, its type and title as its manifest
+ * names them, with the agent half that manifest will declare */
+const BROWSER: DeskKind = {
+  kind: "vibefield.browser-pane",
+  title: "Browser",
+  placeable: false,
+  concurrency: "one",
+  tools: [],
+  version: 1,
+  room: "pages",
+};
+
+describe("a kind whose tools are a room's rows (R-2)", () => {
+  it("answers a kind that is both a room's and a live page's with the room's words first (with item 581)", async () => {
+    const both: DeskKind = { ...BROWSER, livePages: true };
+    const h = world({ kinds: [NOTE, PAGE, both] });
+    const { verbs, win } = room(h);
+    const refused = await verbs.canvas_place(A, { kind: both.kind }).catch((err: unknown) => err);
+    expect(refused).toMatchObject({ details: { fact: "no-tool", room: "pages" } });
+    expect((refused as Error).message).toContain("not with canvas_place");
+    expect((refused as Error).message).not.toContain("only the user adds those");
+    expect(win.seen).toEqual([]);
+  });
+
+  it("answers canvas_place with no-tool naming the room's rows, before the window", async () => {
+    const h = world({ kinds: [NOTE, PAGE, BROWSER] });
+    const { verbs, win } = room(h);
+    const refused = await verbs
+      .canvas_place(A, { kind: BROWSER.kind })
+      .catch((err: unknown) => err);
+    expect(refused).toMatchObject({ details: { fact: "no-tool", room: "pages" } });
+    expect((refused as { details: { tools: string[] } }).details.tools).toContain("browser_open");
+    expect((refused as Error).message).toContain("browser_open");
+    expect(win.seen).toEqual([]);
+  });
+
+  it("answers object_read and object_act on one handed to the caller with no-tool naming the room's rows", async () => {
+    const h = world({ kinds: [NOTE, PAGE, BROWSER] });
+    const { verbs, win } = room(h);
+    const ref = h.refOf("p1", BROWSER.kind);
+    h.desk.hand(ref, "run-a");
+    const read = await verbs.object_read(A, { ref, tool: "snapshot" }).catch((err: unknown) => err);
+    const act = await verbs
+      .object_act(A, { doing: "Click it", ref, tool: "click" })
+      .catch((err: unknown) => err);
+    for (const [refused, verb] of [
+      [read, "object_read"],
+      [act, "object_act"],
+    ] as const) {
+      expect(refused).toMatchObject({ details: { fact: "no-tool", room: "pages" } });
+      expect((refused as Error).message).toContain(`not with ${verb}`);
+      expect((refused as Error).message).toContain("browser_open");
+      expect((refused as Error).message).not.toContain("gives you no tools");
+    }
+    expect(win.seen).toEqual([]);
   });
 });
 

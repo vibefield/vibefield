@@ -29,7 +29,7 @@ by ONE export name; `tray` hangs it on the pegboard. `objects.md` is the deep en
 | `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
 | `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
 | `tray` | { category: string, label: string, order?: number, hang: object, props?: object mapping name → one of string, number, boolean, take?: one of `"face"`, object mapping name → one of string, number, boolean, local?: boolean } | no | — |
-| `agent` | { summary: string, concurrency: `many` \| `one`, faces: object[], guide?: string, tools: object[] } | no | — |
+| `agent` | { summary: string, concurrency: `many` \| `one`, faces: object[], guide?: string, tools: object[], room?: `"pages"` } | no | — |
 | `sticker` | `{ art: string, radius: number, paint?: object[], name?: string }` | no | — |
 | `binding` | { kind: string } | yes | — |
 

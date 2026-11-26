@@ -37,6 +37,8 @@ export interface DeskKind {
   readonly version: number;
   /** item 581 (2026-11-19): its plugin asks a live surface's powers (`LIVE_PAGE_SCOPES`), so only the user adds one */
   readonly livePages?: true | undefined;
+  /** R-2 (2026-11-19): its agent tools are this tool-plane room's rows, not the desk's (the manifest's `agent.room`) */
+  readonly room?: "pages" | undefined;
 }
 
 /** At most `max` bytes of `text`, ending on a whole character. */
@@ -86,14 +88,16 @@ const fromPlugin = (
   return {
     kind: object.type,
     title: object.title,
-    // no agent half, no declaration of what an agent would be placing: only the person's hand makes one; nor a kind
-    // that shows a live page, device or app window (item 581): only the person adds those
-    placeable: object.agent !== undefined && !livePages,
+    // no agent half, no declaration of what an agent would be placing: only the person's hand makes one. R-2
+    // (2026-11-19): nor a kind whose tools are a room's rows: that room makes one (the pages room's browser_open).
+    // Item 581 (2026-11-19): nor a kind that shows a live page, device or app window: only the person adds those
+    placeable: object.agent !== undefined && object.agent.room === undefined && !livePages,
     concurrency: object.agent?.concurrency ?? "many",
     tools: object.agent?.tools ?? [],
     ...(object.agent !== undefined ? { summary: object.agent.summary } : {}),
     ...(guide !== undefined ? { guide, guideFrom: plugin } : {}),
     version: object.schemaVersion,
+    ...(object.agent?.room !== undefined ? { room: object.agent.room } : {}),
     ...(livePages ? { livePages: true as const } : {}),
   };
 };

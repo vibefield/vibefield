@@ -244,6 +244,14 @@ export const REFUSAL_CATALOG = {
     meaning: "the manifest declares an agent half the binding does not carry",
     guidance: "add `agent` to the ObjectBinding, with a handler for each declared tool",
   },
+  "object-agent-room-bound": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "a kind whose tools are a room's rows carries an `agent` on its binding. The room answers for this kind, so an `agent` on its binding would never be called",
+    guidance:
+      "remove the binding's `agent`, or drop `room` from the manifest's agent block (objects.md, The agent half)",
+  },
   "object-agent-summary-missing": {
     check: "activation",
     level: "refuse",

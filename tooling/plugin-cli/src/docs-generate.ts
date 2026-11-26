@@ -948,6 +948,10 @@ function objectsDoc(): string {
             "`tools`",
             `at most ${OBJECT_LIMITS.TOOLS_PER_KIND}: a \`name\`, \`readOnly\`, \`description\`, an \`input\` JSON Schema and optionally an \`output\` and \`destructive\``,
           ],
+          [
+            "`room`",
+            "optional: the tool-plane room whose rows are this kind's agent tools, `pages` alone, named only by the kind its rows work (the browser pane). Such a kind declares no tools of its own and no face a handler fills, and is never placed by the desk: the room makes one, and the desk's own tools on it answer `no-tool`, naming the room's rows. The room answers for this kind, so an `agent` on its binding would never be called: remove it, or drop `room` from the manifest.",
+          ],
         ],
       ),
       "",

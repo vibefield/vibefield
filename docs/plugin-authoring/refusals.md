@@ -42,6 +42,7 @@ and `plugin-build` answer in their own words (`--help`).
 | `module-unloadable` | activation | the built renderer entry exists but throws while being imported | module top-level must not perform product work (§10.1) — do it in activate(ctx) |
 | `object-agent-face-unbound` | activation | a declared text, file or link face has no handler | bind it under `agent.faces` by its id |
 | `object-agent-face-undeclared` | activation | a face handler has no declared face | declare the face in the manifest's `agent.faces`, or remove the handler |
+| `object-agent-room-bound` | activation | a kind whose tools are a room's rows carries an `agent` on its binding. The room answers for this kind, so an `agent` on its binding would never be called | remove the binding's `agent`, or drop `room` from the manifest's agent block (objects.md, The agent half) |
 | `object-agent-summary-missing` | activation | the agent half has no `summary`: nothing can say what the object holds now | add `summary(api)`, returning small bounded JSON |
 | `object-agent-tool-misbound` | activation | a tool is bound on the wrong side: a readOnly tool under `act`, or an acting tool under `read` | a readOnly tool is bound under `agent.read`; only `agent.act` has a way to write |
 | `object-agent-tool-unbound` | activation | a declared tool has no handler | bind it under `agent.read` if it is readOnly, else under `agent.act` |

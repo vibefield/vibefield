@@ -71,6 +71,54 @@ describe("the kinds a desk knows (OB-L2)", () => {
     expect(note?.tools.map((t) => t.name)).toEqual(table?.agent.tools.map((t) => t.name));
   });
 
+  it("reads a kind whose tools are a room's rows as that room's, and never placeable by the desk (R-2)", () => {
+    const kinds = pluginDeskKinds(
+      [
+        record("vibefield.browser-pane", true, [
+          object("vibefield.browser-pane", {
+            summary: "A web page.",
+            concurrency: "one",
+            faces: [{ type: "ref" }],
+            tools: [],
+            room: "pages",
+          }),
+        ]),
+      ],
+      () => undefined,
+    );
+    expect(kinds[0]).toMatchObject({ room: "pages", placeable: false, tools: [] });
+  });
+
+  it("keeps a kind that is both a room's and a live page's unplaceable for both reasons (R-2 with item 581)", () => {
+    // the browser pane as its manifest asks (read, never copied) with a room-naming agent half, as 2g gives it
+    const manifest = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../../plugins/browser-pane/vibefield.plugin.json"),
+        "utf8",
+      ),
+    ) as { id: string; capabilities: string[] };
+    const [kind] = pluginDeskKinds(
+      [
+        record(
+          manifest.id,
+          true,
+          [
+            object(manifest.id, {
+              summary: "A web page.",
+              concurrency: "one",
+              faces: [{ type: "ref" }],
+              tools: [],
+              room: "pages",
+            }),
+          ],
+          manifest.capabilities,
+        ),
+      ],
+      () => undefined,
+    );
+    expect(kind).toMatchObject({ room: "pages", livePages: true, placeable: false });
+  });
+
   it("keeps Print from being placed", () => {
     expect(deskKinds().find((k) => k.kind === "desk.photo")?.placeable).toBe(false);
   });

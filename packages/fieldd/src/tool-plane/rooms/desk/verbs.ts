@@ -14,6 +14,7 @@ import {
   type ObjectRecord,
   type ObjectRef,
   type ObjectYours,
+  TOOLS,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
 import type { DeskObjects } from "../../../objects/desk-objects";
@@ -216,6 +217,19 @@ const manualOf = (parts: ManualParts): ObjectManual => {
   return left.length > 0 ? { ...manual, leftOut: left } : manual;
 };
 
+/** R-2 (2026-11-19): a kind whose agent tools are a room's rows is worked with those, never through the desk's own
+ * verbs: canvas_place, object_read and object_act on it answer this, naming the room's rows. Undefined for any other. */
+const roomsOwn = (kind: DeskKind | undefined, verb: string): RpcCallError | undefined => {
+  if (kind?.room === undefined) return undefined;
+  const room = kind.room;
+  const rows = TOOLS.filter((tool) => tool.family === room).map((tool) => tool.name);
+  return refuse(
+    "no-tool",
+    `${kind.title} is worked with the ${room} room's own tools, not with ${verb}: ${rows.join(", ")}.`,
+    { room, tools: rows },
+  );
+};
+
 const NOT_TOOLS_YET = (ref: string): RpcCallError =>
   refuse("no-tool", `Open ${ref} with object_open first: its tools come in that answer.`);
 
@@ -227,6 +241,8 @@ const declaredTool = (
 ): DeskKindTool => {
   if (record.kind === undefined) throw NOT_TOOLS_YET(record.ref);
   const kind = objects.kind(record.kind);
+  const elsewhere = roomsOwn(kind, acting ? "object_act" : "object_read");
+  if (elsewhere !== undefined) throw elsewhere;
   const tools = kind?.tools ?? [];
   const declared = tools.find((t) => t.name === tool);
   if (declared === undefined) {
@@ -342,6 +358,8 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
       registry.readable();
       objects.vouch(run);
       const kind = objects.kind(input.kind);
+      const elsewhere = roomsOwn(kind, "canvas_place");
+      if (elsewhere !== undefined) throw elsewhere;
       if (kind === undefined || !kind.placeable) {
         const names = objects
           .kinds()

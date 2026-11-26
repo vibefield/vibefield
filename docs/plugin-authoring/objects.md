@@ -44,7 +44,7 @@ One entry per kind under `contributes.objects`:
 | `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
 | `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
 | `tray` | { category: string, label: string, order?: number, hang: object, props?: object mapping name → one of string, number, boolean, take?: one of `"face"`, object mapping name → one of string, number, boolean, local?: boolean } | no | — |
-| `agent` | { summary: string, concurrency: `many` \| `one`, faces: object[], guide?: string, tools: object[] } | no | — |
+| `agent` | { summary: string, concurrency: `many` \| `one`, faces: object[], guide?: string, tools: object[], room?: `"pages"` } | no | — |
 | `sticker` | `{ art: string, radius: number, paint?: object[], name?: string }` | no | — |
 | `binding` | { kind: string } | yes | — |
 
@@ -386,6 +386,7 @@ export interface AgentHalf {
 | `faces` | what a card of the object carries, in the order it offers them. Exactly one `ref`, first; at most one `image`; a `text`, `file` or `link` face has an `id` and a `label` and a handler under `agent.faces` |
 | `guide` | the manual's prose, a Markdown file under `assets/` (the folder the bundle ships), at most 6000 bytes |
 | `tools` | at most 24: a `name`, `readOnly`, `description`, an `input` JSON Schema and optionally an `output` and `destructive` |
+| `room` | optional: the tool-plane room whose rows are this kind's agent tools, `pages` alone, named only by the kind its rows work (the browser pane). Such a kind declares no tools of its own and no face a handler fills, and is never placed by the desk: the room makes one, and the desk's own tools on it answer `no-tool`, naming the room's rows. The room answers for this kind, so an `agent` on its binding would never be called: remove it, or drop `room` from the manifest. |
 
 **The API is the wall.** A read handler is handed `AgentReadApi`: the object's props and
 nothing to write with. An act handler is handed `AgentActApi`, which adds `setProps`.

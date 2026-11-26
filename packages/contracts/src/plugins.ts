@@ -3,6 +3,7 @@ import { SemverString } from "./envelope";
 import { ChipType, OBJECT_LIMITS, ObjectConcurrency, ObjectReadInput } from "./objects";
 import { SCOPES, type Scope } from "./registries";
 import { ObjectSticker, stickerDeclarationProblems } from "./stickers";
+import { TOOLS } from "./tools";
 
 // Plugin manifest contracts (plugin-architecture spec §7/§8, slice P0 — PA-3:
 // the canonical schema lives HERE; plugin-runtime must not own a hand-written
@@ -929,6 +930,10 @@ export const ObjectAgentHalf = z
     /** a Markdown file under `assets/`, at most `OBJECT_LIMITS.GUIDE_BYTES`: the manual's prose */
     guide: RelativeAssetPath.optional(),
     tools: z.array(ObjectAgentTool).max(OBJECT_LIMITS.TOOLS_PER_KIND),
+    /** R-2 (2026-11-19): this kind's agent tools are a tool-plane room's rows, never the desk's object door. The pages
+     * room is the one such room (the browser pane, BU-2 A). An agent is handed and holds such an object as any other;
+     * canvas_place, object_read and object_act on it answer a fact naming the room's rows. It declares no tools. */
+    room: z.literal("pages").optional(),
   })
   .passthrough();
 export type ObjectAgentHalf = z.infer<typeof ObjectAgentHalf>;
@@ -942,6 +947,7 @@ export const agentFaceHasHandler = (face: Pick<ObjectAgentFace, "type">): boolea
 export function agentHalfProblems(half: {
   readonly faces: readonly ObjectAgentFace[];
   readonly tools: readonly ObjectAgentTool[];
+  readonly room?: string | undefined;
 }): readonly { readonly message: string; readonly path: readonly (string | number)[] }[] {
   const out: { message: string; path: (string | number)[] }[] = [];
   const faces = half.faces;
@@ -971,6 +977,20 @@ export function agentHalfProblems(half: {
     if (face.mime !== undefined && face.type !== "file")
       out.push({ message: "only a file face has a mime type", path });
   }
+  // R-2: a kind whose tools are a room's rows has none of its own to declare
+  if (half.room !== undefined && half.tools.length > 0)
+    out.push({
+      message: `a kind whose tools are the ${half.room} room's rows declares none of its own`,
+      path: ["tools"],
+    });
+  // R-2 (2026-11-19): nor a face a handler fills: its binding carries no agent to fill one (object-agent-room-bound)
+  if (half.room !== undefined)
+    for (const [index, face] of faces.entries())
+      if (agentFaceHasHandler(face))
+        out.push({
+          message: `a kind whose tools are the ${half.room} room's rows offers no ${face.type} face: no handler fills it`,
+          path: ["faces", index],
+        });
   const names = new Set<string>();
   for (const [index, tool] of half.tools.entries()) {
     const path = ["tools", index];
@@ -1481,6 +1501,18 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       if (o.agent !== undefined) {
         for (const problem of agentHalfProblems(o.agent))
           issue(problem.message, [...path, "agent", ...problem.path]);
+        // R-2 (2026-11-19): a room answers only for the kind its own rows name (the tool catalog's `object`)
+        const room = o.agent.room;
+        if (room !== undefined) {
+          const owners = [
+            ...new Set(TOOLS.flatMap((t) => (t.family === room && t.object ? [t.object] : []))),
+          ];
+          if (!owners.includes(o.type))
+            issue(
+              `the ${room} room's tools are ${owners.join(", ")}'s: only that kind names the room`,
+              [...path, "agent", "room"],
+            );
+        }
         if (o.agent.guide !== undefined && !o.agent.guide.startsWith(AGENT_GUIDE_DIR))
           issue(`an agent guide must live under ${AGENT_GUIDE_DIR}: only that folder ships`, [
             ...path,

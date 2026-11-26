@@ -17,6 +17,7 @@ import {
   generateRegistryKeypair,
   packVfplugin,
   signRegistryIndex,
+  unpackVfplugin,
 } from "@vibefield/plugin-build";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -225,6 +226,41 @@ describe("an installed plugin loads only as what its install verified (item 279'
     writeFileSync(join(pluginDir, "revisions", `${slot}.index.json.sig`), other.signature);
     await daemon.plugins.refresh();
     expect(shape(daemon.plugins.get(KV_ID))).toEqual(REFUSED);
+  });
+
+  // R-2's slice holds S3's one defensive line with this row (2026-11-19): it is green from its birth, after S3
+  it("a revision the list and its artifact both vouch for, whose manifest names another plugin, is refused", {
+    timeout: 60_000,
+  }, async () => {
+    const l = await lab();
+    const daemon = await l.boot();
+    const TWIN = "vibefield.example.kvtwin";
+    const entry = l.index.plugins[KV_ID];
+    if (entry === undefined) throw new Error("the fixture list lacks kv");
+    // a list the key signed that names kv's own artifact under another plugin's id
+    const list = signedList(
+      { ...l.index, plugins: { [TWIN]: { ...entry, id: TWIN } } },
+      l.keys.secretKey,
+    );
+    const { bytes, sha256 } = await packVfplugin({ rootDir: KV_DIR });
+    const slot = sha256.slice("sha256:".length);
+    const pluginDir = join(l.dataDir, ...LAYOUT.PLUGINS_INSTALLED_DIR, TWIN);
+    const revision = join(pluginDir, "revisions", slot);
+    await unpackVfplugin(bytes, revision);
+    writeFileSync(join(revision, ".vf-artifact.vfplugin"), bytes);
+    writeFileSync(
+      join(revision, ".vf-artifact.json"),
+      `${JSON.stringify({ version: 1, pluginId: TWIN, slot, artifactSha256: sha256 })}\n`,
+    );
+    writeFileSync(join(pluginDir, "revisions", `${slot}.index.json`), list.bytes);
+    writeFileSync(join(pluginDir, "revisions", `${slot}.index.json.sig`), list.signature);
+    writeFileSync(
+      join(pluginDir, ".vf-current.json"),
+      `${JSON.stringify({ version: 2, pluginId: TWIN, slot, artifactSha256: sha256, committedAt: 1, commitEpoch: 1 })}\n`,
+    );
+    await daemon.plugins.refresh();
+    expect(shape(daemon.plugins.get(TWIN))).toEqual(REFUSED);
+    expect(daemon.plugins.get(KV_ID)).toBeUndefined();
   });
 
   it("a genuine install loads across a restart, its provenance the pointer's own", {

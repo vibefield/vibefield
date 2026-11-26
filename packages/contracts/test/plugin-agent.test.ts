@@ -23,6 +23,16 @@ const withAgent = (patch: Record<string, unknown>) => {
   return validatePluginManifest(manifest);
 };
 
+/** The fixture as the browser pane: the kind the pages room's rows name (R-2: only that kind names the room). */
+const withPaneAgent = (patch: Record<string, unknown>) => {
+  const manifest = JSON.parse(
+    JSON.stringify(fixture()).replaceAll("com.example.clock", "vibefield.browser-pane"),
+  ) as ReturnType<typeof fixture>;
+  const row = manifest.contributes.objects[0] as Row;
+  row.agent = { ...row.agent, ...patch };
+  return validatePluginManifest(manifest);
+};
+
 const messages = (result: ReturnType<typeof validatePluginManifest>): readonly string[] =>
   result.ok ? [] : result.issueDetails.map((issue) => issue.message);
 
@@ -94,6 +104,27 @@ describe("the manifest's agent block", () => {
     const many = Array.from({ length: OBJECT_LIMITS.TOOLS_PER_KIND + 1 }, (_, i) => tool(`t${i}`));
     expect(withAgent({ tools: many }).ok).toBe(false);
     expect(withAgent({ tools: [tool("Not-A-Name")] }).ok).toBe(false);
+  });
+
+  it("names the pages room as where a kind's tools are, no other room, and then declares none of its own (R-2)", () => {
+    expect(messages(withPaneAgent({ room: "pages", tools: [] }))).toEqual([]);
+    expect(withPaneAgent({ room: "agents", tools: [] }).ok).toBe(false);
+    expect(messages(withPaneAgent({ room: "pages" }))).toEqual([
+      "a kind whose tools are the pages room's rows declares none of its own",
+    ]);
+  });
+
+  it("lets only the kind a room's rows name declare that room (R-2's follow-up)", () => {
+    expect(messages(withAgent({ room: "pages", tools: [] }))).toEqual([
+      "the pages room's tools are vibefield.browser-pane's: only that kind names the room",
+    ]);
+  });
+
+  it("refuses a face a handler fills on a kind whose tools are a room's rows (R-2's follow-up)", () => {
+    const faces = [{ type: "ref" }, { type: "text", id: "words", label: "Its words" }];
+    expect(messages(withPaneAgent({ room: "pages", tools: [], faces }))).toEqual([
+      "a kind whose tools are the pages room's rows offers no text face: no handler fills it",
+    ]);
   });
 });
 

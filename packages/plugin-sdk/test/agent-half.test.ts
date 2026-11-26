@@ -116,6 +116,28 @@ describe("check: the manifest's agent block against the binding's agent", () => 
     expect(verdictsFor({ ...HALF, summary: undefined })).toEqual(["object-agent-summary-missing"]);
   });
 
+  // R-2's follow-up (2026-11-19): a kind whose tools are a room's rows, as the browser pane's agent half declares it
+  const ROOM_AGENT: NonNullable<ObjectContribution["agent"]> = {
+    summary: "A web page.",
+    concurrency: "many",
+    faces: [{ type: "ref" }, { type: "image" }],
+    tools: [],
+    room: "pages",
+  };
+
+  it("passes a kind whose tools are a room's rows with no agent on its binding: the room answers for it", () => {
+    expect(verdictsFor(undefined, rowWithAgent(ROOM_AGENT))).toEqual([]);
+  });
+
+  it("refuses an agent bound on such a kind, since it would never be called, and says what to do", () => {
+    const verdicts = checkKindDeclaration(
+      { kind: discKind({}), agent: { summary: () => ({}) } },
+      rowWithAgent(ROOM_AGENT),
+    ).filter((v) => v.status === "refused");
+    expect(verdicts.map((v) => v.code)).toEqual(["object-agent-room-bound"]);
+    expect(verdicts[0]?.detail).toContain("would never be called: remove it, or drop `room`");
+  });
+
   it("names a tool with no handler, and a handler with no tool", () => {
     expect(verdictsFor({ ...HALF, read: {} })).toEqual(["object-agent-tool-unbound"]);
     expect(verdictsFor({ ...HALF, read: { ...HALF.read, extra: () => null } })).toEqual([

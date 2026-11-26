@@ -188,6 +188,7 @@ describe("check: the agent half", () => {
       "agent-guide-missing",
       "agent-guide-too-large",
       "object-agent-tool-unbound",
+      "object-agent-room-bound",
     ])
       expect(REFUSAL_CATALOG).toHaveProperty(code);
   });

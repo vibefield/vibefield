@@ -77,6 +77,7 @@ export type KindRefusalCode =
   // the agent half (OB-2): the manifest's `agent` block against the binding's `agent`
   | "object-agent-undeclared"
   | "object-agent-unbound"
+  | "object-agent-room-bound"
   | "object-agent-summary-missing"
   | "object-agent-tool-unbound"
   | "object-agent-tool-undeclared"
@@ -154,6 +155,8 @@ export const KIND_EXPECTED: Readonly<Record<KindRefusalCode | KindNoteCode, stri
     "declare what the binding's `agent` offers: `contributes.objects[].agent` in the manifest, or drop the handlers",
   "object-agent-unbound":
     "give the binding its `agent` (`AgentHalf` from @vibefield/plugin-sdk/desk), with a handler for each tool the manifest declares",
+  "object-agent-room-bound":
+    "no `agent` on the binding of a kind whose manifest names a room: the room answers for it (remove the `agent`, or drop `room`)",
   "object-agent-summary-missing":
     "an `agent.summary(api)` that says what the object holds now: small, bounded, JSON",
   "object-agent-tool-unbound":
@@ -318,6 +321,18 @@ function agentProblems(binding: unknown, row: ObjectContribution, at: string): K
             "object-agent-undeclared",
             subject,
             `${row.type}'s binding has an \`agent\` the manifest does not declare`,
+            { pointer },
+          ),
+        ];
+  // R-2 (2026-11-19): a kind whose tools are a room's rows carries no agent on its binding: the room answers for it
+  if (declared.room !== undefined)
+    return bound === undefined
+      ? []
+      : [
+          refused(
+            "object-agent-room-bound",
+            subject,
+            `${row.type}'s tools are the ${declared.room} room's. The room answers for this kind, so an \`agent\` on its binding would never be called: remove it, or drop \`room\` from the manifest.`,
             { pointer },
           ),
         ];
