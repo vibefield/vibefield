@@ -5615,6 +5615,10 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     after the words bar's own 200 ms, as it does after a press.)*
     *(Corrected 2026-11-25, IK at V7: the caret's bar no longer stands "over the caret's box". It stands at the sheet's
     edge, centred over the caret, by the words bar's Place above, so neither it nor its rows lie over the writing below.)*
+    *(Added 2026-11-26, IK, on the object menus' change of selection ("The bar grown"): when the bar turns between the
+    words and the objects, the list open closes **at once**, as at a change of selection, over the same sheet too, so the
+    words' menu is never drawn over the objects' row, nor the objects' menu or a choice's list over the words'. Esc, a
+    row taken and a press where the bar stays still fold it.)*
   - **Keys** — while a sheet is written the keys are the platform field's, so ⌘C copies the selected words, ⌘X cuts,
     ⌘V pastes and ⌘A selects the sheet's words; Make a card's ⌘C stands down there, as it does today, and is the
     bar's again while objects are selected. ⇧⌘X strikes, ⌘U underlines, ⇧⌘H highlights with the last highlighter

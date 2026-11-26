@@ -206,8 +206,12 @@ const liveCaret = (anchor: SelectionAnchor) =>
  *
  * L1b (2026-11-26; §8 "The words bar" — Place; item 550): standing off the sheet's brackets it keeps the objects' bar's
  * at-work `clear` for that sheet, and the `selection` it was read for, so a clearance turning on or off over the same sheet
- * travels as it does over the object. Off the words' own box (no brackets of its own) it keeps none: the stroke lies
- * round the sheet, not the words.
+ * travels as it does over the object. Off the words' own box (no brackets of its own) it keeps no clearance: the stroke
+ * lies round the sheet, not the words.
+ *
+ * L1c (2026-11-26; §8 "The words bar" — More): the `selection` it says is the writing's own (`writingOf`), never the
+ * objects' key, so the view's change of selection (track OM, 2026-11-26) closes a list AT ONCE when the bar turns between
+ * the words and the objects, over the same sheet too, and nothing of it is carried to the other row.
  */
 function offTheWriting(
   anchor: SelectionAnchor,
@@ -215,18 +219,16 @@ function offTheWriting(
   written: { readonly box: ScreenBox; readonly entity: Entity },
   clear: number,
 ): PlaceAnchor {
+  const selection = writingOf(key);
   if (anchor.box !== null && key === keyOf([written.entity])) {
-    return {
-      box: anchor.box,
-      across: written.box,
-      count: 1,
-      view: anchor.view,
-      clear,
-      selection: key,
-    };
+    return { box: anchor.box, across: written.box, count: 1, view: anchor.view, clear, selection };
   }
-  return { box: written.box, across: written.box, count: 1, view: anchor.view };
+  return { box: written.box, across: written.box, count: 1, view: anchor.view, selection };
 }
+
+/** L1c — the selection the writing's bar (the words', or the caret's) says to the view: the selection's key, as the
+ * writing's, so it is never the objects' bar's over the same sheet. */
+const writingOf = (key: string): string => `${key} (writing)`;
 
 /** IK round two — the bar at the caret: the words' row of a sheet with no words acts — More alone — which the caret's rows
  * grow from (§8). */
@@ -515,6 +517,14 @@ function SelectionBarOn({
           if (
             next.key !== prev.key &&
             growFor.current !== next.key &&
+            surfaceRef.current.surface === "selection"
+          )
+            fold();
+          // L1c (2026-11-26): so does the bar turning between the words and the objects over the SAME selection, in this
+          // read too, so neither row is ever drawn grown over the other (the view cuts the fold: `writingOf`)
+          if (
+            next.key === prev.key &&
+            (next.words === null) !== (prev.words === null) &&
             surfaceRef.current.surface === "selection"
           )
             fold();

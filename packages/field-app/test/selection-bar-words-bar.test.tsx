@@ -22,6 +22,9 @@
  *     door it waits and says ⌘V; a right-click anywhere else is the objects' as before;
  *     a slot's declared `keys` printed in its tip; at a bare CARET (round two, the anchor's `caret`) a right-click on the sheet
  *     grows Paste | Select all at the caret, and no bar stands there otherwise.
+ *   A ROLE FLIP CLOSES AT ONCE (L1c, 2026-11-26) — an open list is closed at once when the bar turns between the words and
+ *     the objects, over another object (track OM's change of selection) or over the SAME sheet, and Esc still folds it
+ *     where it stands;
  *   ITS OWN CLASSES (L1c, 2026-11-26) — the words' own elements wear `vf-words-*` classes beside the bar's shared chrome,
  *     and no rule of the stylesheet outside the words' section names one (two lines both naming `vf-bar-swatch` and
  *     `vf-bar-choice` emptied every words swatch on a running desk: jsdom computes no cascade, so it is pinned at the source);
@@ -1320,5 +1323,136 @@ describe("the words bar's own classes (L1c)", () => {
         .filter((c) => !SHARED.has(c) && !c.startsWith("vf-words-")),
     );
     expect([...foreign]).toEqual([]);
+  });
+});
+
+// L1c (2026-11-26; DESIGN.md §8 "The words bar" — More): an open list is closed AT ONCE when the bar turns between the
+// words and the objects, never drawn open over the other role nor its fold carried there. Over another object that is
+// track OM's change of selection (2026-11-26); over the SAME sheet it is the words bar's own. Esc, where the bar stays,
+// still folds it (M4).
+describe("a role flip closes the list at once (L1c)", () => {
+  const DEVICE: MenuSlot = {
+    id: "device",
+    label: "Device",
+    glyph: { path: "M3 5 H16 V15 H3 Z" },
+    choices: [
+      { id: "laptop", label: "Laptop", current: true },
+      { id: "phone", label: "Phone" },
+    ],
+  };
+  const objectCell = (act: string): HTMLElement => {
+    const el = bar().querySelector<HTMLElement>(`[data-face-row="selection"] [data-act="${act}"]`);
+    if (el === null) throw new Error(`no objects' ${act}`);
+    return el;
+  };
+  /** The words' More, watched through a flip INTO the words: any `aria-expanded` it says there (drawn open, then folded)
+   * is a list drawn open over the words' row. */
+  const watchMore = (to: "words"): (() => (string | null)[]) => {
+    const said = new MutationObserver(() => undefined);
+    said.observe(bar(), {
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["aria-expanded"],
+      attributeOldValue: true,
+    });
+    return () => {
+      const records = said
+        .takeRecords()
+        .filter(
+          (r) =>
+            (r.target as HTMLElement).dataset.act === "more" &&
+            (r.target as HTMLElement).closest(`[data-face-row="${to}"]`) !== null,
+        )
+        .map((r) => r.oldValue);
+      said.disconnect();
+      return records;
+    };
+  };
+  /** Closed at once: not grown, the grow laid at the bar's row, its motion cut. */
+  const cutClosed = (): void => {
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-open")).toBe(false);
+    expect(bar().hasAttribute("data-cut")).toBe(true);
+    expect(bar().style.getPropertyValue("--vf-bar-grow-t")).toBe("0px");
+    expect(bar().style.getPropertyValue("--vf-bar-grow-b")).toBe("0px");
+  };
+  /** The words' list open from a bar flipped BELOW its sheet: it grew down. */
+  const wordsListDown = (): void => {
+    act(() =>
+      selection.publish({
+        box: { x0: 300, y0: 60, x1: 600, y1: 260 },
+        words: words({ box: { x0: 350, y0: 80, x1: 450, y1: 102 } }),
+      }),
+    );
+    act(() => cell("more").click());
+    expect(bar().dataset.dir).toBe("down");
+    expect(bar().style.getPropertyValue("--vf-bar-grow-b")).not.toBe("0px");
+  };
+
+  it("words to an object: the words' list grown down closes at once as a pane is selected — no body over its row", () => {
+    mount();
+    wordsListDown();
+    const pane = deskObjects(ce, "vibefield.comment-pad")[0]?.entity as Entity;
+    act(() => {
+      ce.ops.setSelection([pane]);
+      selection.publish({
+        box: { x0: 700, y0: 300, x1: 900, y1: 500 },
+        editing: false,
+        words: undefined,
+        menu: [DEVICE],
+      });
+    });
+    cutClosed();
+    expect(bar().hasAttribute("data-words")).toBe(false);
+  });
+
+  it("an object to words: a Device list open closes at once as words on a note are selected — no panel over the words' row", () => {
+    selection.publish({ editing: false, words: undefined, menu: [DEVICE] });
+    const pane = deskObjects(ce, "vibefield.comment-pad")[0]?.entity as Entity;
+    ce.ops.setSelection([pane]);
+    mount();
+    act(() => objectCell("act:device").click());
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    const said = watchMore("words");
+    act(() => {
+      ce.ops.setSelection([note]);
+      selection.publish({ box: BOX, editing: true, words: words(), menu: undefined });
+    });
+    expect(said()).toEqual([]);
+    cutClosed();
+    expect(bar().hasAttribute("data-words")).toBe(true);
+  });
+
+  it("the SAME sheet, objects to words: its More open as an object closes at once as words on it are selected", () => {
+    selection.publish({ editing: false, words: undefined });
+    mount();
+    act(() => objectCell("more").click());
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    const said = watchMore("words");
+    act(() => selection.publish({ editing: true, words: words() }));
+    expect(said()).toEqual([]);
+    cutClosed();
+    expect(bar().hasAttribute("data-words")).toBe(true);
+  });
+
+  it("the SAME sheet, words to objects: the words' list grown down closes at once as the sheet stands selected without words", () => {
+    mount();
+    wordsListDown();
+    // (the objects' More, hidden and inert under the words, already says the open list: its `aria-expanded` tells
+    // nothing here. The cut does: drawn grown over the objects for one render, the grow would be taken again over the
+    // objects' selection and never cut)
+    act(() => selection.publish({ editing: false, words: undefined }));
+    cutClosed();
+    expect(bar().hasAttribute("data-words")).toBe(false);
+  });
+
+  it("where the bar stays, the words' list still folds (M4): Esc takes it back over the same words, never cut", () => {
+    mount();
+    act(() => cell("more").click());
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    key("Escape", document.activeElement ?? document.body);
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-open")).toBe(false);
+    expect(bar().hasAttribute("data-cut")).toBe(false);
   });
 });
