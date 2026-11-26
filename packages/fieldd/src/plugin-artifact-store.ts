@@ -18,14 +18,30 @@ import { isWellFormedPluginId } from "@vibefield/contracts";
 //   installed/<pluginId>/
 //     .vf-current.json
 //     revisions/<artifact sha256 hex>/...
+//     revisions/<artifact sha256 hex>.index.json      (item 279's S3)
+//     revisions/<artifact sha256 hex>.index.json.sig
 //
 // Staging is a hidden sibling under `installed/`. A revision directory is
 // synced and atomically renamed into place before the small current pointer can
 // move. Registry discovery follows only the pointer, so an interrupted candidate
 // is never accidentally current, and a folder with no pointer is no install.
+//
+// Item 279's S3 (2026-11-19): what an install verified is kept, so a load can
+// verify it again with the list key. The artifact's own bytes go INSIDE the
+// revision (`PLUGIN_KEPT_ARTIFACT_FILE`): they are fixed by the slot's hash, so
+// item 322's compare of a folder already in place still holds. The signed list
+// goes BESIDE it, exact bytes and signature: a later install of the same release
+// from a newer list writes a newer list there, which item 322 never compares.
 
 export const PLUGIN_CURRENT_POINTER_FILE = ".vf-current.json";
 export const PLUGIN_ARTIFACT_MARKER_FILE = ".vf-artifact.json";
+/** Item 279's S3: the artifact an install verified, kept in its revision. */
+export const PLUGIN_KEPT_ARTIFACT_FILE = ".vf-artifact.vfplugin";
+/** Item 279's S3: the signed list an install verified, beside its revision. */
+const KEPT_LIST_SUFFIX = ".index.json";
+const KEPT_SIGNATURE_SUFFIX = ".index.json.sig";
+/** A kept list's temporary copy before its rename, swept by `recover`. */
+const KEPT_TEMP = /\.tmp-[0-9a-f]{16}$/;
 const REVISION_DIRECTORY = "revisions";
 const SHA256 = /^sha256:([0-9a-f]{64})$/;
 const SLOT = /^[0-9a-f]{64}$/;
@@ -147,8 +163,29 @@ export class PluginArtifactStore {
         await rm(join(pluginRoot, entry.name), { force: true });
         removed += 1;
       }
+      // item 279's S3: a kept list's copy that never reached its rename
+      const revisionsRoot = join(pluginRoot, REVISION_DIRECTORY);
+      for (const entry of await readdir(revisionsRoot, { withFileTypes: true }).catch(() => [])) {
+        if (!entry.isFile() || !KEPT_TEMP.test(entry.name)) continue;
+        await rm(join(revisionsRoot, entry.name), { force: true });
+        removed += 1;
+      }
     }
     return { removed };
+  }
+
+  /** Item 279's S3: keep the signed list an install verified beside its revision, its exact bytes and signature,
+   * each written whole before it is named. A list kept there before is replaced: any list that signed the release
+   * serves the load's check. */
+  async keepList(
+    artifact: ImmutablePluginArtifact,
+    list: { bytes: Buffer; signature: string },
+  ): Promise<void> {
+    this.assertOwnedArtifact(artifact);
+    const paths = keptListPaths(this.installedRoot, artifact.pluginId, artifact.slot);
+    await writeWhole(paths.list, list.bytes);
+    await writeWhole(paths.signature, Buffer.from(`${list.signature}\n`, "utf8"));
+    await syncDirectory(dirname(paths.list));
   }
 
   /** Publishes immutable bytes into a content-addressed revision slot. The
@@ -286,6 +323,10 @@ export class PluginArtifactStore {
     if (current?.pointer.slot === artifact.slot) return false;
     const removed = await exists(artifact.root);
     await rm(artifact.root, { recursive: true, force: true });
+    // item 279's S3: the list kept beside it goes with it
+    const kept = keptListPaths(this.installedRoot, artifact.pluginId, artifact.slot);
+    await rm(kept.list, { force: true });
+    await rm(kept.signature, { force: true });
     if (removed) await syncDirectory(dirname(artifact.root));
     return removed;
   }
@@ -302,6 +343,21 @@ export class PluginArtifactStore {
       throw new Error(`${artifact.pluginId}: artifact handle is not owned by this store`);
     }
   }
+}
+
+/** Item 279's S3: where the signed list an install verified is kept, beside its revision. */
+export function keptListPaths(
+  installedRoot: string,
+  pluginId: string,
+  slot: string,
+): { list: string; signature: string } {
+  assertPluginId(pluginId);
+  if (!SLOT.test(slot)) throw new Error(`invalid revision slot: ${slot}`);
+  const revisionsRoot = join(installedRoot, pluginId, REVISION_DIRECTORY);
+  return {
+    list: join(revisionsRoot, `${slot}${KEPT_LIST_SUFFIX}`),
+    signature: join(revisionsRoot, `${slot}${KEPT_SIGNATURE_SUFFIX}`),
+  };
 }
 
 /** Registry discovery helper: the pointer selects the root. A folder with no
@@ -465,6 +521,24 @@ async function atomicWriteCurrent(
   } catch (error) {
     await rm(temp, { force: true }).catch(() => undefined);
     if (published) throw new PluginArtifactCommitIndeterminateError(pointer.pluginId, error);
+    throw error;
+  }
+}
+
+/** Item 279's S3: `bytes` at `target`, written whole and synced under a temporary name, then renamed over it. */
+async function writeWhole(target: string, bytes: Buffer): Promise<void> {
+  const temp = `${target}.tmp-${randomBytes(8).toString("hex")}`;
+  try {
+    const handle = await open(temp, "wx", 0o600);
+    try {
+      await handle.writeFile(bytes);
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await rename(temp, target);
+  } catch (error) {
+    await rm(temp, { force: true }).catch(() => undefined);
     throw error;
   }
 }

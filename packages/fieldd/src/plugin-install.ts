@@ -21,6 +21,7 @@ import { readVfpluginEntry, unpackVfplugin, verifyRegistryIndex } from "@vibefie
 import { RpcCallError } from "./native-link";
 import {
   type ImmutablePluginArtifact,
+  PLUGIN_KEPT_ARTIFACT_FILE,
   PluginArtifactCommitIndeterminateError,
   PluginArtifactSlotMismatchError,
   PluginArtifactStore,
@@ -646,9 +647,15 @@ export class RegistryInstallService {
           join(staging, ".vf-registry.json"),
           `${JSON.stringify({ indexRef, artifactSha256: release.sha256, publisher }, null, 2)}\n`,
         );
+        // Item 279's S3 (2026-11-19): the verified artifact itself, kept so a load can hold this folder to it. Its
+        // bytes are fixed by the slot's hash, so item 322's compare of a folder already in place still holds.
+        await rm(join(staging, PLUGIN_KEPT_ARTIFACT_FILE), { force: true });
+        await writeFile(join(staging, PLUGIN_KEPT_ARTIFACT_FILE), artifactBytes, { mode: 0o600 });
       },
     });
     try {
+      // Item 279's S3: the list this install verified, kept beside the revision for the load's own check
+      await this.artifacts.keepList(artifact, { bytes: signed.bytes, signature: signed.signature });
       const runtime = await this.cfg.plugins.inspectRegistryCandidate({
         pluginId: params.id,
         root: artifact.root,

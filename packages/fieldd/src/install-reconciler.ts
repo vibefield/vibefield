@@ -105,6 +105,9 @@ export interface InstallReconcilerConfig {
   logger?: Logger;
   /** test-only: how long a person's switch waits behind an update (`PLUGIN_LIMITS.SWITCH_WAIT_MS` otherwise) */
   switchWaitMs?: number;
+  /** Item 333 (2026-11-19): the held plugin list's `generatedAt`, or null with none held (the installer's floor). A
+   * parked entry is said once per id per list. Absent, as null: once per id while this process lives. */
+  listAt?: () => Promise<number | null>;
 }
 
 export class InstallSetReconciler {
@@ -113,6 +116,9 @@ export class InstallSetReconciler {
   private queued = false;
   /** MK-2c (2026-11-11): per plugin id, the index `generatedAt` its community refusal was last said for */
   private readonly communityRefused = new Map<string, number>();
+  /** Item 333 (2026-11-19): per plugin id, the list `generatedAt` (null: none held) its parked entry was last said
+   * for. An entry applied, or gone from the doc, is forgotten here, so its next park is said again. */
+  private readonly parkedSaid = new Map<string, number | null>();
   /** The grant race (2026-11-15): one lane per plugin. A person's grant act (`grantAct`) holds it from before its
    * registry move until its publication settles; a walk's grant section (`applyGrants`) holds it while it reads the
    * doc's decisions and the record and makes its powers. Neither interleaves with the other, so a walk never
@@ -162,9 +168,12 @@ export class InstallSetReconciler {
     // never apply a document older than this device's own acts (see `publishing`)
     while (this.publishing.size > 0) await Promise.allSettled([...this.publishing]);
     const desired = await this.cfg.settingsDoc.installSet();
+    for (const id of [...this.parkedSaid.keys()])
+      if (desired[id] === undefined) this.parkedSaid.delete(id);
     for (const entry of Object.values(desired)) {
       try {
         await this.applyEntry(entry);
+        this.parkedSaid.delete(entry.pluginId);
       } catch (e) {
         // §16.6 — parked pending, honestly; the next reconcile retries. MK-2c (2026-11-11, VF-PM 08:48:07Z): a
         // community entry refused while community plugins are off parks like any other, and is said once per id
@@ -173,6 +182,12 @@ export class InstallSetReconciler {
         if (refusedAt !== undefined) {
           if (this.communityRefused.get(entry.pluginId) === refusedAt) continue;
           this.communityRefused.set(entry.pluginId, refusedAt);
+        } else {
+          // item 333: any other park is said once per id per list too, never once per walk
+          const at = (await this.cfg.listAt?.().catch(() => null)) ?? null;
+          if (this.parkedSaid.has(entry.pluginId) && this.parkedSaid.get(entry.pluginId) === at)
+            continue;
+          this.parkedSaid.set(entry.pluginId, at);
         }
         this.log.warn(
           "fieldd.install_reconciler.entry_parked",
@@ -768,6 +783,24 @@ export class InstallSetReconciler {
       }),
     );
     for (const capability of carried) this.unpark(record.id, capability);
+  }
+
+  /** Item 333 (2026-11-19): a person's uninstall of a plugin with no row here whose entry the install set still holds
+   * from the plugin list (parked: no list here can meet it). Nothing of it is on this desktop, so nothing is torn down
+   * or removed; the entry is unpublished, as a person's Remove… unpublishes, on every desktop. In the plugin's lane,
+   * read afresh there. False, and nothing moves, when it has a row here or the doc holds no list entry for it. */
+  async forgetParked(pluginId: string, by: string): Promise<boolean> {
+    const lane = await this.hold(pluginId);
+    try {
+      const parked = await lane.run(async () => {
+        const entry = (await this.cfg.settingsDoc.installSet())[pluginId];
+        return this.cfg.plugins.get(pluginId) === undefined && entry?.source === "registry";
+      });
+      if (parked) await this.unpublish(pluginId, by);
+      return parked;
+    } finally {
+      lane.release();
+    }
   }
 
   async unpublish(pluginId: string, by: string): Promise<void> {

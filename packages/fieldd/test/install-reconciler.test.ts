@@ -802,6 +802,25 @@ describe("E10 across desktops — a removal travels, data kept (MK-2d)", () => {
   });
 });
 
+describe("a parked entry is said once per list, not at every walk (item 333)", () => {
+  it("walks under the same list say an entry parked once", async () => {
+    const ABSENT = "vibefield.absent.plugin";
+    const calls = removalCalls();
+    const d = await desktop("parked", { calls });
+    // an entry this desktop cannot meet: the harness installs nothing, so every walk parks it
+    await d.settings.setInstallSetEntry(
+      { pluginId: ABSENT, source: "registry", enabled: true, grants: [] },
+      "another-desktop",
+    );
+    await settle(d);
+    await settle(d);
+    const said = calls.logs.filter(
+      (l) => l.event === "fieldd.install_reconciler.entry_parked" && l.attrs?.pluginId === ABSENT,
+    );
+    expect(said.length).toBe(1);
+  });
+});
+
 describe("E10 on a booted daemon (MK-2d)", () => {
   it("a removal from another desktop removes the code here and keeps the data, byte for byte", {
     timeout: 60_000,

@@ -463,3 +463,17 @@ export function readVfpluginEntry(bytes: Buffer, name: string): Buffer | null {
   const entry = entries.find((e) => e.name === name);
   return entry === undefined ? null : entry.data;
 }
+
+/**
+ * Item 279's S3 (2026-11-19): every entry of a `.vfplugin`, read in memory and
+ * never written, sorted bytewise by name as {@link unpackVfplugin} reports
+ * them. The whole container is checked first, every entry as
+ * {@link unpackVfplugin} checks it. fieldd holds an installed revision's files
+ * to these, from the artifact kept at its install.
+ */
+export function readVfpluginEntries(bytes: Buffer): Array<{ name: string; data: Buffer }> {
+  // A stand-in root: the escape check needs one, and nothing is written to it.
+  return checkedEntries(bytes, resolve(sep, "vfplugin-in-memory"))
+    .map(({ name, data }) => ({ name, data }))
+    .sort((a, b) => bytewise(Buffer.from(a.name), Buffer.from(b.name)));
+}

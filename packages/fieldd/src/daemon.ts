@@ -380,6 +380,7 @@ import { ObjectsStore } from "./objects/store";
 import { OwnVitals } from "./own-vitals";
 import { PeerLink } from "./peer-link";
 import { placeFolderOf } from "./place-folder";
+import type { InstalledPluginArtifactSelection } from "./plugin-artifact-store";
 import { PluginCatalogService } from "./plugin-catalog";
 import { CommunityHold, communityGate } from "./plugin-community-hold";
 import { CommunityStatementMark } from "./plugin-community-statement";
@@ -389,6 +390,7 @@ import {
   RegistryInstallService,
 } from "./plugin-install";
 import { InstallCards } from "./plugin-install-cards";
+import { verifyInstalledRevision } from "./plugin-installed-verify";
 import { PluginModuleAuthority } from "./plugin-modules";
 import { PluginRegistryService } from "./plugin-registry";
 import { PluginRuntimeDiagnostics } from "./plugin-runtime-diagnostics";
@@ -1909,7 +1911,8 @@ export async function bootstrap(
     // Item 279 (S2) — the installed root is read only once a signed plugin list is configured (a
     // registry verify key). Until then it is withheld from the registry, so nothing put there
     // loads or is reported, and boot leaves the folder as it finds it.
-    const listKeyed = config.registryPublicKey !== undefined;
+    const listKey = config.registryPublicKey;
+    const listKeyed = listKey !== undefined;
     if (!listKeyed) {
       logger.info("fieldd.plugin_registry.installed_withheld", "installed plugins not loaded", {
         reason: "registry_unconfigured",
@@ -1923,6 +1926,16 @@ export async function bootstrap(
         ...(listKeyed ? { installed: [installedRoot] } : {}),
       },
       ...(config.bundledTrust !== undefined ? { bundledTrust: config.bundledTrust } : {}),
+      // Item 279's S3 (2026-11-19): under the same one condition, each installed revision is held at every load to
+      // what its install verified, with the list key (plugin-installed-verify.ts)
+      ...(listKey !== undefined
+        ? {
+            installedTrust: {
+              verify: (id: string, selected: InstalledPluginArtifactSelection) =>
+                verifyInstalledRevision(installedRoot, id, selected, listKey),
+            },
+          }
+        : {}),
       // MK-O3 (O3-C, 2026-11-12): every plugin from the plugin list is held until the community gate is set below
       communityHold: true,
       // item 457: the records file's writer says a torn copy kept aside and a fall-back to its last good copy
@@ -7940,6 +7953,14 @@ export async function bootstrap(
           },
         },
         async () => {
+          // Item 333 (2026-11-19): nothing of it is here, but the install set still names it from the plugin list (an
+          // entry parked here): the person's Remove… takes it off every desktop, and nothing here is torn down
+          if (
+            before === undefined &&
+            reconciler !== null &&
+            (await reconciler.forgetParked(parsed.data.id, "uninstall"))
+          )
+            return { count: 0, tokenIds: [] };
           const move = async () => {
             const revoked = await teardownPluginWithResult(parsed.data.id);
             await installer.uninstall(parsed.data.id, parsed.data.removeData === true);
@@ -10281,6 +10302,8 @@ export async function bootstrap(
       // MK-2d (2026-11-11, R3): a removal from another desktop retires the plugin as the uninstall door does
       retire: (id) => runtimeDiagnostics.retirePlugin(id),
       logger: logger.child({ component: "plugin.install.reconciler" }),
+      // item 333: a parked entry is said once per list the catalog holds
+      listAt: () => catalog.heldGeneratedAt(),
     });
     reconciler.attach();
     void reconciler.reconcile();

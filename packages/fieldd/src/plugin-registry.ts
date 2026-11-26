@@ -25,7 +25,10 @@ import {
 import type { Logger } from "@vibefield/logging";
 import { canonicalJson, verifyBundledIndex, verifyTrustRoot } from "@vibefield/plugin-build";
 import { RpcCallError } from "./native-link";
-import { resolveInstalledArtifact } from "./plugin-artifact-store";
+import {
+  type InstalledPluginArtifactSelection,
+  resolveInstalledArtifact,
+} from "./plugin-artifact-store";
 import { SystemDocFile } from "./system-doc-file";
 
 // PluginRegistryService (plugin spec §9, slice P2): discovery → validation →
@@ -54,6 +57,13 @@ export interface PluginRegistryConfig {
    * against `rootKeys` (the app's embedded root, handed over by the shell — never read from the root it
    * protects). Unset ⇒ a bundled root walks by manifest as before: the developer's own tree. */
   bundledTrust?: { trustRootPath: string; rootKeys: readonly string[] };
+  /** Item 279's S3 (2026-11-19) — set ⇒ every installed revision is held, at each refresh, to what its install verified:
+   * `verify` (the daemon hands `verifyInstalledRevision`, `plugin-installed-verify.ts`, with the list key) answers for
+   * the revision the pointer selects, and one that fails is a refused row, never loadable, as a bundled one is. Unset ⇒
+   * an installed root walks as before. The daemon hands it with the installed root, under one condition: a list key. */
+  installedTrust?: {
+    verify(pluginId: string, selected: InstalledPluginArtifactSelection): Promise<InstalledVerdict>;
+  };
   /** MK-O3 (O3-C, 2026-11-12; James's pick "Stop"): community plugins off means none of their code runs. Set (the
    * daemon alone), a registry row is held as if turned off while the community gate says so (`setCommunityGate`),
    * and every registry row is held until a gate is set, or when it fails. Unset (a registry a test builds alone),
@@ -63,6 +73,12 @@ export interface PluginRegistryConfig {
    * one (`SystemDocFile`). Unset (a registry a test builds alone), it says nothing. */
   logger?: Logger;
 }
+
+/** Item 279's S3: whether an installed revision holds what its install verified. A refusal's reason names a path
+ * inside the artifact at most, never one on this device. */
+export type InstalledVerdict =
+  | { readonly ok: true }
+  | { readonly ok: false; readonly reason: string };
 
 /** MK-O3 (O3-C): the community gate's answer for one refresh. Allowed, nothing is held; else each registry id the held
  * plugin list does not name as VibeField's is held (`plugin-catalog.ts`, `listedAsLookup`). */
@@ -327,12 +343,23 @@ export class PluginRegistryService extends EventEmitter {
       for (const dir of children) {
         let pluginRoot = join(root, dir);
         let commitEpoch = 1;
+        // item 279's S3: the revision's provenance, checked against what its install verified
+        let verified: InstalledPluginArtifactSelection | null = null;
         if (source === "registry") {
           try {
             const selected = await resolveInstalledArtifact(root, dir);
             if (selected === null) continue;
             pluginRoot = selected.root;
             commitEpoch = selected.commitEpoch;
+            const trust = this.cfg.installedTrust;
+            if (trust !== undefined) {
+              const verdict = await trust.verify(dir, selected);
+              if (!verdict.ok) {
+                this.refuseInstalled(dir, selected, verdict.reason, rows, problems);
+                continue;
+              }
+              verified = selected;
+            }
           } catch (error) {
             problems.push({
               root: dir,
@@ -397,6 +424,30 @@ export class PluginRegistryService extends EventEmitter {
             }
           } catch {
             // absent sidecar — the honest state is simply no provenance block
+          }
+          // Item 279's S3: a checked revision's provenance is the checked one. The artifact's hash is the pointer's,
+          // which the kept list signed; the publisher is the id's namespace, as the install writes it. The sidecar
+          // gives the list's address alone, which nothing acts on.
+          if (verified !== null) {
+            if (row.id !== dir) {
+              this.refuseInstalled(
+                dir,
+                verified,
+                "its manifest names another plugin",
+                rows,
+                problems,
+              );
+              continue;
+            }
+            row = {
+              ...row,
+              registry: {
+                indexRef: row.registry?.indexRef ?? "",
+                artifactSha256: verified.pointer.artifactSha256,
+                publisher: dir.split(".")[0] ?? dir,
+              },
+              installRevision: verified.pointer.slot,
+            };
           }
         }
         if (row === null) {
@@ -626,6 +677,54 @@ export class PluginRegistryService extends EventEmitter {
       into.rootPaths.set(row.id, plugin.dir);
       into.commitEpochs.set(row.id, 1);
     }
+  }
+
+  /** Item 279's S3: an installed plugin whose revision does not hold what its install verified: present, honest, never
+   * loadable, as a refused bundled plugin is. Its manifest is not believed, so its title is its id. A source that
+   * claimed the id first keeps it (bundled scans first, §9.1). Remove… still stands on it (a registry row). */
+  private refuseInstalled(
+    id: string,
+    selected: InstalledPluginArtifactSelection,
+    reason: string,
+    rows: Map<string, PluginRecord>,
+    problems: PluginRegistryProblem[],
+  ): void {
+    const prior = rows.get(id);
+    if (prior !== undefined) {
+      problems.push({
+        root: id,
+        error: summary(
+          "PLUGIN_INVALID",
+          `duplicate plugin id ${id} (already claimed by a ${prior.source} plugin)`,
+        ),
+      });
+      return;
+    }
+    this.cfg.logger?.warn(
+      "fieldd.plugin_registry.installed_refused",
+      "An installed plugin does not hold what its install verified; refused",
+      { pluginId: id, reason },
+    );
+    rows.set(id, {
+      id,
+      version: "0.0.0",
+      title: id,
+      source: "registry",
+      // no manifest is believed: the hash of none
+      manifestHash: sha256(""),
+      installRevision: selected.pointer.slot,
+      state: "invalid",
+      compatible: true,
+      enabled: false,
+      requestedCapabilities: [],
+      grantedCapabilities: [],
+      deniedCapabilities: [],
+      grantGeneration: this.grantGenerations.get(id) ?? 0,
+      contributions: { objects: [], behaviors: [], commands: [], surfaces: [], capabilities: [] },
+      renderer: "none",
+      service: "none",
+      lastError: summary("PLUGIN_ARTIFACT_MISMATCH", reason),
+    });
   }
 
   /** A bundled plugin the index refused: present, honest, never loadable. */

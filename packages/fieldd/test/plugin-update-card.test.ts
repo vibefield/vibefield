@@ -370,10 +370,16 @@ function ledger(dataDir: string, actions: readonly string[]): Array<Record<strin
     .filter((l) => actions.includes(String(l.action)));
 }
 
-/** The plugin's revision folders on disk (the store's `revisions`, `plugin-artifact-store.ts`). */
+/** The plugin's revision folders on disk (the store's `revisions`, `plugin-artifact-store.ts`). Item 279's S3
+ * (2026-11-24) keeps each slot's verified list and its signature beside the slot (`<sha>.index.json`,
+ * `<sha>.index.json.sig`), so only the slot directories themselves are counted: 64 hex characters. */
 function revisions(dataDir: string, id: string): string[] {
   const dir = join(dataDir, "plugins", "installed", id, "revisions");
-  return existsSync(dir) ? readdirSync(dir).sort() : [];
+  return existsSync(dir)
+    ? readdirSync(dir)
+        .filter((name) => /^[0-9a-f]{64}$/u.test(name))
+        .sort()
+    : [];
 }
 
 /** KV's service running, as the registry's snapshot says it: `get` returns the stored row, whose
