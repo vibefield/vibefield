@@ -293,6 +293,57 @@ export const LiveSurfaceIosSimulatorBindingV1 = z
   .passthrough();
 export type LiveSurfaceIosSimulatorBindingV1 = z.infer<typeof LiveSurfaceIosSimulatorBindingV1>;
 
+/** Whose device a simulator's `binding` prop shows: none (no face opens), its own, or one of the person's. */
+export type SimulatorBindingDevice = "none" | "own" | "person";
+
+/** A `binding` prop read as the bundled iOS Simulator reads it: whose device it shows, and its two ids where it binds one.
+ * One that shows the person's is `plain` where it says a model and an iOS and nothing else (no `dedicated`, no other
+ * key): the desk door makes that one a device of the phone's own, and refuses one that asked for something else. */
+export type SimulatorBindingRead =
+  | { readonly device: "none" }
+  | {
+      readonly device: "own";
+      readonly binding: { readonly deviceType: string; readonly runtime: string };
+    }
+  | {
+      readonly device: "person";
+      readonly binding: { readonly deviceType: string; readonly runtime: string };
+      readonly plain: boolean;
+    };
+
+/** Item 581 overturned (2026-11-24): the prop the bundled iOS Simulator keeps its binding in (`plugins/simulator`'s
+ * `PROP.binding`, held equal by its own row): the one name the doors that hold an agent's phone read it by. */
+export const SIMULATOR_BINDING_PROP = "binding";
+
+/**
+ * Item 581 overturned (2026-11-24) — WHOSE DEVICE A PHONE'S `binding` PROP SHOWS, read exactly as the bundled iOS Simulator
+ * reads it (its cell's JSON, or the parsed value; `plugins/simulator`'s `bindingOf`): `none` where the contract reads no
+ * binding (the prop's empty default, or anything it refuses: no face opens); `own` where it carries `dedicated: true`,
+ * which the window turns into the phone's own `instance` and main into a device of VibeField's own, made for that phone
+ * (item 568); `person` for any other binding, which main resolves to one of THIS Mac's devices, the person's. An agent's
+ * place of a kind `AGENT_PLACEABLE_LIVE` names under `ios-simulator` keeps its device in this prop, and shows `none` or
+ * `own` only: fieldd's desk door holds it there (it writes a `plain` one as the phone's own, and refuses any other
+ * `person`), and the window's applier refuses `person`. The ids returned are the two the contract read, never an
+ * `instance` (the window's alone to set) and never a UDID.
+ */
+export function simulatorBindingOf(value: unknown): SimulatorBindingRead {
+  let parsed: unknown = value;
+  if (typeof value === "string") {
+    try {
+      parsed = JSON.parse(value);
+    } catch {
+      return { device: "none" };
+    }
+  }
+  const read = LiveSurfaceIosSimulatorBindingV1.safeParse(parsed);
+  if (!read.success) return { device: "none" };
+  const binding = { deviceType: read.data.deviceType, runtime: read.data.runtime };
+  if (read.data.dedicated === true) return { device: "own", binding };
+  // the contract is a tolerant reader: every key the value carried is still on what it read
+  const plain = Object.keys(read.data).every((key) => key === "deviceType" || key === "runtime");
+  return { device: "person", binding, plain };
+}
+
 /** PT-S2 — NEVER A UDID OUTSIDE MAIN: a `udid` on a shape the renderer sends or reads of a bound phone is REFUSED, never
  * carried along (each such shape is otherwise a tolerant reader) — a main-side spread of a device row fails main's own
  * parse instead of handing the window a UDID. */

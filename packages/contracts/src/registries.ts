@@ -2243,12 +2243,36 @@ export type Scope = (typeof SCOPES)[number];
  * 569); and, through the plugin door alone, another app's window or a UDID-keyed Simulator (`surface.attach` +
  * `surface.capture`). The window's live gate grants a desk face by the first two; fieldd's desk door reads all three
  * to keep an agent from placing a kind whose plugin REQUESTS a whole pair (by the request, never the grants, which
- * the person's toggles move). */
+ * the person's toggles move).
+ * Amended 2026-11-24 (item 581 overturned for the browser pane and the iOS Simulator): the door still reads all three,
+ * and lets an agent place the kinds `AGENT_PLACEABLE_LIVE` names under a pair; the gate still asks every whole pair. */
 export const LIVE_PAGE_SCOPES = {
   browser: ["surface.attach", "surface.browser"],
   "ios-simulator": ["surface.attach", "surface.simulator"],
   "window-capture": ["surface.attach", "surface.capture"],
 } as const satisfies Readonly<Record<string, readonly Scope[]>>;
+
+/** Item 581, overturned 2026-11-24 for the browser pane and the iOS Simulator: for each pair of `LIVE_PAGE_SCOPES`, the
+ * kinds an agent may place with `canvas_place` although their plugin requests that whole pair. Each is named because
+ * something other than the rule keeps the person's own pages and devices from an agent; any other kind whose plugin
+ * requests a whole pair stays the person's to add, by the request and never the grants, as before.
+ *  - `browser`: none. An agent adds a browser pane with `browser_open`: the pages room opens the agent's own page, in
+ *    its run's memory profile and signed out, never the desk's signed-in profile, and places it itself. `canvas_place`
+ *    would open a page in the desk's profile, signed in as the person, so it places no browser kind.
+ *  - `ios-simulator`: the bundled iOS Simulator alone. One an agent places shows a device of VibeField's own (its
+ *    binding `dedicated`, item 568), never one of the person's; the door holds its binding to that, and an unbound one
+ *    shows nothing until the person sets it up. Another plugin's kind reads its device from props the door cannot hold.
+ *  - `window-capture`: none. Another app's window is the person's to put on the desk.
+ * fieldd's kinds table reads a name on this list only for a BUNDLED plugin's kind (the record's `source`), and kind by
+ * kind: a plugin from anywhere else that takes the name, a bundled plugin's other kind, and a named kind whose plugin
+ * also requests a pair it is not named under all stay the person's to add. */
+export const AGENT_PLACEABLE_LIVE: {
+  readonly [S in keyof typeof LIVE_PAGE_SCOPES]: readonly string[];
+} = {
+  browser: [],
+  "ios-simulator": ["vibefield.simulator"],
+  "window-capture": [],
+};
 
 /** The D32 tailnet-caller preset (C3): the scopes a WhoIs-authenticated tailnet
  * principal is granted on a served product surface. Broad product access MINUS

@@ -28,11 +28,13 @@ import {
   LiveSurfaceSimulatorStateV1,
   LiveSurfaceSourceKindV1,
   LiveSurfaceSourceSpecV1,
+  SIMULATOR_BINDING_PROP,
   SURFACE_LIMITS,
   SurfaceEnumerationKindV1,
   SurfaceOpenParamsV1,
   SurfaceSimulatorDevicesParamsV1,
   SurfaceSimulatorDevicesResultV1,
+  simulatorBindingOf,
 } from "../src/live-surfaces";
 
 const geometry = {
@@ -279,6 +281,61 @@ describe("LSF-1 Live Surfaces contracts", () => {
       expect(LiveSurfaceIosSimulatorBindingV1.safeParse(bad).success, JSON.stringify(bad)).toBe(
         false,
       );
+  });
+
+  it("item 581 overturned (2026-11-24): says whose device a phone's binding shows — none, its own, or one of the person's", () => {
+    const binding = {
+      deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+      runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+    };
+    // no binding, the prop's empty default, a cell that is not JSON, or a value the contract refuses: no face opens
+    for (const none of [
+      undefined,
+      null,
+      { deviceType: "", runtime: "" },
+      "{not json",
+      JSON.stringify({ deviceType: "", runtime: "" }),
+      { ...binding, deviceType: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" },
+      { ...binding, dedicated: true, runtime: "" },
+    ])
+      expect(simulatorBindingOf(none), JSON.stringify(none)).toEqual({ device: "none" });
+    // dedicated: a device of VibeField's own, as the cell's JSON or parsed
+    for (const own of [
+      { ...binding, dedicated: true },
+      JSON.stringify({ ...binding, dedicated: true }),
+    ])
+      expect(simulatorBindingOf(own)).toEqual({ device: "own", binding });
+    // any other binding resolves to one of this Mac's devices: the person's, whatever else rides along. One that
+    // says a model and an iOS and nothing else is `plain`: the desk door makes that one a device of its own
+    for (const plain of [binding, JSON.stringify(binding)])
+      expect(simulatorBindingOf(plain), JSON.stringify(plain)).toEqual({
+        device: "person",
+        binding,
+        plain: true,
+      });
+    // one that says more asked for something else: `dedicated` as anything but true, or any other key
+    for (const more of [
+      { ...binding, dedicated: false },
+      { ...binding, dedicated: "true" },
+      { ...binding, dedicated: null },
+      { ...binding, instance: "someone-else" },
+      { ...binding, udid: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" },
+      JSON.stringify({ ...binding, name: "My iPhone" }),
+    ])
+      expect(simulatorBindingOf(more), JSON.stringify(more)).toEqual({
+        device: "person",
+        binding,
+        plain: false,
+      });
+    // what it returns is the two ids alone: never an instance the window sets, never anything riding along
+    expect(simulatorBindingOf({ ...binding, dedicated: true, instance: "x", later: 1 })).toEqual({
+      device: "own",
+      binding,
+    });
+  });
+
+  it("item 581 overturned (2026-11-24): names the prop a phone keeps its binding in, for the doors that hold it", () => {
+    expect(SIMULATOR_BINDING_PROP).toBe("binding");
   });
 
   it("PT-S2 (R1): a phone asks main for its device by its BINDING — a source kind of its own beside the UDID-keyed one, its crop the screen's, and never a UDID", () => {

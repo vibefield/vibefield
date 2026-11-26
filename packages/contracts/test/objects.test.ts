@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { SERVED_TOOLS } from "../gen/tools";
 import {
+  CanvasKindsOutput,
   CHIP_TYPES,
   doorCanName,
   OBJECT_FACTS,
@@ -20,8 +21,9 @@ import {
   ObjectsPresenceSnapshot,
   ObjectsTakeBackResult,
 } from "../src/objects";
+import { ObjectAgentHalf } from "../src/plugins";
 import { LAYOUT, LAYOUT_ROOT_LEVEL } from "../src/registries";
-import { toolRow } from "../src/tools";
+import { isServedTool, ROOM_OPENER, toolRow } from "../src/tools";
 
 // OB-0 — the desk room's wire truth (`draft/thinking-objects-at-work.md` §4, §5).
 
@@ -73,6 +75,45 @@ describe("the desk's eight (§5.2)", () => {
     const row = SERVED_TOOLS.find((t) => t.name === "object_act")!;
     expect(Object.keys((row.inputSchema as { properties: object }).properties)[0]).toBe("doing");
     expect(ObjectActInput.safeParse({ ref: REF, tool: "add" }).success).toBe(false);
+  });
+
+  it("names, for each room whose rows work a kind of their own, the row that adds one to the desk (item 581 overturned, 2026-11-24)", () => {
+    // every room a manifest may name has its opener, and no other room does
+    expect(Object.keys(ROOM_OPENER)).toEqual([ObjectAgentHalf.shape.room.unwrap().value]);
+    for (const [room, name] of Object.entries(ROOM_OPENER)) {
+      const row = toolRow(name);
+      // a served row of that room, on the room's own kind, and one that acts: it adds an object
+      expect(isServedTool(name), room).toBe(true);
+      expect(row?.family, room).toBe(room);
+      expect(row?.object, room).toBeDefined();
+      expect(row?.readOnly, room).toBe(false);
+    }
+  });
+
+  it("lets canvas_kinds say which tool adds a kind canvas_place does not place, and tells the model what that means (item 581 overturned, 2026-11-24)", () => {
+    const listed = SERVED_TOOLS.find((t) => t.name === "canvas_kinds")!;
+    const kind = (
+      listed.outputSchema as unknown as {
+        properties: {
+          kinds: { items: { properties: Record<string, unknown>; required: string[] } };
+        };
+      }
+    ).properties.kinds.items;
+    // optional: a kind canvas_place places says nothing of it
+    expect(kind.properties.placeWith).toEqual({ type: "string", minLength: 1, maxLength: 64 });
+    expect(kind.required).not.toContain("placeWith");
+    expect(listed.description).toContain("placeWith");
+    expect(listed.description).toContain("not with canvas_place");
+    const pane = { kind: "vibefield.browser-pane", title: "Browser", tools: true };
+    expect(
+      CanvasKindsOutput.safeParse({ kinds: [{ ...pane, placeWith: ROOM_OPENER.pages }] }).success,
+    ).toBe(true);
+    expect(CanvasKindsOutput.safeParse({ kinds: [pane] }).success).toBe(true);
+    for (const bad of ["", "x".repeat(65), 7])
+      expect(
+        CanvasKindsOutput.safeParse({ kinds: [{ ...pane, placeWith: bad }] }).success,
+        String(bad),
+      ).toBe(false);
   });
 
   it("always teaches a tool's input: a manual's tools are the kind's own schemas", () => {

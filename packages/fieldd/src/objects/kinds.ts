@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import {
+  AGENT_PLACEABLE_LIVE,
   type DeskKind as BuiltInKind,
   DESK_KINDS,
   LIVE_PAGE_SCOPES,
@@ -35,7 +36,10 @@ export interface DeskKind {
   /** whose words the guide is, for a plugin's kind (MT-L6) */
   readonly guideFrom?: string | undefined;
   readonly version: number;
-  /** item 581 (2026-11-19): its plugin asks a live surface's powers (`LIVE_PAGE_SCOPES`), so only the user adds one */
+  /** item 581 (2026-11-19): its plugin asks a live surface's powers (`LIVE_PAGE_SCOPES`), so only the user adds one.
+   * Corrected 2026-11-24 (item 581 overturned for the browser pane and the iOS Simulator): no longer every such kind.
+   * It is set unless the door's list names the kind under each pair its plugin asks (`AGENT_PLACEABLE_LIVE`, the bundled
+   * iOS Simulator alone); the browser pane keeps it, and an agent opens one with the pages room's row instead. */
   readonly livePages?: true | undefined;
   /** R-2 (2026-11-19): its agent tools are this tool-plane room's rows, not the desk's (the manifest's `agent.room`) */
   readonly room?: "pages" | undefined;
@@ -71,12 +75,30 @@ const readGuide = (root: string | undefined, guide: string | undefined): string 
   }
 };
 
+const LIVE_SOURCES = Object.keys(LIVE_PAGE_SCOPES) as readonly (keyof typeof LIVE_PAGE_SCOPES)[];
+
 /** Item 581 (2026-11-19): whether a plugin REQUESTS a whole pair of a live surface's powers, by its request and never
  * its grants: the person's toggles move the grants, and a kind an agent placed while one was off would wake live,
  * signed in as the person, at the re-grant. Half a pair opens nothing live: the gate and the door ask the whole
- * pair. */
-const asksLiveFaces = (requested: readonly string[]): boolean =>
-  Object.values(LIVE_PAGE_SCOPES).some((pair) => pair.every((scope) => requested.includes(scope)));
+ * pair.
+ * Corrected 2026-11-24 (item 581 overturned for the browser pane and the iOS Simulator): this was asked of the plugin
+ * and kept every one of its kinds from an agent. It is asked of each KIND now: a kind is the user's to add when its
+ * plugin requests a whole pair, unless the door's list names that kind under that pair (`AGENT_PLACEABLE_LIVE`) AND the
+ * plugin is a bundled one. Still by the request, never the grants.
+ *  - The list names kinds, never pairs: a kind is on it because something other than this rule keeps the person's own
+ *    pages and devices from an agent (the desk door holds the iOS Simulator's binding to a device of its own). Any other
+ *    kind under the same pair reads its page or device from props that door cannot hold.
+ *  - Bundled only: no source may shadow a bundled id (the registry walks the bundled roots first), so the name on the
+ *    list is the product's own plugin; a dev-linked, installed or sideloaded plugin that takes the name is not it.
+ *    Under `pnpm dev` the repository's `plugins/` folder is the bundled root.
+ *  - One pair the list does not name the kind under is enough to keep it the user's: a named kind whose plugin also
+ *    asks another pair could show that pair's page or window. */
+const showsLive = (record: PluginRecord, kind: string): boolean =>
+  LIVE_SOURCES.some(
+    (source) =>
+      LIVE_PAGE_SCOPES[source].every((scope) => record.requestedCapabilities.includes(scope)) &&
+      !(record.source === "bundled" && AGENT_PLACEABLE_LIVE[source].includes(kind)),
+  );
 
 const fromPlugin = (
   object: ObjectContribution,
@@ -90,7 +112,9 @@ const fromPlugin = (
     title: object.title,
     // no agent half, no declaration of what an agent would be placing: only the person's hand makes one. R-2
     // (2026-11-19): nor a kind whose tools are a room's rows: that room makes one (the pages room's browser_open).
-    // Item 581 (2026-11-19): nor a kind that shows a live page, device or app window: only the person adds those
+    // Item 581 (2026-11-19): nor a kind that shows a live page, device or app window: only the person adds those.
+    // Corrected 2026-11-24 (item 581 overturned): `livePages` is no longer every such kind (`showsLive`): the bundled
+    // iOS Simulator is placed by an agent, and the browser pane is the pages room's to open
     placeable: object.agent !== undefined && object.agent.room === undefined && !livePages,
     concurrency: object.agent?.concurrency ?? "many",
     tools: object.agent?.tools ?? [],
@@ -110,12 +134,7 @@ export const pluginDeskKinds = (
   records.flatMap((record) =>
     record.enabled
       ? record.contributions.objects.map((object) =>
-          fromPlugin(
-            object,
-            rootPath(record.id),
-            record.title,
-            asksLiveFaces(record.requestedCapabilities),
-          ),
+          fromPlugin(object, rootPath(record.id), record.title, showsLive(record, object.type)),
         )
       : [],
   );

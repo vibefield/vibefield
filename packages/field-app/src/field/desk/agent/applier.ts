@@ -19,6 +19,7 @@ import {
   Viewport,
 } from "@vibecook/ice";
 import {
+  AGENT_PLACEABLE_LIVE,
   DeskInverse,
   deskKind,
   type IntentListValue,
@@ -30,6 +31,7 @@ import {
   type ObjectIntentAnswer,
   ObjectsPresenceSnapshot,
   PAGES_PANE_ADDRESS_PROP,
+  simulatorBindingOf,
 } from "@vibefield/contracts";
 import { type FielddClient, reaskDelayMs, refusedForRoom } from "@vibefield/fieldd-client";
 import {
@@ -179,6 +181,8 @@ const WORDS = {
   off: (label: string): string => `The desk cannot draw this kind right now (${label}).`,
   tooBig: "That answer is larger than an agent can be told.",
   summaryTooBig: "This object's summary is too large to show here. Use its read tools.",
+  notOwnDevice:
+    "An iOS Simulator you place shows a device of its own, never one of the user's. Leave out its binding, or give it `dedicated: true`.",
   // EY-1 (1f, 2026-11-19): the agent's words for a full desk (the room's own, as the pages tools say them)
   deskFull:
     "The desk has no room for another live page right now. Close a page you no longer need, or carry on in this one.",
@@ -458,6 +462,13 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     if (said.state !== null) return refused(intent, "needs-you", WORDS.off(said.label));
     if (deskKind(intent.kind)?.placeable === false)
       return refused(intent, "needs-you", WORDS.noPrint);
+    // item 581 overturned (2026-11-24): an iOS Simulator an agent places shows a device of its own, never one of the
+    // person's. fieldd's desk door holds its binding so; the window refuses one that would still bind the person's
+    if (
+      AGENT_PLACEABLE_LIVE["ios-simulator"].includes(intent.kind) &&
+      simulatorBindingOf(intent.props?.["binding"]).device === "person"
+    )
+      return refused(intent, "bad-input", WORDS.notOwnDevice);
     // EY-1 (1f, 2026-11-24): a kind whose tools are a room's (R-2; the browser pane is the pages room's) is placed by that
     // room, with the page main made for the run (`made`), never by a bare place. So no door, today's or a later one, puts
     // a pane on the desk that would open in the person's own signed-in profile: its face mints into its run's session only

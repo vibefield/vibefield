@@ -1228,7 +1228,7 @@ agent is using"
   the page since v5) and a dated note on EY-D4 A at `thinking-agents-eyes.md` §11 (OB-D1). The record is
   darwin-arm64 only.
 - *A note, 2026-11-24; restated 2026-11-25 at the landing (not a rewrite of this section):* on James's word of 11-24,
-  EY-1 and EY-2 are BUILT. agent-browser 0.41.0 is
+  EY-1, EY-2 and item 581's overturn for the browser and the iOS Simulator are BUILT. agent-browser 0.41.0 is
   installed and held to its record (EY-1 1a), and its release binary is never started; `pnpm dev` hands main a copy of
   the pin's build from source (1b-i, `pages-record.ts` `sourceBuild`), when its launcher names that file in
   `VIBEFIELD_DEV_PAGES_ENGINE_SOURCE` (darwin-arm64 alone; no script here builds it); otherwise main has no engine and
@@ -1391,6 +1391,13 @@ with its three addenda, `lanes/ob-build/ITEM-279-S2-PLAN.md` and `lanes/ob-build
   85defb042 2eb87202d: an agent never places a kind whose plugin requests a live page's, device's or app window's
   powers, and is
   told to ask the user; the window's live gate reads the same list of pairs).
+  *Corrected 2026-11-24: item 581's rule is overturned for the browser pane and the iOS Simulator (DECISIONS, the
+  item 581 row). An agent opens a browser pane with `browser_open` (the pages room: its run's own profile, signed
+  out), and places the bundled iOS Simulator with `canvas_place`, on no device or a device of its own, never one of
+  the person's. The rule still holds for another app's window and for every other plugin's live kind, by the request
+  and never the grants; the window's live gate still reads the same list. Built, and run live with real agents in a
+  QA desktop on 2026-11-24, on an earlier build (the browser through the room, and an unbound Simulator placed with
+  `canvas_place`); no smoke and no gate row drives it yet.*
 - Landed 11-25: **OB-D16, an object's sticker in its agent's Godview pane** (`20134db64`, with the mends `31aba07bd`
   and `635f44c58`, M557; LANDED "OB-D16"): a kind an agent can hold declares its sticker
   (`contributes.objects[].sticker`, its art in its own bundle, and `check` refuses one without), fieldd serves the

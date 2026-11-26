@@ -135,6 +135,16 @@ export const simulatorManifest: PluginManifestV1 = {
           ],
         },
         binding: { kind: SIMULATOR_BINDING_EXPORT },
+        // item 581 overturned (2026-11-24): the phone's agent half. An agent may place one, and it shows a device of its own,
+        // never one of the user's (the desk door holds its binding to that); it reads what the phone is and binds no tool,
+        // so the phone takes no tap, key or picture from an agent yet. Its one face is the object itself.
+        agent: {
+          summary:
+            "An iPhone simulator on the desk, on a device of its own, never one of the user's. You can place one and read which iPhone and iOS version it is; you cannot tap, type into it or take its picture yet. Placed without a binding, it waits for the user to choose an iPhone and an iOS version.",
+          concurrency: "many",
+          faces: [{ type: "ref", id: "live", label: "Live" }],
+          tools: [],
+        },
       },
     ],
   },

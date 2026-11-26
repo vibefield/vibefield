@@ -2534,7 +2534,7 @@
               the control call's deadline less 5 s.
             </p>
             <p class="section-note" id="pages-built">
-              <em>Added 2026-11-24 (EY-1 and EY-2); restated 2026-11-25 at the landing:</em>
+              <em>Added 2026-11-24 (EY-1, EY-2 and item 581's overturn); restated 2026-11-25 at the landing:</em>
               the rows below wear <span class="badge tone-built">Built</span>. Each is in the code, and its unit
               suites pass. Real agents used the pages room live in a QA desktop on 2026-11-24 and 2026-11-25:
               Claude Code at Haiku 5.5, Codex at gpt-6-luna and Grok Build at grok-4.7. The three runs were on
@@ -2566,6 +2566,15 @@
               (3) A run's first page is made by main in the run's own memory profile and placed by the window: the
               room asks the window to place each pane main made (<code>made</code>), and <code>surface.open</code>
               adopts only a pane the room placed.
+              (4) Item 581's rule (2026-11-19: only the person adds a kind that shows a live page, device or app
+              window) is overturned for the browser and the iOS Simulator (James, 2026-11-24). The browser is
+              reached through the room, never <code>canvas_place</code>: a kind whose agent half names a room is not
+              placeable by it, and the room places the run's own pane. For the Simulator, contracts'
+              <code>AGENT_PLACEABLE_LIVE</code> names the bundled <code>vibefield.simulator</code> alone, fieldd's
+              kinds table lets <code>canvas_place</code> place it (<code>kinds.ts</code>, <code>showsLive</code>), on
+              no device or on a device of its own, never the person's (the device rule in
+              <code>rooms/desk/verbs.ts</code>), and the window refuses an agent's Simulator that would show the
+              person's device (<code>simulatorBindingOf</code>).
             </p>
             <div class="table-wrap">
               <table class="reference-table">
@@ -2587,7 +2596,7 @@
                   <tr><td><span class="route">history_search</span></td><td><p><code>history</code></p></td><td><p><code>agent</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>Past sessions under the caller's profiles, asked once per runtime with the hits merged: the matching turns with their session, agent, folder and time.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">history_read</span></td><td><p><code>history</code></p></td><td><p><code>agent</code></p></td><td><p><code>profiles</code></p></td><td><p>CP-1</p></td><td><p>A past session's turns from History, bounded; <code>before</code> pages back.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">projects_list</span></td><td><p><code>projects</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>CP-1</p></td><td><p>The person's projects, each with its name and the folders it has on this desktop.</p></td><td><span class="badge tone-built">Built</span></td></tr>
-                  <tr><td><span class="route">canvas_kinds</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>OB-3</p></td><td><p>What can be placed on the person's desk: each kind's name, what it is for, and whether it gives the caller tools once placed. Answered from the kinds table, the one declaration per kind (OB-L2).</p></td><td><span class="badge tone-built">Built</span></td></tr>
+                  <tr><td><span class="route">canvas_kinds</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>OB-3</p></td><td><p>What can be placed on the person's desk: each kind's name, what it is for, and whether it gives the caller tools once placed. Answered from the kinds table, the one declaration per kind (OB-L2). <em>Added 2026-11-24 (item 581 overturned):</em> a kind a room's own rows work is listed too, with the row that adds one under <code>placeWith</code> (the browser pane, <code>browser_open</code>); <code>canvas_place</code> places none of those.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">canvas_list</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>OB-3</p></td><td><p>The objects on the desk: each one's ref, kind, title and place, who is at work on it, and whether it is the caller's to work. Listing names an object and grants nothing (OB-L1); what an object holds stays closed unless it is the caller's.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">canvas_place</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>device</code></p></td><td><p>OB-3</p></td><td><p>A new object, only when the person asked for one. It is the caller's at once (MT-L4), and the answer carries its ref and its tools, as <code>object_open</code>'s does. The person sees it arrive and can undo it.</p></td><td><span class="badge tone-built">Built</span></td></tr>
                   <tr><td><span class="route">canvas_remove</span></td><td><p><code>canvas</code></p></td><td><p><code>agent</code></p></td><td><p><code>object</code></p></td><td><p>OB-3</p></td><td><p>Removes an object the caller placed. An object the person made or handed over stays theirs to remove: <code>forbidden</code>; one the caller holds no grant on: <code>not-handed</code>. The person can undo it.</p></td><td><span class="badge tone-built">Built</span></td></tr>

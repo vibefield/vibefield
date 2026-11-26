@@ -124,7 +124,10 @@ describe("the live face's gate — the host's, by the object (ruling 3)", () => 
       "ios-simulator": ["surface.attach", "surface.simulator"],
     });
     expect(SIMULATOR_SCOPES).toEqual(["surface.attach", "surface.simulator"]);
-    // item 581: the gate's two face sources are contracts' list, the one fieldd's canvas_place refuses by
+    // item 581: the gate's two face sources are contracts' list, the one fieldd's canvas_place refuses by.
+    // Corrected 2026-11-24 (item 581 overturned for the browser pane and the iOS Simulator): fieldd's door still reads
+    // this list, and no longer refuses every kind under it: it lets an agent place the kinds contracts'
+    // AGENT_PLACEABLE_LIVE names (the bundled iOS Simulator). The gate is unmoved: it asks the whole pair of every object
     expect(LIVE_FACE_SCOPES).toEqual({
       browser: LIVE_PAGE_SCOPES.browser,
       "ios-simulator": LIVE_PAGE_SCOPES["ios-simulator"],

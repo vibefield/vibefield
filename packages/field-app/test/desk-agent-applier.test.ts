@@ -20,6 +20,7 @@ import { NOTE_TYPE, PHOTO_TYPE } from "@vibecook/ice/desk/objects";
 import type { ObjectIntent, ObjectIntentAnswer } from "@vibefield/contracts";
 import { FielddRpcError } from "@vibefield/fieldd-client";
 import * as pane from "@vibefield/plugin-browser-pane";
+import * as phone from "@vibefield/plugin-simulator";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type ApplierDeps,
@@ -471,6 +472,78 @@ describe("placing", () => {
       "needs-you",
     );
     expect(factOf({ op: "place", kind: NOTE_TYPE, props: {} })).toBe("needs-you");
+  });
+});
+
+describe("an iOS Simulator an agent places (item 581 overturned, 2026-11-24)", () => {
+  /** A board whose registry carries the bundled iOS Simulator, as the product's does. */
+  function phoneBoard() {
+    const ce = createFieldEngine(
+      buildRegistry({
+        generation: -1,
+        staged: [],
+        bundled: [
+          {
+            manifest: phone.simulatorManifest,
+            mod: phone.simulatorRenderer,
+            objectBindings: objectBindingsFrom(
+              phone,
+              phone.simulatorManifest.contributes?.objects ?? [],
+            ),
+          },
+        ],
+      }),
+    );
+    ce.docs.create();
+    ce.step(1);
+    const desk = {
+      engine: ce,
+      handle: {} as never,
+      generation: 1,
+      mount: 0,
+      theme: "light",
+      docId: "doc-1",
+    } as MountedDesk;
+    const applier = createDeskApplier(desk, { onCanvas: () => true, handOn: () => false });
+    const placeWith = (props: Record<string, unknown>) =>
+      applier.apply(intent({ op: "place", kind: phone.SIMULATOR_TYPE, props }));
+    const phones = (): number => {
+      const answer = applier.apply(intent({ op: "list" }));
+      if (!answer.ok) throw new Error(`refused: ${answer.fact}: ${answer.text}`);
+      return (answer.value as { objects: { kind: string }[] }).objects.filter(
+        (object) => object.kind === phone.SIMULATOR_TYPE,
+      ).length;
+    };
+    return { placeWith, phones };
+  }
+  const bound = {
+    deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+    runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+  };
+
+  it("places one bound to nothing, or to a device of its own", () => {
+    const { placeWith, phones } = phoneBoard();
+    expect(placeWith({}).ok).toBe(true);
+    expect(placeWith({ binding: { ...bound, dedicated: true } }).ok).toBe(true);
+    // an agent hands the prop's value, never its cell: the desk takes the binding as an object
+    const cell = placeWith({ binding: JSON.stringify({ ...bound, dedicated: true }) });
+    expect(cell.ok).toBe(false);
+    if (!cell.ok) expect(cell.fact).toBe("bad-input");
+    expect(phones()).toBe(2);
+  });
+
+  it("refuses, in words, one whose binding would show one of the user's devices, and places nothing", () => {
+    const { placeWith, phones } = phoneBoard();
+    for (const binding of [bound, JSON.stringify(bound), { ...bound, dedicated: false }]) {
+      const answer = placeWith({ binding });
+      expect(answer.ok, JSON.stringify(binding)).toBe(false);
+      if (answer.ok) continue;
+      expect(answer.fact).toBe("bad-input");
+      expect(answer.text).toBe(
+        "An iOS Simulator you place shows a device of its own, never one of the user's. Leave out its binding, or give it `dedicated: true`.",
+      );
+    }
+    expect(phones()).toBe(0);
   });
 });
 

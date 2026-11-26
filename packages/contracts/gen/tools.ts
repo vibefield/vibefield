@@ -900,7 +900,7 @@ export const SERVED_TOOLS = [
     "audience": "agent",
     "scope": "device",
     "slice": "OB-3",
-    "description": "List what you can place on the user's desk: each kind's name, what it is for, and whether it gives you tools once placed.",
+    "description": "List what you can place on the user's desk: each kind's name, what it is for, and whether it gives you tools once placed. A kind that names a tool under placeWith is added with that tool, not with canvas_place.",
     "annotations": {
       "readOnlyHint": true,
       "destructiveHint": false,
@@ -934,6 +934,11 @@ export const SERVED_TOOLS = [
               },
               "tools": {
                 "type": "boolean"
+              },
+              "placeWith": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
               }
             },
             "required": [

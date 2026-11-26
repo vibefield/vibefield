@@ -16,7 +16,10 @@ import type { PluginRegistry, RegisteredPlugin } from "@vibefield/plugin-runtime
 import type { LiveFaceSource, LiveGateAnswer } from "./desk-live";
 
 /** What a browser page asks of the plugin whose object opens it: contracts' one list (item 581, 2026-11-19 — the pairs
- * fieldd's `canvas_place` refuses a kind by, so the door and the gate never disagree). */
+ * fieldd's `canvas_place` refuses a kind by, so the door and the gate never disagree).
+ * Amended 2026-11-24 (item 581 overturned for the browser pane and the iOS Simulator): the door lets an agent place the
+ * kinds contracts' `AGENT_PLACEABLE_LIVE` names under a pair, the bundled iOS Simulator alone; the gate still asks every
+ * whole pair, of every object, whoever placed it. */
 export const BROWSER_PAGE_SCOPES = LIVE_PAGE_SCOPES.browser;
 /** PT-S2: what a bound Simulator asks of the plugin whose phone opens it (the same list, item 581). */
 export const SIMULATOR_SCOPES = LIVE_PAGE_SCOPES["ios-simulator"];

@@ -7,13 +7,15 @@
 // while the held phone routes its glass and keyboard to its own simulator device.
 
 import { type ObjectBinding, service } from "@vibefield/plugin-sdk/desk";
+import { simulatorAgent } from "./agent";
 import { PHONE_ACTS, type PhoneDriver, phoneDrivers } from "./attach";
 import { type SimulatorGeometry, simulatorKind } from "./kind";
 import type { PhoneInstance, PhoneLookValues } from "./layout";
 import { WORDS_RASTER } from "./notice";
 import { wordsRaster } from "./notice-canvas";
 
-/** THE BINDING — the phone's kind, its face's words' raster lent by its DOM half, and its simulator settings and finish controls. */
+/** THE BINDING — the phone's kind, its face's words' raster lent by its DOM half, its simulator settings and finish controls,
+ * and its agent half. */
 export const simulator: ObjectBinding<SimulatorGeometry, PhoneInstance, PhoneLookValues> = {
   kind: simulatorKind(),
   // The driver connects device keys and makes this desk's simulator actions available to its menu.
@@ -30,4 +32,6 @@ export const simulator: ObjectBinding<SimulatorGeometry, PhoneInstance, PhoneLoo
     },
   },
   menu: PHONE_ACTS,
+  // item 581 overturned (2026-11-24): what an agent reads of a phone, and no tool (agent.ts)
+  agent: simulatorAgent,
 };

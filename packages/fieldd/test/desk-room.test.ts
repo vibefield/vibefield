@@ -1,7 +1,13 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { ObjectIntent, ObjectManual, PluginRecord } from "@vibefield/contracts";
-import { OBJECT_LIMITS, TOOL_SCHEMAS } from "@vibefield/contracts";
+import {
+  AGENT_PLACEABLE_LIVE,
+  OBJECT_LIMITS,
+  ROOM_OPENER,
+  SIMULATOR_BINDING_PROP,
+  TOOL_SCHEMAS,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type DeskKind, pluginDeskKinds } from "../src/objects/kinds";
 import { createDeskVerbs, type DeskVerbs } from "../src/tool-plane/rooms/desk/verbs";
@@ -213,7 +219,7 @@ const BROWSER: DeskKind = {
 };
 
 describe("a kind whose tools are a room's rows (R-2)", () => {
-  it("answers a kind that is both a room's and a live page's with the room's words first (with item 581)", async () => {
+  it("answers a kind that is both a room's and a live page's with the room's words first (the browser pane still is both: item 581 overturned 2026-11-24)", async () => {
     const both: DeskKind = { ...BROWSER, livePages: true };
     const h = world({ kinds: [NOTE, PAGE, both] });
     const { verbs, win } = room(h);
@@ -264,6 +270,41 @@ describe("a kind whose tools are a room's rows (R-2)", () => {
       .catch((err: unknown) => err);
     expect(refused).toMatchObject({ details: { fact: "no-tool", room: "pages" } });
     expect((refused as Error).message).toContain("not with canvas_place");
+    expect(win.seen).toEqual([]);
+    // item 581 overturned (2026-11-24): what an agent is told it can add names the pane, in its manifest's own
+    // words, with the row that opens one
+    const listed = (await verbs.canvas_kinds(A, {})) as {
+      kinds: { kind: string; summary?: string; placeWith?: string }[];
+    };
+    const row = listed.kinds.find((kind) => kind.kind === "vibefield.browser-pane");
+    expect(row).toMatchObject({ title: "Browser", tools: true, placeWith: "browser_open" });
+    expect(row?.summary).toBe(manifest.contributes.objects[0]?.agent?.summary);
+  });
+
+  it("lists a room's kind beside what canvas_place places, naming the row that adds one: an agent that asks learns how to open a browser (item 581 overturned, 2026-11-24)", async () => {
+    // the pane as the kinds table holds it: a room's kind and a live page's, never placeable by the desk
+    const pane: DeskKind = { ...BROWSER, summary: "A web page on the desk.", livePages: true };
+    const h = world({ kinds: [NOTE, PAGE, pane] });
+    const { verbs, win } = room(h);
+    const listed = await verbs.canvas_kinds(A, {});
+    expect(listed).toEqual({
+      kinds: [
+        { kind: "desk.note", title: "Note", summary: "A note on the desk.", tools: true },
+        {
+          kind: BROWSER.kind,
+          title: "Browser",
+          summary: "A web page on the desk.",
+          // its tools are the room's rows, and one of them adds it
+          tools: true,
+          placeWith: ROOM_OPENER.pages,
+        },
+      ],
+    });
+    expect(ROOM_OPENER.pages).toBe("browser_open");
+    expect(TOOL_SCHEMAS.canvas_kinds.output.safeParse(listed).success).toBe(true);
+    // listing it changes nothing of the door: canvas_place still answers with the room's rows, before the window
+    const refused = await verbs.canvas_place(A, { kind: pane.kind }).catch((err: unknown) => err);
+    expect(refused).toMatchObject({ details: { fact: "no-tool", room: "pages" } });
     expect(win.seen).toEqual([]);
   });
 
@@ -385,7 +426,8 @@ describe("the checks before the window sees a call (§5.5 step 3)", () => {
     expect(factOf(page)).toBe("bad-input");
   });
 
-  it("says a live page, device or app window is the user's to add, and to ask, before the window (item 581)", async () => {
+  it("says another app's window, or a live page or device that could be the user's own, is the user's to add, and to ask, before the window (item 581, its words narrowed 2026-11-24)", async () => {
+    // what the rule still keeps: a kind whose plugin asks a live pair and that the door's list does not name
     const live = {
       ...NOTE,
       kind: "example.live",
@@ -403,10 +445,166 @@ describe("the checks before the window sees a call (§5.5 step 3)", () => {
       details: { fact: "bad-input", path: "kind", expected: { enum: ["desk.note"] } },
     });
     expect((refused as Error).message).toBe(
-      "input.kind: VibeField can't place example.live: it shows a live page, device or app window, and only the " +
-        "user adds those to the desk. If you need one, ask the user. It can place: desk.note.",
+      "input.kind: VibeField can't place example.live: it shows another app's window, or a live page or device " +
+        "that could be the user's own, and only the user adds those to the desk. If you need one, ask the user. " +
+        "It can place: desk.note.",
     );
+    // the old words said every live page and device was the user's alone; an agent has its own of each now
+    expect((refused as Error).message).not.toContain("a live page, device or app window");
     expect(win.seen).toEqual([]);
+  });
+});
+
+/** Item 581 overturned (2026-11-24): the iOS Simulator as the kinds table holds it once an agent may place it. Its kind is
+ * the one contracts' AGENT_PLACEABLE_LIVE names under the Simulator's pair, never a second literal here. */
+const [PHONE_KIND = ""] = AGENT_PLACEABLE_LIVE["ios-simulator"];
+const PHONE: DeskKind = {
+  kind: PHONE_KIND,
+  title: "iOS Simulator",
+  summary: "An iPhone simulator on the desk.",
+  placeable: true,
+  concurrency: "many",
+  tools: [],
+  version: 1,
+};
+/** A binding as Xcode names a model and an iOS: the two ids, and nothing else. */
+const IPHONE = {
+  deviceType: "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
+  runtime: "com.apple.CoreSimulator.SimRuntime.iOS-26-1",
+};
+const NOT_THE_USERS =
+  "input.props.binding: an iOS Simulator you place shows a device of its own, never one of the user's. Name its " +
+  "deviceType and runtime and nothing else, or leave the binding out and the user chooses.";
+
+describe("an iOS Simulator an agent places shows a device of its own, never the user's (item 581 overturned, 2026-11-24)", () => {
+  const phoneRoom = () => {
+    const h = world({ kinds: [NOTE, PAGE, PHONE] });
+    return { h, ...room(h) };
+  };
+  /** The props of every place the window was asked. */
+  const placedWith = (seen: readonly ObjectIntent[]) =>
+    seen.flatMap((intent) => (intent.op === "place" ? [intent.props] : []));
+
+  it("places one bound to nothing as given: the user chooses its iPhone", async () => {
+    const { verbs, win } = phoneRoom();
+    const unbound = { [SIMULATOR_BINDING_PROP]: { deviceType: "", runtime: "" } };
+    // a binding the kind cannot read opens no face either: it is the window's to take or refuse, as given
+    const unread = {
+      [SIMULATOR_BINDING_PROP]: { deviceType: "iPhone 17 Pro", runtime: "iOS 26.1" },
+    };
+    await verbs.canvas_place(A, { kind: PHONE.kind });
+    await verbs.canvas_place(A, { kind: PHONE.kind, props: { model: IPHONE.deviceType } });
+    await verbs.canvas_place(A, { kind: PHONE.kind, props: unbound });
+    await verbs.canvas_place(A, { kind: PHONE.kind, props: unread });
+    expect(placedWith(win.seen)).toEqual([
+      undefined,
+      { model: IPHONE.deviceType },
+      unbound,
+      unread,
+    ]);
+  });
+
+  it("writes a binding that names a model and an iOS alone as the phone's own device, as the user's setup writes it", async () => {
+    const { verbs, win } = phoneRoom();
+    const said = { finish: "silver", [SIMULATOR_BINDING_PROP]: { ...IPHONE } };
+    const manual = (await verbs.canvas_place(A, { kind: PHONE.kind, props: said })) as ObjectManual;
+    expect(manual.object.yours).toBe("placed");
+    // the prop's cell as JSON reads the same
+    await verbs.canvas_place(A, {
+      kind: PHONE.kind,
+      props: { [SIMULATOR_BINDING_PROP]: JSON.stringify(IPHONE) },
+    });
+    expect(placedWith(win.seen)).toEqual([
+      { finish: "silver", [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: true } },
+      { [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: true } },
+    ]);
+    // the caller's own input is not written on
+    expect(said).toEqual({ finish: "silver", [SIMULATOR_BINDING_PROP]: IPHONE });
+  });
+
+  it("hands on a binding that asks for a device of its own as its two ids and the flag, nothing that rode along", async () => {
+    const { verbs, win } = phoneRoom();
+    await verbs.canvas_place(A, {
+      kind: PHONE.kind,
+      props: { [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: true } },
+    });
+    await verbs.canvas_place(A, {
+      kind: PHONE.kind,
+      props: {
+        [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: true, instance: "k1", udid: "A1B2" },
+      },
+    });
+    expect(placedWith(win.seen)).toEqual([
+      { [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: true } },
+      { [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: true } },
+    ]);
+  });
+
+  it("refuses a binding that asks for anything else, in words, before the window: it would show one of the user's devices", async () => {
+    const { h, verbs, win } = phoneRoom();
+    for (const binding of [
+      { ...IPHONE, dedicated: false },
+      { ...IPHONE, dedicated: "true" },
+      { ...IPHONE, instance: "k1" },
+      { ...IPHONE, udid: "A1B2C3D4-E5F6-7890-ABCD-EF1234567890" },
+      JSON.stringify({ ...IPHONE, name: "My iPhone" }),
+    ]) {
+      const refused = await verbs
+        .canvas_place(A, { kind: PHONE.kind, props: { [SIMULATOR_BINDING_PROP]: binding } })
+        .catch((err: unknown) => err);
+      expect(refused, JSON.stringify(binding)).toMatchObject({
+        details: {
+          fact: "bad-input",
+          path: "props.binding",
+          expected: { required: ["deviceType", "runtime"], additionalProperties: false },
+        },
+      });
+      expect((refused as Error).message, JSON.stringify(binding)).toBe(NOT_THE_USERS);
+    }
+    expect(win.seen).toEqual([]);
+    // nothing was placed, so nothing is the caller's
+    expect(h.desk.registry.grantOf(h.refOf("k9", PHONE.kind), "run-a")).toBeUndefined();
+  });
+
+  it("places the bundled iOS Simulator as its own manifest declares it, on a device of its own: the kinds table and the door together", async () => {
+    // the phone's manifest read from its plugin folder, never copied, in the record fieldd holds of a bundled plugin
+    const manifest = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../../plugins/simulator/vibefield.plugin.json"),
+        "utf8",
+      ),
+    ) as { id: string; capabilities: string[]; contributes: PluginRecord["contributions"] };
+    const record = {
+      id: manifest.id,
+      enabled: true,
+      source: "bundled",
+      requestedCapabilities: manifest.capabilities,
+      grantedCapabilities: manifest.capabilities,
+      contributions: manifest.contributes,
+    };
+    const phone = pluginDeskKinds([record as unknown as PluginRecord], () => undefined);
+    expect(phone).toEqual([expect.objectContaining({ kind: PHONE.kind, placeable: true })]);
+    const h = world({ kinds: [NOTE, PAGE, ...phone] });
+    const { verbs, win } = room(h);
+    // it is among what an agent is told it can place, by its manifest's own words
+    const listed = (await verbs.canvas_kinds(A, {})) as { kinds: { kind: string }[] };
+    expect(listed.kinds.map((kind) => kind.kind)).toContain(PHONE.kind);
+    const manual = (await verbs.canvas_place(A, {
+      kind: PHONE.kind,
+      props: { [SIMULATOR_BINDING_PROP]: { ...IPHONE } },
+    })) as ObjectManual;
+    expect(manual.object).toMatchObject({ kind: PHONE.kind, yours: "placed" });
+    expect(manual.tools).toEqual([]);
+    expect(placedWith(win.seen)).toEqual([
+      { [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: true } },
+    ]);
+  });
+
+  it("holds the rule to the kinds contracts names: another kind's props reach the window as given", async () => {
+    const { verbs, win } = phoneRoom();
+    const props = { [SIMULATOR_BINDING_PROP]: { ...IPHONE, dedicated: false } };
+    await verbs.canvas_place(A, { kind: NOTE.kind, props });
+    expect(placedWith(win.seen)).toEqual([props]);
   });
 });
 

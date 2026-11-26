@@ -34,6 +34,7 @@ import {
 import { computeEffectiveGrants, PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
 import {
   AGENT_FIELD,
+  AGENT_PLACEABLE_LIVE,
   DESKTOP_APP_ID,
   DESKTOP_TRAY_GUID,
   ENV_KEEP_NAMES,
@@ -724,6 +725,17 @@ describe("logging registries (LOG-43/LOG-44)", () => {
         expect(TAILNET_SCOPES, source).not.toContain(scope);
       }
     }
+  });
+
+  it("lets an agent place, of the kinds that ask a live face's pair, the iOS Simulator alone (item 581, overturned 2026-11-24)", () => {
+    // every pair says which kinds it lets an agent place: a new pair cannot slip past the door unsaid
+    expect(Object.keys(AGENT_PLACEABLE_LIVE).sort()).toEqual(Object.keys(LIVE_PAGE_SCOPES).sort());
+    // the browser pane is the pages room's to open (browser_open, the run's own profile), never canvas_place's
+    expect(AGENT_PLACEABLE_LIVE.browser).toEqual([]);
+    // the bundled iOS Simulator, bound only to a device of its own
+    expect(AGENT_PLACEABLE_LIVE["ios-simulator"]).toEqual(["vibefield.simulator"]);
+    // another app's window stays the person's to add
+    expect(AGENT_PLACEABLE_LIVE["window-capture"]).toEqual([]);
   });
 
   it("declares the exact trusted app-preference surface", () => {

@@ -114,6 +114,10 @@ export const CanvasKindsOutput = z
           summary: z.string().optional(),
           /** whether placing one gives you tools */
           tools: z.boolean(),
+          /** item 581 overturned (2026-11-24): the tool that adds one, where `canvas_place` does not: a kind worked with
+           * a room's own tools (R-2) is added by that room's row (`ROOM_OPENER`: the browser pane, by `browser_open`).
+           * Absent: `canvas_place` places it. */
+          placeWith: z.string().min(1).max(64).optional(),
         })
         .passthrough(),
     ),

@@ -372,8 +372,9 @@ export const TOOLS: readonly ToolDef[] = [
     ...DESK_DEVICE,
     readOnly: true,
     slice: "OB-3",
+    // item 581 overturned (2026-11-24): a room's kind is listed too, with the row that adds one (`placeWith`)
     description:
-      "List what you can place on the user's desk: each kind's name, what it is for, and whether it gives you tools once placed.",
+      "List what you can place on the user's desk: each kind's name, what it is for, and whether it gives you tools once placed. A kind that names a tool under placeWith is added with that tool, not with canvas_place.",
   },
   {
     name: "canvas_list",
@@ -824,6 +825,14 @@ export const TOOL_SCHEMAS = {
 export type ServedToolName = keyof typeof TOOL_SCHEMAS;
 export const isServedTool = (name: string): name is ServedToolName =>
   Object.hasOwn(TOOL_SCHEMAS, name);
+
+/** Item 581 overturned (2026-11-24): for each room whose rows work a kind of their own (R-2: the manifest's
+ * `agent.room`), the row that adds one of that kind to the desk. `canvas_place` places no such kind, so `canvas_kinds`
+ * names this row beside it (`placeWith`), and an agent that asks what it can add learns how to open a browser. */
+export const ROOM_OPENER = { pages: "browser_open" } as const satisfies Record<
+  "pages",
+  ServedToolName
+>;
 
 const BY_NAME: ReadonlyMap<string, ToolDef> = new Map(TOOLS.map((tool) => [tool.name, tool]));
 /** The row of a name, served or planned; undefined for a name the catalog has no row for. */

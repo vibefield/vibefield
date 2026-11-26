@@ -45,8 +45,8 @@ runs the pinned engine: the pin's build from source, when whoever launches `pnpm
 pages answer not installed. The installed npm binary is never started. Real agents used the pages room live in a QA
 desktop on 2026-11-24 and 2026-11-25, on earlier builds of this work, and called some of its rows; which ones is in
 api's note. No smoke and no gate row drives them yet, and a packaged app carries no
-engine yet, so a package has no pages. What is built and what is not is api's
-[note](agent-plane/api.html#pages-built).
+engine yet, so a package has no pages. What is built and what is not, item 581's overturn for the browser and the iOS
+Simulator included, is api's [note](agent-plane/api.html#pages-built).
 
 Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard as the left one.
 

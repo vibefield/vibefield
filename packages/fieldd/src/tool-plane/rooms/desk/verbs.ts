@@ -1,4 +1,5 @@
 import {
+  AGENT_PLACEABLE_LIVE,
   type AtWorkState,
   type CanvasPlaceInput,
   IntentListValue,
@@ -14,6 +15,9 @@ import {
   type ObjectRecord,
   type ObjectRef,
   type ObjectYours,
+  ROOM_OPENER,
+  SIMULATOR_BINDING_PROP,
+  simulatorBindingOf,
   TOOLS,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../../../native-link";
@@ -234,6 +238,48 @@ const roomsOwn = (kind: DeskKind | undefined, verb: string): RpcCallError | unde
   );
 };
 
+/**
+ * Item 581 overturned (2026-11-24) — THE DEVICE RULE. An iOS Simulator an agent places shows no device (unbound: the user
+ * chooses its iPhone) or a device of VibeField's own, made for that phone (item 568), never one of the user's. The kinds
+ * are the ones contracts' `AGENT_PLACEABLE_LIVE` names under the Simulator's pair, and the device is read off the
+ * `binding` prop exactly as the kind reads it (`simulatorBindingOf`):
+ *  - none (no binding, the prop's empty default, or a value the kind cannot read: no face opens) goes on as given;
+ *  - a binding that binds goes on as the user's own setup writes it, its two ids and `dedicated: true`, so nothing
+ *    else an agent wrote rides into the document. One that names a model and an iOS alone is completed so: this door
+ *    gives a phone no other device, and the kind's summary says so before the place;
+ *  - one that asks for anything else (`dedicated` as anything but true, or another key) is refused, in words: it asked
+ *    for a device this door never gives, and would otherwise get another without being told.
+ * Policy is this door's (OB-L8); the window's applier refuses the user's device again behind it. canvas_place is the
+ * one door an agent writes a phone's props through: the kind binds no tool, so object_act writes nothing on it.
+ */
+const heldToOwnDevice = (
+  kind: string,
+  props: Record<string, unknown> | undefined,
+): Record<string, unknown> | undefined => {
+  if (props === undefined || !AGENT_PLACEABLE_LIVE["ios-simulator"].includes(kind)) return props;
+  const read = simulatorBindingOf(props[SIMULATOR_BINDING_PROP]);
+  if (read.device === "none") return props;
+  if (read.device === "person" && !read.plain)
+    throw refuse(
+      "bad-input",
+      `input.props.${SIMULATOR_BINDING_PROP}: an iOS Simulator you place shows a device of its own, never one of the user's. Name its deviceType and runtime and nothing else, or leave the binding out and the user chooses.`,
+      {
+        path: `props.${SIMULATOR_BINDING_PROP}`,
+        expected: {
+          type: "object",
+          properties: {
+            deviceType: { type: "string" },
+            runtime: { type: "string" },
+            dedicated: { const: true },
+          },
+          required: ["deviceType", "runtime"],
+          additionalProperties: false,
+        },
+      },
+    );
+  return { ...props, [SIMULATOR_BINDING_PROP]: { ...read.binding, dedicated: true } };
+};
+
 const NOT_TOOLS_YET = (ref: string): RpcCallError =>
   refuse("no-tool", `Open ${ref} with object_open first: its tools come in that answer.`);
 
@@ -317,15 +363,22 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
   return {
     async canvas_kinds() {
       return {
-        kinds: objects
-          .kinds()
-          .filter((kind) => kind.placeable)
-          .map((kind) => ({
-            kind: kind.kind,
-            title: kind.title,
-            ...(kind.summary !== undefined ? { summary: kind.summary } : {}),
-            tools: kind.tools.length > 0,
-          })),
+        kinds: objects.kinds().flatMap((kind) => {
+          // item 581 overturned (2026-11-24): a room's kind is listed too, with the room's row that adds one (R-2:
+          // canvas_place places none), so an agent that asks what it can add learns how to open a browser. Its tools
+          // are the room's rows. Every other kind canvas_place cannot place stays unlisted
+          const opener = kind.room === undefined ? undefined : ROOM_OPENER[kind.room];
+          if (!kind.placeable && opener === undefined) return [];
+          return [
+            {
+              kind: kind.kind,
+              title: kind.title,
+              ...(kind.summary !== undefined ? { summary: kind.summary } : {}),
+              tools: kind.tools.length > 0 || opener !== undefined,
+              ...(opener !== undefined ? { placeWith: opener } : {}),
+            },
+          ];
+        }),
       };
     },
 
@@ -369,10 +422,14 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
           .kinds()
           .filter((k) => k.placeable)
           .map((k) => k.kind);
-        // item 581 (2026-11-19): a live page, device or app window is the user's to add; the agent is told to ask
+        // item 581 (2026-11-19): a live page, device or app window is the user's to add; the agent is told to ask.
+        // Corrected 2026-11-24 (item 581 overturned for the browser pane and the iOS Simulator): the words said every
+        // live page and device was the user's alone. An agent opens a page of its own with the pages room's row and
+        // places the bundled iOS Simulator on a device of its own, so `livePages` is what remains (kinds.ts): another
+        // app's window, and a live kind the door cannot hold to the agent's own (another plugin's, read by its request)
         const why =
           kind?.livePages === true
-            ? ": it shows a live page, device or app window, and only the user adds those to the desk. If you need one, ask the user"
+            ? ": it shows another app's window, or a live page or device that could be the user's own, and only the user adds those to the desk. If you need one, ask the user"
             : "";
         throw refuse(
           "bad-input",
@@ -385,6 +442,8 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
           path: "props",
           expected: { maxBytes: OBJECT_LIMITS.TOOL_BYTES },
         });
+      // item 581 overturned (2026-11-24): a phone an agent places never shows one of the user's devices
+      const props = heldToOwnDevice(input.kind, input.props);
       const docId = defaultDesk();
       const agent = objects.who(run);
       const answered = await intents.ask(docId, {
@@ -393,7 +452,7 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
         handle: agent.handle,
         kind: input.kind,
         ...(input.title !== undefined ? { title: input.title } : {}),
-        ...(input.props !== undefined ? { props: input.props } : {}),
+        ...(props !== undefined ? { props } : {}),
       });
       const value = parseValue(IntentPlaceValue, answered.value);
       // it ended while the window placed it: the object stands, the person's to keep, and nobody holds it

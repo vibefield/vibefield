@@ -2,6 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  AGENT_PLACEABLE_LIVE,
   DESK_KINDS,
   LIVE_PAGE_SCOPES,
   OBJECT_LIMITS,
@@ -40,20 +41,38 @@ const object = (type: string, agent?: unknown) => ({
   ...(agent !== undefined ? { agent } : {}),
 });
 
+/** A plugin's record as fieldd holds it. Where a row says nothing of where the plugin came from, it was installed. */
 const record = (
   id: string,
   enabled: boolean,
   objects: unknown[],
   requested: string[] = [],
   granted: string[] = requested,
+  source: PluginRecord["source"] = "registry",
 ) =>
   ({
     id,
     enabled,
+    source,
     requestedCapabilities: requested,
     grantedCapabilities: granted,
     contributions: { objects },
   }) as unknown as PluginRecord;
+
+/** Every place a plugin can come from (contracts' PluginSource). */
+const SOURCES = ["bundled", "dev-linked", "registry", "sideload"] as const;
+
+/** A plugin of the product as its own manifest declares it, read from its folder and never copied. */
+const official = (folder: string) =>
+  JSON.parse(
+    readFileSync(
+      join(import.meta.dirname, "../../../plugins", folder, "vibefield.plugin.json"),
+      "utf8",
+    ),
+  ) as { id: string; capabilities: string[]; contributes: { objects: unknown[] } };
+
+/** The one kind the door's list names under the Simulator's pair (contracts' AGENT_PLACEABLE_LIVE). */
+const [PHONE = ""] = AGENT_PLACEABLE_LIVE["ios-simulator"];
 
 describe("the kinds a desk knows (OB-L2)", () => {
   it("reads the built-ins from the table, each by its type", () => {
@@ -89,34 +108,32 @@ describe("the kinds a desk knows (OB-L2)", () => {
     expect(kinds[0]).toMatchObject({ room: "pages", placeable: false, tools: [] });
   });
 
-  it("keeps a kind that is both a room's and a live page's unplaceable for both reasons (R-2 with item 581)", () => {
-    // the browser pane as its manifest asks (read, never copied) with a room-naming agent half, as 2g gives it
-    const manifest = JSON.parse(
-      readFileSync(
-        join(import.meta.dirname, "../../../plugins/browser-pane/vibefield.plugin.json"),
-        "utf8",
-      ),
-    ) as { id: string; capabilities: string[] };
-    const [kind] = pluginDeskKinds(
-      [
-        record(
-          manifest.id,
-          true,
-          [
-            object(manifest.id, {
-              summary: "A web page.",
-              concurrency: "one",
-              faces: [{ type: "ref" }],
-              tools: [],
-              room: "pages",
-            }),
-          ],
-          manifest.capabilities,
-        ),
-      ],
-      () => undefined,
-    );
-    expect(kind).toMatchObject({ room: "pages", livePages: true, placeable: false });
+  it("keeps the bundled browser pane a room's kind and a live page's: an agent opens one with the room's row, never canvas_place (R-2; item 581 overturned 2026-11-24)", () => {
+    // the pane as its manifest declares and asks: the door's list names no kind under the browser's pair, so the
+    // overturn leaves it unplaceable for both reasons, and canvas_place would open it in the desk's signed-in profile
+    const manifest = official("browser-pane");
+    expect(AGENT_PLACEABLE_LIVE.browser).toEqual([]);
+    for (const source of SOURCES) {
+      const [kind] = pluginDeskKinds(
+        [
+          record(
+            manifest.id,
+            true,
+            manifest.contributes.objects,
+            manifest.capabilities,
+            manifest.capabilities,
+            source,
+          ),
+        ],
+        () => undefined,
+      );
+      expect(kind, source).toMatchObject({
+        kind: manifest.id,
+        room: "pages",
+        livePages: true,
+        placeable: false,
+      });
+    }
   });
 
   it("keeps Print from being placed", () => {
@@ -165,39 +182,97 @@ describe("the kinds a desk knows (OB-L2)", () => {
     expect(map?.guide?.endsWith("\uFFFD")).toBe(false);
   });
 
-  it("keeps a kind whose plugin asks a live face's whole pair from an agent, whatever the person granted (item 581)", () => {
-    for (const pair of Object.values(LIVE_PAGE_SCOPES)) {
-      // asked, but revoked by the person's toggle: the request decides, so a re-grant never wakes an agent's object
-      const [kind] = pluginDeskKinds(
-        [record("com.live", true, [object("live.page", agentHalf)], [...pair], [])],
-        () => undefined,
-      );
-      expect(kind, pair.join("+")).toMatchObject({ placeable: false, livePages: true });
-    }
+  it("keeps a kind whose plugin asks a live face's whole pair from an agent, whatever the person granted and wherever the plugin came from (item 581; still the rule for every kind the door's list does not name)", () => {
+    for (const pair of Object.values(LIVE_PAGE_SCOPES))
+      for (const source of SOURCES) {
+        // asked, but revoked by the person's toggle: the request decides, so a re-grant never wakes an agent's object
+        const [kind] = pluginDeskKinds(
+          [record("com.live", true, [object("live.page", agentHalf)], [...pair], [], source)],
+          () => undefined,
+        );
+        expect(kind, `${source}: ${pair.join("+")}`).toMatchObject({
+          placeable: false,
+          livePages: true,
+        });
+      }
   });
 
-  it("keeps the official live plugins' kinds from an agent, by what their own manifests request (item 581)", () => {
-    // read at the source, never copied from the list: a pair renamed in one place and not the other turns this red
-    for (const folder of ["browser-pane", "simulator"]) {
-      const manifest = JSON.parse(
-        readFileSync(
-          join(import.meta.dirname, "../../../plugins", folder, "vibefield.plugin.json"),
-          "utf8",
-        ),
-      ) as { id: string; capabilities: string[] };
-      const [kind] = pluginDeskKinds(
+  it("lets an agent place the bundled iOS Simulator, by what its own manifest declares and asks, whatever the person granted (item 581 overturned, 2026-11-24)", () => {
+    // read at the source, never copied from the list: a kind or a pair renamed in one place and not the other turns this red
+    const manifest = official("simulator");
+    expect(AGENT_PLACEABLE_LIVE["ios-simulator"]).toEqual([manifest.id]);
+    for (const granted of [manifest.capabilities, []]) {
+      const [phone] = pluginDeskKinds(
         [
           record(
             manifest.id,
             true,
-            [object(manifest.id, agentHalf)],
+            manifest.contributes.objects,
             manifest.capabilities,
-            manifest.capabilities,
+            granted,
+            "bundled",
           ),
         ],
         () => undefined,
       );
-      expect(kind, manifest.id).toMatchObject({ placeable: false, livePages: true });
+      expect(phone).toMatchObject({ kind: manifest.id, placeable: true, tools: [] });
+      expect(phone?.livePages).toBeUndefined();
+      expect(phone?.room).toBeUndefined();
+    }
+  });
+
+  it("keeps an iOS Simulator that is not the bundled one the user's to add: a plugin from anywhere else can take the kind's name, never its place on the list", () => {
+    const manifest = official("simulator");
+    for (const source of SOURCES.filter((from) => from !== "bundled")) {
+      const [phone] = pluginDeskKinds(
+        [
+          record(
+            manifest.id,
+            true,
+            manifest.contributes.objects,
+            manifest.capabilities,
+            manifest.capabilities,
+            source,
+          ),
+        ],
+        () => undefined,
+      );
+      expect(phone, source).toMatchObject({ placeable: false, livePages: true });
+    }
+  });
+
+  it("reads the door's list kind by kind: a bundled plugin's other kind under the same pair stays the user's to add", () => {
+    const pair = [...LIVE_PAGE_SCOPES["ios-simulator"]];
+    const [named, other] = pluginDeskKinds(
+      [
+        record(
+          PHONE,
+          true,
+          [object(PHONE, agentHalf), object(`${PHONE}.other`, agentHalf)],
+          pair,
+          pair,
+          "bundled",
+        ),
+      ],
+      () => undefined,
+    );
+    expect(named).toMatchObject({ kind: PHONE, placeable: true });
+    expect(named?.livePages).toBeUndefined();
+    expect(other).toMatchObject({ kind: `${PHONE}.other`, placeable: false, livePages: true });
+  });
+
+  it("keeps a named kind the user's to add under any pair the list does not name it for", () => {
+    const own = LIVE_PAGE_SCOPES["ios-simulator"];
+    for (const [source, pair] of Object.entries(LIVE_PAGE_SCOPES)) {
+      if (source === "ios-simulator") continue;
+      // the other pair alone, and beside its own: a page in the desk's profile or another app's window is still live
+      for (const requested of [[...pair], [...own, ...pair]]) {
+        const [kind] = pluginDeskKinds(
+          [record(PHONE, true, [object(PHONE, agentHalf)], requested, requested, "bundled")],
+          () => undefined,
+        );
+        expect(kind, requested.join("+")).toMatchObject({ placeable: false, livePages: true });
+      }
     }
   });
 

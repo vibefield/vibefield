@@ -9,6 +9,18 @@
   "contributes": {
     "objects": [
       {
+        "agent": {
+          "concurrency": "many",
+          "faces": [
+            {
+              "id": "live",
+              "label": "Live",
+              "type": "ref"
+            }
+          ],
+          "summary": "An iPhone simulator on the desk, on a device of its own, never one of the user's. You can place one and read which iPhone and iOS version it is; you cannot tap, type into it or take its picture yet. Placed without a binding, it waits for the user to choose an iPhone and an iOS version.",
+          "tools": []
+        },
         "binding": {
           "kind": "simulator"
         },
