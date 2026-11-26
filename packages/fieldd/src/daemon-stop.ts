@@ -43,6 +43,8 @@ export const STOP_STEPS = [
   "doc-lane",
   "presence-rooms",
   "tool-plane",
+  // EY-2 (2b, 2026-11-19): the pages room's stills keeper stops its daily sweep
+  "pages-stills",
   "needs-queue",
   "desk-objects",
   "doc-sync",

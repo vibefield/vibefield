@@ -19,16 +19,20 @@ import {
 import { NOTE_TYPE, PHOTO_TYPE } from "@vibecook/ice/desk/objects";
 import type { ObjectIntent, ObjectIntentAnswer } from "@vibefield/contracts";
 import { FielddRpcError } from "@vibefield/fieldd-client";
+import * as pane from "@vibefield/plugin-browser-pane";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   type ApplierDeps,
   createDeskApplier,
   type DeskAgentDoor,
+  declaredProps,
   followDeskAgent,
 } from "../src/field/desk/agent/applier";
+import { madePaneRemover } from "../src/field/desk/agent/made-panes";
 import { type MountedDesk, publishDesk } from "../src/field/desk/desk-door";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
 import { type RendererLogger, setRendererLogger } from "../src/logging";
+import { objectBindingsFrom } from "../src/plugin-host/build-widget";
 
 type Ok = Extract<ObjectIntentAnswer, { ok: true }>;
 
@@ -830,5 +834,342 @@ describe("the door asks again while its desk is mounted (item 521)", () => {
       { event: "renderer.desk.agent_presence_ended", attrs: { kind: "NOT_FOUND" } },
     ]);
     expect(wire.asked).toEqual({ intents: 1, presence: 1 });
+  });
+});
+
+// EY-1 (1f, 2026-11-19) — A PAGE AN AGENT'S RUN MADE, placed by fieldd's pages room (`made`): only where the desk
+// has room for one more agent's page without resting one of the person's (item 581, the live service's `agentRoom`).
+// No room: nothing is placed, and main lets the page go at once. Placed: the pane's first mint adopts it. And the ONE
+// path a run's pane leaves the desk by (made-panes.ts).
+describe("EY-1 (1f): a page an agent's run made", () => {
+  const MADE = "surface_fedcba9876543210";
+  /** The desk with a live service under the test's hand: its room, and what it was told. */
+  function live(room: number) {
+    const told = { adopted: [] as [string, string][], declined: [] as string[] };
+    const service = {
+      agentRoom: () => room,
+      adoptMade: (key: string, made: string) => told.adopted.push([key, made]),
+      declineMade: (made: string) => told.declined.push(made),
+    };
+    const m = mount();
+    const desk = { ...m.desk, live: service as never } as MountedDesk;
+    const applier = createDeskApplier(desk, { onCanvas: () => true, handOn: () => false });
+    return { ...m, applier, told };
+  }
+
+  it("places the pane where the desk has room, and its first mint adopts the made page", () => {
+    const { applier, told, countOf } = live(1);
+    const answer = applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {}, made: MADE }));
+    if (!answer.ok) throw new Error(`refused: ${answer.fact}`);
+    const key = (answer.value as { key: string }).key;
+    expect(told.adopted).toEqual([[key, MADE]]);
+    expect(told.declined).toEqual([]);
+    expect(countOf(NOTE_TYPE)).toBe(1);
+  });
+
+  it("places nothing on a desk with no room: desk-full, in the room's words, and main lets the page go", () => {
+    const { applier, told, countOf } = live(0);
+    const answer = applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {}, made: MADE }));
+    expect(answer.ok).toBe(false);
+    if (answer.ok) return;
+    expect(answer.fact).toBe("desk-full");
+    expect(answer.text).toBe(
+      "The desk has no room for another live page right now. Close a page you no longer need, or carry on in this one.",
+    );
+    expect(told.declined).toEqual([MADE]);
+    expect(told.adopted).toEqual([]);
+    expect(countOf(NOTE_TYPE)).toBe(0);
+  });
+
+  it("lets the made page go when its pane is refused, and places none in a window with no live pages", () => {
+    const { applier, told, countOf } = live(3);
+    const refused = applier.apply(
+      intent({ op: "place", kind: NOTE_TYPE, props: { nonsense: 1 }, made: MADE }),
+    );
+    expect(refused.ok ? "answered" : refused.fact).toBe("bad-input");
+    expect(told.declined).toEqual([MADE]);
+    expect(countOf(NOTE_TYPE)).toBe(0);
+    const { factOf } = mount();
+    expect(factOf({ op: "place", kind: NOTE_TYPE, props: {}, made: MADE })).toBe("failed");
+  });
+
+  it("asks nothing of the live service for a place with no made page", () => {
+    const { applier, told } = live(0);
+    expect(applier.apply(intent({ op: "place", kind: NOTE_TYPE, props: {} })).ok).toBe(true);
+    expect(told).toEqual({ adopted: [], declined: [] });
+  });
+
+  it("takes a run's pane off the document by the one path: not undone by the person's undo; nothing on a read-only board", () => {
+    const { ce, place, countOf } = mount();
+    const removeMadePane = madePaneRemover(ce);
+    const pane = place();
+    expect(removeMadePane(pane.entity, "never-reached")).toBe(true);
+    expect(countOf(NOTE_TYPE)).toBe(0);
+    ce.docs.undo();
+    ce.world.sync();
+    expect(countOf(NOTE_TYPE)).toBe(0);
+    // gone already: nothing
+    expect(removeMadePane(pane.entity, "run-ended")).toBe(false);
+    const other = place();
+    Object.defineProperty(ce.docs.current(), "readOnly", { value: true });
+    expect(removeMadePane(other.entity, "run-ended")).toBe(false);
+  });
+});
+
+// EY-1 (1f, 2026-11-24) — THE BROWSER PANE ITSELF, as the pages room places it: `made`, its run (`agentRun`) and the
+// address the room asked the page to open (`url`, an http(s) one or about:blank). And the window's own defence: a kind
+// whose tools are a room's is placed by its room, with the page main made for the run. With no `made` it is refused, so
+// no door can put a pane on the desk that would open in the person's own signed-in profile.
+describe("EY-1 (1f): the browser pane a run's pages room places", () => {
+  const MADE = "surface_0123456789abcdef";
+  const RUN = "run_7a9c";
+  function paneBoard(room = 1, o: { readonly leaveMade?: boolean } = {}) {
+    const ce = createFieldEngine(
+      buildRegistry({
+        generation: -1,
+        staged: [],
+        bundled: [
+          {
+            manifest: pane.browserPaneManifest,
+            mod: pane.browserPaneRenderer,
+            objectBindings: objectBindingsFrom(
+              pane,
+              pane.browserPaneManifest.contributes?.objects ?? [],
+            ),
+          },
+        ],
+      }),
+    );
+    ce.docs.create();
+    ce.step(1);
+    const told = { adopted: [] as [string, string][], declined: [] as string[] };
+    const left: string[] = [];
+    const service = {
+      agentRoom: () => room,
+      adoptMade: (key: string, made: string) => told.adopted.push([key, made]),
+      declineMade: (made: string) => told.declined.push(made),
+      // a mount with the host's one leaving path (desk-live's leaveMade): the pane is handed to it
+      ...(o.leaveMade === true
+        ? {
+            leaveMade: (key: string) => {
+              left.push(key);
+              return true;
+            },
+          }
+        : {}),
+    };
+    const desk = {
+      engine: ce,
+      handle: {} as never,
+      generation: 1,
+      mount: 0,
+      theme: "light",
+      docId: "doc-1",
+      live: service as never,
+    } as MountedDesk;
+    const applier = createDeskApplier(desk, { onCanvas: () => true, handOn: () => false });
+    const panes = (): number => {
+      const answer = applier.apply(intent({ op: "list" }));
+      if (!answer.ok) throw new Error(`refused: ${answer.fact}: ${answer.text}`);
+      return (answer.value as { objects: { kind: string }[] }).objects.filter(
+        (object) => object.kind === pane.BROWSER_PANE_TYPE,
+      ).length;
+    };
+    const propsOf = (key: string): Record<string, unknown> =>
+      declaredProps(ce, ce.docs.current()?.store.resolve(key as never) as Entity);
+    return { ce, applier, told, panes, propsOf, left };
+  }
+
+  // A run's own close (2026-11-24): the pages room removes a run's pane when its run closes the page (browser_close).
+  // Destroyed at once, the pane cut its at-work mark's leaving short; it is handed to the host's one leaving path,
+  // which waits out the mark and never takes the pane from under the hand.
+  it("a run's own close of its pane hands the pane to the host's leaving, which waits out its mark: removed, with its inverse", () => {
+    const { applier, panes, left } = paneBoard(1, { leaveMade: true });
+    const placed = applier.apply(
+      intent({ op: "place", kind: pane.BROWSER_PANE_TYPE, props: { agentRun: RUN }, made: MADE }),
+    );
+    if (!placed.ok) throw new Error(`refused: ${placed.fact}: ${placed.text}`);
+    const key = (placed.value as { key: string }).key;
+    const removed = applier.apply(intent({ op: "remove", key }));
+    if (!removed.ok) throw new Error(`refused: ${removed.fact}: ${removed.text}`);
+    expect(removed.value).toEqual({ removed: true });
+    expect(removed.inverse).toMatchObject({ op: "remove", type: pane.BROWSER_PANE_TYPE });
+    expect(left).toEqual([key]);
+    // still on the desk until its mark has left: the leaver takes it off, not the applier
+    expect(panes()).toBe(1);
+  });
+
+  it("a mount with no leaving path removes a run's pane at once, as before", () => {
+    const { applier, panes, left } = paneBoard();
+    const placed = applier.apply(
+      intent({ op: "place", kind: pane.BROWSER_PANE_TYPE, props: { agentRun: RUN }, made: MADE }),
+    );
+    if (!placed.ok) throw new Error(`refused: ${placed.fact}: ${placed.text}`);
+    const key = (placed.value as { key: string }).key;
+    const removed = applier.apply(intent({ op: "remove", key }));
+    if (!removed.ok) throw new Error(`refused: ${removed.fact}: ${removed.text}`);
+    expect(removed.value).toEqual({ removed: true });
+    expect(left).toEqual([]);
+    expect(panes()).toBe(0);
+  });
+
+  it("places a made pane with its run and the address the room opened, and its first mint adopts the page", () => {
+    for (const url of ["about:blank", "https://example.com/start"]) {
+      const { applier, told, panes, propsOf } = paneBoard();
+      const answer = applier.apply(
+        intent({
+          op: "place",
+          kind: pane.BROWSER_PANE_TYPE,
+          props: { agentRun: RUN, url },
+          made: MADE,
+        }),
+      );
+      if (!answer.ok) throw new Error(`refused: ${answer.fact}: ${answer.text}`);
+      const key = (answer.value as { key: string }).key;
+      expect(told.adopted).toEqual([[key, MADE]]);
+      expect(told.declined).toEqual([]);
+      // PI-1 (2026-11-24): the address the room opened is the pane's runAddress, never its url
+      expect(propsOf(key)).toMatchObject({ agentRun: RUN, runAddress: url });
+      expect(propsOf(key)["url"]).toBe(pane.SAMPLE_URL);
+      expect(panes()).toBe(1);
+    }
+  });
+
+  // PI-1 (2026-11-24): the document never holds a run's address in `url`, the prop a reader that does not know the run
+  // (an older build, another device on one) turns into a live page in the person's signed-in profile
+  it("PI-1: keeps the address the room opened out of url: it is the pane's runAddress, and url is no page to any reader", () => {
+    for (const props of [
+      { agentRun: RUN, url: "https://example.com/start" },
+      { agentRun: RUN, runAddress: "https://example.com/start", url: "about:blank" },
+    ]) {
+      const { applier, told, propsOf } = paneBoard();
+      const answer = applier.apply(
+        intent({ op: "place", kind: pane.BROWSER_PANE_TYPE, props, made: MADE }),
+      );
+      if (!answer.ok) throw new Error(`refused: ${answer.fact}: ${answer.text}`);
+      const key = (answer.value as { key: string }).key;
+      expect(told.adopted).toEqual([[key, MADE]]);
+      const kept = propsOf(key);
+      expect(kept["agentRun"]).toBe(RUN);
+      expect(kept["runAddress"], JSON.stringify(props)).toBe("https://example.com/start");
+      // as main's own record reads a pane (isPageUrl): no page, so never a mint into the desk's profile
+      expect(pane.isPageUrl(String(kept["url"]), pane.SAMPLE_URL), JSON.stringify(props)).toBe(
+        false,
+      );
+    }
+  });
+
+  it("places a made pane with its run alone (the room before it sends an address): the pane's own default stands", () => {
+    const { applier, told, propsOf } = paneBoard();
+    const answer = applier.apply(
+      intent({ op: "place", kind: pane.BROWSER_PANE_TYPE, props: { agentRun: RUN }, made: MADE }),
+    );
+    if (!answer.ok) throw new Error(`refused: ${answer.fact}: ${answer.text}`);
+    const key = (answer.value as { key: string }).key;
+    expect(told.adopted).toEqual([[key, MADE]]);
+    expect(propsOf(key)["agentRun"]).toBe(RUN);
+  });
+
+  it("refuses a pane that names no made page, run or none, and places nothing: the room places it, never a bare place", () => {
+    const { applier, told, panes } = paneBoard();
+    for (const props of [{}, { url: "https://example.com" }, { agentRun: RUN }]) {
+      const answer = applier.apply(intent({ op: "place", kind: pane.BROWSER_PANE_TYPE, props }));
+      expect(answer.ok, JSON.stringify(props)).toBe(false);
+      if (answer.ok) continue;
+      expect(answer.fact).toBe("no-tool");
+      // the mount names no words here, so the kind is named by its type
+      expect(answer.text).toBe(
+        `${pane.BROWSER_PANE_TYPE} is placed by the pages room's own tools, with the page they open, never with canvas_place.`,
+      );
+    }
+    expect(told).toEqual({ adopted: [], declined: [] });
+    expect(panes()).toBe(0);
+  });
+
+  // L8 (2026-11-24, the first live run): the agent's pane landed on top of the person's own browser pane, covering part
+  // of it. An object an agent places lands in the free place nearest the middle of the person's view, never over an
+  // object already on the board (DESIGN.md §8, "pages an agent's run opens", as added 2026-11-24).
+  it("L8: lands in free space near the middle of the view, never over the person's own pane", () => {
+    const { ce, applier, propsOf } = paneBoard(3);
+    ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
+    ce.world.setResource(Camera, { x: 0, y: 0, zoom: 0.25, gesturing: false });
+    // the view is 4800 × 3200 in the world: its middle (2400, 1600). The person's own pane lies there
+    const size = { w: 1280, h: 800 };
+    const mine = ce.ops.spawnWidget(pane.BROWSER_PANE_TYPE, {
+      x: 2400 - size.w / 2,
+      y: 1600 - size.h / 2,
+      w: size.w,
+      h: size.h,
+      props: { url: "https://example.com/mine" },
+    });
+    ce.world.sync();
+    const rectOf = (e: Entity) => {
+      const at = ce.world.get(e, Position);
+      const across = ce.world.get(e, Size);
+      if (at === undefined || across === undefined) throw new Error("no place");
+      return { x: at.x, y: at.y, w: across.w, h: across.h };
+    };
+    const overlap = (a: ReturnType<typeof rectOf>, b: ReturnType<typeof rectOf>): boolean =>
+      a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+    const placed: ReturnType<typeof rectOf>[] = [rectOf(mine)];
+    for (let n = 0; n < 3; n += 1) {
+      const answer = applier.apply(
+        intent({
+          op: "place",
+          kind: pane.BROWSER_PANE_TYPE,
+          props: { agentRun: RUN, url: "about:blank" },
+          made: `surface_${String(n).repeat(16)}`,
+        }),
+      );
+      if (!answer.ok) throw new Error(`refused: ${answer.fact}: ${answer.text}`);
+      const key = (answer.value as { key: string; onScreen: boolean }).key;
+      expect(propsOf(key)["agentRun"]).toBe(RUN);
+      const e = ce.docs.current()?.store.resolve(key as never) as Entity;
+      const rect = rectOf(e);
+      // over nothing already there: the person's pane, nor the agent's earlier ones
+      for (const other of placed)
+        expect(overlap(rect, other), JSON.stringify([rect, other])).toBe(false);
+      // and near the middle: in the view the person is looking at
+      expect((answer.value as { onScreen: boolean }).onScreen).toBe(true);
+      placed.push(rect);
+    }
+  });
+
+  it("L8: lands at the middle of the view when nothing lies there", () => {
+    const { ce, applier } = paneBoard(3);
+    ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
+    ce.world.setResource(Camera, { x: 0, y: 0, zoom: 0.25, gesturing: false });
+    // the person's pane far off to one side
+    ce.ops.spawnWidget(pane.BROWSER_PANE_TYPE, { x: 0, y: 0, w: 640, h: 400, props: {} });
+    ce.world.sync();
+    const answer = applier.apply(
+      intent({
+        op: "place",
+        kind: pane.BROWSER_PANE_TYPE,
+        props: { agentRun: RUN, url: "about:blank" },
+        made: MADE,
+      }),
+    );
+    if (!answer.ok) throw new Error(`refused: ${answer.fact}: ${answer.text}`);
+    const e = ce.docs.current()?.store.resolve((answer.value as { key: string }).key as never);
+    const at = ce.world.get(e as Entity, Position);
+    const across = ce.world.get(e as Entity, Size);
+    expect((at?.x ?? 0) + (across?.w ?? 0) / 2).toBeCloseTo(2400, 2);
+    expect((at?.y ?? 0) + (across?.h ?? 0) / 2).toBeCloseTo(1600, 2);
+  });
+
+  it("declines a made pane on a desk with no room: desk-full, nothing placed", () => {
+    const { applier, told, panes } = paneBoard(0);
+    const answer = applier.apply(
+      intent({
+        op: "place",
+        kind: pane.BROWSER_PANE_TYPE,
+        props: { agentRun: RUN, url: "about:blank" },
+        made: MADE,
+      }),
+    );
+    expect(answer.ok ? "answered" : answer.fact).toBe("desk-full");
+    expect(told.declined).toEqual([MADE]);
+    expect(panes()).toBe(0);
   });
 });

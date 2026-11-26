@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "packageManager": "pnpm@11.13.1",
   "engines": {
-    "node": ">=22"
+    "node": ">=24"
   },
   "scripts": {
     "dev": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs",

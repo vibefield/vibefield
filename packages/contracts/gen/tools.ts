@@ -1697,5 +1697,1927 @@ export const SERVED_TOOLS = [
       ],
       "additionalProperties": true
     }
+  },
+  {
+    "name": "browser_tools_profiles",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "self",
+    "slice": "EY-2",
+    "description": "List the browser tools you hold, and how to reach the browser's other commands from your pane. VibeField answers it, and it touches no page.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^browser_[a-z_]{1,48}$"
+          },
+          "maxItems": 64
+        },
+        "command": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "rows"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_open",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Open a page in a browser pane on the user's VibeField desk, not another browser on their computer. With no page, it opens your own, without the user's sign-ins. A url moves a page you have; a handed page stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        }
+      },
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_read",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Read a page you opened or the user handed you, as text. While the user holds the page, it answers held. A page that has not settled answers loading: read it again.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "filter": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "outline": {
+          "type": "boolean"
+        },
+        "raw": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_snapshot",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Read a page you opened or the user handed you, as its parts, each with a ref you can act on. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "compact": {
+          "type": "boolean"
+        },
+        "delta": {
+          "type": "boolean"
+        },
+        "depth": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 256
+        },
+        "full": {
+          "type": "boolean"
+        },
+        "includeUrls": {
+          "type": "boolean"
+        },
+        "interactive": {
+          "type": "boolean"
+        },
+        "within": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_back",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Go back one step in a page's history. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_forward",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Go forward one step in a page's history. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_reload",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Reload a page you opened or the user handed you. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_click",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Click a part of a page by the ref a snapshot gave you. A ref the page no longer has answers stale-ref: take a new snapshot. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "page",
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_fill",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Clear a field on a page and fill it with your text, by its ref. A ref the page no longer has answers stale-ref. A field only the user may fill, such as a password, answers needs-you. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 16384
+        }
+      },
+      "required": [
+        "page",
+        "ref",
+        "text"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_type",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Type text into a part of a page by its ref, after what it already holds. A ref the page no longer has answers stale-ref. A field only the user may fill, such as a password, answers needs-you. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "delayMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 200
+        }
+      },
+      "required": [
+        "page",
+        "ref",
+        "text"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_press",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Press a key on a page, where its focus is. A field only the user may fill, such as a password, answers needs-you. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "required": [
+        "page",
+        "key"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_check",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Check a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "page",
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_uncheck",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Uncheck a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "page",
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_select",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Pick one or more options in a list on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "maxLength": 2000
+          },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "page",
+        "ref",
+        "values"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_scroll",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Scroll a page, or one part of it by its ref. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "up",
+            "down",
+            "left",
+            "right"
+          ]
+        },
+        "amount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_wait_ms",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Wait a set number of milliseconds on a page, within a bound, before your next call. A page that closed answers gone.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 25000
+        }
+      },
+      "required": [
+        "page",
+        "ms"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_wait_for_selector",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Wait until a part of a page appears, within a bound. Past the bound it answers loading: read the page again.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "waitTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25000
+        }
+      },
+      "required": [
+        "page",
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_wait_for_text",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Wait until some text appears on a page, within a bound. Past the bound it answers loading: read the page again.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "waitTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25000
+        }
+      },
+      "required": [
+        "page",
+        "text"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_wait_for_load",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Wait until a page has loaded, within a bound. Past the bound it answers loading: read the page again.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "load",
+            "domcontentloaded",
+            "networkidle"
+          ]
+        },
+        "waitTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 25000
+        }
+      },
+      "required": [
+        "page",
+        "state"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_screenshot",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Take a still of a page, or of one part of it. It is saved as a file and answered as its path, which you can read. With ifChanged, a page that has not changed answers unchanged, with no file. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "annotate": {
+          "type": "boolean"
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "png",
+            "jpeg"
+          ]
+        },
+        "fullPage": {
+          "type": "boolean"
+        },
+        "ifChanged": {
+          "type": "boolean"
+        },
+        "quality": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "file": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_get_text",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Read the visible text of one part of a page, by its ref. A ref the page no longer has answers stale-ref. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        }
+      },
+      "required": [
+        "page",
+        "ref"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_get_url",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Read the address a page is at now. A page that closed answers gone.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_get_title",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Read a page's title. A page that closed answers gone.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_tab_new",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "device",
+    "slice": "EY-2",
+    "description": "Open a new page of your own, without the user's sign-ins, in a pane the window places on the desk. When the desk parks one of your pages to stay within its cap, that page answers parked.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": false,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8192
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        }
+      },
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "minItems": 1,
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page",
+        "made"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_tab_list",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "self",
+    "slice": "EY-2",
+    "description": "List the pages you have: those you opened and those the user handed you.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "pages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "title": {
+                "type": "string",
+                "maxLength": 512
+              },
+              "handed": {
+                "type": "boolean"
+              },
+              "current": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "handed",
+              "current"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "pages"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_tab_switch",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Answer which of your pages is current. Each call on a page goes to that page first, so a switch sets nothing for later calls. A page that closed answers gone: list your pages again.",
+    "annotations": {
+      "readOnlyHint": true,
+      "destructiveHint": false,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {}
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_tab_close",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Close one of your own pages. A page the user handed you goes back to them instead, and its pane stays open. A page that already closed answers gone: list your pages again.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+          },
+          "maxItems": 64
+        },
+        "returned": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "closed",
+        "returned"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_eval",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "object",
+    "slice": "EY-2",
+    "description": "Run your own script on a page and read what it returns. On a page with the user's sign-ins it runs only if the user allowed your scripts there. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": false,
+      "openWorldHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "script": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16384
+        }
+      },
+      "required": [
+        "page",
+        "script"
+      ],
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "page": {
+          "type": "string",
+          "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+        },
+        "result": {},
+        "made": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "page": {
+                "type": "string",
+                "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+              },
+              "url": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 8192
+              },
+              "by": {
+                "type": "string",
+                "enum": [
+                  "open",
+                  "tab",
+                  "popup"
+                ]
+              }
+            },
+            "required": [
+              "page",
+              "url",
+              "by"
+            ],
+            "additionalProperties": true
+          },
+          "maxItems": 5
+        }
+      },
+      "required": [
+        "page"
+      ],
+      "additionalProperties": true
+    }
+  },
+  {
+    "name": "browser_close",
+    "family": "pages",
+    "category": "desk",
+    "audience": "agent",
+    "scope": "self",
+    "slice": "EY-2",
+    "description": "Close the pages you opened. Pages the user handed you go back to them, their panes left open. You can open a page again later.",
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "idempotentHint": true,
+      "openWorldHint": false
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": true
+    },
+    "outputSchema": {
+      "type": "object",
+      "properties": {
+        "closed": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+          },
+          "maxItems": 64
+        },
+        "returned": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^vf:obj\\/[a-z0-9]{8}$"
+          },
+          "maxItems": 64
+        }
+      },
+      "required": [
+        "closed",
+        "returned"
+      ],
+      "additionalProperties": true
+    }
   }
 ] as const;

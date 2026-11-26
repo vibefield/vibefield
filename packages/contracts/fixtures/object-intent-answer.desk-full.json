@@ -1,0 +1,7 @@
+{
+  "//": "EY-1 (1f) — the desk declines to place a page an agent's run made, having no room for it: the window answers fieldd's place intent with the fact desk-full, the same word main's make refusal says (never busy, which is an object at work), and fieldd's plane hands it to the model as itself.",
+  "intent": "i-01J8Z3K9",
+  "ok": false,
+  "fact": "desk-full",
+  "text": "The desk has no room for another live page. Close one, then try again."
+}

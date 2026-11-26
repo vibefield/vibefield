@@ -189,6 +189,11 @@ export interface SurfaceHandle<TFrame extends LiveSurfaceClosableFrame> {
    * settings). Same soft-fail contract. Optional, as `faviconArrivals` is: a handle that is not the pool's own need not
    * carry it (a face whose handle has none offers no act). */
   device?(command: LiveSurfaceDeviceCommandV1): boolean;
+  /** EY-1 (1g, 2026-11-19) — THIS holder's hold on a browser page: the person picked it up (`true`) or put it down
+   * (`false`). The pool folds its holders (any holding) and sends an edge alone, before any demand it sends with it; one
+   * kept while the lane is not live is heard by the next attachment before its first demand. False when not live or
+   * released. Optional, as `device` is: a handle that is not the pool's own need not carry it. */
+  hold?(held: boolean): boolean;
   /** Mint fresh and re-attach after a loss. A no-op in any other state. */
   retry(): void;
   /** Drop this holder's claim. Idempotent. */
@@ -241,6 +246,11 @@ export interface SurfacePool<TFrame extends LiveSurfaceClosableFrame> {
   acquire(key: string, opts: SurfaceAcquireOptions): SurfaceHandle<TFrame>;
   snapshot(): SurfacePoolSnapshot;
   dispose(): void;
+  /** EY-1 (1f, 2026-11-19): the desk's room for an agent's pages, said on the WINDOW's control port (`room`). Absent on
+   * a pool with no window's port (a test's): nothing is said. */
+  sayRoom?(agentPages: number): void;
+  /** EY-1 (1f): the desk will not place a page main made for a run (`made-declined`): main lets it go at once. */
+  declineMade?(made: string): void;
 }
 
 interface PoolEntry<TFrame extends LiveSurfaceClosableFrame> {
@@ -263,6 +273,8 @@ interface PoolEntry<TFrame extends LiveSurfaceClosableFrame> {
   nextRevision: number;
   emittedIntent: SurfaceDemandIntent | null;
   emittedDemand: LiveSurfaceDemandV1 | null;
+  /** EY-1 (1g): what the installed attachment last heard of the person's hold. False on a fresh one, which heard none. */
+  emittedHeld: boolean;
   mints: number;
   failure: SurfacePoolFailure | null;
   error: Error | null;
@@ -275,6 +287,7 @@ function toError(value: unknown): Error {
 class PoolHandle<TFrame extends LiveSurfaceClosableFrame> implements SurfaceHandle<TFrame> {
   readonly #listeners = new Set<(state: SurfaceHandleState<TFrame>) => void>();
   #released = false;
+  #held = false;
 
   constructor(
     private readonly pool: SurfaceAttachmentPool<TFrame>,
@@ -288,6 +301,11 @@ class PoolHandle<TFrame extends LiveSurfaceClosableFrame> implements SurfaceHand
 
   get released(): boolean {
     return this.#released;
+  }
+
+  /** EY-1 (1g): this holder's hold, kept across a loss; a released holder holds nothing. */
+  get held(): boolean {
+    return this.#held && !this.#released;
   }
 
   /**
@@ -355,6 +373,12 @@ class PoolHandle<TFrame extends LiveSurfaceClosableFrame> implements SurfaceHand
     const attachment = this.entry.attachment;
     if (this.entry.status !== "live" || attachment === null || attachment.closed) return false;
     return attachment.sendDevice(command);
+  }
+
+  hold(held: boolean): boolean {
+    if (this.#released) return false;
+    this.#held = held;
+    return this.pool.holderHoldChanged(this.entry);
   }
 
   onState(listener: (state: SurfaceHandleState<TFrame>) => void): () => void {
@@ -468,6 +492,7 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
         nextRevision: 0,
         emittedIntent: null,
         emittedDemand: null,
+        emittedHeld: false,
         mints: 0,
         failure: null,
         error: null,
@@ -482,6 +507,22 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
     if (!entry.attaching && entry.attachment === null) this.#startAttach(entry);
     else this.#projectDemand(entry);
     return handle;
+  }
+
+  sayRoom(agentPages: number): void {
+    if (this.#disposed) return;
+    void this.#transport.then(
+      (transport) => transport.sendRoom(agentPages),
+      () => false,
+    );
+  }
+
+  declineMade(made: string): void {
+    if (this.#disposed) return;
+    void this.#transport.then(
+      (transport) => transport.declineMade(made),
+      () => false,
+    );
   }
 
   snapshot(): SurfacePoolSnapshot {
@@ -542,9 +583,17 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
     this.#projectDemand(entry);
   }
 
+  holderHoldChanged(entry: PoolEntry<TFrame>): boolean {
+    if (this.#disposed) return false;
+    this.#reconcile(entry);
+    return this.#projectHold(entry);
+  }
+
   holderReleased(entry: PoolEntry<TFrame>): void {
     if (this.#disposed) return;
     this.#reconcile(entry);
+    // the last holder holding lets go of the page: put down, ahead of the demand that follows
+    this.#projectHold(entry);
     this.#projectDemand(entry);
     if (entry.holders.size > 0) return;
     // Nothing to keep warm for a key with no attachment and no attach running.
@@ -638,6 +687,8 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
     // A fresh attachment has heard no demand, so the fold must be re-emitted.
     entry.emittedIntent = null;
     entry.emittedDemand = null;
+    // …and no hold (EY-1, 1g): one a holder kept while the lane was down is heard again below, before the first demand.
+    entry.emittedHeld = false;
     // Registered last: `onSummary` calls back synchronously, and the entry must
     // already read as live before the pool can be asked to reconcile it. A
     // summary that did NOT close the attachment still moved state the holders
@@ -647,6 +698,7 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
       this.#reconcile(entry);
       if (entry.attachment === attachment && !attachment.closed) this.#notify(entry);
     });
+    this.#projectHold(entry);
     this.#projectDemand(entry);
     if (entry.holders.size === 0) this.#armGrace(entry);
     this.#notify(entry);
@@ -802,6 +854,23 @@ class SurfaceAttachmentPool<TFrame extends LiveSurfaceClosableFrame>
     }
     entry.emittedIntent = folded;
     entry.emittedDemand = demand;
+  }
+
+  /**
+   * EY-1 (1g, 2026-11-19) — the person's hold, folded over the holders (any holding), sent on an EDGE alone: true when
+   * the attachment carries the fold now, false with none live to carry it (the holders keep theirs for the next one).
+   */
+  #projectHold(entry: PoolEntry<TFrame>): boolean {
+    const attachment = entry.attachment;
+    if (entry.status !== "live" || attachment === null || attachment.closed) return false;
+    const held = [...entry.holders].some((handle) => handle.held);
+    if (held === entry.emittedHeld) return true;
+    if (!attachment.sendHold(held)) {
+      this.#reconcile(entry);
+      return false;
+    }
+    entry.emittedHeld = held;
+    return true;
   }
 
   #notify(entry: PoolEntry<TFrame>): void {

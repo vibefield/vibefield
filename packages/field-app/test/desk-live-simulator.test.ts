@@ -335,6 +335,14 @@ describe("PT-S2 — a bound Simulator's lane on the desk's LIVE service", () => 
     expect(handle.demands.at(-1)).toEqual(PHONE_PAUSED);
   });
 
+  it("EY-1: a phone's lane tells no hold — a pick-up and a put-down are its demand alone (main takes a hold from a page's attachment only)", () => {
+    const { face, handle } = phone();
+    face.demand(PHONE_HELD);
+    face.demand(PHONE_REST);
+    expect(handle.holds).toEqual([]);
+    expect(handle.order.some((sent) => sent.startsWith("hold"))).toBe(false);
+  });
+
   it("R2: says each of main's conditions as the SDK's word, the device's name with it — read by the kind's own reader — each move an arrival; streaming is `live` where its frames flow; a crop fallen back (R6) is still `live`, a fact on the row", () => {
     const { face, handle, presentation, arrived, live } = phone({}, null);
     // nothing said yet (no facts): no words, the coarse state starting

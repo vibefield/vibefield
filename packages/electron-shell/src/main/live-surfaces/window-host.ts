@@ -38,6 +38,24 @@ export type LiveSurfaceTextureSinkFactory = (
   budget: LiveSurfaceTextureTransferBudget,
 ) => LiveSurfaceTextureFrameSink;
 
+/** EY-1 (1f): what a window's desk says to main over its control session, not an attachment's. */
+export interface LiveSurfaceWindowDesk {
+  /** the desk's room for agent pages (`room`) */
+  readonly onRoom?: (agentPages: number) => void;
+  /** the desk declines a made page at its adopt (`made-declined`) */
+  readonly onMadeDeclined?: (made: string) => void;
+}
+
+/** EY-1 (1f, 2026-11-19): the product windows that stand now, by their contents' ids: every window
+ * with a live-surface host whose window is not destroyed (a run's page may land on its desk). */
+export function liveSurfaceProductWindows(
+  hosts: Iterable<Pick<LiveSurfaceWindowHost, "window">>,
+): number[] {
+  const ids: number[] = [];
+  for (const host of hosts) if (!host.window.isDestroyed()) ids.push(host.window.webContents.id);
+  return ids;
+}
+
 /** Owns generation ports and ticket targeting for one shell WebContents. */
 export class LiveSurfaceWindowHost {
   readonly #webContents: BrowserWindow["webContents"];
@@ -56,6 +74,8 @@ export class LiveSurfaceWindowHost {
     readonly logger?: Logger,
     readonly createTextureSink?: LiveSurfaceTextureSinkFactory,
     textureBudgets?: Map<string, LiveSurfaceTextureTransferBudget>,
+    /** EY-1 (1f): where this window's desk word goes, each renderer generation's alike */
+    readonly desk?: LiveSurfaceWindowDesk,
   ) {
     this.#webContents = window.webContents;
     this.#textureBudgets = textureBudgets ?? new Map();
@@ -64,6 +84,16 @@ export class LiveSurfaceWindowHost {
 
   get rendererGeneration(): number {
     return this.#generation;
+  }
+
+  /** EY-1 (C4, 2026-11-24): whether the document `rendererGeneration` names stands now: its load ended, and nothing
+   * has replaced it, closed its ports or ended its process since. False before the window's first load ends (the
+   * number is 0), and from a navigation's start until its load's end (the number is still the old document's).
+   * Custody reads it to know which document a pane placed now lands in. */
+  get rendererLive(): boolean {
+    return (
+      !this.#disposed && this.#generation > 0 && this.#session !== null && !this.#session.closed
+    );
   }
 
   async whenDrained(): Promise<void> {
@@ -170,6 +200,8 @@ export class LiveSurfaceWindowHost {
           { webContentsId: this.#webContents.id, generation: this.#generation, reason },
         );
       },
+      onRoom: (agentPages) => this.desk?.onRoom?.(agentPages),
+      onMadeDeclined: (made) => this.desk?.onMadeDeclined?.(made),
       onClosed: () => {
         this.trackDrain(session.whenDrained());
         if (this.#session !== session) return;

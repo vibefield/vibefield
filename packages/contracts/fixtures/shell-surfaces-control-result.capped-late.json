@@ -1,0 +1,7 @@
+{
+  "//": "EY-1 (1f) — a late decline, reported on the run's NEXT answer: after the previous answer went, the desk declined a pop-up that call had made, having no room. This read, the run's next call, carries it: the pane in `closed` (main disposed of it) and its count in `capped`.",
+  "status": "done",
+  "output": { "snapshot": "- heading \"Example Domain\" [ref=e1]" },
+  "closed": ["surface_fedcba9876543210"],
+  "capped": { "deskFull": 1 }
+}

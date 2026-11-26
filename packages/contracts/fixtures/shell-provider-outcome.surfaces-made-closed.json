@@ -1,0 +1,11 @@
+{
+  "error": {
+    "kind": "PRECONDITION_FAILED",
+    "message": "the desktop operation failed",
+    "retryable": false,
+    "details": {
+      "service": "surfaces",
+      "state": "made-closed"
+    }
+  }
+}

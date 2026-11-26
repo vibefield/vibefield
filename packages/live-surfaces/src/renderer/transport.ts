@@ -1,9 +1,11 @@
 import {
+  LIVE_PAGES_MAX_V1,
   type LiveSurfaceAttachTicketV1,
   LiveSurfaceDemandV1,
   LiveSurfaceDeviceCommandV1,
   LiveSurfaceFrameEnvelopeV1,
   LiveSurfaceHostControlMessageV1,
+  LiveSurfaceIdV1,
   LiveSurfaceInputEventV1,
   LiveSurfaceNavigationCommandV1,
   type LiveSurfacePortBootstrapV1,
@@ -221,6 +223,26 @@ export class LiveSurfaceRendererAttachment<
     return true;
   }
 
+  /**
+   * EY-1 (1g, 2026-11-19; EY-L2, "your hand wins") — the person picked this page up (`true`) or put it down
+   * (`false`): one message for both edges, sent before the demand that follows the pick-up, so main closes an agent's
+   * act window first. main takes it from a browser page's attachment granted `pointer` alone. Same soft-fail contract.
+   */
+  sendHold(held: boolean): boolean {
+    if (this.#closed) return false;
+    try {
+      this.sendControl({
+        v: 1,
+        type: "hold",
+        attachmentId: this.attachmentId,
+        held,
+      });
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
   onSummary(listener: (summary: LiveSurfaceRuntimeSummaryV1) => void): () => void {
     if (this.#closed) {
       try {
@@ -392,6 +414,39 @@ export class LiveSurfaceRendererTransport<
       throw error;
     }
     return response;
+  }
+
+  /**
+   * EY-1 (1f, 2026-11-19) — the WINDOW's word on its own control port, never an attachment's: how many more pages an
+   * agent's run could have alive on this window's desk without resting one of the person's (`room`). main keeps the
+   * last count as an early hint; the desk's adopt decides. A count outside the contract's bounds is brought inside it
+   * (main fails a generation that sends a malformed message). False, never a throw, once closed.
+   */
+  sendRoom(agentPages: number): boolean {
+    if (this.#closed) return false;
+    const room = Number.isFinite(agentPages)
+      ? Math.min(LIVE_PAGES_MAX_V1, Math.max(0, Math.floor(agentPages)))
+      : 0;
+    try {
+      this.postControl({ v: 1, type: "room", agentPages: room });
+    } catch {
+      return false;
+    }
+    return true;
+  }
+
+  /**
+   * EY-1 (1f) — the desk will not place a page main made for a run (`made-declined`, no room): main lets it go at once.
+   * An id that is not a surface's is not sent (false). False, never a throw, once closed.
+   */
+  declineMade(made: string): boolean {
+    if (this.#closed || !LiveSurfaceIdV1.safeParse(made).success) return false;
+    try {
+      this.postControl({ v: 1, type: "made-declined", made, reason: "no-room" });
+    } catch {
+      return false;
+    }
+    return true;
   }
 
   dispose(reason = errorFromHost("live surface renderer transport closed")): void {

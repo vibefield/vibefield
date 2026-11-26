@@ -76,6 +76,16 @@ export interface GuardedBrowserSurfaceWebContents {
 }
 
 /**
+ * EY-1 (1f, 2026-11-19) — a page's run's pop-up policy, as the guard asks it: `decide` at once, and `open` with the
+ * address of a pop-up it allowed, which the run opens as a new pane of its own. Never a window here: Electron is always
+ * answered deny (measured: a pop-up's own window does not paint).
+ */
+export interface BrowserSurfacePopups {
+  decide(url: string): "allow" | "deny";
+  open(url: string): void;
+}
+
+/**
  * PT-5a — what a page asked for and was REFUSED, as its guards say it (ruling 7: answered at once, never by a native
  * window): a pop-up (its address: the pane itself goes there), a page that asked to stay on its unload, HTTP auth, a
  * download — and (BP-D1, thinking-browser-profile.md, 2026-10-26) a Chromium permission it REQUESTED, denied (its word:
@@ -209,10 +219,26 @@ export function installGuardedBrowserSurfaceSession(target: BrowserSurfaceSessio
 export function installGuardedBrowserSurfaceContents(
   contents: GuardedBrowserSurfaceWebContents,
   refused: (what: BrowserSurfaceGuardRefusal, detail?: string) => void = () => undefined,
+  // EY-1 (1f): the page's run's pop-up policy, read at each pop-up; none, today's answer
+  popups: () => BrowserSurfacePopups | null = () => null,
+  // EY-1 (1f): told when the address rule refuses a pop-up the policy allowed: the policy asks the
+  // same rule first, so this is the two having diverged, and the caller says it loudly
+  beltRefused: () => void = () => undefined,
 ): void {
   paneContents.add(contents);
   contents.setWindowOpenHandler((details) => {
-    refused("popup", details?.url);
+    const url = details?.url;
+    const policy = popups();
+    if (policy === null) {
+      refused("popup", url);
+      return { action: "deny" };
+    }
+    // EY-1 (1f): under a policy, a pop-up is the run's or nothing, never today's answer. The policy decides first
+    // (and counts what it refuses); the address rule then stands between its allow and the run's new pane.
+    if (typeof url === "string" && policy.decide(url) === "allow") {
+      if (isAllowedBrowserTopLevelUrl(url)) policy.open(url);
+      else beltRefused();
+    }
     return { action: "deny" };
   });
   const guardNavigation = (event: { preventDefault(): void }, url: string): void => {

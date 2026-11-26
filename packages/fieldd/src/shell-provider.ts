@@ -291,7 +291,8 @@ export class ShellProviderBroker {
     this.detach(parsed.data.callId, call);
     if (parsed.data.outcome.error !== undefined) {
       const error = parsed.data.outcome.error;
-      call.reject(new RpcCallError(error.kind, error.message, error.retryable));
+      // EY-1: what main says of a service's state (a pages UNAVAILABLE's) reaches the room that asked
+      call.reject(new RpcCallError(error.kind, error.message, error.retryable, error.details));
       return { accepted: true };
     }
     const output = call.output.safeParse(parsed.data.outcome.result);

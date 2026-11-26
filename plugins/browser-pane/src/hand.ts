@@ -31,7 +31,7 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { resolveAddress } from "./address";
 import { mountAddressEditor } from "./address-editor";
-import { urlCell } from "./device";
+import { propsCell, urlCell } from "./device";
 import { mountDeviceMenu } from "./device-menu";
 import { SAMPLE_URL } from "./ids";
 import { bandLayout, type HeldPart } from "./law";
@@ -110,11 +110,28 @@ export const HELD_QUIET_MS = 250;
 export interface PaneHandOptions {
   readonly cell?: () => ReturnType<typeof urlCell>;
   readonly now?: () => number;
+  /** PI-1 (2026-11-24): whether pane `e` names a run (its `agentRun`): its address is written to `runAddress`, never to
+   * `url`. By default read from the pane type's props cell; what cannot be read there is read as a run's. */
+  readonly run?: (e: Entity) => boolean;
 }
 
 export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): PaneHand {
   const cellOf = opts.cell ?? urlCell;
   const now = opts.now ?? (() => performance.now());
+  const isRun =
+    opts.run ??
+    ((e: Entity): boolean => {
+      // PI-1 (2026-11-24): "cannot tell" (no props cell, no `agentRun` in it) is a run's: its moves go to `runAddress`,
+      // which no reader opens for a person's pane, never to `url`. Only a definite "" names no run.
+      const cell = propsCell();
+      const props =
+        cell === undefined
+          ? undefined
+          : (h.world.get(e, cell) as Readonly<Record<string, unknown>> | undefined);
+      return props?.["agentRun"] !== "";
+    });
+  /** PI-1 (2026-11-24): the prop pane `e`'s address lives in: a run's pane's `runAddress`, a person's pane's `url`. */
+  const addressProp = (e: Entity): "runAddress" | "url" => (isRun(e) ? "runAddress" : "url");
   let dom: ObjectDomHost | undefined;
   let deviceMenu: ReturnType<typeof mountDeviceMenu> | undefined;
   let addressEditor: ReturnType<typeof mountAddressEditor> | undefined;
@@ -180,8 +197,10 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
     if (lease === addressLease) {
       const cell = cellOf();
       const saved =
-        cell === undefined ? undefined : (h.world.get(e, cell) as { url?: string } | undefined);
-      seed = local()?.page(e)?.info.address ?? saved?.url ?? "";
+        cell === undefined
+          ? undefined
+          : (h.world.get(e, cell) as { url?: string; runAddress?: string } | undefined);
+      seed = local()?.page(e)?.info.address ?? saved?.[addressProp(e)] ?? "";
     }
     dom.editor.lend(lease, lease === addressLease ? seed.length : undefined);
     if (lease === addressLease) {
@@ -206,16 +225,18 @@ export function createPaneHand(h: KindDriverHost, opts: PaneHandOptions = {}): P
   };
 
   /** The pane's `url` prop, written NOT undoably (ruling 9): a page's navigation is not a desk edit — into the url's own cell, so
-   * an undo of the desk's edits to the pane's other props never re-asserts the address it replaced. */
+   * an undo of the desk's edits to the pane's other props never re-asserts the address it replaced. PI-1 (2026-11-24): a run's
+   * pane's address goes to its `runAddress` in the same cell, and its `url` is never written. */
   const write = (e: Entity, url: string): void => {
     const cell = cellOf();
     const session = writable(h.docs);
     if (cell === undefined || session === undefined) return;
     const props = (h.world.get(e, cell) ?? {}) as Readonly<Record<string, unknown>>;
-    if (props.url === url) return;
+    const prop = addressProp(e);
+    if (props[prop] === url) return;
     session.store.transaction(
       (tx) => {
-        tx.edit(e).set(cell, { ...props, url });
+        tx.edit(e).set(cell, { ...props, [prop]: url });
       },
       { undoable: false },
     );

@@ -8,7 +8,9 @@ import {
   SIGNATURE_SUFFIX,
   StagedReleaseIdentity,
   TRUST_ROOT_FILE,
+  VIBEFIELD_DEV_PAGES_ENGINE_ENV,
 } from "@vibefield/contracts";
+import { PAGES_ENGINE_RECORD } from "@vibefield/contracts/pages-record";
 import {
   archCompatible,
   EXECUTABLE_HEADER_BYTES,
@@ -87,6 +89,16 @@ export interface DesktopResources {
    * fieldd's index says in a person's words that this copy has no agent
    * history; only a PRESENT one is asserted, for its architecture. */
   readonly rosettadPath: string | null;
+  /** EY-1 1b (2026-11-19) — the pages engine, the program main's broker starts. Packaged: flat under bin/ beside
+   * fieldd on macOS, where the stager puts it; elsewhere null. Development: the dev runner's own copy of the pinned
+   * binary (`takeDevelopmentPagesEngine`), else null. Never asserted at boot: an absent engine is the broker's honest
+   * `not-installed`, never a refusal to start; a value that is not absolute is refused at load in development alone,
+   * by design, as `VIBEFIELD_DEV_REPO_ROOT` is (`takeDevelopmentPagesEngine`).
+   *
+   * The release binary's stream port (2026-11-24): the engine is the pin's SOURCE BUILD alone, so the path is null on
+   * every host the record names no source build for (`pagesSourceBuildRecorded`), in development and in a package,
+   * whatever main was handed. The broker's identity check then holds the file at the path to that build. */
+  readonly pagesEnginePath: string | null;
   /** plugin discovery roots — absolute, never derived by the daemon itself */
   readonly pluginRoots: {
     readonly bundled: readonly string[];
@@ -177,6 +189,39 @@ export function resolveDevelopmentRepoRoot(appPath: string, injected?: string): 
   return resolve(injected);
 }
 
+/** EY-1 1b (2026-11-19) — the pages engine's development copy, as the dev runner hands it to main (contracts'
+ * `VIBEFIELD_DEV_PAGES_ENGINE_ENV`). Read ONCE and deleted from `env` in the same step. Main takes it at module load,
+ * before Electron is ready, so no helper Electron starts and nothing main spawns (fieldd, and through it every agent's
+ * terminal) inherits where the engine sits. Unset or empty: null, and the broker answers `not-installed`. A value
+ * that is not absolute is refused at load, by design, as `VIBEFIELD_DEV_REPO_ROOT` is: main never resolves the
+ * engine's place against its own working folder, and the variable is deleted before it is judged, so even a refused
+ * value reaches nothing main starts. A packaged app drops it unread instead (`dropDevelopmentPagesEngine`): no
+ * environment moves a packaged engine. */
+export function takeDevelopmentPagesEngine(env: NodeJS.ProcessEnv): string | null {
+  const value = env[VIBEFIELD_DEV_PAGES_ENGINE_ENV];
+  delete env[VIBEFIELD_DEV_PAGES_ENGINE_ENV];
+  if (value === undefined || value === "") return null;
+  if (!isAbsolute(value)) {
+    throw new Error(`${VIBEFIELD_DEV_PAGES_ENGINE_ENV} must be an absolute path`);
+  }
+  return value;
+}
+
+/** EY-1 1b (2026-11-19) — a packaged app's side of the same variable: deleted from `env` unread and never judged, so a
+ * packaged app launched from a shell that exports it passes it to nothing it starts. Always null: no environment
+ * moves a packaged engine. */
+export function dropDevelopmentPagesEngine(env: NodeJS.ProcessEnv): null {
+  delete env[VIBEFIELD_DEV_PAGES_ENGINE_ENV];
+  return null;
+}
+
+/** The release binary's stream port (2026-11-24) — whether the pin's record names a SOURCE BUILD for a host
+ * (`<platform>-<arch>`, the record's key). It is the only engine main starts: a host without one has no engine, and
+ * pages answer `not-installed` there. The record's release binaries (`binarySha256`) name no engine. */
+export function pagesSourceBuildRecorded(platform: string, arch: string): boolean {
+  return Object.hasOwn(PAGES_ENGINE_RECORD.sourceBuild.binarySha256, `${platform}-${arch}`);
+}
+
 /** Development: the repo IS the layout. Electron runs the fieldd bundle in node
  * mode, and field-native comes from the cargo debug profile — both explicitly
  * forbidden in a package, which is why they live only on this side. */
@@ -184,8 +229,13 @@ export function resolveDevelopmentResources(opts: {
   repoRoot: string;
   electronExecPath: string;
   platform?: string;
+  /** the host's architecture, for the pages engine's source build alone (`pagesSourceBuildRecorded`) */
+  arch?: string;
+  /** EY-1 1b — the dev runner's copy of the pages engine, as `takeDevelopmentPagesEngine` read it */
+  pagesEnginePath?: string | null;
 }): DesktopResources {
   const platform = opts.platform ?? process.platform;
+  const arch = opts.arch ?? process.arch;
   return {
     packaged: false,
     developmentDockIconPath: join(
@@ -256,6 +306,10 @@ export function resolveDevelopmentResources(opts: {
       platform,
     ),
     rosettadPath: null,
+    // the dev runner's copy of the source build, and nothing on a host the record names none for
+    pagesEnginePath: pagesSourceBuildRecorded(platform, arch)
+      ? (opts.pagesEnginePath ?? null)
+      : null,
     pluginRoots: {
       bundled: [join(opts.repoRoot, "plugins")],
       devLinked: [join(opts.repoRoot, "examples", "plugins")],
@@ -263,6 +317,13 @@ export function resolveDevelopmentResources(opts: {
     identity: null,
     tray: trayLayout(join(opts.repoRoot, "apps", "desktop", "packaging", "tray")),
   };
+}
+
+/** EY-1 1b (2026-11-20) — the pages engine's file name in a package's `bin/`: the record's package name (contracts'
+ * `PAGES_ENGINE_RECORD`), `.exe` on Windows. scripts/pages-pin.mjs's `pagesEngineFileName` computes the same name for
+ * the stager over the same record, and a test holds the two equal, so main and the stage never name two files. */
+export function packagedPagesEngineFile(platform: string): string {
+  return exe(PAGES_ENGINE_RECORD.package, platform);
 }
 
 /** Packaged: everything hangs off `process.resourcesPath`, which Electron gives
@@ -279,8 +340,11 @@ export function resolvePackagedResources(opts: {
   resourcesPath: string;
   electronExecPath: string;
   platform?: string;
+  /** the host's architecture, for the pages engine's source build alone (`pagesSourceBuildRecorded`) */
+  arch?: string;
 }): DesktopResources {
   const platform = opts.platform ?? process.platform;
+  const arch = opts.arch ?? process.arch;
   const bin = join(opts.resourcesPath, "bin");
   return {
     packaged: true,
@@ -309,6 +373,12 @@ export function resolvePackagedResources(opts: {
     desktopHapticsPath: platform === "darwin" ? join(bin, "desktop-haptics.node") : null,
     desktopSoundPlayerPath: platform === "darwin" ? join(bin, "desktop-sound-player.node") : null,
     rosettadPath: join(bin, exe("rosettad", platform)),
+    // EY-1 1b: the stager puts it here on macOS. The file there must be the pin's SOURCE BUILD (2026-11-24): a Mac
+    // the record names no source build for has no engine, and the broker refuses a staged release build by its bytes
+    pagesEnginePath:
+      platform === "darwin" && pagesSourceBuildRecorded(platform, arch)
+        ? join(bin, packagedPagesEngineFile(platform))
+        : null,
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],
       devLinked: [],

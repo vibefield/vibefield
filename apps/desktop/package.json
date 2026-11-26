@@ -71,6 +71,9 @@
     "package:mac:release": "node packaging/run-macos-release.mjs",
     "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"
   },
+  "dependencies": {
+    "agent-browser": "0.41.0"
+  },
   "devDependencies": {
     "@electron/fuses": "^2.1.3",
     "@resvg/resvg-js": "2.6.2",

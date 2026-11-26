@@ -18,11 +18,22 @@ import type {
   ShellSurfacesSimulatorDevicesParams,
   ShellSurfacesSimulatorDevicesResult,
 } from "@vibefield/contracts";
+import {
+  BROWSER_DESK_PROFILE_REF,
+  PAGES_RUN_PROFILE_PREFIX,
+  SHELL_SURFACES_MADE_CLOSED,
+  SHELL_SURFACES_SERVICE,
+} from "@vibefield/contracts";
 import type { AuditPhaseV1 } from "@vibefield/contracts/diagnostics";
+import type { Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import type { AuditMutation, AuditMutationOutcome } from "../src/audit-service";
 import { RpcCallError } from "../src/native-link";
-import { createSurfaceService, type SurfaceAuthority } from "../src/surface-service";
+import {
+  createSurfaceService,
+  type SurfaceAuthority,
+  type SurfaceMadePanes,
+} from "../src/surface-service";
 import { TokenService } from "../src/token-service";
 
 const PARTICIPANT: RendererParticipantIdentity = {
@@ -234,8 +245,21 @@ function fakeAuthority(): FakeAuthority {
   return authority;
 }
 
-function service(authority: FakeAuthority, audit = fakeAudit()) {
-  return { surfaces: createSurfaceService({ api: authority, audit }), audit };
+function service(authority: FakeAuthority, audit = fakeAudit(), made?: SurfaceMadePanes) {
+  const options = made === undefined ? { api: authority, audit } : { api: authority, audit, made };
+  return { surfaces: createSurfaceService(options), audit };
+}
+
+/** EY-2 (the made path) — the pages room, as the panes it placed, and what it was asked. */
+function madePanes(...placed: string[]) {
+  const asked: string[] = [];
+  const panes: SurfaceMadePanes = {
+    placed: (surfaceId) => {
+      asked.push(surfaceId);
+      return placed.includes(surfaceId);
+    },
+  };
+  return { panes, asked };
 }
 
 async function refusal(promise: Promise<unknown>): Promise<RpcCallError> {
@@ -843,5 +867,244 @@ describe("SurfaceService — UNAVAILABLE pass-through", () => {
     );
     expect(error.kind).toBe("TIMEOUT");
     expect(error.details).toEqual({ service: "shell", state: "timeout" });
+  });
+});
+
+describe("SurfaceService.open — a made pane (EY-2, the made path)", () => {
+  const MADE = "srf_01ARZ3NDEKTSV4RRMADE1";
+  /** main's words for a made pane that is gone for good (EY-1's row-4 seam), which fieldd says too */
+  const GONE = { service: SHELL_SURFACES_SERVICE, state: SHELL_SURFACES_MADE_CLOSED };
+  const ctx = () => windowContext(["surface.attach", "surface.browser"]);
+
+  it("forwards made to main's mint for a pane the pages room placed, beside the source and the reuse key", async () => {
+    const authority = fakeAuthority();
+    const { panes, asked } = madePanes(MADE);
+    const { surfaces } = service(authority, fakeAudit(), panes);
+    await surfaces.open(ctx(), { source: BROWSER_SOURCE, reuseKey: "desk:made-1", made: MADE });
+    expect(asked).toEqual([MADE]);
+    expect(authority.minted).toEqual([
+      {
+        rendererParticipant: PARTICIPANT,
+        source: BROWSER_SOURCE,
+        reuseKey: "desk:made-1",
+        made: MADE,
+      },
+    ]);
+  });
+
+  it("refuses a made pane the pages room does not hold as gone for good, before the ledger or main", async () => {
+    const authority = fakeAuthority();
+    const { panes } = madePanes();
+    const { surfaces, audit } = service(authority, fakeAudit(), panes);
+    const err = await refusal(surfaces.open(ctx(), { source: BROWSER_SOURCE, made: MADE }));
+    expect(err.kind).toBe("PRECONDITION_FAILED");
+    expect(err.details).toEqual(GONE);
+    expect(authority.minted).toEqual([]);
+    expect(audit.rows).toEqual([]);
+  });
+
+  it("refuses made the same way, gone for good, when no pages room answers", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    const err = await refusal(surfaces.open(ctx(), { source: BROWSER_SOURCE, made: MADE }));
+    expect(err.kind).toBe("PRECONDITION_FAILED");
+    expect(err.details).toEqual(GONE);
+    expect(authority.minted).toEqual([]);
+  });
+
+  it("an open naming no made pane never asks the room, and mints as before", async () => {
+    const authority = fakeAuthority();
+    const { panes, asked } = madePanes(MADE);
+    const { surfaces } = service(authority, fakeAudit(), panes);
+    await surfaces.open(ctx(), { source: BROWSER_SOURCE });
+    expect(asked).toEqual([]);
+    expect(authority.minted[0]).not.toHaveProperty("made");
+  });
+
+  it("main's refusal of a made pane it closed reaches the caller with its details whole", async () => {
+    const authority = fakeAuthority();
+    // a guard: green before this piece too
+    authority.mintResult = async () => {
+      throw new RpcCallError("PRECONDITION_FAILED", "the desktop operation failed", false, GONE);
+    };
+    const { panes } = madePanes(MADE);
+    const { surfaces } = service(authority, fakeAudit(), panes);
+    const err = await refusal(surfaces.open(ctx(), { source: BROWSER_SOURCE, made: MADE }));
+    expect(err.kind).toBe("PRECONDITION_FAILED");
+    expect(err.details).toEqual(GONE);
+  });
+
+  it("the attempt says it adopts a made pane, beside the kind and the window", async () => {
+    const authority = fakeAuthority();
+    const { panes } = madePanes(MADE);
+    const { surfaces, audit } = service(authority, fakeAudit(), panes);
+    await surfaces.open(ctx(), { source: BROWSER_SOURCE, made: MADE });
+    expect(audit.rows[0]?.attrs).toEqual({
+      sourceKind: "browser",
+      participantId: "win-1",
+      incarnation: "gen-1",
+      adopts: true,
+    });
+  });
+
+  it("a refused made pane is logged by its codes alone, never its surface or its address", async () => {
+    const said: { event: string; attrs: unknown }[] = [];
+    const logger: Logger = {
+      child: () => logger,
+      trace: () => undefined,
+      debug: () => undefined,
+      info: (event, _message, attrs) => void said.push({ event, attrs }),
+      warn: (event, _message, attrs) => void said.push({ event, attrs }),
+      error: (event, _message, _error, attrs) => void said.push({ event, attrs }),
+      fatal: () => undefined,
+      isLevelEnabled: () => true,
+    };
+    const { panes } = madePanes();
+    const surfaces = createSurfaceService({
+      api: fakeAuthority(),
+      audit: fakeAudit(),
+      logger,
+      made: panes,
+    });
+    await refusal(surfaces.open(ctx(), { source: BROWSER_SOURCE, made: MADE }));
+    expect(said).toEqual([
+      { event: "fieldd.surfaces.made_refused", attrs: { sourceKind: "browser" } },
+    ]);
+    expect(JSON.stringify(said)).not.toContain(MADE);
+    expect(JSON.stringify(said)).not.toContain("example.invalid");
+  });
+});
+
+// A run's pane after its run (2026-11-24) — a pane the pages room placed names its run, and its window mints into that
+// run's own session at every open. Once the run can be served no page (it ended and no resume carried its pages on;
+// fieldd restarted; no fieldd here ever had it), main, started anew, knows nothing of the run and refuses the mint with
+// no word, so the pane stood on a failure for good. fieldd says the word first: closed for good.
+describe("SurfaceService.open — a mint into a run's session (a run's pane after its run, 2026-11-24)", () => {
+  const RUN = "run-01J8Z3K9";
+  const RUN_SOURCE: LiveSurfaceSourceSpecV1 = {
+    ...BROWSER_SOURCE,
+    profile: { mode: "memory", ref: `${PAGES_RUN_PROFILE_PREFIX}${RUN}` },
+  };
+  const DESK_SOURCE: LiveSurfaceSourceSpecV1 = {
+    ...BROWSER_SOURCE,
+    profile: { mode: "persistent", ref: BROWSER_DESK_PROFILE_REF },
+  };
+  const GONE = { service: SHELL_SURFACES_SERVICE, state: SHELL_SURFACES_MADE_CLOSED };
+  const ctx = () => windowContext(["surface.attach", "surface.browser"]);
+  /** The pages room, as the runs it can still serve a page, and which it was asked about. */
+  function runsServed(...served: string[]) {
+    const asked: string[] = [];
+    const panes: SurfaceMadePanes = {
+      placed: () => false,
+      serves: (run) => {
+        asked.push(run);
+        return served.includes(run);
+      },
+    };
+    return { panes, asked };
+  }
+
+  it("refuses the mint as closed for good when the room serves the run no page, before the ledger or main", async () => {
+    const authority = fakeAuthority();
+    const { panes, asked } = runsServed();
+    const { surfaces, audit } = service(authority, fakeAudit(), panes);
+    const err = await refusal(surfaces.open(ctx(), { source: RUN_SOURCE, reuseKey: "desk:k1" }));
+    expect(asked).toEqual([RUN]);
+    expect(err.kind).toBe("PRECONDITION_FAILED");
+    expect(err.details).toEqual(GONE);
+    expect(authority.minted).toEqual([]);
+    expect(audit.rows).toEqual([]);
+  });
+
+  it("waits for the room's word when it is not ready yet (a mint before the boot's settle), and then holds to it", async () => {
+    const authority = fakeAuthority();
+    let say: (served: boolean) => void = () => undefined;
+    const panes: SurfaceMadePanes = {
+      placed: () => false,
+      serves: () =>
+        new Promise<boolean>((resolve) => {
+          say = resolve;
+        }),
+    };
+    const { surfaces } = service(authority, fakeAudit(), panes);
+    const opening = refusal(surfaces.open(ctx(), { source: RUN_SOURCE, reuseKey: "desk:k1" }));
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(authority.minted).toEqual([]);
+    say(false);
+    expect((await opening).details).toEqual(GONE);
+    expect(authority.minted).toEqual([]);
+  });
+
+  it("forwards the mint of a run the room serves: main decides it by its key", async () => {
+    const authority = fakeAuthority();
+    const { panes } = runsServed(RUN);
+    const { surfaces } = service(authority, fakeAudit(), panes);
+    await surfaces.open(ctx(), { source: RUN_SOURCE, reuseKey: "desk:k1" });
+    expect(authority.minted).toEqual([
+      { rendererParticipant: PARTICIPANT, source: RUN_SOURCE, reuseKey: "desk:k1" },
+    ]);
+  });
+
+  it("never asks about the person's own page, nor a memory profile that is no run's: both mint as before", async () => {
+    const authority = fakeAuthority();
+    const { panes, asked } = runsServed();
+    const { surfaces } = service(authority, fakeAudit(), panes);
+    await surfaces.open(ctx(), { source: DESK_SOURCE, reuseKey: "desk:mine" });
+    await surfaces.open(ctx(), { source: BROWSER_SOURCE, reuseKey: "desk:scratch" });
+    expect(asked).toEqual([]);
+    expect(authority.minted.map((mint) => mint.reuseKey)).toEqual(["desk:mine", "desk:scratch"]);
+  });
+
+  it("a made pane the room placed is forwarded on that word alone: its run is not asked about again", async () => {
+    const MADE = "srf_01ARZ3NDEKTSV4RRMADE2";
+    const authority = fakeAuthority();
+    const asked: string[] = [];
+    const panes: SurfaceMadePanes = {
+      placed: (surfaceId) => surfaceId === MADE,
+      serves: (run) => {
+        asked.push(run);
+        return false;
+      },
+    };
+    const { surfaces } = service(authority, fakeAudit(), panes);
+    await surfaces.open(ctx(), { source: RUN_SOURCE, reuseKey: "desk:k1", made: MADE });
+    expect(asked).toEqual([]);
+    expect(authority.minted).toHaveLength(1);
+  });
+
+  it("with no pages room, or a room that does not say, the mint is forwarded and main's own word stands", async () => {
+    const bare = fakeAuthority();
+    await service(bare).surfaces.open(ctx(), { source: RUN_SOURCE, reuseKey: "desk:k1" });
+    expect(bare.minted).toHaveLength(1);
+    const silent = fakeAuthority();
+    const { surfaces } = service(silent, fakeAudit(), { placed: () => false });
+    await surfaces.open(ctx(), { source: RUN_SOURCE, reuseKey: "desk:k1" });
+    expect(silent.minted).toHaveLength(1);
+  });
+
+  it("the refusal is logged by its codes alone: never the run, the key or the address", async () => {
+    const said: { event: string; attrs: unknown }[] = [];
+    const logger: Logger = {
+      child: () => logger,
+      trace: () => undefined,
+      debug: () => undefined,
+      info: (event, _message, attrs) => void said.push({ event, attrs }),
+      warn: (event, _message, attrs) => void said.push({ event, attrs }),
+      error: (event, _message, _error, attrs) => void said.push({ event, attrs }),
+      fatal: () => undefined,
+      isLevelEnabled: () => true,
+    };
+    const surfaces = createSurfaceService({
+      api: fakeAuthority(),
+      audit: fakeAudit(),
+      logger,
+      made: runsServed().panes,
+    });
+    await refusal(surfaces.open(ctx(), { source: RUN_SOURCE, reuseKey: "desk:k1" }));
+    expect(said).toEqual([
+      { event: "fieldd.surfaces.run_session_closed", attrs: { sourceKind: "browser" } },
+    ]);
+    expect(JSON.stringify(said)).not.toContain(RUN);
+    expect(JSON.stringify(said)).not.toContain("example.invalid");
   });
 });

@@ -112,6 +112,10 @@ class FakeSurfaceHost {
   readonly detaches: string[] = [];
   /** PT-S2: the device acts the control port carried, with the attachment each named. */
   readonly devices: { attachmentId: string; command: unknown }[] = [];
+  /** EY-1 (1g): the person's holds the control port carried, with the attachment each named. */
+  readonly holds: { attachmentId: string; held: boolean }[] = [];
+  /** EY-1 (1g): the demands and holds in the order the port carried them ("demand", "hold:true", "hold:false"). */
+  readonly wire: string[] = [];
   readonly attachmentIds: string[] = [];
   readonly transport: LiveSurfaceRendererTransport<LiveSurfaceClosableFrame>;
   #rejectNext: { code: string; message: string } | null = null;
@@ -153,6 +157,7 @@ class FakeSurfaceHost {
       ticket?: { token?: string };
       demand?: LiveSurfaceDemandV1;
       command?: unknown;
+      held?: boolean;
     };
     if (message.type === "attach" && message.requestId !== undefined) {
       this.attaches.push({
@@ -189,6 +194,7 @@ class FakeSurfaceHost {
     if (message.type === "demand" && message.attachmentId !== undefined) {
       if (message.demand !== undefined) {
         this.demands.push({ attachmentId: message.attachmentId, demand: message.demand });
+        this.wire.push("demand");
       }
       return;
     }
@@ -198,6 +204,14 @@ class FakeSurfaceHost {
     }
     if (message.type === "device" && message.attachmentId !== undefined) {
       this.devices.push({ attachmentId: message.attachmentId, command: message.command });
+    }
+    if (
+      message.type === "hold" &&
+      message.attachmentId !== undefined &&
+      typeof message.held === "boolean"
+    ) {
+      this.holds.push({ attachmentId: message.attachmentId, held: message.held });
+      this.wire.push(`hold:${message.held}`);
     }
   }
 }
@@ -583,6 +597,49 @@ describe("surface pool", () => {
     handle.release();
     expect(handle.device?.({ verb: "show" })).toBe(false);
     expect(host.devices).toHaveLength(1);
+  });
+
+  it("EY-1: a handle's HOLD reaches its live attachment once an edge, folded over the holders — kept while the lane is down and heard by a fresh attachment BEFORE its first demand; the last holder holding let go puts it down", async () => {
+    const { host, tickets, pool } = await poolHarness();
+
+    const a = pool.acquire("page", { tickets, initialDemand: LIVE_30 });
+    // still attaching: nothing carries it yet, but this holder keeps it
+    expect(a.hold?.(true)).toBe(false);
+    await settle();
+    expect(a.status).toBe("live");
+    // the fresh attachment heard the hold before its first demand (the person's first input comes after both)
+    expect(host.wire.slice(0, 2)).toEqual(["hold:true", "demand"]);
+    expect(host.holds).toEqual([{ attachmentId: host.lastAttachmentId, held: true }]);
+    // the same again is no edge: carried, nothing sent
+    expect(a.hold?.(true)).toBe(true);
+    expect(host.holds).toHaveLength(1);
+
+    // a second holder of the same page: the page is held while EITHER holds
+    const b = pool.acquire("page", { tickets, initialDemand: LIVE_30 });
+    expect(b.hold?.(true)).toBe(true);
+    expect(a.hold?.(false)).toBe(true);
+    expect(host.holds).toHaveLength(1);
+    // the last holder holding let go: put down
+    b.release();
+    expect(host.holds.map((hold) => hold.held)).toEqual([true, false]);
+
+    // lost: a hold taken now is kept, and the attachment a retry makes hears it before its first demand
+    host.detach();
+    expect(a.status).toBe("lost");
+    expect(a.hold?.(true)).toBe(false);
+    const sent = host.wire.length;
+    a.retry();
+    await settle();
+    expect(a.status).toBe("live");
+    expect(host.wire.slice(sent, sent + 2)).toEqual(["hold:true", "demand"]);
+    expect(host.holds.at(-1)).toEqual({ attachmentId: host.lastAttachmentId, held: true });
+
+    // released holding: put down; a released holder may send nothing
+    a.release();
+    expect(host.holds.at(-1)).toMatchObject({ held: false });
+    const told = host.holds.length;
+    expect(a.hold?.(true)).toBe(false);
+    expect(host.holds).toHaveLength(told);
   });
 
   it("reports a rejected attach as lost, and recovers on retry", async () => {

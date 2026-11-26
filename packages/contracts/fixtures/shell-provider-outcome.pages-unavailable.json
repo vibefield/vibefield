@@ -1,0 +1,11 @@
+{
+  "error": {
+    "kind": "UNAVAILABLE",
+    "message": "the live-surface authority is unavailable",
+    "retryable": true,
+    "details": {
+      "service": "pages",
+      "state": "not-installed"
+    }
+  }
+}

@@ -120,6 +120,8 @@ describe("PT-5a — why a browser face failed: the host's word, read by the kind
       "unresponsive",
       "lost",
       "may-not",
+      "never-opened",
+      "run-ended",
       "failed",
     ]);
   });

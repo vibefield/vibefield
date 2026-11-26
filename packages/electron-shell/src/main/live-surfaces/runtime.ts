@@ -51,6 +51,13 @@ export interface LiveSurfaceRuntimeAttachment {
    * not offer is the runtime's silent no-op (the face races the summary), never a fault.
    */
   device?(command: LiveSurfaceDeviceCommandV1): void;
+  /**
+   * EY-1 (1g, 2026-11-19; EY-L2, "your hand wins") — the person picked this page up (`true`) or put it down
+   * (`false`), on the `pointer` grant of a browser page's attachment. Same optionality and fire-and-forget contract:
+   * absent on every runtime that is not a browser page's. The producer folds every attachment's hold into one (any
+   * held), and an agent's act window closes at once on the held edge.
+   */
+  hold?(held: boolean): void;
   dispose(): void;
 }
 

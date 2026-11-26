@@ -322,6 +322,8 @@ export const BROWSER_NAVIGATION = serviceKey<BrowserNavigation>("vibefield.brows
  *  - `lost`: the desk lost its hold of the page. `retry` opens it again;
  *  - `may-not`: the desk may not open a page for this object (its plugin is not granted the capability, this window lends
  *    no pages). No `retry`;
+ *  - EY-1 (1f, 2026-11-19), a page an agent's run made: `never-opened` (it never reached this window: main let it go
+ *    first) and `run-ended` (its run's page was closed, and nothing brings it back: the closed still). No `retry`;
  *  - `failed`: anything else.
  */
 export const LIVE_BROWSER_FAILURES = [
@@ -339,6 +341,8 @@ export const LIVE_BROWSER_FAILURES = [
   "unresponsive",
   "lost",
   "may-not",
+  "never-opened",
+  "run-ended",
   "failed",
 ] as const;
 export type LiveBrowserFailure = (typeof LIVE_BROWSER_FAILURES)[number];

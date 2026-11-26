@@ -10,6 +10,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   faviconOnce,
   LiveSurfaceControlSession,
+  type LiveSurfaceControlSessionOptions,
   type LiveSurfaceMainMessagePort,
 } from "../src/main/live-surfaces/control-session";
 import type {
@@ -78,6 +79,10 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
   readonly devices: LiveSurfaceDeviceCommandV1[] = [];
   withDeviceLane = false;
   deviceThrows = false;
+  /** EY-1 (1g, 2026-11-19): a browser page's runtime carries `hold`, the person's pick-up and put-down. */
+  readonly holds: boolean[] = [];
+  withHoldLane = false;
+  holdThrows = false;
 
   attach(context: LiveSurfaceRuntimeAttachContext) {
     this.context = context;
@@ -104,6 +109,14 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
             },
           }
         : {}),
+      ...(this.withHoldLane
+        ? {
+            hold: (held: boolean) => {
+              if (this.holdThrows) throw new Error("runtime hold fault");
+              this.holds.push(held);
+            },
+          }
+        : {}),
       dispose: this.dispose,
     };
   }
@@ -116,6 +129,7 @@ function setup(
     "view",
     "pointer",
   ],
+  sourceKind: Parameters<LiveSurfaceTicketTable<unknown>["issue"]>[0]["sourceKind"] = "browser",
 ) {
   const port = new FakeMainPort();
   const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
@@ -127,7 +141,7 @@ function setup(
     targetWebContentsId: 17,
     rendererGeneration: 3,
     surfaceId: authority.surfaceId,
-    sourceKind: "browser",
+    sourceKind,
     operations,
     authority,
   });
@@ -236,6 +250,98 @@ describe("LiveSurfaceControlSession", () => {
       attachmentId: "attachment_0123456789abcdef",
       summary: { state: "reconnecting", producerEpoch: 2 },
     });
+  });
+
+  // EY-1 (C2, 2026-11-24): a runtime main closed says `closed`. The window closes its own side of the attachment on
+  // that summary and sends no detach, so main's side ends with the summary it forwards: the runtime's handle let go,
+  // the sink drained, nothing more posted for it. Kept, each page main closed held one of the generation's attachments
+  // until the window reloaded.
+  it("EY-1: a `closed` summary is forwarded and ends the attachment on main's side: its handle let go, its sink drained, no `detached` posted", () => {
+    const sink: LiveSurfaceTextureFrameSink = {
+      stats: {
+        offered: 0,
+        accepted: 0,
+        dropped: 0,
+        outstanding: 0,
+        peakOutstanding: 0,
+        completed: 0,
+        timedOut: 0,
+        sendFailures: 0,
+        releaseFaults: 0,
+      },
+      offer: vi.fn(() => ({ kind: "dropped" as const, reason: "transfer-cap" as const })),
+      close: vi.fn(),
+      whenDrained: vi.fn(() => Promise.resolve()),
+      closeAndDrain: vi.fn(() => Promise.resolve("drained" as const)),
+    };
+    const result = setup(() => sink);
+    attach(result);
+    expect(result.session.attachmentCount).toBe(1);
+    result.authority.context?.publishSummary({ ...summary("closed", 1), stateRevision: 2 });
+    expect(result.port.sent.at(-1)).toMatchObject({
+      type: "summary",
+      attachmentId: "attachment_0123456789abcdef",
+      summary: { state: "closed" },
+    });
+    expect(result.session.attachmentCount).toBe(0);
+    expect(result.authority.dispose).toHaveBeenCalledTimes(1);
+    expect(sink.closeAndDrain).toHaveBeenCalledTimes(1);
+    expect(
+      result.port.sent.some((message) => (message as { type?: string }).type === "detached"),
+    ).toBe(false);
+    // the window's own messages for it afterwards are the detach race, and the generation stands: a demand sent before
+    // the window read the close is dropped (one for an attachment nobody ever had is still the generation's fault)
+    const posted = result.port.sent.length;
+    result.port.receive({
+      v: 1,
+      type: "demand",
+      attachmentId: "attachment_0123456789abcdef",
+      demand: { revision: 1, mode: "paused", targetFps: 0, priority: 0, interactive: false },
+    });
+    expect(result.authority.demands).toEqual([]);
+    result.port.receive({ v: 1, type: "detach", attachmentId: "attachment_0123456789abcdef" });
+    result.authority.context?.publishSummary({ ...summary("closed", 1), stateRevision: 3 });
+    expect(result.port.sent.slice(posted)).toEqual([
+      { v: 1, type: "detached", attachmentId: "attachment_0123456789abcdef" },
+    ]);
+    expect(result.session.closed).toBe(false);
+    expect(result.protocolFaults).toEqual([]);
+  });
+
+  // EY-1 (C2, the attach's own summary, 2026-11-24): a runtime that says `closed` while it is being attached says it
+  // before its attachment stands. The word is kept and becomes the attachment's FIRST summary, inside `attached`, so it
+  // never passes the place where a later `closed` ends main's side. Its entry then stood, on a runtime that was
+  // closed, until the window's generation ended.
+  it("EY-1: a runtime that closes while it is being attached: `attached` carries `closed`, and main's side of the attachment ends with it", () => {
+    const result = setup(undefined, (authority) => {
+      authority.onAttach = (context) =>
+        context.publishSummary({ ...summary("closed", 1), stateRevision: 2 });
+    });
+    attach(result);
+    expect(result.port.sent.at(-1)).toMatchObject({
+      type: "attached",
+      requestId: "request_0001",
+      attachment: { attachmentId: "attachment_0123456789abcdef", summary: { state: "closed" } },
+    });
+    expect(result.session.attachmentCount).toBe(0);
+    expect(result.authority.dispose).toHaveBeenCalledTimes(1);
+    // what the window sends for it before it reads the close is the detach race: a demand is dropped, a detach is
+    // answered, and the generation stands
+    const posted = result.port.sent.length;
+    result.port.receive({
+      v: 1,
+      type: "demand",
+      attachmentId: "attachment_0123456789abcdef",
+      demand: { revision: 1, mode: "paused", targetFps: 0, priority: 0, interactive: false },
+    });
+    expect(result.authority.demands).toEqual([]);
+    result.port.receive({ v: 1, type: "detach", attachmentId: "attachment_0123456789abcdef" });
+    expect(result.port.sent.slice(posted)).toEqual([
+      { v: 1, type: "detached", attachmentId: "attachment_0123456789abcdef" },
+    ]);
+    expect(result.authority.dispose).toHaveBeenCalledTimes(1);
+    expect(result.session.closed).toBe(false);
+    expect(result.protocolFaults).toEqual([]);
   });
 
   it("PT-5a: a favicon's BYTES go down an attachment's port ONCE a key — with the first summary that names it (the attach's own, or a later one) — and the key alone after; another key is sent whole, and the first again after it (one key is remembered: the last)", () => {
@@ -923,6 +1029,86 @@ describe("LiveSurfaceControlSession", () => {
     expect(throwing.protocolFaults).toEqual(["runtime rejected a validated device act"]);
   });
 
+  // EY-1 (1g, 2026-11-19) — the person's pick-up and put-down of a page (EY-L2, "your hand wins"; one gesture, so
+  // the pick-up also reports the object held). A hold is input's kin: it comes from a browser page's attachment
+  // granted `pointer`, and nothing else sends one.
+  const hold = (held: boolean, attachmentId = "attachment_0123456789abcdef") => ({
+    v: 1,
+    type: "hold",
+    attachmentId,
+    held,
+  });
+
+  it("EY-1: a browser attachment's hold reaches the runtime, both edges, in order", () => {
+    const page = setup(undefined, (authority) => {
+      authority.withHoldLane = true;
+    });
+    attach(page);
+    page.port.receive(hold(true));
+    page.port.receive(hold(false));
+    expect(page.protocolFaults).toEqual([]);
+    expect(page.session.closed).toBe(false);
+    expect(page.authority.holds).toEqual([true, false]);
+  });
+
+  it("EY-1: a hold from a simulator attachment, though granted pointer, fails the generation closed", () => {
+    // a simulator now has `pointer` too, so the hold keys on the surface KIND as well
+    const phone = setup(
+      undefined,
+      (authority) => {
+        authority.withHoldLane = true;
+      },
+      ["view", "pointer"],
+      "ios-simulator-device",
+    );
+    attach(phone);
+    phone.port.receive(hold(true));
+    expect(phone.session.closed).toBe(true);
+    expect(phone.protocolFaults).toEqual(["hold arrived from a surface that is not a page"]);
+    expect(phone.authority.holds).toEqual([]);
+  });
+
+  it("EY-1: a hold from a browser attachment without the pointer grant fails the generation closed", () => {
+    const viewOnly = setup(
+      undefined,
+      (authority) => {
+        authority.withHoldLane = true;
+      },
+      ["view"],
+    );
+    attach(viewOnly);
+    viewOnly.port.receive(hold(true));
+    expect(viewOnly.session.closed).toBe(true);
+    expect(viewOnly.protocolFaults).toEqual(["hold arrived without its operation grant"]);
+    expect(viewOnly.authority.holds).toEqual([]);
+  });
+
+  it("EY-1: a hold for an unknown attachment or a runtime without the member drops silently, and one that throws faults", () => {
+    const raced = setup(undefined, (authority) => {
+      authority.withHoldLane = true;
+    });
+    attach(raced);
+    raced.port.receive(hold(true, "attachment_9999999999999999"));
+    expect(raced.session.closed).toBe(false);
+    expect(raced.protocolFaults).toEqual([]);
+    expect(raced.authority.holds).toEqual([]);
+
+    const memberless = setup();
+    attach(memberless);
+    memberless.port.receive(hold(true));
+    expect(memberless.session.closed).toBe(false);
+    expect(memberless.protocolFaults).toEqual([]);
+
+    const throwing = setup(undefined, (authority) => {
+      authority.withHoldLane = true;
+      authority.holdThrows = true;
+    });
+    attach(throwing);
+    throwing.port.receive(hold(true));
+    expect(throwing.session.closed).toBe(true);
+    expect(throwing.protocolFaults).toEqual(["runtime rejected a validated hold"]);
+  });
+
   it("drops granted input on a runtime with no lane, and faults a runtime that throws", () => {
     // A view-only runtime simply has no member: silent drop, session intact.
     const laneless = setup(undefined, undefined, ["view", "pointer"]);
@@ -952,5 +1138,51 @@ describe("LiveSurfaceControlSession", () => {
     });
     expect(throwing.session.closed).toBe(true);
     expect(throwing.protocolFaults).toEqual(["runtime rejected a validated input event"]);
+  });
+
+  // EY-1 (1f, 2026-11-19) — a window's desk says its room for agent pages, and declines a made
+  // page at its adopt. Both are the window's own word, not an attachment's: they reach the
+  // callbacks main gave this window's session, and fault nothing.
+  function desk(callbacks: Pick<LiveSurfaceControlSessionOptions, "onRoom" | "onMadeDeclined">) {
+    const port = new FakeMainPort();
+    const faults: string[] = [];
+    const session = new LiveSurfaceControlSession({
+      senderWebContentsId: 17,
+      bootstrap: { v: 1, rendererGeneration: 3 },
+      port,
+      tickets: new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
+        randomToken: () => "ticket_0000000000000000000000000000000000000001",
+      }),
+      publishCpuFrame: () => true,
+      onProtocolFault: (fault) => faults.push(fault),
+      ...callbacks,
+    });
+    session.start();
+    return { port, session, faults };
+  }
+  const decline = { v: 1, type: "made-declined", made: "surface_0123456789ab", reason: "no-room" };
+
+  it("EY-1: a desk's room and its decline of a made page reach the window's callbacks, in order", () => {
+    const rooms: number[] = [];
+    const declined: string[] = [];
+    const { port, session, faults } = desk({
+      onRoom: (agentPages) => rooms.push(agentPages),
+      onMadeDeclined: (made) => declined.push(made),
+    });
+    port.receive({ v: 1, type: "room", agentPages: 2 });
+    port.receive({ v: 1, type: "room", agentPages: 0 });
+    port.receive(decline);
+    expect(rooms).toEqual([2, 0]);
+    expect(declined).toEqual(["surface_0123456789ab"]);
+    expect(faults).toEqual([]);
+    expect(session.closed).toBe(false);
+  });
+
+  it("EY-1: a room or a decline with no callback given does nothing and faults nothing", () => {
+    const { port, session, faults } = desk({});
+    port.receive({ v: 1, type: "room", agentPages: 1 });
+    port.receive(decline);
+    expect(faults).toEqual([]);
+    expect(session.closed).toBe(false);
   });
 });

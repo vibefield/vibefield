@@ -35,7 +35,8 @@ export interface McpTool {
   readonly description: string;
   readonly inputSchema: Readonly<Record<string, unknown>>;
   readonly outputSchema?: Readonly<Record<string, unknown>>;
-  /** All four, from the catalog's row (gen/tools.ts): every room is closed-world. */
+  /** All four, from the catalog's row (gen/tools.ts): every room is closed-world but the pages room, whose rows say
+   * one by one whether they reach the open web (EY, 2026-11-19). */
   readonly annotations?: {
     readonly readOnlyHint: boolean;
     readonly destructiveHint: boolean;
@@ -44,12 +45,24 @@ export interface McpTool {
   };
 }
 
-/** What a tool call answered: the structured result, and the words a model reads. */
+/** A file the answer points the model at (EY-2, 2026-11-19: a page's still), by its `file:` URI. */
+export interface McpResourceLink {
+  readonly uri: string;
+  readonly name: string;
+  readonly mimeType?: string;
+}
+
+/** What a tool call answered: the structured result, the words a model reads, and the files it points at. */
 export interface McpCallResult {
   readonly structured?: unknown;
   readonly text: string;
   readonly isError?: boolean;
+  readonly links?: readonly McpResourceLink[];
 }
+
+/** The protocols whose tool results may carry a `resource_link` (it came in 2025-06-18). An older one has the file's
+ * path in the answer's words alone. */
+const LINKS_SPOKEN: readonly string[] = [MCP_MODERN, "2025-11-25", "2025-06-18"];
 
 export interface McpServerOptions {
   readonly serverInfo: { readonly name: string; readonly version: string };
@@ -195,8 +208,15 @@ export class McpConnection {
         } catch (err) {
           result = { text: (err as Error).message || "the call failed", isError: true };
         }
+        const linked =
+          !result.isError && LINKS_SPOKEN.includes(modern ? MCP_MODERN : (this.#legacy ?? ""));
         return done({
-          content: [{ type: "text", text: result.text }],
+          content: [
+            { type: "text", text: result.text },
+            ...(linked
+              ? (result.links ?? []).map((link) => ({ type: "resource_link", ...link }))
+              : []),
+          ],
           // a validating client checks structuredContent against the row's outputSchema even on an error, so a refusal
           // carries none: its words are the answer
           ...(result.structured !== undefined && !result.isError

@@ -7639,6 +7639,34 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     person is watching the page.
     *Amended 2026-11-19 (James; DECISIONS "FL", as amended):* this said the browser pane had shipped in no
     packaged app since 2026-11-09, so these words held for a dev run until it returned. It ships Built in at 0.9.
+    *Added 2026-11-19 (track EY, EY-1 1f):* **pages an agent's run opens.** A new tab or a pop-up an agent's own act
+    opens becomes a pane of the run's, beside the page that opened it, in the first free place; the person's view
+    never moves to it. It is the run's page, signed out, never the person's. When the desk has no room or the run
+    holds its five, nothing is shown: the agent is told. Rested to make room for the person's hand, it shows its
+    last frame with the rest mark, as any rested pane. At the run's end the run's panes leave the desk, never from
+    under the person's hand. A made pane whose run has ended (held then and put down, rested or reloaded later, or
+    seen on a device that never had the run) shows the **closed still**: the failed page's notice over its last
+    still, or its film where it has none, saying **"This page closed when an agent's work ended"** and **"Open its
+    address in a page of your own to see it again."**, with no Try again. A made pane whose page never reached the
+    window (its run ended first, or the window did not take it in time) leaves the desk as soon as that is known, as
+    the run's panes do at its end. Under the person's hand it stays until put down, on its film, saying **"This page
+    didn't open"** and **"It leaves the desk when you put it down."**
+    *Added 2026-11-24 (track EY; the second live run found the panes of runs that had ended with the app still on
+    the desk at the next start):* **a run's pane whose run ended while nobody could see it.** A pane a run placed on
+    this device, whose run's end was never shown on it (the app was stopped, or its desk was under a cover, when the
+    run ended), leaves the desk when that is first learned: as the app comes back, or as the desk is next shown; never
+    from under the person's hand, where it shows the closed still and is kept. A pane kept on its closed still stays
+    kept, across a reload and a restart. A pane this device did not place (one carried with the board from another
+    device, one placed before this was built) is never taken off: it shows the closed still, whatever became of its
+    run.
+    *Added 2026-11-24 (track EY, L8 of the first live run: an agent's pane landed over the person's own browser
+    pane, covering part of it):* **where an agent's object lands.** Every object an agent places, a run's page
+    among them, lands on the board in the **free place nearest the middle of the person's view** (while the person
+    is inside a mat, nearest the place beside the board's object they went in through): over no object already on
+    the board, and one place gap (24, the gap a placed object keeps beside a mat) clear of each. The person's view
+    never moves to it. Where no free place lies within a few of its own sizes of that middle, it lands at the
+    middle as before, a step down and across from the agent's last. *Not built:* "beside the page that opened
+    it" (above) for a run's new tab or pop-up: it lands by this same rule.
   - **At work, in the pane** (OB-D16, Godview's end of item 550's at-work mark; ruled by James on the page *Swapped
     Stickers*, 2026-11-25 06:39Z: the look A, the place B, the state A, the touch A; the first page's places in the
     pane's head set aside on his word of 06:15Z, "the header area is too crowded, try design at right bottom area

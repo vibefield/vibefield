@@ -1,6 +1,7 @@
 // THE PANE'S LIVE PAGE (PT-2 — PORTALS' rulings 1–6; ICE design-019 §3.3–§3.5 as the pane uses them, after LT1's reference
 // consumer, the rig's live kind): a pane whose address is a web page (http or https — the sample stays PT-1's still, and any
-// other address the dark film) holds a LIVE FACE that the host's `LIVE` service opens for it, by the object's DURABLE key
+// other address the dark film; EY S2a: and a pane that names a RUN is one whatever its address — `paneAddressOf`) holds a LIVE
+// FACE that the host's `LIVE` service opens for it, by the object's DURABLE key
 // (`KindHost.keyOf` — so a reload re-attaches the same page, never a new one), and its pass draws the face's texture. The kind
 // holds a view and words, never a frame (PA-22: the host fills the texture).
 //  - OPENED at the pane's record (a runtime entity — a tray's ghost, a specimen — has no durable key, and gets no face), TAKEN
@@ -40,9 +41,10 @@ import {
   type LiveInput,
   type LiveState,
   type Sight,
+  stringProp,
 } from "@vibefield/plugin-sdk/desk";
 import { pageFavicon, pageRefusal, pageStill, REFUSAL_SAY_MS } from "./head";
-import { BROWSER_PANE_KIND } from "./ids";
+import { BROWSER_PANE_KIND, SAMPLE_URL } from "./ids";
 import {
   BROWSER,
   type BrowserLaw,
@@ -56,6 +58,41 @@ import { PAGE_REMAKE_MS } from "./pass";
 /** Is an address a web page the host's browser opens (its policy: http and https)? The sample is PT-1's still, never a page. */
 export const isPageUrl = (url: string, sample: string): boolean =>
   url !== sample && /^https?:\/\//i.test(url);
+
+/** The address a run's pane opens at when its own is no web page: the page main already holds for the run is the one adopted. */
+export const BLANK_PAGE = "about:blank";
+
+/** What a pane's address is, as its record reads it (`paneAddressOf`). */
+export interface PaneAddress {
+  /** The address the pane shows (its head, its readout, its still or film) and its face opens at. */
+  readonly url: string;
+  /** A live page: the pane holds a face at `url`. */
+  readonly live: boolean;
+  /** It names a run (its `agentRun`): its page is the one main made for the run. */
+  readonly run: boolean;
+}
+
+/**
+ * EY S2a (2026-11-24) — THE PANE'S ADDRESS, the one rule its record reads. A person's pane is a live page at a web address
+ * alone (`isPageUrl`); the sample is its still and any other address the film. A pane that NAMES A RUN (`agentRun`, set by
+ * VibeField when the pages room places it; "" names none) is a live page WHATEVER its address: where that is no web page
+ * (the manifest's default, the sample; about:blank) it shows and opens `about:blank`, the mint adopts the page main holds
+ * for the run, and the address then follows the page (`PaneLocal.follow`). `isPageUrl`'s other readers judge an address
+ * (one typed, one a page says), never a pane.
+ */
+export function paneAddressOf(props: Readonly<Record<string, unknown>>): PaneAddress {
+  const run = stringProp(props, "agentRun", "") !== "";
+  if (run) {
+    // PI-1 (2026-11-24): a run's pane is at its `runAddress` ALONE, never at `url` (which a reader that does not know the
+    // run reads alone). An empty one is about:blank, never a read of `url`: the cell is one whole value, and a reader that
+    // does not know the run writes it whole as `{ url }`, dropping `runAddress` — reading `url` then would send the run's
+    // page to the address the person typed there. The applier never places a run's pane with an empty one.
+    const own = stringProp(props, "runAddress", "");
+    return { url: isPageUrl(own, SAMPLE_URL) ? own : BLANK_PAGE, live: true, run };
+  }
+  const url = stringProp(props, "url", SAMPLE_URL);
+  return { url, live: isPageUrl(url, SAMPLE_URL), run };
+}
 
 /** What the pane's faces have done since the desk was made — a test's and a smoke's witness. */
 export interface PaneFaceStats {

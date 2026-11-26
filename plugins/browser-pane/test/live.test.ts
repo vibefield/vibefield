@@ -27,10 +27,12 @@ import {
 import { productPalette } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it, vi } from "vitest";
 import {
+  BLANK_PAGE,
   BROWSER,
   BROWSER_PANE_KIND,
   bandLayout,
   browserPaneKind,
+  browserPaneManifest,
   createPaneLocal,
   cutOf,
   deviceById,
@@ -55,7 +57,9 @@ import {
   type PageFavicon,
   type PaneGeometry,
   type PaneInstance,
+  PROMPT,
   pageStill,
+  paneAddressOf,
   paneDemand,
   paneLook,
   paneValues,
@@ -96,6 +100,7 @@ function fakeFace(key: string, arrived: () => void) {
   };
   const face: LiveFace & {
     hold(): void;
+    know(info: LiveInfo): void;
     land(t?: Partial<LiveTexture>): void;
     say(next: { state?: LiveState; info?: LiveInfo }): void;
     /** PT-5b: the host let the texture go (the budget's eviction; a failed page's frames hidden). */
@@ -127,6 +132,11 @@ function fakeFace(key: string, arrived: () => void) {
       put();
       owed = true;
     },
+    know(next) {
+      // EY S2a: the words the host already holds when the face opens (a page main made and held for a run): owed, nothing told
+      info = next;
+      owed = true;
+    },
     land(t) {
       put(t);
       owed = true;
@@ -156,6 +166,8 @@ function fakeHost(
     live?: boolean;
     keys?: Record<number, string>;
     holds?: boolean;
+    /** EY S2a: the words the host already holds for the page when its face opens. */
+    knows?: LiveInfo;
     /** false: no navigation lent; "navigate-only": one that cannot `respec` (a host before PT-4). */
     nav?: boolean | "navigate-only";
     /** PT-4: the head's raster the DOM half lends. */
@@ -244,6 +256,7 @@ function fakeHost(
       opened.push({ key, spec: { ...spec } });
       const f = fakeFace(key, arrived);
       if (opts.holds === true) f.hold();
+      if (opts.knows !== undefined) f.know(opts.knows);
       faces.set(key, f);
       return f;
     },
@@ -629,6 +642,213 @@ describe("the pane's live page — its record", () => {
       local.tick?.(0);
       expect(word(), JSON.stringify(title)).toBe("example.org");
     }
+  });
+});
+
+// PI-1 (2026-11-24) — A RUN'S ADDRESS IS KEPT OUT OF `url`, the prop every reader turns into a live page. A reader that does
+// not know `agentRun` (an older build, another device on one, a copy) reads only `url`, and would open an agent-chosen
+// address in the person's signed-in desk profile. A run's pane keeps its address in `runAddress` (in the url's own cell,
+// so an undo never re-asserts it), which such a reader drops: it shows the sample, never a page.
+describe("PI-1 — a run's pane keeps its address in runAddress, never in url", () => {
+  const RUN = "run-1";
+  const AT = "https://example.com/agent";
+  it("a run's pane opens at its runAddress, whatever url says", () => {
+    expect(paneAddressOf({ agentRun: RUN, runAddress: AT })).toEqual({
+      url: AT,
+      live: true,
+      run: true,
+    });
+    expect(paneAddressOf({ agentRun: RUN, runAddress: AT, url: SAMPLE_URL })).toEqual({
+      url: AT,
+      live: true,
+      run: true,
+    });
+  });
+  it("a person's pane never reads runAddress: its url alone, as every reader reads it", () => {
+    expect(paneAddressOf({ runAddress: AT })).toEqual({ url: SAMPLE_URL, live: false, run: false });
+    expect(paneAddressOf({ agentRun: "", runAddress: AT, url: SAMPLE_URL }).live).toBe(false);
+  });
+  it("a run's pane with no runAddress is at about:blank, whatever url says: an older peer's write of url (which replaces the whole cell, dropping runAddress) never names the run's page", () => {
+    const Y = "https://y.example/";
+    for (const props of [
+      { agentRun: RUN, url: Y, runAddress: "" },
+      { agentRun: RUN, url: Y },
+      { agentRun: RUN, url: Y, runAddress: SAMPLE_URL },
+    ]) {
+      expect(paneAddressOf(props), JSON.stringify(props)).toEqual({
+        url: BLANK_PAGE,
+        live: true,
+        run: true,
+      });
+    }
+  });
+  it("the manifest declares runAddress beside url, in the url's own cell", () => {
+    const kind = browserPaneManifest.contributes?.objects?.[0];
+    expect(kind?.groups?.["page"]).toEqual(["url", "runAddress"]);
+    expect(kind?.props?.["runAddress"]).toMatchObject({ kind: "string", default: "" });
+  });
+});
+
+describe("EY S2a — a pane that names a run is a live page whatever its address", () => {
+  const k = browserPaneKind();
+  const KEY = "13918995204487956201-1";
+  const RUN = "run-1";
+  const NEXT = "http://127.0.0.1:4321/next";
+  const recordOf = (local: ReturnType<typeof createPaneLocal>, props: Record<string, unknown>) => {
+    const ctx = ctxOf(props, local);
+    return k.record(k.resolve(ctx), ctx) as PaneInstance;
+  };
+  const wordOf = (local: unknown, props: Record<string, unknown>): unknown => {
+    const readout = k.open?.readout;
+    return typeof readout === "function"
+      ? readout({ world: undefined as never, entity: 1 as Entity, props: () => props, local })
+      : readout;
+  };
+
+  it("a run's pane at the manifest's default address (the sample) opens a face at about:blank: the film, never the sample's still, and its head names no address", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const r = recordOf(local, { agentRun: RUN });
+    expect(t.opened).toHaveLength(1);
+    expect(t.opened[0]?.spec).toMatchObject({ source: "browser", url: "about:blank" });
+    expect(r.live?.face).toBe(t.faces.get(KEY));
+    expect(r.page).toBeNull();
+    expect(local.said(1 as Entity)).toMatchObject({ display: "", favicon: null, secure: false });
+    expect(wordOf(local, { agentRun: RUN })).toBe(PROMPT);
+  });
+
+  it("a run's pane at about:blank (the room's word for an address that is no web page) opens a face there", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const r = recordOf(local, { agentRun: RUN, runAddress: "about:blank" });
+    expect(t.opened.map((o) => o.spec.url)).toEqual(["about:blank"]);
+    expect(r.live?.face).toBe(t.faces.get(KEY));
+    expect(r.page).toBeNull();
+  });
+
+  it("a run's pane at a web address opens its face there, as a person's does", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const r = recordOf(local, { agentRun: RUN, runAddress: PAGE });
+    expect(t.opened.map((o) => o.spec.url)).toEqual([PAGE]);
+    expect(r.live?.face).toBe(t.faces.get(KEY));
+  });
+
+  it("a person's pane (no run) is unchanged: the sample keeps its still and a blank page its film, and neither opens a face", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    for (const props of [{}, { agentRun: "" }, { url: SAMPLE_URL, agentRun: "" }]) {
+      const r = recordOf(local, props);
+      expect(r.live, JSON.stringify(props)).toBeUndefined();
+      expect(r.page?.key, JSON.stringify(props)).toMatch(/^sample\|/);
+      expect(local.said(1 as Entity)?.favicon).toBe("sample");
+    }
+    for (const props of [{ url: "about:blank" }, { url: "about:blank", agentRun: "" }]) {
+      const r = recordOf(local, props);
+      expect(r.live, JSON.stringify(props)).toBeUndefined();
+      expect(r.page, JSON.stringify(props)).toBeNull();
+    }
+    expect(t.opened).toHaveLength(0);
+  });
+
+  it("by night a run's pane before its page glows as a live page does; a person's blank pane does not", () => {
+    const dark = (props: Record<string, unknown>) =>
+      k.resolve({ ...ctxOf(props, undefined), theme: { name: "dark" } } as ObjectContext);
+    expect(dark({ agentRun: RUN, runAddress: "about:blank" })).toEqual(dark({ url: PAGE }));
+    expect(dark({ url: "about:blank" })).not.toEqual(dark({ url: PAGE }));
+  });
+
+  it("its address FOLLOWS the page: where the run's page goes is addressed (the hand writes it), the write lands with no navigation, and the face stays the one it was", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    recordOf(local, { agentRun: RUN });
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.say({ state: { is: "live" }, info: { address: "about:blank" } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([]);
+    face.say({ state: { is: "live" }, info: { address: PAGE } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([[1, PAGE]]);
+    // the write lands: the record reads the page's own address — no navigation, nothing addressed
+    recordOf(local, { agentRun: RUN, runAddress: PAGE });
+    expect(t.navigations).toEqual([]);
+    expect([...local.addressed()]).toEqual([]);
+    // the agent drives it on: addressed again
+    face.say({ state: { is: "live" }, info: { address: NEXT } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([[1, NEXT]]);
+    recordOf(local, { agentRun: RUN, runAddress: NEXT });
+    expect(t.navigations).toEqual([]);
+    expect(t.opened).toHaveLength(1);
+    expect(face.closed()).toBe(0);
+  });
+
+  it("a page main already holds at its address when the face opens is addressed at once — for a run's pane, at any address the room placed it with; a person's pane waits for its page to move, as before", () => {
+    for (const url of [undefined, "about:blank", PAGE]) {
+      const t = fakeHost({ knows: { address: NEXT } });
+      const local = createPaneLocal(t.host);
+      recordOf(local, { agentRun: RUN, ...(url === undefined ? {} : { runAddress: url }) });
+      expect([...local.addressed()], String(url)).toEqual([[1, NEXT]]);
+      expect(t.navigations, String(url)).toEqual([]);
+    }
+    const t = fakeHost({ knows: { address: NEXT } });
+    const local = createPaneLocal(t.host);
+    recordOf(local, { url: PAGE });
+    expect([...local.addressed()]).toEqual([]);
+  });
+
+  it("sent to an address that is no web page (the sample typed), a run's page goes to about:blank and stays live; where it stood is never written back over the person's word", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    recordOf(local, { agentRun: RUN, runAddress: PAGE });
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.say({ state: { is: "live" }, info: { address: PAGE } });
+    local.tick?.(0);
+    const r = recordOf(local, { agentRun: RUN, runAddress: SAMPLE_URL });
+    expect(r.live?.face).toBe(face);
+    expect(t.navigations).toEqual([{ key: KEY, command: { action: "go", url: "about:blank" } }]);
+    expect([...local.addressed()]).toEqual([]);
+    face.say({ state: { is: "live" }, info: { address: "about:blank" } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([]);
+    expect(face.closed()).toBe(0);
+  });
+});
+
+describe("PI-1 — an older peer's url never moves a run's page", () => {
+  const k = browserPaneKind();
+  const KEY = "13918995204487956201-1";
+  const RUN = "run-1";
+  const AT = "https://example.com/agent";
+  const Y = "https://y.example/";
+  const recordOf = (local: ReturnType<typeof createPaneLocal>, props: Record<string, unknown>) => {
+    const ctx = ctxOf(props, local);
+    return k.record(k.resolve(ctx), ctx) as PaneInstance;
+  };
+
+  it("a run's page cell written whole as {url} by a reader that does not know the run (runAddress gone) opens no face at that url and sends the run's page nowhere near it", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    recordOf(local, { agentRun: RUN, runAddress: AT, url: SAMPLE_URL });
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.say({ state: { is: "live" }, info: { address: AT } });
+    local.tick?.(0);
+    // the older peer's hand: tx.edit(e).set(page, { url: Y }); this build decodes runAddress as its default, ""
+    recordOf(local, { agentRun: RUN, url: Y, runAddress: "" });
+    expect(t.opened.map((o) => o.spec.url)).toEqual([AT]);
+    const went = t.navigations.map((n) => (n.command as { url?: string }).url);
+    expect(went).not.toContain(Y);
+    expect([...local.addressed()].map(([, a]) => a)).not.toContain(Y);
+  });
+
+  it("a run's pane first read with a url and no runAddress opens its face at about:blank, never at the url", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    recordOf(local, { agentRun: RUN, url: Y });
+    expect(t.opened.map((o) => o.spec.url)).toEqual([BLANK_PAGE]);
   });
 });
 

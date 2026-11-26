@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { type CallerContext, SHELL_PROVIDER_METHODS } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { RpcCallError } from "../src/native-link";
@@ -166,6 +168,41 @@ describe("ShellProviderBroker", () => {
       outcome: { result: { captured: true } },
     });
     await expect(second).resolves.toEqual({ captured: true });
+  });
+
+  it("EY-1: a provider error's details reach the waiting call as the fixture says them, and none when it says none", async () => {
+    const outcome = JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dirname,
+          "../../contracts/fixtures/shell-provider-outcome.pages-unavailable.json",
+        ),
+        "utf8",
+      ),
+    ) as { error: { details: unknown } };
+    const broker = new ShellProviderBroker();
+    const lane = transport();
+    broker.register(shellContext(), lane, { methods: METHODS });
+    const said = broker.call(pluginContext(), "shell.dialog.pickFolder", {
+      purpose: "artifact.publish",
+    });
+    expect(
+      broker.resolve(shellContext(), lane, { callId: notificationCallId(lane, 0), outcome }),
+    ).toEqual({ accepted: true });
+    await expect(said).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      details: outcome.error.details,
+    });
+    const bare = broker.call(pluginContext(), "shell.dialog.pickFolder", {
+      purpose: "artifact.publish",
+    });
+    broker.resolve(shellContext(), lane, {
+      callId: notificationCallId(lane, 1),
+      outcome: { error: { kind: "UNAVAILABLE", message: "unavailable", retryable: true } },
+    });
+    const error = await bare.catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(RpcCallError);
+    expect((error as RpcCallError).details).toBeUndefined();
   });
 
   it("rejects provider loss and ignores its late answer", async () => {

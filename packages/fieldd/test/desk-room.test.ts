@@ -1,7 +1,9 @@
-import type { ObjectIntent, ObjectManual } from "@vibefield/contracts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { ObjectIntent, ObjectManual, PluginRecord } from "@vibefield/contracts";
 import { OBJECT_LIMITS, TOOL_SCHEMAS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DeskKind } from "../src/objects/kinds";
+import { type DeskKind, pluginDeskKinds } from "../src/objects/kinds";
 import { createDeskVerbs, type DeskVerbs } from "../src/tool-plane/rooms/desk/verbs";
 import {
   type Answer,
@@ -231,6 +233,37 @@ describe("a kind whose tools are a room's rows (R-2)", () => {
     expect(refused).toMatchObject({ details: { fact: "no-tool", room: "pages" } });
     expect((refused as { details: { tools: string[] } }).details.tools).toContain("browser_open");
     expect((refused as Error).message).toContain("browser_open");
+    expect(win.seen).toEqual([]);
+  });
+
+  it("answers canvas_place on the browser pane as its own manifest declares it, before the window (2g)", async () => {
+    // the pane's manifest read from its plugin folder, never copied: its agent half names the pages room
+    const manifest = JSON.parse(
+      readFileSync(
+        join(import.meta.dirname, "../../../plugins/browser-pane/vibefield.plugin.json"),
+        "utf8",
+      ),
+    ) as { id: string; capabilities: string[]; contributes: PluginRecord["contributions"] };
+    // the record fieldd holds of it under `pnpm dev` and in a packaged build: bundled, asking what its manifest asks
+    const record = {
+      id: manifest.id,
+      enabled: true,
+      source: "bundled",
+      requestedCapabilities: manifest.capabilities,
+      grantedCapabilities: manifest.capabilities,
+      contributions: manifest.contributes,
+    };
+    const pane = pluginDeskKinds([record as unknown as PluginRecord], () => undefined);
+    expect(pane).toEqual([
+      expect.objectContaining({ kind: "vibefield.browser-pane", room: "pages", placeable: false }),
+    ]);
+    const h = world({ kinds: [NOTE, PAGE, ...pane] });
+    const { verbs, win } = room(h);
+    const refused = await verbs
+      .canvas_place(A, { kind: "vibefield.browser-pane", props: { url: "https://example.com/" } })
+      .catch((err: unknown) => err);
+    expect(refused).toMatchObject({ details: { fact: "no-tool", room: "pages" } });
+    expect((refused as Error).message).toContain("not with canvas_place");
     expect(win.seen).toEqual([]);
   });
 

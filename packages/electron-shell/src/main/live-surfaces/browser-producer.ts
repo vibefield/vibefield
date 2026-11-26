@@ -19,6 +19,9 @@ import {
 } from "@vibefield/contracts";
 import { LiveSurfaceDemandTracker, LiveSurfaceLifecycle } from "@vibefield/live-surfaces";
 import type {
+  BrowserAgentPage,
+  BrowserAgentPageState,
+  BrowserAgentPopups,
   BrowserControlTargetRegistry,
   BrowserControlTargetWebContents,
 } from "./browser-control-target";
@@ -102,6 +105,9 @@ export interface BrowserSurfaceNativeWindow {
   isDestroyed(): boolean;
   destroy(): void;
   setFrameRate(fps: number): void;
+  /** The transport's frame-rate ceiling: CPU_FALLBACK_MAX_FPS on the CPU fallback, Infinity on a shared texture. A call
+   * window's frame-rate floor never passes it (EY-1). Called on the transport's edge only. */
+  setFrameRateCeiling?(maxFps: number): void;
   startPainting(): void;
   stopPainting(): void;
   /** The page's sound. `stopPainting()` stops an offscreen page's frames, never its audio (Electron 43). */
@@ -183,6 +189,9 @@ export interface BrowserSurfaceNativeWindow {
   onPaint(listener: (paint: BrowserSurfacePaint) => void): () => void;
   onRenderProcessGone(listener: (reason: string) => void): () => void;
   onDestroyed(listener: () => void): () => void;
+  /** EY-1 (1f, 2026-11-19): the run's pop-up policy for this window, or none (null). OPTIONAL: a native without it
+   * hands off no pop-up: today's answer. */
+  setPopupPolicy?(policy: BrowserAgentPopups | null): void;
 }
 
 /**
@@ -534,6 +543,8 @@ interface BrowserRuntimeAttachmentRecord {
   readonly context: LiveSurfaceRuntimeAttachContext;
   readonly demand: LiveSurfaceDemandTracker;
   active: boolean;
+  /** EY-1 (1g): the person holds the page on this attachment. */
+  held: boolean;
 }
 
 interface SourceCallbacks {
@@ -669,6 +680,22 @@ function aggregateDemand(
       : { logicalViewport: { width: logicalViewport.width, height: logicalViewport.height } }),
     priority: Math.max(...selected.map((demand) => demand.priority)),
     interactive: selected.some((demand) => demand.interactive),
+  };
+}
+
+/** EY-1 (1g): a page read through closures, so the binding carries the hold and never the runtime. 1f: and the run's
+ * pop-up policy. */
+function agentPageOf(page: {
+  readonly held: () => boolean;
+  readonly onHeld: BrowserAgentPage["onHeld"];
+  readonly popups: (policy: BrowserAgentPopups | null) => void;
+}): BrowserAgentPage {
+  return {
+    get held() {
+      return page.held();
+    },
+    onHeld: page.onHeld,
+    popups: page.popups,
   };
 }
 
@@ -999,6 +1026,48 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   readonly #onPaintCallbackDurationUs: ((durationUs: bigint) => void) | undefined;
   readonly #lifecycle = new LiveSurfaceLifecycle();
   readonly #attachments = new Map<string, BrowserRuntimeAttachmentRecord>();
+  /** EY-1 (1g, 2026-11-19; EY-L2): the person's hold as the attachments tell it (any holding), and who hears its edges.
+   * Apart from PT-5d's `#held`, which reads the same hand off the effective demand. */
+  #holding = false;
+  readonly #holdingListeners = new Set<(held: boolean) => void>();
+  /**
+   * EY-1 (S1, 2026-11-24) — HELD FOR ITS RUN: a page main made for an agent's run has no window attached until the desk
+   * adopts it, and its run works on it meanwhile (the pages broker waits for its control binding before it names the page
+   * to anyone). While the hold stands and nothing is attached, the page is STARTED under no ask at all (every other start
+   * is under a live one); its first frame puts it to rest as any paused page, its document and its control target kept;
+   * it is silent; and the detached grace is not armed, since no renderer was attached to leave. The FIRST attachment ends
+   * the hold for good: from then the window's own ask rules the page, as any page's.
+   */
+  #runHeld = false;
+  /**
+   * EY-1 (C7, C8, 2026-11-24) — WHO HEARS THAT A HELD PAGE FAILED: custody's word, given with the hold. A page held for
+   * its run has nobody attached, so nothing asks for it live and nothing starts it again when its source fails (its
+   * window could not be made, it never came up inside the startup bound, its renderer went). It is said ONCE, in a turn
+   * of its own (never from inside the producer's own failure path, and after the make that held it has answered), and
+   * only while the hold stands: a page a window has attached to is that window's to see stopped, and to reload.
+   */
+  #heldFailure: (() => void) | null = null;
+  /** EY-1 (1e, 2026-11-19): the page's address and title as they stood when the person's hold
+   * began, until it ends: the pages broker never reads what the person did in their hold. */
+  #heldPage: { readonly url: string; readonly title: string } | null = null;
+  /** EY-1 (1g): the page an agent's broker reads through the control binding: the hold, and each edge once. 1f: and
+   * the run's pop-up policy, which reaches the window that stands. */
+  readonly #page: BrowserAgentPage = agentPageOf({
+    held: () => this.#holding,
+    onHeld: (listener) => {
+      this.#holdingListeners.add(listener);
+      return () => {
+        this.#holdingListeners.delete(listener);
+      };
+    },
+    popups: (policy) => {
+      this.#popups = policy;
+      this.forwardPopups();
+    },
+  });
+  /** EY-1 (1f): the run's pop-up policy as the broker last set it, and what the window that stands was last told */
+  #popups: BrowserAgentPopups | null = null;
+  #toldPopups: BrowserAgentPopups | null = null;
   #window: BrowserSurfaceNativeWindow | null = null;
   #callbacks: SourceCallbacks | null = null;
   #startupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -1308,6 +1377,60 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     };
   }
 
+  /** EY-1 (1e, 2026-11-19): this page's state for the pages broker (BrowserAgentPageState):
+   * parked when its lifecycle is at rest (hibernated: no window, so no binding), and its address
+   * and title; while the person holds it, as they stood when the hold began. EY-1 (7b): and its
+   * logical size and density now, which a tab or pop-up it opens takes. */
+  agentPageState(): BrowserAgentPageState {
+    const page = this.#heldPage ?? this.pageNow();
+    return {
+      parked: this.#lifecycle.snapshot.state === "hibernated",
+      ...page,
+      logicalViewport: { width: this.#viewport.width, height: this.#viewport.height },
+      deviceScaleFactor: this.density(),
+    };
+  }
+
+  /**
+   * EY-1 (S1, 2026-11-24): custody holds this page for the run it was made for (`#runHeld`). A page not yet made is
+   * started now, with no window attached. Asked of a page a renderer has already attached to, or a closed one, it is
+   * nothing: the hold is for the time before the first window, and never comes back.
+   * EY-1 (C7, C8, 2026-11-24): `onFailed` is told once if the page's source fails while the hold stands (`#heldFailure`).
+   */
+  holdForRun(onFailed?: () => void): void {
+    if (this.#closed || this.#runHeld || this.#attachmentsCreated > 0) return;
+    this.#runHeld = true;
+    this.#heldFailure = onFailed ?? null;
+    if (this.#lifecycle.snapshot.state === "created") this.startProducer();
+  }
+
+  /** EY-1 (C7, C8): a held page's source failed: its holder is told, once, in a turn of its own, if the page is then
+   * still held, still failed and not closed (a window that attached meanwhile asks for it again itself). */
+  private tellHeldFailure(): void {
+    const told = this.#heldFailure;
+    if (!this.#runHeld || told === null) return;
+    this.#heldFailure = null;
+    queueMicrotask(() => {
+      if (this.#closed || !this.#runHeld || this.#lifecycle.snapshot.state !== "failed") return;
+      told();
+    });
+  }
+
+  /** EY-1 (C6, 2026-11-24): when the pages plane last asked main's registry for this page's control binding (unix ms),
+   * which every call of a run on a page begins with; null: never, or the page binds nowhere. Custody reads it to know a
+   * page it keeps for a run is still in use. */
+  agentAskedAt(): number | null {
+    return this.#controlTargets?.askedAt(this.surfaceId) ?? null;
+  }
+
+  /** The page's address and title now: its committed state, or at rest the address it keeps. */
+  private pageNow(): { readonly url: string; readonly title: string } {
+    return {
+      url: this.#browserState?.url ?? this.#resumeUrl ?? this.source.initialUrl,
+      title: this.#browserState?.title ?? "",
+    };
+  }
+
   /** PT-5c2 (F4): the device switches this page took (`stats.emulations`) — main's census counts them
    * (`LiveSurfaceAuthority.state()`). */
   emulations(): number {
@@ -1378,9 +1501,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       context,
       demand: new LiveSurfaceDemandTracker(),
       active: true,
+      held: false,
     };
     this.#attachments.set(context.attachmentId, record);
     this.#attachmentsCreated += 1;
+    // EY-1 (S1): the first window attached: the run's hold is over for good, and this attachment's ask rules the page
+    this.#runHeld = false;
+    this.#heldFailure = null;
     let disposed = false;
     const runtime = this;
     return {
@@ -1417,11 +1544,19 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
           runtime.#navigationDropped += 1;
         });
       },
+      // EY-1 (1g, 2026-11-19): the person picked the page up or put it down, on this attachment
+      hold(held) {
+        if (disposed || !record.active) return;
+        record.held = held;
+        runtime.reconcileHeld();
+      },
       dispose() {
         if (disposed) return;
         disposed = true;
         record.active = false;
         runtime.#attachments.delete(context.attachmentId);
+        // EY-1 (1g): a held attachment that goes puts the page down, ahead of the demand it leaves
+        runtime.reconcileHeld();
         runtime.reconcileDemand();
         // PT-5c (ruling 2): a gesture ends when the attachment that took its press goes
         runtime.letGo(context.attachmentId);
@@ -1443,14 +1578,28 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     return this.#closed;
   }
 
-  /** Explicit source-owner teardown; renderer detach alone only pauses the source, and hibernates it once the grace lapses. */
+  /**
+   * Explicit source-owner teardown; renderer detach alone only pauses the source, and hibernates it once the grace lapses.
+   *
+   * EY-1 (C2, 2026-11-24) — A PAGE CLOSED UNDER A WINDOW SAYS SO TO IT: the page goes to `closed` and that summary is
+   * published to every attachment it still has, BEFORE they are let go. A window hears a close only so, and its lost,
+   * probe and leave path starts there. (Before: the attachments were cleared first and no summary was said. A page main
+   * closed while a window showed it, a run's page at its run's end above all, left its pane on its last frame, said to
+   * be live.) A page whose windows had all detached has nobody to tell, as before.
+   */
   dispose(): void {
     if (this.#closed) return;
     this.#closed = true;
     this.clearTimers();
+    // EY-1 (1f): the window that stands is told the policy is gone before it goes (never a destroyed one)
+    this.forwardPopups();
     this.destroyWindow();
-    this.#attachments.clear();
     if (this.#lifecycle.snapshot.state !== "closed") this.#lifecycle.transition("closed");
+    this.publishSummary();
+    this.#attachments.clear();
+    // EY-1 (1g): a closed page is held by nobody, and tells nobody more
+    this.reconcileHeld();
+    this.#holdingListeners.clear();
   }
 
   /**
@@ -2326,7 +2475,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         this.#born = true;
         // (F9: the device its birth told it — the hand follows it from now)
         this.#told = told;
-        this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents);
+        this.#controlTargets?.associate(this.surfaceId, epoch, window.controlContents, this.#page);
         // PT-5a: a load the page itself said FAILED is not a failed SOURCE — its window lives, its state says why, and a
         // reload asks again. PT-5b2 (ruling 6): and NOTHING of the source is read off this load's promise (`load`)
         if (this.#stopAsked) {
@@ -2721,6 +2870,42 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.publishSummary();
   }
 
+  /**
+   * EY-1 (1g, 2026-11-19) — THE PERSON'S HOLD: any attachment holding the page, as `aggregateDemand` folds the
+   * attachments' asks. Each edge is told once to every listener; a listener that throws is its own fault.
+   */
+  private reconcileHeld(): void {
+    const held = [...this.#attachments.values()].some(
+      (attachment) => attachment.active && attachment.held,
+    );
+    if (held === this.#holding) return;
+    this.#holding = held;
+    this.#heldPage = held ? this.pageNow() : null;
+    // EY-1 (1f; EY-L2): a page the person holds hands off no pop-up, from this turn, ahead of the broker's own clear
+    this.forwardPopups();
+    for (const listener of [...this.#holdingListeners]) {
+      try {
+        listener(held);
+      } catch {
+        // the broker's own fault; the page's hold stands
+      }
+    }
+  }
+
+  /**
+   * EY-1 (1f, 2026-11-19) — THE RUN'S POP-UP POLICY REACHES THE WINDOW THAT STANDS: the policy the broker set, or
+   * none while the person holds the page (EY-L2) or once the page is closed. Told at each birth, on each held edge and
+   * as the policy moves, and only when what the window should hold changes: a window never told holds none.
+   */
+  private forwardPopups(): void {
+    const window = this.#window;
+    if (window === null || window.isDestroyed()) return;
+    const policy = this.#holding || this.#closed ? null : this.#popups;
+    if (policy === this.#toldPopups) return;
+    this.#toldPopups = policy;
+    window.setPopupPolicy?.(policy);
+  }
+
   private reconcileDemand(): void {
     this.#effectiveDemand = aggregateDemand(this.#attachments.values());
     const demand = this.#effectiveDemand;
@@ -2737,7 +2922,9 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       // A pause stops the page's frames, never its sound: a page no renderer shows is MUTED while the grace keeps it.
       if (state === "live") this.pauseProducer();
       this.mute(true);
-      this.armDetachedHibernate();
+      // EY-1 (S1, 2026-11-24): a page held for its run has had no renderer attached, so none left: it rests here, its
+      // document and control target kept, until its first window attaches (custody ends it by its own rules)
+      if (!this.#runHeld) this.armDetachedHibernate();
       return;
     }
     this.cancelDetachedHibernate();
@@ -2822,6 +3009,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#viewport = viewport;
       this.#window = window;
+      this.#toldPopups = null;
+      this.forwardPopups();
       this.mute(this.#userMuted || this.#effectiveDemand?.mode !== "live");
       this.#windowDensity = this.density();
       const removePaint = window.onPaint((paint) => this.acceptPaint(window, epoch, paint));
@@ -2946,6 +3135,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     const capabilityChanged = this.#transport !== "shared-texture";
     this.#transport = "shared-texture";
+    // EY-1 (2026-11-19): the window learns its ceiling on the transport's edge, as applyFrameRate's clamp moves with it
+    if (capabilityChanged) this.#window?.setFrameRateCeiling?.(Number.POSITIVE_INFINITY);
     this.#error = undefined;
     const becameLive = this.observeFirstUsableFrame();
     this.#sequence += 1n;
@@ -3048,6 +3239,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     const capabilityChanged = this.#transport !== "cpu-bgra";
     this.#transport = "cpu-bgra";
+    if (capabilityChanged) this.#window?.setFrameRateCeiling?.(CPU_FALLBACK_MAX_FPS);
     this.#error = sourceError(
       "transport-degraded",
       "Browser shared texture was unavailable; bounded CPU fallback is active",
@@ -3304,6 +3496,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     try {
       const window = this.#native.createWindow(this.windowOptions(viewport, initialRaster));
       this.#window = window;
+      this.#toldPopups = null;
+      this.forwardPopups();
       this.mute(this.#userMuted || this.#effectiveDemand?.mode !== "live");
       this.#viewport = viewport;
       this.#windowDensity = this.density();
@@ -3368,6 +3562,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }
     this.#error = error;
     this.publishSummary();
+    this.tellHeldFailure();
   }
 
   private destroyWindow(): void {
@@ -3383,10 +3578,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
         reject(new Error("Browser input's window is gone"));
     }
     // the next window is born with its sound (it is made only under a LIVE ask — every caller of `startProducer` and
-    // `createReconnectingProducer` says so: a page woken is born as its ask says), at its own density, its scale unread
+    // `createReconnectingProducer` says so: a page woken is born as its ask says — or, EY-1 (S1), for a page held for
+    // its run, which is muted as it is made), at its own density, its scale unread
     this.#muted = false;
     this.#windowDensity = undefined;
     this.#documentStands = false;
+    // EY-1 (1f): the next window is told the policy at its birth
+    this.#toldPopups = null;
     this.#heardLoading = false;
     // (R4: the person's stop — `#stopAsked` — is the page's, not the window's: kept)
     // PT-5c2 (F6) — A STOP THE PERSON ASKED AND THE ENGINE NEVER SAID IS SAID AS THE WINDOW GOES (a rest, a remake under an

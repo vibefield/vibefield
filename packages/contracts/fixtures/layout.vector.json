@@ -44,6 +44,7 @@
   "OBJECTS_DIR": ["fieldd", "objects"],
   "OBJECTS_KEY_FILE": ["fieldd", "objects.key"],
   "OBJECTS_GRANTS_FILE": ["fieldd", "objects.grants.json"],
+  "PAGES_STILLS_DIR": ["fieldd", "pages", "stills"],
   "SPARK_FILES_DIR": ["fieldd", "spark-files"],
   "SPARK_FILES_KEY_FILE": ["fieldd", "spark-files.key"],
   "FLOWS_LIBRARY_DIR": ["flows"],

@@ -1,0 +1,6 @@
+{
+  "//": "EY-1 (1f) — the agent closed a page the person had handed it: main's broker gave it back instead of closing it. The person's page stays open and the run's grant on it ends; the answer names it in `givenBack`, counted as `closed` is.",
+  "status": "done",
+  "output": { "closed": true },
+  "givenBack": ["surface_0123456789abcdef"]
+}

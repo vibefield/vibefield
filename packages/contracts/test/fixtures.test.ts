@@ -233,6 +233,7 @@ import {
 } from "../src/freeway";
 import {
   LiveSurfaceIosSimulatorBindingV1,
+  LiveSurfaceRendererControlMessageV1,
   SimulatorsMadeRemoveResult,
   SimulatorsMadeStatus,
 } from "../src/live-surfaces";
@@ -294,7 +295,12 @@ import {
   SystemNativeRestartResult,
   TerminalRoutesStreamPayload,
 } from "../src/mgmt";
-import { ObjectGrantsFile, ObjectsPresenceSnapshot } from "../src/objects";
+import {
+  ObjectGrantsFile,
+  ObjectIntent,
+  ObjectIntentAnswer,
+  ObjectsPresenceSnapshot,
+} from "../src/objects";
 import {
   BundledPluginIndex,
   PluginsCatalog,
@@ -349,6 +355,7 @@ import {
   CommunityStatement,
   FielddLinkUnavailable,
   ShellOpenMadeAppParams,
+  ShellProviderOutcome,
   ShellSurfacesControlParams,
   ShellSurfacesControlResult,
   ShellWebContentsCaptureArtifactPreviewParams,
@@ -578,6 +585,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // three answers (done, held, needs-you). fieldd's room and main's broker parse them through these schemas.
   "shell-surfaces-control-params": ShellSurfacesControlParams,
   "shell-surfaces-control-result": ShellSurfacesControlResult,
+  // EY-1 — a provider's outcome as main sends it and fieldd reads it: a pages UNAVAILABLE with its state.
+  "shell-provider-outcome": ShellProviderOutcome,
   "native-health": NativeHealth,
   // Item 600 — fieldd's `system.health` as a product client reads it; fieldd's own blocks ride through unread.
   // Its own rows: system-health.test.ts.
@@ -637,6 +646,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // OB at work (item 550): the desk's presence feed, each object's agents with their run's project,
   // spark and starter as ids (objects.ts; TS-only). Its own rows: objects.test.ts.
   "objects-presence": ObjectsPresenceSnapshot,
+  // EY-1 (1f) — the window's door: a place of a pane a pages call made, with `made` and the run-naming prop
+  // (objects.ts, pages.ts; TS-only). Its own rows: shell.test.ts.
+  "object-intent": ObjectIntent,
+  // EY-1 (1f) — the window's answer to an intent: a refusal names its fact (the desk room's OBJECT_FACTS), as the
+  // desk refuses a made page it has no room for. Its own rows: objects.test.ts.
+  "object-intent-answer": ObjectIntentAnswer,
   // DS-1 — the egress facade (mgmt.ts). The table has TWO fixtures on purpose:
   // a bound table (a MagicDNS target and a bracketed IPv6 one) and the EMPTY
   // snapshot a node teardown pushes, which is the facade's reset.
@@ -767,6 +782,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // simulators-made.test.ts.
   "simulators-made-status": SimulatorsMadeStatus,
   "simulators-made-remove-result": SimulatorsMadeRemoveResult,
+  // EY-1 (1f) — two renderer → main messages on the control port: a window's room for agent pages, and a made
+  // pane it declines (live-surfaces.ts; TS-only). Their own rows: live-surfaces.test.ts.
+  "live-surface-renderer-control": LiveSurfaceRendererControlMessageV1,
   "diagnostic-snapshot": DiagnosticLogSnapshotV1,
   "diagnostic-delta": DiagnosticLogDeltaV1,
   "diagnostic-lease": DiagnosticLeaseV1,

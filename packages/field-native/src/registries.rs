@@ -389,6 +389,7 @@ pub mod layout {
     pub const OBJECTS_DIR: &[&str] = &["fieldd", "objects"];
     pub const OBJECTS_KEY_FILE: &[&str] = &["fieldd", "objects.key"];
     pub const OBJECTS_GRANTS_FILE: &[&str] = &["fieldd", "objects.grants.json"];
+    pub const PAGES_STILLS_DIR: &[&str] = &["fieldd", "pages", "stills"];
     pub const SPARK_FILES_DIR: &[&str] = &["fieldd", "spark-files"];
     pub const SPARK_FILES_KEY_FILE: &[&str] = &["fieldd", "spark-files.key"];
     pub const FLOWS_LIBRARY_DIR: &[&str] = &["flows"];
@@ -494,6 +495,7 @@ pub mod layout {
         ("OBJECTS_DIR", OBJECTS_DIR),
         ("OBJECTS_KEY_FILE", OBJECTS_KEY_FILE),
         ("OBJECTS_GRANTS_FILE", OBJECTS_GRANTS_FILE),
+        ("PAGES_STILLS_DIR", PAGES_STILLS_DIR),
         ("SPARK_FILES_DIR", SPARK_FILES_DIR),
         ("SPARK_FILES_KEY_FILE", SPARK_FILES_KEY_FILE),
         ("FLOWS_LIBRARY_DIR", FLOWS_LIBRARY_DIR),

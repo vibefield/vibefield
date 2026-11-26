@@ -1,6 +1,11 @@
 import { join } from "node:path";
 import {
+  PAGES_OUTPUT_EXHAUSTED_MESSAGE,
+  PAGES_SERVICE,
+  PAGES_UNAVAILABLE_STATES,
   SHELL_PROVIDER_METHODS,
+  SHELL_SURFACES_MADE_CLOSED,
+  SHELL_SURFACES_SERVICE,
   ShellDialogPickFileParams,
   ShellDialogPickFileResult,
   ShellDialogPickFolderParams,
@@ -16,12 +21,16 @@ import {
   type ShellProviderCallParams,
   ShellProviderCallParams as ShellProviderCallParamsSchema,
   type ShellProviderError,
+  type ShellProviderErrorDetails,
   ShellProviderRegisterResult,
   ShellRendererRequestReplacementParams,
   type ShellRendererRequestReplacementResult,
   ShellRendererRequestReplacementResult as ShellRendererRequestReplacementResultSchema,
   ShellRevealPathParams,
   ShellRevealPathResult,
+  ShellSurfacesControlParams,
+  type ShellSurfacesControlResult,
+  ShellSurfacesControlResult as ShellSurfacesControlResultSchema,
   ShellSurfacesEnumerateParams,
   type ShellSurfacesEnumerateResult,
   ShellSurfacesEnumerateResult as ShellSurfacesEnumerateResultSchema,
@@ -42,6 +51,7 @@ import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import type { BrowserWindow, OpenDialogOptions, SaveDialogOptions } from "electron";
 import type { FielddHandleCoordinator } from "./fieldd-handle-coordinator";
+import { PagesBrokerError } from "./pages/broker/broker";
 
 type Stop = () => void;
 type Client = FielddHandle["client"];
@@ -91,6 +101,13 @@ export interface ShellProviderNative {
     params: ShellSurfacesSimulatorDevicesParams,
     signal: AbortSignal,
   ): Promise<ShellSurfacesSimulatorDevicesResult>;
+  /** EY-1 — an agent's call on a page, answered by main's pages broker with fieldd's cancel as
+   * its signal and fieldd's deadline as its own. Absent: main has no broker yet. */
+  controlSurface?(
+    params: ShellSurfacesControlParams,
+    signal: AbortSignal,
+    deadlineAt: number,
+  ): Promise<ShellSurfacesControlResult>;
 }
 
 interface ActiveCall {
@@ -99,10 +116,62 @@ interface ActiveCall {
   method: ShellProviderCallParams["method"];
 }
 
+/** EY-1 (2026-11-24): the broker's own words for a pages RESOURCE_EXHAUSTED, which fieldd's pages room reads by
+ * name: the run holds the most pages it may, the desk has no room for another, an answer is larger than one call
+ * carries. A row holds this list to the room's reading. */
+const PAGES_EXHAUSTED_STATES: readonly string[] = ["run-full", "desk-full", "output-too-large"];
+
+/** What main says of a pages RESOURCE_EXHAUSTED that is no answer too large: the room's own words reach the agent,
+ * never these. */
+const PAGES_NO_ROOM_MESSAGE = "no room for another page";
+
+/** EY-1 (2026-11-19): a pages UNAVAILABLE keeps its state to the room, so its words say why: the service and the
+ * broker's own fixed word (PAGES_UNAVAILABLE_STATES), never a page's text. Any other error says none.
+ * Errata (2026-11-24, a pages call with no room): "any other error says none" left a pages RESOURCE_EXHAUSTED bare,
+ * so the room could tell a run at its count of pages from a full desk or an answer too large only by the kind of
+ * call. It keeps its state too, by the broker's own list for that kind (PAGES_EXHAUSTED_STATES). A state is its
+ * kind's: the same word under another kind says none. */
+function pagesDetails(error: unknown): ShellProviderErrorDetails | undefined {
+  if (!(error instanceof PagesBrokerError)) return undefined;
+  const listed: readonly string[] =
+    error.kind === "UNAVAILABLE"
+      ? PAGES_UNAVAILABLE_STATES
+      : error.kind === "RESOURCE_EXHAUSTED"
+        ? PAGES_EXHAUSTED_STATES
+        : [];
+  return listed.includes(error.state) ? { service: PAGES_SERVICE, state: error.state } : undefined;
+}
+
+/** A RESOURCE_EXHAUSTED's fixed words by what was asked (2026-11-24): a preview's image budget is the preview's
+ * alone. A pages call says an answer too large (contracts' own words for it), or no room for another page. */
+function exhaustedMessage(
+  method: ShellProviderCallParams["method"],
+  details: ShellProviderErrorDetails | undefined,
+): string {
+  if (method !== "shell.surfaces.control")
+    return "the preview could not fit within the image budget";
+  return details?.state === "run-full" || details?.state === "desk-full"
+    ? PAGES_NO_ROOM_MESSAGE
+    : PAGES_OUTPUT_EXHAUSTED_MESSAGE;
+}
+
+/** EY-1 (7b, 2026-11-19): a surface mint main refused because its page is gone for good keeps that one word to the
+ * window, so its pane leaves; no other refusal's state crosses (an allow-list of one). */
+function surfacesDetails(error: unknown): ShellProviderErrorDetails | undefined {
+  if (error instanceof PagesBrokerError || typeof error !== "object" || error === null) {
+    return undefined;
+  }
+  const { kind, state } = error as { kind?: unknown; state?: unknown };
+  return kind === "PRECONDITION_FAILED" && state === SHELL_SURFACES_MADE_CLOSED
+    ? { service: SHELL_SURFACES_SERVICE, state: SHELL_SURFACES_MADE_CLOSED }
+    : undefined;
+}
+
 function safeProviderError(
   error: unknown,
   method: ShellProviderCallParams["method"],
 ): ShellProviderError {
+  const details = pagesDetails(error) ?? surfacesDetails(error);
   const kind =
     typeof error === "object" && error !== null && "kind" in error
       ? String((error as { kind: unknown }).kind)
@@ -138,11 +207,12 @@ function safeProviderError(
                 ? "the live-surface authority is unavailable"
                 : "the primary window is unavailable"
           : kind === "RESOURCE_EXHAUSTED"
-            ? "the preview could not fit within the image budget"
+            ? exhaustedMessage(method, details)
             : kind === "NOT_FOUND" && method === "shell.openMadeApp"
               ? "that app has no local view to open"
               : "the desktop operation failed",
     retryable: kind === "UNAVAILABLE" || kind === "TIMEOUT" || kind === "CONFLICT",
+    ...(details === undefined ? {} : { details }),
   };
 }
 
@@ -294,10 +364,18 @@ export class RecoveringShellProvider {
     this.calls.set(call.callId, active);
     void this.execute(call, active.controller.signal).then(
       (result) => this.resolve(generation, client, call.callId, active, { result }),
-      (error: unknown) =>
-        this.resolve(generation, client, call.callId, active, {
+      (error: unknown) => {
+        // EY-1: the broker's kind and state are its own fixed words, never a page's text
+        if (error instanceof PagesBrokerError) {
+          this.logger.warn("desktop.pages.control_failed", "main's pages broker refused a call", {
+            kind: error.kind,
+            state: error.state,
+          });
+        }
+        return this.resolve(generation, client, call.callId, active, {
           error: safeProviderError(error, call.method),
-        }),
+        });
+      },
     );
   }
 
@@ -392,10 +470,32 @@ export class RecoveringShellProvider {
         await this.native.listSimulatorDevices(params, signal),
       );
     }
-    // EY-0 — an agent's call on a page. Main has no broker until EY-1, so it refuses before any
-    // parse: the live-surface authority is unavailable, and the call never reaches a dialog below.
+    // EY-1 — an agent's call on a page. Its params are parsed through the contract first, so a call
+    // that is not a page's never reaches a dialog below; main's pages broker answers it, and its
+    // answer is parsed on the way out. With no broker, the live-surface authority is unavailable.
     if (call.method === "shell.surfaces.control") {
-      throw { kind: "UNAVAILABLE" };
+      const params = ShellSurfacesControlParams.safeParse(call.params);
+      if (!params.success) throw { kind: "PRECONDITION_FAILED" };
+      if (this.native.controlSurface === undefined) throw { kind: "UNAVAILABLE" };
+      const answer = ShellSurfacesControlResultSchema.safeParse(
+        await this.native.controlSurface(params.data, signal, call.deadlineAt),
+      );
+      if (!answer.success) {
+        // Only zod's own codes, the count and the deepest path's length are said: a page can choose
+        // an answer's keys as well as its values, and either can hold the page's text.
+        const issues = answer.error.issues;
+        this.logger.warn(
+          "desktop.pages.control_answer_rejected",
+          "main's pages broker gave an answer outside the contract",
+          {
+            issues: issues.length,
+            codes: [...new Set(issues.map((issue) => issue.code))].join(","),
+            depth: Math.max(0, ...issues.map((issue) => issue.path.length)),
+          },
+        );
+        throw { kind: "INTERNAL" };
+      }
+      return answer.data;
     }
     // GT-7 — Settings → Terminal's Import file…: one FILE, and main hands back
     // only its path; fieldd reads it (bounded, UTF-8). Each verb is locked to

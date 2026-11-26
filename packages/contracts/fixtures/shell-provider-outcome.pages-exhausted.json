@@ -1,0 +1,11 @@
+{
+  "error": {
+    "kind": "RESOURCE_EXHAUSTED",
+    "message": "no room for another page",
+    "retryable": false,
+    "details": {
+      "service": "pages",
+      "state": "run-full"
+    }
+  }
+}

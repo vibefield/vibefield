@@ -56,9 +56,15 @@ export const browserPaneManifest: PluginManifestV1 = {
         // the URL in a cell of its own (PT-3 ruling 9): strata's undo re-asserts a WHOLE cell as it stood before the undone
         // edit, so an undo of the desk's edit to the props (a finish, a device switch) would take back with it a page's later
         // navigation — written into the url, never an undo step — and send the page back
-        groups: { page: ["url"] },
+        // PI-1 (2026-11-24): and a run's pane's address (`runAddress`) beside it in the same cell, never in `url`: a reader
+        // that does not know `agentRun` (an older build, a device on one) reads `url` alone and drops a field it does not
+        // declare, so it shows the sample, never an agent's page in the person's signed-in profile
+        groups: { page: ["url", "runAddress"] },
         props: {
           url: { kind: "string", default: SAMPLE_URL, maxLength: URL_MAX },
+          // PI-1 (2026-11-24): the address a run's pane is at, set by VibeField (the pages room's place, the page's own
+          // moves); "" on a person's pane, which never reads it
+          runAddress: { kind: "string", default: "", maxLength: URL_MAX },
           device: { kind: "enum", options: [...DEVICE_IDS], default: "laptop" },
           deviceScaleFactor: { kind: "number", default: 0, min: 0, max: 8 },
           inputMode: {
@@ -76,6 +82,10 @@ export const browserPaneManifest: PluginManifestV1 = {
           muted: { kind: "boolean", default: false },
           finish: { kind: "enum", options: [...PANE_FINISHES], default: "low-iron" },
           scheme: { kind: "enum", options: [...PANE_SCHEMES], default: "desk" },
+          // EY-2 (2g, 2026-11-19): the run whose pages room made this pane, set by VibeField, never by an agent or a
+          // plugin; "" names no run (the person's own pane, and every pane saved before this prop). 128 is a run id's
+          // bound on the control call (ShellSurfacesControlParams.run)
+          agentRun: { kind: "string", default: "", maxLength: 128 },
         },
         // on the pegboard (ICE design-017 §8): a pane on a shelf under the portals' own category, hung at its own
         // aspect, its specimen drawn with the kind's desk state (its head engraved by the host's service)
@@ -97,6 +107,20 @@ export const browserPaneManifest: PluginManifestV1 = {
         // OB-D16 (2026-11-25): the likeness Godview's pane wears while an agent holds one (its art ships in assets/)
         sticker: { art: "./assets/sticker.svg", radius: 6, name: "url" },
         binding: { kind: "browserPane" },
+        // EY-2 (2g, 2026-11-19): the pane's agent half. Its tools are the pages room's rows, so it declares none of
+        // its own and names the room: an agent is handed a page as any object, and opens its own with browser_open,
+        // never canvas_place. Its faces need no handler: the object itself, and its picture (the capture door's)
+        agent: {
+          summary:
+            "A web page on the desk. Work it with the browser tools; you can work only the pages you opened with them, not the user's.",
+          concurrency: "many",
+          faces: [
+            { type: "ref", label: "Live" },
+            { type: "image", label: "Picture" },
+          ],
+          tools: [],
+          room: "pages",
+        },
       },
     ],
   },

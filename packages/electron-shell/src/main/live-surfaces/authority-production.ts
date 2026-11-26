@@ -1,19 +1,31 @@
 import { existsSync } from "node:fs";
-import type {
-  BrowserDataClearResult,
-  SimulatorSetupStatus,
-  SimulatorSetupTarget,
+import {
+  type BrowserDataClearResult,
+  type LiveSurfaceBrowserSourceV1,
+  type ShellSurfacesControlParams,
+  type SimulatorSetupStatus,
+  type SimulatorSetupTarget,
+  SURFACE_AUTHORITY_LIMITS,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
-import type {
-  LiveSurfaceEnumerationSources,
-  LiveSurfaceRuntimeFactories,
-  LiveSurfaceSimulatorCensus,
-  LiveSurfaceSimulatorDeviceSource,
+import { pageClassOf } from "../pages/core/policy";
+import type { PageClass } from "../pages/core/types";
+import {
+  type LiveSurfaceAuthority,
+  type LiveSurfaceEnumerationSources,
+  type LiveSurfaceRuntimeFactories,
+  type LiveSurfaceSimulatorCensus,
+  type LiveSurfaceSimulatorDeviceSource,
+  RUN_PROFILE_PREFIX,
 } from "./authority";
+import {
+  BrowserControlTargetRegistry,
+  type BrowserControlTargetRegistryOptions,
+} from "./browser-control-target";
 import { clearBrowsingData } from "./browser-data";
 import { ElectronBrowserSurfaceNative } from "./browser-electron-native";
 import { BrowserLiveSurfaceRuntime } from "./browser-producer";
+import { browserSurfacePartition } from "./browser-security";
 import { SimulatorDeviceSessions } from "./ios-simulator-device-runtime";
 import {
   IosSimulatorLiveSurfaceRuntime,
@@ -40,6 +52,85 @@ import { SimulatorSetupService } from "./simulator-setup";
 // device list (R8). PT-S3 (P1): and by the booted-simulator kind's catalog —
 // main's ONE simctl, so every xcrun main spawns is pinned to the vetted Xcode.
 
+/** EY-1 (1f): what emptying a run's own session needs of Electron's session. */
+export interface RunPartitionSession {
+  clearStorageData(): Promise<void>;
+  clearCache(): Promise<void>;
+  clearAuthCache(): Promise<void>;
+}
+
+/** EY-1 (1f, 2026-11-19): custody's `clearRunPartition`. It empties an ended run's own memory
+ * session (its site storage, its HTTP cache, its auth cache) through the session its pages held,
+ * named as the producer named it. Any other source is refused, a desk's page or a person's profile
+ * above all: a run's end never clears what is not the run's. */
+export function createRunPartitionClearer(
+  sessionOf: (partition: string) => RunPartitionSession,
+): (source: LiveSurfaceBrowserSourceV1) => Promise<void> {
+  return async (source) => {
+    if (source.profile.mode !== "memory" || !source.profile.ref.startsWith(RUN_PROFILE_PREFIX)) {
+      throw new Error("only a run's own memory session is cleared at its end");
+    }
+    const target = sessionOf(browserSurfacePartition(source));
+    await target.clearStorageData();
+    await target.clearCache();
+    await target.clearAuthCache();
+  };
+}
+
+/**
+ * EY-1 (C3, 2026-11-24) — THE RULE MAIN HOLDS BY ITSELF: A RUN IS OF THE FIELDD THAT NAMED IT. A run ended in main
+ * only when fieldd's pages room sent the run form's close. A fieldd that restarted or crashed has no room that knows
+ * the run, so that message can never come: its kept pages stood hidden, its adopted panes went on minting into its
+ * session, and nothing was cleared, until the app quit. So when a fieldd with ANOTHER BOOT IDENTITY attaches (main's
+ * boot fence, which already replaces every renderer document then), main ends every run it holds:
+ * - custody first, at once and whole (`endEveryRun`): pages, sessions, records;
+ * - then the pages broker's half of each run it named (its grants, its route, its engine), through the plane's own
+ *   door, the run form's close, with the control call's own deadline. The broker answers at once for a run it does
+ *   not hold, and by then finds no page of the run in custody to close. A close that fails is said and stops nothing.
+ * With no run to end, the plane's door is never asked.
+ *
+ * Why this rule and no smaller one: the boot identity is what main already reads to know fieldd's whole in-memory
+ * authority was replaced, and it is exact (a reconnect of the same fieldd ends nothing). Why no larger one: every
+ * other way a run's end fails to reach main is fieldd's to mend (it now says a run's end whether or not its room
+ * holds panes), and custody's own bounds on a kept page stand behind it (KEPT_UNUSED_MS, the last product window).
+ * A run the broker holds and custody never did (it made no page) is ended by the plane's own door, `endEveryRun`,
+ * which the boot fence asks beside this (2026-11-24).
+ */
+export function endRunsOfGoneFieldd(deps: {
+  readonly custody: Pick<LiveSurfaceAuthority, "endEveryRun">;
+  /** the pages plane's `control` */
+  readonly control: (
+    params: ShellSurfacesControlParams,
+    ctx: { readonly signal: AbortSignal; readonly deadlineAt: number },
+  ) => Promise<unknown>;
+  readonly now?: () => number;
+  /** an event and its fields, never a run's id */
+  readonly warn?: (event: string, fields: Readonly<Record<string, unknown>>) => void;
+}): { runs: number; pages: number } {
+  const ended = deps.custody.endEveryRun();
+  const deadlineAt = (deps.now ?? Date.now)() + SURFACE_AUTHORITY_LIMITS.CONTROL_DEADLINE_MS;
+  const failed = (error: unknown): void => {
+    const kind =
+      typeof error === "object" && error !== null && "kind" in error
+        ? String(error.kind)
+        : "INTERNAL";
+    deps.warn?.("desktop.pages.gone_fieldd_close_failed", { kind });
+  };
+  for (const run of ended.runs) {
+    try {
+      void deps
+        .control(
+          { run, window: "act", command: { action: "close" } },
+          { signal: new AbortController().signal, deadlineAt },
+        )
+        .catch(failed);
+    } catch (error) {
+      failed(error);
+    }
+  }
+  return { runs: ended.runs.length, pages: ended.pages };
+}
+
 export interface LiveSurfaceCapturePaths {
   readonly helperPath: string;
   readonly adapterPath: string;
@@ -58,6 +149,12 @@ export interface ProductionLiveSurfaceSupport {
   /** PT-S3 (D1) — main's simulator census (the authority's `state().simulator`): it READS what was made and never makes
    * — no simctl, no capture stack, no session, no spawn, no load. */
   census(): LiveSurfaceSimulatorCensus;
+  /** EY-1 (7b, 2026-11-19): main's ONE control-target registry, every browser page this support
+   * makes binds there; null when it was given no resolver. Cleared at dispose: no binding outlives it. */
+  readonly controlTargets: BrowserControlTargetRegistry | null;
+  /** EY-1 (7b): a browser page's class by its profile, of the live page this support made for the
+   * surface; null for none. */
+  pageClass(surfaceId: string): PageClass | null;
   dispose(): Promise<void>;
 }
 
@@ -91,18 +188,34 @@ export function createProductionLiveSurfaceSupport(opts: {
    * crash left running is shut down by the next start's panes. Absent: none is kept, and such a device runs on. */
   simulatorBootedFile?: string;
   logger?: Logger;
+  /** EY-1 (7b, 2026-11-19): Electron's `webContents.fromDevToolsTargetId`, the registry's resolver.
+   * Absent: no registry, and no browser page binds for an agent. */
+  controlTargetResolver?: BrowserControlTargetRegistryOptions["resolveTarget"];
 }): ProductionLiveSurfaceSupport {
   const simctlCalls = opts.simctlCalls;
   let browserNative: ElectronBrowserSurfaceNative | null = null;
   /** BP-D4: the browser surfaces this support made — what "Clear browsing data" reloads (closed ones are let go there) */
   const browserSurfaces = new Set<BrowserLiveSurfaceRuntime>();
+  const controlTargets =
+    opts.controlTargetResolver === undefined
+      ? null
+      : new BrowserControlTargetRegistry({ resolveTarget: opts.controlTargetResolver });
   let captureStack: CaptureStack | null = null;
   let simctl: SimctlService | null = null;
   let simulatorSessions: SimulatorDeviceSessions | null = null;
   let disposed = false;
 
   const ensureBrowserNative = (): ElectronBrowserSurfaceNative => {
-    if (browserNative === null) browserNative = new ElectronBrowserSurfaceNative();
+    if (browserNative === null) {
+      browserNative = new ElectronBrowserSurfaceNative({
+        // EY-1 (1f, 2026-11-19): a pop-up the run's policy allowed, refused by the address rule: the two diverged
+        onPopupBeltRefused: () =>
+          opts.logger?.warn(
+            "desktop.pages.popup_belt_refused",
+            "a pop-up the run's policy allowed was refused by the address rule",
+          ),
+      });
+    }
     return browserNative;
   };
 
@@ -207,6 +320,7 @@ export function createProductionLiveSurfaceSupport(opts: {
             ? {}
             : { profilesRoot: opts.browserProfilesRoot }),
           ...(opts.browserProfilesPackaged === true ? { profilesPackaged: true } : {}),
+          ...(controlTargets === null ? {} : { controlTargets }),
         });
         // a closed surface is let go as the next is made, so the set holds the open ones (and a few just closed)
         for (const surface of browserSurfaces)
@@ -303,8 +417,18 @@ export function createProductionLiveSurfaceSupport(opts: {
         ...(simctlCalls === undefined ? {} : { simctl: { ...simctlCalls } }),
       };
     },
+    controlTargets,
+    pageClass: (surfaceId) => {
+      for (const surface of browserSurfaces) {
+        if (surface.surfaceId === surfaceId && !surface.isClosed()) {
+          return pageClassOf(surface.source.profile);
+        }
+      }
+      return null;
+    },
     dispose: async () => {
       disposed = true;
+      controlTargets?.clear();
       const phonesStopped = simulatorSessions?.dispose();
       simulatorSessions = null;
       const stack = captureStack;

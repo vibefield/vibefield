@@ -65,6 +65,7 @@ import {
   screen,
   session,
   shell,
+  webContents,
 } from "electron";
 import { aboutPanelOptions } from "./about-panel";
 import { applyDevelopmentDockIcon } from "./app-branding";
@@ -123,9 +124,15 @@ import { LinkNoticeObserver } from "./link-notices";
 import { LiveSurfaceAuthority } from "./live-surfaces/authority";
 import {
   createProductionLiveSurfaceSupport,
+  createRunPartitionClearer,
+  endRunsOfGoneFieldd,
   type ProductionLiveSurfaceSupport,
 } from "./live-surfaces/authority-production";
-import { configureBrowserEngineIdentity } from "./live-surfaces/browser-electron-native";
+import {
+  browserAgentPortOf,
+  configureBrowserEngineIdentity,
+} from "./live-surfaces/browser-electron-native";
+import { engineAgentOf } from "./live-surfaces/browser-producer";
 import {
   browserProfilesPlacement,
   sayBrowserProfilesPlacement,
@@ -139,7 +146,7 @@ import {
   type LiveSurfaceTextureTransferBudget,
 } from "./live-surfaces/texture-forwarder";
 import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
-import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
+import { LiveSurfaceWindowHost, liveSurfaceProductWindows } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
 import {
@@ -165,6 +172,9 @@ import {
   smokeSimctlDeveloperDir,
 } from "./modes";
 import { NeedsNoticeObserver } from "./needs-notices";
+import { composePages, type PagesComposition, pagesEngineOf } from "./pages/compose";
+import { agentInput } from "./pages/endpoint/input";
+import { makeBridgeWss } from "./pages/endpoint/wss";
 import { readCensus, requestConsentedStop } from "./pair-stop";
 import { localDay } from "./picture-save-door";
 import { installPluginProtocol } from "./plugin-protocol";
@@ -175,9 +185,11 @@ import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
 import { installRendererLogging } from "./renderer-logging";
 import {
   assertPackagedResources,
+  dropDevelopmentPagesEngine,
   resolveDevelopmentRepoRoot,
   resolveDevelopmentResources,
   resolvePackagedResources,
+  takeDevelopmentPagesEngine,
 } from "./resources";
 import { registerShellSchemes } from "./scheme-registration";
 import { withScreenshotScreenBounds } from "./screenshot-bounds";
@@ -216,6 +228,7 @@ import { createElectronTrayRuntime } from "./tray-native";
 import { wordsBox } from "./updates/controller";
 import { readUpdateIdentity } from "./updates/identity";
 import { createElectronApplyPort, installUpdateController } from "./updates/install";
+import { bundlePathOf } from "./updates/location";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
 import { ViewRegistry } from "./view";
 import { installVitals, type VitalsHost } from "./vitals";
@@ -238,6 +251,13 @@ const RENDERER_POLICY_MODE = rendererPolicyMode(MODE, process.env["VF_GODVIEW_LA
 // PT-S3 (P2) — a smoke's simctl developer directory, parsed once, beside the mode: read ONLY in a smoke-like mode
 // (`modes.ts`), so production's simctl always asks xcode-select
 const SMOKE_SIMCTL_DEVELOPER_DIR = smokeSimctlDeveloperDir(MODE, process.env);
+// EY-1 1b (2026-11-19) — the pages engine's development copy, TAKEN here at module load: read once and removed from
+// main's environment before Electron is ready, so no helper Electron starts and nothing main spawns inherits where the
+// engine sits. A packaged app drops it unread: no environment moves a packaged engine. The development arm of the
+// resource resolution reads this value.
+const DEVELOPMENT_PAGES_ENGINE = app.isPackaged
+  ? dropDevelopmentPagesEngine(process.env)
+  : takeDevelopmentPagesEngine(process.env);
 // TP-S3a — the direct terminal door (TP-D1 as ratified): a rollback flag, OFF
 // until S3e; it widens the production CSP to the cells' loopback ports and, at
 // S3b, routes the pool's transport. Parsed once, beside the mode.
@@ -372,6 +392,9 @@ const liveSurfaceTextureBudgets = new Map<string, LiveSurfaceTextureTransferBudg
 // only before boot completes or after shell teardown (doors answer UNAVAILABLE).
 let liveSurfaceAuthority: LiveSurfaceAuthority | null = null;
 let liveSurfaceSupport: ProductionLiveSurfaceSupport | null = null;
+// EY-1 (7b, 2026-11-19) — the pages plane (`pages/compose.ts`), on the same custody; null with none (an agent's
+// call answers UNAVAILABLE) and after teardown.
+let pagesPlane: PagesComposition | null = null;
 // Item 287 — fieldd is started only through the attached pair's coordinator, which refuses while held for a stop
 // and once disposed. With none attached (before boot, after teardown) nothing starts it. The bare
 // `supervisor.ensure` road this replaced could not start a pair after teardown either, but only because the
@@ -407,6 +430,9 @@ function disposeShellState(): Promise<void> {
   primaryWindowOpener = null;
   for (const dispose of shellDisposers) dispose();
   shellDisposers.clear();
+  // EY-1 (7b): every run's engine is main's direct child and ends with the shell, before custody goes
+  const pagesStopped = pagesPlane?.stop("quit");
+  pagesPlane = null;
   liveSurfaceAuthority?.dispose();
   liveSurfaceAuthority = null;
   const surfacesStopped = liveSurfaceSupport?.dispose();
@@ -416,10 +442,11 @@ function disposeShellState(): Promise<void> {
   liveSurfaceTickets.clear();
   fielddHandles?.dispose();
   fielddHandles = null;
-  return surfacesStopped ?? Promise.resolve();
+  return Promise.all([surfacesStopped, pagesStopped]).then(() => {});
 }
 
 function installLiveSurfaceHost(window: Electron.BrowserWindow, logger: Logger): void {
+  const webContentsId = window.webContents.id;
   const host = new LiveSurfaceWindowHost(
     window,
     liveSurfaceTickets,
@@ -434,9 +461,13 @@ function installLiveSurfaceHost(window: Electron.BrowserWindow, logger: Logger):
         budget,
       ),
     liveSurfaceTextureBudgets,
+    {
+      // EY-1 (1f, 2026-11-19): this window's desk says its room and declines made pages to custody
+      onRoom: (agentPages) => liveSurfaceAuthority?.setRoom(webContentsId, agentPages),
+      onMadeDeclined: (made) => liveSurfaceAuthority?.declineMade(webContentsId, made),
+    },
   ).install();
   liveSurfaceWindowHosts.set(window.id, host);
-  const webContentsId = window.webContents.id;
   const dispose = (): void => {
     // Custody never outlives its window (DT-1c): reopen re-creates surfaces
     // from durable widget props.
@@ -808,6 +839,8 @@ async function main(
           process.env["VIBEFIELD_DEV_REPO_ROOT"],
         ),
         electronExecPath: process.execPath,
+        // EY-1 1b: taken at module load (DEVELOPMENT_PAGES_ENGINE), before Electron is ready
+        pagesEnginePath: DEVELOPMENT_PAGES_ENGINE,
       });
   // Fatal and typed before anything spawns: a missing or wrong-architecture
   // sidecar must read as a packaging failure with a doctor code, not as an exec
@@ -1414,6 +1447,21 @@ async function main(
         requested: 0,
         unavailable: 0,
       };
+      // EY-1 (C3, 2026-11-24): a run is of the fieldd that named it. The new fieldd's pages room knows none of the old
+      // one's runs, so the message that ends a run in main can never come for them: main ends them itself, custody's
+      // half at once and the pages broker's through the plane's own door (`endRunsOfGoneFieldd`)
+      const custody = liveSurfaceAuthority;
+      const plane = pagesPlane;
+      if (custody !== null) {
+        endRunsOfGoneFieldd({
+          custody,
+          control: (params, ctx) =>
+            plane === null ? Promise.reject({ kind: "UNAVAILABLE" }) : plane.control(params, ctx),
+          warn: (event, fields) => logger.warn(event, "pages plane", fields),
+        });
+      }
+      // EY-1 (C3, 2026-11-24): a run that made no page is the broker's alone, and custody names it to nobody
+      void plane?.endEveryRun();
       logger.warn(
         "desktop.fieldd.boot_authority_changed",
         "fieldd restarted; every surviving renderer document was fenced",
@@ -1449,6 +1497,8 @@ async function main(
       // PT-S3 (D2): a smoke's count of main's simctl calls, by name (above) — the census's `simctl`
       ...(harnessSimctlCalls === null ? {} : { simctlCalls: harnessSimctlCalls }),
       logger: logger.child({ component: "live-surfaces.capture" }),
+      // EY-1 (7b, 2026-11-19): main's ONE control-target registry resolves a page's target by Electron's own id
+      controlTargetResolver: (targetId) => webContents.fromDevToolsTargetId(targetId),
     });
     if (!app.isPackaged && process.env["FIELDD_DATA_DIR"] === undefined && !isSmokeLike(MODE)) {
       // BP-D6: an unpackaged shell started by hand on the packaged app's data root — said once, here
@@ -1475,6 +1525,52 @@ async function main(
       // PT-S3 (D1): main's simulator census on `state()` — counts only, read and never made
       simulatorCensus: liveSurfaceSupport.census,
       logger: logger.child({ component: "live-surfaces.authority" }),
+      // EY-1 (1f, 2026-11-19): a run's pages land in the windows that host a desk, and an ended
+      // run's own session is emptied once its last page is gone
+      productWindows: () => liveSurfaceProductWindows(liveSurfaceWindowHosts.values()),
+      clearRunPartition: createRunPartitionClearer((partition) =>
+        session.fromPartition(partition, { cache: true }),
+      ),
+      // EY-1 (7b, 2026-11-19): a page made for a run and let go unadopted ends the broker's wait
+      // EY-1 (C8, 2026-11-24): custody's word goes on as custody said it, `failed` among them (a row holds this
+      // line), and the pages plane's port names all four.
+      onMadeDisposed: (run, surfaceId, why) => pagesPlane?.madeGone(run, surfaceId, why),
+    });
+    // EY-1 (7b, 2026-11-19) — the pages plane on main's custody: the registry's bindings, the authority's page
+    // state, the support's page class. Nothing listens and no engine starts until an agent's first call.
+    const pagesSupport = liveSurfaceSupport;
+    const pagesAuthority = liveSurfaceAuthority;
+    const pagesLogger = logger.child({ component: "pages" });
+    pagesPlane = composePages({
+      lookupBinding: (surfaceId) => pagesSupport.controlTargets?.lookupPrivate(surfaceId) ?? null,
+      pageState: (surfaceId) => pagesAuthority.agentPageState(surfaceId),
+      pageClass: (surfaceId) => pagesSupport.pageClass(surfaceId),
+      custody: pagesAuthority,
+      portOf: (contents) => browserAgentPortOf(contents),
+      engine: () =>
+        pagesEngineOf(
+          engineAgentOf({
+            chrome: process.versions.chrome,
+            platform: process.platform,
+            arch: process.arch,
+            systemVersion: process.getSystemVersion(),
+          }),
+          process.versions,
+        ),
+      input: agentInput,
+      makeWss: makeBridgeWss,
+      broker: {
+        enginePath: () => resources.pagesEnginePath,
+        packaged: app.isPackaged,
+        // a package's engine is judged by the team that signed this app
+        appBundlePath:
+          app.isPackaged && process.platform === "darwin" ? bundlePathOf(process.execPath) : null,
+        env: process.env,
+      },
+      log: {
+        info: (event, fields) => pagesLogger.info(event, "pages plane", fields),
+        warn: (event, fields) => pagesLogger.warn(event, "pages plane", fields),
+      },
     });
     const shellProvider = new RecoveringShellProvider(
       bundle.handles,
@@ -1524,6 +1620,12 @@ async function main(
           const authority = liveSurfaceAuthority;
           if (authority === null) throw { kind: "UNAVAILABLE" };
           return authority.simulatorDevices();
+        },
+        // EY-1 (7b, 2026-11-19): an agent's call on a page, answered by main's pages broker
+        controlSurface: async (params, signal, deadlineAt) => {
+          const plane = pagesPlane;
+          if (plane === null) throw { kind: "UNAVAILABLE" };
+          return plane.control(params, { signal, deadlineAt });
         },
       },
       logger.child({ component: "shell.provider" }),

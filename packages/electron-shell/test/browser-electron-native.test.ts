@@ -79,6 +79,7 @@ vi.mock("../src/main/live-surfaces/browser-security", async (importOriginal) => 
 }));
 
 import {
+  browserAgentPortOf,
   ElectronBrowserSurfaceNative,
   FRAME_SIGHT,
   FRAME_WORDS_BINDING,
@@ -1636,6 +1637,109 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  /** EY-1 (1d, 2026-11-19): a client's own session on the page, as the engine says an explicit flat
+   * `Target.attachToTarget` of the page itself — a page, attached at the page's root. */
+  const client = (r: ReturnType<typeof recording>, waitingForDebugger = false): void =>
+    r.emit("Target.attachedToTarget", {
+      sessionId: "C",
+      targetInfo: { type: "page", targetId: "page-target", url: "https://host.test/a" },
+      waitingForDebugger,
+    });
+
+  it("1d — a page attached at the root is a client's own session: the owner neither resumes nor detaches it, waiting or not", async () => {
+    for (const waiting of [false, true]) {
+      const r = recording();
+      await r.native.setFocused(true);
+      r.sent.length = 0;
+      client(r, waiting);
+      await turns();
+      expect(r.sent, `the owner's commands for a client's session (waiting: ${waiting})`).toEqual(
+        [],
+      );
+    }
+  });
+
+  it("1d — what a client's session attaches is the client's: its frame gets no guard, device or resume, and is not placed; its worker is neither resumed nor detached", async () => {
+    const r = recording();
+    await r.native.setFocused(true);
+    client(r);
+    r.sent.length = 0;
+    r.emit(
+      "Target.attachedToTarget",
+      {
+        sessionId: "K",
+        targetInfo: { type: "iframe", targetId: "t-K", url: "" },
+        waitingForDebugger: true,
+      },
+      "C",
+    );
+    r.emit(
+      "Target.attachedToTarget",
+      {
+        sessionId: "KW",
+        targetInfo: { type: "worker", targetId: "t-KW" },
+        waitingForDebugger: true,
+      },
+      "C",
+    );
+    await turns();
+    expect(r.sent, "the owner's commands for a client's children").toEqual([]);
+  });
+
+  it("1d — a client's console is the client's: the owner discards nothing on its session", async () => {
+    const r = recording();
+    await r.native.setFocused(true);
+    client(r);
+    r.sent.length = 0;
+    r.emit("Runtime.consoleAPICalled", { type: "log", args: [] }, "C");
+    r.emit("Runtime.exceptionThrown", { exceptionDetails: {} }, "C");
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(r.on("C"), "the owner's commands on a client's session").toEqual([]);
+  });
+
+  it("1d PIN — with a client's session open, the owner's own frame and worker are the owner's as before: the frame guarded, then resumed; the worker resumed, then released", async () => {
+    const r = recording();
+    await r.native.setFocused(true);
+    client(r);
+    r.sent.length = 0;
+    r.attach("frame-1");
+    r.emit("Target.attachedToTarget", {
+      sessionId: "W",
+      targetInfo: { type: "worker", targetId: "t-W" },
+      waitingForDebugger: true,
+    });
+    await turns();
+    expect(r.on("frame-1")).toContain("Page.addScriptToEvaluateOnNewDocument");
+    expect(r.on("frame-1").at(-1)).toBe("Runtime.runIfWaitingForDebugger");
+    expect(r.on("W")).toEqual(["Runtime.runIfWaitingForDebugger"]);
+    expect(r.sent).toContainEqual({
+      method: "Target.detachFromTarget",
+      params: { sessionId: "W" },
+    });
+  });
+
+  it("1d PIN — a client's sessions going (its frame's, then its own) leave the owner's frames: a press on frame F still reaches F", async () => {
+    const r = await framed();
+    client(r);
+    r.emit(
+      "Target.attachedToTarget",
+      { sessionId: "K", targetInfo: { type: "iframe", targetId: "t-K", url: "" } },
+      "C",
+    );
+    await turns();
+    r.emit("Target.detachedFromTarget", { sessionId: "K" }, "C");
+    r.emit("Target.detachedFromTarget", { sessionId: "C" });
+    await turns();
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    expect(r.hand()).toEqual(["mousePressed@F 80,40"]);
   });
 
   it("PT-6a (M4, M5 — F1) — the words RE-ARM their window's listeners when its document is OPENED (the document-open steps erase them, the focus words' too): their MutationObserver sees the root replaced, and adds each again — never twice; and they name their own `where()` in their isolated world, for a PULLED word", () => {
@@ -4906,6 +5010,57 @@ describe("PT-5d — the frames of other sites: each guarded (M2), and the hand's
         vi.useRealTimers();
       }
     });
+  });
+
+  it("EY-1 (1d) — the page's port says a frame of another site holds the focus, or may: a press's doubt, then F's word; the page's own word takes it back", async () => {
+    const r = await framed();
+    const port = browserAgentPortOf(r.contents);
+    const word = (payload: string, session?: string): void =>
+      r.emit(
+        "Runtime.bindingCalled",
+        { name: FRAME_WORDS_BINDING, payload, executionContextId: 1 },
+        session,
+      );
+    const reads: (boolean | null)[] = [];
+    const read = (): void => {
+      reads.push(port === null ? null : port.framesHoldFocus());
+    };
+    read();
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    read();
+    word("here", "F");
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 180,
+      y: 120,
+      button: "left",
+      clickCount: 1,
+    });
+    read();
+    await r.native.dispatchMouse({
+      type: "mousePressed",
+      x: 20,
+      y: 20,
+      button: "left",
+      clickCount: 1,
+    });
+    word("here");
+    word("away", "F");
+    await r.native.dispatchMouse({
+      type: "mouseReleased",
+      x: 20,
+      y: 20,
+      button: "left",
+      clickCount: 1,
+    });
+    read();
+    expect(reads).toEqual([false, true, true, false]);
   });
 });
 

@@ -40,6 +40,7 @@ import {
 import { createStillDecoder, createStillTaker } from "../surfaces/live/still-taker";
 import { getSurfacePool, surfaceGraceMs } from "../surfaces/pool";
 import { useAppTheme } from "../theme";
+import { type MadePaneLeaving, madePaneLeaving } from "./desk/agent/made-panes";
 import { AtWorkOnTheMat } from "./desk/at-work/AtWorkOnTheMat";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { deskCensus, installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
@@ -178,10 +179,11 @@ export function CanvasStage({
   });
 
   // A new factory per engine and per remount: `<Desk>` re-boots on a new identity, never on a render.
-  const { layer, live, devices } = useMemo<{
+  const { layer, live, devices, madePanes } = useMemo<{
     layer: LayerFactory;
     live: DeskLiveSources | undefined;
     devices: DeskSimulatorDevices | undefined;
+    madePanes: MadePaneLeaving;
   }>(() => {
     const dressed = themeRef.current;
     const search = typeof location === "undefined" ? "" : location.search;
@@ -192,6 +194,9 @@ export function CanvasStage({
     // PT-2 — THE DESK'S LIVE PAGES, one service per mount: its writers on THIS mount's device (`onDevice`), its pages in the
     // window's LSF pool (whose grace keeps a page attached across a remount), its gate the window's registry — by the object
     const eyes = createLiveEyes(ce);
+    // EY-1 (1f, 2026-11-19): the one path a run's pane leaves the desk by (made-panes.ts); item 550b (2026-11-24): at
+    // its run's end, on its at-work leaving
+    const madePanes = madePaneLeaving(ce);
     const live =
       registry === undefined
         ? undefined
@@ -246,6 +251,10 @@ export function CanvasStage({
             far: eyes.far,
             exists: eyes.exists,
             graceMs: surfaceGraceMs,
+            // EY-1 (1f): a run's pane mints into its run's own session, and leaves the desk by the one path
+            runOf: eyes.runOf,
+            leave: (key, why) =>
+              madePanes.leave(key, why === "never-reached" ? "never-reached" : "run-ended"),
           });
     // PT-S2 (R11) — THIS MAC'S SIMULATOR DEVICES, as a phone's attach reads them: read on the window's product connection
     // while a phone stands on the board (an object whose plugin holds the Simulator's scopes — the same registry's grants)
@@ -292,11 +301,13 @@ export function CanvasStage({
       wornRef.current = dressed;
       return handle;
     };
-    return { layer, live, devices };
+    return { layer, live, devices, madePanes };
   }, [ce, mount, kinds, registry]);
   // the mount's faces closed with it (its kinds close theirs on their own dispose — this is the service's word); and, PT-5a
   // (ruling 5), the desk's PARK told to it as the frame gate announces it (ICE I41): a parked desk's kinds are not ticked
   // and cannot ask, so the service pauses their pages and gives each its last ask back at the unpark
+  // item 550b (2026-11-24): a run's pane still waiting on its at-work leaving is not taken off by a mount that went
+  useEffect(() => () => madePanes.dispose(), [madePanes]);
   useEffect(() => {
     if (live === undefined) return;
     const frame = ce.engine.frame;

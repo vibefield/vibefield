@@ -1,0 +1,12 @@
+{
+  "//": "EY-1 — a still the call wrote: the file in the run's folder, its type, size and bytes, never the bytes themselves (MT-D10).",
+  "status": "done",
+  "output": { "saved": true },
+  "still": {
+    "path": "/srv/run-01J8Z3K9/still-1.png",
+    "mime": "image/png",
+    "width": 1280,
+    "height": 800,
+    "bytes": 48213
+  }
+}

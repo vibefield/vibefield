@@ -32,6 +32,15 @@ import {
 import { HELD_QUIET_MS } from "../src/hand";
 import { LAMP } from "../src/law";
 
+// PI-1 (2026-11-24): the props cell the hand's DEFAULT run reader reads (`propsCell`, the catalog's `props` group; a test
+// tree may not name the SDK's canvas door, so the lookup is stood in here). None unless a row names one (the rows that tell
+// the hand outright pass `run`).
+const catalog = vi.hoisted(() => ({ cell: undefined as unknown }));
+vi.mock("../src/device", async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  return { ...actual, propsCell: () => catalog.cell };
+});
+
 const PAGE = "http://127.0.0.1:4321/page";
 const NEXT = "http://127.0.0.1:4321/next";
 const S = shapeOf(PANE_SIZE);
@@ -143,12 +152,25 @@ function fakeEditor() {
   };
 }
 
-function setup(opts: { inHand?: boolean; readOnly?: boolean; now?: () => number } = {}) {
+function setup(
+  opts: {
+    inHand?: boolean;
+    readOnly?: boolean;
+    now?: () => number;
+    /** true or false tells the hand outright; "read" leaves it its own reader (the catalog's props cell). */
+    run?: boolean | "read";
+    agentRun?: string;
+  } = {},
+) {
   const L = fakeLocal();
   if (opts.now !== undefined) L.clockBy(opts.now);
   const E = fakeEditor();
   const writes: { e: Entity; value: unknown; opts: unknown }[] = [];
-  const props: Record<string, unknown> = { url: PAGE, device: "laptop" };
+  const props: Record<string, unknown> = {
+    url: PAGE,
+    device: "laptop",
+    ...(opts.agentRun === undefined ? {} : { agentRun: opts.agentRun }),
+  };
   const cell = { name: "props" } as never;
   let inHand = opts.inHand ?? true;
   const world = {
@@ -192,9 +214,12 @@ function setup(opts: { inHand?: boolean; readOnly?: boolean; now?: () => number 
     refused: () => {},
     wake: () => {},
   } as unknown as KindDriverHost;
+  // PI-1 (2026-11-24): whether the pane names a run (its `agentRun`), as the hand is told — or read by its own reader
+  const runs = opts.run === "read" ? {} : { run: () => opts.run === true };
   const hand = createPaneHand(h, {
     cell: () => cell,
     ...(opts.now === undefined ? {} : { now: opts.now }),
+    ...runs,
   });
   const downs: ((ev: PointerEvent) => void)[] = [];
   const dom = {
@@ -221,6 +246,7 @@ function setup(opts: { inHand?: boolean; readOnly?: boolean; now?: () => number 
     world,
     writes,
     props,
+    cell,
     lease,
     press: (x: number, y: number, target?: unknown) => {
       const ev = { clientX: x, clientY: y, target, preventDefault: vi.fn() };
@@ -482,6 +508,56 @@ describe("the pane's hand on the editor (PT-3 rulings 6–9)", () => {
     expect(ro.writes).toEqual([]);
     // refused once is not asked again every frame: the hand rests
     expect(ro.hand.idle?.()).toBe(true);
+  });
+
+  it("PI-1 (2026-11-24): a RUN's page's own navigation writes its runAddress, never its url (a reader that does not know the run reads url alone)", () => {
+    const t = setup({ inHand: false, run: true });
+    t.setAddressed(new Map([[1 as Entity, NEXT]]));
+    t.hand.follow(0);
+    expect(t.writes).toEqual([
+      {
+        e: 1,
+        value: { url: PAGE, device: "laptop", runAddress: NEXT },
+        opts: { undoable: false },
+      },
+    ]);
+  });
+
+  describe("PI-1 (2026-11-24): the hand's own run reader (the pane type's props cell)", () => {
+    const followed = (o: { agentRun?: string; catalogued: boolean }) => {
+      const t = setup({
+        inHand: false,
+        run: "read",
+        ...(o.agentRun === undefined ? {} : { agentRun: o.agentRun }),
+      });
+      catalog.cell = o.catalogued ? t.cell : undefined;
+      try {
+        t.setAddressed(new Map([[1 as Entity, NEXT]]));
+        t.hand.follow(0);
+      } finally {
+        catalog.cell = undefined;
+      }
+      return t.writes.map((w) => w.value as Record<string, unknown>);
+    };
+    it("a pane whose props name a run: its page's moves go to runAddress", () => {
+      const w = followed({ agentRun: "run-1", catalogued: true });
+      expect(w).toHaveLength(1);
+      expect(w[0]).toMatchObject({ url: PAGE, runAddress: NEXT });
+    });
+    it("a pane whose props name none (an empty agentRun): its page's moves go to url, as before", () => {
+      const w = followed({ agentRun: "", catalogued: true });
+      expect(w).toHaveLength(1);
+      expect(w[0]).toMatchObject({ url: NEXT });
+      expect(w[0]?.["runAddress"]).toBeUndefined();
+    });
+    it("CANNOT TELL (no props cell in the catalog, or a cell with no agentRun) is read as a run's: url is never written", () => {
+      for (const o of [{ catalogued: false }, { catalogued: true }]) {
+        const w = followed(o);
+        expect(w, JSON.stringify(o)).toHaveLength(1);
+        expect(w[0]?.["url"], JSON.stringify(o)).toBe(PAGE);
+        expect(w[0]?.["runAddress"], JSON.stringify(o)).toBe(NEXT);
+      }
+    });
   });
 
   it("the held bar's acts reach the hand on their WORLD: back, forward and reload the page's, the address the hand's", () => {

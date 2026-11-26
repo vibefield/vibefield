@@ -1,0 +1,8 @@
+{
+  "//": "EY-1 — a call that writes a still: fieldd names the run's own folder (`folder`), never the agent, and main checks it before the engine writes there.",
+  "run": "run-01J8Z3K9",
+  "surfaceId": "surface_0123456789abcdef",
+  "folder": "/srv/run-01J8Z3K9",
+  "window": "read",
+  "command": { "action": "screenshot" }
+}

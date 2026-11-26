@@ -2,8 +2,11 @@ import {
   type CallerContext,
   type LiveSurfaceSourceKindV1,
   type LiveSurfaceSourceSpecV1,
+  PAGES_RUN_PROFILE_PREFIX,
   type RendererParticipantIdentity,
   type Scope,
+  SHELL_SURFACES_MADE_CLOSED,
+  SHELL_SURFACES_SERVICE,
   type ShellSurfacesEnumerateParams,
   type ShellSurfacesEnumerateResult,
   type ShellSurfacesMintParams,
@@ -97,10 +100,34 @@ export interface SurfaceAudit {
   ): Promise<T>;
 }
 
+/** EY-2 (the made path, 2026-11-19) — the pages room's word on a made pane: whether a pane a pages call made is one
+ * the room placed, or is placing. */
+export interface SurfaceMadePanes {
+  placed(surfaceId: string): boolean;
+  /** A run's pane after its run (2026-11-24) — whether a mint into this run's own session could still be answered
+   * with a page (the room's `servesOnceSettled`: its word may wait for the boot's settle, and the open waits with it).
+   * Absent: the room does not say, and every such mint is forwarded. */
+  serves?(run: string): boolean | Promise<boolean>;
+}
+
+/** A run's pane after its run (2026-11-24) — the run whose own session a source would mint into (the memory profile
+ * `${PAGES_RUN_PROFILE_PREFIX}${run}`, which the window names a run's pane's session by at every mint); undefined for
+ * the desk's own profile, any other memory profile, and every other kind. */
+function sessionRunOf(source: LiveSurfaceSourceSpecV1): string | undefined {
+  if (source.kind !== "browser" || source.profile.mode !== "memory") return undefined;
+  const ref = source.profile.ref;
+  return ref.startsWith(PAGES_RUN_PROFILE_PREFIX)
+    ? ref.slice(PAGES_RUN_PROFILE_PREFIX.length)
+    : undefined;
+}
+
 export interface SurfaceServiceOptions {
   api: SurfaceAuthority;
   audit: SurfaceAudit;
   logger?: Logger;
+  /** EY-2 (the made path, 2026-11-19) — `surface.open` forwards a `made` only for a pane this answers placed; absent,
+   * it forwards none */
+  made?: SurfaceMadePanes;
 }
 
 export interface SurfaceService {
@@ -113,7 +140,7 @@ export interface SurfaceService {
 
 function authorityUnavailable(): RpcCallError {
   return new RpcCallError("UNAVAILABLE", "the live-surface authority is unavailable", true, {
-    service: "surfaces",
+    service: SHELL_SURFACES_SERVICE,
     state: "authority-unavailable",
   });
 }
@@ -267,6 +294,42 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
         }
       }
       const rendererParticipant = rendererParticipantOf(ctx);
+      // EY-2 (the made path, 2026-11-19): an open adopts a made pane only when the pages room placed it (main's adopt
+      // checks the run and the key). A pane the room does not hold has no live run in this fieldd, so it is gone for
+      // good, said in main's own words; it is refused, never minted as a plain page
+      const made = parsed.data.made;
+      if (made !== undefined && options.made?.placed(made) !== true) {
+        logger.info(
+          "fieldd.surfaces.made_refused",
+          "An open named a made pane the pages room does not hold",
+          { sourceKind: source.kind },
+        );
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "that page is closed: only a page VibeField placed for an agent is adopted this way",
+          false,
+          { service: SHELL_SURFACES_SERVICE, state: SHELL_SURFACES_MADE_CLOSED },
+        );
+      }
+      // A run's pane after its run (2026-11-24): a mint that names no made pane, into the session of a run the pages
+      // room can serve no page (it ended for good, fieldd restarted and it was not brought back, or no fieldd here ever
+      // had it). Main, when it has restarted too, knows nothing of the run and can only refuse with no word, which left
+      // the pane on a failure for good; fieldd says first that its page is closed for good. Nothing is taken off a desk
+      // by this word alone: the window decides that by what it placed itself
+      const sessionRun = made === undefined ? sessionRunOf(source) : undefined;
+      if (sessionRun !== undefined && (await options.made?.serves?.(sessionRun)) === false) {
+        logger.info(
+          "fieldd.surfaces.run_session_closed",
+          "An open named the session of a run the pages room serves no page",
+          { sourceKind: source.kind },
+        );
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "that page is closed: the agent's work it was opened for has ended",
+          false,
+          { service: SHELL_SURFACES_SERVICE, state: SHELL_SURFACES_MADE_CLOSED },
+        );
+      }
       const owner = ownerOf(ctx);
       const memo =
         parsed.data.idempotencyKey === undefined
@@ -290,6 +353,7 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
             incarnation: rendererParticipant.incarnation,
             ...(owner === undefined ? {} : { pluginId: owner.pluginId }),
             ...(memo === undefined ? {} : { idempotent: true }),
+            ...(made === undefined ? {} : { adopts: true }),
           },
         },
         async () => {
@@ -309,6 +373,7 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
               rendererParticipant,
               source,
               ...(reuseKey === undefined ? {} : { reuseKey }),
+              ...(made === undefined ? {} : { made }),
               ...(owner === undefined ? {} : { owner }),
             })
             .then((result) => SurfaceOpenResultV1.parse(result), throughSurfaces);

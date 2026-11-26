@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import test from "node:test";
 import {
   createElectronStack,
+  createPagesEngineResolver,
   createRosettadBinResolver,
   createSidecarPathResolver,
 } from "../src/electron-stack.mjs";
@@ -14,6 +15,10 @@ function setup({
   resolveRosettadBin = () => rosettadBin,
   sidecarPath = null,
   resolveSidecarPath = () => ({ path: sidecarPath }),
+  // EY-1 1b: the runner's pages engine, resolved outside the unit too (the default reads contracts and the
+  // record, hashes the installed binary and copies it under the dev root: never a unit's business)
+  pagesEngine = { name: "VIBEFIELD_DEV_PAGES_ENGINE", path: null },
+  resolvePagesEngine = () => pagesEngine,
 } = {}) {
   const child = new EventEmitter();
   Object.assign(child, { pid: 1234, exitCode: null, signalCode: null, connected: true });
@@ -60,6 +65,7 @@ function setup({
     // the truffle bump: the dev floor's sidecar, resolved outside the unit too
     // (the default reads siblings.lock.json and the vendored package)
     resolveSidecarPath,
+    resolvePagesEngine,
     spawnProcess(...args) {
       spawnArgs = args;
       child.send = (message, callback) => {
@@ -507,4 +513,120 @@ test("an unexpected exit leaves the daemons running and requests recovery", asyn
   assert.deepEqual(fixture.products, []);
   assert.deepEqual(fixture.updates.at(-1), { electronPid: null });
   assert.deepEqual(fixture.exits, [{ code: 1, signal: null }]);
+});
+
+// EY-1 1b (2026-11-19): the pages engine main runs in development is the runner's own copy, handed in the variable
+// contracts names, which main reads once and removes from its environment.
+const PAGES = "VIBEFIELD_DEV_PAGES_ENGINE";
+const PAGES_COPY = "/repo/.vibefield/dev/pages-engine/a402fef2489c221b/engine";
+
+test("hands main the runner's copy of the pages engine (EY-1 1b)", async () => {
+  const fixture = setup({ pagesEngine: { name: PAGES, path: PAGES_COPY } });
+  await fixture.stack.start(runtime);
+  assert.equal(fixture.getSpawnArgs()[2].env[PAGES], PAGES_COPY);
+  assert.deepEqual(fixture.warnings, []);
+});
+
+test("an inherited pages engine never reaches main when the runner has none", async () => {
+  await withVariable(PAGES, "/shell/engine", async () => {
+    const fixture = setup({ pagesEngine: { name: PAGES, path: null } });
+    await fixture.stack.start(runtime);
+    assert.equal(PAGES in fixture.getSpawnArgs()[2].env, false);
+  });
+});
+
+test("the runner's copy replaces an inherited pages engine, never rides beside it", async () => {
+  await withVariable(PAGES, "/shell/engine", async () => {
+    const fixture = setup({ pagesEngine: { name: PAGES, path: PAGES_COPY } });
+    await fixture.stack.start(runtime);
+    assert.equal(fixture.getSpawnArgs()[2].env[PAGES], PAGES_COPY);
+  });
+});
+
+test("why main has no pages engine is said once while it stands, not at every shell-only restart", async () => {
+  const none = "apps/desktop has no engine installed for darwin-arm64: run an install";
+  let answer = { name: PAGES, path: null, warning: none };
+  const fixture = setup({ resolvePagesEngine: () => answer });
+  await fixture.stack.start(runtime);
+  await fixture.stack.stop({ stopDaemons: false });
+  await fixture.stack.start({ ...runtime, buildId: "dev-shell-edit" });
+  await fixture.stack.stop({ stopDaemons: false });
+  // an install mid-session reaches the next launch
+  answer = { name: PAGES, path: PAGES_COPY };
+  await fixture.stack.start({ ...runtime, buildId: "dev-installed" });
+  assert.deepEqual(fixture.warnings, [`[pages] ${none}`]);
+  assert.equal(fixture.getSpawnArgs()[2].env[PAGES], PAGES_COPY);
+});
+
+// The release binary's stream port (2026-11-24): the engine is the SOURCE BUILD, which whoever launches the runner
+// names in a variable of the runner's own. The runner hands the copy on, never the variable.
+const PAGES_SOURCE = "VIBEFIELD_DEV_PAGES_ENGINE_SOURCE";
+const PAGES_SUM = "f3a53cbce43fe30875d7d785a6f67647af4e96d987b8ea889fee8f0e68213dea";
+
+test("the launcher's name for the source build is the runner's alone: Electron never inherits it", async () => {
+  await withVariable(PAGES_SOURCE, "/built/agent-browser", async () => {
+    for (const path of [PAGES_COPY, null]) {
+      const fixture = setup({ pagesEngine: { name: PAGES, path } });
+      await fixture.stack.start(runtime);
+      assert.equal(PAGES_SOURCE in fixture.getSpawnArgs()[2].env, false);
+    }
+  });
+});
+
+test("which engine main is handed is said once while it stands, by the source build's sum", async () => {
+  let answer = { name: PAGES, path: PAGES_COPY, sha256: PAGES_SUM, held: 1 };
+  const fixture = setup({ resolvePagesEngine: () => answer });
+  await fixture.stack.start(runtime);
+  await fixture.stack.stop({ stopDaemons: false });
+  answer = { ...answer, held: 0 };
+  await fixture.stack.start({ ...runtime, buildId: "dev-shell-edit" });
+  const said = fixture.said.filter((line) => line.startsWith("[pages]"));
+  assert.deepEqual(said, [
+    `[pages] main is handed the pin's source build, SHA-256 ${PAGES_SUM}: ${PAGES_COPY}`,
+    "[pages] 1 earlier engine copy under the dev root lost its execute bits",
+  ]);
+  assert.deepEqual(fixture.warnings, []);
+});
+
+test("the pages engine resolver hands the copy the file the launcher's variable names, and none when unset", () => {
+  const seen = [];
+  const resolver = (env) =>
+    createPagesEngineResolver({
+      root: "/repo",
+      devRoot: "/repo/.vibefield/dev",
+      env,
+      readName: () => PAGES,
+      copy: (_root, _devRoot, o) => {
+        seen.push(o);
+        return { path: null, warning: "none" };
+      },
+    });
+  resolver({ [PAGES_SOURCE]: "/built/agent-browser" })();
+  resolver({})();
+  assert.deepEqual(seen, [{ source: "/built/agent-browser" }, { source: undefined }]);
+});
+
+test("the pages engine resolver: contracts' name and the runner's copy; a name it cannot read is said", () => {
+  const resolve = createPagesEngineResolver({
+    root: "/repo",
+    devRoot: "/repo/.vibefield/dev",
+    readName: () => PAGES,
+    copy: (_root, devRoot) => ({ path: `${devRoot}/pages-engine/a402fef2489c221b/engine` }),
+  });
+  assert.deepEqual(resolve(), { name: PAGES, path: PAGES_COPY });
+  const unread = createPagesEngineResolver({
+    root: "/repo",
+    devRoot: "/repo/.vibefield/dev",
+    readName: () => {
+      throw new Error(
+        "packages/contracts/src/registries.ts: no VIBEFIELD_DEV_PAGES_ENGINE_ENV literal",
+      );
+    },
+    copy: () => assert.fail("no copy is made without the variable's name"),
+  });
+  assert.deepEqual(unread(), {
+    name: null,
+    path: null,
+    warning: "packages/contracts/src/registries.ts: no VIBEFIELD_DEV_PAGES_ENGINE_ENV literal",
+  });
 });

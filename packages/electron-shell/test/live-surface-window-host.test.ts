@@ -11,7 +11,9 @@ import { LiveSurfaceTicketTable } from "../src/main/live-surfaces/ticket-table";
 import {
   type LiveSurfaceMainMessageChannel,
   type LiveSurfaceTextureSinkFactory,
+  type LiveSurfaceWindowDesk,
   LiveSurfaceWindowHost,
+  liveSurfaceProductWindows,
 } from "../src/main/live-surfaces/window-host";
 
 class FakePort extends EventEmitter {
@@ -86,7 +88,7 @@ class FakeAuthority implements LiveSurfaceRuntimeAuthority {
   }
 }
 
-function setup(createTextureSink?: LiveSurfaceTextureSinkFactory) {
+function setup(createTextureSink?: LiveSurfaceTextureSinkFactory, desk?: LiveSurfaceWindowDesk) {
   const webContents = new FakeWebContents();
   const window = { webContents } as unknown as BrowserWindow;
   const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>({
@@ -107,6 +109,8 @@ function setup(createTextureSink?: LiveSurfaceTextureSinkFactory) {
     createChannel,
     undefined,
     createTextureSink,
+    undefined,
+    desk,
   ).install();
   return { webContents, window, tickets, channels, host };
 }
@@ -246,6 +250,34 @@ describe("LiveSurfaceWindowHost", () => {
     expect(result.channels).toHaveLength(6);
   });
 
+  // EY-1 (C4, 2026-11-24): the generation's number alone does not say a document stands: it is 0 before the first
+  // load ends, and still the old document's from a navigation's start until its load's end. Custody reads which
+  // document a pane placed now lands in, so the host says whether one stands.
+  it("EY-1: says whether its generation's document stands: not before the first load ends, not between a navigation's start and its load's end, not once its process is gone or it is disposed", () => {
+    const result = setup();
+    expect(result.host.rendererGeneration).toBe(0);
+    expect(result.host.rendererLive).toBe(false);
+    finishLoad(result);
+    expect(result.host.rendererLive).toBe(true);
+    // a navigation begins: the number is still the old document's, and no document stands
+    result.webContents.emit("did-start-navigation", {}, "vibefield-app://shell", false, true);
+    expect(result.host.rendererGeneration).toBe(1);
+    expect(result.host.rendererLive).toBe(false);
+    // a navigation inside the document, or a frame's own, replaces nothing
+    result.webContents.emit("did-finish-load");
+    expect(result.host.rendererGeneration).toBe(2);
+    expect(result.host.rendererLive).toBe(true);
+    result.webContents.emit("did-start-navigation", {}, "vibefield-app://shell#a", true, true);
+    result.webContents.emit("did-start-navigation", {}, "https://frame.test/", false, false);
+    expect(result.host.rendererLive).toBe(true);
+    result.webContents.emit("render-process-gone");
+    expect(result.host.rendererLive).toBe(false);
+    result.webContents.emit("did-finish-load");
+    expect(result.host.rendererLive).toBe(true);
+    result.host.dispose();
+    expect(result.host.rendererLive).toBe(false);
+  });
+
   it("closes a generation when its control port disconnects", () => {
     const result = setup();
     finishLoad(result);
@@ -342,6 +374,47 @@ describe("LiveSurfaceWindowHost", () => {
     expect(result.webContents.listenerCount("did-finish-load")).toBe(0);
     expect(result.channels[0]?.port1.close).toHaveBeenCalledTimes(1);
     expect(result.channels[2]?.port1.close).toHaveBeenCalledTimes(1);
+  });
+
+  // EY-1 (1f, 2026-11-19) — the window's desk word reaches the window's desk callbacks from every
+  // renderer generation's control session, and the product windows are the hosts that stand.
+  it("EY-1: hands each generation's room and declines from its desk to the window's desk", () => {
+    const rooms: number[] = [];
+    const declined: string[] = [];
+    const result = setup(undefined, {
+      onRoom: (agentPages) => rooms.push(agentPages),
+      onMadeDeclined: (made) => declined.push(made),
+    });
+    finishLoad(result);
+    result.channels[0]?.port1.receive({ v: 1, type: "room", agentPages: 3 });
+    result.channels[0]?.port1.receive({
+      v: 1,
+      type: "made-declined",
+      made: "surface_0123456789ab",
+      reason: "no-room",
+    });
+    // a reload opens a new generation: its control session reaches the same desk
+    result.webContents.emit("did-start-navigation", {}, "vibefield-app://shell", false, true);
+    result.webContents.emit("did-finish-load");
+    result.channels[3]?.port1.receive({ v: 1, type: "room", agentPages: 0 });
+    expect(rooms).toEqual([3, 0]);
+    expect(declined).toEqual(["surface_0123456789ab"]);
+  });
+
+  it("EY-1: names the product windows that stand: a host added, one removed, one destroyed", () => {
+    const hostOf = (id: number, destroyed = false): Pick<LiveSurfaceWindowHost, "window"> => {
+      const window = { isDestroyed: () => destroyed, webContents: { id } };
+      return { window: window as unknown as BrowserWindow };
+    };
+    const hosts = new Map<number, Pick<LiveSurfaceWindowHost, "window">>();
+    expect(liveSurfaceProductWindows(hosts.values())).toEqual([]);
+    hosts.set(1, hostOf(7));
+    hosts.set(2, hostOf(8));
+    expect(liveSurfaceProductWindows(hosts.values())).toEqual([7, 8]);
+    hosts.delete(1);
+    expect(liveSurfaceProductWindows(hosts.values())).toEqual([8]);
+    hosts.set(3, hostOf(9, true));
+    expect(liveSurfaceProductWindows(hosts.values())).toEqual([8]);
   });
 });
 

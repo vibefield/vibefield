@@ -1,6 +1,11 @@
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
+import {
+  PAGES_ENGINE_SOURCE_ENV,
+  pagesEngineDevCopy,
+  readPagesEngineEnv,
+} from "../../../scripts/pages-pin.mjs";
 import { devSidecar, rosettadBinary } from "../../../scripts/siblings.mjs";
 import { buildChildEnv } from "./env.mjs";
 import { terminateChild } from "./processes.mjs";
@@ -91,6 +96,40 @@ export function createSidecarPathResolver({ env = process.env, lookup = devSidec
 
 const defaultResolveSidecarPath = createSidecarPathResolver();
 
+/** EY-1 1b (2026-11-19): the pages engine main runs in development, asked at every Electron launch. It is the runner's
+ * own content-addressed copy (`pagesEngineDevCopy`, scripts/pages-pin.mjs), handed to main in the variable contracts
+ * names (`VIBEFIELD_DEV_PAGES_ENGINE_ENV`); main reads it once and removes it from its own environment.
+ *
+ * The release binary's stream port (2026-11-24): the copy is of the pin's SOURCE BUILD alone, the file whoever
+ * launched the runner names in `PAGES_ENGINE_SOURCE_ENV`, held to the record's source build before it is copied. The
+ * installed package's binary is the release, which opens a loopback command port: it is never copied and never a
+ * fallback. That variable is read here, in the runner's own environment, at each launch, and is never handed on.
+ *
+ * Answers `{ name, path, sha256, held, warning }`. A null `path` hands main none, and the launch then removes an
+ * inherited value too: the runner decides which engine main runs, never the launching shell. It can remove only a
+ * variable it can name: when contracts' name cannot be read, an inherited value stays, and the `warning` says why. */
+export function createPagesEngineResolver({
+  root,
+  devRoot,
+  env = process.env,
+  readName = readPagesEngineEnv,
+  copy = pagesEngineDevCopy,
+}) {
+  return () => {
+    let name;
+    try {
+      name = readName(root);
+    } catch (error) {
+      return {
+        name: null,
+        path: null,
+        warning: error instanceof Error ? error.message : String(error),
+      };
+    }
+    return { name, ...copy(root, devRoot, { source: env[PAGES_ENGINE_SOURCE_ENV] }) };
+  };
+}
+
 export function createElectronStack({
   paths,
   viteUrl,
@@ -103,12 +142,14 @@ export function createElectronStack({
   spawnProcess = spawn,
   resolveRosettadBin = defaultResolveRosettadBin,
   resolveSidecarPath = defaultResolveSidecarPath,
+  resolvePagesEngine = createPagesEngineResolver({ root: paths.repoRoot, devRoot: paths.devRoot }),
   readProduct = readDevProduct,
   stopProduct = stopVerifiedDevProduct,
   terminate = terminateChild,
 }) {
   let child = null;
   let currentDaemonBuildId = null;
+  let pagesSaid = null;
   let studioRequested = studioOpen;
   let commandSequence = 0;
   let stopping = false;
@@ -138,6 +179,25 @@ export function createElectronStack({
     }
     const sidecar = resolveSidecarPath();
     if (sidecar.warning !== undefined) log.warn(`[sidecar] ${sidecar.warning}`);
+    // EY-1 1b: the pages engine's copy. Which engine main is handed (the source build, by its sum), or why there is
+    // none, is said once while it stands, never at every shell-only restart.
+    const pagesEngine = resolvePagesEngine();
+    const pagesHanded =
+      pagesEngine.path !== null && pagesEngine.sha256 !== undefined
+        ? `main is handed the pin's source build, SHA-256 ${pagesEngine.sha256}: ${pagesEngine.path}`
+        : null;
+    const pagesSays = pagesEngine.warning ?? pagesHanded;
+    if (pagesSays !== null && pagesSays !== pagesSaid) {
+      if (pagesEngine.warning !== undefined) log.warn(`[pages] ${pagesSays}`);
+      else log.info(`[pages] ${pagesSays}`);
+    }
+    pagesSaid = pagesSays;
+    const pagesHeld = pagesEngine.held ?? 0;
+    if (pagesHeld > 0) {
+      log.info(
+        `[pages] ${pagesHeld} earlier engine cop${pagesHeld === 1 ? "y" : "ies"} under the dev root lost ${pagesHeld === 1 ? "its" : "their"} execute bits`,
+      );
+    }
     const env = buildChildEnv(process.env, {
       set: {
         VITE_DEV_SERVER_URL: viteUrl,
@@ -165,6 +225,11 @@ export function createElectronStack({
         // floor. Absent when neither names a file on disk (and an inherited
         // empty one is stripped below), and then the floor's own search answers.
         ...(sidecar.path !== null ? { FIELD_NATIVE_SIDECAR_PATH: sidecar.path } : {}),
+        // EY-1 1b: the runner's copy of the pages engine, for main alone; main removes the variable on reading it,
+        // so nothing it starts inherits it
+        ...(pagesEngine.name !== null && pagesEngine.path !== null
+          ? { [pagesEngine.name]: pagesEngine.path }
+          : {}),
         FIELD_LOG_DIR: paths.logRoot,
       },
       // This flag is set only by Electron main for its fieldd child. Inheriting
@@ -186,6 +251,11 @@ export function createElectronStack({
         ...FLOOR_CHILD_OVERRIDES,
         ...(rosettadBin === null ? ["FIELDD_ROSETTAD_BIN"] : []),
         ...(sidecar.path === null ? ["FIELD_NATIVE_SIDECAR_PATH", "TRUFFLE_SIDECAR_PATH"] : []),
+        // EY-1 1b: no copy, no engine; an inherited one is the shell's, never the runner's choice
+        ...(pagesEngine.name !== null && pagesEngine.path === null ? [pagesEngine.name] : []),
+        // the launcher's name for the source build's file is the runner's alone: main is handed the copy, never
+        // the variable, so nothing Electron starts inherits it
+        PAGES_ENGINE_SOURCE_ENV,
       ],
     });
 

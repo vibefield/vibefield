@@ -70,6 +70,10 @@ export interface DeskCaller {
 
 export interface DeskDeps {
   readonly objects: DeskObjects;
+  /** canvas_remove of a run's page (2026-11-24) — told after a run's own object left the desk by canvas_remove: the
+   * pages room closes the page of a browser pane it holds for the run, so a page nobody can see is never worked. Never
+   * throws. */
+  readonly removed?: (run: string, ref: ObjectRef) => Promise<void>;
 }
 
 export interface DeskVerbs {
@@ -451,6 +455,9 @@ export function createDeskVerbs(deps: DeskDeps): DeskVerbs {
           inverse: answered.inverse,
           label: answered.changed ?? "Removed an object",
         });
+      // canvas_remove of a run's page (2026-11-24): the object is off the desk; a page the pages room holds for it
+      // closes too. The undo brings the object back, never its web session.
+      await deps.removed?.(run, input.ref).catch(() => undefined);
       return { removed: true };
     },
 

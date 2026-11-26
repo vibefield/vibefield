@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it } from "vitest";
 import { resolveBrowserControlProviderBinding } from "../src/main/live-surfaces/browser-control-provider";
 import {
+  type BrowserAgentPage,
   BrowserControlTargetRegistry,
   type BrowserControlTargetWebContents,
 } from "../src/main/live-surfaces/browser-control-target";
@@ -25,6 +26,9 @@ class FakeContents extends EventEmitter implements BrowserControlTargetWebConten
   }
 }
 
+/** EY-1 (1g): a producer's page that is never held — what these rows' bindings carry. */
+const PAGE: BrowserAgentPage = { held: false, onHeld: () => () => undefined };
+
 function setup() {
   const targets = new Map<string, BrowserControlTargetWebContents>();
   const registry = new BrowserControlTargetRegistry({
@@ -38,7 +42,7 @@ describe("Browser control provider handoff", () => {
     const result = setup();
     const contents = new FakeContents(17, "target-A");
     result.targets.set(contents.targetId, contents);
-    result.registry.associate("surface_0123456789abcdef", 3, contents);
+    result.registry.associate("surface_0123456789abcdef", 3, contents, PAGE);
 
     expect(
       resolveBrowserControlProviderBinding(result.registry, "surface_0123456789abcdef"),
@@ -58,7 +62,7 @@ describe("Browser control provider handoff", () => {
     const result = setup();
     const contents = new FakeContents(17, "target-A");
     result.targets.set(contents.targetId, contents);
-    result.registry.associate("surface_0123456789abcdef", 3, contents);
+    result.registry.associate("surface_0123456789abcdef", 3, contents, PAGE);
     result.targets.delete(contents.targetId);
 
     expect(

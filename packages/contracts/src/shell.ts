@@ -15,13 +15,14 @@ import {
   LiveSurfaceAttachTicketV1,
   LiveSurfaceIdV1,
   LiveSurfaceSourceSpecV1,
+  LiveSurfaceUrlV1,
   SURFACE_LIMITS,
   SurfaceEnumerationKindV1,
   SurfaceReuseKeyV1,
   SurfaceSimulatorDevicesResultV1,
   SurfaceSourceDescriptorV1,
 } from "./live-surfaces";
-import { PagesNeed } from "./pages";
+import { PAGES_RUN_PANES_MAX, PAGES_STILL_MAX_BYTES, PagesNeed } from "./pages";
 import { isAbsoluteDesktopPath } from "./paths";
 import { PluginId } from "./plugins";
 import { SHELL_CLIPBOARD } from "./registries";
@@ -1287,12 +1288,24 @@ export const ShellSurfacesEnumerateResult = z
   .passthrough();
 export type ShellSurfacesEnumerateResult = z.infer<typeof ShellSurfacesEnumerateResult>;
 
+/** EY-1 (7b, 2026-11-19) — the one refusal word a window's pane leaves on: main refused its mint because the page
+ * is gone for good (main let a run's made page go or closed it, or its run has ended). It rides a provider error's
+ * `details` (ShellProviderErrorDetails) as `{ service: SHELL_SURFACES_SERVICE, state: SHELL_SURFACES_MADE_CLOSED }`;
+ * a pane leaves only when both words match exactly; another refusal may name the service (fieldd's
+ * `authority-unavailable`), never `made-closed`. */
+export const SHELL_SURFACES_SERVICE = "surfaces" as const;
+export const SHELL_SURFACES_MADE_CLOSED = "made-closed" as const;
+
 export const ShellSurfacesMintParams = z
   .object({
     rendererParticipant: RendererParticipantIdentity,
     source: LiveSurfaceSourceSpecV1,
     reuseKey: SurfaceReuseKeyV1.optional(),
     owner: z.object({ pluginId: PluginId.optional() }).passthrough().optional(),
+    /** EY-1 (1f) — the made pane this mint adopts: one a pages call made for its run (the control result's `made`).
+     * Main adopts it only while it is held for that run and not yet adopted, of the same source kind and memory
+     * profile; any other is PRECONDITION_FAILED. */
+    made: LiveSurfaceIdV1.optional(),
   })
   .passthrough();
 export type ShellSurfacesMintParams = z.infer<typeof ShellSurfacesMintParams>;
@@ -1330,6 +1343,28 @@ function jsonFits(value: unknown, max: number): boolean {
   return value !== undefined && utf8ByteLength(JSON.stringify(value)) <= max;
 }
 
+/** EY-1 — the run form's actions that are main's alone: the broker answers them itself and never sends them to the
+ * engine. `rebind`: a resume moves the old run's grants (`from`, fieldd's key for that run) to this call's `run`.
+ * `tab_list`: the run's pages, answered from main's grants. `close`: the run's end (N4), which closes the run's own
+ * panes and gives handed pages back. */
+export const SHELL_SURFACES_RUN_ACTIONS = ["rebind", "tab_list", "close"] as const;
+export type ShellSurfacesRunAction = (typeof SHELL_SURFACES_RUN_ACTIONS)[number];
+
+/** EY-1 — `rebind`'s command, in the run-level form (no page). */
+export const ShellSurfacesRebindCommand = z
+  .object({ action: z.literal("rebind"), from: z.string().min(1).max(128) })
+  .passthrough();
+export type ShellSurfacesRebindCommand = z.infer<typeof ShellSurfacesRebindCommand>;
+
+/** EY-1 — a still's folder is named exactly, never by a walk: no `.` or `..` segment. */
+const hasNoDotSegment = (path: string): boolean =>
+  !path.split(/[\\/]/).some((segment) => segment === "." || segment === "..");
+
+const ShellStillFolderPath = ShellAbsoluteFolderPath.refine(
+  hasNoDotSegment,
+  "expected a folder named exactly, with no . or .. segment",
+);
+
 /** EY-0 — an agent's call on a page, from fieldd's pages room to main's broker. Two forms:
  * - the page form names the page by `surfaceId`, the key release uses;
  * - the run-level form leaves it out, for a call with no page to name: `browser_open` or `browser_tab_new` when the
@@ -1338,11 +1373,19 @@ function jsonFits(value: unknown, max: number): boolean {
  *
  * `run` is fieldd's own key for the run. It picks the run's one engine (BU-20) and is never authority, like mint's
  * `owner`. `window` is the window the broker opens for this call. `command` is the checked JSON command, with a string
- * `action`: the broker runs exactly it, never argv. No `rendererParticipant`: an agent has no window. */
+ * `action`: the broker runs exactly it, never argv. No `rendererParticipant`: an agent has no window.
+ *
+ * EY-1 (2026-11-19): the run-level form also carries main's own actions (SHELL_SURFACES_RUN_ACTIONS), which
+ * never reach the engine: `rebind` names the run it moves from (ShellSurfacesRebindCommand), `tab_list` is
+ * answered from main's grants, and `close` is the run's end. */
 export const ShellSurfacesControlParams = z
   .object({
     run: z.string().min(1).max(128),
     surfaceId: LiveSurfaceIdV1.optional(),
+    /** EY-1 — the folder a call writes its still in: fieldd's own folder for the run, never the agent's input or its
+     * working folder. Main checks its shape before the engine writes, and the file after; fieldd is the authority
+     * on whose folder it is. Named exactly: a `.` or `..` segment is refused here, and by main again. */
+    folder: ShellStillFolderPath.optional(),
     window: z.enum(["read", "act"]),
     command: z
       .object({ action: z.string().min(1) })
@@ -1350,6 +1393,11 @@ export const ShellSurfacesControlParams = z
       .refine(
         (command) => jsonFits(command, SURFACE_AUTHORITY_LIMITS.CONTROL_COMMAND_MAX_BYTES),
         "command over SURFACE_AUTHORITY_LIMITS.CONTROL_COMMAND_MAX_BYTES",
+      )
+      .refine(
+        (command) =>
+          command.action !== "rebind" || ShellSurfacesRebindCommand.safeParse(command).success,
+        "a rebind names the run it moves from",
       ),
   })
   .passthrough();
@@ -1367,6 +1415,63 @@ export const ShellSurfacesControlRefusalFact = z.enum([
 ]);
 export type ShellSurfacesControlRefusalFact = z.infer<typeof ShellSurfacesControlRefusalFact>;
 
+/** EY-1 — a pane a call made (BU-19): the run-level open's first page, a new tab, or a pop-up an act opened on the
+ * run's own page. It is the run's own, placed by the window, and main names it by its surface. fieldd's room mints its
+ * desk object and grants it `placed`, as canvas_place's object is, so a model never sees a surfaceId. */
+export const ShellSurfacesMadePane = z
+  .object({
+    surfaceId: LiveSurfaceIdV1,
+    url: LiveSurfaceUrlV1,
+    by: z.enum(["open", "tab", "popup"]),
+  })
+  .passthrough();
+export type ShellSurfacesMadePane = z.infer<typeof ShellSurfacesMadePane>;
+
+/** EY-1 — the still a call wrote: one file in fieldd's own folder for the run (`folder`), which main checked after
+ * the engine wrote it. The answer names the file; its bytes never cross (MT-D10, EL2). */
+export const ShellSurfacesStill = z
+  .object({
+    path: ShellAbsolutePath,
+    mime: z.enum(["image/png", "image/jpeg"]),
+    width: z.number().int().positive(),
+    height: z.number().int().positive(),
+    bytes: z.number().int().positive().max(PAGES_STILL_MAX_BYTES),
+  })
+  .passthrough();
+export type ShellSurfacesStill = z.infer<typeof ShellSurfacesStill>;
+
+/** EY-1 (1f) — the pop-ups refused for the run, one count per reason, so the agent hears why: `runFull`, at the
+ * run's cap (PAGES_RUN_PANES_MAX); `deskFull`, because the desk was full; `address`, by the address rule (a refused
+ * address is counted and never followed); `noWindow` (7b, 2026-11-19), because no window took its page (none stood,
+ * none adopted it in time, or its run ended first). Each a whole number, absent when none; at least one key is said, and a
+ * reason a newer main adds passes, for the reader to log (the tolerant reader). It counts as
+ * `closed` does: every refusal decided since the run's previous answer, inside this call's window or after that answer
+ * went (an adopt's late decline between calls), and rides the run's next answer, whichever call that is. */
+export const ShellSurfacesCapped = z
+  .object({
+    runFull: z.number().int().positive().optional(),
+    deskFull: z.number().int().positive().optional(),
+    address: z.number().int().positive().optional(),
+    noWindow: z.number().int().positive().optional(),
+  })
+  .passthrough()
+  .refine((capped) => Object.keys(capped).length > 0, "capped names at least one reason");
+export type ShellSurfacesCapped = z.infer<typeof ShellSurfacesCapped>;
+
+/** EY-1 — what any arm of a control result may also say: a call answered `held` may already have made or closed a
+ * pane. `made`, the panes the call made; `closed`, the run's own panes it closed (a handed page is given back, never
+ * closed); `givenBack` (1f, 2026-11-19), the handed pages the run gave back: the person's page stays open and the
+ * run's grant on it ends, counted as `closed` is, since the run's previous answer. A reader that knows no
+ * `givenBack` loses nothing: the page is the person's, and stays. `still`, the still it wrote; `capped` (1f), the
+ * pop-ups it refused, counted by why (ShellSurfacesCapped). Absent when none. */
+const ShellSurfacesControlCarries = {
+  made: z.array(ShellSurfacesMadePane).max(PAGES_RUN_PANES_MAX).optional(),
+  closed: z.array(LiveSurfaceIdV1).max(PAGES_RUN_PANES_MAX).optional(),
+  givenBack: z.array(LiveSurfaceIdV1).max(PAGES_RUN_PANES_MAX).optional(),
+  still: ShellSurfacesStill.optional(),
+  capped: ShellSurfacesCapped.optional(),
+};
+
 /** EY-0 — the call's answer. A fact has to reach the model as a word, and main's errors cross only as a kind with a
  * fixed message, so a refusal is a result: `done` with the engine's `output` (JSON, bounded), or `refused` with its
  * `fact`. UNAVAILABLE (no window, no broker) and TIMEOUT stay error kinds. */
@@ -1380,11 +1485,23 @@ export const ShellSurfacesControlResult = z.union([
           (output) => jsonFits(output, SURFACE_AUTHORITY_LIMITS.CONTROL_OUTPUT_MAX_BYTES),
           "output is required, within SURFACE_AUTHORITY_LIMITS.CONTROL_OUTPUT_MAX_BYTES",
         ),
+      ...ShellSurfacesControlCarries,
     })
     .passthrough(),
-  z.object({ status: z.literal("refused"), fact: ShellSurfacesControlRefusalFact }).passthrough(),
   z
-    .object({ status: z.literal("refused"), fact: z.literal("needs-you"), need: PagesNeed })
+    .object({
+      status: z.literal("refused"),
+      fact: ShellSurfacesControlRefusalFact,
+      ...ShellSurfacesControlCarries,
+    })
+    .passthrough(),
+  z
+    .object({
+      status: z.literal("refused"),
+      fact: z.literal("needs-you"),
+      need: PagesNeed,
+      ...ShellSurfacesControlCarries,
+    })
     .passthrough(),
 ]);
 export type ShellSurfacesControlResult = z.infer<typeof ShellSurfacesControlResult>;
@@ -1450,11 +1567,24 @@ export const ShellProviderCallParams = z
   .passthrough();
 export type ShellProviderCallParams = z.infer<typeof ShellProviderCallParams>;
 
+/** EY-1 (2026-11-19) — what a provider error may say of its service's state, so the room's words say why (a pages
+ * UNAVAILABLE's `not-installed`, `engine-starting`, …): two short words, the service and its own fixed state, never
+ * a page's text. Tolerant: a state a newer main adds still parses, and the room passes one it does not know as it
+ * came; details this build cannot read cost that fact, never the error. */
+export const ShellProviderErrorDetails = z
+  .object({
+    service: z.string().min(1).max(32),
+    state: z.string().min(1).max(64),
+  })
+  .passthrough();
+export type ShellProviderErrorDetails = z.infer<typeof ShellProviderErrorDetails>;
+
 export const ShellProviderError = z
   .object({
     kind: ErrorKind,
     message: z.string().min(1).max(256),
     retryable: z.boolean().default(false),
+    details: ShellProviderErrorDetails.optional().catch(undefined),
   })
   .passthrough();
 export type ShellProviderError = z.infer<typeof ShellProviderError>;

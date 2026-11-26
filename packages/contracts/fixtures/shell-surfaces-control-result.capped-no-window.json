@@ -1,0 +1,6 @@
+{
+  "//": "EY-1 (7b) — a pop-up no window took: the run's click opened one, and no window stood to take its page, so main made none and counted it. The answer carries the count in `capped`, as `noWindow`; this one made no page, so nothing is in `closed`.",
+  "status": "done",
+  "output": { "clicked": true },
+  "capped": { "noWindow": 1 }
+}

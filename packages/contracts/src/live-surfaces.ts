@@ -25,7 +25,7 @@ const LiveSurfaceBoundedTextV1 = z
   .min(1)
   .max(512)
   .refine(hasNoControlCharacters, "control characters are forbidden");
-const LiveSurfaceUrlV1 = z
+export const LiveSurfaceUrlV1 = z
   .string()
   .min(1)
   .max(8_192)
@@ -598,6 +598,15 @@ export const LiveSurfaceBrowserStateV1 = z
           .passthrough(),
       ])
       .optional(),
+    /** EY-1 (2026-11-19) — where an agent's act lands on the page, in CSS px of the page's logical size, while the act
+     * runs; absent otherwise. Only the act point rides the summary: who is using the page is the object's presence. */
+    act: z
+      .object({
+        x: z.number().finite().min(0).max(LIVE_SURFACE_MAX_DIMENSION),
+        y: z.number().finite().min(0).max(LIVE_SURFACE_MAX_DIMENSION),
+      })
+      .passthrough()
+      .optional(),
   })
   .passthrough();
 export type LiveSurfaceBrowserStateV1 = z.infer<typeof LiveSurfaceBrowserStateV1>;
@@ -832,6 +841,10 @@ export type LiveSurfaceNavigationCommandV1 = z.infer<typeof LiveSurfaceNavigatio
 export const LiveSurfaceDeviceCommandV1 = z.object({ verb: LiveSurfaceDeviceVerbV1 }).passthrough();
 export type LiveSurfaceDeviceCommandV1 = z.infer<typeof LiveSurfaceDeviceCommandV1>;
 
+/** EY-1 (1f) — the most live pages one window's desk keeps alive at once: field-app's live cap reads it, and a `room`
+ * message is bounded by it. */
+export const LIVE_PAGES_MAX_V1 = 6;
+
 /** Renderer → main messages carried only by the generation-scoped control port. */
 export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", [
   z
@@ -903,6 +916,27 @@ export const LiveSurfaceRendererControlMessageV1 = z.discriminatedUnion("type", 
       type: z.literal("hold"),
       attachmentId: LiveSurfaceAttachmentIdV1,
       held: z.boolean(),
+    })
+    .passthrough(),
+  // EY-1 (1f) — how many more agent pages this window's desk could make alive without resting a person's. Main keeps
+  // each window's last count. Since 2026-11-19, a window that never sent one is UNKNOWN and blocks no make: main
+  // refuses a make as desk-full only when every window has said, and every count said is 0. The desk's adopt stays
+  // authoritative (`made-declined`).
+  z
+    .object({
+      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+      type: z.literal("room"),
+      agentPages: z.number().int().min(0).max(LIVE_PAGES_MAX_V1),
+    })
+    .passthrough(),
+  // EY-1 (1f) — the desk declines a made pane at its adopt: main disposes it at once and names it in the call's
+  // `closed`. `reason` is an enum, so it can grow.
+  z
+    .object({
+      v: z.literal(LIVE_SURFACE_PROTOCOL_VERSION_V1),
+      type: z.literal("made-declined"),
+      made: LiveSurfaceIdV1,
+      reason: z.enum(["no-room"]),
     })
     .passthrough(),
 ]);
@@ -1220,6 +1254,9 @@ export const SurfaceOpenParamsV1 = z
     source: LiveSurfaceSourceSpecV1,
     reuseKey: SurfaceReuseKeyV1.optional(),
     idempotencyKey: z.string().min(1).max(SURFACE_LIMITS.IDEMPOTENCY_KEY_CHARS).optional(),
+    /** EY-1 (1f) — the made pane this open adopts (`shell.surfaces.mint`'s `made`). fieldd forwards it only for a pane
+     * its pages room placed. */
+    made: LiveSurfaceIdV1.optional(),
   })
   .passthrough();
 export type SurfaceOpenParamsV1 = z.infer<typeof SurfaceOpenParamsV1>;

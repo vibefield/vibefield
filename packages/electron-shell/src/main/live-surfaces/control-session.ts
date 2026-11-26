@@ -7,6 +7,7 @@ import {
   type LiveSurfacePortBootstrapV1,
   LiveSurfaceRendererControlMessageV1,
   LiveSurfaceRuntimeSummaryV1,
+  type LiveSurfaceSourceSpecV1,
 } from "@vibefield/contracts";
 import {
   LiveSurfaceDemandTracker,
@@ -46,6 +47,8 @@ interface ManagedAttachment {
   readonly demand: LiveSurfaceDemandTracker;
   /** The redeemed ticket's grant, captured at attach — the input lane's gate. */
   readonly operations: readonly LiveSurfacePresentationOperation[];
+  /** EY-1 (1g, 2026-11-19): the redeemed ticket's source kind, captured at attach — the hold's gate, beside `pointer`. */
+  readonly sourceKind: LiveSurfaceSourceSpecV1["kind"];
   summary: LiveSurfaceRuntimeSummaryV1;
   lastFrameSequence: bigint | null;
   cpuFrameInFlight: { readonly producerEpoch: number; readonly sequence: string } | null;
@@ -91,6 +94,10 @@ export interface LiveSurfaceControlSessionOptions {
   readonly textureDrainTimeoutMs?: number;
   readonly onProtocolFault?: (reason: string) => void;
   readonly onClosed?: () => void;
+  /** EY-1 (1f): this window's desk said its room for agent pages (`room`): main's early hint */
+  readonly onRoom?: (agentPages: number) => void;
+  /** EY-1 (1f): this window's desk will not place a made page (`made-declined`) */
+  readonly onMadeDeclined?: (made: string) => void;
 }
 
 function hostError(
@@ -101,9 +108,16 @@ function hostError(
   return { code, message, recovery };
 }
 
+/** EY-1 (C2, 2026-11-24): how many attachments main itself ended a generation remembers, the newest. */
+const ENDED_BY_HOST_MAX = 256;
+
 /** One main-side control session, bounded to one renderer generation. */
 export class LiveSurfaceControlSession {
   readonly #attachments = new Map<string, ManagedAttachment>();
+  /** EY-1 (C2, 2026-11-24): the attachments main itself ended (their runtime said `closed`), by id. The window goes on
+   * sending for one until it has read that summary: a demand for it then is a race, never the fault a demand for an
+   * attachment nobody ever had is. Ids alone, the newest ENDED_BY_HOST_MAX; gone with the generation. */
+  readonly #endedByHost = new Set<string>();
   readonly #pendingDrains = new Set<Promise<unknown>>();
   readonly #randomAttachmentId: () => string;
   readonly #maxAttachments: number;
@@ -177,6 +191,8 @@ export class LiveSurfaceControlSession {
       case "demand": {
         const attachment = this.#attachments.get(message.attachmentId);
         if (attachment === undefined || !attachment.active) {
+          // EY-1 (C2): sent before the window read that main had closed the page: dropped, as input is
+          if (this.#endedByHost.has(message.attachmentId)) return;
           this.protocolFault("demand named an unknown attachment");
           return;
         }
@@ -256,6 +272,39 @@ export class LiveSurfaceControlSession {
         }
         return;
       }
+      case "hold": {
+        // EY-1 (1g, 2026-11-19; EY-L2, "your hand wins") — the person picks a page up or puts it down. Input's
+        // shape: an unknown attachment is the detach race (silent). A hold is a page's alone, keyed on its source kind as well as
+        // `pointer`, since a simulator now has `pointer` too: from any other surface, or without the grant, it is not our
+        // renderer (EL7: fail the generation closed). A runtime with no hold member drops it.
+        const attachment = this.#attachments.get(message.attachmentId);
+        if (attachment === undefined || !attachment.active) return;
+        if (attachment.sourceKind !== "browser") {
+          this.protocolFault("hold arrived from a surface that is not a page");
+          return;
+        }
+        if (!attachment.operations.includes("pointer")) {
+          this.protocolFault("hold arrived without its operation grant");
+          return;
+        }
+        const hold = attachment.runtime.hold;
+        if (hold === undefined) return;
+        try {
+          hold.call(attachment.runtime, message.held);
+        } catch {
+          this.protocolFault("runtime rejected a validated hold");
+        }
+        return;
+      }
+      case "room":
+        // EY-1 (1f, 2026-11-19): the window's own word, not an attachment's. Main keeps the last
+        // count as a hint; the desk's adopt decides (custody keeps it for product windows alone).
+        this.options.onRoom?.(message.agentPages);
+        return;
+      case "made-declined":
+        // EY-1 (1f): the desk declines a made page at its adopt; custody lets it go at once
+        this.options.onMadeDeclined?.(message.made);
+        return;
       case "cpu-frame-ack": {
         const attachment = this.#attachments.get(message.attachmentId);
         if (attachment === undefined || !attachment.active) return;
@@ -289,6 +338,7 @@ export class LiveSurfaceControlSession {
     }
     let authority: LiveSurfaceRuntimeAuthority;
     let operations: readonly LiveSurfacePresentationOperation[];
+    let sourceKind: LiveSurfaceSourceSpecV1["kind"];
     try {
       const redeemed = this.options.tickets.redeem(ticket, {
         senderWebContentsId: this.options.senderWebContentsId,
@@ -296,6 +346,7 @@ export class LiveSurfaceControlSession {
       });
       authority = redeemed.authority;
       operations = redeemed.operations;
+      sourceKind = redeemed.sourceKind;
       if (authority.surfaceId !== redeemed.surfaceId) {
         throw new LiveSurfaceTicketError("invalid");
       }
@@ -345,6 +396,8 @@ export class LiveSurfaceControlSession {
               attachmentId,
               summary: faviconOnce(managed, summary),
             });
+            // EY-1 (C2, 2026-11-24): a runtime main closed has said its last word, and main's side ends with it
+            if (summary.state === "closed") this.endClosed(attachmentId);
           }
         },
         publishCpuFrame: (frame) => {
@@ -391,6 +444,7 @@ export class LiveSurfaceControlSession {
         textureSink,
         demand: new LiveSurfaceDemandTracker(),
         operations,
+        sourceKind,
         summary,
         lastFrameSequence: null,
         cpuFrameInFlight: null,
@@ -404,6 +458,9 @@ export class LiveSurfaceControlSession {
         requestId,
         attachment: { v: 1, attachmentId, summary: faviconOnce(managed, summary) },
       });
+      // EY-1 (C2, 2026-11-24): a runtime that said `closed` while it was being attached said it before this
+      // attachment stood, so the word is the attachment's first summary and never passed the place above
+      if (summary.state === "closed") this.endClosed(attachmentId);
     } catch {
       if (managed !== null) managed.active = false;
       this.#attachments.delete(attachmentId);
@@ -418,6 +475,21 @@ export class LiveSurfaceControlSession {
         hostError("source-not-found", "live surface source could not attach", "user-action"),
       );
     }
+  }
+
+  /** EY-1 (C2, 2026-11-24): the attachment's runtime said `closed`, and the window was told (a summary, or the
+   * attach's own). The window closes its own side on that word and sends no detach, so main's side ends here: the
+   * runtime's handle let go and the sink drained, with no `detached` posted (nothing asked for one). What the window
+   * still sends for the attachment is the detach race, dropped as ever (a demand too: `#endedByHost`). */
+  private endClosed(attachmentId: string): void {
+    this.#endedByHost.add(attachmentId);
+    if (this.#endedByHost.size > ENDED_BY_HOST_MAX) {
+      for (const oldest of this.#endedByHost) {
+        this.#endedByHost.delete(oldest);
+        break;
+      }
+    }
+    this.detach(attachmentId, false);
   }
 
   private detach(attachmentId: string, acknowledge: boolean): void {

@@ -4,7 +4,11 @@ import { fileURLToPath } from "node:url";
 import { validatePluginManifest } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
 import { DESK_OBJECT, isObjectKind } from "@vibefield/plugin-sdk/desk";
-import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
+import {
+  activateWithMockHost,
+  defaultProps,
+  validateStateProps,
+} from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
 import {
   BROWSER_PANE_CATEGORY,
@@ -63,12 +67,14 @@ describe("vibefield.browser-pane", () => {
 
   it("keeps the address, the device, the glass and the scheme — never a viewport: Size is the truth and the viewport its derivation", () => {
     expect(Object.keys(row?.props ?? {}).sort()).toEqual([
+      "agentRun",
       "device",
       "deviceScaleFactor",
       "finish",
       "inputMode",
       "muted",
       "navigatorPlatform",
+      "runAddress",
       "scheme",
       "url",
       "userAgent",
@@ -91,7 +97,8 @@ describe("vibefield.browser-pane", () => {
     ]);
     expect(row?.props.url?.kind === "string" ? row.props.url.default : undefined).toBe(SAMPLE_URL);
     // the url in a cell of its own (PT-3 ruling 9): an undo of the props' cell never re-asserts an old address
-    expect(row?.groups).toEqual({ page: ["url"] });
+    // PI-1 (2026-11-24): a run's pane's address beside it, in the same cell
+    expect(row?.groups).toEqual({ page: ["url", "runAddress"] });
   });
 
   it("is a laptop's page in size, resized by core's handles down to the smallest viewport at the finest density", () => {
@@ -136,6 +143,39 @@ describe("vibefield.browser-pane", () => {
     expect([...session.commands.keys()]).toEqual([]);
     expect([...session.surfaces.keys()]).toEqual([]);
     await session.close();
+  });
+
+  it("EY-2: names the run a pane was made for in a prop VibeField alone sets, '' for no run, a run id's length at most", () => {
+    const agentRun = row?.props.agentRun;
+    expect(agentRun).toEqual({ kind: "string", default: "", maxLength: 128 });
+    if (row === undefined) throw new Error("row");
+    expect(defaultProps(row).agentRun).toBe("");
+    expect(validateStateProps(row, "made", { agentRun: "run-1" })).toBeNull();
+    expect(validateStateProps(row, "too-long", { agentRun: "r".repeat(129) })).not.toBeNull();
+  });
+
+  it("EY-2: a pane saved before the prop reads no run: its props still stand, and the default fills the rest", () => {
+    if (row === undefined) throw new Error("row");
+    const saved = { url: SAMPLE_URL, device: "laptop", finish: "low-iron", scheme: "desk" };
+    expect(validateStateProps(row, "saved-before", saved)).toBeNull();
+    const read: Readonly<Record<string, unknown>> = { ...defaultProps(row), ...saved };
+    expect(read.agentRun).toBe("");
+  });
+
+  it("EY-2: an agent can be handed a page and works it through the pages room's rows: no tools of its own, never placed by one", () => {
+    expect(row?.agent).toEqual({
+      summary:
+        "A web page on the desk. Work it with the browser tools; you can work only the pages you opened with them, not the user's.",
+      concurrency: "many",
+      faces: [
+        { type: "ref", label: "Live" },
+        { type: "image", label: "Picture" },
+      ],
+      tools: [],
+      room: "pages",
+    });
+    // many runs may hold a page at once: the person's hand, not a lease, keeps it
+    expect(row?.agent?.concurrency).not.toBe("one");
   });
 
   it("keeps the committed manifest byte-identical to its validated canonical emission", () => {

@@ -1,0 +1,8 @@
+{
+  "//": "EY-1 — an act that opened a pop-up on the run's own page: `made` names the pane it made, which fieldd's room mints as the run's own desk object (BU-19).",
+  "status": "done",
+  "output": { "clicked": true },
+  "made": [
+    { "surfaceId": "surface_fedcba9876543210", "url": "https://example.com/sign-in", "by": "popup" }
+  ]
+}

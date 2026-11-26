@@ -1,0 +1,11 @@
+{
+  "//": "EY-1 (1f) — the pages room places a pane a call made: `made` names the surface the new object adopts, and the declared prop `agentRun` names its run, so every later mint keeps the pane in that run's own session, never the desk's signed-in one.",
+  "op": "place",
+  "intent": "i-01J8Z3K9",
+  "run": "run-01J8Z3K9",
+  "handle": "claude·2",
+  "expiresAt": 1763550000000,
+  "kind": "vibefield.browser-pane",
+  "props": { "url": "https://example.com/sign-in", "agentRun": "run-01J8Z3K9" },
+  "made": "surface_fedcba9876543210"
+}

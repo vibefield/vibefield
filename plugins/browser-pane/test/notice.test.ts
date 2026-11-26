@@ -66,6 +66,15 @@ describe("PT-5a — what a failed page's film says", () => {
     expect(failureWords("connection-refused").headline).toBe("This site refused to connect");
     expect(failureWords("certificate").detail).toMatch(/was not opened/);
     expect(failureWords("stopped: Browser page stopped").headline).toBe("This page stopped");
+    // EY-1 (1f, DESIGN.md §8): an agent's page that never reached the window, and the closed still
+    expect(failureWords("never-opened")).toEqual({
+      headline: "This page didn’t open",
+      detail: "It leaves the desk when you put it down.",
+    });
+    expect(failureWords("run-ended")).toEqual({
+      headline: "This page closed when an agent’s work ended",
+      detail: "Open its address in a page of your own to see it again.",
+    });
     // PT-5b2 (ruling 6): an address that is no page, and a load the person stopped before anything of the page arrived
     expect(failureWords("no-document")).toEqual({
       headline: "There’s no page at this address",

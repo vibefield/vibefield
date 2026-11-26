@@ -134,8 +134,10 @@ export interface PaneLocal extends KindLocal {
   navigate(e: Entity, command: BrowserNavigationCommand): boolean;
   /** PT-3 — a control's act: back, forward, reload (stop while the page loads), the address (the hand's). */
   act(e: Entity, control: HeldPart): void;
-  /** PT-3 — the url `e`'s record read: one that moved under its live page (a peer's, an undo) navigates the page there. */
-  follow(e: Entity, url: string): void;
+  /** PT-3 — the url `e`'s record read: one that moved under its live page (a peer's, an undo) navigates the page there.
+   * EY S2a — `run`: the page is the one main made for the pane's run, opened before the pane: at the record's first read
+   * nothing is waited for, and wherever the page already stands is its own (addressed, the hand writes it). */
+  follow(e: Entity, url: string, run?: boolean): void;
   /** PT-3 — the panes whose page WENT, of its own, to a web address the record has not read (from where it stood when the record
    * last read a new url): the hand writes it, not undoably (ruling 9). A page that has not yet followed the document is not one;
    * nor is a page's plumbing (its bootstrap `about:blank`, an error page). */
@@ -418,13 +420,14 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       }
     },
     // the document's word over the page's: an address that moved under a live page is followed, the page's own never echoed back
-    follow(e, url) {
+    follow(e, url, run = false) {
       const was = urls.get(e);
       if (was === url) return;
       urls.set(e, url);
       const words = live.words(e);
       const at = words?.info.address;
-      stoodAt.set(e, at);
+      // (a run's page at its pane's first read was sent nowhere by the document: it is not waiting to follow it)
+      stoodAt.set(e, run && was === undefined ? undefined : at);
       followedAt.set(e, pageDocument(words?.info));
       if (was === undefined || at === url) return;
       navigate(e, { action: "go", url });

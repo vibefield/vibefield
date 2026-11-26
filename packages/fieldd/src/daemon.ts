@@ -471,6 +471,8 @@ import {
 import { TokenService } from "./token-service";
 import { composeProjects, ToolPlaneService } from "./tool-plane";
 import { crewFactsOf, SparkCrews } from "./tool-plane/crews";
+import { PagesStills } from "./tool-plane/rooms/pages/stills";
+import { pagesRunsOf } from "./tool-plane/rooms/pages/verbs";
 import { sparkSpawn } from "./tool-plane/rooms/talk/spawn";
 import type { TalkDeps, TalkSession } from "./tool-plane/rooms/talk/verbs";
 import { NeedsQueue, type NeedsRun } from "./tool-plane/rooms/you/queue";
@@ -2922,7 +2924,18 @@ export async function bootstrap(
     // `surface.attach`, the local-window binding, idempotent replay, the audit
     // pair) and Electron main mints it. Until DT-1c lands the main-side
     // authority the doors answer UNAVAILABLE, and so does this.
-    const surfaces = createSurfaceService({ api, audit, logger });
+    // EY-2 (the made path, 2026-11-19): an open adopts a made pane only when the pages room placed it; the tool plane
+    // is built later, so the room is asked through it at each open
+    const surfaces = createSurfaceService({
+      api,
+      audit,
+      logger,
+      made: {
+        placed: (surfaceId) => toolPlane?.pagesPlaced(surfaceId) ?? false,
+        // a run's pane after its run (2026-11-24): until the tool plane is built, no run's page is said closed
+        serves: (run) => toolPlane?.pagesServes(run) ?? true,
+      },
+    });
     api.register("surface.sources", (ctx, params) => surfaces.sources(ctx, params));
     api.register("surface.open", (ctx, params) => surfaces.open(ctx, params));
     api.register("surface.close", (ctx, params) => surfaces.close(ctx, params));
@@ -4133,6 +4146,9 @@ export async function bootstrap(
       },
     });
     deskObjects.boot();
+    // a run's end told to main (2026-11-24) — the runs a previous fieldd held pages for, read before the settle ends
+    // its plain grants: this fieldd serves none of their pages, and main may still hold their runs, routes and sessions
+    const pagesRunsAtBoot = pagesRunsOf(deskObjects);
     agents.onRunEnded((runtimeRunId) => deskObjects.runEnded(runtimeRunId));
     agents.onRunReplaced((old, next) => {
       // the spark that started a run started its successor: handed on before the desk shows the successor
@@ -4145,6 +4161,30 @@ export async function bootstrap(
     projectGroups.onChange(() => refreshDesk());
     // what ended while fieldd was down holds nothing now, judged once the re-attach has settled
     needs.joinSettle("objects", () => deskObjects.reconcile());
+    // EY-2 (2b, 2026-11-19) — the pages room's stills: a private folder per run under LAYOUT.PAGES_STILLS_DIR. A folder
+    // goes when its run's record is forgotten, or once its newest still is older than PAGES_STILLS_MAX_AGE_MS (swept now
+    // and daily), each removal inside one audit line: the folder's hash, its count and bytes, never a path
+    const pagesStills = new PagesStills({
+      root: join(config.dataDir, ...LAYOUT.PAGES_STILLS_DIR),
+      ...(process.getuid !== undefined ? { uid: process.getuid() } : {}),
+      audited: (removal, remove) =>
+        audit.requiredSystem(
+          {
+            action: "pages.stills.remove",
+            target: { kind: "pages-stills", id: removal.folder },
+            attrs: { why: removal.why, files: removal.files, bytes: removal.bytes },
+          },
+          remove,
+        ),
+    });
+    agents.onRecordForgotten((runtimeRunId) => {
+      void pagesStills.forget(runtimeRunId).catch((err: unknown) =>
+        logger.warn("fieldd.pages.stills_forget_failed", "A forgotten run's stills stayed", {
+          reason: (err as Error).message,
+        }),
+      );
+    });
+    const pagesStillsSweeps = pagesStills.startSweeps();
     toolPlane = new ToolPlaneService({
       native,
       lanes: laneLink,
@@ -4187,6 +4227,19 @@ export async function bootstrap(
       },
       talk,
       desk: { objects: deskObjects },
+      pages: {
+        objects: deskObjects,
+        control: (params) => api.surfacesControl(params),
+        stills: pagesStills,
+        logger: logger.child({ component: "pages" }),
+        // the room's own acts, audited (2026-11-24) — the room's own acts on a run's browser (a run's end told to main,
+        // a resume's rebind), each in one system line: the run and a count, never a page or an address
+        audited: (act, send) =>
+          audit.requiredSystem(
+            { action: act.action, target: { kind: "run", id: act.run }, attrs: act.attrs },
+            send,
+          ),
+      },
       you: {
         queue: needs,
         label: runLabel,
@@ -4202,6 +4255,14 @@ export async function bootstrap(
       const door = toolPlane;
       native.on("connected", () => void door.ensureStarted());
       void door.ensureStarted();
+      // EY-2 — a run's browser session ends with it; a resume's own pages follow it (after the desk's grants have)
+      agents.onRunEnded((runtimeRunId) => door.pagesRunEnded(runtimeRunId));
+      agents.onRunReplaced((old, next) => door.pagesRunReplaced(old, next));
+      // a run's end told to main (2026-11-24) — once the re-attach has settled (after the objects' own reconcile), main
+      // hears the end of each run a previous fieldd held pages for; a run's end main did not hear is told again when a
+      // shell registers
+      needs.joinSettle("pages", () => door.pagesEndedBefore(pagesRunsAtBoot));
+      api.onShellRegistered(() => door.pagesShellRegistered());
     }
     const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
       tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??
@@ -10597,6 +10658,7 @@ export async function bootstrap(
             ["doc-lane", () => docLane.close()],
             ["presence-rooms", () => presenceRooms?.stop()],
             ["tool-plane", () => toolPlane?.stop()],
+            ["pages-stills", () => pagesStillsSweeps.stop()],
             ["needs-queue", () => needsQueue?.stop()],
             // OB custody (C5) — the desk's store is released: its one timer (a take-back the disk would not
             // take is written again on it) stops here, once every door that can change a grant has closed (the

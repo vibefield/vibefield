@@ -29,6 +29,7 @@ import {
   ObjectIntent,
   type ObjectIntentAnswer,
   ObjectsPresenceSnapshot,
+  PAGES_PANE_ADDRESS_PROP,
 } from "@vibefield/contracts";
 import { type FielddClient, reaskDelayMs, refusedForRoom } from "@vibefield/fieldd-client";
 import {
@@ -39,6 +40,7 @@ import {
 } from "@vibefield/plugin-sdk/desk";
 import { getActiveView } from "../../../frame/view-state";
 import { getRendererLogger } from "../../../logging";
+import { typeDefinition } from "../../../plugin-host/build-widget";
 import { askAgain } from "../../../reconnect";
 import { agentHalfOf } from "../agent-kinds";
 import { atWorkStore } from "../at-work/at-work-store";
@@ -177,6 +179,12 @@ const WORDS = {
   off: (label: string): string => `The desk cannot draw this kind right now (${label}).`,
   tooBig: "That answer is larger than an agent can be told.",
   summaryTooBig: "This object's summary is too large to show here. Use its read tools.",
+  // EY-1 (1f, 2026-11-19): the agent's words for a full desk (the room's own, as the pages tools say them)
+  deskFull:
+    "The desk has no room for another live page right now. Close a page you no longer need, or carry on in this one.",
+  noLive: "This window cannot show live pages right now.",
+  roomPlaces: (name: string, room: string): string =>
+    `${name} is placed by the ${room} room's own tools, with the page they open, never with canvas_place.`,
 } as const;
 
 const refused = (intent: ObjectIntent, fact: Fact, text: string): ObjectIntentAnswer => ({
@@ -232,9 +240,97 @@ function isOnScreen(engine: CanvasEngine, e: Entity, onCanvas: () => boolean): b
   return at.x + size.w > camera.x && at.x < right && at.y + size.h > camera.y && at.y < bottom;
 }
 
+/** L8 (2026-11-24): how far from its first spot, in its own sizes, a free place is looked for; and the most of the board's
+ * objects near that spot whose edges make the places looked at (the nearest first). Bounds on the search, not looks. */
+const FREE_REACH = 4;
+const FREE_EDGES_MAX = 64;
+
+interface Rect {
+  readonly x: number;
+  readonly y: number;
+  readonly w: number;
+  readonly h: number;
+}
+
+/** The objects lying on the board itself (never inside a mat, never a pegboard's specimen), as rects in the world. */
+function boardRects(engine: CanvasEngine): Rect[] {
+  const { world } = engine;
+  const board = world.getResource(BoardRoot)?.root;
+  const rects: Rect[] = [];
+  world.query(objects).each((batch) => {
+    for (const row of batch) {
+      const e = batch.entity(row);
+      if (board !== undefined && world.getRelation(e, ChildOf) !== board) continue;
+      const at = world.get(e, Position);
+      const size = world.get(e, Size);
+      if (at === undefined || size === undefined) continue;
+      rects.push({ x: at.x, y: at.y, w: size.w, h: size.h });
+    }
+  });
+  return rects;
+}
+
+/**
+ * L8 (2026-11-24; DESIGN.md §8, "where an agent's object lands") — THE FREE PLACE nearest `start` for an object of `size`:
+ * over no object on the board, PLACE_GAP clear of each. The places looked at are `start` and those that put the object
+ * one gap beside an edge of a nearby object, on either axis; the free one nearest `start` wins. Undefined: none within
+ * FREE_REACH of its own sizes.
+ */
+function freeSpot(
+  rects: readonly Rect[],
+  start: { readonly x: number; readonly y: number },
+  size: { readonly w: number; readonly h: number },
+): { x: number; y: number } | undefined {
+  const clear = (x: number, y: number): boolean =>
+    rects.every(
+      (r) =>
+        x >= r.x + r.w + PLACE_GAP ||
+        r.x >= x + size.w + PLACE_GAP ||
+        y >= r.y + r.h + PLACE_GAP ||
+        r.y >= y + size.h + PLACE_GAP,
+    );
+  if (clear(start.x, start.y)) return start;
+  const reachX = FREE_REACH * size.w;
+  const reachY = FREE_REACH * size.h;
+  const cx = start.x + size.w / 2;
+  const cy = start.y + size.h / 2;
+  const near = rects
+    .filter(
+      (r) =>
+        r.x + r.w >= start.x - reachX &&
+        r.x <= start.x + size.w + reachX &&
+        r.y + r.h >= start.y - reachY &&
+        r.y <= start.y + size.h + reachY,
+    )
+    .sort(
+      (a, b) =>
+        Math.hypot(a.x + a.w / 2 - cx, a.y + a.h / 2 - cy) -
+        Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy),
+    )
+    .slice(0, FREE_EDGES_MAX);
+  const xs = [start.x];
+  const ys = [start.y];
+  for (const r of near) {
+    xs.push(r.x + r.w + PLACE_GAP, r.x - PLACE_GAP - size.w, r.x);
+    ys.push(r.y + r.h + PLACE_GAP, r.y - PLACE_GAP - size.h, r.y);
+  }
+  let best: { x: number; y: number; d: number } | undefined;
+  for (const x of xs) {
+    if (Math.abs(x - start.x) > reachX) continue;
+    for (const y of ys) {
+      if (Math.abs(y - start.y) > reachY) continue;
+      const d = Math.hypot(x - start.x, y - start.y);
+      if (best !== undefined && d >= best.d) continue;
+      if (clear(x, y)) best = { x, y, d };
+    }
+  }
+  return best === undefined ? undefined : { x: best.x, y: best.y };
+}
+
 /** Where an object an agent places lands on the board: the middle of the view, or, while the person is inside a mat (whose
- * camera says nothing of the board), beside the object on the board they went in through. Each lands a little down and
- * across from the last, so a run placing several does not stack them exactly. */
+ * camera says nothing of the board), beside the object on the board they went in through. L8 (2026-11-24): in the free
+ * place nearest there, over no object already on the board (`freeSpot`). Where none is near, it lands there as before,
+ * a little down and across from the last, so a run placing several does not stack them exactly. */
 function spotFor(
   engine: CanvasEngine,
   size: { readonly w: number; readonly h: number },
@@ -243,6 +339,7 @@ function spotFor(
   const { world } = engine;
   const cascade = (nth % 8) * 24;
   const frame = currentNavFrame(world);
+  let start: { x: number; y: number };
   if (frame !== undefined) {
     const board = world.getResource(BoardRoot)?.root;
     let top = frame;
@@ -254,18 +351,22 @@ function spotFor(
       top = up;
     const at = world.get(top, Position);
     const across = world.get(top, Size);
-    return {
-      x: (at?.x ?? 0) + (across?.w ?? 0) + PLACE_GAP + cascade,
-      y: (at?.y ?? 0) + cascade,
+    start = { x: (at?.x ?? 0) + (across?.w ?? 0) + PLACE_GAP, y: at?.y ?? 0 };
+  } else {
+    const camera = world.getResource(Camera);
+    const view = world.getResource(Viewport);
+    const zoom = camera?.zoom ?? 1;
+    start = {
+      x: (camera?.x ?? 0) + ((view?.w ?? 0) / zoom - size.w) / 2,
+      y: (camera?.y ?? 0) + ((view?.h ?? 0) / zoom - size.h) / 2,
     };
   }
-  const camera = world.getResource(Camera);
-  const view = world.getResource(Viewport);
-  const zoom = camera?.zoom ?? 1;
-  return {
-    x: (camera?.x ?? 0) + ((view?.w ?? 0) / zoom - size.w) / 2 + cascade,
-    y: (camera?.y ?? 0) + ((view?.h ?? 0) / zoom - size.h) / 2 + cascade,
-  };
+  return (
+    freeSpot(boardRects(engine), start, size) ?? {
+      x: start.x + cascade,
+      y: start.y + cascade,
+    }
+  );
 }
 
 export interface DeskApplier {
@@ -357,6 +458,12 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     if (said.state !== null) return refused(intent, "needs-you", WORDS.off(said.label));
     if (deskKind(intent.kind)?.placeable === false)
       return refused(intent, "needs-you", WORDS.noPrint);
+    // EY-1 (1f, 2026-11-24): a kind whose tools are a room's (R-2; the browser pane is the pages room's) is placed by that
+    // room, with the page main made for the run (`made`), never by a bare place. So no door, today's or a later one, puts
+    // a pane on the desk that would open in the person's own signed-in profile: its face mints into its run's session only
+    const room = typeDefinition(intent.kind)?.agent?.room;
+    if (room !== undefined && intent.made === undefined)
+      return refused(intent, "no-tool", WORDS.roomPlaces(said.title, room));
     const props: Record<string, unknown> = { ...intent.props };
     if (intent.title !== undefined) {
       const titleProp = deskKind(intent.kind)?.titleProp;
@@ -364,6 +471,31 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
       if (props[titleProp] !== undefined && props[titleProp] !== intent.title)
         return refused(intent, "bad-input", WORDS.twoTitles(titleProp));
       props[titleProp] = intent.title;
+    }
+    // EY-1 (1f, 2026-11-19) — A PAGE A RUN MADE (`made`): placed only where the desk has room for one more agent's page
+    // without resting one of the person's (item 581: `agentRoom`, the plan's own count). No room: nothing is placed and
+    // main lets the page go at once; a window that shows no live pages places none (main's grace lets it go).
+    const made = intent.made;
+    const live = desk.live;
+    // PI-1 (2026-11-24): a run's address never rides `url`, which a reader that does not know the run opens live in the
+    // person's signed-in profile. On a made pane of a kind that declares the address prop, the address the room opened
+    // (its own prop, else its `url`) is written there, `url` is left at the kind's default (no page), and a pane the room
+    // placed with no address is at about:blank
+    if (
+      made !== undefined &&
+      widget.groups.some((group) => PAGES_PANE_ADDRESS_PROP in group.fields)
+    ) {
+      const asked = props[PAGES_PANE_ADDRESS_PROP] ?? props["url"];
+      delete props["url"];
+      props[PAGES_PANE_ADDRESS_PROP] =
+        typeof asked === "string" && asked !== "" ? asked : "about:blank";
+    }
+    if (made !== undefined) {
+      if (live === undefined) return refused(intent, "failed", WORDS.noLive);
+      if (live.agentRoom() < 1) {
+        live.declineMade(made);
+        return refused(intent, "desk-full", WORDS.deskFull);
+      }
     }
     const size = widget.defaultSize;
     const spot = spotFor(engine, size, placed);
@@ -381,6 +513,7 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
         undoable: false,
       });
     } catch (cause) {
+      if (made !== undefined) live?.declineMade(made);
       return refused(
         intent,
         "bad-input",
@@ -390,8 +523,12 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
     placed += 1;
     project(e);
     const key = session.store.keyOf(e) as string | undefined;
-    if (key === undefined || typeOf(e) === undefined)
+    if (key === undefined || typeOf(e) === undefined) {
+      if (made !== undefined) live?.declineMade(made);
       return refused(intent, "failed", "The object did not reach the desk.");
+    }
+    // its face's first mint adopts the made page (its spawn opens the face later in this tick: the mint reads it then)
+    if (made !== undefined) live?.adoptMade(key, made);
     const value: IntentPlaceValue = {
       key,
       ...opened(intent.kind, e),
@@ -426,6 +563,21 @@ export function createDeskApplier(desk: MountedDesk, deps: ApplierDeps = {}): De
       rect: { x: at.x, y: at.y, w: size.w, h: size.h },
       props: declaredProps(engine, e),
     };
+    // A run's own close (2026-11-24): a pane a room placed for a run (the pages room's browser pane) leaves by the
+    // host's one path where this mount has one (the live service's leaveMade). It waits out the pane's at-work mark
+    // (DESIGN.md §8, "At work on the mat"), which fieldd releases as this answer reaches it, and never takes the pane
+    // from under the person's hand. The answer says removed: fieldd closes the pane's page on it
+    const key = session.store.keyOf(e) as string | undefined;
+    if (
+      key !== undefined &&
+      typeDefinition(type)?.agent?.room !== undefined &&
+      desk.live?.leaveMade?.(key) === true
+    )
+      return answered(
+        intent,
+        { removed: true },
+        { inverse, changed: `Removed a ${words(type).title}` },
+      );
     guardedTransaction(session.store, world, (tx) => tx.destroy(e), {
       undoable: false,
       meta: metaOf(intent),

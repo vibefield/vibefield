@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SparkId } from "./agent-session";
+import { LiveSurfaceIdV1 } from "./live-surfaces";
 
 // Objects at Work (track OB; `draft/thinking-objects-at-work.md`). The wire truth of the desk's room: what a chip can be
 // (OB-D1), what a desk object's name looks like (OB-L1: a name, never a grant), the eight desk tools' inputs and answers
@@ -50,7 +51,8 @@ export const OBJECT_LIMITS = {
 } as const;
 
 /** The refusals only the desk room gives (§5.2's facts, errors as results, MT §8). The plane's own (`bad-input`,
- * `unavailable`, `forbidden`) are its own. */
+ * `unavailable`, `forbidden`) are its own. `desk-full` (EY-1 1f, 2026-11-19): the desk has no room to place a page
+ * an agent's run made; the same word main's make refusal says, never `busy`, which is an object at work. */
 export const OBJECT_FACTS = [
   "not-handed",
   "held",
@@ -59,6 +61,7 @@ export const OBJECT_FACTS = [
   "no-tool",
   "needs-you",
   "conflict",
+  "desk-full",
 ] as const;
 export type ObjectFact = (typeof OBJECT_FACTS)[number];
 
@@ -255,6 +258,9 @@ export const ObjectIntent = z.discriminatedUnion("op", [
       kind: KindId,
       title: Title.optional(),
       props: z.record(z.unknown()).optional(),
+      /** EY-1 (1f) — the made pane the placed object adopts: the pages room places a pane a call made, and the
+       * window binds the new object to it (its open's `made`). */
+      made: LiveSurfaceIdV1.optional(),
     })
     .passthrough(),
   z.object({ op: z.literal("remove"), ...IntentBase, key: DeskObjectKey }).passthrough(),

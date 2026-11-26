@@ -55,11 +55,11 @@ const CALL_ANSWER_MS = 10_000;
 
 /** `real`: the audit the plane is given in place of the recording fake (item 526's real-trail row). `actTurns` (item
  * 557, 2026-11-18): the window answers an act only this many turns after it arrives, as a window slower than a
- * reader's count. */
-function harness(real?: ToolPlaneAudit, actTurns = 0) {
+ * reader's count. `respond`: how the window answers (EY-1 1f: a window that says a fact of its own). */
+function harness(real?: ToolPlaneAudit, actTurns = 0, respond = ordinaryWindow) {
   const h = world();
   h.window((intent) => {
-    const answer = ordinaryWindow(intent);
+    const answer = respond(intent);
     if (actTurns === 0 || intent.op !== "act" || answer === undefined) return answer;
     void (async () => {
       for (let i = 0; i < actTurns; i += 1) await new Promise((r) => setTimeout(r, 0));
@@ -253,6 +253,25 @@ describe("the desk room through the plane (OB-3b)", () => {
     expect(refused?.isError).toBe(true);
     expect(refused?.content?.[0]?.text).toMatch(/^no-tool: /);
     expect(refused?.content?.[0]?.text).toContain("read_text, write_text");
+  });
+
+  // EY-1 (1f, 2026-11-19): `desk-full` is said by the window alone (it has no room for a page an agent's run
+  // made), so it too reaches the model as itself, never as its error kind's fact.
+  it("answers desk-full, a fact only the window says, as itself in the model's tool result", async () => {
+    const { plane, call } = harness(undefined, 0, (intent) =>
+      intent.op === "place"
+        ? {
+            ok: false,
+            fact: "desk-full",
+            text: "The desk has no room for another live page right now.",
+          }
+        : ordinaryWindow(intent),
+    );
+    await plane.ensureStarted();
+    const refused = await call(4, "canvas_place", { kind: "desk.note" });
+    expect(refused?.isError).toBe(true);
+    expect(refused?.content?.[0]?.text).toMatch(/^desk-full: /);
+    expect(refused?.content?.[0]?.text).toContain("no room for another live page");
   });
 
   it("says a bad input's path and expected shape to the model in the words it reads", async () => {

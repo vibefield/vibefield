@@ -1,13 +1,17 @@
 import { EventEmitter } from "node:events";
 import { join } from "node:path";
-import type {
-  LiveSurfaceBrowserEmulationV1,
-  LiveSurfaceDemandV1,
-  LiveSurfaceRuntimeSummaryV1,
+import {
+  type LiveSurfaceBrowserEmulationV1,
+  type LiveSurfaceDemandV1,
+  type LiveSurfaceRuntimeSummaryV1,
+  PAGES_MADE_DEVICE_SCALE,
+  PAGES_MADE_EMULATION,
+  PAGES_MADE_VIEWPORT,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { LiveSurfaceAuthority } from "../src/main/live-surfaces/authority";
 import {
+  type BrowserAgentPopups,
   BrowserControlTargetRegistry,
   type BrowserControlTargetWebContents,
 } from "../src/main/live-surfaces/browser-control-target";
@@ -33,7 +37,15 @@ import {
   virtualKeyCodeOf,
 } from "../src/main/live-surfaces/browser-producer";
 import { browserSurfaceProfileName } from "../src/main/live-surfaces/browser-security";
-import type { LiveSurfaceRuntimeAttachContext } from "../src/main/live-surfaces/runtime";
+import {
+  LiveSurfaceControlSession,
+  type LiveSurfaceMainMessagePort,
+} from "../src/main/live-surfaces/control-session";
+import type {
+  LiveSurfaceRuntimeAttachContext,
+  LiveSurfaceRuntimeAuthority,
+} from "../src/main/live-surfaces/runtime";
+import { LiveSurfaceTicketTable } from "../src/main/live-surfaces/ticket-table";
 
 const SURFACE_ID = "browser_surface_0123456789";
 
@@ -126,6 +138,20 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
 
   setFrameRate(fps: number): void {
     this.frameRates.push(fps);
+  }
+
+  /** EY-1: each ceiling the producer told this window. */
+  readonly frameRateCeilings: number[] = [];
+
+  /** EY-1 (1f): each pop-up policy the producer told this window ("after-destroy": told once it was gone). */
+  readonly popupPolicies: Array<BrowserAgentPopups | null | "after-destroy"> = [];
+
+  setPopupPolicy(policy: BrowserAgentPopups | null): void {
+    this.popupPolicies.push(this.destroyed ? "after-destroy" : policy);
+  }
+
+  setFrameRateCeiling(maxFps: number): void {
+    this.frameRateCeilings.push(maxFps);
   }
 
   setAudioMuted(muted: boolean): void {
@@ -528,8 +554,652 @@ async function birthEnds(): Promise<void> {
   for (let i = 0; i < 12; i += 1) await Promise.resolve();
 }
 
+/** A renderer generation's control port, as main's session holds it: what main posted, and a message from the window. */
+class FakeControlPort extends EventEmitter implements LiveSurfaceMainMessagePort {
+  readonly sent: unknown[] = [];
+
+  postMessage(message: unknown): void {
+    this.sent.push(message);
+  }
+
+  start(): void {}
+
+  close(): void {}
+
+  receive(message: unknown): void {
+    this.emit("message", { data: message });
+  }
+}
+
+/** The desk's product window in these rows, by its contents' id. */
+const DESK_WINDOW = 7;
+
+/**
+ * EY-1 (2026-11-24): main's custody over REAL browser runtimes on the fake native, with one product window whose tickets
+ * are real and whose renderer generation has a real control session on a fake port. What a run's made page, its adopt
+ * and main's own close of it look like from the window's side, with nothing of Electron beneath.
+ */
+function custodyOnFakeNative(
+  options: Partial<ConstructorParameters<typeof BrowserLiveSurfaceRuntime>[0]> = {},
+) {
+  const native = new FakeNative();
+  const controlTargets = new BrowserControlTargetRegistry({
+    resolveTarget: (targetId) => native.targets.get(targetId),
+  });
+  const runtimes: BrowserLiveSurfaceRuntime[] = [];
+  const tickets = new LiveSurfaceTicketTable<LiveSurfaceRuntimeAuthority>();
+  const port = new FakeControlPort();
+  const session = new LiveSurfaceControlSession({
+    senderWebContentsId: DESK_WINDOW,
+    bootstrap: { v: 1, rendererGeneration: 1 },
+    port,
+    tickets,
+    publishCpuFrame: () => true,
+  });
+  session.start();
+  /** each made page custody said went before a window adopted it: its run, its surface, why */
+  const gone: [string, string, string][] = [];
+  const none = (): never => {
+    throw new Error("only browser pages here");
+  };
+  const custody = new LiveSurfaceAuthority({
+    resolveWindow: () => ({ webContentsId: DESK_WINDOW }),
+    hostFor: () => ({
+      issue: (request) =>
+        tickets.issue({
+          targetWebContentsId: DESK_WINDOW,
+          rendererGeneration: 1,
+          surfaceId: request.surfaceId,
+          sourceKind: request.sourceKind,
+          operations: request.operations,
+          authority: request.authority,
+        }),
+    }),
+    factories: {
+      browser: (surfaceId, browserSource) => {
+        const runtime = new BrowserLiveSurfaceRuntime({
+          surfaceId,
+          source: browserSource,
+          native,
+          controlTargets,
+          ...options,
+        });
+        runtimes.push(runtime);
+        return runtime;
+      },
+      sckWindow: none,
+      iosSimulator: none,
+      iosSimulatorDevice: none,
+    },
+    enumeration: null,
+    productWindows: () => [DESK_WINDOW],
+    onMadeDisposed: (run, surfaceId, why) => {
+      gone.push([run, surfaceId, why]);
+    },
+  });
+  let requests = 0;
+  /** The window's document mints the run's pane naming the made page, and attaches to it: its attachment's id. */
+  const adopt = (run: string, made: string, reuseKey = "desk:pane-1"): string => {
+    const minted = custody.mint({
+      rendererParticipant: { participantId: "desk", incarnation: "desk:1" },
+      source: {
+        kind: "browser",
+        initialUrl: "https://example.test/form",
+        profile: { mode: "memory", ref: `run:${run}` },
+        logicalViewport: PAGES_MADE_VIEWPORT,
+        deviceScaleFactor: PAGES_MADE_DEVICE_SCALE,
+      },
+      reuseKey,
+      made,
+    });
+    requests += 1;
+    const requestId = `request_${String(requests).padStart(4, "0")}`;
+    port.receive({ v: 1, type: "attach", requestId, ticket: minted.ticket });
+    const attached = port.sent.find(
+      (message) =>
+        (message as { type?: unknown; requestId?: unknown }).type === "attached" &&
+        (message as { requestId?: unknown }).requestId === requestId,
+    ) as { attachment: { attachmentId: string } } | undefined;
+    if (attached === undefined) throw new Error("the window's attach was not accepted");
+    return attached.attachment.attachmentId;
+  };
+  /** The summaries main posted to the window for one attachment, by their state. */
+  const states = (attachmentId: string): string[] =>
+    port.sent.flatMap((message) => {
+      const said = message as {
+        type?: unknown;
+        attachmentId?: unknown;
+        summary?: { state: string };
+      };
+      return said.type === "summary" && said.attachmentId === attachmentId && said.summary
+        ? [said.summary.state]
+        : [];
+    });
+  return { native, controlTargets, runtimes, custody, session, port, gone, adopt, states };
+}
+
+/** A page a run's open makes: a person's new pane, at the size and density contracts name. */
+const RUN_OPEN = {
+  run: "r1",
+  url: "https://example.test/form",
+  by: "open",
+  logicalViewport: PAGES_MADE_VIEWPORT,
+  deviceScaleFactor: PAGES_MADE_DEVICE_SCALE,
+} as const;
+
 afterEach(() => {
   vi.useRealTimers();
+});
+
+/** EY-1 (1f): a run's pop-up policy, as the pages broker sets it. */
+const POPUPS: BrowserAgentPopups = { decide: () => "allow", open: () => undefined };
+
+describe("EY-1 (1f) — a page's pop-ups reach the window that stands", () => {
+  it("tells the window the run's pop-up policy, and none while the person holds the page", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 60));
+    await flush();
+    result.native.windows[0]?.paint(sharedPaint(640, 360).paint);
+    const window = result.native.windows[0];
+    const page = result.controlTargets.lookupPrivate(SURFACE_ID)?.page;
+    if (window === undefined || page === undefined) throw new Error("the page is not bound");
+    page.popups?.(POPUPS);
+    expect(window.popupPolicies).toEqual([POPUPS]);
+    renderer.attachment.hold?.(true);
+    expect(window.popupPolicies).toEqual([POPUPS, null]);
+    // a policy set while held: the window still holds none, until the hand lets go
+    const next: BrowserAgentPopups = { ...POPUPS };
+    page.popups?.(next);
+    expect(window.popupPolicies).toEqual([POPUPS, null]);
+    renderer.attachment.hold?.(false);
+    expect(window.popupPolicies).toEqual([POPUPS, null, next]);
+    result.runtime.dispose();
+  });
+
+  it("tells a window never told nothing, and a new window never a revoked binding's policy", async () => {
+    vi.useFakeTimers();
+    const result = setup({ restartLimit: 1 });
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live"));
+    await vi.advanceTimersByTimeAsync(0);
+    result.native.windows[0]?.paint(sharedPaint().paint);
+    expect(result.native.windows[0]?.popupPolicies).toEqual([]);
+    result.controlTargets.lookupPrivate(SURFACE_ID)?.page.popups?.(POPUPS);
+    expect(result.native.windows[0]?.popupPolicies).toEqual([POPUPS]);
+    // the window goes and a reconnect's is born: the old binding's policy went with it
+    result.native.windows[0]?.crash();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(result.native.windows[0]?.popupPolicies).not.toContain("after-destroy");
+    expect(result.native.windows).toHaveLength(2);
+    expect(result.native.windows[1]?.popupPolicies).toEqual([]);
+    // the broker sets it again through the new binding, and the new window holds it
+    result.native.windows[1]?.paint(sharedPaint().paint);
+    result.controlTargets.lookupPrivate(SURFACE_ID)?.page.popups?.(POPUPS);
+    expect(result.native.windows[1]?.popupPolicies).toEqual([POPUPS]);
+    result.runtime.dispose();
+  });
+
+  it("tells the window the policy is gone as the page closes, before the window goes", async () => {
+    const result = setup();
+    const renderer = attach(result.runtime);
+    renderer.attachment.setDemand(demand(1, "live", 60));
+    await flush();
+    result.native.windows[0]?.paint(sharedPaint(640, 360).paint);
+    result.controlTargets.lookupPrivate(SURFACE_ID)?.page.popups?.(POPUPS);
+    result.runtime.dispose();
+    expect(result.native.windows[0]?.popupPolicies).toEqual([POPUPS, null]);
+    expect(result.native.windows[0]?.destroyed).toBe(true);
+  });
+});
+
+// EY-1 (S1, 2026-11-24): a page main makes for an agent's run has no window attached until the desk adopts it, and the
+// run works on it meanwhile. Held for its run it is started under no ask at all, put to rest at its first frame with
+// its document and its control target kept, and silent; the first attachment ends the hold for good.
+describe("EY-1 (S1) — a page held for its run, with no window attached", () => {
+  it("held for its run, a page nothing attaches to starts and registers its control target; unheld, nothing starts", async () => {
+    // a page nothing holds and nothing attaches to is never started: no window, no binding
+    const plain = setup();
+    await birthEnds();
+    expect(plain.native.windows).toHaveLength(0);
+    expect(plain.controlTargets.status(SURFACE_ID).bound).toBe(false);
+    plain.runtime.dispose();
+
+    const result = setup();
+    result.runtime.holdForRun();
+    expect(result.native.windows).toHaveLength(1);
+    expect(result.runtime.summary.state).toBe("starting");
+    await birthEnds();
+    const window = result.native.windows[0];
+    // born: its address asked for once, and the binding the pages broker waits for stands
+    expect(window?.loadedUrls).toEqual([source().initialUrl]);
+    expect(result.controlTargets.status(SURFACE_ID)).toMatchObject({
+      bound: true,
+      producerEpoch: 1,
+    });
+    expect(result.runtime.stats.activeAttachments).toBe(0);
+    // in the session its source names, a memory one: never a persistent profile
+    expect(window?.options).toMatchObject({ persistent: false });
+    // asked again, it is the one page
+    result.runtime.holdForRun();
+    expect(result.native.windows).toHaveLength(1);
+    result.runtime.dispose();
+  });
+
+  it("is silent, rests at its first frame with its document and its control target kept, and no grace ends it", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = setup({ detachedHibernateMs: 1000 });
+      result.runtime.holdForRun();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(result.native.windows).toHaveLength(1);
+      const window = result.native.windows[0]!;
+      // silent from its start: nobody sees it
+      expect(window.mutes).toEqual([true]);
+      const target = result.controlTargets.status(SURFACE_ID);
+      expect(target.bound).toBe(true);
+      // its first frame has no window to go to and is released; the page is then at rest, as any paused page
+      const first = sharedPaint(320, 180);
+      window.paint(first.paint);
+      expect(first.release).toHaveBeenCalledOnce();
+      expect(result.runtime.summary.state).toBe("paused");
+      expect(window.stopPainting).toHaveBeenCalledOnce();
+      expect(window.frameRates.at(-1)).toBe(1);
+      expect(window.muted).toBe(true);
+      expect(window.destroyed).toBe(false);
+      expect(result.controlTargets.status(SURFACE_ID)).toEqual(target);
+      expect(result.runtime.agentPageState()).toMatchObject({ parked: false });
+      // no window was attached, so none left: the detached grace is not armed, however long the hold stands
+      await vi.advanceTimersByTimeAsync(600_000);
+      expect(window.destroyed).toBe(false);
+      expect(result.runtime.summary.state).toBe("paused");
+      expect(result.controlTargets.status(SURFACE_ID)).toEqual(target);
+      expect(result.native.windows).toHaveLength(1);
+      result.runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the first attachment ends the hold for good: its paused ask rests the page and keeps its target, its live ask wakes it, and its leaving arms the grace", async () => {
+    vi.useFakeTimers();
+    try {
+      const result = setup({ detachedHibernateMs: 1000 });
+      result.runtime.holdForRun();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(result.native.windows).toHaveLength(1);
+      const window = result.native.windows[0]!;
+      window.paint(sharedPaint(320, 180).paint);
+      const target = result.controlTargets.status(SURFACE_ID);
+      expect(result.runtime.summary.state).toBe("paused");
+      // the window that adopted it attaches, its pane out of view: a paused ask
+      const renderer = attach(result.runtime);
+      renderer.attachment.setDemand(demand(1, "paused"));
+      expect(result.runtime.summary.state).toBe("paused");
+      expect(window.destroyed).toBe(false);
+      expect(result.controlTargets.status(SURFACE_ID)).toEqual(target);
+      // seen: live on the same window, heard again, its address never asked for twice
+      renderer.attachment.setDemand(demand(2, "live", 30));
+      expect(result.runtime.summary.state).toBe("live");
+      expect(window.startPainting).toHaveBeenCalled();
+      expect(window.muted).toBe(false);
+      expect(window.loadedUrls).toEqual([source().initialUrl]);
+      expect(result.native.windows).toHaveLength(1);
+      expect(result.controlTargets.status(SURFACE_ID)).toEqual(target);
+      // the hold is over for good: asked again it is nothing, and the attachment's leaving arms the grace as any page's
+      result.runtime.holdForRun();
+      renderer.attachment.dispose();
+      expect(result.runtime.summary.state).toBe("paused");
+      await vi.advanceTimersByTimeAsync(999);
+      expect(window.destroyed).toBe(false);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(window.destroyed).toBe(true);
+      expect(result.runtime.summary.state).toBe("hibernated");
+      expect(result.controlTargets.status(SURFACE_ID).bound).toBe(false);
+      result.runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a page a window attached to before the hold was asked, or a closed one, is not started by it", async () => {
+    const attached = setup();
+    attach(attached.runtime);
+    attached.runtime.holdForRun();
+    await birthEnds();
+    expect(attached.native.windows).toHaveLength(0);
+    attached.runtime.dispose();
+    const closed = setup();
+    closed.runtime.dispose();
+    closed.runtime.holdForRun();
+    await birthEnds();
+    expect(closed.native.windows).toHaveLength(0);
+  });
+
+  // EY-1 (F2, 2026-11-24): the desk tells an adopted pane its device as its lane first goes live. A made page that was
+  // told nothing of a device took that word for a device SWITCH: a loaded page reloaded in front of the person (what the
+  // run had typed and the refs it held gone), and a page still loading had its window made anew (another epoch, so the
+  // run's next call on it answered gone).
+  it("an adopted page takes the desk's first word of its device as no switch: nothing reloads, no window is made anew, its epoch and its control target stand", async () => {
+    /** The pane's default device as the desk says it at the adopt: the made page's own emulation, with the desk's own
+     * scheme. That the desk says exactly this of such a pane is held where it says it (field-app,
+     * made-page-emulation.test.ts), and that the constant is the pane's default device, in the pane's own row. */
+    const deskSays = {
+      action: "emulate" as const,
+      emulation: { ...PAGES_MADE_EMULATION, colorScheme: "dark" as const },
+    };
+    expect(deskSays.emulation).toEqual({
+      deviceScaleFactor: PAGES_MADE_DEVICE_SCALE,
+      mobile: false,
+      touchPoints: 0,
+      colorScheme: "dark",
+    });
+    const told = async (loaded: boolean) => {
+      const desk = custodyOnFakeNative();
+      const made = desk.custody.makeForRun(RUN_OPEN);
+      await birthEnds();
+      const window = desk.native.windows[0];
+      const runtime = desk.runtimes[0];
+      if (window === undefined || runtime === undefined) throw new Error("the page was not made");
+      if (loaded) {
+        // the run's page has loaded, and the run has worked on it
+        window.paint(sharedPaint().paint);
+        window.emitNavigationState({
+          url: RUN_OPEN.url,
+          title: "Form",
+          loading: false,
+          canGoBack: false,
+          canGoForward: false,
+        });
+      }
+      const target = desk.controlTargets.status(made.surfaceId);
+      expect(target.bound).toBe(true);
+      const attachmentId = desk.adopt("r1", made.surfaceId);
+      desk.port.receive({
+        v: 1,
+        type: "demand",
+        attachmentId,
+        demand: demand(1, "live", 30, undefined, PAGES_MADE_VIEWPORT),
+      });
+      await flush();
+      desk.port.receive({ v: 1, type: "navigate", attachmentId, navigation: deskSays });
+      await flush();
+      await flush();
+      expect(desk.session.closed).toBe(false);
+      return { desk, window, runtime, target, surfaceId: made.surfaceId };
+    };
+
+    const standing = await told(true);
+    expect(standing.window.navigations).toEqual([]);
+    expect(standing.window.loadedUrls).toEqual([RUN_OPEN.url]);
+    expect(standing.desk.native.windows).toHaveLength(1);
+    expect(standing.runtime.stats).toMatchObject({ emulationReloads: 0, windowsRemade: 0 });
+    expect(standing.runtime.summary.producerEpoch).toBe(1);
+    expect(standing.desk.controlTargets.status(standing.surfaceId)).toEqual(standing.target);
+    // the scheme alone is told live, on the window that stands
+    expect(standing.window.emulations.at(-1)?.colorScheme).toBe("dark");
+    standing.desk.custody.dispose();
+
+    const loading = await told(false);
+    expect(loading.window.destroyed).toBe(false);
+    expect(loading.desk.native.windows).toHaveLength(1);
+    expect(loading.runtime.stats).toMatchObject({ emulationReloads: 0, windowsRemade: 0 });
+    expect(loading.runtime.summary.producerEpoch).toBe(1);
+    expect(loading.desk.controlTargets.status(loading.surfaceId)).toEqual(loading.target);
+    loading.desk.custody.dispose();
+  });
+});
+
+// EY-1 (C2, 2026-11-24): a page main closes while a window shows it (its run's end, its run's own close of it, a
+// resumed run's page custody would not move) is SAID to that window. The window hears a close only as a summary whose
+// state is `closed`, and the desk's lost, probe and leave path starts there. Told nothing, its pane kept its last frame
+// and its `live` word, and its input went nowhere.
+describe("EY-1 (C2) — a page main closes is told to the windows that show it", () => {
+  it("a page closed under a window's attachment says `closed` to it, once, and to every attachment it has", async () => {
+    const result = setup();
+    const first = attach(result.runtime);
+    const second = attach(result.runtime, "attachment_browser_00000002");
+    first.attachment.setDemand(demand(1, "live", 30));
+    await flush();
+    result.native.windows[0]?.paint(sharedPaint().paint);
+    expect(first.summaries.at(-1)?.state).toBe("live");
+    const revision = first.summaries.at(-1)?.stateRevision ?? 0;
+    result.runtime.dispose();
+    for (const renderer of [first, second]) {
+      const last = renderer.summaries.at(-1);
+      expect(last?.state).toBe("closed");
+      // a later state of the same page: a window never refuses it as a move backwards
+      expect(last?.stateRevision).toBeGreaterThan(revision);
+      expect(last?.producerEpoch).toBe(1);
+      expect(renderer.summaries.filter((said) => said.state === "closed")).toHaveLength(1);
+    }
+    expect(result.native.windows[0]?.destroyed).toBe(true);
+    // closed, it holds no attachment and says nothing more
+    expect(result.runtime.stats.activeAttachments).toBe(0);
+    result.runtime.dispose();
+    expect(first.summaries.filter((said) => said.state === "closed")).toHaveLength(1);
+  });
+
+  it("main's close of an adopted run page reaches the window's port as a `closed` summary, and the session lets the attachment go", async () => {
+    const desk = custodyOnFakeNative();
+    const made = desk.custody.makeForRun(RUN_OPEN);
+    await birthEnds();
+    desk.native.windows[0]?.paint(sharedPaint().paint);
+    const attachmentId = desk.adopt("r1", made.surfaceId);
+    desk.port.receive({
+      v: 1,
+      type: "demand",
+      attachmentId,
+      demand: demand(1, "live", 30, undefined, PAGES_MADE_VIEWPORT),
+    });
+    await flush();
+    expect(desk.states(attachmentId)).not.toContain("closed");
+    expect(desk.session.attachmentCount).toBe(1);
+    // the run's end, or its own close of the page: main disposes it while the window shows it
+    expect(desk.custody.closeMade("r1", made.surfaceId)).toBe(true);
+    expect(desk.states(attachmentId).at(-1)).toBe("closed");
+    expect(desk.states(attachmentId).filter((state) => state === "closed")).toHaveLength(1);
+    // the generation stands (no fault), and it holds nothing of the page that went: the window closes its own side on
+    // the summary and sends no detach, so main's side goes with it
+    expect(desk.session.closed).toBe(false);
+    expect(desk.session.attachmentCount).toBe(0);
+    // what the window still sends for the attachment is the detach race: dropped, never a fault
+    desk.port.receive({
+      v: 1,
+      type: "demand",
+      attachmentId,
+      demand: demand(2, "paused"),
+    });
+    desk.port.receive({ v: 1, type: "detach", attachmentId });
+    expect(desk.session.closed).toBe(false);
+    desk.custody.dispose();
+  });
+
+  // EY-1 (C3, 2026-11-24): main's own end of the runs a gone fieldd named closes their adopted pages too, and a
+  // window that still shows one hears it the same way.
+  it("main's end of a gone fieldd's runs closes an adopted page under its window, which is told `closed`; the held one goes, its run told", async () => {
+    const desk = custodyOnFakeNative();
+    const shown = desk.custody.makeForRun(RUN_OPEN);
+    const held = desk.custody.makeForRun(RUN_OPEN);
+    await birthEnds();
+    for (const window of desk.native.windows) window.paint(sharedPaint().paint);
+    const attachmentId = desk.adopt("r1", shown.surfaceId);
+    expect(desk.custody.endEveryRun()).toEqual({ runs: ["r1"], pages: 2 });
+    expect(desk.states(attachmentId).at(-1)).toBe("closed");
+    expect(desk.gone).toEqual([["r1", held.surfaceId, "run-end"]]);
+    expect(desk.native.windows.map((window) => window.destroyed)).toEqual([true, true]);
+    expect(desk.controlTargets.status(shown.surfaceId).bound).toBe(false);
+    expect(desk.custody.state().runtimes).toBe(0);
+    expect(desk.session.closed).toBe(false);
+    desk.custody.dispose();
+  });
+});
+
+// EY-1 (C7, C8, 2026-11-24): a page held for its run has no window attached, so nothing starts it again when it
+// fails (a restart is under a live ask, and it has none). Custody is told, and lets it go: the pages broker's wait for
+// its binding ends at once (C8: it polled to the call's deadline, 29.5 s, and then answered that there was no window),
+// and a page its run was told of is no longer the run's (C7: it stayed in custody for good, counted against its run's
+// five, with nothing the run could call to free it).
+// EY-1 (C8, the word, 2026-11-24): and the port is told it as `failed`, the page's own failure. Said as `grace` (no
+// window took it), a failed open answered its run that no VibeField window is open, while the desk stood open.
+describe("EY-1 (C7, C8) — a page held for its run that fails is let go, and its run is told", () => {
+  it("C8: a held page whose window cannot be made, or never comes up, goes at once: the wait for its binding is told, and nothing of it is left", async () => {
+    const desk = custodyOnFakeNative();
+    desk.native.createWindow = () => {
+      throw new Error("no window can be made here");
+    };
+    const made = desk.custody.makeForRun(RUN_OPEN);
+    // the make itself answers; what hears the failure is the wait for the page's binding, which begins after it
+    expect(desk.custody.madeBy(made.surfaceId)).toBe("r1");
+    expect(desk.gone).toEqual([]);
+    await flush();
+    expect(desk.gone).toEqual([["r1", made.surfaceId, "failed"]]);
+    expect(desk.custody.madeBy(made.surfaceId)).toBeNull();
+    expect(desk.custody.state().runtimes).toBe(0);
+    expect(desk.runtimes[0]?.isClosed()).toBe(true);
+    desk.custody.dispose();
+
+    vi.useFakeTimers();
+    try {
+      const slow = custodyOnFakeNative({ startupTimeoutMs: 5_000 });
+      // a window whose first layout never answers: it is never born, so its control target is never registered
+      slow.native.createWindow = (options) => {
+        const window = FakeNative.prototype.createWindow.call(
+          slow.native,
+          options,
+        ) as FakeBrowserWindow;
+        window.setBackingRaster = () => new Promise(() => undefined);
+        return window;
+      };
+      const late = slow.custody.makeForRun(RUN_OPEN);
+      await vi.advanceTimersByTimeAsync(4_999);
+      expect(slow.controlTargets.status(late.surfaceId).bound).toBe(false);
+      expect(slow.gone).toEqual([]);
+      expect(slow.custody.state().runtimes).toBe(1);
+      // the startup bound: the page failed, with nobody attached to ask for it again. The port hears `failed`: a
+      // desk under load that paints late is not a desk with no window
+      await vi.advanceTimersByTimeAsync(1);
+      expect(slow.gone).toEqual([["r1", late.surfaceId, "failed"]]);
+      expect(slow.custody.state().runtimes).toBe(0);
+      expect(slow.native.windows[0]?.destroyed).toBe(true);
+      slow.custody.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("C7: a page its run was told of that crashes with no window attached is released: it is no longer the run's, and its run's count is free of it", async () => {
+    const desk = custodyOnFakeNative();
+    const made = desk.custody.makeForRun(RUN_OPEN);
+    await birthEnds();
+    const window = desk.native.windows[0];
+    if (window === undefined) throw new Error("the page was not made");
+    window.paint(sharedPaint().paint);
+    expect(desk.custody.keepForRun("r1", made.surfaceId)).toBe(true);
+    expect(desk.controlTargets.status(made.surfaceId).bound).toBe(true);
+    window.crash();
+    await flush();
+    // (the pages broker counts a run's panes by this word: `made`)
+    expect(desk.custody.madeBy(made.surfaceId)).toBeNull();
+    expect(desk.gone).toEqual([["r1", made.surfaceId, "failed"]]);
+    expect(desk.custody.state().runtimes).toBe(0);
+    expect(desk.controlTargets.status(made.surfaceId).bound).toBe(false);
+    // the run lives on: it makes another page, in the same session
+    const next = desk.custody.makeForRun(RUN_OPEN);
+    expect(desk.custody.madeBy(next.surfaceId)).toBe("r1");
+    expect(desk.runtimes[1]?.source.profile).toEqual(desk.runtimes[0]?.source.profile);
+    desk.custody.dispose();
+  });
+
+  it("an ADOPTED page that fails stays its window's: the person sees it stopped and reloads or closes it, and custody ends nothing", async () => {
+    const desk = custodyOnFakeNative();
+    const made = desk.custody.makeForRun(RUN_OPEN);
+    await birthEnds();
+    const window = desk.native.windows[0];
+    if (window === undefined) throw new Error("the page was not made");
+    window.paint(sharedPaint().paint);
+    const attachmentId = desk.adopt("r1", made.surfaceId);
+    // its pane is out of view (a paused ask), so nothing starts the page again by itself
+    desk.port.receive({ v: 1, type: "demand", attachmentId, demand: demand(1, "paused") });
+    window.crash();
+    await flush();
+    expect(desk.states(attachmentId).at(-1)).toBe("failed");
+    expect(desk.gone).toEqual([]);
+    expect(desk.custody.madeBy(made.surfaceId)).toBe("r1");
+    expect(desk.custody.state().runtimes).toBe(1);
+    desk.custody.dispose();
+  });
+});
+
+// EY-1 (C6, 2026-11-24): a page is KEPT once an answer naming it has left main for its run, and from then nothing
+// timed ended it: only its adopt, a decline, its run's close or its run's end, the last two each one message from
+// fieldd's room. An answer that never reached the room (its own deadline passed first, the link moved, the call was
+// cancelled in the gap) left a page nobody placed and nobody would ever end: a hidden renderer until the app quit. A
+// kept page is now kept while its run uses it: a call of the run on a page begins by asking main's one registry for
+// the page's control binding, and a kept page nobody has asked for in thirty minutes is let go.
+describe("EY-1 (C6) — a kept page no window adopted is kept while its run uses it", () => {
+  const MINUTE = 60_000;
+
+  it("a kept page its run never asks for goes after thirty minutes; each call of its run on it begins the thirty again", async () => {
+    vi.useFakeTimers();
+    try {
+      const desk = custodyOnFakeNative();
+      const lost = desk.custody.makeForRun(RUN_OPEN);
+      const used = desk.custody.makeForRun(RUN_OPEN);
+      await vi.advanceTimersByTimeAsync(0);
+      for (const window of desk.native.windows) window.paint(sharedPaint().paint);
+      // each was named to its run in an answer; the answer naming `lost` never reached the run's room
+      expect(desk.custody.keepForRun("r1", lost.surfaceId)).toBe(true);
+      expect(desk.custody.keepForRun("r1", used.surfaceId)).toBe(true);
+      await vi.advanceTimersByTimeAsync(20 * MINUTE);
+      // the run calls the one it knows: the pages plane asks for its binding, as every call on a page begins
+      expect(desk.controlTargets.lookupPrivate(used.surfaceId)).not.toBeNull();
+      await vi.advanceTimersByTimeAsync(10 * MINUTE - 1);
+      expect(desk.gone).toEqual([]);
+      expect(desk.custody.state().runtimes).toBe(2);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(desk.gone).toEqual([["r1", lost.surfaceId, "grace"]]);
+      expect(desk.custody.madeBy(lost.surfaceId)).toBeNull();
+      expect(desk.native.windows[0]?.destroyed).toBe(true);
+      // the one in use stands until thirty minutes after its last call, and no longer
+      expect(desk.custody.madeBy(used.surfaceId)).toBe("r1");
+      await vi.advanceTimersByTimeAsync(20 * MINUTE - 1);
+      expect(desk.custody.state().runtimes).toBe(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(desk.gone).toEqual([
+        ["r1", lost.surfaceId, "grace"],
+        ["r1", used.surfaceId, "grace"],
+      ]);
+      expect(desk.custody.state().runtimes).toBe(0);
+      desk.custody.dispose();
+      // nothing of custody's clocks outlives the pages they were for
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a page a window adopted is under no such clock, and a page no answer named keeps its thirty seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      const desk = custodyOnFakeNative();
+      const adopted = desk.custody.makeForRun(RUN_OPEN);
+      const unnamed = desk.custody.makeForRun(RUN_OPEN);
+      await vi.advanceTimersByTimeAsync(0);
+      for (const window of desk.native.windows) window.paint(sharedPaint().paint);
+      expect(desk.custody.keepForRun("r1", adopted.surfaceId)).toBe(true);
+      desk.adopt("r1", adopted.surfaceId);
+      await vi.advanceTimersByTimeAsync(30_000);
+      expect(desk.gone).toEqual([["r1", unnamed.surfaceId, "grace"]]);
+      await vi.advanceTimersByTimeAsync(120 * MINUTE);
+      expect(desk.gone).toHaveLength(1);
+      expect(desk.custody.madeBy(adopted.surfaceId)).toBe("r1");
+      expect(desk.custody.state().runtimes).toBe(1);
+      desk.custody.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 describe("BrowserLiveSurfaceRuntime", () => {
@@ -765,19 +1435,113 @@ describe("BrowserLiveSurfaceRuntime", () => {
     expect(first?.stopPainting).toHaveBeenCalledOnce();
     expect(result.runtime.summary.state).toBe("paused");
     expect(result.controlTargets.status(SURFACE_ID).bound).toBe(true);
+    expect(result.runtime.agentPageState()).toMatchObject({ parked: false });
     renderer.attachment.setDemand(demand(3, "hibernated"));
     expect(first?.destroyed).toBe(true);
     expect(result.runtime.summary.state).toBe("hibernated");
     expect(result.controlTargets.status(SURFACE_ID).bound).toBe(false);
+    // at rest: no binding, parked, its address kept
+    expect(result.runtime.agentPageState()).toMatchObject({
+      parked: true,
+      url: source().initialUrl,
+    });
 
     renderer.attachment.setDemand(demand(4, "live"));
     expect(result.native.windows).toHaveLength(2);
     expect(result.runtime.summary).toMatchObject({ state: "starting", producerEpoch: 2 });
     result.native.windows[1]?.paint(sharedPaint(320, 180).paint);
     expect(result.runtime.summary).toMatchObject({ state: "live", producerEpoch: 2 });
+    expect(result.runtime.agentPageState()).toMatchObject({ parked: false });
     await flush();
     expect(result.native.windows[1]?.loadedUrls).toEqual([source().initialUrl]);
     result.runtime.dispose();
+  });
+
+  it("EY-1: the person's hold is the OR of the attachments — one edge each way reaches onHeld through the binding's page; a held attachment that goes puts the page down", async () => {
+    const result = setup();
+    const one = attach(result.runtime);
+    const two = attach(result.runtime, "attachment_browser_00000002");
+    one.attachment.setDemand(demand(1, "live", 60));
+    await flush();
+    result.native.windows[0]?.paint(sharedPaint(640, 360).paint);
+    const page = result.controlTargets.lookupPrivate(SURFACE_ID)?.page;
+    if (page === undefined) throw new Error("the page is not bound");
+    const edges: boolean[] = [];
+    const stop = page.onHeld((held) => edges.push(held));
+    expect(page.held).toBe(false);
+
+    one.attachment.hold?.(true);
+    // held already: the second hand is no edge, and one hand letting go leaves it held
+    two.attachment.hold?.(true);
+    one.attachment.hold?.(false);
+    expect(page.held).toBe(true);
+    expect(edges).toEqual([true]);
+    // the attachment that holds it goes: put down
+    two.attachment.dispose();
+    expect(page.held).toBe(false);
+    expect(edges).toEqual([true, false]);
+    // a hold on a gone attachment is nothing
+    two.attachment.hold?.(true);
+    expect(page.held).toBe(false);
+
+    // a listener that stopped hears nothing more; the hold still moves
+    stop();
+    one.attachment.hold?.(true);
+    expect(edges).toEqual([true, false]);
+    expect(page.held).toBe(true);
+    result.runtime.dispose();
+    expect(page.held).toBe(false);
+  });
+
+  it("EY-1: the page's address and title for the pages broker stand as they were when the person's hold began, until it ends", async () => {
+    const result = setup();
+    const one = attach(result.runtime);
+    one.attachment.setDemand(demand(1, "live", 60));
+    await flush();
+    const window = result.native.windows[0];
+    window?.paint(sharedPaint(640, 360).paint);
+    const nav = { loading: false, canGoBack: false, canGoForward: false };
+    window?.emitNavigationState({ url: "https://example.test/before", title: "Before", ...nav });
+    one.attachment.hold?.(true);
+    window?.emitNavigationState({ url: "https://example.test/during", title: "During", ...nav });
+    // its size and density are the source's (320 × 180 at 1), which a tab it opens takes
+    const view = { logicalViewport: { width: 320, height: 180 }, deviceScaleFactor: 1 };
+    expect(result.runtime.agentPageState()).toEqual({
+      parked: false,
+      url: "https://example.test/before",
+      title: "Before",
+      ...view,
+    });
+    one.attachment.hold?.(false);
+    expect(result.runtime.agentPageState()).toEqual({
+      parked: false,
+      url: "https://example.test/during",
+      title: "During",
+      ...view,
+    });
+    result.runtime.dispose();
+  });
+
+  it("EY-1: tells the window its frame-rate ceiling on each transport's edge, and only on its edge", async () => {
+    const shared = setup();
+    const onTexture = attach(shared.runtime);
+    onTexture.attachment.setDemand(demand(1, "live", 60));
+    await flush();
+    const window = shared.native.windows[0]!;
+    window.paint(sharedPaint(640, 360).paint);
+    window.paint(sharedPaint(640, 360).paint);
+    expect(window.frameRateCeilings).toEqual([Number.POSITIVE_INFINITY]);
+    shared.runtime.dispose();
+
+    vi.useFakeTimers();
+    const cpu = setup({ requestSharedTexture: false, cpuFallbackPaints: 3 });
+    const onCpu = attach(cpu.runtime);
+    onCpu.attachment.setDemand(demand(1, "live", 60, { width: 1920, height: 1080 }));
+    const fallback = cpu.native.windows[0]!;
+    for (let i = 0; i < 4; i += 1) fallback.paint(cpuPaint(1920, 1080).paint);
+    // the CPU fallback's ceiling, once, after the paints that declare it
+    expect(fallback.frameRateCeilings).toEqual([10]);
+    cpu.runtime.dispose();
   });
 
   it("pauses invisible page animation at 1 Hz and restores live cadence without replacing its document or agent target", async () => {

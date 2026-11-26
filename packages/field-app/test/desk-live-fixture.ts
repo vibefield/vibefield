@@ -230,7 +230,7 @@ export function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
     navigations: [] as unknown[],
     /** PT-4: the emulations told down the lane (the `emulate` commands), apart from the chrome's navigations. */
     emulations: [] as unknown[],
-    /** Every send in the order it went: "demand" and "emulate". */
+    /** Every send in the order it went: "demand", "emulate" and (EY-1) "hold:true" / "hold:false". */
     order: [] as string[],
     lane: true,
     sendInput(event: unknown, revision?: number) {
@@ -245,6 +245,14 @@ export function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
         h.order.push("emulate");
       } else h.navigations.push(command);
       return true;
+    },
+    /** EY-1 (1g): the person's holds the face told its handle, each edge in order, in `order` too ("hold:true"). The pool
+     * keeps one told while the lane is down, so each is recorded; false is what the pool says while not live. */
+    holds: [] as boolean[],
+    hold(held: boolean) {
+      h.holds.push(held);
+      h.order.push(`hold:${held}`);
+      return h.lane && state.status === "live";
     },
     /** PT-S2: the device acts sent down a bound Simulator's lane (as `navigate`: only while its lane is live). */
     devices: [] as unknown[],
@@ -283,6 +291,8 @@ export function setup(over: Partial<DeskLiveDeps> = {}) {
   const graceAt = { at: null as number | null };
   /** A test's word on each handle the pool hands out. */
   const hooks: { acquired?: (handle: ReturnType<typeof fakeHandle>) => void } = {};
+  /** EY-1 (1f): what the desk said on the window's port: its room for agent pages, and the made pages it declined. */
+  const said = { rooms: [] as number[], declined: [] as string[] };
   const deps: DeskLiveDeps = {
     pool: () =>
       ({
@@ -314,6 +324,8 @@ export function setup(over: Partial<DeskLiveDeps> = {}) {
             }),
           }) as never,
         dispose: () => {},
+        sayRoom: (agentPages: number) => said.rooms.push(agentPages),
+        declineMade: (made: string) => said.declined.push(made),
       }) as never,
     mintClient: () => ({
       async request(method: string, params?: unknown) {
@@ -360,7 +372,7 @@ export function setup(over: Partial<DeskLiveDeps> = {}) {
     ...over,
   };
   const live = createDeskLiveSources(deps);
-  return { live, handles, writers, device, requests, graceAt, hooks };
+  return { live, deps, handles, writers, device, requests, graceAt, hooks, said };
 }
 
 /** A face opened and attached live, its presentation in hand. */

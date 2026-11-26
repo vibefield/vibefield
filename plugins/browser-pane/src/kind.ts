@@ -59,16 +59,12 @@ import {
   type PaneInstance,
   type PaneLookValues,
 } from "./layout";
-import { isPageUrl } from "./live";
+import { paneAddressOf } from "./live";
 import { createPaneLocal, type PaneLocal } from "./local";
 import { PanePass } from "./pass";
 import { pageTexels } from "./sample-page";
 import { paneShaders } from "./shaders";
 import { type BrowserPanePalette, paneFinish, paneLook } from "./theme";
-
-/** The pane's address from its props (none: the sample). */
-export const urlOf = (props: Readonly<Record<string, unknown>>): string =>
-  stringProp(props, "url", SAMPLE_URL);
 
 /** The page's colour scheme: the pane's own, or the desk's (the pages follow the desk into dark — the default). */
 export function schemeOf(
@@ -217,7 +213,9 @@ export function paneOpening(law: BrowserLaw = BROWSER): OpenBinding {
     // address it is at (its producer's truth — a redirect's); a still's the address it was given
     readout: ({ props, entity, local }) => {
       const info = (local as PaneLocal | undefined)?.page(entity)?.info;
-      return info?.title?.trim() || displayOf(info?.address ?? urlOf(props())) || PROMPT;
+      return (
+        info?.title?.trim() || displayOf(info?.address ?? paneAddressOf(props()).url) || PROMPT
+      );
     },
   };
 }
@@ -236,8 +234,8 @@ export function browserPaneKind(
     resolve(ctx: ObjectContext): PaneGeometry {
       const S = shapeOf(ctx.rect, deviceForProps(ctx.props), law);
       // by night a lit page's glow reaches round the pane: the quad grows to hold it (a still's, or a live page's)
-      const url = urlOf(ctx.props);
-      const lit = ctx.theme.name === "dark" && (url === SAMPLE_URL || isPageUrl(url, SAMPLE_URL));
+      const { url, live } = paneAddressOf(ctx.props);
+      const lit = ctx.theme.name === "dark" && (url === SAMPLE_URL || live);
       // PT-5a — a failed page (as its face last said: a state that moves remakes the pane): its film carries a notice
       const state = (ctx.local as PaneLocal | undefined)?.page(ctx.entity)?.state;
       return resolvePane(
@@ -257,13 +255,14 @@ export function browserPaneKind(
         throw new Error(
           "browser-pane: no look — the desk hands every kind the look its `theme` makes",
         );
-      const url = urlOf(ctx.props);
+      // EY S2a — the address as the one rule reads it: a run's pane is a live page whatever its own (`paneAddressOf`)
+      const { url, live, run } = paneAddressOf(ctx.props);
       const S = G.shape;
       const scheme = schemeOf(ctx.props, ctx.theme.name);
       const local = ctx.local as PaneLocal | undefined;
       // PT-2 — a web page is a LIVE FACE the host opens by the pane's durable key; any other address closes the one it had
       let face: LiveFace | undefined;
-      if (isPageUrl(url, SAMPLE_URL))
+      if (live)
         face = local?.face(
           ctx.entity,
           {
@@ -281,8 +280,8 @@ export function browserPaneKind(
         );
       else local?.drop(ctx.entity);
       if (face !== undefined) {
-        // PT-3 — the url it read (one that moved under the page is followed).
-        local?.follow(ctx.entity, url);
+        // PT-3 — the url it read (one that moved under the page is followed); EY S2a — a run's page's address is its own
+        local?.follow(ctx.entity, url, run);
       }
       // The head works before there is a page: the sample and a blank pane need the address to open their first one.
       if (ctx.held !== undefined)

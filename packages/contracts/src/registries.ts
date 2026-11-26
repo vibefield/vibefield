@@ -2576,6 +2576,14 @@ export const FIELDD_AGENT_BREW_PREFIXES_ENV = "FIELDD_AGENT_BREW_PREFIXES" as co
  * must be absolute (`socketAliasParentFrom` refuses anything else), and a plane booted with it set says so in one
  * log line. Its `FIELD_` prefix keeps it out of every agent PTY (EL7). Reaches Rust by generation. */
 export const SOCKET_ALIAS_PARENT_ENV = "FIELD_SOCKET_ALIAS_PARENT" as const;
+/** EY-1 1b (2026-11-19) — DEVELOPMENT ONLY: the pages engine's binary, as the absolute path of the dev runner's own
+ * copy of the pinned binary, which the runner hands Electron main (`pnpm dev`), beside its other names for main
+ * (`VIBEFIELD_DEV_REPO_ROOT`, `VIBEFIELD_DEV_BUILD_ID`). main's resources.ts reads it in its development branch alone,
+ * so a packaged app ignores it and no environment moves a packaged engine. Unset, main has no engine, and the broker
+ * answers `not-installed`. A path, not a secret; but an agent has no use for where the engine sits, so main deletes it
+ * from its own environment the moment it reads it, before any spawn, and nothing main starts inherits it. TS-only,
+ * like the names above. */
+export const VIBEFIELD_DEV_PAGES_ENGINE_ENV = "VIBEFIELD_DEV_PAGES_ENGINE" as const;
 
 /** PA-29 / plugin spec §11.6 — the host-singleton externals list. React,
  * ReactDOM, ICE/strata (and the desk's four entries), Loro, and the SDK runtime
@@ -2818,6 +2826,14 @@ export const LAYOUT = {
    * `sealed` level its key is handed (`CustodyHandoff.records`) and OBJECTS_KEY_FILE is never written; under `files`
    * the key is that file's, and the EL7 note above holds as it reads. */
   OBJECTS_GRANTS_FILE: ["fieldd", "objects.grants.json"],
+  /** EY-2 (2026-11-19) — the pages room's stills: one 0700 folder per run, in a 0700 root, named by a hash of the
+   * run's key; each still a file of the person's own uid in it, bounded one by one (PAGES_STILL_MAX_BYTES) and in
+   * all (PAGES_RUN_STILLS_MAX_BYTES). fieldd's own, never the agent's working folder; a run's folder is forgotten
+   * with its run's record, or swept once its newest still is older than PAGES_STILLS_MAX_AGE_MS. A still's answer is
+   * its path here, which the agent can read. The private folder keeps stills out of the agent's working folder and
+   * from other OS users, NOT from another run of the same person: an agent runs as the person's uid (EL7), so it
+   * can list this folder and read any run's stills, and a folder's name hides nothing. */
+  PAGES_STILLS_DIR: ["fieldd", "pages", "stills"],
   /** Item 159 (TH0-Q11 (b), ruled 2026-11-04) — fieldd's own files for each spark: one 0700 folder per spark, named by
    * its id (`spark-files/<sparkId>/`), holding its kept record (`SparkKeptRecord`, compose.ts's SPARK_KEPT_FILE, 0600)
    * and, with TH-1, its runs' transcript files beside it. One key for the folder: SPARK_FILES_KEY_FILE's secret (0600,

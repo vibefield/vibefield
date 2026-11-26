@@ -1,0 +1,7 @@
+{
+  "//": "EY-1 (1f) — the desk declines a made pane at its adopt, having no room for it: main disposes the pane at once and names it in the call's `closed`.",
+  "v": 1,
+  "type": "made-declined",
+  "made": "surface_fedcba9876543210",
+  "reason": "no-room"
+}

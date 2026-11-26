@@ -44,6 +44,33 @@ import {
   ObjectReleaseOutput,
   ObjectToolOutput,
 } from "./objects";
+import {
+  PagesActOutput,
+  PagesClosedOutput,
+  PagesEvalInput,
+  PagesFillInput,
+  PagesNoInput,
+  PagesOpenInput,
+  PagesPageInput,
+  PagesPressInput,
+  PagesProfilesOutput,
+  PagesReadInput,
+  PagesReadOutput,
+  PagesRefInput,
+  PagesScreenshotInput,
+  PagesScreenshotOutput,
+  PagesScrollInput,
+  PagesSelectInput,
+  PagesSnapshotInput,
+  PagesTabListOutput,
+  PagesTabNewInput,
+  PagesTabNewOutput,
+  PagesTypeInput,
+  PagesWaitForLoadInput,
+  PagesWaitForRefInput,
+  PagesWaitForTextInput,
+  PagesWaitMsInput,
+} from "./pages";
 
 // The tool plane (track MT; `draft/thinking-tool-plane.md`, ruled by James on its page 2026-10-30 21:19–21:20Z; the
 // plan is `draft/tool-plane/IMPLEMENTATION.md` §3). Every tool VibeField offers an agent is ONE ROW here, served by the
@@ -117,7 +144,9 @@ export type ToolFact = (typeof TOOL_FACTS)[number];
 export interface ToolDef {
   /** `<noun>_<verb>`, singular for one object and plural for a list: lowercase, unique on the server, never a dot or a
    * vendor's word (the MT lead's ruling 1, 2026-10-30). Short and plain, because a harness may find a tool by
-   * searching its description. A rename is a retirement (the study's §8). */
+   * searching its description. A rename is a retirement (the study's §8). Dated 2026-11-19 (EY-0's follow-up): the
+   * pages room keeps the pin's own verbs as `browser_<verb>` (plan §6.1), so `browser_get_text` and `browser_tab_list`
+   * keep the engine's order of words, one to one with the pin. */
   readonly name: string;
   readonly family: ToolFamily;
   readonly category: ToolCategory;
@@ -125,13 +154,19 @@ export interface ToolDef {
   readonly scope: ToolScope;
   /** a kind room's rows only: the object kind they act on (the pages room's `vibefield.browser-pane`) */
   readonly object?: string;
-  /** answers from what fieldd already knows and changes nothing (MCP's `readOnlyHint`) */
+  /** answers from what fieldd already knows and changes nothing (MCP's `readOnlyHint`). Dated 2026-11-19 (EY-0's
+   * follow-up): nothing outside the caller's own run folder, where a still (`browser_screenshot`) is saved as its
+   * answer. */
   readonly readOnly: boolean;
   /** MCP's `destructiveHint`. Stated on every acting row, because MCP's own default is `true`; a read-only row leaves it
    * out and the projection writes `false`. */
   readonly destructive?: boolean;
   /** MCP's `idempotentHint`. Stated on every acting row; a read-only row leaves it out and the projection writes `true`. */
   readonly idempotent?: boolean;
+  /** MCP's `openWorldHint` (EY, 2026-11-19): the row reaches whatever site a page shows, the open web. Stated on
+   * every pages row; every other room is closed-world (the desk, the profiles, this device), leaves it out, and
+   * the projection writes `false`. */
+  readonly openWorld?: boolean;
   readonly slice: ToolSlice;
   /** what the model reads in the tool list; "you" is the caller, "the user" the person it works for */
   readonly description: string;
@@ -145,8 +180,15 @@ const DESK_OBJECT = { category: "desk", audience: "agent", scope: "object" } as 
 
 // EY — the pages room (`draft/tool-plane/browser-use.md`, BU-1 and BU-2 A). The map was signed on 2026-11-17
 // (EY-0, plan §2.1). The rows are the pinned engine's core profile, in its order, named `browser_<verb>`. They are
-// every agent's (MT-D2), each on the browser pane. Planned: EY-2 serves them. `pages-record.ts` records the pin, and
-// a test holds these rows to it.
+// every agent's (MT-D2), each on the browser pane. EY-2 serves them. `pages-record.ts` records the pin, and
+// a test holds these rows to it. Read a second time on 2026-11-19 (EY-0's follow-up), which changed four things:
+// - browser_open keeps the object scope, and the room holds both its forms: on a page, by the grant; with none, as
+//   the run's own new pane, minted and granted as canvas_place's object is, and so every pane a call makes;
+// - browser_tab_switch is a read: each call goes to its page first (BU-20), so a switch sets nothing;
+// - check, uncheck and select may destroy, as a click may: a settings page saves as it changes;
+// - a handed page goes back at browser_tab_close and browser_close, and the person's pane stays open.
+// Served since 2a (2026-11-19): each row's input and output are pages.ts's, the pin's own arguments less those the
+// room drops.
 const PAGES = {
   family: "pages",
   category: "desk",
@@ -433,6 +475,7 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "self",
     readOnly: true,
+    openWorld: false,
     description:
       "List the browser tools you hold, and how to reach the browser's other commands from your pane. VibeField answers it, and it touches no page.",
   },
@@ -443,14 +486,16 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: true,
+    openWorld: true,
     description:
-      "Open a page at an address. On a page you have, it goes there: a page the user handed you stays inside its site, or answers off-site. With no page yet, it opens one of your own on the desk. While the user holds the page, it answers held.",
+      "Open a page in a browser pane on the user's VibeField desk, not another browser on their computer. With no page, it opens your own, without the user's sign-ins. A url moves a page you have; a handed page stays inside its site, or answers off-site. While the user holds the page, it answers held.",
   },
   {
     name: "browser_read",
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
       "Read a page you opened or the user handed you, as text. While the user holds the page, it answers held. A page that has not settled answers loading: read it again.",
   },
@@ -459,6 +504,7 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
       "Read a page you opened or the user handed you, as its parts, each with a ref you can act on. While the user holds the page, it answers held.",
   },
@@ -469,6 +515,7 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: false,
+    openWorld: true,
     description:
       "Go back one step in a page's history. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
   },
@@ -479,6 +526,7 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: false,
+    openWorld: true,
     description:
       "Go forward one step in a page's history. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
   },
@@ -489,6 +537,7 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: true,
+    openWorld: true,
     description:
       "Reload a page you opened or the user handed you. While the user holds the page, it answers held.",
   },
@@ -499,8 +548,9 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: false,
+    openWorld: true,
     description:
-      "Click a part of a page by the ref a snapshot gave you. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
+      "Click a part of a page by the ref a snapshot gave you. A ref the page no longer has answers stale-ref: take a new snapshot. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
   },
   {
     name: "browser_fill",
@@ -509,8 +559,9 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: true,
+    openWorld: true,
     description:
-      "Clear a field on a page and fill it with your text, by its ref. A ref the page no longer has answers stale-ref. A field only the user may fill, such as a password, answers needs-you.",
+      "Clear a field on a page and fill it with your text, by its ref. A ref the page no longer has answers stale-ref. A field only the user may fill, such as a password, answers needs-you. While the user holds the page, it answers held.",
   },
   {
     name: "browser_type",
@@ -519,8 +570,9 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: false,
     idempotent: false,
+    openWorld: true,
     description:
-      "Type text into a part of a page by its ref, after what it already holds. A ref the page no longer has answers stale-ref. While the user holds the page, it answers held.",
+      "Type text into a part of a page by its ref, after what it already holds. A ref the page no longer has answers stale-ref. A field only the user may fill, such as a password, answers needs-you. While the user holds the page, it answers held.",
   },
   {
     name: "browser_press",
@@ -529,38 +581,42 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: false,
+    openWorld: true,
     description:
-      "Press a key on a page, where its focus is. While the user holds the page, it answers held.",
+      "Press a key on a page, where its focus is. A field only the user may fill, such as a password, answers needs-you. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
   },
   {
     name: "browser_check",
     ...PAGES,
     scope: "object",
     readOnly: false,
-    destructive: false,
+    destructive: true,
     idempotent: true,
+    openWorld: true,
     description:
-      "Check a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot.",
+      "Check a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
   },
   {
     name: "browser_uncheck",
     ...PAGES,
     scope: "object",
     readOnly: false,
-    destructive: false,
+    destructive: true,
     idempotent: true,
+    openWorld: true,
     description:
-      "Uncheck a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot.",
+      "Uncheck a checkbox or a switch on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
   },
   {
     name: "browser_select",
     ...PAGES,
     scope: "object",
     readOnly: false,
-    destructive: false,
+    destructive: true,
     idempotent: true,
+    openWorld: true,
     description:
-      "Pick one or more options in a list on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot.",
+      "Pick one or more options in a list on a page, by its ref. A ref the page no longer has answers stale-ref: take a new snapshot. While the user holds the page, it answers held.",
   },
   {
     name: "browser_scroll",
@@ -569,6 +625,7 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: false,
     idempotent: false,
+    openWorld: true,
     description:
       "Scroll a page, or one part of it by its ref. While the user holds the page, it answers held.",
   },
@@ -577,6 +634,7 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
       "Wait a set number of milliseconds on a page, within a bound, before your next call. A page that closed answers gone.",
   },
@@ -585,6 +643,7 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
       "Wait until a part of a page appears, within a bound. Past the bound it answers loading: read the page again.",
   },
@@ -593,6 +652,7 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
       "Wait until some text appears on a page, within a bound. Past the bound it answers loading: read the page again.",
   },
@@ -601,6 +661,7 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
       "Wait until a page has loaded, within a bound. Past the bound it answers loading: read the page again.",
   },
@@ -609,22 +670,25 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
-      "Take a still of a page, or of one part of it. It is saved as a file in your folder and answered as its path. While the user holds the page, it answers held.",
+      "Take a still of a page, or of one part of it. It is saved as a file and answered as its path, which you can read. With ifChanged, a page that has not changed answers unchanged, with no file. While the user holds the page, it answers held.",
   },
   {
     name: "browser_get_text",
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description:
-      "Read the visible text of one part of a page, by its ref. A ref the page no longer has answers stale-ref.",
+      "Read the visible text of one part of a page, by its ref. A ref the page no longer has answers stale-ref. While the user holds the page, it answers held.",
   },
   {
     name: "browser_get_url",
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description: "Read the address a page is at now. A page that closed answers gone.",
   },
   {
@@ -632,6 +696,7 @@ export const TOOLS: readonly ToolDef[] = [
     ...PAGES,
     scope: "object",
     readOnly: true,
+    openWorld: true,
     description: "Read a page's title. A page that closed answers gone.",
   },
   {
@@ -641,25 +706,26 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: false,
     idempotent: false,
+    openWorld: true,
     description:
-      "Open a new page of your own, in a pane the window places on the desk. When the desk parks one of your pages to stay within its cap, that page answers parked.",
+      "Open a new page of your own, without the user's sign-ins, in a pane the window places on the desk. When the desk parks one of your pages to stay within its cap, that page answers parked.",
   },
   {
     name: "browser_tab_list",
     ...PAGES,
     scope: "self",
     readOnly: true,
+    openWorld: false,
     description: "List the pages you have: those you opened and those the user handed you.",
   },
   {
     name: "browser_tab_switch",
     ...PAGES,
     scope: "object",
-    readOnly: false,
-    destructive: false,
-    idempotent: true,
+    readOnly: true,
+    openWorld: false,
     description:
-      "Switch the browser to one of your pages. Each call on a page switches to that page first, so this sets nothing for later calls. A page that closed answers gone: list your pages again.",
+      "Answer which of your pages is current. Each call on a page goes to that page first, so a switch sets nothing for later calls. A page that closed answers gone: list your pages again.",
   },
   {
     name: "browser_tab_close",
@@ -668,8 +734,9 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: true,
+    openWorld: false,
     description:
-      "Close one of your pages. A page that already closed answers gone: list your pages again.",
+      "Close one of your own pages. A page the user handed you goes back to them instead, and its pane stays open. A page that already closed answers gone: list your pages again.",
   },
   {
     name: "browser_eval",
@@ -678,8 +745,9 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: false,
+    openWorld: true,
     description:
-      "Run your own script on a page and read what it returns. On a page with the user's sign-ins it runs only if the user allowed your scripts there. While the user holds the page, it answers held.",
+      "Run your own script on a page and read what it returns. On a page with the user's sign-ins it runs only if the user allowed your scripts there. A page the user handed you stays inside its site, or answers off-site. While the user holds the page, it answers held.",
   },
   {
     name: "browser_close",
@@ -688,7 +756,9 @@ export const TOOLS: readonly ToolDef[] = [
     readOnly: false,
     destructive: true,
     idempotent: true,
-    description: "End your browser session, when you are done with the pages you opened.",
+    openWorld: false,
+    description:
+      "Close the pages you opened. Pages the user handed you go back to them, their panes left open. You can open a page again later.",
   },
 ];
 
@@ -719,6 +789,36 @@ export const TOOL_SCHEMAS = {
   object_read: { input: ObjectReadInput, output: ObjectToolOutput },
   object_act: { input: ObjectActInput, output: ObjectToolOutput },
   object_release: { input: ObjectOnlyInput, output: ObjectReleaseOutput },
+  // EY-2 (the pages room's 29, in the pin's order; their shapes are pages.ts's, 2a)
+  browser_tools_profiles: { input: PagesNoInput, output: PagesProfilesOutput },
+  browser_open: { input: PagesOpenInput, output: PagesActOutput },
+  browser_read: { input: PagesReadInput, output: PagesReadOutput },
+  browser_snapshot: { input: PagesSnapshotInput, output: PagesReadOutput },
+  browser_back: { input: PagesPageInput, output: PagesActOutput },
+  browser_forward: { input: PagesPageInput, output: PagesActOutput },
+  browser_reload: { input: PagesPageInput, output: PagesActOutput },
+  browser_click: { input: PagesRefInput, output: PagesActOutput },
+  browser_fill: { input: PagesFillInput, output: PagesActOutput },
+  browser_type: { input: PagesTypeInput, output: PagesActOutput },
+  browser_press: { input: PagesPressInput, output: PagesActOutput },
+  browser_check: { input: PagesRefInput, output: PagesActOutput },
+  browser_uncheck: { input: PagesRefInput, output: PagesActOutput },
+  browser_select: { input: PagesSelectInput, output: PagesActOutput },
+  browser_scroll: { input: PagesScrollInput, output: PagesActOutput },
+  browser_wait_ms: { input: PagesWaitMsInput, output: PagesReadOutput },
+  browser_wait_for_selector: { input: PagesWaitForRefInput, output: PagesReadOutput },
+  browser_wait_for_text: { input: PagesWaitForTextInput, output: PagesReadOutput },
+  browser_wait_for_load: { input: PagesWaitForLoadInput, output: PagesReadOutput },
+  browser_screenshot: { input: PagesScreenshotInput, output: PagesScreenshotOutput },
+  browser_get_text: { input: PagesRefInput, output: PagesReadOutput },
+  browser_get_url: { input: PagesPageInput, output: PagesReadOutput },
+  browser_get_title: { input: PagesPageInput, output: PagesReadOutput },
+  browser_tab_new: { input: PagesTabNewInput, output: PagesTabNewOutput },
+  browser_tab_list: { input: PagesNoInput, output: PagesTabListOutput },
+  browser_tab_switch: { input: PagesPageInput, output: PagesReadOutput },
+  browser_tab_close: { input: PagesPageInput, output: PagesClosedOutput },
+  browser_eval: { input: PagesEvalInput, output: PagesActOutput },
+  browser_close: { input: PagesNoInput, output: PagesClosedOutput },
 } as const satisfies Record<string, { input: z.ZodTypeAny; output: z.ZodTypeAny }>;
 
 export type ServedToolName = keyof typeof TOOL_SCHEMAS;

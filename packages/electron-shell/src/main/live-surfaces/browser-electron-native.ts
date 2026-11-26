@@ -1,4 +1,6 @@
 import { app, BrowserWindow, session } from "electron";
+import { pacingFor, pacingSteps } from "../pages/core/pins";
+import type { Pacing, PacingStep } from "../pages/core/types";
 import {
   BrowserFrames,
   type FrameAncestor,
@@ -24,6 +26,7 @@ import {
   engineAgentOf,
 } from "./browser-producer";
 import {
+  type BrowserSurfacePopups,
   installGuardedBrowserSurfaceContents,
   installGuardedBrowserSurfaceSession,
 } from "./browser-security";
@@ -285,6 +288,207 @@ function safeEffectiveRaster(
   };
 }
 
+/** EY-1 (1d, 2026-11-19): a client's session refused a command (-32000), or is gone (-32001): the bridge's codes. */
+export const AGENT_SESSION_REFUSED = -32_000;
+export const AGENT_SESSION_GONE = -32_001;
+
+/** EY-1 (1d, 2026-11-19): what a client's session answers when it will not send, or can no longer. */
+export class BrowserAgentSessionError extends Error {
+  constructor(
+    readonly code: typeof AGENT_SESSION_REFUSED | typeof AGENT_SESSION_GONE,
+    message: string,
+  ) {
+    super(message);
+    this.name = "BrowserAgentSessionError";
+  }
+}
+
+/** EY-1 (1d, 2026-11-19): an event said on a client's session; `child`: said on a session under it, that one. */
+export interface BrowserAgentEvent {
+  readonly method: string;
+  readonly params: Readonly<Record<string, unknown>>;
+  readonly child?: string;
+}
+
+/**
+ * EY-1 (1d, 2026-11-19) — A CLIENT'S OWN SESSION ON A DESK PAGE: the page attached to itself (`Target.attachToTarget`,
+ * flat) on the owner's session, so a client's enables, disables and auto-attach act on its own session, never the
+ * owner's. `id` is Chromium's, never "". `send` goes to the client's session, or to a session under it (`child`: its own
+ * alone). It ends once — its session detached, the page's debugger gone, the window destroyed, or `close()` — with its
+ * reason; what it had in flight, and what it sends after, are refused as gone.
+ */
+export interface BrowserAgentSession {
+  readonly id: string;
+  send(method: string, params: Readonly<Record<string, unknown>>, child?: string): Promise<unknown>;
+  onEvent(listener: (event: BrowserAgentEvent) => void): () => void;
+  close(): Promise<void>;
+  readonly closed: Promise<{ readonly reason: string }>;
+}
+
+/**
+ * EY-1 (1d, 2026-11-19) — WHAT THE AGENT'S ENDPOINT IS GIVEN OF A DESK PAGE: its target, its clients' own sessions, the
+ * capture scale in force, what it shows, and its end — said once, when the page's debugger goes or its window is
+ * destroyed; after it, the page has no port.
+ */
+export interface BrowserAgentPort {
+  readonly targetId: string;
+  openClientSession(): Promise<BrowserAgentSession>;
+  captureScale(): number;
+  info(): { readonly url: string; readonly title: string };
+  onDetach(listener: (reason: string) => void): () => void;
+  /** a call window's pin (pages/core/pins.ts: scale 1, a frame-rate floor, painting), applied at every send until its
+   * release; held by the window alone, one per window; `answerBy` is a Date.now() deadline for `applied` */
+  pin(o?: { readonly signal?: AbortSignal; readonly answerBy?: number }): BrowserAgentPin;
+  /** true while a frame of another site holds the focus, or the focus is in doubt after a hint (a press, a key's down, a
+   * tap's end) until a document's word settles it; input.ts acts on it */
+  framesHoldFocus(): boolean;
+  /** the main target's CSS point as the page's view takes it, at the capture scale in force (1 under a pin); the hand's
+   * root input and input.ts both take their point from here */
+  viewImagePoint(p: { readonly x: number; readonly y: number }): {
+    readonly x: number;
+    readonly y: number;
+  };
+}
+
+/** EY-1 (1d, 2026-11-19): how a pin is answered (the shared shapes' five): a frame of the page's own document painted
+ * at the pinned scale, its deadline passed, its signal aborted or its window released, the page gone, or the owner
+ * failing to lay it while the page lives. */
+export type BrowserAgentPinAnswer = "applied" | "timeout" | "cancelled" | "gone" | "failed";
+
+/** EY-1 (1d): a call window's pin on a desk page. The last release returns the page to its demand as it then stands. */
+export interface BrowserAgentPin {
+  readonly applied: Promise<BrowserAgentPinAnswer>;
+  release(): void;
+}
+
+/** EY-1 (1d, 2026-11-19): the producer's raster as it asked it (setBackingRaster's own arguments), kept under a pin. */
+interface DemandRaster {
+  readonly requested: { width: number; height: number };
+  readonly logicalViewport: { width: number; height: number };
+  readonly deviceScaleFactor: number;
+  readonly mobile: boolean;
+}
+
+/** EY-1 (1d): the base and the raster laid for a request; a pinned desktop page is laid at its base (capture scale 1). */
+function rasterOf(
+  r: DemandRaster,
+  pinned: boolean,
+): {
+  base: { width: number; height: number };
+  effective: { width: number; height: number; pageScaleFactor: number; captureScale: number };
+} {
+  // The base derives from THIS call's viewport (DT-3f), never the
+  // construction-time one: the viewport now follows the card, and a raster
+  // judged against a stale base would reject every request whose aspect had
+  // legitimately moved with the layout.
+  const base = {
+    width: integerDimension(r.logicalViewport.width * r.deviceScaleFactor),
+    height: integerDimension(r.logicalViewport.height * r.deviceScaleFactor),
+  };
+  // Mobile pages own their layout/initial zoom (including the 980px fallback).
+  // Preserve their existing native raster until that path has a separate proof.
+  const effective = safeEffectiveRaster(
+    (pinned && !r.mobile) ||
+      (r.mobile && (r.requested.width < base.width || r.requested.height < base.height))
+      ? base
+      : r.requested,
+    base,
+  );
+  return { base, effective };
+}
+
+/** EY-1 (1d): each desk page's port, by its contents (what the control target's binding names). */
+const agentPorts = new WeakMap<object, BrowserAgentPort>();
+
+/** EY-1 (1d, 2026-11-19): the port of a desk page's contents; null once its debugger is gone or its window destroyed. */
+export function browserAgentPortOf(contents: object): BrowserAgentPort | null {
+  return agentPorts.get(contents) ?? null;
+}
+
+type PageDebugger = BrowserWindow["webContents"]["debugger"];
+
+/** EY-1 (1d): one client's session, as its page's owner keeps it. */
+class AgentClientSession implements BrowserAgentSession {
+  readonly closed: Promise<{ readonly reason: string }>;
+  readonly #listeners = new Set<(event: BrowserAgentEvent) => void>();
+  readonly #inFlight = new Set<(error: Error) => void>();
+  #ended: string | undefined;
+  #said: (ended: { readonly reason: string }) => void = () => undefined;
+
+  constructor(
+    readonly id: string,
+    private readonly page: {
+      readonly cdp: () => PageDebugger;
+      /** a session under this client's (its own included), by the owner's maps */
+      readonly isUnder: (session: string) => boolean;
+      /** the owner detaches this client's session and ends it */
+      readonly close: () => Promise<void>;
+    },
+  ) {
+    this.closed = new Promise((resolve) => {
+      this.#said = resolve;
+    });
+  }
+
+  send(
+    method: string,
+    params: Readonly<Record<string, unknown>>,
+    child?: string,
+  ): Promise<unknown> {
+    if (this.#ended !== undefined)
+      return Promise.reject(
+        new BrowserAgentSessionError(AGENT_SESSION_GONE, `the session ended (${this.#ended})`),
+      );
+    // (never the page's own session, "" — nor a session that is not under this client's)
+    if (child !== undefined && (child === "" || !this.page.isUnder(child)))
+      return Promise.reject(
+        new BrowserAgentSessionError(AGENT_SESSION_REFUSED, "not a session of this client"),
+      );
+    return new Promise((resolve, reject) => {
+      const fail = (error: Error) => reject(error);
+      this.#inFlight.add(fail);
+      this.page
+        .cdp()
+        .sendCommand(method, params, child ?? this.id)
+        .then(resolve, reject)
+        .finally(() => this.#inFlight.delete(fail));
+    });
+  }
+
+  onEvent(listener: (event: BrowserAgentEvent) => void): () => void {
+    if (this.#ended !== undefined) return () => undefined;
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  close(): Promise<void> {
+    return this.#ended !== undefined ? Promise.resolve() : this.page.close();
+  }
+
+  /** what is said on its session, or under it — to every listener, in order */
+  deliver(event: BrowserAgentEvent): void {
+    if (this.#ended !== undefined) return;
+    for (const listener of [...this.#listeners]) {
+      try {
+        listener(event);
+      } catch {
+        // (a listener's own failure is its own)
+      }
+    }
+  }
+
+  /** once: what it had in flight refused as gone, its listeners let go, its end said */
+  end(reason: string): void {
+    if (this.#ended !== undefined) return;
+    this.#ended = reason;
+    const gone = new BrowserAgentSessionError(AGENT_SESSION_GONE, `the session ended (${reason})`);
+    for (const fail of [...this.#inFlight]) fail(gone);
+    this.#inFlight.clear();
+    this.#listeners.clear();
+    this.#said({ reason });
+  }
+}
+
 /** PT-5d (M9): the window of a native told it is focused — one at a time, as a browser has one focused window. */
 interface FocusHolder {
   window: ElectronBrowserSurfaceWindow | undefined;
@@ -298,6 +502,16 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   #debuggerAttached = false;
   #captureScale = 1;
   #frameRate: number | undefined;
+  /** EY-1 (1d, 2026-11-19): the call windows pinning this page (one each; pages/core/pins.ts's pins while above 0) */
+  #pins = 0;
+  /** EY-1 (1d): the transport's frame-rate ceiling, as the producer says it on the transport's edge */
+  #ceiling = Number.POSITIVE_INFINITY;
+  /** EY-1 (1d): the producer's demand as last said — painting, and its raster as asked — which a pin keeps */
+  #demandPainting = true;
+  #demandRaster: DemandRaster | undefined;
+  /** EY-1 (1d): the size a pinned frame paints at (its laid base), and the pins waiting for that paint */
+  #pinnedSize: { width: number; height: number } | undefined;
+  readonly #atPinnedPaint = new Set<(answer: BrowserAgentPinAnswer) => void>();
   /** PT-5a: the bootstrap document has been taken out of the page's history (below) — once a window's life. */
   #bootstrapPruned = false;
   /** PT-5a: the main frame's last load failed with this net error (cleared when a page commits). */
@@ -319,6 +533,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   readonly #hungListeners = new Set<(frame?: string) => void>();
   /** PT-5d (M7 H2): key-like events waiting for a word of where the focus is */
   readonly #focusWaiters = new Set<{ known(): void; refuse(error: Error): void }>();
+  /** EY-1 (1f, 2026-11-19): the page's run's pop-up policy, as the producer last set it; none once destroyed */
+  #popups: BrowserSurfacePopups | null = null;
   /** PT-6a (K1 b): the page's own word awaited, timed — the doubt it is of (`BrowserFrames.pageWord`), and its timer */
   #wordDue: { readonly due: object; readonly timer: ReturnType<typeof setTimeout> } | undefined;
   /** PT-6a (M5 — F1): the page's word to be PULLED — the doubt it is for (`BrowserFrames.pageWord`), and its timer */
@@ -332,6 +548,21 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   /** PT-6a (M14 — R4): each of those sessions' PARENT session (undefined: the page's), set at its attach and forgotten with
    * it — the cascade at a detach reads these, never the frames' records, which a frame's own COMMIT drops first */
   readonly #parentOf = new Map<string, string | undefined>();
+  /** EY-1 (1d, 2026-11-19): a client's own sessions on this page — each a page attached at the root (the bridge's
+   * `Target.attachToTarget`), and each session attached under one — by the client session it hangs under (undefined: the
+   * root). None is the owner's: see `clientHeard`. */
+  readonly #clientSessions = new Map<string, string | undefined>();
+  /** EY-1 (1d, 2026-11-19): what the agent's endpoint is given of this page */
+  readonly agentPort: BrowserAgentPort;
+  /** EY-1 (1d): the clients the port opened, by their own session */
+  readonly #clients = new Map<string, AgentClientSession>();
+  /** EY-1 (1d): the port's self-attach in flight, by the page's target (one at a time): its announcement, said before its
+   * answer, makes its client — so nothing said on the new session is lost */
+  #selfAttach: string | undefined;
+  #selfAttaching: Promise<void> = Promise.resolve();
+  /** EY-1 (1d): the port's end, said once — and to whom */
+  #agentEnded = false;
+  readonly #agentDetach = new Set<(reason: string) => void>();
   /** PT-5d (M8): by session (`""`: the page's), each document's context of the words' isolated world, by its frame */
   readonly #worlds = new Map<string, Map<string, number>>();
   /** PT-5d (M8): each frame's parent frame — the document that holds its owner element */
@@ -409,6 +640,25 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     window.webContents.debugger.on("message", (_event, method, params, sessionId) =>
       this.heard(method, params as Readonly<Record<string, unknown>>, sessionId),
     );
+    // EY-1 (1d, 2026-11-19): the page's debugger gone takes every client's session with it, and ends the port
+    window.webContents.debugger.on("detach", (_event, reason) => this.agentGone(String(reason)));
+    const contents = window.webContents;
+    this.agentPort = {
+      get targetId() {
+        return contents.getOrCreateDevToolsTargetId();
+      },
+      openClientSession: () => this.openClientSession(),
+      captureScale: () => this.#captureScale,
+      info: () => ({ url: contents.getURL(), title: contents.getTitle() }),
+      onDetach: (listener) => {
+        if (this.#agentEnded) return () => undefined;
+        this.#agentDetach.add(listener);
+        return () => this.#agentDetach.delete(listener);
+      },
+      pin: (o) => this.pin(o),
+      framesHoldFocus: () => this.#frames.inDoubt() || this.#frames.focused().session !== undefined,
+      viewImagePoint: (p) => this.viewImagePoint(p),
+    };
     // (registered before any navigation listener: the count has moved when a state is said)
     const committed = (): void => {
       this.#pageDocument = true;
@@ -427,6 +677,21 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
       this.#unpainted.clear();
       for (const arm of [...this.#atPaint]) arm();
       this.#atPaint.clear();
+    });
+    // EY-1 (1d, 2026-11-19): a pin is applied at the first paint of the page's own document at the pinned size (a
+    // bootstrap paint, or one still at the old size, is not it)
+    window.webContents.on("paint", (_event, _dirty, image) => {
+      if (this.#atPinnedPaint.size === 0 || !this.#pageDocument) return;
+      const want = this.#pinnedSize;
+      const got = (image as Electron.NativeImage | undefined)?.getSize();
+      if (
+        want !== undefined &&
+        got !== undefined &&
+        (got.width !== want.width || got.height !== want.height)
+      )
+        return;
+      for (const answer of [...this.#atPinnedPaint]) answer("applied");
+      this.#atPinnedPaint.clear();
     });
     // Navigation can create a new compositor whose reported FPS carries over
     // while its actual cadence returns to the default. Restore the current
@@ -457,6 +722,18 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     return () => this.#refusedListeners.delete(listener);
   }
 
+  /** EY-1 (1f, 2026-11-19): the page's run's pop-up policy, set by the producer at each birth, held edge and close. A
+   * destroyed window keeps none. */
+  setPopupPolicy(policy: BrowserSurfacePopups | null): void {
+    this.#popups = this.isDestroyed() ? null : policy;
+  }
+
+  /** EY-1 (1f): the policy the guard asks at each pop-up; none once the window is destroyed, so a pop-up on a dying
+   * page gets today's answer */
+  popupPolicy(): BrowserSurfacePopups | null {
+    return this.isDestroyed() ? null : this.#popups;
+  }
+
   /**
    * PT-5a — what CDP says of the page's asks. A dialog is WebContents-wide and said on every session with its Page domain on,
    * so it is counted on the page's own session alone (`alert`, `confirm`; `beforeunload` is `will-prevent-unload`'s to say);
@@ -468,6 +745,8 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     params: Readonly<Record<string, unknown>>,
     sessionId: string | undefined,
   ): void {
+    // EY-1 (1d, 2026-11-19): a client's session, and what is said on it, is never the owner's
+    if (this.clientHeard(method, params, sessionId)) return;
     // PT-5c (ruling 1): the page's word of its scale — on its OWN session, by its own binding; tagged with the document the
     // window counts as it arrives (every word came after its document's `did-navigate`: the probe)
     if (method === "Runtime.bindingCalled") {
@@ -956,6 +1235,10 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   destroy(): void {
+    // EY-1 (1f, 2026-11-19): a destroyed window keeps no pop-up policy
+    this.#popups = null;
+    // EY-1 (1d, 2026-11-19): every client's session ends before the page's debugger goes, and the port with them
+    this.agentGone("destroyed");
     for (const due of this.#discards.values()) if (due.timer !== null) clearTimeout(due.timer);
     this.#discards.clear();
     if (this.#wordDue !== undefined) clearTimeout(this.#wordDue.timer);
@@ -979,20 +1262,129 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
 
   setFrameRate(fps: number): void {
     this.#frameRate = fps;
-    this.window.webContents.setFrameRate(fps);
+    // EY-1 (1d, 2026-11-19): under a call window's pin the producer's rate is demand, and the pin's floor stands
+    this.window.webContents.setFrameRate(this.#pins > 0 ? this.pacing().frameRate : fps);
+  }
+
+  /** EY-1 (1d, 2026-11-19): the transport's frame-rate ceiling, said by the producer on the transport's edge; a call
+   * window's floor never passes it */
+  setFrameRateCeiling(maxFps: number): void {
+    this.#ceiling = maxFps;
+    if (this.#pins > 0 && !this.isDestroyed())
+      this.window.webContents.setFrameRate(this.pacing().frameRate);
   }
 
   private restoreFrameRate(): void {
-    if (!this.isDestroyed() && this.#frameRate !== undefined)
-      this.window.webContents.setFrameRate(this.#frameRate);
+    if (this.isDestroyed()) return;
+    if (this.#pins > 0) this.window.webContents.setFrameRate(this.pacing().frameRate);
+    else if (this.#frameRate !== undefined) this.window.webContents.setFrameRate(this.#frameRate);
   }
 
   startPainting(): void {
+    this.#demandPainting = true;
     this.window.webContents.startPainting();
   }
 
   stopPainting(): void {
+    this.#demandPainting = false;
+    // EY-1 (1d): a call window's pin paints until its release; the producer's rest is demand, in force then
+    if (this.#pins > 0) return;
     this.window.webContents.stopPainting();
+  }
+
+  /** EY-1 (1d, 2026-11-19): pages/core/pins.ts's pacing for the demand as last said — inside a window while a pin stands */
+  private pacing(): Pacing {
+    const raster = this.#demandRaster;
+    return pacingFor(
+      {
+        mode: this.#demandPainting ? "live" : "paused",
+        fps: this.#frameRate ?? 0,
+        maxFps: this.#ceiling,
+        captureScale: raster === undefined ? 1 : rasterOf(raster, false).effective.captureScale,
+        mobile: raster?.mobile ?? false,
+      },
+      this.#pins > 0,
+    );
+  }
+
+  /** EY-1 (1d): pages/core/pins.ts's steps, sent in its order (a metrics step waits on the device queue); `device` is
+   * the journal's to ask, never the owner's */
+  private async pace(steps: readonly PacingStep[]): Promise<void> {
+    for (const step of steps) {
+      if (this.isDestroyed()) throw new Error("Browser surface was destroyed while it paced");
+      if (step.kind === "frame-rate") {
+        if (this.#pins > 0 || this.#frameRate !== undefined)
+          this.window.webContents.setFrameRate(step.fps);
+      } else if (step.kind === "metrics") {
+        if (this.#demandRaster !== undefined) await this.layRaster();
+      } else if (step.kind === "painting") {
+        if (step.on) this.window.webContents.startPainting();
+        else this.window.webContents.stopPainting();
+      }
+    }
+  }
+
+  /** EY-1 (1d, 2026-11-19): a call window's pin — pins.ts's steps from the pacing in force to the pinned one; `applied`
+   * at the first paint of the page's own document at the pinned size, or at once when no step differs and it paints */
+  private pin(
+    o: { readonly signal?: AbortSignal; readonly answerBy?: number } = {},
+  ): BrowserAgentPin {
+    if (this.#agentEnded || this.isDestroyed())
+      return { applied: Promise.resolve("gone"), release: () => undefined };
+    const from = this.pacing();
+    this.#pins += 1;
+    const to = this.pacing();
+    const steps = pacingSteps(from, to);
+    let settle: (answer: BrowserAgentPinAnswer) => void = () => undefined;
+    const applied = new Promise<BrowserAgentPinAnswer>((resolve) => {
+      let settled = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = (answer: BrowserAgentPinAnswer): void => {
+        if (settled) return;
+        settled = true;
+        if (timer !== undefined) clearTimeout(timer);
+        o.signal?.removeEventListener("abort", aborted);
+        this.#atPinnedPaint.delete(done);
+        resolve(answer);
+      };
+      const aborted = (): void => done("cancelled");
+      settle = done;
+      if (o.signal?.aborted === true) done("cancelled");
+      o.signal?.addEventListener("abort", aborted, { once: true });
+      if (o.answerBy !== undefined) {
+        timer = setTimeout(() => done("timeout"), Math.max(0, o.answerBy - Date.now()));
+        // (a pin waiting never holds main's event loop at quit)
+        timer.unref?.();
+      }
+      this.pace(steps).then(
+        () => {
+          if (steps.length === 0 && to.painting) done("applied");
+          else if (!settled) this.#atPinnedPaint.add(done);
+        },
+        // a pace that throws while the page lives is the owner failing, not the page going
+        () => done(this.#agentEnded || this.isDestroyed() ? "gone" : "failed"),
+      );
+    });
+    let released = false;
+    return {
+      applied,
+      release: () => {
+        if (released) return;
+        released = true;
+        // a window released before its pin was applied: its wait ends here, its timer and listener with it
+        settle("cancelled");
+        this.unpin();
+      },
+    };
+  }
+
+  /** EY-1 (1d): a window's pin released; the last returns the page to its demand as it then stands */
+  private unpin(): void {
+    if (this.#pins === 0) return;
+    const from = this.pacing();
+    this.#pins -= 1;
+    if (this.#pins > 0 || this.isDestroyed()) return;
+    this.pace(pacingSteps(from, this.pacing())).catch(() => undefined);
   }
 
   setAudioMuted(muted: boolean): void {
@@ -1010,20 +1402,20 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     deviceScaleFactor: number,
     mobile = false,
   ): Promise<{ width: number; height: number }> {
-    // The base derives from THIS call's viewport (DT-3f), never the
-    // construction-time one: the viewport now follows the card, and a raster
-    // judged against a stale base would reject every request whose aspect had
-    // legitimately moved with the layout.
-    const base = {
-      width: integerDimension(logicalViewport.width * deviceScaleFactor),
-      height: integerDimension(logicalViewport.height * deviceScaleFactor),
-    };
-    // Mobile pages own their layout/initial zoom (including the 980px fallback).
-    // Preserve their existing native raster until that path has a separate proof.
-    const effective = safeEffectiveRaster(
-      mobile && (requested.width < base.width || requested.height < base.height) ? base : requested,
-      base,
-    );
+    // EY-1 (1d, 2026-11-19): the producer's raster is demand — kept, and laid as asked unless a call window's pin
+    // stands (then the page is laid at its base, and this answers the painted size; the last release lays the request)
+    this.#demandRaster = { requested, logicalViewport, deviceScaleFactor, mobile };
+    return this.layRaster();
+  }
+
+  private layRaster(): Promise<{ width: number; height: number }> {
+    const demand = this.#demandRaster;
+    if (demand === undefined)
+      return Promise.reject(new Error("Browser surface has no raster to lay"));
+    const { logicalViewport, deviceScaleFactor, mobile } = demand;
+    const pinned = this.#pins > 0 && !mobile;
+    const { effective } = rasterOf(demand, pinned);
+    this.#pinnedSize = pinned ? { width: effective.width, height: effective.height } : undefined;
     return this.device(async () => {
       if (this.isDestroyed()) throw new Error("Browser surface was destroyed during resize");
       await this.bootstrapReady;
@@ -1384,6 +1776,163 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   }
 
   /** PT-6a (M8 — C5): the sessions under a frame's session, at any depth — by the native's own parent links (M14 — R4). */
+  /**
+   * EY-1 (1d, 2026-11-19) — THE OWNER KEEPS TO ITS OWN SESSIONS. Its auto-attach asks for iframes and workers alone, never a
+   * page: so a page attached at its root can only be an explicit `Target.attachToTarget` of the page — a client's own
+   * session (the bridge's). That session, and each session attached under it, is the client's: the owner guards, resumes,
+   * detaches, places and discards nothing on them, and every event said on one is left to the bridge. A session the owner
+   * has not heard announced stays the owner's, as before (a worker under a parent it never attached is still released).
+   * Says whether the event was a client's.
+   */
+  private clientHeard(
+    method: string,
+    params: Readonly<Record<string, unknown>>,
+    sessionId: string | undefined,
+  ): boolean {
+    const on = sessionId === undefined || sessionId === "" ? undefined : sessionId;
+    if (on === undefined) {
+      if (method === "Target.attachedToTarget") {
+        const child = params["sessionId"];
+        const info = params["targetInfo"] as
+          | { readonly type?: unknown; readonly targetId?: unknown }
+          | undefined;
+        if (typeof child !== "string" || info?.type !== "page") return false;
+        this.#clientSessions.set(child, undefined);
+        // EY-1 (1d): the port's own self-attach, announced before its answer: its client is made now
+        const mine = this.#selfAttach !== undefined && info.targetId === this.#selfAttach;
+        if (mine && !this.#clients.has(child)) this.#clients.set(child, this.newClient(child));
+        return true;
+      }
+      if (method === "Target.detachedFromTarget") {
+        const gone = params["sessionId"];
+        if (typeof gone !== "string" || !this.#clientSessions.has(gone)) return false;
+        this.forgetClientSessions(gone);
+        this.#clients.get(gone)?.end("detached");
+        this.#clients.delete(gone);
+        return true;
+      }
+      return false;
+    }
+    if (!this.#clientSessions.has(on)) return false;
+    // EY-1 (1d): the maps first, then the client hears it — on its own session, or with the session under it it was said on
+    const child = params["sessionId"];
+    if (typeof child === "string") {
+      if (method === "Target.attachedToTarget") this.#clientSessions.set(child, on);
+      else if (method === "Target.detachedFromTarget" && this.#clientSessions.has(child))
+        this.forgetClientSessions(child);
+    }
+    const root = this.clientRootOf(on);
+    const said = on === root ? { method, params } : { method, params, child: on };
+    this.#clients.get(root)?.deliver(said);
+    return true;
+  }
+
+  /** EY-1 (1d): a client's session and every session under it, forgotten */
+  private forgetClientSessions(gone: string): void {
+    const going = [gone];
+    for (let i = 0; i < going.length; i += 1)
+      for (const [child, of] of this.#clientSessions)
+        if (of === going[i] && !going.includes(child)) going.push(child);
+    for (const session of going) this.#clientSessions.delete(session);
+  }
+
+  /** EY-1 (1d): the client's own session a client session hangs under (its own, for a client's own) */
+  private clientRootOf(session: string): string {
+    let at = session;
+    let up = this.#clientSessions.get(at);
+    while (up !== undefined) {
+      at = up;
+      up = this.#clientSessions.get(at);
+    }
+    return at;
+  }
+
+  private newClient(id: string): AgentClientSession {
+    return new AgentClientSession(id, {
+      cdp: () => this.window.webContents.debugger,
+      isUnder: (session) => this.#clientSessions.has(session) && this.clientRootOf(session) === id,
+      close: () => this.closeClient(id),
+    });
+  }
+
+  /**
+   * EY-1 (1d, 2026-11-19) — A CLIENT'S OWN SESSION, opened: the owner's guards first (its session made, as for the hand),
+   * then the page attached to itself on the owner's session, flat. One at a time: the self-attach's announcement — a page
+   * on the root, said before its answer — makes its client, so nothing said on the new session is lost.
+   */
+  private async openClientSession(): Promise<BrowserAgentSession> {
+    const before = this.#selfAttaching;
+    let done: () => void = () => undefined;
+    this.#selfAttaching = new Promise<void>((resolve) => {
+      done = resolve;
+    });
+    await before;
+    try {
+      if (this.#agentEnded || this.isDestroyed())
+        throw new BrowserAgentSessionError(AGENT_SESSION_GONE, "the page is gone");
+      await this.ensureDebugger();
+      const targetId = this.window.webContents.getOrCreateDevToolsTargetId();
+      this.#selfAttach = targetId;
+      const answer = (await this.window.webContents.debugger.sendCommand("Target.attachToTarget", {
+        targetId,
+        flatten: true,
+      })) as { readonly sessionId?: unknown };
+      const id = answer.sessionId;
+      if (typeof id !== "string" || id === "")
+        throw new BrowserAgentSessionError(AGENT_SESSION_GONE, "the page made no session");
+      if (!this.#clientSessions.has(id)) this.#clientSessions.set(id, undefined);
+      let client = this.#clients.get(id);
+      if (client === undefined) {
+        client = this.newClient(id);
+        this.#clients.set(id, client);
+      }
+      if (this.#agentEnded) client.end("detached");
+      return client;
+    } finally {
+      this.#selfAttach = undefined;
+      done();
+    }
+  }
+
+  /** EY-1 (1d): a client closes its own session — ended at once; its session forgotten when the engine says it went (so
+   * its going never reaches the owner's frames), or now, if the detach could not be sent */
+  private async closeClient(id: string): Promise<void> {
+    const client = this.#clients.get(id);
+    if (client === undefined) return;
+    this.#clients.delete(id);
+    client.end("closed");
+    const cdp = this.window.webContents.debugger;
+    if (this.isDestroyed() || !cdp.isAttached()) {
+      this.forgetClientSessions(id);
+      return;
+    }
+    await cdp
+      .sendCommand("Target.detachFromTarget", { sessionId: id })
+      .catch(() => this.forgetClientSessions(id));
+  }
+
+  /** EY-1 (1d, 2026-11-19): the page's debugger gone, or its window destroyed — every client ended, the port's end said
+   * once, and the page no longer has one */
+  private agentGone(reason: string): void {
+    if (this.#agentEnded) return;
+    this.#agentEnded = true;
+    agentPorts.delete(this.controlContents);
+    // EY-1 (1d, 2026-11-19): a pin still waiting for its paint is answered: the page is gone
+    for (const answer of [...this.#atPinnedPaint]) answer("gone");
+    this.#atPinnedPaint.clear();
+    for (const client of [...this.#clients.values()]) client.end(reason);
+    this.#clients.clear();
+    this.#clientSessions.clear();
+    for (const listener of [...this.#agentDetach]) {
+      try {
+        listener(reason);
+      } catch {
+        // (a listener's own failure is its own)
+      }
+    }
+    this.#agentDetach.clear();
+  }
+
   private descendantsOf(session: string): string[] {
     const out: string[] = [];
     const under = [session];
@@ -1531,11 +2080,19 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
   private onSession(routed: FrameRouted): { readonly x: number; readonly y: number } {
     // CDP's main target receives view-image coordinates. OOPIF target inputs
     // stay in their own CSS coordinates (verified with a real cross-site frame).
-    if (routed.target.session === undefined)
-      return { x: routed.x * this.#captureScale, y: routed.y * this.#captureScale };
+    if (routed.target.session === undefined) return this.viewImagePoint(routed);
     const said = this.#pageScale;
     const s = said !== undefined && said.document === this.#documents ? said.value : 1;
     return { x: routed.x / s, y: routed.y / s };
+  }
+
+  /** EY-1 (1d, 2026-11-19): the main target's CSS point as the page's view takes it, at the capture scale in force — the
+   * one home of the rule, for the hand's root input and the agent's (the port) */
+  private viewImagePoint(p: { readonly x: number; readonly y: number }): {
+    readonly x: number;
+    readonly y: number;
+  } {
+    return { x: p.x * this.#captureScale, y: p.y * this.#captureScale };
   }
 
   /** PT-5d: a pointer's event, routed — a hover that crosses into another target first tells the one it left; a wheel by
@@ -1896,9 +2453,21 @@ export function configureBrowserEngineIdentity(): void {
 }
 
 /** Pinned Electron 43 Browser OSR adapter. */
+/** EY-1 (1f, 2026-11-19): what the native tells its maker. A pop-up the run's policy allowed and the address rule then
+ * refused is the two having diverged (the policy asks the same rule first), so the maker says it loudly. */
+export interface BrowserSurfaceNativeHooks {
+  readonly onPopupBeltRefused?: () => void;
+}
+
 export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
   /** PT-5d (M9): the one window of this native told it is focused */
   readonly #focus: FocusHolder = { window: undefined, told: undefined };
+  /** EY-1 (1f, 2026-11-19): what this native tells its maker */
+  readonly #hooks: BrowserSurfaceNativeHooks;
+
+  constructor(hooks: BrowserSurfaceNativeHooks = {}) {
+    this.#hooks = hooks;
+  }
 
   createWindow(options: BrowserSurfaceNativeWindowOptions): BrowserSurfaceNativeWindow {
     // PT-4: a persistent profile lives under its USER's data (`LAYOUT.BROWSER_PROFILES_DIR`) when the runtime names where;
@@ -1941,13 +2510,23 @@ export class ElectronBrowserSurfaceNative implements BrowserSurfaceNative {
       },
     });
     // the guards are installed BEFORE the bootstrap document; what they refuse is told to the window made just below
-    const told: { refused?: (what: BrowserSurfaceRefusal, detail?: string) => void } = {};
-    installGuardedBrowserSurfaceContents(window.webContents, (what, detail) =>
-      told.refused?.(what, detail),
+    const told: {
+      refused?: (what: BrowserSurfaceRefusal, detail?: string) => void;
+      // EY-1 (1f, 2026-11-19): the page's run's pop-up policy, read at each pop-up; none until the window is made
+      popups?: () => BrowserSurfacePopups | null;
+    } = {};
+    installGuardedBrowserSurfaceContents(
+      window.webContents,
+      (what, detail) => told.refused?.(what, detail),
+      () => told.popups?.() ?? null,
+      () => this.#hooks.onPopupBeltRefused?.(),
     );
     const bootstrapReady = window.loadURL("about:blank");
     const surface = new ElectronBrowserSurfaceWindow(window, options, bootstrapReady, this.#focus);
     told.refused = (what, detail) => surface.refused(what, detail);
+    told.popups = () => surface.popupPolicy();
+    // EY-1 (1d, 2026-11-19): the page's port, found by its contents
+    agentPorts.set(surface.controlContents, surface.agentPort);
     return surface;
   }
 

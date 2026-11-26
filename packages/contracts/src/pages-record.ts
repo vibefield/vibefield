@@ -1,7 +1,7 @@
 // The pages room's record (EY-0), written by the lab's convert-record.mjs. Never edit it by hand.
 // The converter runs again at each EL8, after the record pass.
 // Its inputs in draft/browser-spike/ey, by SHA-256:
-// c6a0a8d4418a8c7231229c1c79de539d4fdf45dc9bfdced84b51964546a62f51  script-set-0.41.0-p2.json
+// 109dc1d64fb043f472339660b3c88630795f097cd61dee68d38aa51beada1924  script-set-0.41.0-p2.json
 // 77d252df92d93dfe7ee8e1694e8894cb63e774c2c4003f34b1aeac1434474afa  script-calls-0.41.0-p2.json
 // a5bff3fe0c7470915242f7a4705fe36482026b4260b012b9f4798dc1fffc4c49  mcp-tools-0.41.0.json
 // 0f16d012822ac12f9b30cf9d93327893b50f46e7a8d3332f9d7bbf69a817f5e4  report-ey-s2-macos.json
@@ -11,6 +11,13 @@
 // and the length of its UTF-8 bytes. Every script form in the set, and every script call the last
 // record pass kept, matched this form before it was written. recordedCalls counts the agent's
 // calls of every record pass merged into the set, not script calls.
+//
+// The source build (2026-11-24): `sourceBuild` and `starts` were added here BY HAND, the one departure from the rule
+// above, because the converter does not write them yet. They are read from the converter's own input
+// notes/bu14-build.md (revision 2, the SHA-256 above): the tag, the patch's SHA-256 and the built darwin-arm64
+// binary's SHA-256. `binarySha256` stays the release binary's (the npm package's), which preflight holds the install
+// to and which is never started. The converter owes both fields before its next run: the record's schema requires
+// them, so a run that drops them fails its parse.
 
 import type { PagesEngineRecordV1, PagesScriptSetV1 } from "./pages";
 
@@ -24,6 +31,14 @@ export const PAGES_ENGINE_RECORD: PagesEngineRecordV1 = {
   binarySha256: {
     "darwin-arm64": "a402fef2489c221b17522aa21f103ca5dc47f00ff5879d4a72c39881544730ab",
   },
+  sourceBuild: {
+    tagCommit: "1453dd37a40c730fe00f592bc32198a896ff8747",
+    patchSha256: "08274e8604452e6cfe1c167d98e6c3d63988e353a6c9cbe462d014140c7810f7",
+    binarySha256: {
+      "darwin-arm64": "f3a53cbce43fe30875d7d785a6f67647af4e96d987b8ea889fee8f0e68213dea",
+    },
+  },
+  starts: "sourceBuild",
   mcpToolsSha256: "a5bff3fe0c7470915242f7a4705fe36482026b4260b012b9f4798dc1fffc4c49",
   core: [
     {
@@ -431,7 +446,7 @@ export const PAGES_SCRIPT_SET: PagesScriptSetV1 = {
       sha256: "f5670e05c1c02f79348c9b48e501b3a5fcbb9fd042435503530df2d878aa1b99",
       length: 54,
       method: "Runtime.evaluate",
-      commandClass: "act",
+      commandClass: "read",
       commands: ["tab t1"],
     },
     {

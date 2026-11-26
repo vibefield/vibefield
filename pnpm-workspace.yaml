@@ -28,6 +28,13 @@ allowBuilds:
   # needs it, and a postinstall we never exercise is install-time code we cannot
   # vouch for. Flip it in the slice that first builds an NSIS installer.
   electron-winstaller: false
+  # EY-1 (2026-11-24; EY-0-PLAN.md §2.7, ask 2 A): agent-browser, the pages engine. Its
+  # postinstall (scripts/postinstall.js) downloads a binary from GitHub when its own
+  # is missing, writes bin/.install-method, runs `npm prefix -g` and may relink a
+  # global bin. Refused: the 0.41.0 tarball ships every platform's binary, preflight
+  # holds this host's to PAGES_ENGINE_RECORD by its SHA-256 (scripts/pages-pin.mjs),
+  # and nothing runs the package's launcher (wall R33).
+  agent-browser: false
   # Nx validates its native binary for the current platform. Nx Cloud is not
   # configured, so its guarded postinstall performs no network setup.
   nx: true

@@ -9,6 +9,7 @@ import {
   Camera,
   type CanvasEngine,
   defineQuery,
+  type Entity,
   Not,
   Position,
   PrefabId,
@@ -16,6 +17,8 @@ import {
   Specimen,
   Viewport,
 } from "@vibecook/ice";
+import { PAGES_PANE_RUN_PROP, PagesPaneRun } from "@vibefield/contracts";
+import type { PaneRunReading } from "./desk-live";
 import { type PageStills, pageStills } from "./page-stills";
 
 /** The board's objects (never a pegboard's specimen) — the desk door's own query. */
@@ -28,6 +31,12 @@ export interface LiveEyes {
   exists(key: string): boolean | undefined;
   /** PT-5b2 — the durable keys of the objects the open document holds; `undefined`: no document is open to say. */
   standing(): readonly string[] | undefined;
+  /** EY-1 (1f, 2026-11-19): the object behind a key on the open document; undefined: none, or no document. */
+  entityOf(key: string): Entity | undefined;
+  /** EY-1 (1f): the run a pane's object names in its declared `agentRun` (PAGES_PANE_RUN_PROP). PI-2 (2026-11-24): three
+   * answers, never two. `none` only for a kind that declares no such prop, or the prop read as its empty default;
+   * `unknown` for no document, an object the document does not hold, or a value that is no run key. */
+  runOf(key: string): PaneRunReading;
 }
 
 export function createLiveEyes(engine: CanvasEngine): LiveEyes {
@@ -39,6 +48,33 @@ export function createLiveEyes(engine: CanvasEngine): LiveEyes {
     return entity !== undefined && engine.world.isAlive(entity) ? entity : null;
   };
   return {
+    entityOf(key) {
+      return entityOf(key) ?? undefined;
+    },
+    runOf(key) {
+      // PI-2 (2026-11-24): what cannot be read is never read as the person's page
+      const entity = entityOf(key);
+      if (entity === undefined || entity === null) return { is: "unknown" };
+      const type = engine.world.get(entity, PrefabId)?.id;
+      if (typeof type !== "string") return { is: "unknown" };
+      const widget = engine.catalog.widget(type);
+      if (widget === undefined) return { is: "unknown" };
+      for (const group of widget.groups) {
+        if (!(PAGES_PANE_RUN_PROP in group.fields)) continue;
+        const cell = engine.world.get(entity, group.component) as
+          | Record<string, unknown>
+          | undefined;
+        if (cell === undefined) return { is: "unknown" };
+        const run = cell[PAGES_PANE_RUN_PROP];
+        if (run === "") return { is: "none" };
+        // any other value names a run's pane, as the kind's own reader says: one that is no run key cannot be told
+        return typeof run === "string" && PagesPaneRun.safeParse(run).success
+          ? { is: "run", run }
+          : { is: "unknown" };
+      }
+      // a kind that declares no run prop cannot be a run's pane: the pages room places only the kind that does
+      return { is: "none" };
+    },
     exists(key) {
       const entity = entityOf(key);
       return entity === undefined ? undefined : entity !== null;

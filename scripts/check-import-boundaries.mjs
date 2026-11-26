@@ -686,6 +686,52 @@ const RULES = [
     },
   },
   {
+    id: "R33",
+    // EY-1 (2026-11-24; thinking-agents-eyes.md §13, EY-0-PLAN.md §5): agent-browser, the pages engine, is a program
+    // main's broker starts and speaks to, never a library. No source imports it by any entry, so its launcher (which
+    // chmods, and may download, at run time) never enters a bundle or a test's realm. Three rows under one id because
+    // `applies` is per row: this one, the import half, exempts nothing; the next, the naming half, exempts the files
+    // that place the executable; the third, the installed half (2026-11-24), exempts fewer. None sees .js or .cjs
+    // files, package.json scripts, shell or a computed path, so "only the broker starts it" also needs a spawn census
+    // of main, which does not exist yet.
+    enforce: true,
+    description:
+      "agent-browser is imported by no source, by any entry (a program main's broker starts, never a library)",
+    applies: (p) => SOURCE_EXT.test(p),
+    importTest: (s) => importsModule(s, "agent-browser"),
+  },
+  {
+    id: "R33",
+    // EY-1 (2026-11-24): the naming half. The engine's executable (a platform binary in the package, its path under
+    // node_modules, the staged bin/ file) is named only by main's broker, main's resource layout, the pin's one reader
+    // (scripts/pages-pin.mjs) and the shell's testing harnesses: the browser benchmark runs the engine by a path its
+    // caller hands it, and testing ships in no package. Prose may name it (R7's rule).
+    enforce: true,
+    stripComments: true,
+    description:
+      "agent-browser's executable is named only by packages/electron-shell/src/main/pages (main's broker), packages/electron-shell/src/main/resources.ts, scripts/pages-pin.mjs and packages/electron-shell/src/testing",
+    applies: (p) => SOURCE_EXT.test(p) && !underAny(p, PAGES_ENGINE_NAMERS),
+    linePattern:
+      /\bagent-browser-(?:darwin|linux|linux-musl|win32)-(?:arm64|x64)(?:\.exe)?\b|node_modules\/agent-browser\b|\bbin\/agent-browser\b/g,
+  },
+  {
+    id: "R33",
+    // The release binary's stream port (2026-11-24): the installed half. The INSTALLED package's binary (a platform
+    // binary of the package, its path under node_modules) is the release build, which always opens a loopback command
+    // port: nothing starts it. Main's broker and main's resource layout name the staged engine (`bin/…`) alone, so
+    // they leave this row's namers: a literal of the installed binary's path in either can never become main's engine
+    // path again. The pin's one reader keeps it for preflight's hold of the install, and the testing harnesses for
+    // the benchmark that runs a binary its caller hands it. A computed path is not seen here: rows in
+    // tooling/dev-runner/test hold that the helpers that place the installed binary serve preflight's hold alone.
+    enforce: true,
+    stripComments: true,
+    description:
+      "the installed agent-browser binary (a platform binary of the package, its path under node_modules) is named only by scripts/pages-pin.mjs and packages/electron-shell/src/testing: never by main, which names the staged engine alone",
+    applies: (p) => SOURCE_EXT.test(p) && !underAny(p, PAGES_ENGINE_INSTALLED_NAMERS),
+    linePattern:
+      /\bagent-browser-(?:darwin|linux|linux-musl|win32)-(?:arm64|x64)(?:\.exe)?\b|node_modules\/agent-browser\b/g,
+  },
+  {
     id: "R35",
     // Item 600 (2026-11-19): field-app's source imports nothing from fieldd, a type import included. fieldd is its
     // TEST-ONLY dependency, and fieldd's package exports are its source, so one type import in field-app's source
@@ -825,6 +871,22 @@ const FLOWS_SRC_DIR = "packages/fieldd/src/flows";
 const FLOWS_HOST_DIR = "packages/fieldd/src/flows/host";
 // CP-4a2a (R32's host clause) — the one file outside the child's folder that it may import: fieldd ⇄ host messages.
 const FLOWS_PROTOCOL = "packages/fieldd/src/flows/protocol";
+
+// EY-1 (R33's naming half) — the files that may name where the pages engine's executable sits: main's broker (its
+// folder), main's resource layout, the pin's one reader, and the shell's testing harnesses.
+const PAGES_ENGINE_NAMERS = [
+  "packages/electron-shell/src/main/pages",
+  "packages/electron-shell/src/main/resources.ts",
+  "scripts/pages-pin.mjs",
+  "packages/electron-shell/src/testing",
+];
+// The release binary's stream port (R33's installed half, 2026-11-24) — the files that may name where the INSTALLED
+// package's binary sits, the release build nothing starts: the pin's one reader and the shell's testing harnesses.
+// Main's broker and main's resource layout are not among them.
+const PAGES_ENGINE_INSTALLED_NAMERS = [
+  "scripts/pages-pin.mjs",
+  "packages/electron-shell/src/testing",
+];
 
 // The repo path a relative `spec` in `relPath` names, an extension (if written) dropped; undefined for a package or a
 // built-in. Textual, as every rule here.
@@ -1536,6 +1598,51 @@ function runSelfTest() {
       file: "packages/fieldd/test/evaluates-a-flow.test.ts",
       body: 'import { evaluateFlow } from "../src/flows/host/compartment.ts";\nexport const e = evaluateFlow;\n',
     },
+    // EY-1 (R33): the pages engine is a program, never a library, by any entry and in any folder (testing too); and
+    // its executable is named only where it may be.
+    {
+      id: "R33",
+      file: "packages/fieldd/src/tool-plane/rooms/pages/imports-engine.ts",
+      body: 'import { launch } from "agent-browser";\nexport const l = launch;\n',
+    },
+    {
+      id: "R33",
+      file: "plugins/browser-pane/src/drives-pages.ts",
+      body: 'export const d = () => import("agent-browser/bin/agent-browser.js");\n',
+    },
+    {
+      id: "R33",
+      file: "packages/electron-shell/src/testing/imports-engine.ts",
+      body: 'import "agent-browser";\nexport const t = 1;\n',
+    },
+    {
+      id: "R33",
+      file: "packages/electron-shell/src/main/live-surfaces/spawns-engine.ts",
+      body: 'export const engine = "node_modules/agent-browser/bin/agent-browser-darwin-arm64";\n',
+    },
+    {
+      id: "R33",
+      file: "packages/fieldd/src/spawns-staged.ts",
+      body: 'export const staged = ["Resources", "bin/agent-browser"].join("/");\n',
+    },
+    {
+      id: "R33",
+      file: "packages/electron-shell/test/names-engine.test.ts",
+      body: 'expect("staged at bin/agent-browser").toMatch(/engine/);\n',
+    },
+    // The release binary's stream port (R33, 2026-11-24): the INSTALLED package's binary is the release, which nothing
+    // starts. Main's broker and main's resource layout name the staged engine alone, so neither may spell where the
+    // installed one sits: a literal of that path cannot become main's engine path again.
+    {
+      id: "R33",
+      file: "packages/electron-shell/src/main/pages/broker/names-installed-engine.ts",
+      body: 'import { join } from "node:path";\nexport const engine = (repo: string) =>\n  join(repo, "apps/desktop/node_modules/agent-browser/bin/agent-browser-darwin-arm64");\n',
+    },
+    {
+      id: "R33",
+      file: "packages/electron-shell/src/main/resources.ts",
+      body: 'export const pagesEngineFile = (arch: string) => (arch === "arm64" ? "agent-browser-darwin-arm64" : null);\n',
+    },
     // Item 252: a file git lists as untracked and not ignored is read before it is staged.
     {
       id: "R22",
@@ -1559,6 +1666,29 @@ function runSelfTest() {
     },
   ];
   const cleans = [
+    // EY-1 (R33): the broker names the staged engine, the record names its package, a testing harness names the
+    // installed binary and the engine's plugin protocol, and prose names anything. The installed half (2026-11-24)
+    // leaves each of them clean: the broker's staged name is not the installed binary's.
+    {
+      file: "packages/electron-shell/src/main/pages/clean-broker.ts",
+      body: 'import { join } from "node:path";\nexport const engine = (resources: string) => join(resources, "bin/agent-browser");\n',
+    },
+    {
+      file: "packages/contracts/src/clean-pages-record.ts",
+      body: 'export const RECORD = { package: "agent-browser", version: "0.41.0" };\n',
+    },
+    {
+      file: "packages/electron-shell/src/testing/clean-perf-engine.ts",
+      body: 'export const protocol = "agent-browser.plugin.v1";\nexport const engine = "node_modules/agent-browser/bin/agent-browser-darwin-arm64";\n',
+    },
+    {
+      file: "packages/electron-shell/test/clean-built-engine.test.ts",
+      body: 'export const staged = ["bin", "agent-browser"].join("/");\n',
+    },
+    {
+      file: "packages/fieldd/src/clean-engine-prose.ts",
+      body: "// the broker starts bin/agent-browser (node_modules/agent-browser/bin/agent-browser-darwin-arm64 in dev)\nexport const prose = 1;\n",
+    },
     // Item 600: the health crosses as contracts' shape, and fieldd-client is another package, so R35 does not overfire.
     {
       file: "packages/field-app/src/clean-health.ts",
@@ -1882,6 +2012,9 @@ function runSelfTest() {
     const r26Gated = found.some((v) => v.id === "R26" && ENFORCE_BY_ID.get(v.id) === true);
     console.log(`  ${r26Gated ? "PASS" : "FAIL"}  R26 detected and GATED (P2)`);
     if (!r26Gated) ok = false;
+    const r33Gated = found.some((v) => v.id === "R33" && ENFORCE_BY_ID.get(v.id) === true);
+    console.log(`  ${r33Gated ? "PASS" : "FAIL"}  R33 detected and GATED (EY-1)`);
+    if (!r33Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

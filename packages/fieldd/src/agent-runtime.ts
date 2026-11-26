@@ -973,6 +973,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   >();
   private readonly runEndedListeners = new Set<(runtimeRunId: string) => void>();
   private readonly runReplacedListeners = new Set<(old: string, next: string) => void>();
+  private readonly recordForgottenListeners = new Set<(runtimeRunId: string) => void>();
   /** TU-1 (Q1) — the sparks service hears each time a spark's own session is known to have worked */
   private readonly sparkTurnedListeners = new Set<(spark: SparkId, at: string) => void>();
   /** TH-1, CP-4a2b — each run as it enters (`onRunEntered`): a spark's transcript, a flow's steps */
@@ -2599,6 +2600,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return () => this.runEndedListeners.delete(listener);
   }
 
+  /** EY-2 (2b, 2026-11-19) — a run's record was forgotten (`forgetUnder`): what fieldd keeps for that run goes with it,
+   * its pages' stills among them. Each listener hears each run once. */
+  onRecordForgotten(listener: (runtimeRunId: string) => void): () => void {
+    this.recordForgottenListeners.add(listener);
+    return () => this.recordForgottenListeners.delete(listener);
+  }
+
   /** TH-1 — each of a spark's own runs as it enters the fold, and how it began: a birth, a resume, a re-attach after
    * fieldd restarted, an adoption. Its listener subscribes to the run's events itself (`Agent.on`); a run a spark
    * started is not the spark's own and is not told. */
@@ -3362,6 +3370,17 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       if (record.profileId !== undefined && profileIds.has(record.profileId)) {
         this.records.remove(record.runtimeRunId);
         this.ledger.forget(record.runtimeRunId);
+        for (const listener of this.recordForgottenListeners) {
+          try {
+            listener(record.runtimeRunId);
+          } catch (err) {
+            this.logger.warn(
+              "fieldd.agents.forgotten_listener_failed",
+              "A forgotten record's listener threw",
+              { runtimeRunId: record.runtimeRunId, reason: (err as Error).message },
+            );
+          }
+        }
       }
     }
     this.ledger.flush();

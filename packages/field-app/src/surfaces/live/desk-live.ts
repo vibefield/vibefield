@@ -87,6 +87,10 @@ import {
   type LiveSurfaceInputEventV1,
   type LiveSurfaceSimulatorConditionV1,
   type LiveSurfaceSimulatorStateV1,
+  PAGES_RUN_PROFILE_PREFIX,
+  PagesPaneRun,
+  SHELL_SURFACES_MADE_CLOSED,
+  SHELL_SURFACES_SERVICE,
   SurfaceOpenResultV1,
 } from "@vibefield/contracts";
 import {
@@ -110,7 +114,7 @@ import {
   type SurfacePool,
   type SurfaceTicketSource,
 } from "../pool";
-import { type CapFace, capPlan, LIVE_PAGES_MAX } from "./live-cap";
+import { type CapFace, capPlan, capRoom, LIVE_PAGES_MAX } from "./live-cap";
 import { PAGE_STILL_MAX_PX, type PageStill, type PageStills } from "./page-stills";
 import { previewFrameBatch } from "./preview-frame-batch";
 import {
@@ -129,6 +133,20 @@ export type LiveGateAnswer = { readonly type: string } | { readonly refused: str
 
 /** PT-S2: what a face shows — a browser page, or a bound Simulator's device (the gate asks each source's own scopes). */
 export type LiveFaceSource = "browser" | "ios-simulator";
+
+/** EY-1 (1f, 2026-11-19): why a run's pane leaves the desk. Its page never reached this window, or main closed the
+ * page it showed (the run ended, or the run closed it itself). A run's pane after its run (2026-11-24): `closed` is
+ * also a pane this device placed whose run's end is first learned at a mount's first mint (the app came back, a covered
+ * desk was shown again). */
+export type MadePaneGone = "never-reached" | "closed";
+
+/** PI-2 (2026-11-24): what the window reads of the run a pane names. A run (its key fits PagesPaneRun); none (the
+ * person's own page: a kind with no run prop, or the prop at its empty default); or cannot tell (no document, an object
+ * the document does not hold, a value that is no run key). "Cannot tell" is never read as the person's page. */
+export type PaneRunReading =
+  | { readonly is: "run"; readonly run: string }
+  | { readonly is: "none" }
+  | { readonly is: "unknown" };
 
 export interface DeskLiveDeps {
   /** Diagnostic hooks for the staged simulator benchmark. */
@@ -162,6 +180,17 @@ export interface DeskLiveDeps {
   readonly exists?: (key: string) => boolean | undefined;
   /** How long the pool keeps a page nobody holds (a deleted pane's still is forgotten then) — the pool's own, by default. */
   readonly graceMs?: () => number;
+  /** EY-1 (1f, 2026-11-19): the run a pane's object names, its declared `agentRun` (PAGES_PANE_RUN_PROP). Such a page
+   * is minted into its run's own session, never the desk's profile. Main admits that mint only while the run lives and
+   * only under a key it adopted: the prop names a session, never a right. PI-2 (2026-11-24): three answers. Only a
+   * definite `none` (the person's page) mints into the desk's profile; on `unknown` nothing is minted. Absent: a host
+   * that shows no run's pane, so every pane is the person's. */
+  readonly runOf?: (key: string) => PaneRunReading;
+  /** EY-1 (1f): take a run's pane off the desk. Its page never reached the window, or main closed it (the run's end,
+   * or the run's own close). The host removes it (`removeMadePane`). Never called for a pane in the person's hand.
+   * A run's pane after its run (2026-11-24): or its run's end was first learned at a mount's first mint, for a pane
+   * this device placed for a run. Never called for a pane it did not place, nor for the person's own. */
+  readonly leave?: (key: string, why: MadePaneGone) => void;
   /** The clock and the timers (a test's own). */
   readonly now?: () => number;
   readonly timers?: {
@@ -315,6 +344,18 @@ export interface DeskLiveSources extends LiveSources {
   cap(next?: number): number;
   /** PT-5b — whatever the service has in flight (a still being taken, kept or laid; a page being put to rest) is done. */
   settled(): Promise<void>;
+  /** EY-1 (1f, 2026-11-19): how many pages an agent's run could have alive now without resting one of the person's
+   * (`capRoom`, item 581): the room this desk says on the window's port, and what a place of a made pane asks first. */
+  agentRoom(): number;
+  /** EY-1 (1f): the pane `key` adopts the page main made for its run (`made`): its first mint names it, once. */
+  adoptMade(key: string, made: string): void;
+  /** EY-1 (1f): the desk will not place a page main made for a run (no room): main lets it go at once. */
+  declineMade(made: string): void;
+  /** A run's own close (2026-11-24): the pane `key`, which its run closed (the pages room's remove of it), leaves by
+   * the host's one path (`leave`), which waits out its at-work mark and reads the person's hand again when the wait
+   * ends. The applier's remove asks it of a pane a room placed for a run, instead of destroying the object at once.
+   * False: this mount has no such path, or is going, and the caller removes the object itself. */
+  leaveMade(key: string): boolean;
   /** Every face closed (the mount is going). */
   dispose(): void;
 }
@@ -626,15 +667,19 @@ export function emulationOf(page: LiveBrowserSpec): LiveSurfaceBrowserEmulationV
 }
 
 /** LSF's browser source for a page: the desk's one profile, laid out at the page's viewport at its device's density (LSF
- * sizes its frame by the two multiplied, and lays the page out at the viewport), born on its device. */
-function browserSource(page: LiveBrowserSpec) {
+ * sizes its frame by the two multiplied, and lays the page out at the viewport), born on its device. EY-1 (1f,
+ * 2026-11-19): a run's pane (`run`) is its run's own session instead — in memory, signed out, never the desk's. */
+function browserSource(page: LiveBrowserSpec, run?: string) {
   return {
     kind: "browser" as const,
     initialUrl: page.url,
     ...(page.muted === undefined ? {} : { muted: page.muted }),
     // PT-5a: a desk page that stops is SAID to have stopped, and waits for its reload — never restarted behind the person
     whenStopped: "say" as const,
-    profile: { mode: "persistent" as const, ref: DESK_PROFILE },
+    profile:
+      run === undefined
+        ? { mode: "persistent" as const, ref: DESK_PROFILE }
+        : { mode: "memory" as const, ref: `${PAGES_RUN_PROFILE_PREFIX}${run}` },
     logicalViewport: { width: page.viewport[0], height: page.viewport[1] },
     deviceScaleFactor: page.deviceScaleFactor,
     emulation: emulationOf(page),
@@ -838,11 +883,169 @@ const forgetTimers = new WeakMap<
   Map<string, { readonly timers: LiveTimers; handle: unknown }>
 >();
 
+/** EY-1 (1f, 2026-11-19): main refused a mint because a run's page is closed for good — a made key main itself closed,
+ * or a run that ended (its one word for both). Any other refusal is not this: a wrong match would take a live agent's
+ * pane off the person's desk.
+ * Erratum (2026-11-24, PI-6): "main refused" is not the whole of it. fieldd says the same two words first, for a
+ * `made` its pages room does not hold (surface-service.ts, the made pane's place check). Main says them for a made
+ * page it let go or never made, a key it closed, and a key adopted into a run that has ended (authority.ts `#adopt`,
+ * `#holdRunSession`). Main's refusal of a run-session mint under a key it never adopted stays bare, so a pane in that
+ * case is never taken off by this word (F10's case: the window's made shelf keeps the `made` for its first mint).
+ * A run's pane after its run (2026-11-24): fieldd says the words for a third case, a mint with no `made` into the
+ * session of a run its pages room can serve no page (surface-service.ts; the room's `serves`): a run that ended for
+ * good, one a restart did not bring back, and one no fieldd here ever had. The last is why the words alone never take
+ * a pane off at a mount's first mint: only a pane this device placed leaves on them (`runPanes`). */
+const madeClosed = (error: unknown): boolean => {
+  const refused = error as { readonly kind?: unknown; readonly details?: unknown } | null;
+  const details = refused?.details as
+    | { readonly service?: unknown; readonly state?: unknown }
+    | undefined;
+  return (
+    refused?.kind === "PRECONDITION_FAILED" &&
+    details?.service === SHELL_SURFACES_SERVICE &&
+    details.state === SHELL_SURFACES_MADE_CLOSED
+  );
+};
+
+/** F10 (2026-11-24) — THE WINDOW'S MADE PAGES: which page main made for a run's pane, kept from the place until that
+ * pane's first mint adopts it (or main says it is gone). A covered desk mints nothing, so the first mint can come after
+ * the desk was remounted or the window reloaded: the shelf is the WINDOW's, never the mount's. sessionStorage is the
+ * window's own and outlives its renderer (doc-manager.ts keeps the window's board there for the same reason); it never
+ * leaves this window, so another window or device never adopts with it. The window's memory stands in where storage
+ * cannot be had. Keyed by the document and the pane's key. */
+const MADE_SHELF_PREFIX = "vf-made-pane\u0000";
+const madeInMemory = new Map<string, string>();
+const windowStorage = (): Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined => {
+  try {
+    return typeof sessionStorage === "undefined" ? undefined : sessionStorage;
+  } catch {
+    return undefined;
+  }
+};
+const madeShelf = {
+  name: (doc: string, key: string): string => `${MADE_SHELF_PREFIX}${doc}\u0000${key}`,
+  get(doc: string, key: string): string | undefined {
+    const name = madeShelf.name(doc, key);
+    try {
+      const kept = windowStorage()?.getItem(name);
+      if (typeof kept === "string" && kept !== "") return kept;
+    } catch {
+      /* storage refused: the window's memory below */
+    }
+    return madeInMemory.get(name);
+  },
+  set(doc: string, key: string, made: string): void {
+    const name = madeShelf.name(doc, key);
+    madeInMemory.set(name, made);
+    try {
+      windowStorage()?.setItem(name, made);
+    } catch {
+      /* storage refused: the window's memory holds it */
+    }
+  },
+  delete(doc: string, key: string): void {
+    const name = madeShelf.name(doc, key);
+    madeInMemory.delete(name);
+    try {
+      windowStorage()?.removeItem(name);
+    } catch {
+      /* storage refused: nothing kept there */
+    }
+  },
+};
+
+/** A run's pane after its run (2026-11-24) — the most panes placed for runs this device keeps the names of. Past it the
+ * oldest is let go: that pane is then one this device cannot say it placed, so it is kept on its closed still. */
+export const RUN_PANES_KEPT_MAX = 256;
+
+/**
+ * A run's pane after its run (2026-11-24) — THE PANES THIS DEVICE PLACED FOR A RUN, each named from its place (the
+ * pages room's, through the applier: `adoptMade`) until its run's end has been SHOWN on it: it left the desk, or it was
+ * kept on its closed still. This is the one thing that lets a pane be taken off when its run's end is learned at a
+ * mount's first mint (the app came back, a covered desk was shown again). A board is carried to other devices, and a
+ * pane that names a run can arrive from one where that run still lives, so the run prop alone never takes a pane off a
+ * desk: only this device's own word that it placed the pane does. Kept where it outlives the app and is never carried
+ * with the board (localStorage: this device's), as one bounded list of `document, key` names, the newest last; the
+ * window's memory stands in where storage cannot be had. A name the list has lost costs nothing but the leaving.
+ */
+const RUN_PANES_KEY = "vf-run-panes";
+const runPanesInMemory: string[] = [];
+const deviceStorage = (): Pick<Storage, "getItem" | "setItem" | "removeItem"> | undefined => {
+  try {
+    return typeof localStorage === "undefined" ? undefined : localStorage;
+  } catch {
+    return undefined;
+  }
+};
+const runPanes = {
+  name: (doc: string, key: string): string => `${doc}\u0000${key}`,
+  /** The list as this device holds it: its storage's, else the window's memory. Anything that is not a list of names is
+   * read as none. */
+  all(): string[] {
+    try {
+      const kept = deviceStorage()?.getItem(RUN_PANES_KEY);
+      if (typeof kept === "string") {
+        const parsed: unknown = JSON.parse(kept);
+        if (Array.isArray(parsed))
+          return parsed.filter((name): name is string => typeof name === "string");
+      }
+    } catch {
+      /* storage refused, or holds no list: the window's memory below */
+    }
+    return [...runPanesInMemory];
+  },
+  keep(names: readonly string[]): void {
+    const kept = names.slice(-RUN_PANES_KEPT_MAX);
+    runPanesInMemory.splice(0, runPanesInMemory.length, ...kept);
+    try {
+      const storage = deviceStorage();
+      if (kept.length === 0) storage?.removeItem(RUN_PANES_KEY);
+      else storage?.setItem(RUN_PANES_KEY, JSON.stringify(kept));
+    } catch {
+      /* storage refused: the window's memory holds it */
+    }
+  },
+  has: (doc: string, key: string): boolean => runPanes.all().includes(runPanes.name(doc, key)),
+  add(doc: string, key: string): void {
+    const name = runPanes.name(doc, key);
+    runPanes.keep([...runPanes.all().filter((kept) => kept !== name), name]);
+  },
+  delete(doc: string, key: string): void {
+    const name = runPanes.name(doc, key);
+    const all = runPanes.all();
+    if (all.includes(name)) runPanes.keep(all.filter((kept) => kept !== name));
+  },
+};
+
+/** F10: the TEST door: the window's memory of made pages forgotten (a row's pages never reach the next row's), and
+ * this device's names of the panes it placed for runs. */
+export function forgetMadeForTest(): void {
+  madeInMemory.clear();
+  runPanes.keep([]);
+}
+
 export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
   /** PT-5a: the desk's loop is parked — every page is held paused until it runs again. */
   let parked = false;
   /** PT-5b: the most pages alive at once (the policy's one constant, unless the test door lowered it). */
   let cap = LIVE_PAGES_MAX;
+  /** EY-1 (1f, 2026-11-19): the pages main made for runs, which panes on this desk adopt at their first mint. F10
+   * (2026-11-24): on the window's shelf (`madeShelf`), under the open document, so a remount or a reload keeps them. */
+  const docOf = (): string => deps.docId?.() ?? "";
+  const pendingMade = {
+    get: (key: string): string | undefined => madeShelf.get(docOf(), key),
+    set: (key: string, made: string): void => madeShelf.set(docOf(), key, made),
+    delete: (key: string): void => madeShelf.delete(docOf(), key),
+  };
+  /** A run's pane after its run (2026-11-24): the panes this device placed for runs (`runPanes`), under the open
+   * document. */
+  const placedHere = {
+    has: (key: string): boolean => runPanes.has(docOf(), key),
+    add: (key: string): void => runPanes.add(docOf(), key),
+    delete: (key: string): void => runPanes.delete(docOf(), key),
+  };
+  /** EY-1 (1f): the room this mount last said on the window's port (undefined: none yet). */
+  let saidRoom: number | undefined;
   let disposed = false;
   const now = deps.now ?? Date.now;
   const timers = deps.timers ?? {
@@ -1013,6 +1216,22 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     );
   };
 
+  /** EY-1 (1f, 2026-11-19; item 581) — THE DESK'S ROOM for an agent's pages: how many could be alive now without
+   * resting one of the person's (`capRoom`, the plan's own count). */
+  const roomNow = (): number =>
+    capRoom([...[...lanes.values()].map((lane) => lane.capFace()), ...ghosts()], cap);
+  /** Said on the window's port at the mount and again whenever it moves, never at dispose: the window's last word
+   * stands across a desk switch, and main reads a window that never said as unknown, not full (the room ruling). */
+  const tellRoom = (): void => {
+    if (disposed) return;
+    const room = roomNow();
+    if (room === saidRoom) return;
+    const pool = deps.pool();
+    if (pool === null || pool.sayRoom === undefined) return;
+    saidRoom = room;
+    pool.sayRoom(room);
+  };
+
   /**
    * PT-5b — THE CAP, DONE (live-cap.ts is its policy): read every page, plan, and do what can be done NOW — a page alive
    * as it stands is the service's; a wake into a free slot (the held page's whatever it costs); a rest is begun (its still
@@ -1070,6 +1289,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     }
     // a parked desk's pages stay paused whatever is asked: nothing is written but the park's own word
     if (!parked || opts.all === true) for (const lane of touched) lane.send();
+    tellRoom();
   }
 
   /** The lanes whose ask moved this tick and waits for its end (see `ask`). */
@@ -2030,6 +2250,67 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     const pool = deps.pool();
     if (pool === null) return refuse(key, "live pages are unavailable in this window");
     const label = `${gate.type}/live ${key}`;
+    /**
+     * EY-1 (1f, 2026-11-19) — A RUN'S PANE: the run its object names (read at EVERY mint), the run a mint into whose
+     * session main ACCEPTED (item 581: only then is the face an agent's at the cap, never by the prop alone), and why
+     * its page is gone for good: it never reached this window, or main closed its run's page. Gone, it never mints
+     * again. A pane whose page never reached the window and is in the person's hand leaves when it is put down. One
+     * probe mint asks main whether a lost run's page is gone (`probing`).
+     * A run's pane after its run (2026-11-24): and a pane THIS device placed for a run (`placedHere`), told closed for
+     * good before any mint of this mount was accepted (the app came back, or its desk was shown again after its run
+     * ended under a cover), leaves too, unless it is in the person's hand: its run's end is shown on it now, late. A
+     * pane this device did not place is never taken off by that word: its closed still.
+     */
+    let accepted: string | undefined;
+    let runGone: "never-reached" | "run-ended" | undefined;
+    let leaveOnPutDown = false;
+    let probing: { readonly leave: boolean } | undefined;
+    const runNow = (): PaneRunReading => {
+      const named = deps.runOf?.(key) ?? { is: "none" };
+      // PI-2 (2026-11-24): a run key that does not fit is "cannot tell", whoever read it
+      return named.is === "run" && !PagesPaneRun.safeParse(named.run).success
+        ? { is: "unknown" }
+        : named;
+    };
+    let runPageGone: (why: "never-reached" | "run-ended") => void = () => {};
+    const tickets: SurfaceTicketSource = {
+      async mint() {
+        if (runGone !== undefined) throw new Error("a run's page that is gone is not minted again");
+        const reading = runNow();
+        // PI-2 (2026-11-24): fail closed. While the pane's run cannot be read nothing is minted, and nothing is said
+        // gone: a later mint (the pool's retry, the person's Try again) reads it again
+        if (reading.is === "unknown")
+          throw new Error("the run this pane names cannot be read now: nothing is minted");
+        const run = reading.is === "run" ? reading.run : undefined;
+        const made = pendingMade.get(key);
+        // a made page is adopted only into its run's own session, never the desk's profile: no run named, no mint
+        if (made !== undefined && run === undefined) {
+          pendingMade.delete(key);
+          runPageGone("never-reached");
+          throw new Error("a made page names no run to be adopted into");
+        }
+        const params = {
+          source: browserSource(page, run),
+          reuseKey: key,
+          ...(made === undefined ? {} : { made }),
+        };
+        try {
+          const grant = await ticketsOf(() => params).mint();
+          pendingMade.delete(key);
+          if (run !== undefined) accepted = run;
+          probing = undefined;
+          return grant;
+        } catch (error) {
+          if (run !== undefined && madeClosed(error)) {
+            pendingMade.delete(key);
+            runPageGone(made !== undefined ? "never-reached" : "run-ended");
+          }
+          probing = undefined;
+          throw error;
+        }
+      },
+      close: (surfaceId) => ticketsOf(() => ({})).close?.(surfaceId),
+    };
     let handle: SurfaceHandle<ProductSurfaceFrame>;
     try {
       handle = pool.acquire(poolKey(key), {
@@ -2041,7 +2322,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           viewport: page.viewport,
           interactive: false,
         }),
-        tickets: ticketsOf(() => ({ source: browserSource(page), reuseKey: key })),
+        tickets,
       });
     } catch (error) {
       return refuse(key, error instanceof Error ? error.message : String(error));
@@ -2275,6 +2556,9 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     };
     listen(presentation);
     let wasFailing = failing(handle.state);
+    /** EY-1 (1f): the lane's status the last state said, and whether a probe was made since its page was last live. */
+    let statusWas = handle.state.status;
+    let probed = false;
     /** PT-6a (M14, R1): its page STOPPED — failed, or its handle lost (a page let go is `holdGone`'s). */
     const stopping = (state: SurfaceHandleState<ProductSurfaceFrame>): boolean =>
       state.status === "lost" || state.presentation?.summary.state === "failed";
@@ -2284,6 +2568,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       `${state.status} ${aliveBySummary(state)} ${state.presentation?.summary.state === "failed"}`;
     let capWas = capWord(handle.state);
     const offState = handle.onState((state) => {
+      // EY-1 (1f): read before this state moves the seat (a stop gives back the cap's permission below)
+      const lostNow = state.status === "lost" && statusWas !== "lost";
+      statusWas = state.status;
+      const allowedBefore = seat.allowed;
       if (state.presentation !== presentation) listen(state.presentation);
       // a lane gone live is told the spec's device (a page re-bound after a reload may have been told another)
       if (state.status === "live") tellDevice();
@@ -2335,12 +2623,53 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         capWas = word;
         if (!closed && lanes.has(key)) replan();
       }
+      // EY-1 (1f, 2026-11-19) — A RUN'S PAGE LOST: main closed it (the run's end, or the run's own close), or this
+      // window's live surfaces went (a dead generation closes every attachment the same way). A loss alone writes
+      // nothing: ONE probe mint asks, and only main's refusal that the page is closed for good (`madeClosed`) takes the
+      // pane off the desk or shows its closed still. A dead generation fails the probe at its attach: lost, as any.
+      // One probe per loss: a loss after a probe, with no live page between, is the same loss (never a loop).
+      if (state.status === "live") probed = false;
+      if (lostNow && accepted !== undefined && runGone === undefined && !probed) {
+        probed = true;
+        const held = asked?.mode === "live" && asked.interactive;
+        // alive and not in the hand at the loss: it leaves; held, or resting: its closed still
+        probing = { leave: !held && allowedBefore && !seat.rested };
+        handle.retry();
+      }
       const said = wordsOf(state);
       if (said === words) return;
       words = said;
       wordsOwed = true;
       tell();
     });
+    runPageGone = (why) => {
+      if (closed || runGone !== undefined) return;
+      runGone = why;
+      const held = asked?.mode === "live" && asked.interactive;
+      // a loss this mount saw decides as it always did (alive and not in the hand at the loss). A run's pane after its
+      // run (2026-11-24): with no loss seen and no mint of this mount accepted, this is the first this mount hears of
+      // the pane's page, so a pane this device placed for a run leaves now unless it is in the hand
+      const leave =
+        probing !== undefined
+          ? probing.leave
+          : accepted === undefined && !held && placedHere.has(key);
+      probing = undefined;
+      // its run's end is shown on it from here (it leaves, or it is kept on its closed still): this device's word that
+      // it placed the pane has done its one work
+      placedHere.delete(key);
+      wordsOwed = true;
+      tell();
+      if (lanes.has(key)) replan();
+      if (why === "never-reached") {
+        // never from under the person's hand: put down, it leaves
+        if (held) leaveOnPutDown = true;
+        else deps.leave?.(key, "never-reached");
+      } else if (leave) {
+        // THE RUN'S-END SITE (EY-1 1f): the host's `leave` waits out the pane's at-work leaving (item 550b,
+        // 2026-11-24: `madePaneLeaving`, over `whenAtWorkLeft`) before it takes the pane off
+        deps.leave?.(key, "closed");
+      }
+    };
 
     const face: LiveFace = {
       key,
@@ -2410,6 +2739,15 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       },
       state: (): LiveState => {
         if (closed) return { is: "closed" };
+        // EY-1 (1f, DESIGN.md §8): a run's page gone for good says why, with nothing to try again. It never reached
+        // this window, or its run's work ended: the closed still, its last still under the words where one is kept
+        if (runGone !== undefined)
+          return {
+            is: "failed",
+            reason: liveBrowserFailureReason(
+              runGone === "never-reached" ? "never-opened" : "run-ended",
+            ),
+          };
         const state = liveStateOf(handle.state, {
           mint: () => handle.retry(),
           reload: () => {
@@ -2466,6 +2804,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         const was = asked;
         asked = d;
         counts.demands += 1;
+        // EY-1 (1g, 2026-11-19) — THE PERSON'S HAND: picked up (live and interactive) or put down, told down the
+        // page's lane on the edge alone and BEFORE the demand it brings, so main closes an agent's act window ahead of the
+        // person's first input on the same ordered port. A page's alone: a phone's lane sends none.
+        const held = d.mode === "live" && d.interactive;
+        if (held !== (was?.mode === "live" && was.interactive)) handle.hold?.(held);
         // PT-5b2 (ruling 8) — LAST SEEN: a pane is seen until its ask leaves `live`, so it is stamped then too
         seat.saw(was, d);
         // PT-5b — PUT DOWN: the best pixels the page will have are in its texture now
@@ -2473,6 +2816,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           void clock.take();
         // the cap may wake it, make it wait, or rest another for it
         ask(lane, d.mode === "live" && d.interactive);
+        // EY-1 (1f): a pane whose page never reached the window, put down — it leaves now
+        if (leaveOnPutDown && !(d.mode === "live" && d.interactive)) {
+          leaveOnPutDown = false;
+          deps.leave?.(key, "never-reached");
+        }
         // PT-5b2 (ruling 1) — seen again with a texture of an address the page has LEFT while nobody looked (a peer's `go`,
         // a script's redirect: its frames were taken and closed meanwhile): the film, never the page it left
         if (d.mode === "live" && was?.mode !== "live" && liveShown && !ofNow()) letGo();
@@ -2609,7 +2957,11 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         preview?.demand(intent);
         handle.setDemand(intent);
       },
-      capFace: seat.capFace,
+      // item 581: an agent's page at the cap only once main ACCEPTED a mint into its run's session
+      capFace: () => {
+        const at = seat.capFace();
+        return accepted === undefined ? at : { ...at, agent: { run: accepted } };
+      },
       adoptable: seat.adoptable,
       unasked: seat.unasked,
       wake: seat.wake,
@@ -2662,8 +3014,26 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     return face;
   };
 
+  tellRoom();
   return {
     open,
+    agentRoom: roomNow,
+    adoptMade(key, made) {
+      if (disposed) return;
+      pendingMade.set(key, made);
+      // a run's pane after its run (2026-11-24): this device placed this pane for a run
+      placedHere.add(key);
+    },
+    declineMade(made) {
+      if (!disposed) deps.pool()?.declineMade?.(made);
+    },
+    leaveMade(key) {
+      if (disposed || deps.leave === undefined) return false;
+      // its run's end, by the run's own hand, is shown on it from here
+      placedHere.delete(key);
+      deps.leave(key, "closed");
+      return true;
+    },
     navigation: {
       navigate(key, command) {
         const lane = lanes.get(key);

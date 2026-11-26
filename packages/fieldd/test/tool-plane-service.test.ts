@@ -264,6 +264,40 @@ function harness(
 const names = (answer: { result: { tools: { name: string }[] } }) =>
   answer.result.tools.map((t) => t.name);
 
+/** EY-2 (2b) — the pages room's 29 rows, every agent's, in catalog order, written out so that a row served or dropped is
+ * a change this file says. */
+const PAGES_ROWS = [
+  "browser_tools_profiles",
+  "browser_open",
+  "browser_read",
+  "browser_snapshot",
+  "browser_back",
+  "browser_forward",
+  "browser_reload",
+  "browser_click",
+  "browser_fill",
+  "browser_type",
+  "browser_press",
+  "browser_check",
+  "browser_uncheck",
+  "browser_select",
+  "browser_scroll",
+  "browser_wait_ms",
+  "browser_wait_for_selector",
+  "browser_wait_for_text",
+  "browser_wait_for_load",
+  "browser_screenshot",
+  "browser_get_text",
+  "browser_get_url",
+  "browser_get_title",
+  "browser_tab_new",
+  "browser_tab_list",
+  "browser_tab_switch",
+  "browser_tab_close",
+  "browser_eval",
+  "browser_close",
+];
+
 /** The fact a refusal leads with: an isError result carries no structuredContent, so a validating client keeps it. */
 const factOf = (answer: { result: { content: { text: string }[] } }) =>
   /^[a-z-]+/.exec(answer.result.content[0]?.text ?? "")?.[0];
@@ -275,8 +309,8 @@ describe("the tool plane in fieldd (MT-0)", () => {
     for (const d of DOORS)
       h.ask(d.laneId, { id: 1, method: "tools/list", params: { _meta: META } });
     await h.settle();
-    // CP-1's six reads, since CP-2 its six acting rows (start, watch, talk), and since CP-3 the person's two, in
-    // catalog order
+    // CP-1's six reads, since CP-2 its six acting rows (start, watch, talk), since CP-3 the person's two, since OB-3b
+    // the desk's eight, and since EY-2 (2b) the pages room's 29, in catalog order
     expect(names(h.answers(1001)[0])).toEqual([
       "agents_available",
       "agent_spawn",
@@ -300,6 +334,7 @@ describe("the tool plane in fieldd (MT-0)", () => {
       "object_release",
       "ask_user",
       "notify",
+      ...PAGES_ROWS,
     ]);
     expect(h.answers(1001)[0].result.tools[0].annotations).toEqual({
       readOnlyHint: true,
@@ -307,7 +342,7 @@ describe("the tool plane in fieldd (MT-0)", () => {
       idempotentHint: true,
       openWorldHint: false,
     });
-    // MT-D11: telling the person is every agent's; asking is a spark's
+    // MT-D11: telling the person is every agent's; asking is a spark's. The pages are every agent's (MT-D2).
     expect(names(h.answers(1002)[0])).toEqual([
       "history_search",
       "history_read",
@@ -321,6 +356,7 @@ describe("the tool plane in fieldd (MT-0)", () => {
       "object_act",
       "object_release",
       "notify",
+      ...PAGES_ROWS,
     ]);
     for (const lane of [1003, 1004, 1005, 1006]) {
       expect(names(h.answers(lane)[0]), String(lane)).toEqual([]);
@@ -433,9 +469,32 @@ describe("the tool plane in fieldd (MT-0)", () => {
     const pane = h.answers(1005)[0].result.instructions as string;
     expect(spark).toContain("see which agents you can start");
     expect(spark).toContain("Every call is recorded.");
+    // EY-2 (2b): the pages room is the last room every agent holds, so its words close the list
     expect(run).toContain(
-      "search and read History, list the user's projects, see and place objects on the user's desk, work the objects you placed or the user handed you and reach the user",
+      "search and read History, list the user's projects, see and place objects on the user's desk, work the objects you placed or the user handed you, reach the user and use the browser pages you open or the user hands you, under your Agent Profiles.",
     );
+    expect(spark).toContain(
+      "reach the user and use the browser pages you open or the user hands you, under your Agent Profiles.",
+    );
+    // EY-2 (2026-11-24): the desk's sentences promise an undo and an object_open first; a page has neither, so a caller
+    // holding the pages room is told so, after them
+    const PAGES_WORDS =
+      "The browser tools work a page by its desk ref, with no object_open first. Unlike an object's acts, what you do on a page reaches its site, and the user can't undo it.";
+    for (const words of [spark, run]) {
+      expect(words).toContain(PAGES_WORDS);
+      expect(words.indexOf(PAGES_WORDS)).toBeGreaterThan(words.indexOf("the user can undo it."));
+      // Claude Code cuts a server's instructions at 4,096 characters
+      expect(words.length).toBeLessThan(4096);
+    }
+    // L3 (2026-11-24): asked for a browser on the desk, an agent reached for its own computer tool and opened another
+    // browser on the user's machine; the server's words make the desk's browser the plain choice, after the pages'
+    const DESK_BROWSER =
+      "When the user asks for a page or a browser on their desk, or here, open it with browser_open: it opens in a pane on their desk, where they can see it. Never open or drive another browser or app on their computer for that.";
+    for (const words of [spark, run]) {
+      expect(words).toContain(DESK_BROWSER);
+      expect(words.indexOf(DESK_BROWSER)).toBeGreaterThan(words.indexOf(PAGES_WORDS));
+      expect(words.length).toBeLessThan(4096);
+    }
     expect(run).not.toContain("agents you can start");
     expect(run).toContain("never as the user's words");
     expect(pane).toBe(
@@ -673,6 +732,7 @@ describe("the door places a plain run by the one rule (TU-1, Q3; critique 6)", (
       "object_act",
       "object_release",
       "notify",
+      ...PAGES_ROWS,
     ]);
   });
 });

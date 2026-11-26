@@ -674,6 +674,14 @@ export class ProductApi extends EventEmitter {
     >;
   }
 
+  /** EY-2 (2b, 2026-11-19) — the pages room's door to main's broker: one checked command of a run's, in a read or act
+   * window, under the method's own deadline. Answers a ShellSurfacesControlResult, which the room reads. */
+  surfacesControl(
+    params: import("@vibefield/contracts").ShellSurfacesControlParams,
+  ): Promise<unknown> {
+    return this.shellProvider.callInternal("shell.surfaces.control", params);
+  }
+
   /** PT-S2 (R11) — the attach's device list: this Mac's simulator devices, redacted in main. */
   surfacesSimulatorDevices(
     params: import("@vibefield/contracts").ShellSurfacesSimulatorDevicesParams,

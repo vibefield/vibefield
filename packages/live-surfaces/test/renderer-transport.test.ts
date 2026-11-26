@@ -1,4 +1,9 @@
-import type { LiveSurfaceFrameMetadataV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
+import {
+  LIVE_PAGES_MAX_V1,
+  type LiveSurfaceFrameMetadataV1,
+  LiveSurfaceRendererControlMessageV1,
+  type LiveSurfaceRuntimeSummaryV1,
+} from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   type LiveSurfaceClosableFrame,
@@ -537,5 +542,54 @@ describe("LiveSurfaceRendererTransport", () => {
     attachment.dispose();
     expect(attachment.sendDevice({ verb: "retry" })).toBe(false);
     expect(rendererMessages.filter((message) => message.type === "device")).toHaveLength(2);
+  });
+
+  it("EY-1: fires the person's pick-up and put-down as one hold message each, in order; false, never a throw, once closed", async () => {
+    const { attachment, hostControl } = await attachedTransport();
+
+    // no geometry is needed: a hold names no point of the frame
+    expect(attachment.sendHold(true)).toBe(true);
+    expect(attachment.sendHold(false)).toBe(true);
+
+    const rendererMessages = (hostControl.peer?.sent ?? []) as Array<Record<string, unknown>>;
+    expect(rendererMessages.filter((message) => message.type === "hold")).toEqual([
+      { v: 1, type: "hold", attachmentId: "attachment_0123456789abcdef", held: true },
+      { v: 1, type: "hold", attachmentId: "attachment_0123456789abcdef", held: false },
+    ]);
+
+    attachment.dispose();
+    expect(attachment.sendHold(true)).toBe(false);
+    expect(rendererMessages.filter((message) => message.type === "hold")).toHaveLength(2);
+  });
+
+  it("EY-1 (1f): the window says its room and declines a made page on its own port, as the contract parses them; false, never a throw, once closed", async () => {
+    const { transport, hostControl } = await attachedTransport();
+    const made = "surface_fedcba9876543210";
+
+    expect(transport.sendRoom(2)).toBe(true);
+    // a count outside the contract's bounds is brought inside it, never sent malformed
+    expect(transport.sendRoom(9)).toBe(true);
+    expect(transport.sendRoom(-1)).toBe(true);
+    expect(transport.declineMade(made)).toBe(true);
+    // an id that is not a surface's is not sent
+    expect(transport.declineMade("x")).toBe(false);
+
+    const rendererMessages = (hostControl.peer?.sent ?? []) as Array<Record<string, unknown>>;
+    const said = rendererMessages.filter(
+      (message) => message.type === "room" || message.type === "made-declined",
+    );
+    expect(said).toEqual([
+      { v: 1, type: "room", agentPages: 2 },
+      { v: 1, type: "room", agentPages: LIVE_PAGES_MAX_V1 },
+      { v: 1, type: "room", agentPages: 0 },
+      { v: 1, type: "made-declined", made, reason: "no-room" },
+    ]);
+    for (const message of said) {
+      expect(LiveSurfaceRendererControlMessageV1.safeParse(message).success).toBe(true);
+    }
+
+    transport.dispose();
+    expect(transport.sendRoom(1)).toBe(false);
+    expect(transport.declineMade(made)).toBe(false);
   });
 });

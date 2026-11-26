@@ -2,11 +2,29 @@ import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { SURFACE_LIMITS } from "../src/live-surfaces";
+import { ErrorKind } from "../src/errors";
+import {
+  BROWSER_DESK_PROFILE_REF,
+  SURFACE_LIMITS,
+  SurfaceOpenParamsV1,
+} from "../src/live-surfaces";
 import { METHODS } from "../src/methods";
-import { PAGES_NEEDS } from "../src/pages";
+import { ObjectIntent } from "../src/objects";
+import {
+  PAGES_NEEDS,
+  PAGES_OUTPUT_EXHAUSTED_MESSAGE,
+  PAGES_PANE_RUN_PROP,
+  PAGES_RUN_PANES_MAX,
+  PAGES_RUN_PROFILE_PREFIX,
+  PAGES_RUN_STILLS_MAX_BYTES,
+  PAGES_STILL_MAX_BYTES,
+  PAGES_STILLS_MAX_AGE_MS,
+  PAGES_UNAVAILABLE_STATES,
+  PagesPaneRun,
+} from "../src/pages";
 import {
   IPC_CHANNELS,
+  LAYOUT,
   MADE_APP_LIMITS,
   SCREENSHOT_STILL,
   SHELL_CLIPBOARD,
@@ -42,6 +60,9 @@ import {
   resolveTheme,
   SHELL_INTERNAL_PROVIDER_METHODS,
   SHELL_PROVIDER_METHODS,
+  SHELL_SURFACES_MADE_CLOSED,
+  SHELL_SURFACES_RUN_ACTIONS,
+  SHELL_SURFACES_SERVICE,
   ShellCommandRequest,
   ShellDialogPickFolderParams,
   ShellDialogPickFolderResult,
@@ -51,6 +72,7 @@ import {
   ShellOpenMadeAppParams,
   ShellOpenMadeAppResult,
   ShellProviderCallParams,
+  ShellProviderError,
   ShellProviderOutcome,
   ShellProviderRegisterParams,
   ShellProviderRegisterResult,
@@ -59,6 +81,8 @@ import {
   ShellSurfacesControlParams,
   ShellSurfacesControlRefusalFact,
   ShellSurfacesControlResult,
+  ShellSurfacesMintParams,
+  ShellSurfacesRebindCommand,
   ShellSurfacesSimulatorDevicesParams,
   ShellSurfacesSimulatorDevicesResult,
   ShellWebContentsCaptureArtifactPreviewParams,
@@ -1110,6 +1134,216 @@ describe("AH-3/AH-4 static shell provider", () => {
       expect(result(bad), JSON.stringify(bad).slice(0, 80)).toBe(false);
   });
 
+  it("EY-1: a still's call names the run's folder, and every arm may say the panes it made, the panes it closed and the still it wrote", () => {
+    const params = (value: unknown) => ShellSurfacesControlParams.safeParse(value).success;
+    const still = {
+      run: "run-01J8Z3K9",
+      surfaceId: "surface_0123456789abcdef",
+      folder: "/srv/run-01J8Z3K9",
+      window: "read",
+      command: { action: "screenshot" },
+    };
+    expect(ShellSurfacesControlParams.parse(still)).toEqual(still);
+    // named exactly, never by a walk: no `.` or `..` segment (a dot inside a name is a name)
+    for (const folder of [
+      "relative/folder",
+      "",
+      "C:folder",
+      "/srv/run-01J8Z3K9/../other",
+      "/srv/./run-01J8Z3K9",
+      "/srv/run-01J8Z3K9/..",
+      "C:\\runs\\..\\other",
+    ])
+      expect(params({ ...still, folder }), folder).toBe(false);
+    expect(params({ ...still, folder: "/srv/run..01J8Z3K9" })).toBe(true);
+
+    const result = (value: unknown) => ShellSurfacesControlResult.safeParse(value).success;
+    const pane = {
+      surfaceId: "surface_fedcba9876543210",
+      url: "https://example.com/",
+      by: "popup",
+    };
+    const carries = {
+      made: [pane],
+      closed: ["surface_0123456789abcdef"],
+      still: {
+        path: "/srv/run-01J8Z3K9/still-1.png",
+        mime: "image/png",
+        width: 1280,
+        height: 800,
+        bytes: 48_213,
+      },
+    };
+    // on every arm: a call answered held may already have made a pane
+    for (const arm of [
+      { status: "done", output: { ok: true } },
+      { status: "refused", fact: "held" },
+      { status: "refused", fact: "needs-you", need: "sign-in" },
+    ])
+      expect(ShellSurfacesControlResult.parse({ ...arm, ...carries })).toMatchObject(carries);
+    expect(PAGES_RUN_PANES_MAX).toBe(5);
+    const done = { status: "done", output: { ok: true } };
+    for (const bad of [
+      { made: Array.from({ length: PAGES_RUN_PANES_MAX + 1 }, () => pane) },
+      { made: [{ ...pane, by: "window" }] },
+      { made: [{ ...pane, surfaceId: "short" }] },
+      { closed: ["short"] },
+      { still: { ...carries.still, path: "still-1.png" } },
+      { still: { ...carries.still, mime: "image/gif" } },
+      { still: { ...carries.still, width: 0 } },
+      { still: { ...carries.still, bytes: 1.5 } },
+      { still: { ...carries.still, bytes: PAGES_STILL_MAX_BYTES + 1 } },
+    ])
+      expect(result({ ...done, ...bad }), JSON.stringify(bad).slice(0, 80)).toBe(false);
+    // the engine's own words for a run whose engine is down, after the window's, then the room's (EY-2)
+    expect(PAGES_UNAVAILABLE_STATES).toEqual([
+      "no-window",
+      "engine-starting",
+      "engine-stopped",
+      "engine-refused",
+      "not-installed",
+      "no-answer",
+      "bad-answer",
+    ]);
+    expect(PAGES_STILL_MAX_BYTES).toBe(64 * 1024 * 1024);
+    expect(PAGES_RUN_STILLS_MAX_BYTES).toBe(4 * PAGES_STILL_MAX_BYTES);
+    expect(PAGES_STILLS_MAX_AGE_MS).toBe(7 * 24 * 60 * 60 * 1000);
+    expect(LAYOUT.PAGES_STILLS_DIR).toEqual(["fieldd", "pages", "stills"]);
+  });
+
+  it("EY-1 (N5): a pages call whose answer passes the output bound is RESOURCE_EXHAUSTED in the page's words, never a preview's", () => {
+    expect(ErrorKind.options).toContain("RESOURCE_EXHAUSTED");
+    expect(PAGES_OUTPUT_EXHAUSTED_MESSAGE).toBe(
+      "the page's answer is larger than one call may carry",
+    );
+    expect(PAGES_OUTPUT_EXHAUSTED_MESSAGE).not.toMatch(/preview|image|budget/);
+    // the bound it names is the control call's own: an output past it is no `done`
+    const over = "x".repeat(SURFACE_AUTHORITY_LIMITS.CONTROL_OUTPUT_MAX_BYTES);
+    expect(ShellSurfacesControlResult.safeParse({ status: "done", output: over }).success).toBe(
+      false,
+    );
+  });
+
+  it("EY-1: the run form carries main's own actions, which never reach the engine, and a rebind names the run it moves from", () => {
+    expect(SHELL_SURFACES_RUN_ACTIONS).toEqual(["rebind", "tab_list", "close"]);
+    const params = (value: unknown) => ShellSurfacesControlParams.safeParse(value).success;
+    const run = { run: "run-01J8Z3K9", window: "read" };
+    const rebind = { ...run, command: { action: "rebind", from: "run-01J8Z2A1" } };
+    expect(ShellSurfacesControlParams.parse(rebind)).toEqual(rebind);
+    expect(ShellSurfacesRebindCommand.parse(rebind.command)).toEqual(rebind.command);
+    expect(params({ ...run, command: { action: "tab_list" } })).toBe(true);
+    expect(params({ ...run, window: "act", command: { action: "close" } })).toBe(true);
+    for (const command of [
+      { action: "rebind" },
+      { action: "rebind", from: "" },
+      { action: "rebind", from: "x".repeat(129) },
+    ])
+      expect(params({ ...run, command }), JSON.stringify(command)).toBe(false);
+  });
+
+  it("EY-1 (1f): a made pane's session is its run's memory profile, by one prefix", () => {
+    expect(PAGES_RUN_PROFILE_PREFIX).toBe("run:");
+    // the desk's own profile never begins with it
+    expect(BROWSER_DESK_PROFILE_REF.startsWith(PAGES_RUN_PROFILE_PREFIX)).toBe(false);
+    // a run key holds no `:`: its ref splits back to the run, and is never a run key itself
+    const ref = `${PAGES_RUN_PROFILE_PREFIX}run-01J8Z3K9`;
+    expect(PagesPaneRun.parse(ref.slice(PAGES_RUN_PROFILE_PREFIX.length))).toBe("run-01J8Z3K9");
+    expect(PagesPaneRun.safeParse(ref).success).toBe(false);
+  });
+
+  it("EY-1 (1f): a mint, an open and a place may name the made pane they adopt, and every arm may say the pop-ups a call refused, and why", () => {
+    const made = "surface_fedcba9876543210";
+    for (const field of [ShellSurfacesMintParams.shape.made, SurfaceOpenParamsV1.shape.made]) {
+      expect(field.safeParse(made).success).toBe(true);
+      expect(field.safeParse(undefined).success).toBe(true);
+      expect(field.safeParse("short").success).toBe(false);
+    }
+    const place = {
+      op: "place",
+      intent: "i1",
+      run: "r1",
+      handle: "claude·2",
+      expiresAt: 1_000,
+      kind: "vibefield.browser-pane",
+    };
+    expect(ObjectIntent.parse({ ...place, made })).toMatchObject({ made });
+    expect(ObjectIntent.safeParse({ ...place, made: "short" }).success).toBe(false);
+    // the run-naming prop (C1): VibeField's alone, its value a run key a session name cannot split on
+    expect(PAGES_PANE_RUN_PROP).toBe("agentRun");
+    for (const run of ["run-01J8Z3K9", "r1", "run_a-b", "x".repeat(128)])
+      expect(PagesPaneRun.safeParse(run).success, run).toBe(true);
+    for (const run of ["", "a:b/c", "run:1", "a/b", "run.1", "run 1", "x".repeat(129)])
+      expect(PagesPaneRun.safeParse(run).success, run).toBe(false);
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+    const placed = ObjectIntent.parse(
+      JSON.parse(readFileSync(join(fixtures, "object-intent.place-made.json"), "utf8")),
+    );
+    if (placed.op !== "place") throw new Error("the fixture is a place");
+    expect(placed.kind).toBe("vibefield.browser-pane");
+    expect(placed.made).toBe(made);
+    expect(placed.props?.[PAGES_PANE_RUN_PROP]).toBe(placed.run);
+    expect(PagesPaneRun.safeParse(placed.run).success).toBe(true);
+    const done = { status: "done", output: { clicked: true } };
+    // why each pop-up was refused, one count per reason: each alone, or two together
+    for (const arm of [
+      done,
+      { status: "refused", fact: "held" },
+      { status: "refused", fact: "needs-you", need: "sign-in" },
+    ])
+      for (const capped of [
+        { runFull: 2 },
+        { deskFull: 1 },
+        { address: 3 },
+        { noWindow: 1 },
+        { runFull: 1, address: 2 },
+      ])
+        expect(ShellSurfacesControlResult.parse({ ...arm, capped })).toMatchObject({ capped });
+    // a reason a newer main adds passes, for the reader to log; the known ones are whole numbers of at least one
+    expect(ShellSurfacesControlResult.parse({ ...done, capped: { other: 1 } })).toMatchObject({
+      capped: { other: 1 },
+    });
+    for (const capped of [
+      {},
+      { runFull: 0 },
+      { deskFull: -1 },
+      { address: 1.5 },
+      { noWindow: 0 },
+      2,
+    ])
+      expect(
+        ShellSurfacesControlResult.safeParse({ ...done, capped }).success,
+        JSON.stringify(capped),
+      ).toBe(false);
+  });
+
+  it("EY-1 (1f): every arm may name the handed pages the run gave back, beside the panes it closed", () => {
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+    const given = ShellSurfacesControlResult.parse(
+      JSON.parse(
+        readFileSync(join(fixtures, "shell-surfaces-control-result.given-back.json"), "utf8"),
+      ),
+    );
+    expect(given).toMatchObject({ status: "done", givenBack: ["surface_0123456789abcdef"] });
+    for (const arm of [
+      { status: "done", output: { closed: true } },
+      { status: "refused", fact: "held" },
+      { status: "refused", fact: "needs-you", need: "sign-in" },
+    ])
+      expect(
+        ShellSurfacesControlResult.parse({ ...arm, givenBack: ["surface_0123456789abcdef"] }),
+      ).toMatchObject({ givenBack: ["surface_0123456789abcdef"] });
+    // a surface id each, at most the run's cap
+    for (const givenBack of [
+      ["short"],
+      [""],
+      Array.from(
+        { length: PAGES_RUN_PANES_MAX + 1 },
+        (_, i) => `surface_${String(i).padStart(16, "0")}`,
+      ),
+    ])
+      expect(ShellSurfacesControlResult.safeParse({ ...given, givenBack }).success).toBe(false);
+  });
+
   it("requires a unique registered static method set and exactly one outcome arm", () => {
     expect(
       ShellProviderRegisterParams.safeParse({
@@ -1143,6 +1377,35 @@ describe("AH-3/AH-4 static shell provider", () => {
         error: { kind: "INTERNAL", message: "no", retryable: false },
       }).success,
     ).toBe(false);
+  });
+
+  it("EY-1: a provider error may say its service and state in two short words; details it cannot read cost that fact, never the error", () => {
+    const error = {
+      kind: "UNAVAILABLE",
+      message: "the live-surface authority is unavailable",
+      retryable: true,
+    };
+    const read = (details: unknown) => ShellProviderError.parse({ ...error, details }).details;
+    const pages = { service: "pages", state: "not-installed" };
+    expect(read(pages)).toEqual(pages);
+    const newer = { service: "pages", state: "a-state-a-newer-main-says" };
+    expect(read(newer)).toEqual(newer);
+    expect(read({ service: "pages", state: "x".repeat(65) })).toBeUndefined();
+    expect(read({ service: "", state: "not-installed" })).toBeUndefined();
+    expect(read({ service: "pages" })).toBeUndefined();
+    expect(ShellProviderError.parse(error).details).toBeUndefined();
+  });
+
+  it("EY-1 (7b): the gone-for-good refusal is two fixed words that fit a provider error's details", () => {
+    expect(SHELL_SURFACES_SERVICE).toBe("surfaces");
+    expect(SHELL_SURFACES_MADE_CLOSED).toBe("made-closed");
+    const words = { service: SHELL_SURFACES_SERVICE, state: SHELL_SURFACES_MADE_CLOSED };
+    const error = {
+      kind: "PRECONDITION_FAILED",
+      message: "the desktop operation failed",
+      retryable: false,
+    };
+    expect(ShellProviderError.parse({ ...error, details: words }).details).toEqual(words);
   });
 
   it("bounds and validates server-originated call notifications", () => {

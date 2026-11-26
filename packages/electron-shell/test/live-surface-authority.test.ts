@@ -122,6 +122,42 @@ function mintParams(
   return { rendererParticipant: identity, source, ...extra };
 }
 
+describe("EY-1: a browser page's state for the pages broker, by its surface", () => {
+  it("answers the runtime's own state, and null for a runtime without one or an unknown surface", () => {
+    const state = {
+      parked: true,
+      url: "https://example.test/kept",
+      title: "Kept",
+      logicalViewport: { width: 390, height: 844 },
+      deviceScaleFactor: 3,
+    };
+    const runtime = (surfaceId: string): LiveSurfaceRuntimeHandle => ({
+      surfaceId,
+      attach: () => {
+        throw new Error("attach is the control session's job, not this suite's");
+      },
+      dispose: () => undefined,
+    });
+    const alice = participant("window-1", "document-1");
+    const withState = fixture({
+      factories: {
+        browser: (surfaceId: string) => ({ ...runtime(surfaceId), agentPageState: () => state }),
+        sckWindow: runtime,
+        iosSimulator: runtime,
+        iosSimulatorDevice: runtime,
+      },
+    });
+    withState.windows.set(alice.incarnation, { webContentsId: 7 });
+    const page = withState.authority.mint(mintParams(alice, BROWSER_SOURCE));
+    expect(withState.authority.agentPageState(page.surfaceId)).toEqual(state);
+    expect(withState.authority.agentPageState("surface_unknown_00000000")).toBeNull();
+    const without = fixture();
+    without.windows.set(alice.incarnation, { webContentsId: 7 });
+    const plain = without.authority.mint(mintParams(alice, BROWSER_SOURCE));
+    expect(without.authority.agentPageState(plain.surfaceId)).toBeNull();
+  });
+});
+
 describe("LiveSurfaceAuthority", () => {
   it("PT-5c2 (F4): the census counts the device switches its browser pages took — each runtime's own count, those let go included (it only grows): main's word that a device was told, the smoke's to read", () => {
     const switched = new Map<string, number>();

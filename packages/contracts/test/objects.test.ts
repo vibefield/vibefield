@@ -6,6 +6,7 @@ import { SERVED_TOOLS } from "../gen/tools";
 import {
   CHIP_TYPES,
   doorCanName,
+  OBJECT_FACTS,
   OBJECT_GRANTS_FORMAT,
   ObjectActInput,
   ObjectAtWork,
@@ -123,6 +124,14 @@ describe("the window's door (CP-D13)", () => {
       }).success,
     ).toBe(true);
     expect(ObjectIntentAnswer.safeParse({ intent: "i1", ok: false }).success).toBe(false);
+  });
+
+  it("names desk-full, main's own make refusal, when the desk has no room to place a made page (EY-1 1f)", () => {
+    const facts: readonly string[] = OBJECT_FACTS;
+    expect(facts).toContain("desk-full");
+    // the window's answer, as the desk gives it; fieldd's plane hands a fact on this list to the model as itself
+    const answer = ObjectIntentAnswer.parse(fixture("object-intent-answer.desk-full.json"));
+    expect(answer.ok === false && facts.includes(answer.fact)).toBe(true);
   });
 
   it("says why a hand was refused", () => {

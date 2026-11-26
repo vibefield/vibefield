@@ -221,3 +221,30 @@ describe("PT-5b — the cap's eyes", () => {
     expect(eyes.far(only.key)).toBe(Number.POSITIVE_INFINITY);
   });
 });
+
+// PI-2 (2026-11-24) — THE RUN A PANE NAMES, read three ways: a run, none (the person's own page), or cannot tell. Only a
+// definite none may mint into the desk's signed-in profile; a value that does not fit a run key, an object the document
+// does not hold, and no document at all are "cannot tell", never "none". The kind's own reader (browser-pane live.ts)
+// calls any non-empty `agentRun` a run's pane, and the window's reader agrees: a non-empty value is never the person's.
+describe("PI-2 — the run a pane names: a run, none, or cannot tell", () => {
+  it("answers a run for a fitting key, none for the empty default, and cannot tell for a value that does not fit, a key the document lacks, or no document", () => {
+    const { ce, panes, eyes } = board();
+    const at = (x: number, props: Record<string, unknown>): void => {
+      ce.ops.spawnWidget(pane.BROWSER_PANE_TYPE, { x, y: 0, w: 400, h: 200, props });
+    };
+    at(0, {});
+    at(1000, { agentRun: "run_7a9c" });
+    at(2000, { agentRun: "a b" });
+    ce.world.sync();
+    const [mine, runs, unfit] = panes();
+    if (mine === undefined || runs === undefined || unfit === undefined)
+      throw new Error("no panes");
+    expect(eyes.runOf(mine.key)).toEqual({ is: "none" });
+    expect(eyes.runOf(runs.key)).toEqual({ is: "run", run: "run_7a9c" });
+    expect(eyes.runOf(unfit.key)).toEqual({ is: "unknown" });
+    expect(eyes.runOf("no-such-key")).toEqual({ is: "unknown" });
+    ce.docs.close();
+    expect(eyes.runOf(mine.key)).toEqual({ is: "unknown" });
+    ce.dispose();
+  });
+});

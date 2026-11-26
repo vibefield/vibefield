@@ -82,6 +82,16 @@ export const NOTICE_WORDS: Readonly<Record<LiveBrowserFailure, NoticeWords>> = {
     headline: "Pages can’t be opened here",
     detail: "This desk isn’t allowed to open web pages for this pane.",
   },
+  // EY-1 (1f, 2026-11-19; DESIGN.md §8): a page an agent's run made that never reached this window, in the person's
+  // hand (it leaves the desk when put down); and the closed still, its run's page closed. Neither has a Try again.
+  "never-opened": {
+    headline: "This page didn’t open",
+    detail: "It leaves the desk when you put it down.",
+  },
+  "run-ended": {
+    headline: "This page closed when an agent’s work ended",
+    detail: "Open its address in a page of your own to see it again.",
+  },
   failed: {
     headline: "This page couldn’t be shown",
     detail: "Something went wrong.",

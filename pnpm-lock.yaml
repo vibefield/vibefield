@@ -75,6 +75,10 @@ importers:
         version: 23.1.0
 
   apps/desktop:
+    dependencies:
+      agent-browser:
+        specifier: 0.41.0
+        version: 0.41.0
     devDependencies:
       '@electron/fuses':
         specifier: ^2.1.3
@@ -341,6 +345,9 @@ importers:
       electron-updater:
         specifier: 6.8.9
         version: 6.8.9
+      ws:
+        specifier: ^8.18.0
+        version: 8.21.1
     devDependencies:
       '@tailwindcss/vite':
         specifier: 'catalog:'
@@ -348,6 +355,9 @@ importers:
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.3
+      '@types/ws':
+        specifier: ^8.5.0
+        version: 8.18.1
       '@vibecook/ghosttea-client':
         specifier: 0.16.3
         version: 0.16.3
@@ -2667,6 +2677,11 @@ packages:
   agent-base@7.1.4:
     resolution: {integrity: sha512-MnA+YT8fwfJPgBx3m60MNqakm30XOkyIoH1y6huTQvC0PwZG7ki8NacLBcrPbNoo8vEZy7Jpuk7+jMO+CUovTQ==}
     engines: {node: '>= 14'}
+
+  agent-browser@0.41.0:
+    resolution: {integrity: sha512-XJtBouE5+gGUKyZU1COSmnxU6MKIlmLE2oEyHzl0ohLVOhuRjx9kqQ9vOqxiiW/Gbvi4JPF4Oz777Mn3FGiHAA==}
+    engines: {node: '>=24.0.0', pnpm: '>=11.0.0'}
+    hasBin: true
 
   ajv@8.20.0:
     resolution: {integrity: sha512-Thbli+OlOj+iMPYFBVBfJ3OmCAnaSyNn4M1vz9T6Gka5Jt9ba/HIR56joy65tY6kx/FCF5VXNB819Y7/GUrBGA==}
@@ -5669,6 +5684,8 @@ snapshots:
       - supports-color
 
   agent-base@7.1.4: {}
+
+  agent-browser@0.41.0: {}
 
   ajv@8.20.0:
     dependencies:

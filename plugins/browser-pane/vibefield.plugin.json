@@ -9,13 +9,30 @@
   "contributes": {
     "objects": [
       {
+        "agent": {
+          "concurrency": "many",
+          "faces": [
+            {
+              "label": "Live",
+              "type": "ref"
+            },
+            {
+              "label": "Picture",
+              "type": "image"
+            }
+          ],
+          "room": "pages",
+          "summary": "A web page on the desk. Work it with the browser tools; you can work only the pages you opened with them, not the user's.",
+          "tools": []
+        },
         "binding": {
           "kind": "browserPane"
         },
         "description": "A pane of glass cut to its page: resize it and its page re-lays out; switch its device and it is re-cut to that screen's size",
         "groups": {
           "page": [
-            "url"
+            "url",
+            "runAddress"
           ]
         },
         "interaction": {
@@ -29,6 +46,11 @@
           "w": 165.39
         },
         "props": {
+          "agentRun": {
+            "default": "",
+            "kind": "string",
+            "maxLength": 128
+          },
           "device": {
             "default": "laptop",
             "kind": "enum",
@@ -74,6 +96,11 @@
             "default": "",
             "kind": "string",
             "maxLength": 32
+          },
+          "runAddress": {
+            "default": "",
+            "kind": "string",
+            "maxLength": 2048
           },
           "scheme": {
             "default": "desk",

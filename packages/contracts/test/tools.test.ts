@@ -21,7 +21,8 @@ import {
 // 21:45Z). What these hold: one row per tool, named `<noun>_<verb>` with the family as a column; every row carries its
 // audience, scope, slice and description; a schema belongs to a row, and a row with schemas is exactly a served one; an
 // acting row says whether it destroys and whether it repeats; and the projection fieldd lists carries all four
-// annotations, closed-world.
+// annotations, closed-world. Dated 2026-11-19 (EY-0's follow-up): the pages rows are `browser_` and the pin's own verb
+// (plan §6.1), `<noun>_<verb>` only where the engine's name is; and a pages row says whether it reaches the open web.
 
 const names = TOOLS.map((t) => t.name);
 const served = new Set(Object.keys(TOOL_SCHEMAS));
@@ -163,7 +164,7 @@ describe("served and planned (ruling 2)", () => {
   // spark's alone, with its destructive and idempotent hints said. CP-3's two act too (the person;
   // `draft/compose-plane/cp3-the-person.md`, ruled 2026-10-31): asking is a spark's, telling every agent's (MT-D11).
   it("serves exactly the rows whose slice has landed: CP-1's read, CP-2's and CP-3's act", () => {
-    const landed = ["CP-1", "CP-2", "CP-3", "OB-3"];
+    const landed = ["CP-1", "CP-2", "CP-3", "OB-3", "EY-2"];
     for (const t of TOOLS.filter((x) => served.has(x.name))) {
       expect(landed, t.name).toContain(t.slice);
       if (t.slice === "CP-1") expect(t.readOnly, t.name).toBe(true);
@@ -177,6 +178,10 @@ describe("served and planned (ruling 2)", () => {
         expect(t.category, t.name).toBe("desk");
         expect(t.audience, t.name).toBe("agent");
         if (!t.readOnly) expect(typeof t.destructive, t.name).toBe("boolean");
+      }
+      if (t.slice === "EY-2") {
+        expect(t.family, t.name).toBe("pages");
+        expect(t.object, t.name).toBe("vibefield.browser-pane");
       }
     }
     for (const t of TOOLS.filter((x) => landed.includes(x.slice)))
@@ -210,7 +215,7 @@ describe("served and planned (ruling 2)", () => {
     expect(send.description).not.toContain("as the user's words");
   });
 
-  it("projects exactly the served rows, in catalog order, with all four annotations and closed-world", () => {
+  it("projects exactly the served rows, in catalog order, with all four annotations, closed-world unless the row says it reaches the open web", () => {
     expect(SERVED_TOOLS.map((t) => t.name)).toEqual(names.filter((n) => served.has(n)));
     for (const t of SERVED_TOOLS) {
       const row = toolRow(t.name)!;
@@ -220,7 +225,7 @@ describe("served and planned (ruling 2)", () => {
         readOnlyHint: row.readOnly,
         destructiveHint: row.readOnly ? false : row.destructive,
         idempotentHint: row.readOnly ? true : row.idempotent,
-        openWorldHint: false,
+        openWorldHint: row.openWorld === true,
       });
       expect(t.inputSchema.type, t.name).toBe("object");
       expect(t.outputSchema.type, t.name).toBe("object");
@@ -255,7 +260,7 @@ describe("the facts a refusal names (the study's §8; EY-0)", () => {
 
 // EY-0 (draft/tool-plane/EY-0-PLAN.md §2.1, §2.7) — the pages rows are written by hand. Until EY-2's generator,
 // they are held here to the record the lab's converter writes.
-describe("the pages room's rows: the pin's core profile, planned (EY-0)", () => {
+describe("the pages room's rows: the pin's core profile (EY-0), served at EY-2", () => {
   const pages = TOOLS.filter((t) => t.family === "pages");
   const engine = PAGES_ENGINE_RECORD.core;
 
@@ -268,8 +273,12 @@ describe("the pages room's rows: the pin's core profile, planned (EY-0)", () => 
     expect(engine.map((tool) => tool.engineName)).not.toContain("agent_browser_get_cdp_url");
   });
 
-  it("takes readOnly from the engine's readOnlyHint, but for the map's two: a still is a read, and fieldd answers the profiles row", () => {
-    const departures = new Set(["browser_screenshot", "browser_tools_profiles"]);
+  it("takes readOnly from the engine's readOnlyHint, but for the map's three: a still is a read, fieldd answers the profiles row, and a switch sets nothing (BU-20)", () => {
+    const departures = new Set([
+      "browser_screenshot",
+      "browser_tools_profiles",
+      "browser_tab_switch",
+    ]);
     for (const [index, row] of pages.entries()) {
       const hint = engine[index]?.readOnlyHint;
       if (departures.has(row.name)) {
@@ -279,10 +288,124 @@ describe("the pages room's rows: the pin's core profile, planned (EY-0)", () => 
         expect(row.readOnly, row.name).toBe(hint);
       }
     }
-    expect(pages.filter((t) => t.readOnly)).toHaveLength(12);
+    expect(pages.filter((t) => t.readOnly)).toHaveLength(13);
   });
 
-  it("puts every row on the browser pane, for every agent, in slice EY-2, and serves none before EY-2", () => {
+  // Read a second time on 2026-11-19 (EY-0's follow-up): each row's scope, and the d and i of each acting row, held
+  // here row by row, so no later edit moves one unseen. A row is [scope, readOnly, destructive, idempotent].
+  it("holds each row's scope, and d and i on each acting row: 25 on a page, 3 the run's own, 1 the device", () => {
+    const map: Record<string, readonly [string, boolean, boolean?, boolean?]> = {
+      browser_tools_profiles: ["self", true],
+      browser_open: ["object", false, true, true],
+      browser_read: ["object", true],
+      browser_snapshot: ["object", true],
+      browser_back: ["object", false, true, false],
+      browser_forward: ["object", false, true, false],
+      browser_reload: ["object", false, true, true],
+      browser_click: ["object", false, true, false],
+      browser_fill: ["object", false, true, true],
+      browser_type: ["object", false, false, false],
+      browser_press: ["object", false, true, false],
+      browser_check: ["object", false, true, true],
+      browser_uncheck: ["object", false, true, true],
+      browser_select: ["object", false, true, true],
+      browser_scroll: ["object", false, false, false],
+      browser_wait_ms: ["object", true],
+      browser_wait_for_selector: ["object", true],
+      browser_wait_for_text: ["object", true],
+      browser_wait_for_load: ["object", true],
+      browser_screenshot: ["object", true],
+      browser_get_text: ["object", true],
+      browser_get_url: ["object", true],
+      browser_get_title: ["object", true],
+      browser_tab_new: ["device", false, false, false],
+      browser_tab_list: ["self", true],
+      browser_tab_switch: ["object", true],
+      browser_tab_close: ["object", false, true, true],
+      browser_eval: ["object", false, true, false],
+      browser_close: ["self", false, true, true],
+    };
+    expect(pages.map((t) => t.name)).toEqual(Object.keys(map));
+    for (const t of pages) {
+      const [scope, readOnly, destructive, idempotent] = map[t.name]!;
+      expect([t.scope, t.readOnly, t.destructive, t.idempotent], t.name).toEqual([
+        scope,
+        readOnly,
+        destructive,
+        idempotent,
+      ]);
+    }
+    const tally = (scope: string) => pages.filter((t) => t.scope === scope).length;
+    expect([tally("object"), tally("self"), tally("device")]).toEqual([25, 3, 1]);
+  });
+
+  // The same read's words: each row names the fact the model will meet there, as EY-2 builds it.
+  it("says held on every row that reads or acts on a page, and the facts an act there may meet", () => {
+    const says = (phrase: string, ...rows: string[]) => {
+      for (const name of rows) expect(toolRow(name)?.description, name).toContain(phrase);
+    };
+    says(
+      "While the user holds the page, it answers held.",
+      "browser_open",
+      "browser_read",
+      "browser_snapshot",
+      "browser_back",
+      "browser_forward",
+      "browser_reload",
+      "browser_click",
+      "browser_fill",
+      "browser_type",
+      "browser_press",
+      "browser_check",
+      "browser_uncheck",
+      "browser_select",
+      "browser_scroll",
+      "browser_screenshot",
+      "browser_get_text",
+      "browser_eval",
+    );
+    says("such as a password, answers needs-you.", "browser_fill", "browser_type", "browser_press");
+    says(
+      "stays inside its site, or answers off-site.",
+      "browser_open",
+      "browser_back",
+      "browser_forward",
+      "browser_click",
+      "browser_press",
+      "browser_eval",
+    );
+    // an agent's own page carries none of the user's sign-ins; the run's own stay with it until its end (2026-11-24)
+    says("without the user's sign-ins", "browser_open", "browser_tab_new");
+    for (const name of ["browser_open", "browser_tab_new"])
+      expect(toolRow(name)?.description, name).not.toContain("signed out of every site");
+    says("handed you go", "browser_tab_close", "browser_close");
+    says(
+      "It is saved as a file and answered as its path, which you can read.",
+      "browser_screenshot",
+    );
+    says(
+      "With ifChanged, a page that has not changed answers unchanged, with no file.",
+      "browser_screenshot",
+    );
+    says("sets nothing for later calls", "browser_tab_switch");
+  });
+
+  // EY (2026-11-19): the engine marks all 29 open-world (its mcp-tools.json; the record keeps readOnlyHint alone). Five
+  // depart: they reach only the run's own pages, or fieldd answers them.
+  it("says openWorld on every pages row and on no other row: 24 reach a page's site, 5 do not", () => {
+    const shut = new Set([
+      "browser_tools_profiles",
+      "browser_tab_list",
+      "browser_tab_switch",
+      "browser_tab_close",
+      "browser_close",
+    ]);
+    for (const t of TOOLS) if (t.family !== "pages") expect(t.openWorld, t.name).toBeUndefined();
+    for (const t of pages) expect(t.openWorld, t.name).toBe(!shut.has(t.name));
+    expect(pages.filter((t) => t.openWorld)).toHaveLength(24);
+  });
+
+  it("puts every row on the browser pane, for every agent, in slice EY-2, and serves each (2a)", () => {
     for (const t of pages) {
       expect(t, t.name).toMatchObject({
         category: "desk",
@@ -290,7 +413,7 @@ describe("the pages room's rows: the pin's core profile, planned (EY-0)", () => 
         object: "vibefield.browser-pane",
         slice: "EY-2",
       });
-      expect(served.has(t.name), t.name).toBe(false);
+      expect(served.has(t.name), t.name).toBe(true);
       // the words are VibeField's: never the engine's name
       expect(t.description, t.name).not.toMatch(/agent.browser/i);
     }

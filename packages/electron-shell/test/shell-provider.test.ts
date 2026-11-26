@@ -1,11 +1,17 @@
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { SHELL_PROVIDER_METHODS } from "@vibefield/contracts";
+import {
+  PAGES_OUTPUT_EXHAUSTED_MESSAGE,
+  SHELL_PROVIDER_METHODS,
+  type ShellSurfacesControlResult,
+} from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { createNoopLogger } from "@vibefield/logging";
 import type { BrowserWindow } from "electron";
 import { describe, expect, it, vi } from "vitest";
 import { FielddHandleCoordinator } from "../src/main/fieldd-handle-coordinator";
+import { PagesBrokerError } from "../src/main/pages/broker/broker";
 import { RecoveringShellProvider, type ShellProviderNative } from "../src/main/shell-provider";
 
 function deferred<T>() {
@@ -89,6 +95,7 @@ function call(
     | "shell.webcontents.captureArtifactPreview"
     | "shell.renderer.requestReplacement"
     | "shell.surfaces.simulatorDevices"
+    | "shell.surfaces.mint"
     | "shell.surfaces.control",
   params: unknown,
 ) {
@@ -101,7 +108,10 @@ function call(
   };
 }
 
-async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
+async function fixture(
+  nativeOverrides?: Partial<ShellProviderNative>,
+  logger = createNoopLogger(),
+) {
   const client = new FakeClient();
   const handle = fakeHandle("boot-1", client);
   const coordinator = new FielddHandleCoordinator({
@@ -126,7 +136,7 @@ async function fixture(nativeOverrides?: Partial<ShellProviderNative>) {
     listSimulatorDevices: vi.fn(async () => ({ devices: [] })),
     ...nativeOverrides,
   };
-  const provider = new RecoveringShellProvider(coordinator, native, createNoopLogger());
+  const provider = new RecoveringShellProvider(coordinator, native, logger);
   await coordinator.ensure();
   await vi.waitFor(() =>
     expect(client.requests[0]).toEqual({
@@ -444,40 +454,358 @@ describe("RecoveringShellProvider", () => {
     provider.dispose();
   });
 
-  it("EY-0: refuses an agent's call on a page as the live-surface authority unavailable, and never reaches the folder dialog", async () => {
+  // EY-1: a page's call as fieldd's pages room sends it
+  const pageCall = {
+    run: "run-01J8Z3K9",
+    surfaceId: "surface_0123456789abcdef",
+    window: "read",
+    command: { action: "snapshot", interactive: true },
+  };
+  type ControlSurface = NonNullable<ShellProviderNative["controlSurface"]>;
+
+  function resolved(callId: string, outcome: unknown) {
+    return { method: "shell.provider.resolve", params: { callId, outcome } };
+  }
+
+  it("EY-1: parses an agent's call on a page through the contract and hands it to the broker with fieldd's signal and deadline", async () => {
+    const controlSurface = vi.fn<ControlSurface>(async () => ({ status: "refused", fact: "held" }));
+    const { client, provider } = await fixture({ controlSurface });
+    const sent = call("shell-controlaaaaaaaaa", "shell.surfaces.control", pageCall);
+    client.emit("shell.provider.call", sent);
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual(
+        resolved("shell-controlaaaaaaaaa", { result: { status: "refused", fact: "held" } }),
+      ),
+    );
+    const [params, signal, deadlineAt] = controlSurface.mock.calls[0] ?? [];
+    expect(params).toEqual(pageCall);
+    expect(signal?.aborted).toBe(false);
+    expect(deadlineAt).toBe(sent.deadlineAt);
+    provider.dispose();
+  });
+
+  it("EY-1: answers a page's call UNAVAILABLE while main has no pages broker", async () => {
     const { client, native, provider } = await fixture();
-    // a page's call as fieldd's pages room will send it, and one whose params a folder pick would take
+    client.emit(
+      "shell.provider.call",
+      call("shell-controlbbbbbbbbb", "shell.surfaces.control", pageCall),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual(
+        resolved("shell-controlbbbbbbbbb", {
+          error: {
+            kind: "UNAVAILABLE",
+            message: "the live-surface authority is unavailable",
+            retryable: true,
+          },
+        }),
+      ),
+    );
+    expect(native.showOpenDialog).not.toHaveBeenCalled();
+    provider.dispose();
+  });
+
+  it("EY-1: refuses params that are not a page's call before the broker or any dialog", async () => {
+    const controlSurface = vi.fn<ControlSurface>(async () => ({ status: "refused", fact: "gone" }));
+    const { client, native, provider } = await fixture({ controlSurface });
     const calls = [
-      {
-        callId: "shell-controlaaaaaaaaa",
-        params: {
-          run: "run-01J8Z3K9",
-          surfaceId: "surface_0123456789abcdef",
-          window: "read",
-          command: { action: "snapshot", interactive: true },
-        },
-      },
-      { callId: "shell-controlbbbbbbbbb", params: { purpose: "workspace.export" } },
+      { callId: "shell-controlccccccccc", params: { purpose: "workspace.export" } },
+      { callId: "shell-controlddddddddd", params: { ...pageCall, window: "write" } },
     ];
     for (const { callId, params } of calls) {
       client.emit("shell.provider.call", call(callId, "shell.surfaces.control", params));
       await vi.waitFor(() =>
-        expect(client.requests).toContainEqual({
-          method: "shell.provider.resolve",
-          params: {
-            callId,
-            outcome: {
-              error: {
-                kind: "UNAVAILABLE",
-                message: "the live-surface authority is unavailable",
-                retryable: true,
-              },
+        expect(client.requests).toContainEqual(
+          resolved(callId, {
+            error: {
+              kind: "PRECONDITION_FAILED",
+              message: "the desktop operation failed",
+              retryable: false,
             },
-          },
-        }),
+          }),
+        ),
       );
     }
+    expect(controlSurface).not.toHaveBeenCalled();
     expect(native.showOpenDialog).not.toHaveBeenCalled();
+    provider.dispose();
+  });
+
+  it("EY-1: carries the broker's errors across as their kinds", async () => {
+    const controlSurface = vi.fn<ControlSurface>(async () => {
+      throw { kind: "TIMEOUT", state: "deadline" };
+    });
+    const { client, provider } = await fixture({ controlSurface });
+    client.emit(
+      "shell.provider.call",
+      call("shell-controleeeeeeeee", "shell.surfaces.control", pageCall),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual(
+        resolved("shell-controleeeeeeeee", {
+          error: { kind: "TIMEOUT", message: "the desktop operation failed", retryable: true },
+        }),
+      ),
+    );
+    provider.dispose();
+  });
+
+  it("EY-1: a pages UNAVAILABLE keeps its state to the room as the fixture says it; any other error stays bare, and main logs the broker's word", async () => {
+    const logger = createNoopLogger();
+    const warn = vi.spyOn(logger, "warn");
+    const outcome: unknown = JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dirname,
+          "../../contracts/fixtures/shell-provider-outcome.pages-unavailable.json",
+        ),
+        "utf8",
+      ),
+    );
+    const errors = [
+      new PagesBrokerError("UNAVAILABLE", "not-installed"),
+      new PagesBrokerError("UNAVAILABLE", "run-form"),
+      new PagesBrokerError("PRECONDITION_FAILED", "signed-in"),
+    ];
+    const controlSurface = vi.fn<ControlSurface>(async () => {
+      throw errors.shift();
+    });
+    const { client, provider } = await fixture({ controlSurface }, logger);
+    const asked = async (callId: string, answer: unknown) => {
+      client.emit("shell.provider.call", call(callId, "shell.surfaces.control", pageCall));
+      await vi.waitFor(() => expect(client.requests).toContainEqual(resolved(callId, answer)));
+    };
+    await asked("shell-controlhhhhhhhhh", outcome);
+    await asked("shell-controliiiiiiiii", {
+      error: {
+        kind: "UNAVAILABLE",
+        message: "the live-surface authority is unavailable",
+        retryable: true,
+      },
+    });
+    await asked("shell-controljjjjjjjjj", {
+      error: {
+        kind: "PRECONDITION_FAILED",
+        message: "the desktop operation failed",
+        retryable: false,
+      },
+    });
+    expect(warn).toHaveBeenCalledWith("desktop.pages.control_failed", expect.any(String), {
+      kind: "UNAVAILABLE",
+      state: "not-installed",
+    });
+    expect(warn).toHaveBeenCalledWith("desktop.pages.control_failed", expect.any(String), {
+      kind: "PRECONDITION_FAILED",
+      state: "signed-in",
+    });
+    provider.dispose();
+  });
+
+  it("EY-1: a pages RESOURCE_EXHAUSTED keeps the broker's word to the room as the fixture says it, in words of its own; a preview keeps the preview's", async () => {
+    // 2026-11-24: main's provider said a state only for a pages UNAVAILABLE. A run at its count of pages, a desk
+    // with no room and an answer too large all crossed bare, in the words of a preview's image budget, and the room
+    // could only guess which by the kind of call.
+    const outcome = JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dirname,
+          "../../contracts/fixtures/shell-provider-outcome.pages-exhausted.json",
+        ),
+        "utf8",
+      ),
+    ) as { error: { kind: string; message: string; retryable: boolean; details: unknown } };
+    expect(outcome.error.details).toEqual({ service: "pages", state: "run-full" });
+    const errors = [
+      new PagesBrokerError("RESOURCE_EXHAUSTED", "run-full"),
+      new PagesBrokerError("RESOURCE_EXHAUSTED", "desk-full"),
+      new PagesBrokerError("RESOURCE_EXHAUSTED", "output-too-large"),
+      new PagesBrokerError("RESOURCE_EXHAUSTED", "a-word-off-the-list"),
+      new PagesBrokerError("PRECONDITION_FAILED", "run-full"),
+    ];
+    const controlSurface = vi.fn<ControlSurface>(async () => {
+      throw errors.shift();
+    });
+    const captureArtifactPreview = vi.fn<ShellProviderNative["captureArtifactPreview"]>(
+      async () => {
+        throw { kind: "RESOURCE_EXHAUSTED" };
+      },
+    );
+    const { client, provider } = await fixture({ controlSurface, captureArtifactPreview });
+    const asked = async (callId: string, answer: unknown) => {
+      client.emit("shell.provider.call", call(callId, "shell.surfaces.control", pageCall));
+      await vi.waitFor(() => expect(client.requests).toContainEqual(resolved(callId, answer)));
+    };
+    const exhausted = (message: string, state?: string) => ({
+      error: {
+        kind: "RESOURCE_EXHAUSTED",
+        message,
+        retryable: false,
+        ...(state === undefined ? {} : { details: { service: "pages", state } }),
+      },
+    });
+    await asked("shell-controlkkkkkkkkk", outcome);
+    await asked("shell-controllllllllll", exhausted(outcome.error.message, "desk-full"));
+    await asked(
+      "shell-controlmmmmmmmmm",
+      exhausted(PAGES_OUTPUT_EXHAUSTED_MESSAGE, "output-too-large"),
+    );
+    // a word off the broker's list crosses as no state, and still never in a preview's words
+    await asked("shell-controlnnnnnnnnn", exhausted(PAGES_OUTPUT_EXHAUSTED_MESSAGE));
+    // the state belongs to its kind: the same word under another kind says nothing
+    await asked("shell-controlooooooooo", {
+      error: {
+        kind: "PRECONDITION_FAILED",
+        message: "the desktop operation failed",
+        retryable: false,
+      },
+    });
+    // a preview's own budget keeps its own words, and names no service
+    const previewId = "shell-previewkkkkkkkkkk";
+    client.emit(
+      "shell.provider.call",
+      call(previewId, "shell.webcontents.captureArtifactPreview", {
+        artifactId: "01ARZ3NDEKTSV4RRFFQ69G5FAV",
+        url: "https://host.tail1234.ts.net:12000/",
+      }),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual(
+        resolved(previewId, exhausted("the preview could not fit within the image budget")),
+      ),
+    );
+    provider.dispose();
+  });
+
+  it("the broker's words for no room are the ones fieldd's room reads, each by name", () => {
+    // main's list of the states a pages RESOURCE_EXHAUSTED may say is held to the room's own reading of them, by
+    // its text, until contracts names the list for both
+    const room = readFileSync(
+      join(import.meta.dirname, "../../fieldd/src/tool-plane/rooms/pages/facts.ts"),
+      "utf8",
+    );
+    const read = [...room.matchAll(/\bsaid === "([a-z-]+)"/gu)].map((match) => match[1]).sort();
+    expect(read).toEqual(["desk-full", "output-too-large", "run-full"]);
+    const provider = readFileSync(
+      join(import.meta.dirname, "../src/main/shell-provider.ts"),
+      "utf8",
+    );
+    const listed = /PAGES_EXHAUSTED_STATES[^=]*=\s*\[([^\]]*)\]/u.exec(provider)?.[1] ?? "";
+    expect([...listed.matchAll(/"([a-z-]+)"/gu)].map((match) => match[1]).sort()).toEqual(read);
+  });
+
+  it("EY-1 (7b): a mint refused because its page is gone for good says so to the window as the fixture says it; no other state crosses", async () => {
+    const outcome: unknown = JSON.parse(
+      readFileSync(
+        join(
+          import.meta.dirname,
+          "../../contracts/fixtures/shell-provider-outcome.surfaces-made-closed.json",
+        ),
+        "utf8",
+      ),
+    );
+    const errors: unknown[] = [
+      { kind: "PRECONDITION_FAILED", state: "made-closed" },
+      { kind: "PRECONDITION_FAILED" },
+      { kind: "PRECONDITION_FAILED", state: "desk-full" },
+      { kind: "UNAVAILABLE", state: "made-closed" },
+      new PagesBrokerError("PRECONDITION_FAILED", "made-closed"),
+    ];
+    const mintSurfaceTicket = vi.fn<ShellProviderNative["mintSurfaceTicket"]>(async () => {
+      throw errors.shift();
+    });
+    const { client, provider } = await fixture({ mintSurfaceTicket });
+    const params = {
+      rendererParticipant: {
+        participantId: "renderer:desktop-test:window-1",
+        incarnation: "renderer:desktop-test:window-1:document-2",
+      },
+      source: {
+        kind: "browser",
+        initialUrl: "https://example.com/",
+        profile: { mode: "memory", ref: "run:run-01J8Z3K9" },
+        logicalViewport: { width: 1280, height: 800 },
+        deviceScaleFactor: 2,
+      },
+      reuseKey: "pane-made-1",
+      made: "surface_fedcba9876543210",
+    };
+    const asked = async (callId: string, answer: unknown) => {
+      client.emit("shell.provider.call", call(callId, "shell.surfaces.mint", params));
+      await vi.waitFor(() => expect(client.requests).toContainEqual(resolved(callId, answer)));
+    };
+    const bare = {
+      kind: "PRECONDITION_FAILED",
+      message: "the desktop operation failed",
+      retryable: false,
+    };
+    await asked("shell-mintaaaaaaaaaaaa", outcome);
+    await asked("shell-mintbbbbbbbbbbbb", { error: bare });
+    await asked("shell-mintcccccccccccc", { error: bare });
+    await asked("shell-mintdddddddddddd", {
+      error: {
+        kind: "UNAVAILABLE",
+        message: "the live-surface authority is unavailable",
+        retryable: true,
+      },
+    });
+    await asked("shell-minteeeeeeeeeeee", { error: bare });
+    expect(mintSurfaceTicket).toHaveBeenCalledTimes(5);
+    provider.dispose();
+  });
+
+  it("EY-1: answers a broker answer outside the contract INTERNAL, and logs its shape, never its content", async () => {
+    const logger = createNoopLogger();
+    const warn = vi.spyOn(logger, "warn");
+    const planted = "page text that must never reach a log";
+    // the page's text as a value and as a key: neither may reach the log
+    const malformed = { status: "refused", fact: planted, [planted]: planted };
+    const controlSurface = vi.fn<ControlSurface>(
+      async () => malformed as unknown as ShellSurfacesControlResult,
+    );
+    const { client, provider } = await fixture({ controlSurface }, logger);
+    client.emit(
+      "shell.provider.call",
+      call("shell-controlggggggggg", "shell.surfaces.control", pageCall),
+    );
+    await vi.waitFor(() =>
+      expect(client.requests).toContainEqual(
+        resolved("shell-controlggggggggg", {
+          error: { kind: "INTERNAL", message: "the desktop operation failed", retryable: false },
+        }),
+      ),
+    );
+    expect(warn).toHaveBeenCalledWith("desktop.pages.control_answer_rejected", expect.any(String), {
+      issues: expect.any(Number),
+      codes: expect.any(String),
+      depth: expect.any(Number),
+    });
+    expect(JSON.stringify(warn.mock.calls)).not.toContain(planted);
+    provider.dispose();
+  });
+
+  it("EY-1: aborts the broker's call when fieldd cancels it, and answers nothing after", async () => {
+    let seen: AbortSignal | undefined;
+    const answer = deferred<ShellSurfacesControlResult>();
+    const controlSurface = vi.fn<ControlSurface>((_params, signal) => {
+      seen = signal;
+      return answer.promise;
+    });
+    const { client, provider } = await fixture({ controlSurface });
+    const callId = "shell-controlfffffffff";
+    client.emit("shell.provider.call", call(callId, "shell.surfaces.control", pageCall));
+    await vi.waitFor(() => expect(controlSurface).toHaveBeenCalledTimes(1));
+    expect(seen?.aborted).toBe(false);
+    client.emit("shell.provider.cancel", { callId });
+    expect(seen?.aborted).toBe(true);
+    answer.resolve({ status: "done", output: { success: true } });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(
+      client.requests.some(
+        (request) =>
+          request.method === "shell.provider.resolve" &&
+          (request.params as { callId?: string }).callId === callId,
+      ),
+    ).toBe(false);
     provider.dispose();
   });
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  LIVE_PAGES_MAX_V1,
   LIVE_SURFACE_FAVICON_MAX_BASE64,
   LIVE_SURFACE_FAVICON_MAX_BYTES,
   LIVE_SURFACE_MAX_PIXELS,
@@ -442,6 +443,33 @@ describe("LSF-1 Live Surfaces contracts", () => {
       );
   });
 
+  it("EY-1 (1f): a window says how many more agent pages its desk could make alive, and declines a made pane it has no room for", () => {
+    expect(LIVE_PAGES_MAX_V1).toBe(6);
+    for (const agentPages of [0, 3, LIVE_PAGES_MAX_V1]) {
+      const message = { v: 1, type: "room", agentPages };
+      expect(LiveSurfaceRendererControlMessageV1.parse(message)).toEqual(message);
+    }
+    const declined = {
+      v: 1,
+      type: "made-declined",
+      made: "surface_fedcba9876543210",
+      reason: "no-room",
+    };
+    expect(LiveSurfaceRendererControlMessageV1.parse(declined)).toEqual(declined);
+    for (const bad of [
+      { v: 1, type: "room" },
+      { v: 1, type: "room", agentPages: -1 },
+      { v: 1, type: "room", agentPages: LIVE_PAGES_MAX_V1 + 1 },
+      { v: 1, type: "room", agentPages: 1.5 },
+      { ...declined, reason: "full" },
+      { ...declined, made: "short" },
+      { ...declined, v: 2 },
+    ])
+      expect(LiveSurfaceRendererControlMessageV1.safeParse(bad).success, JSON.stringify(bad)).toBe(
+        false,
+      );
+  });
+
   it("EY-0: the person's hold on a page is its own control message, and `held` says which edge", () => {
     const attachmentId = "attachment_0123456789abcdef";
     for (const held of [true, false]) {
@@ -698,6 +726,33 @@ describe("LSF-1 Live Surfaces contracts", () => {
     expect(LiveSurfaceBrowserSourceV1.safeParse({ ...source, whenStopped: "ask" }).success).toBe(
       false,
     );
+  });
+
+  it("EY-1: the browser state says where an agent's act lands, in CSS px of the page's logical size, only during the act", () => {
+    const state = {
+      url: "https://example.test/",
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+    };
+    expect(LiveSurfaceBrowserStateV1.parse(state)).not.toHaveProperty("act");
+    for (const act of [
+      { x: 0, y: 0 },
+      { x: 412.5, y: 96 },
+      { x: 16_384, y: 16_384 },
+    ])
+      expect(LiveSurfaceBrowserStateV1.parse({ ...state, act })).toMatchObject({ act });
+    for (const act of [
+      { x: -1, y: 0 },
+      { x: 0 },
+      { x: 16_385, y: 0 },
+      { x: Number.NaN, y: 0 },
+      "0,0",
+    ])
+      expect(
+        LiveSurfaceBrowserStateV1.safeParse({ ...state, act }).success,
+        JSON.stringify(act),
+      ).toBe(false);
   });
 
   it("PT-5b3 (ruling 4): the browser state says WHICH DOCUMENT the page is at — `document`, a positive integer, absent until one has committed (or from a producer that counts none) — and a frame may say the document it is of", () => {

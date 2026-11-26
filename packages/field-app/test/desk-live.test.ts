@@ -1112,6 +1112,28 @@ describe("PT-5a — the parked desk (ruling 5)", () => {
     expect(t.live.stats().parks).toBe(1);
   });
 
+  it("EY-1: the held edge tells the page's lane the hold BEFORE the demand; the put-down tells held:false; nothing between the edges", () => {
+    const { handle, face } = attached();
+    face.demand(SEEN);
+    expect(handle.holds).toEqual([]);
+    handle.order.length = 0;
+    const HELD = { ...SEEN, fps: 60, interactive: true };
+    face.demand(HELD);
+    expect(handle.holds).toEqual([true]);
+    expect(handle.order.slice(0, 2)).toEqual(["hold:true", "demand"]);
+    // held still, its ask moved: no second hold
+    face.demand({ ...HELD, fps: 30 });
+    expect(handle.holds).toEqual([true]);
+    // put down: told first, then the demand
+    handle.order.length = 0;
+    face.demand(SEEN);
+    expect(handle.holds).toEqual([true, false]);
+    expect(handle.order.slice(0, 2)).toEqual(["hold:false", "demand"]);
+    // unseen from rest is no edge
+    face.demand(UNSEEN);
+    expect(handle.holds).toEqual([true, false]);
+  });
+
   it("a face that never asked is paused at its spec's layout through a park and its unpark; a face opened on a parked desk stays paused until the desk runs; a closed face is told nothing", () => {
     const t = setup();
     const a = t.live.open(KEY, PAGE, () => {});

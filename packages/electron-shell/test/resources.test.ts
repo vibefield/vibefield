@@ -1,14 +1,20 @@
 import { readFileSync } from "node:fs";
 import { join, sep } from "node:path";
+import { VIBEFIELD_DEV_PAGES_ENGINE_ENV } from "@vibefield/contracts";
+import { PAGES_ENGINE_RECORD } from "@vibefield/contracts/pages-record";
 import { describe, expect, it } from "vitest";
+import { pagesEngineFileName } from "../../../scripts/pages-pin.mjs";
 import {
   assertPackagedResources,
   type DesktopResources,
+  dropDevelopmentPagesEngine,
+  packagedPagesEngineFile,
   ResourceError,
   readBundledTrust,
   resolveDevelopmentRepoRoot,
   resolveDevelopmentResources,
   resolvePackagedResources,
+  takeDevelopmentPagesEngine,
 } from "../src/main/resources";
 
 // The packaged/development resource contract (distribution spec §4.3). These are
@@ -74,6 +80,7 @@ describe("resolveDevelopmentResources", () => {
     repoRoot: REPO,
     electronExecPath: ELECTRON,
     platform: "darwin",
+    arch: "arm64",
   });
 
   it("runs the fieldd bundle from the repo through Electron-as-node", () => {
@@ -192,6 +199,101 @@ describe("resolveDevelopmentResources", () => {
     expect(dev.rosettadPath).toBeNull();
   });
 
+  it("names the dev runner's copy of the pages engine, and none when it handed main none (EY-1 1b)", () => {
+    expect(dev.pagesEnginePath).toBeNull();
+    const copy = join(REPO, "pages-engine", "f3a53cbce43fe308", "agent-browser");
+    expect(
+      resolveDevelopmentResources({
+        repoRoot: REPO,
+        electronExecPath: ELECTRON,
+        platform: "darwin",
+        arch: "arm64",
+        pagesEnginePath: copy,
+      }).pagesEnginePath,
+    ).toBe(copy);
+  });
+
+  it("names no pages engine on a host the record has no source build for, whatever main was handed (2026-11-24)", () => {
+    // the record's source build is the only engine main starts; the release binary's sums name no engine
+    expect(Object.keys(PAGES_ENGINE_RECORD.sourceBuild.binarySha256)).toEqual(["darwin-arm64"]);
+    const copy = join(REPO, "pages-engine", "f3a53cbce43fe308", "agent-browser");
+    for (const [platform, arch] of [
+      ["darwin", "x64"],
+      ["linux", "x64"],
+      ["linux", "arm64"],
+      ["win32", "x64"],
+    ] as const) {
+      expect(
+        resolveDevelopmentResources({
+          repoRoot: REPO,
+          electronExecPath: ELECTRON,
+          platform,
+          arch,
+          pagesEnginePath: copy,
+        }).pagesEnginePath,
+        `${platform}-${arch}`,
+      ).toBeNull();
+    }
+  });
+
+  it("reads the dev runner's pages engine once and removes it from main's environment (EY-1 1b)", () => {
+    const copy = join(REPO, "pages-engine", "f3a53cbce43fe308", "agent-browser");
+    const had = Object.hasOwn(process.env, VIBEFIELD_DEV_PAGES_ENGINE_ENV);
+    const previous = process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV];
+    process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV] = copy;
+    try {
+      expect(takeDevelopmentPagesEngine(process.env)).toBe(copy);
+      // once taken, nothing main starts can inherit where the engine sits
+      expect(Object.hasOwn(process.env, VIBEFIELD_DEV_PAGES_ENGINE_ENV)).toBe(false);
+      expect(takeDevelopmentPagesEngine(process.env)).toBeNull();
+    } finally {
+      if (had) process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV] = previous;
+      else delete process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV];
+    }
+    const others: NodeJS.ProcessEnv = { [VIBEFIELD_DEV_PAGES_ENGINE_ENV]: copy, PATH: "/usr/bin" };
+    takeDevelopmentPagesEngine(others);
+    expect(others).toEqual({ PATH: "/usr/bin" });
+    const empty: NodeJS.ProcessEnv = { [VIBEFIELD_DEV_PAGES_ENGINE_ENV]: "" };
+    expect(takeDevelopmentPagesEngine(empty)).toBeNull();
+    expect(empty).toEqual({});
+    const relative: NodeJS.ProcessEnv = { [VIBEFIELD_DEV_PAGES_ENGINE_ENV]: "engine" };
+    expect(() => takeDevelopmentPagesEngine(relative)).toThrow(/must be an absolute path/);
+    expect(relative).toEqual({});
+  });
+
+  it("a packaged app drops the dev runner's variable unread (EY-1 1b)", () => {
+    const had = Object.hasOwn(process.env, VIBEFIELD_DEV_PAGES_ENGINE_ENV);
+    const previous = process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV];
+    // a value the development take would refuse: a packaged app neither reads nor judges it
+    process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV] = "not/absolute";
+    try {
+      expect(dropDevelopmentPagesEngine(process.env)).toBeNull();
+      expect(Object.hasOwn(process.env, VIBEFIELD_DEV_PAGES_ENGINE_ENV)).toBe(false);
+    } finally {
+      if (had) process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV] = previous;
+      else delete process.env[VIBEFIELD_DEV_PAGES_ENGINE_ENV];
+    }
+    const others: NodeJS.ProcessEnv = { [VIBEFIELD_DEV_PAGES_ENGINE_ENV]: "/x", PATH: "/usr/bin" };
+    expect(dropDevelopmentPagesEngine(others)).toBeNull();
+    expect(others).toEqual({ PATH: "/usr/bin" });
+  });
+
+  it("main takes the pages engine at module load, once, before Electron is ready (EY-1 1b)", () => {
+    // A source read, as the walls read: the variable leaves main's environment at module level, ahead of the first
+    // ready wait, taken in development and dropped unread when packaged, so no helper Electron starts and nothing
+    // main spawns inherits it. Never spell the ready call in a comment above the const: this row compares the
+    // const with the FIRST spelling of `app.whenReady(` in the file, and a comment there would stand before it.
+    const index = readFileSync(new URL("../src/main/index.ts", import.meta.url), "utf8");
+    const take = "takeDevelopmentPagesEngine(process.env)";
+    const drop = "dropDevelopmentPagesEngine(process.env)";
+    expect(index.split(take)).toHaveLength(2);
+    expect(index.split(drop)).toHaveLength(2);
+    const constant = `\nconst DEVELOPMENT_PAGES_ENGINE = app.isPackaged\n  ? ${drop}\n  : ${take};\n`;
+    expect(index).toContain(constant);
+    expect(index.indexOf(constant)).toBeLessThan(index.indexOf("app.whenReady("));
+    expect(index).toContain("pagesEnginePath: DEVELOPMENT_PAGES_ENGINE,");
+  });
+
   it("offers both plugin roots, including the dev-linked pack", () => {
     expect(dev.pluginRoots.bundled).toEqual([join(REPO, "plugins")]);
     expect(dev.pluginRoots.devLinked).toEqual([join(REPO, "examples", "plugins")]);
@@ -215,6 +317,7 @@ describe("resolvePackagedResources", () => {
     resourcesPath: RESOURCES,
     electronExecPath: ELECTRON,
     platform: "darwin",
+    arch: "arm64",
   });
 
   it("hangs everything off resourcesPath", () => {
@@ -241,6 +344,56 @@ describe("resolvePackagedResources", () => {
 
   it("puts rosettad beside fieldd, flat under bin/ (AR-8, L3)", () => {
     expect(pkg.rosettadPath).toBe(join(RESOURCES, "bin", "rosettad"));
+  });
+
+  it("puts the pages engine beside fieldd on macOS, and names none elsewhere (EY-1 1b)", () => {
+    expect(pkg.pagesEnginePath).toBe(join(RESOURCES, "bin", packagedPagesEngineFile("darwin")));
+    for (const platform of ["win32", "linux"] as const) {
+      expect(
+        resolvePackagedResources({
+          resourcesPath: RESOURCES,
+          electronExecPath: ELECTRON,
+          platform,
+          arch: "arm64",
+        }).pagesEnginePath,
+      ).toBeNull();
+    }
+  });
+
+  it("names no packaged engine on a Mac the record has no source build for (2026-11-24)", () => {
+    // an Intel Mac: the record names no source build there, so a package names no engine to start
+    expect(
+      resolvePackagedResources({
+        resourcesPath: RESOURCES,
+        electronExecPath: ELECTRON,
+        platform: "darwin",
+        arch: "x64",
+      }).pagesEnginePath,
+    ).toBeNull();
+  });
+
+  it("names the packaged engine's file as the stager does, from the same record (EY-1 1b)", () => {
+    for (const [platform, recordPlatform] of [
+      ["darwin", "darwin-arm64"],
+      ["win32", "win32-x64"],
+    ] as const) {
+      expect(packagedPagesEngineFile(platform)).toBe(
+        pagesEngineFileName(PAGES_ENGINE_RECORD, recordPlatform),
+      );
+    }
+  });
+
+  it("does not make the pages engine a boot-fatal resource (EY-1 1b)", () => {
+    // absent, the broker answers not-installed; main starts as before
+    const okHeads = (path: string): Uint8Array | null =>
+      path === pkg.pagesEnginePath ? null : MACHO_ARM64;
+    expect(() =>
+      assertPackagedResources(pkg, {
+        nodeArch: "arm64",
+        readHead: okHeads,
+        readText: textReader(),
+      }),
+    ).not.toThrow();
   });
 
   it("does not make the screenshot helper a boot-fatal resource (SNAP-D5)", () => {
@@ -283,6 +436,7 @@ describe("resolvePackagedResources", () => {
         : [pkg.macosLiveSurfaceCapture.helperPath, pkg.macosLiveSurfaceCapture.adapterPath]),
       ...(pkg.screenshotHelperPath === null ? [] : [pkg.screenshotHelperPath]),
       ...(pkg.rosettadPath === null ? [] : [pkg.rosettadPath]),
+      ...(pkg.pagesEnginePath === null ? [] : [pkg.pagesEnginePath]),
       ...pkg.pluginRoots.bundled,
       ...Object.values(pkg.tray).flatMap((set) => Object.values(set)),
     ].join("\n");

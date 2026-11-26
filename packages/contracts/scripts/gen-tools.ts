@@ -25,12 +25,13 @@ const toSchema = (schema: ZodTypeAny): Record<string, unknown> => {
 };
 
 // All four on every row (the MT lead's ruling of 23:35Z): a client that ignores MCP's "meaningful only when
-// readOnlyHint is false" would read a read-only tool as destructive by MCP's default. Every room is closed-world.
+// readOnlyHint is false" would read a read-only tool as destructive by MCP's default. Every room is closed-world but
+// the pages room, whose rows say one by one whether they reach the open web (EY, 2026-11-19).
 const annotations = (row: ToolDef) => ({
   readOnlyHint: row.readOnly,
   destructiveHint: row.readOnly ? false : row.destructive === true,
   idempotentHint: row.readOnly ? true : row.idempotent === true,
-  openWorldHint: false,
+  openWorldHint: row.openWorld === true,
 });
 
 const schemas = TOOL_SCHEMAS as Record<string, { input: ZodTypeAny; output: ZodTypeAny }>;

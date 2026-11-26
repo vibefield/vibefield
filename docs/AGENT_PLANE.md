@@ -39,6 +39,14 @@ CP-1d's spark launch/resume handoff is documented in [Spark briefings](agent-pla
 MT-0 makes the compose door the tool plane's (`draft/thinking-tool-plane.md`, ruled 2026-10-30): every tool VibeField offers an agent is one row of `packages/contracts/src/tools.ts`, served by fieldd's `packages/fieldd/src/tool-plane/` to each caller by its audience, a spark every served row and a plain run the `agent` rows. The catalog's table is api's [`vibefield` door](agent-plane/api.html#cat-compose-door); a plain run's briefing is in [Run briefings](agent-plane/spark-briefings.md).
 EY-0 (2026-11-17) adds the `pages` family's 29 `browser_*` rows to the catalog as planned rows
 (DESIGNED: BU-1, BU-2 A, `draft/tool-plane/browser-use.md`), served once EY-2 builds the pages room.
+*Added 2026-11-24; restated 2026-11-25 at the landing:* BUILT. fieldd's pages room serves them and main's pages plane
+runs the pinned engine: the pin's build from source, when whoever launches `pnpm dev` names that file in
+`VIBEFIELD_DEV_PAGES_ENGINE_SOURCE` (darwin-arm64 alone; no script here builds it). Otherwise main has no engine and
+pages answer not installed. The installed npm binary is never started. Real agents used the pages room live in a QA
+desktop on 2026-11-24 and 2026-11-25, on earlier builds of this work, and called some of its rows; which ones is in
+api's note. No smoke and no gate row drives them yet, and a packaged app carries no
+engine yet, so a package has no pages. What is built and what is not is api's
+[note](agent-plane/api.html#pages-built).
 
 Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard as the left one.
 

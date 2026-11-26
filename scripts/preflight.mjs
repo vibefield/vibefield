@@ -20,6 +20,7 @@
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
+import { pagesInstallProblems, readPagesPin } from "./pages-pin.mjs";
 import {
   applySwiftRelease,
   cargoLockHidden,
@@ -350,6 +351,15 @@ const PIN_EXPECTATIONS = [
     label: '"@vibefield/puppeteer-views": 0.4.15',
     package: "@vibefield/puppeteer-views",
   },
+  // EY-1 (2026-11-24): agent-browser, the pages engine, is an exact `dependencies` row in apps/desktop's
+  // manifest beside the truffle sidecars; its record is contracts' PAGES_ENGINE_RECORD (EY-0). The block after this
+  // table holds the row, the lock and the installed binary to that record (scripts/pages-pin.mjs); this row holds the
+  // manifest to the event in one more place, as ice's does. Anchored to the line's end like ice's.
+  {
+    file: "apps/desktop/package.json",
+    re: /^\s*"agent-browser":\s*"0\.41\.0",?$/m,
+    label: '"agent-browser": "0.41.0" (apps/desktop/package.json)',
+  },
 ];
 // A petition window's [patch.crates-io] row is part of its pin: without it the
 // exact version is a registry version again and the window is quietly shut. That
@@ -389,6 +399,17 @@ for (const { file, re, label, package: packageName, overlay } of PIN_EXPECTATION
   } catch {
     problems.push(`EL8 pin check could not read ${file}`);
   }
+}
+// --- EY-1: the pages engine held to its record (scripts/pages-pin.mjs, the pin's one reader) ---
+// The manifest's row, the lock's entry and its integrity, the installed version and this host's binary by its
+// SHA-256, each against contracts' PAGES_ENGINE_RECORD. An engine not installed WARNs: pages are UNAVAILABLE in dev
+// until an install, as the agent index is without rosettad.
+try {
+  const found = pagesInstallProblems(root, readPagesPin(root));
+  problems.push(...found.problems);
+  warnings.push(...found.warnings);
+} catch (error) {
+  problems.push(`the pages engine's pin could not be read: ${error.message}`);
 }
 // --- AR-0 sibling mode: siblings.lock.json vs the checkouts and the overrides ---
 // Two siblings, two kinds of consumption. Every lock package must have a `link:`

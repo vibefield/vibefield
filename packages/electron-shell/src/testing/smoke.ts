@@ -252,6 +252,9 @@ import {
 export { runCaptureWebRtcProbe } from "./capture-webrtc-probe";
 // MV-0 — the Godview perf lab rides the same bundle, for the same reason.
 export { runGodviewPerfLab } from "./godview-perf-lab";
+// EY-1 (1e, 2026-11-19) — the testing engine kill, made by main only under the smoke's mark and
+// its own flag (pagesDaemonKillAsked), and handed to 1i's in-process adapter alone.
+export { createPagesEngineKill } from "./pages-engine-kill";
 // Item 212 (RV #29) — main reads the plugin-runtime soak's own fieldd recovery
 // intensity BEFORE the pair boots (each pair's coordinator is built with it),
 // so the soak's reader is a door of this bundle's like the stagers below.

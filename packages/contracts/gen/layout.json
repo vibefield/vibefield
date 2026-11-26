@@ -181,6 +181,11 @@
     "fieldd",
     "objects.grants.json"
   ],
+  "PAGES_STILLS_DIR": [
+    "fieldd",
+    "pages",
+    "stills"
+  ],
   "SPARK_FILES_DIR": [
     "fieldd",
     "spark-files"
