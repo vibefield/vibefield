@@ -988,14 +988,23 @@ export interface HeldToolDef {
     readonly cursor?: string;
     /** false: keys only — no slot in the bar (the board's tip, its wipe). */
     readonly bar?: boolean;
-    /** An action's op. */
-    run?(api: HeldToolApi): void;
+    /**
+     * An action's op. An action that is a CHOICE (petition I62 — `choices`) is handed the choice the host took (`taken`), only when it is
+     * one of the tool's choices now; used with none, it does its plain op (or nothing).
+     */
+    run?(api: HeldToolApi, taken?: ActChoiceTaken): void;
     /**
      * Its STATE NOW (petition I49 — `HeldToolState`): asked with the anchor, as the kind's `open.readout` is, and when the tool is used.
      * Undefined — or absent — the tool as declared. One that THROWS is caught where it is asked (the desk says so once, never a strike):
      * the tool stands as declared.
      */
     state?(ctx: HeldToolStateContext): HeldToolState | undefined;
+    /**
+     * Its CHOICES NOW (petition I62 — an action may be a choice, as a menu act may: a held pane's device): plain data the host draws as
+     * rows, the current one marked, read with the anchor as its state is. Undefined — or absent — the tool is one op. One that THROWS is
+     * caught where it is asked (said once): the tool stands as one op.
+     */
+    choices?(ctx: HeldToolStateContext): readonly ActChoice[] | undefined;
 }
 /**
  * A held tool's GLYPH (design-016 §5 · K-L2, K8a): a NAME the bar draws (its set — `SELECTION_GLYPHS` in `@ice/react`, which an
