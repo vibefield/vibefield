@@ -26,6 +26,8 @@ import type {
   ThemeName,
   TrayAnchor,
 } from "@vibecook/ice/desk";
+import { ObjectsPresenceSnapshot } from "@vibefield/contracts";
+import { SPARK_STATUSES } from "@vibefield/design-kit/spark-face";
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
 import type {
@@ -39,6 +41,19 @@ import type {
   DeskSimulatorDevicesStats,
 } from "../../surfaces/live/simulator-devices";
 import { setSurfaceGraceForTest, surfaceGraceMs } from "../../surfaces/pool";
+import {
+  type AtWorkLayerRecord,
+  type AtWorkLentSpark,
+  atWorkContexts,
+  atWorkDraws,
+  atWorkRecord,
+  atWorkRenders,
+  atWorkStageContexts,
+  atWorkStageFrames,
+  declineAtWorkGl,
+  lendAtWorkSparks,
+} from "./at-work/at-work-layer";
+import { type AtWorkStore, atWorkStore } from "./at-work/at-work-store";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
 import { type CopyRecord, lastCopy } from "./copy/copy-record";
 import { type CoverRecord, coverCaptures, coverRecords } from "./cover-still";
@@ -400,6 +415,23 @@ export interface VfDeskDoor {
     readonly renders: number;
     readonly said: PresenceSaid | null;
   };
+  /** Item 550 (2026-11-18) — at work on the mat, a read: the layer's record as it last drew (its form, GL or the
+   * DOM's, and why; its verdict; the objects it keeps and those on screen; its contexts; its steps, rAFs and timers;
+   * the draws held a frame; its element writes and renders), the draws window-wide (none at rest or under a cover),
+   * the frames a spark's live star was drawn on its stage (none 8 s after the last touch), the view's renders
+   * (never per frame), the window's at-work WebGL2 contexts: the overlay's (made on the first mark, never by
+   * this read) and its live-star stages', and the applier's writes a smoke's fixture held back. */
+  atWork(): {
+    readonly record: AtWorkLayerRecord | null;
+    readonly draws: number;
+    readonly stageFrames: number;
+    readonly renders: number;
+    readonly contexts: number;
+    readonly stageContexts: number;
+    /** the applier's writes held back from the at-work store while a smoke's fixture stood (`atWorkFixture`),
+     * window-wide: none in the packaged app */
+    readonly held: number;
+  };
   /** DK-16 — the smokes' presence relay, installed only on a page loaded with `?presenceRelay=1` (two windows of one shell
    * share no presence room — fieldd's rooms are other desktops' — so the smoke plays the mesh): the presence payloads this
    * window sent since the last ask (base64), and payloads handed in as its lane hands a room's (each through
@@ -410,6 +442,17 @@ export interface VfDeskDoor {
    * payload that carried one left, or null before — installed with the relay. Since desk.7 a spawned pointer's first
    * world point is its own, so a peer's first cursor is never the origin a frame-late world point left behind. */
   presenceFirst?(): { readonly x: number; readonly y: number } | null;
+  /** Item 550 (2026-11-18) — the smokes' at-work fixture, installed only on a page loaded with `?atWorkFixture=1`
+   * (no agent feeds a smoke's applier): the objects agents are at work on, each by its durable key with its rows as
+   * the presence feed spells them, published for the board this mount shows as the applier publishes a feed's
+   * (null clears it, as a feed that ends). While a fixture stands the store takes no write of the applier's own
+   * (each one held back and counted in `atWork().held`), so a row is never judged on a board the applier
+   * replaced. `sparks` lends a fixture's spark its face seed and its status (one of the kit's), as Chat's list
+   * would hold them, since a smoke's window reads no spark of its own. Answers whether the board took it. */
+  atWorkFixture?(
+    objects: readonly { readonly key: string; readonly agents: readonly unknown[] }[] | null,
+    sparks?: Readonly<Record<string, { readonly seed: number; readonly status: string }>>,
+  ): boolean;
   /**
    * PT-5b (ruling 6) — the smokes' DOCUMENT relay, installed only on a page loaded with `?docRelay=1` (two windows of one
    * shell hold no board together — fieldd's rooms are other desktops' — so the smoke plays the mesh, as it does for
@@ -502,6 +545,9 @@ const pickOf = (
 
 /** Install `window.__vfDesk` for one mount; the returned undo removes it if it is still this one's. */
 export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): () => void {
+  // item 550 (2026-11-18): a smoke's page loaded with `?atWorkGl=0` witnesses the at-work layer's DOM form over a
+  // drawing desk (its context then made with no WebGL2)
+  if (atWorkGlRefused()) declineAtWorkGl();
   const words = desk.words ?? plainWords;
   const { handle, engine } = desk;
   let ambient: AmbientMode = "idle";
@@ -676,14 +722,26 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       renders: peersRenders(),
       said: presenceSaid(engine),
     }),
+    atWork: () => ({
+      record: atWorkRecord(),
+      draws: atWorkDraws(),
+      stageFrames: atWorkStageFrames(),
+      renders: atWorkRenders(),
+      contexts: atWorkContexts(),
+      stageContexts: atWorkStageContexts(),
+      held: atWorkHeld,
+    }),
     ...(presenceRelayAsked() ? presenceRelay(engine) : {}),
     ...(docRelayAsked() ? docRelay(engine) : {}),
     ...(deskFaultsAsked() ? { gpuFault: (kind) => gpuFault(desk.device?.() ?? null, kind) } : {}),
+    ...(atWorkFixtureAsked() ? { atWorkFixture: atWorkFixture(desk) } : {}),
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;
   return () => {
     if (scope["__vfDesk"] === door) delete scope["__vfDesk"];
+    // item 550 (2026-11-18): a smoke's at-work fixture holds the store no longer than the door that took it
+    if (door.atWorkFixture !== undefined) letGoAtWorkStore();
   };
 }
 
@@ -852,6 +910,106 @@ function deskFaultsAsked(): boolean {
   return (
     typeof location !== "undefined" && new URLSearchParams(location.search).get(DESK_FAULTS) === "1"
   );
+}
+
+/** Item 550 (2026-11-18): the smokes' URL door for the at-work fixture (`?atWorkFixture=1`). */
+export const AT_WORK_FIXTURE = "atWorkFixture";
+
+function atWorkFixtureAsked(): boolean {
+  return (
+    typeof location !== "undefined" &&
+    new URLSearchParams(location.search).get(AT_WORK_FIXTURE) === "1"
+  );
+}
+
+/** Item 550 (2026-11-18): the smokes' URL door for the at-work layer's DOM form (`?atWorkGl=0`): the window's
+ * at-work context is made with no WebGL2, as a window that has none. */
+export const AT_WORK_GL_SWITCH = "atWorkGl";
+
+function atWorkGlRefused(): boolean {
+  return (
+    typeof location !== "undefined" &&
+    new URLSearchParams(location.search).get(AT_WORK_GL_SWITCH) === "0"
+  );
+}
+
+/** A fixture object's address as the feed spells one (`vf:obj/` and eight lowercase letters or digits). */
+const fixtureRef = (i: number): string => `vf:obj/fixt${String(i).padStart(4, "0")}`;
+
+/** The window's at-work store's own two writes. */
+type AtWorkStoreWrites = Pick<AtWorkStore, "publish" | "clear">;
+
+/** The store's own writes while a smoke's fixture holds it (null: none holds it), and the applier's writes held
+ * back meanwhile, window-wide. */
+let atWorkHold: AtWorkStoreWrites | null = null;
+let atWorkHeld = 0;
+
+/** Item 550 (2026-11-18): while a smoke's fixture stands, the window's at-work store takes the fixture's writes
+ * alone. The applier's own (a feed's snapshot, its end or refusal, a reconnect's clear) are held back and counted,
+ * so a row is never judged on a board the applier replaced mid-row. Only the fixture's door holds it, on a page
+ * loaded with `?atWorkFixture=1`; it is let go when the fixture is cleared or the door goes. Returns the store's
+ * own writes. */
+function holdAtWorkStore(): AtWorkStoreWrites {
+  if (atWorkHold !== null) return atWorkHold;
+  const own: AtWorkStoreWrites = { publish: atWorkStore.publish, clear: atWorkStore.clear };
+  const held = (): void => {
+    atWorkHeld += 1;
+  };
+  atWorkStore.publish = held;
+  atWorkStore.clear = held;
+  atWorkHold = own;
+  return own;
+}
+
+/** The store's own writes given back: the applier's reach it again. */
+function letGoAtWorkStore(): void {
+  if (atWorkHold === null) return;
+  atWorkStore.publish = atWorkHold.publish;
+  atWorkStore.clear = atWorkHold.clear;
+  atWorkHold = null;
+}
+
+/** A fixture's sparks as a smoke hands them — each one's face seed and its status, one of the kit's — or null
+ * where one is not. */
+function lentSparksOf(
+  sparks: Readonly<Record<string, { readonly seed: number; readonly status: string }>>,
+): ReadonlyMap<string, AtWorkLentSpark> | null {
+  const lent = new Map<string, AtWorkLentSpark>();
+  for (const [spark, { seed, status }] of Object.entries(sparks)) {
+    const known = SPARK_STATUSES.find((one) => one.id === status)?.id;
+    if (known === undefined || !Number.isFinite(seed)) return null;
+    lent.set(spark, { seed, status: known });
+  }
+  return lent;
+}
+
+/** The smokes' at-work fixture over this mount's board: read as the feed's own snapshot is (contracts'
+ * `ObjectsPresenceSnapshot`), then published into the window's at-work store as the applier publishes, the store
+ * held against the applier's own writes while it stands; its sparks lent as Chat's list would hold them. */
+function atWorkFixture(desk: MountedDesk): NonNullable<VfDeskDoor["atWorkFixture"]> {
+  return (objects, sparks) => {
+    const docId = desk.docId;
+    if (docId === undefined) return false;
+    if (objects === null) {
+      lendAtWorkSparks(new Map());
+      letGoAtWorkStore();
+      atWorkStore.clear();
+      return true;
+    }
+    const read = ObjectsPresenceSnapshot.safeParse({
+      objects: objects.map((object, i) => ({
+        ref: fixtureRef(i),
+        docId,
+        key: object.key,
+        agents: object.agents,
+      })),
+    });
+    const lent = lentSparksOf(sparks ?? {});
+    if (!read.success || lent === null) return false;
+    lendAtWorkSparks(lent);
+    holdAtWorkStore().publish(docId, read.data);
+    return true;
+  };
 }
 
 /** Fault the layer's own device: lose it (destroyed, as a reset loses it), or raise ONE uncaptured validation error (a

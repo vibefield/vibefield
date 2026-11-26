@@ -143,6 +143,7 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import { AT_WORK_DOORS, AT_WORK_FLAG, atWorkGpuLessRows, atWorkRows } from "./smoke-at-work";
 import { browserPaneRows, PANE_FLAG } from "./smoke-browser-pane";
 import { BUNDLED_FLAG, bundledFixture, judgeBundled } from "./smoke-bundled";
 import {
@@ -1314,6 +1315,8 @@ export async function runSmokeCanvas(opts: {
     // markers too, for their lab seam alone — DK-14's AIMED row calls the terminals up through it, as a person's first
     // call would, since a launch leaves them uncalled and the deck shows no pane to aim at (testing/godview-deck-up.ts)
     if (noWebgpu) await withoutWebgpu(win);
+    // item 550 (2026-11-18): and the at-work fixture's door (`atWorkFixture`: no agent feeds a smoke's applier, so the
+    // AT WORK rows hand the at-work store their rows; testing/smoke-at-work.ts)
     await loadRenderer(win, "smoke-canvas", opts.viteUrl, {
       [SEED_EXAMPLES]: "1",
       presenceRelay: "1",
@@ -1323,6 +1326,7 @@ export async function runSmokeCanvas(opts: {
         : {}),
       deskFaults: "1",
       godviewMarkers: "1",
+      ...AT_WORK_DOORS,
     });
     // DK-11: the page's visibility recorder armed as the window loads — the occluded row asks whether it EVER went hidden
     await pageVisibility(win);
@@ -1354,6 +1358,8 @@ export async function runSmokeCanvas(opts: {
           say: (line) => console.log(line),
         })),
       );
+      // item 550 (2026-11-18): the at-work layer hides with a desk that does not draw (testing/smoke-at-work.ts)
+      problems.push(...(await atWorkGpuLessRows({ win, say: (line) => console.log(line) })));
       if (win.webContents.isCrashed()) problems.push("the renderer crashed");
     } else if (gpu) {
       // FG-2: the rows start on the revealed desk, as they did while the reveal followed the stable desk at once (the
@@ -1390,6 +1396,33 @@ export async function runSmokeCanvas(opts: {
           problems.push(`DK-16 PEERS: ${error instanceof Error ? error.message : String(error)}`);
         }
       };
+      // item 550 (2026-11-18): at work on the mat (testing/smoke-at-work.ts); its DOM row loads the page again with
+      // WebGL2 declined, then back on these doors
+      const runAtWork = async (): Promise<void> => {
+        try {
+          problems.push(
+            ...(await atWorkRows({
+              win,
+              reload: async (search) => {
+                const ready = waitForConsole(win, "DESK_READY ", 60_000);
+                await loadRenderer(win, "smoke-canvas", opts.viteUrl, search);
+                await ready;
+                await bootRevealed(win, "the at-work rows' page");
+              },
+              doors: {
+                presenceRelay: "1",
+                deskFaults: "1",
+                godviewMarkers: "1",
+                ...AT_WORK_DOORS,
+              },
+              shotDir,
+              say: (line) => console.log(line),
+            })),
+          );
+        } catch (error) {
+          problems.push(`AT WORK: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      };
       const profileSeed = profileSeedUrl(process.argv);
       if (profileSeed !== undefined) {
         // BP-D7 — smoke:profile's PHASE A, its rows ALONE after the boot's: one pane laid, pointed at the row's own fixture,
@@ -1414,6 +1447,8 @@ export async function runSmokeCanvas(opts: {
         );
       } else if (process.argv.includes("--peers")) {
         await runPeers();
+      } else if (process.argv.includes(AT_WORK_FLAG)) {
+        await runAtWork();
       } else if (process.argv.includes("--desk-copy")) {
         // The copy and idle rows alone, for diagnosing their pointer interactions on the seeded desk.
         try {
@@ -1616,6 +1651,11 @@ export async function runSmokeCanvas(opts: {
         } catch (error) {
           problems.push(`DK-16 FAULTS: ${error instanceof Error ? error.message : String(error)}`);
         }
+        // item 550 (2026-11-18): at work on the mat — a fixture row drawn on a seeded object within two frames, its
+        // light on the bare mat by night, nothing drawn at rest with the wind stilled, the ring on its own timer,
+        // nothing under a cover, a spark's live star let go after the ambient, and the DOM form over a drawing desk
+        // with WebGL2 declined (testing/smoke-at-work.ts) — before the pad's rows move the camera
+        await runAtWork();
         // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
         // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
         const pad = await commentPadRow(win, shotDir);
@@ -1714,6 +1754,8 @@ export async function runSmokeCanvas(opts: {
           say: (line) => console.log(line),
         })),
       );
+      // item 550 (2026-11-18): the at-work layer hides with a desk that does not draw (testing/smoke-at-work.ts)
+      problems.push(...(await atWorkGpuLessRows({ win, say: (line) => console.log(line) })));
       if (win.webContents.isCrashed()) problems.push("the renderer crashed");
     }
     // DK-18 (36): how often a smoke window became the key window — said, never judged: no row focuses one (the source row in

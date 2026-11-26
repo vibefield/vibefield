@@ -18,6 +18,11 @@ export const BAR = {
   lowest: 120,
   /** the line's reserve: nothing of the bar's grows lower than the window's foot less this (700 at 780) */
   foot: 80,
+  /** how far the anchor's box stands out of the selected objects: the brackets' 6 round one, the union's 10 round
+   * several (ICE's `MARKS.select.gap`, `MARKS.union.gap`) — a clearance from the objects' edge is measured past it
+   * (item 550, 2026-11-18) */
+  bracketGap: 6,
+  unionGap: 10,
 } as const;
 
 /** The bar IN HAND (§8 "Tools in hand"; MC-D4): under the head, its top at y 64 (centre 84) — 16 under the name pill —
@@ -79,19 +84,26 @@ export const offScreen = (box: ScreenBox, view: ViewSize): boolean =>
  * cross the safe top (94) it stands 10 below them instead, and a bar flipped below clamps at 94; kept 16 from each
  * side; its top never lower than the window's foot less 120 (660). Null — no bar — with nothing selected, no box
  * drawn, or the selection wholly off-screen.
+ *
+ * Over an object at work (item 550, 2026-11-18; §8 "The selection bar", Place) the foot stands `clear` off the
+ * selected objects' edge — the reach of their marks, `atWorkBarClear` — and flipped, as far below; never nearer than
+ * the 10 above the brackets. With no clearance (0) the place is the one above, number for number.
  */
 export function placeBar(
   anchor: { readonly box: ScreenBox | null; readonly count: number; readonly view: ViewSize },
   width: number,
+  clear = 0,
 ): BarPlace | null {
   const { box, view } = anchor;
   if (box === null || anchor.count === 0 || offScreen(box, view)) return null;
   const x = clamp((box.x0 + box.x1) / 2 - width / 2, BAR.sides, view.width - BAR.sides - width);
   const lowest = view.height - BAR.lowest;
-  let y = box.y0 - BAR.above - BAR.height;
+  const gap = anchor.count === 1 ? BAR.bracketGap : BAR.unionGap;
+  const above = clear > 0 ? Math.max(BAR.above, clear - gap) : BAR.above;
+  let y = box.y0 - above - BAR.height;
   let below = false;
   if (y < BAR.safeTop) {
-    y = Math.max(box.y1 + BAR.above, BAR.safeTop);
+    y = Math.max(box.y1 + above, BAR.safeTop);
     below = true;
   }
   return { x, y: Math.min(y, Math.max(BAR.safeTop, lowest)), below };

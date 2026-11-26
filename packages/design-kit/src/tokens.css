@@ -198,6 +198,24 @@
   --vf-coin-bevel-light: rgb(255 255 255 / 50%);
   --vf-coin-bevel-dark: rgb(0 0 0 / 16%);
   --vf-coin-sheen: rgb(255 255 255 / 30%);
+  /* §8 "At work on the mat" (item 550, 2026-11-18): what the at-work overlay draws with beside a
+     project's colour (DESIGN.md §2.6, §2.9) — the mark printed on a sticker's foil, the shadow its
+     marks cast by day and by night (§5), a spark's starlight (§2.10: a pearl leaning through rose
+     and aqua over its deep tone, never a palette's) and the neutral pearl a run in no project wears.
+     The same in both themes: the overlay mixes day and night itself, by the theme's light on the
+     mat, so `.dark` redeclares none. A sticker's paper and its cut are §2.8's (`--vf-sticker-edge`,
+     `--vf-sticker-cut`, above). The overlay reads each from the root into its uniforms, as the press
+     reads its colours, and its shader holds no ink of its own: the whites of its lights and the
+     printed star's eyes by night are light, its own numbers, as the press keeps its lamp (DESIGN.md
+     §5). */
+  --vf-atwork-print: #16171b;
+  --vf-atwork-cast: #0e1a0a;
+  --vf-atwork-cast-night: #050509;
+  --vf-atwork-pearl: #f0e7d6;
+  --vf-atwork-pearl-deep: #898299;
+  --vf-atwork-pearl-rose: #fdc4e3;
+  --vf-atwork-pearl-aqua: #a7edec;
+  --vf-atwork-neutral: #b1aa9d;
   /* A presence cursor's wire colour: the SENDER resolves it and every peer
      draws it as sent, whatever their theme — so one neutral that holds on
      both grounds and under ICE's white label text, never the theme's ink:

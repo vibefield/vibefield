@@ -26,6 +26,7 @@ const UPDATE_GROUP_OPTIONS: readonly { id: UpdateCornerGroup; label: string }[] 
   { id: "acts", label: "Restart · Download" },
 ];
 
+import { AT_WORK_PLATES, AtWorkLivePlate, AtWorkPlate } from "../AtWorkPreview";
 import { CardBloomPlate } from "../CardBloomPreview";
 import {
   CARD_FIXTURES,
@@ -396,6 +397,33 @@ export function ChromeSection({
           it, the face first, then the name — never the person's colour. Placed every frame through
           the camera; hidden after 8 s idle, when the pointer leaves its window or its canvas, under
           a cover and while the board is out. The plates lay the lit mat where the desk draws it.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="At work on the mat — who is at work on an object, in its project's colour"
+        source="field/desk/at-work/* · DESIGN.md §8, §2.6, §2.8, §2.9, §2.10, §5, §6"
+        bleed
+      >
+        <AtWorkLivePlate dark={dark} />
+        <div className="vf-ds-atwork-plates">
+          {AT_WORK_PLATES.map((state) => (
+            <AtWorkPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          An agent at work on a desk object wears one marker stroke round it in the colour Godview
+          gives its project — 9, 8 or 7 px, nested out from 17 px, never over the pencil — and its
+          sticker, its catalog mark on foil, down the object's right side; past three agents the
+          third seat counts the rest on paper. State is said by motion and in words, and the mark
+          never changes colour for it: reading runs the ink wet at 95 px/s, acting at 235; needs-you
+          lifts the sticker, a ring leaves it every 2.4 s and its name stands on the line's glass; a
+          failure shivers once; your hand on it greys it. A spark at work is its free star and a
+          starlight line, the star's props in the engine's own colours (an amber lock, a red ✕); a
+          crew run's sticker wears its spark's printed star. Zoomed out the strokes merge, then
+          become a 2 px line. The live plate is the GL layer, and keeps the band ICE's pencil lies
+          in clear on a selected object; the plates below are its DOM form — still, never a blank —
+          on the lit mat where the desk draws it.
         </p>
       </Specimen>
 

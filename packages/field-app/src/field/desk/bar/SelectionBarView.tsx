@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { AT_WORK_MOTION } from "../at-work/at-work-model";
 import {
   BAR,
   type BarPlace,
@@ -50,12 +51,22 @@ import "./selection-bar.css";
 // — no React render. A render happens only when what the bar SAYS changes (the selection, its acts, its words, the
 // hand's tools, the mode in hand, the kind's word). The transform places the bar's CENTRE (`translateX(-50%)`), so
 // its width can change with its contents — the cross-fade's 120 ms — without it leaving its place.
+//
+// OVER AN OBJECT AT WORK (item 550, 2026-11-18; DESIGN.md §8 "The selection bar", Place; §6 "At work on the mat"):
+// the place's `clear` stands the foot off the marks. When it turns on over the same selection while the bar is seen,
+// the bar travels out with the stroke's draw-on, 780 ms on the island curve; when it turns off, back with the
+// stroke's retract, 460 ms on the retract curve — one transform transition, taken off one beat past its end as the
+// role change's is. A clearance that changes with the selection, an unseen bar and reduced motion (M6) place at once.
 
 /** What the bar is placed from: the anchor's box, its count and the view (ICE's `SelectionAnchor`, narrowed). */
 export interface PlaceAnchor {
   readonly box: ScreenBox | null;
   readonly count: number;
   readonly view: ViewSize;
+  /** Item 550 (2026-11-18): how far the foot stands off the selected objects' edge for an object at work's marks
+   * (absent or 0: above the brackets, as ever), and the selection it was read for — its entities, as one key. */
+  readonly clear?: number;
+  readonly selection?: string;
 }
 
 export interface SelectionBarHandle {
@@ -131,6 +142,26 @@ const handKey = (cell: HandCell, index: number): string => {
 /** A reduced-motion role change, a fade only: out at the old place, then in at the new one. */
 type SwapPhase = "none" | "out" | "in";
 
+/** The foot's travel clear of an object at work's marks, under way: out with the draw-on, back with the retract. */
+type Clearing = "none" | "out" | "back";
+
+/** The clearance the bar last stood at, and the selection it was read for. */
+interface StoodClear {
+  readonly atWork: boolean;
+  readonly selection: string | undefined;
+}
+
+/** The retract's curve (DESIGN.md §6), as the chat's and the bloom's own CSS spell it. */
+const RETRACT = "cubic-bezier(0.4, 0, 1, 1)";
+
+/** Item 550 (2026-11-18): the foot's transform transition clear of an object at work's marks — out with the stroke's
+ * draw-on on the island curve, back with its retract (DESIGN.md §6 "At work on the mat"). */
+export function clearanceTransition(out: boolean): string {
+  return out
+    ? travelTransition(AT_WORK_MOTION.drawMs)
+    : `transform ${AT_WORK_MOTION.eraseMs}ms ${RETRACT}`;
+}
+
 const NO_HAND: readonly HandCell[] = [];
 
 export function SelectionBarView({
@@ -197,6 +228,11 @@ export function SelectionBarView({
   const [swapPhase, setSwapPhase] = useState<SwapPhase>("none");
   const swapPhaseRef = useRef<SwapPhase>("none");
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  // OVER AN OBJECT AT WORK (item 550): the foot's travel clear of the marks, and the clearance it last stood at (null:
+  // none yet, or in hand)
+  const [clearing, setClearing] = useState<Clearing>("none");
+  const clearTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stoodClear = useRef<StoodClear | null>(null);
   const visible = shown && !away && swapPhase !== "out";
   /** Whether the bar was SEEN as of the last render committed — what a role change travels from, or not. */
   const wasVisible = useRef(visible);
@@ -207,13 +243,15 @@ export function SelectionBarView({
   const handShown = role === "hand" || face === "hand" || swapping ? lastHand.current : NO_HAND;
 
   /** The root's transitions: its opacity's (shown, away, out — or a reduced role change's fade), the travel's transform
-   * while it travels, and the width's while the contents cross-fade. */
+   * while it travels (else the foot's travel clear of an object at work's marks, item 550), and the width's while the
+   * contents cross-fade. */
   const transitionOf = (
     phase: SwapPhase,
     travelOn: boolean,
     swapOn: boolean,
     shownNow: boolean,
     awayNow: boolean,
+    clearOn: Clearing,
   ): string => {
     const parts = [
       phase === "out"
@@ -223,9 +261,16 @@ export function SelectionBarView({
           : shownTransition(motion, !shownNow ? "out" : awayNow ? "away" : "in"),
     ];
     if (travelOn) parts.push(travelTransition(travelMs));
+    else if (clearOn !== "none") parts.push(clearanceTransition(clearOn === "out"));
     if (swapOn) parts.push(`width ${motion.swapMs}ms ease`);
     return parts.join(", ");
   };
+  /** This render's transitions with a clearance travel on (item 550): what `place` writes before the new place. */
+  const clearingTransition = useRef<(clearOn: Clearing) => string>(() => "");
+  clearingTransition.current = (clearOn) =>
+    transitionOf(swapPhase, traveling, swapping, shown, away, clearOn);
+  const travelsRef = useRef(motion.travels);
+  travelsRef.current = motion.travels;
 
   /** The width of what the bar shows — its glass — written with its place. */
   const fit = useCallback((): void => {
@@ -267,6 +312,29 @@ export function SelectionBarView({
     root.dataset.scroll = g.scroll ? "true" : "false";
   }, []);
 
+  /** Item 550: the foot travels clear of the marks (`out`) or back — while the bar is seen and travels at all. The
+   * transition goes on before the new place is written, and comes off one beat past its end. */
+  const travelClear = useCallback((root: HTMLElement, out: boolean): void => {
+    if (!wasVisible.current || !travelsRef.current) return;
+    const kind: Clearing = out ? "out" : "back";
+    if (clearTimer.current !== null) clearTimeout(clearTimer.current);
+    root.style.transition = clearingTransition.current(kind);
+    setClearing(kind);
+    clearTimer.current = setTimeout(
+      () => {
+        clearTimer.current = null;
+        setClearing("none");
+      },
+      (out ? AT_WORK_MOTION.drawMs : AT_WORK_MOTION.eraseMs) + TRAVEL_GRACE_MS,
+    );
+  }, []);
+  useEffect(
+    () => () => {
+      if (clearTimer.current !== null) clearTimeout(clearTimer.current);
+    },
+    [],
+  );
+
   const place = useCallback(
     (anchor: PlaceAnchor, now = true): void => {
       lastAnchor.current = anchor;
@@ -274,18 +342,30 @@ export function SelectionBarView({
       const root = rootRef.current;
       const inHand = roleRef.current === "hand";
       const w = inHand ? handWidthRef.current : widthRef.current;
-      const at = inHand ? placeHand(anchor.view, w) : placeBar(anchor, w);
+      const at = inHand ? placeHand(anchor.view, w) : placeBar(anchor, w, anchor.clear ?? 0);
       if (root === null || at === null) return;
       placed.current = at;
       // a reduced role change places at its swap point, unseen (a fade only): this anchor is remembered for it
       if (swapPhaseRef.current === "out") return;
+      // item 550: a clearance that turned on or off over the same selection travels; in hand there is none
+      const atWork = !inHand && (anchor.clear ?? 0) > 0;
+      const stood = stoodClear.current;
+      stoodClear.current = inHand ? null : { atWork, selection: anchor.selection };
+      if (
+        stood !== null &&
+        stood.atWork !== atWork &&
+        stood.selection !== undefined &&
+        stood.selection === anchor.selection
+      ) {
+        travelClear(root, atWork);
+      }
       root.style.transform = `translate(${(at.x + w / 2).toFixed(1)}px, ${at.y.toFixed(1)}px) translateX(-50%)`;
       root.dataset.below = at.below ? "true" : "false";
       fit();
       barStats.placements += 1;
       if (openRef.current) layoutGrow();
     },
-    [layoutGrow, fit],
+    [layoutGrow, fit, travelClear],
   );
   useImperativeHandle(handleRef, () => ({ place }), [place]);
 
@@ -304,6 +384,8 @@ export function SelectionBarView({
     if (role === roleSeen.current) return;
     roleSeen.current = role;
     roleRef.current = role;
+    // a role change travels on its own: the clearance is read afresh from the next place (item 550)
+    stoodClear.current = null;
     clearTimers();
     const root = rootRef.current;
     const settle = (): void => {
@@ -338,7 +420,7 @@ export function SelectionBarView({
       );
       return;
     }
-    root.style.transition = transitionOf("none", true, false, true, false);
+    root.style.transition = transitionOf("none", true, false, true, false, "none");
     setTraveling(true);
     setSwapping(false);
     timers.current.push(
@@ -803,7 +885,7 @@ export function SelectionBarView({
     "--vf-bar-swap-ms": `${motion.swapMs}ms`,
     opacity: visible ? 1 : 0,
     visibility: visible ? "visible" : "hidden",
-    transition: transitionOf(swapPhase, traveling, swapping, shown, away),
+    transition: transitionOf(swapPhase, traveling, swapping, shown, away, clearing),
   } as CSSProperties;
 
   const selectionShown = face === "selection";

@@ -41,6 +41,7 @@ import { getActiveView } from "../../../frame/view-state";
 import { getRendererLogger } from "../../../logging";
 import { askAgain } from "../../../reconnect";
 import { agentHalfOf } from "../agent-kinds";
+import { atWorkStore } from "../at-work/at-work-store";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
 import { publishPresence } from "./presence-store";
 
@@ -87,11 +88,22 @@ export interface DeskAgentDoor {
     readonly key: string;
     readonly held: boolean;
   }): Promise<unknown>;
+  /** Item 550 (2026-11-18): whether the client is ready, told at each change of its status (absent: never told) */
+  ready?(onChange: (ready: boolean) => void): () => void;
 }
 
-export function deskAgentDoorOver(
-  client: Pick<FielddClient, "request" | "subscribe">,
-): DeskAgentDoor {
+/** What the door reads of the client: its two calls, and its status where it says one (item 550, 2026-11-18). */
+type DoorClient = Pick<FielddClient, "request" | "subscribe"> &
+  Partial<Pick<FielddClient, "status" | "onStatusChange">>;
+
+/** The door's `ready`, where the client says its status: ready, or not (connecting, reconnecting, closed, failed). */
+function readyOver(client: DoorClient): Pick<DeskAgentDoor, "ready"> {
+  const listen = client.onStatusChange?.bind(client);
+  if (listen === undefined) return {};
+  return { ready: (onChange) => listen(() => onChange(client.status === "ready")) };
+}
+
+export function deskAgentDoorOver(client: DoorClient): DeskAgentDoor {
   const stream = async (
     method: string,
     params: unknown,
@@ -131,6 +143,7 @@ export function deskAgentDoorOver(
       return () => subscription.unsubscribe();
     },
     held: (params) => client.request("objects.held", params),
+    ...readyOver(client),
   };
 }
 
@@ -602,10 +615,15 @@ function startApplier(
     open: (onEnded: (error: unknown) => void) => Promise<() => void>,
   ): void => {
     let step = 0;
+    // item 550 (2026-11-18): while the presence feed is down nothing on the desk claims work
+    const down = (): void => {
+      if (name === "presence" && !disposed) atWorkStore.clear();
+    };
     const ask = (): void => {
       if (disposed) return;
       void open((error) => {
         log().warn(`renderer.desk.agent_${name}_ended`, FEED_ENDED[name], { kind: kindOf(error) });
+        down();
       }).then(
         (off) => {
           step = 0;
@@ -617,6 +635,7 @@ function startApplier(
             kind: kindOf(cause),
             again,
           });
+          down();
           if (!again || disposed) return;
           const wait = setTimeout(() => {
             waits.delete(wait);
@@ -649,7 +668,8 @@ function startApplier(
     ),
   );
 
-  // the objects a run has open on this board, and which of those the person's hand is on
+  // the objects a run has open on this board, and which of those the person's hand is on; item 550 (2026-11-18): the
+  // same feed publishes who is at work on them to the at-work store, cleared when it ends, is refused or stops
   let open: readonly string[] = [];
   const reported = new Set<string>();
   const say = (key: string, held: boolean): void => {
@@ -689,6 +709,7 @@ function startApplier(
         say(key, false);
       }
       if (disposed) return;
+      atWorkStore.publish(docId, snapshot.data);
       if (open.length > 0 && guest === null)
         guest = engine.engine.guests.add({ id: "objects.held", make: () => look });
       else if (open.length === 0 && guest !== null) {
@@ -697,6 +718,11 @@ function startApplier(
       }
     }, onEnded),
   );
+  // a client that leaves ready holds no feed until its replay, so nothing on the desk claims work meanwhile
+  const offReady = door.ready?.((ready) => {
+    if (!ready && !disposed) atWorkStore.clear();
+  });
+  if (offReady !== undefined) keep(offReady);
 
   return () => {
     disposed = true;
@@ -707,6 +733,7 @@ function startApplier(
     guest = null;
     for (const off of offs) off();
     offs.length = 0;
+    atWorkStore.clear();
   };
 }
 

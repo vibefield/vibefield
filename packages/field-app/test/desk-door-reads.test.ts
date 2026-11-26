@@ -17,6 +17,8 @@ import {
 import { COMMENT_PAD_TYPE } from "@vibefield/plugin-comment-pad";
 import { afterEach, describe, expect, it } from "vitest";
 import { setBoardStatus } from "../src/board-status";
+import { atWorkGlDeclined } from "../src/field/desk/at-work/at-work-layer";
+import { atWorkStore } from "../src/field/desk/at-work/at-work-store";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskObjects, installDeskDoor, type VfDeskDoor } from "../src/field/desk/desk-door";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
@@ -672,6 +674,150 @@ describe("the desk door's reads (DK-8)", () => {
       expect(calls).toEqual(["createBuffer 4/0", "asked", "destroy", "asked"]);
       asked.undo();
     } finally {
+      if (before === undefined) delete g.location;
+      else g.location = before;
+      ce.dispose();
+    }
+  });
+
+  it("item 550: the at-work read makes no context, and the smokes' at-work doors stand only on a page asked for them (`?atWorkFixture=1`, `?atWorkGl=0`) — the packaged app's page, asked for neither, has neither", () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const install = (docId?: string) => {
+      const undo = installDeskDoor(
+        {
+          engine: ce,
+          handle: {} as never,
+          generation: 1,
+          mount: 0,
+          theme: "light",
+          ...(docId === undefined ? {} : { docId }),
+        },
+        () => false,
+      );
+      return { door: (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk as VfDeskDoor, undo };
+    };
+    const g = globalThis as { location?: { search: string } };
+    const before = g.location;
+    const row = {
+      run: "r1",
+      handle: "r1 in the smoke",
+      agent: "fixture-agent",
+      state: "reading",
+      since: 1,
+    };
+    try {
+      // the packaged app loads its page with no query: neither door, and the layer's switch untouched
+      g.location = { search: "" };
+      const plain = install("doc-1");
+      expect(plain.door.atWorkFixture).toBeUndefined();
+      expect(atWorkGlDeclined()).toBe(false);
+      // the read makes no context: none before a mark, and no write held back
+      expect(plain.door.atWork()).toMatchObject({
+        record: null,
+        contexts: 0,
+        stageContexts: 0,
+        held: 0,
+      });
+      plain.undo();
+      g.location = { search: "?atWorkFixture=1" };
+      const asked = install("doc-1");
+      expect(asked.door.atWorkFixture?.([{ key: "k1", agents: [row] }])).toBe(true);
+      const states = atWorkStore
+        .current("doc-1")
+        .objects.get("k1")
+        ?.agents.map((a) => a.state);
+      expect(states).toEqual(["reading"]);
+      // a row the feed could not read is no fixture; null clears the board
+      expect(asked.door.atWorkFixture?.([{ key: "k1", agents: [{ run: "" }] }])).toBe(false);
+      expect(asked.door.atWorkFixture?.(null)).toBe(true);
+      expect(atWorkStore.current("doc-1").objects.size).toBe(0);
+      asked.undo();
+      // a mount that shows no board takes nothing
+      const boardless = install();
+      expect(boardless.door.atWorkFixture?.([])).toBe(false);
+      boardless.undo();
+      g.location = { search: "?atWorkGl=0" };
+      const declined = install("doc-1");
+      expect(declined.door.atWorkFixture).toBeUndefined();
+      expect(atWorkGlDeclined()).toBe(true);
+      declined.undo();
+    } finally {
+      if (before === undefined) delete g.location;
+      else g.location = before;
+      ce.dispose();
+    }
+  });
+
+  it("item 550: while a smoke's at-work fixture stands the store takes no write of the applier's own, each held back and counted; cleared, or its door gone, the store is the applier's again", () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const g = globalThis as { location?: { search: string } };
+    const before = g.location;
+    const row = {
+      run: "r1",
+      handle: "r1 in the smoke",
+      agent: "fixture-agent",
+      state: "reading",
+      since: 1,
+    };
+    const states = () =>
+      atWorkStore
+        .current("doc-1")
+        .objects.get("k1")
+        ?.agents.map((a) => a.state);
+    let emits = 0;
+    const off = atWorkStore.subscribe(() => {
+      emits += 1;
+    });
+    try {
+      g.location = { search: "?atWorkFixture=1" };
+      const undo = installDeskDoor(
+        {
+          engine: ce,
+          handle: {} as never,
+          generation: 1,
+          mount: 0,
+          theme: "light",
+          docId: "doc-1",
+        },
+        () => false,
+      );
+      const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk as VfDeskDoor;
+      expect(door.atWorkFixture?.([{ key: "k1", agents: [row] }])).toBe(true);
+      const held = door.atWork().held;
+      emits = 0;
+      // the applier's writes as it makes them: a feed's snapshot with nobody at work, then a clear (its end, a
+      // reconnect): neither reaches the store, and each is counted
+      atWorkStore.publish("doc-1", { objects: [] });
+      atWorkStore.clear();
+      expect(emits).toBe(0);
+      expect(door.atWork().held).toBe(held + 2);
+      expect(states()).toEqual(["reading"]);
+      // the fixture's own writes still land, its spark lent a face and a status; a status the kit has not is none
+      const acting = [{ key: "k1", agents: [{ ...row, state: "acting" }] }];
+      const reviewing = { "sp-fixture1": { seed: 7, status: "reviewing" } };
+      expect(door.atWorkFixture?.(acting, reviewing)).toBe(true);
+      expect(states()).toEqual(["acting"]);
+      const coding = { "sp-fixture1": { seed: 7, status: "coding" } };
+      expect(door.atWorkFixture?.([{ key: "k1", agents: [row] }], coding)).toBe(false);
+      expect(states()).toEqual(["acting"]);
+      // cleared: the board empties, and the applier's next write reaches the store
+      expect(door.atWorkFixture?.(null)).toBe(true);
+      expect(atWorkStore.current("doc-1").objects.size).toBe(0);
+      emits = 0;
+      atWorkStore.publish("doc-1", { objects: [] });
+      expect(emits).toBe(1);
+      // a door that goes gives the store back with it
+      expect(door.atWorkFixture?.([{ key: "k1", agents: [row] }])).toBe(true);
+      undo();
+      emits = 0;
+      atWorkStore.clear();
+      expect(emits).toBe(1);
+      expect(atWorkStore.current("doc-1").objects.size).toBe(0);
+    } finally {
+      off();
+      atWorkStore.clear();
       if (before === undefined) delete g.location;
       else g.location = before;
       ce.dispose();

@@ -6,10 +6,26 @@
  * from each side; its top never below 660; no bar for a selection wholly off-screen. Grown: at least 244 wide (the
  * bar's width when wider), centred on the bar, 16 from the sides; up from its row, or down when the top would cross
  * 94; when it fits neither way the list scrolls, clamped between 94 and the line's reserve (700). The sides were 42
- * — the notch's 26 + 16 — until the edges left the frame (HN-8).
+ * — the notch's 26 + 16 — until the edges left the frame (HN-8). Item 550 (2026-11-18): over an object at work the
+ * foot clears its marks, (three strokes' reach + 9) × the marks' scale, and an object with no mark keeps this place.
  */
 import { describe, expect, it } from "vitest";
-import { BAR, growMenu, HAND, placeBar, placeHand } from "../src/field/desk/bar/bar-geometry";
+import {
+  AT_WORK_BAR_REACH,
+  atWorkBarClear,
+  atWorkInkScale,
+  atWorkReach,
+} from "../src/field/desk/at-work/at-work-model";
+import {
+  BAR,
+  growMenu,
+  HAND,
+  offScreen,
+  placeBar,
+  placeHand,
+  type ScreenBox,
+  type ViewSize,
+} from "../src/field/desk/bar/bar-geometry";
 import { BAR_MOTION, barMotion, swapAt, travelTransition } from "../src/field/desk/bar/bar-motion";
 import { DESK_HOLD } from "../src/field/desk/desk-layer";
 
@@ -134,5 +150,123 @@ describe("where the tools in hand stand, and what the layer reserves for them (D
     expect(swapAt(BAR_MOTION, 560)).toBe(440);
     expect(swapAt(BAR_MOTION, 80)).toBe(0); // a travel shorter than the cross-fade swaps at once
     expect(barMotion(true)).toMatchObject({ swapMs: 60, travels: false });
+  });
+});
+
+// Item 550 (2026-11-18) — OVER AN OBJECT AT WORK (DESIGN.md §8 "The selection bar", Place): while any selected object is
+// at work the foot stands (AT_WORK_BAR_REACH + 9) × the marks' scale off the selected objects' edge — the reach of
+// three strokes whatever the count of agents, measured from inside the brackets' 6 or the union's 10 — and flipped, as
+// far below. An object with no mark keeps the place above, number for number: `pnpm still` and the canvas smokes need
+// no re-bless.
+describe("over an object at work (item 550)", () => {
+  const BOX = { x0: 400, y0: 300, x1: 600, y1: 450 };
+  const several = (box: ScreenBox) => ({ box, count: 2, view });
+
+  /** The place as bar-geometry.ts computed it before item 550, line for line: what the no-mark path is held to. */
+  function landedPlace(
+    anchor: { readonly box: ScreenBox | null; readonly count: number; readonly view: ViewSize },
+    width: number,
+  ) {
+    const { box, view: size } = anchor;
+    if (box === null || anchor.count === 0 || offScreen(box, size)) return null;
+    const lo = BAR.sides;
+    const hi = size.width - BAR.sides - width;
+    const x = Math.min(Math.max((box.x0 + box.x1) / 2 - width / 2, lo), Math.max(lo, hi));
+    const lowest = size.height - BAR.lowest;
+    let y = box.y0 - BAR.above - BAR.height;
+    let below = false;
+    if (y < BAR.safeTop) {
+      y = Math.max(box.y1 + BAR.above, BAR.safeTop);
+      below = true;
+    }
+    return { x, y: Math.min(y, Math.max(BAR.safeTop, lowest)), below };
+  }
+
+  it("keeps today's place with no mark, number for number: the cases above with a clearance of 0, and 200 boxes", () => {
+    expect(placeBar(one(BOX), 260, 0)).toEqual({ x: 370, y: 300 - 10 - 40, below: false });
+    expect(placeBar(one({ x0: 400, y0: 140, x1: 600, y1: 300 }), 260, 0)).toMatchObject({
+      y: 310,
+      below: true,
+    });
+    expect(placeBar(one({ x0: 400, y0: 20, x1: 600, y1: 60 }), 260, 0)).toMatchObject({
+      y: BAR.safeTop,
+      below: true,
+    });
+    expect(placeBar(one({ x0: -100, y0: 300, x1: 60, y1: 400 }), 260, 0)?.x).toBe(16);
+    expect(placeBar(one({ x0: 1100, y0: 300, x1: 1300, y1: 400 }), 260, 0)?.x).toBe(
+      1180 - 16 - 260,
+    );
+    expect(placeBar(one({ x0: 400, y0: 60, x1: 600, y1: 780 }), 260, 0)).toMatchObject({
+      y: 660,
+      below: true,
+    });
+    expect(placeBar({ box: null, count: 1, view }, 260, 0)).toBeNull();
+    expect(placeBar({ box: { x0: 1, y0: 1, x1: 2, y1: 2 }, count: 0, view }, 260, 0)).toBeNull();
+    expect(placeBar(one({ x0: -300, y0: 300, x1: -10, y1: 400 }), 260, 0)).toBeNull();
+    // 200 boxes across the window and past its edges, one object and several, many widths
+    for (let i = 0; i < 200; i += 1) {
+      const x0 = ((i * 97) % 1400) - 110;
+      const y0 = ((i * 53) % 900) - 60;
+      const box = { x0, y0, x1: x0 + 8 + ((i * 31) % 420), y1: y0 + 8 + ((i * 17) % 360) };
+      const width = 120 + ((i * 13) % 300);
+      for (const anchor of [one(box), several(box)]) {
+        expect(placeBar(anchor, width)).toEqual(placeBar(anchor, width, 0));
+        expect(placeBar(anchor, width, 0), `box ${i}`).toEqual(landedPlace(anchor, width));
+      }
+    }
+  });
+
+  it("stands the foot (reach + 9) off one object's edge at 100%: 40.171, the brackets' 6 inside it", () => {
+    expect(BAR.bracketGap).toBe(6);
+    const at = placeBar(one(BOX), 260, atWorkBarClear(atWorkInkScale(1)));
+    expect(at?.x).toBe(370);
+    expect(at?.below).toBe(false);
+    expect(at?.y).toBeCloseTo(300 - (40.171 - 6) - 40, 9);
+  });
+
+  it("keeps the marks' scale: 28.12 at 70% and below, 88.376 at 220% and above", () => {
+    for (const zoom of [0.4, 0.7]) {
+      const at = placeBar(one(BOX), 260, atWorkBarClear(atWorkInkScale(zoom)));
+      expect(at?.y, `zoom ${zoom}`).toBeCloseTo(300 - (28.1197 - 6) - 40, 9);
+    }
+    for (const zoom of [2.2, 3]) {
+      const at = placeBar(one(BOX), 260, atWorkBarClear(atWorkInkScale(zoom)));
+      expect(at?.y, `zoom ${zoom}`).toBeCloseTo(300 - (88.3762 - 6) - 40, 9);
+    }
+  });
+
+  it("flips below by the same distance when its top would cross the safe top", () => {
+    const at = placeBar(one({ x0: 400, y0: 140, x1: 600, y1: 300 }), 260, atWorkBarClear(1));
+    expect(at?.below).toBe(true);
+    expect(at?.y).toBeCloseTo(300 + (40.171 - 6), 9);
+  });
+
+  it("over several, clears from the union's 10", () => {
+    expect(BAR.unionGap).toBe(10);
+    const at = placeBar(several(BOX), 260, atWorkBarClear(1));
+    expect(at?.y).toBeCloseTo(300 - (40.171 - 10) - 40, 9);
+  });
+
+  it("never moves with the count of agents: the clearance reads the marks' scale alone, past every count's reach", () => {
+    expect(atWorkBarClear.length).toBe(1);
+    expect(atWorkReach(1)).toBeLessThan(atWorkReach(3));
+    for (const n of [1, 2, 3, 4, 5]) {
+      // each count's own strokes lie inside the one clearance the bar stands at
+      expect(atWorkReach(n) + 9, `${n} agents`).toBeLessThanOrEqual(atWorkBarClear(1) + 1e-9);
+    }
+    const at = placeBar(one(BOX), 260, atWorkBarClear(1));
+    expect(at?.y).toBeCloseTo(300 - (AT_WORK_BAR_REACH + 9 - 6) - 40, 9);
+  });
+
+  it("clears the reach of three strokes, atWorkReach(3) itself — 31.171, never a rounded 31.2", () => {
+    expect(AT_WORK_BAR_REACH).toBe(atWorkReach(3));
+    expect(AT_WORK_BAR_REACH).toBeCloseTo(31.171, 9);
+    expect(atWorkBarClear(1)).toBeCloseTo(AT_WORK_BAR_REACH + 9, 12);
+    expect(Math.abs(atWorkBarClear(1) - 40.2)).toBeGreaterThan(0.01);
+  });
+
+  it("never stands nearer than 10 above the brackets, whatever the clearance", () => {
+    expect(placeBar(one(BOX), 260, 5)).toEqual(landedPlace(one(BOX), 260));
+    expect(placeBar(several(BOX), 260, 15)).toEqual(landedPlace(several(BOX), 260));
   });
 });

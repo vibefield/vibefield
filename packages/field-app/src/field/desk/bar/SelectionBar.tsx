@@ -1,4 +1,4 @@
-import { type Entity, PrefabId, selectedEntities } from "@vibecook/ice";
+import { Camera, type Entity, PrefabId, selectedEntities } from "@vibecook/ice";
 import type { MenuSlot, SelectionAnchor } from "@vibecook/ice/desk";
 import { isEditableTarget, keyboardClaimOf } from "@vibecook/ice/dom";
 import {
@@ -13,6 +13,8 @@ import {
 } from "react";
 import { type FrameSurface, foldSurface } from "../../../frame/frame-surface";
 import { isCopyChord, listenForProductChord } from "../../product-chords";
+import { atWorkBarClear, atWorkInkScale } from "../at-work/at-work-model";
+import { atWorkStore } from "../at-work/at-work-store";
 import { copySelection } from "../copy/copy-to-hand";
 import { inHand } from "../desk-anchor";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
@@ -32,7 +34,7 @@ import {
 import { TRAVEL_MS, useReducedMotion } from "./bar-motion";
 import { barStats } from "./bar-stats";
 import { downloadable, downloadPrint } from "./print-download";
-import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
+import { type PlaceAnchor, type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 
 // THE SELECTION BAR'S CONTROLLER (DK-11; DESIGN.md §8 "The doors", "The selection bar", "The bar grown — More, and
 // right-click"; R5, R7, R8, R26). ICE gives the chrome DATA, never pixels: `handle.selection` offers `anchor()` and
@@ -65,6 +67,11 @@ import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 // DOWNLOAD… (item 578; §8 "The bar grown"): the grown menu's row for one print whose picture the desk holds, the
 // host's own act (print-download.ts). Whether it is offered is read with the selection AND on every publish after,
 // because a print's picture can arrive after the print was selected, and the row must then appear.
+//
+// OVER AN OBJECT AT WORK (item 550, 2026-11-18; §8 "The selection bar", Place): while any selected object is at work
+// the foot clears its marks (`atWorkClearOf`). The clearance is read at each publish and whenever the at-work store
+// moves it, so an agent arriving on the selection or leaving it re-places the bar while the desk sleeps; the view
+// travels it on the stroke's own times when it turns on or off over the same selection.
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -237,6 +244,25 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
   };
 }
 
+/** Item 550 (2026-11-18): how far the bar's foot stands off the selection's edge for the marks of an object at work —
+ * `atWorkBarClear` at the desk's ink scale while any selected object is at work, else 0, the place it has always had
+ * (§8 "The selection bar", Place). The count of agents is never read: three strokes' reach clears any count. A key
+ * whose agents have all released is not at work: its marks are leaving. */
+export function atWorkClearOf(desk: MountedDesk): number {
+  const docId = desk.docId;
+  const keys = desk.engine.docs.current()?.store;
+  if (docId === undefined || keys === undefined) return 0;
+  const { objects } = atWorkStore.current(docId);
+  if (objects.size === 0) return 0;
+  const { world } = desk.engine;
+  const atWork = selectedEntities(world).some((e) => {
+    const key = keys.keyOf(e) as string | undefined;
+    const object = key === undefined ? undefined : objects.get(key);
+    return object?.agents.some((row) => row.state !== "released") === true;
+  });
+  return atWork ? atWorkBarClear(atWorkInkScale(world.getResource(Camera)?.zoom ?? 1)) : 0;
+}
+
 /** The desk's own element, which the right-click is heard on (the layer's canvas lies in it). */
 const containerOf = (desk: MountedDesk): HTMLElement | null => {
   const canvas = (desk.handle as Partial<MountedDesk["handle"]>).canvas;
@@ -273,26 +299,38 @@ function SelectionBarOn({
   // SAYS changed (its width with it), remembered and placed once the bar has re-rendered. One read, one placement
   // at most — none while it is away or has nowhere to stand (a gesture's end places it where the object came to rest).
   useLayoutEffect(() => {
+    /** the clearance the bar was last placed with (item 550): a store change re-places it only when it moved */
+    let clear = 0;
     const read = (): void => {
       barStats.publishes += 1;
       const anchor = source.anchor();
       const prev = factsRef.current;
       const next = readFacts(anchor, desk, prev);
+      clear = atWorkClearOf(desk);
+      const at: PlaceAnchor = { ...anchor, clear, selection: next.key };
       if (next !== prev) {
         factsRef.current = next;
         setFacts(next);
         // what it SAYS changed — the selection's cells, or the hand's — so it is placed once it has re-rendered
         if (next.selection !== prev.selection || next.hand !== prev.hand) {
-          barRef.current?.place(anchor, false);
+          barRef.current?.place(at, false);
           return;
         }
       }
       // in hand it stands under the head whatever the selection's box; over a selection, only where it can stand
       const placing = next.inHand || (next.count > 0 && next.onScreen && !next.stepAside);
-      barRef.current?.place(anchor, placing);
+      barRef.current?.place(at, placing);
     };
     read();
-    return source.subscribe(read);
+    const offAnchor = source.subscribe(read);
+    // an agent arriving on the selection or leaving it moves the foot, even while the desk sleeps (item 550)
+    const offAtWork = atWorkStore.subscribe(() => {
+      if (atWorkClearOf(desk) !== clear) read();
+    });
+    return () => {
+      offAnchor();
+      offAtWork();
+    };
   }, [source, desk]);
 
   const shown = !hidden && (facts.inHand || (facts.count > 0 && facts.onScreen));

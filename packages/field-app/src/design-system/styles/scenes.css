@@ -1409,6 +1409,34 @@
   background: var(--vf-mat-ground);
 }
 
+/* Item 550 (2026-11-18) — at work on the mat: the shipping view (`AtWorkView`, and the GL layer on the live plate) over
+   a stand-in for the LIT MAT, which the desk draws on the GPU. */
+.vf-ds-atwork-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.vf-ds-atwork-plate {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--vf-mat-ground);
+}
+
+.vf-ds-atwork-live {
+  display: grid;
+  gap: 10px;
+}
+
+.vf-ds-atwork-live__controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 /* DK-13 — the pegboard's plates: the shipping chrome (`PegboardView`) over a stand-in for the desk's own drawer, which
    the desk draws on the GPU behind the line (its board, its specimens, their label tape) — a plain board where it lies,
    its specimens plain stand-ins, as the selection bar's plates stand an object in. */

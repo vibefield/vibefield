@@ -40,6 +40,7 @@ import {
 import { createStillDecoder, createStillTaker } from "../surfaces/live/still-taker";
 import { getSurfacePool, surfaceGraceMs } from "../surfaces/pool";
 import { useAppTheme } from "../theme";
+import { AtWorkOnTheMat } from "./desk/at-work/AtWorkOnTheMat";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { deskCensus, installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
 import { type DeskFeed, feedDesk } from "./desk/desk-feed";
@@ -84,7 +85,8 @@ function timingFace(key: string): BenchFaceClock | undefined {
 //     against the kinds the layer was MOUNTED without — and the status line's notices (desk-notices.ts): each
 //     type on the board the desk draws as missing said once, at the first frame and whenever the faults move.
 // And as the desk's child, PEERS ON THE MAT (DK-16, desk/peers/): the room's other people drawn by VibeField — the layer
-// mounted with ICE's remote cursors off — while the desk draws.
+// mounted with ICE's remote cursors off — while the desk draws; and before them AT WORK ON THE MAT (item 550,
+// 2026-11-18, desk/at-work/): who is at work on the board's objects, VibeField's own layer under the peers.
 // THE KINDS (DK-9, plugin-host/window-kinds.ts; ICE I25 — the kind set is fixed for a layer's life): the
 // layer is mounted with the catalog's kinds LESS those of a plugin that is off (the structural `catalog`
 // a host hands its layer, read at the mount alone), so a disabled plugin's objects wear ICE's missing
@@ -495,6 +497,7 @@ export function CanvasStage({
   return (
     <div className="field-canvas" data-desk={retrying ? "retrying" : status.state}>
       <Desk engine={ce} layer={layer} onReady={onReady}>
+        <AtWorkOnTheMat drawing={drawing} docId={docId} />
         <PeersOnTheMat drawing={drawing} />
       </Desk>
       {words === null ? null : <DeskUnavailableView words={words} onReload={remount} />}

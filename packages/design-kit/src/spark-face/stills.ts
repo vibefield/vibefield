@@ -1,5 +1,6 @@
 import {
   placeSparkBuddy,
+  type SparkBuddyOptions,
   type SparkEngine,
   type Sparklings,
   type SparkRgb,
@@ -21,6 +22,9 @@ export interface StillFace {
   /** A free face's box over its size: FREE_FACE_ROOM unless said. 1 draws it edge to edge, with no room for its
    * props, as Godview's views draw a host's picture inside their own box (TH-3, 2026-11-19). */
   readonly room?: number;
+  /** whether it wears its props; absent, the engine's own way (a free face does, a framed one does not). The desk's
+   * at-work star sets it by its switch (item 550, 2026-11-18; DESIGN.md §2.10). */
+  readonly props?: boolean | undefined;
 }
 
 /** A free face's picture is half again its box, so its props (thought dots, Zzz, hearts) are whole. */
@@ -58,7 +62,7 @@ function roomOf(face: StillFace): number | null {
 
 export function stillKey(face: StillFace, pixelRatio: number): string {
   const cut = face.cut.map((channel) => Math.round(channel * 255)).join(",");
-  const fields = [
+  const parts: (string | number)[] = [
     face.seed,
     face.status,
     face.size,
@@ -67,7 +71,10 @@ export function stillKey(face: StillFace, pixelRatio: number): string {
     pixelRatio,
   ];
   const room = roomOf(face);
-  return (room === null ? fields : [...fields, `room=${room}`]).join("|");
+  if (room !== null) parts.push(`room=${room}`);
+  // a face that names its props keys apart; one that does not keeps the key it always had
+  if (face.props !== undefined) parts.push(face.props ? "props" : "no-props");
+  return parts.join("|");
 }
 
 /** The face's picture, or null where the window has no WebGL2 (the face is then the flat star). */
@@ -86,7 +93,12 @@ export function drawStill(engines: Sparklings, face: StillFace): string | null {
   still.element.style.setProperty("--vf-spark-still-box", `${box}px`);
   still.engine.resize();
   still.engine.clear();
-  const buddy = still.engine.add(new engines.Buddy(sparkBuddyOptions(engines, face, face.cut)));
+  // the vendored Buddy takes `props` beside a face's options (sparks.js `Buddy`), which `SparkBuddyOptions` leaves out
+  const options: SparkBuddyOptions & { readonly props?: boolean } =
+    face.props === undefined
+      ? sparkBuddyOptions(engines, face, face.cut)
+      : { ...sparkBuddyOptions(engines, face, face.cut), props: face.props };
+  const buddy = still.engine.add(new engines.Buddy(options));
   placeSparkBuddy(buddy, box / 2, box / 2, face.size, face.framed);
   still.engine.render(0, { frozen: true });
   const picture = still.element.toDataURL("image/png");

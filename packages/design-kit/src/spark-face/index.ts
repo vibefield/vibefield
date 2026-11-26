@@ -1,6 +1,15 @@
 // A spark's face (DESIGN.md §2.10) — the kit's `./spark-face` entry. Pure at import: the engine is
 // loaded by the first face that mounts (./engine.ts).
 export {
+  bakeFlatStars,
+  createDrivenStage,
+  type DrivenFace,
+  type DrivenStage,
+  type FlatStarBake,
+  type FlatStarBakeOptions,
+  type FlatStarBakeStage,
+} from "./driven";
+export {
   loadSparklings,
   SPARK_FRAME,
   type Sparklings,
@@ -47,4 +56,4 @@ export {
   type SparkStatus,
   sparkStatusWord,
 } from "./statuses";
-export { FREE_FACE_ROOM, type StillFace, stillKey } from "./stills";
+export { drawStill, FREE_FACE_ROOM, type StillFace, stillKey } from "./stills";

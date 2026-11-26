@@ -10,21 +10,29 @@
  *     on Esc (taken before the desk's keymap), a press elsewhere, a gesture and a change of selection (R5);
  *   THE KEYS — a toolbar named "Selection" with one tab stop, ← → between its cells, Esc back to the desk (R9);
  *   RIGHT-CLICK — the object under the pointer selected FIRST by the desk's pick, then the same menu grown (R26);
- *   THE ACTS — through the engine's ops; COPY — its four doors, ⌘C among them, deal ONE card (HN-D3).
+ *   THE ACTS — through the engine's ops; COPY — its four doors, ⌘C among them, deal ONE card (HN-D3);
+ *   OVER AN OBJECT AT WORK (item 550) — the foot clear of the marks, out with the draw-on and back with the retract.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { type CanvasEngine, type Entity, setWidgetProps } from "@vibecook/ice";
 import type { SelectionAnchor } from "@vibecook/ice/desk";
+import type { ObjectsPresenceSnapshot } from "@vibefield/contracts";
 import { act, createElement, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { atWorkStore } from "../src/field/desk/at-work/at-work-store";
 import { readBarStats, resetBarStatsForTest } from "../src/field/desk/bar/bar-stats";
 import { SelectionBar } from "../src/field/desk/bar/SelectionBar";
 import { lastCopy } from "../src/field/desk/copy/copy-record";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
-import { deskObjects, type MountedDesk, publishDesk } from "../src/field/desk/desk-door";
+import {
+  currentDesk,
+  deskObjects,
+  type MountedDesk,
+  publishDesk,
+} from "../src/field/desk/desk-door";
 import type { ObjectWords } from "../src/field/desk/desk-object-words";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import { cardsStore } from "../src/frame/cards/cards-store";
@@ -1057,5 +1065,111 @@ describe("Make a card — four doors deal ONE card (HN-D3)", () => {
     // this harness's desk draws nothing (its capture door answers none): no picture, no card — and the line is told
     expect(lastCopy()?.refused).toBe("No card made — the desk could not draw it");
     expect(cardsStore.snapshot().cards).toEqual([]);
+  });
+});
+
+// ── ITEM 550 — OVER AN OBJECT AT WORK (DESIGN.md §8 "The selection bar", Place; §6 "At work on the mat") ─────────
+// While a selected object is at work the foot clears its marks. The clearance turning on over the same selection
+// TRAVELS the bar out with the stroke's draw-on, 780 ms on the island curve; turning off, back with its retract, 460 ms
+// on the retract curve — one transform transition, taken off one beat past its end. The store's change places it while
+// the desk sleeps; a new selection, and reduced motion, place it at once.
+describe("over an object at work (item 550)", () => {
+  /** This mount names its board, so the window's at-work store reaches the bar. */
+  const nameTheBoard = (): void => {
+    const desk = currentDesk();
+    if (desk === null) throw new Error("no desk");
+    unpublish();
+    unpublish = publishDesk({ ...desk, docId: "doc-1" });
+  };
+  /** The store's rows for the selected note: one agent on it, at `state`. */
+  const noteAtWork = (state: "open" | "released", since = 1): void => {
+    const key = ce.docs.current()?.store.keyOf(note) as string;
+    const agents = [{ run: "r1", handle: "r1 in vibe-field", agent: "agent", state, since }];
+    atWorkStore.publish("doc-1", {
+      objects: [
+        {
+          ref: "vf:obj/note0000",
+          docId: "doc-1",
+          key,
+          agents: agents as ObjectsPresenceSnapshot["objects"][number]["agents"],
+        },
+      ],
+    });
+  };
+  /** The bar over the note's brackets, its foot `above` over them (happy-dom lays out no width: its centre). */
+  const standing = (above: number): string =>
+    `translate(500.0px, ${(300 - above - 40).toFixed(1)}px) translateX(-50%)`;
+
+  afterEach(() => atWorkStore.clear());
+
+  it("travels its foot clear of the marks as an agent opens the selection — 780 ms on the island curve — and back on the retract, 460 ms, as it lets go", () => {
+    vi.useFakeTimers();
+    nameTheBoard();
+    mount();
+    expect(bar().style.transform).toBe(standing(10));
+    expect(bar().style.transition).toBe("opacity 180ms ease-out");
+    // an agent opens the note while the desk sleeps: the store places the bar (31.171 + 9) off the note, so 34.171
+    // above the brackets' 6
+    act(() => noteAtWork("open"));
+    expect(bar().style.transform).toBe(standing(40.171 - 6));
+    expect(bar().style.transition).toBe(
+      "opacity 180ms ease-out, transform 780ms var(--vf-ease-island)",
+    );
+    // declared one beat past the draw-on, then off: a moving selection places at once again
+    act(() => vi.advanceTimersByTime(780 + 99));
+    expect(bar().style.transition).toContain("transform 780ms");
+    act(() => vi.advanceTimersByTime(1));
+    expect(bar().style.transition).toBe("opacity 180ms ease-out");
+    // the agent works on: the store moves, the clearance does not, and nothing is placed for it
+    const placements = readBarStats().placements;
+    act(() => noteAtWork("open", 2));
+    expect(readBarStats().placements).toBe(placements);
+    // the agent lets it go: back with the retract
+    act(() => noteAtWork("released", 3));
+    expect(bar().style.transform).toBe(standing(10));
+    expect(bar().style.transition).toBe(
+      "opacity 180ms ease-out, transform 460ms cubic-bezier(0.4, 0, 1, 1)",
+    );
+    act(() => vi.advanceTimersByTime(460 + 100));
+    expect(bar().style.transition).toBe("opacity 180ms ease-out");
+  });
+
+  it("stands at once over a new selection: a clearance that changes with the selection never travels", () => {
+    vi.useFakeTimers();
+    nameTheBoard();
+    mount();
+    act(() => noteAtWork("open"));
+    act(() => vi.advanceTimersByTime(780 + 100));
+    expect(bar().style.transform).toBe(standing(40.171 - 6));
+    // the comment pad, which no agent has open, selected in the note's place
+    act(() => {
+      ce.ops.setSelection([pad]);
+      selection.publish({ box: { ...BOX } });
+    });
+    expect(bar().style.transform).toBe(standing(10));
+    expect(bar().style.transition).not.toContain("transform");
+  });
+
+  it("REDUCED MOTION: the foot stands clear at once, and comes back at once (M6)", () => {
+    vi.useFakeTimers();
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      ...matchMedia.call(window, query),
+      matches: query.includes("prefers-reduced-motion"),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as typeof window.matchMedia;
+    try {
+      nameTheBoard();
+      mount();
+      act(() => noteAtWork("open"));
+      expect(bar().style.transform).toBe(standing(40.171 - 6));
+      expect(bar().style.transition).toBe("opacity 90ms ease-out");
+      act(() => noteAtWork("released", 2));
+      expect(bar().style.transform).toBe(standing(10));
+      expect(bar().style.transition).toBe("opacity 90ms ease-out");
+    } finally {
+      window.matchMedia = matchMedia;
+    }
   });
 });

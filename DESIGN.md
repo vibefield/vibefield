@@ -205,6 +205,12 @@ inset ring form `0 0 0 1px rgba(0,0,0,0.05)` when it must ride a shadow. Structu
 strokes inside content (clock face, dividers) use the text opacity ramp, not grays.
 Heavier weights exist only as *meaning*: `1.5px` = selection ring and rim width.
 
+*Amended 2026-11-18 (item 550; §7, §8 "At work on the mat"):* one weight more, on the mat alone — **the at-work
+stroke**, a marker line round an object an agent works on: **9** ink px for one agent, **8** each for two and **7** each
+for three, lying about a half width apart, centred **17** off the object's edge for one and 18.9 and 20.8 for two and
+three, so the innermost stays near 17. It means that an agent works here. It is a mark on the mat, never a hairline or a
+border of the chrome, and it never covers the pencil (§7).
+
 ### 2.4 Text — the opacity ramp
 
 Text color is **surface color + opacity**, never fixed grays (so hierarchy survives on any
@@ -319,6 +325,18 @@ corners, and over a light ground (Godview by day, a sheet) from 68% to 88%, so t
 mat, 8.1:1 on the Moon's, 3.7:1 on Godview by day. On Godview by night the ground is already the dim's colour, so the
 dim falls on the bodies, the panes and the frame, and the ring carries the focus alone.
 
+*Amended 2026-11-18 (item 550; James, 2026-11-17, on *The Fourth Hand*'s first version: "no need to indicate
+different state with colors"):* **the desk's at-work mark carries no state colour** (§8 "At work on the mat"). Its
+stroke and its sticker's foil say whose it is, in the colour Godview gives the agent's project (§2.6's second
+exception), the same in every state, and never turn green, orange or red for one: the agent-state mapping above is the
+badges' and the monitor's, never the mat's. What the agent is doing is said by the mark's motion and in words (§2.6
+names each), and its chip's words take no state ink either (§8, where their inks are ‹for James›). **One thing on the
+mat may show a state colour: a spark's live star.** Its engine draws it as on the page James picked, a free face with
+its props on: Asking you's question mark is in the face's own ink, but Needs your OK's lock is amber, Stuck's dizzy
+stars yellow, Rate limited's hourglass sand, and Failed's ✕ red on a face tinted toward red (§2.10). Those stand with
+the chip's inks in the same ‹for James› line, behind one switch (§8), whose off position takes away the props' amber,
+yellow and sand and Failed's red ✕, though at Failed the face still tints toward red, as every Failed face does in Chat.
+
 ### 2.6 Organizational accents (containers, comments, tags)
 
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
@@ -330,6 +348,19 @@ across an afternoon colour has to say whose a lane is, and the swarm's one ink m
 alike. There the shape says what: work is a wide wake, a wait a thin thread, rest a hairline. So a
 project hue that lands near orange (the wheel withholds only the band around `--vf-select`) never
 reads as blocked, and the wheel itself is not changed.
+**A second exception, carried by motion and words (item 550, 2026-11-18; James, 2026-11-17, on *The Fourth Hand*:
+"the color should be per project color, which is the agent color in godview, so they can be a large variation of
+colors"):** on the desk an object an agent works on wears **the at-work frame** (§8 "At work on the mat") in the colour
+Godview gives that agent's project — `AgentView.colour`'s deal, `projectHue(seq)` over puppeteer's 333° wheel, which
+withholds only the 27° round `--vf-select` — at Godview's night tint, L 0.74 and C 0.15, in both themes, for the mat is
+dark under both (§2.1). **So a frame may wear the hues §2.9 withholds from projects** (PJ-L7) — a red, an orange, a
+yellow, a green — and the wheel is not changed for it. Its shape is the same in every state, so here the shape cannot
+say what; the rest of the mark keeps state off its hue: the ink's **motion** (a wet stretch runs along it while its
+agent reads or acts, and it lies still while the agent only has the object open), the sticker's **lift and its ring**
+(needs you), one **shiver** (failed), the **grey of your hand** (paused) and the chip's **words** (§8, §9). A green
+frame is a project, never "working", and a red one never "failed" (§2.5). It follows Godview through PJ-5: when Godview
+takes §2.9's ink the frame takes it in the same change (§2.9, "On the mat"). Until then one project can show two hues
+at once, its frame's on the mat and its agent card's in the hand (§2.9's ink, §8 "The hand").
 **Users are not among them (2026-09-22, UA-D17):** a person is known by a face (§2.8), never a
 colour. An accent on a user collided with the project inks and with §2.5 — measured in OKLCH,
 three of the eight slots sat within 3° of green, orange and red, and one inside the band
@@ -698,6 +729,19 @@ straight so rows line up. From 20px, the control holding it lifts it on hover or
 tilt relaxed to 35%, on `--vf-ease-lift` (180ms) — held, like a card (§7). Reduced motion: the
 same lift in 90ms, `ease-out` (M6).
 
+*Amended 2026-11-18 (item 550; James's pick of A on *The Fourth Hand*, whose stickers are drawn so; §8 "At work on the
+mat"):* **the at-work sticker** frames an agent's catalog mark where the agent works on a desk object. It is the
+sticker's die-cut, cut for a mark: the toolkit's `agentMark` (kept exact, §13; an unknown agent is its letter), 15 ink
+px, printed in `--vf-atwork-print` (`#16171b`) on 4.1 of foil in its project's colour (§2.6; leaning as §2.9's frame
+does), then a **1.6** paper edge in `--vf-sticker-edge` (`#ffffff`) and the cut **0.7** beyond it at black/12
+(`--vf-sticker-cut`), about 26 across, its shadow §5's. *Two departures, said:* the edge is wider than the 3.2% above,
+which is 1 px at this size, and the cut thinner than the 1px cut line above, because the sticker is small and the page
+James picked cuts it so. **It is an agent's, never a person's:** foil in a project's colour carrying a catalog mark,
+where a person's face is the emoji they chose, on paper, with no hue (I-1); and it lies only on the mat beside its
+stroke, never in the chrome. **It keeps its own angle below 40px** — up to ±5.4° from its run's seed, relaxed to 35% as
+it lifts — where a face sits straight (I-2), because James picked the page's look and its stickers keep theirs. It
+lifts (1.08×) when its agent needs you (§6). A crew run's sticker wears its spark's star printed at its top right, on
+the same sheet (§2.10).
 *Amended 2026-11-25 (OB-D16; §8 "At work, in the pane"):* an **object's** sticker in a Godview
 pane is cut from the same paper: the edge in `--vf-sticker-edge` in both themes at a fixed 1.5px
 (`--vf-pane-sticker-edge`), the cut and the cast as above, the object's art fitted by its long
@@ -812,6 +856,44 @@ and per-room deals (D-i13, AR5-D3; the History room's own 333° wheel and puppet
   work column's project circles, which wear the colour their bodies wear so the two never disagree
   (WL-1, 2026-11-23; §8 "Godview's work column"). A device never gets an ink (§2.8, PJ-D24): a
   desktop is its OS mark.
+- **On the mat: the at-work frame** (item 550, 2026-11-18; §2.6's second exception, §8 "At work on the mat"). **The
+  desk is not yet among this entry's surfaces:** until PJ-5 the frame wears Godview's deal, puppeteer's, as the swarm
+  and the timeline wake do (above); at PJ-5 the desk joins them and the frame wears `ink`, which its feed already
+  carries. Whichever deal it wears, it keeps these rules:
+  - **A stroke round the object, never a dot or a fill:** one marker stroke per agent (§2.3). Where its chip names the
+    project, the folder mark is the project's glyph (§8).
+  - **The night's lightness on the mat, in both themes:** L 0.74 and C 0.15 by day as by night, for the mat is a dark
+    ground under the Sun as under the Moon (§2.1); a hue that leaves sRGB gives up chroma as above (to 0.126 at the
+    deal's cyans). Off the mat it takes the theme's: the chip's folder mark is chrome on the line's glass, so by day it
+    wears Godview's day tint, L 0.60, and reads 3.05–3.58:1 on the chip over the lit mat, where 0.74 would read
+    1.79–2.07; by night it wears 0.74 (6.70–7.76:1).
+  - **Contrast on the mat** (measured 2026-11-18: WCAG 2's ratio, the ink as dealt, every hue of the deal at 0.1°, 3330
+    in all, and the first thousand projects): **3.12–3.61:1** on the Sun-lit sage `#3D5A30`, **4.56–5.28:1** on the
+    Moon's dapples `#313C40` and **6.57–7.60:1** in the palm's shadow `#1C2027`. Every hue clears 3:1, the floor for a
+    mark that must be seen, and by day only just. The lowest are the pinks and reds, 318° through 0° to 26° (under 3.15
+    by day; the least 3.12 at 354.5°, `#F27FB0`); the highest the greens and cyans, 138°–203° (the most 3.61 at 163°,
+    `#2CC88F`). Green on green holds: a frame dealt the sage's own hue (137°, `#7BC05D`) reads 3.53:1, told from the
+    sage by lightness alone (0.74 against its 0.43). **Where the drawn ink falls under 3:1, its shadow holds its edge:**
+    by day the mat's light dims the ink (to 2.94:1 at 95% of the light, 2.49 at 80%) and the film thins it through its
+    middle, and the stroke's own shadow (§5) lies along the lower-right flank of every stretch of it, where the ink
+    reads 4.76–5.51:1 on the darkened mat (`#273D1F` at its core) as dealt, and 3.8:1 or more down to 80% of the light.
+    The drawn stroke is measured in the window's own pixels on the lit mat before it lands, as the peers' chip was
+    (DK-16). **Your hand's grey** (paused) reads 2.45–3.02:1 on the sage by day, under the floor while your hand holds
+    the object (§7), and 3.74–4.61:1 on its shadow; by night 3.58:1 or more.
+  - **The leans** (James, 2026-11-17: "while portraying the primary per project color, please also add some colorful
+    color like iridescent colors"): the stroke and its foil lean through two neighbours of the project's colour and a
+    pearl, at a strength of 0.6, most where the film is thin and least at its rims. The neighbours are walked on the
+    deal's own wheel, 53.6° either side of the project's place on the 333° (58° of 360), through `projectHue`'s skip, so
+    no lean lands in 238°–265° by the pencil's blue: lean A at L 0.82, lean B at L 0.80, both C 0.14, and the deep tone
+    at L 0.50, C 0.14. PJ-5 sets the leans when the frame takes §2.9's ink.
+  - **No project** (a run in none, or one not dealt yet) wears **the neutral pearl**, `--vf-atwork-neutral` (`#b1aa9d`:
+    L 0.74, C 0.02, at the starlight's own 85°), in both themes, its gloss and its leans kept — the starlight's leans
+    and deep tone (§2.10) — so it is never your hand's matte grey. It reads **3.37:1** by day and **4.92:1** and
+    **7.08:1** by night.
+  - **In code:** the ink is `oklchToHex(l, c, projectHue(seq))` at `DEFAULT_PROJECT_TINT.dark` (the chip's folder mark
+    at `.light` by day), from puppeteer-view-sdk's toolkit, the function Godview's colours come from; at PJ-5 it is
+    `projectInkHex(ink, "dark")` (below). The leans and the deep tone are made the same way from the walked hues. The
+    neutral and the starlight are read from the root, as the press reads its colours (§5).
 - **The one exception: a made app's fallback icon** (added 2026-11-05, track MA; MA-D10 (b), ruled by
   James on the page *Apps in a Pocket*; §8 "The phone's Apps", the icon). A made app's icon is its
   preview, which wears no ink. Until it has one, its squircle is drawn from its project's ink and its
@@ -852,6 +934,16 @@ colour stays inside the face.
 | **S-4 Needs you is the attention ink, in words** | CH-D4 (ruled A): Asking you, Needs your OK, Stuck and Rate limited turn the row's word to the attention ink (§2.5), Chat's cell takes the orange dot, and in another view a note says so for 2.4 s. The face itself never turns orange. |
 | **S-5 The name makes it certain** | §2.8 I-4: the face is an index. The name sits beside it, and @ finds a spark by its name. *(SP-1d, 2026-10-31: Chat's @ lists agents and sessions, never sparks (CH-D5 A, EW-D3 B), so this waits for a @ that names sparks.)* |
 
+*Amended 2026-11-18 (item 550; James's pick `spark-ink` star, 10:57:03Z, on *The Fourth Hand*):* **a spark at work on a
+desk object draws its line in starlight**, never in its palette, so S-2 stands as written: no line takes a spark's
+colour. Starlight is the material's own pearl, the same for every spark (the face says which): `--vf-atwork-pearl`
+(`#f0e7d6`) leaning through rose and aqua (`--vf-atwork-pearl-rose` `#fdc4e3`, `--vf-atwork-pearl-aqua` `#a7edec`) over
+its deep tone (`--vf-atwork-pearl-deep` `#898299`). It is the at-work stroke (§2.3, §8 "At work on the mat") in that
+ink, closing 7 past its start on the star with no tail, its glow 0.8 of an agent's. By day it is white pigment, chalky
+where the nib ran dry; by night it is light, and lights the mat beside it. No project is dealt white, so a white line
+says "a spark" before the face is read; the neutral pearl (§2.9) is a grey at the ink's lightness, never this white. As
+dealt it reads 6.3:1 by day and 9.2:1 and 13.3:1 by night.
+
 **The nineteen statuses.** These are a spark's. Coding and Debugging are an agent's work and never a
 spark's face.
 
@@ -884,6 +976,23 @@ cut ring takes the surface behind it (the chrome, the inset fill, a selected row
 desk object's paper, each read from its token in both themes), so a badge beside it sits clean. *Free*
 is the star alone, with no disc.
 
+*Amended 2026-11-18 (item 550; James on *The Fourth Hand*, 2026-11-18: "the spark should sit on right top of the agent
+and become part of the sticker"):* **printed** is a third form, and the desk's alone. An agent a spark started wears
+that spark's star printed on its own at-work sticker (§2.8, §8 "At work on the mat"), on the mark's top right: one sheet
+of paper with the sticker, one cut round both. It is the flat star's second use (the first is the face without WebGL2,
+below): the star's own points and palette in one flat colour, the palette's first (`c[0]`), its foil leaning to `c[2]`
+and `c[4]`, its two eyes bare paper that look down at the agent's mark (look −0.55, −0.4) and, by night, lit near white
+with a faint light round them, so they still read when the paper dims (James, 2026-11-18: "the eye of spark mark on the
+agent sticker is too invisible in the moon mode, make it brighter"). It is baked once per spark from the engine's own
+Flat style (style 0, at a face scale of 1.25) through the kit's `loadSparklings()` and kept as two distance fields, its
+outline and its eyes; the kit's `flatStar` draws it where WebGL2 is refused. **It is a still and never a status:** it
+does not blink, glow or follow the spark's state, so it says whose agent this is and never what the spark is doing —
+the spark's own star says that, wherever the spark is (S-3). Its numbers, in ink px: radius 6.6 (about 13 across), 2
+clear of the mark's silhouette, on its shoulder 40° above its right, 1.1 of bare paper between it and the agent's foil,
+a 2.6 fillet where the two join, leaning 6° toward the mark. It buds as the sticker lands (§6). **Who started a run is
+fieldd's own memory of starting it**, kept beside custody's and never read from the run's record, so a run fieldd
+started before its last restart wears no printed star.
+
 **Where it appears, at what size** (round 2's plates; the rows marked *proposed* wait on their marks):
 
 | Surface | Size | Form |
@@ -897,6 +1006,8 @@ is the star alone, with no disc.
 | Godview: its own bubble · its agents' rims · their panes' chips (EW-D1, *proposed*) | 20 px · 20 px · 16 px | free · framed · free |
 | History's rows · "Lyra started this" (EW-D1, *proposed*) | 20 px · 18 px | framed · framed |
 | A flow's board head · its byline (FL-D2, *proposed*) | 26 px · 18 px | framed on paper |
+| An object at work on the desk: the spark's own star (item 550; `spark-form` free) | 34 px (ink px: the desk's scale from 70% to 220%) | free, live while its work moves, else a still (below) |
+| An agent it started, at work on the desk: its star printed on that agent's sticker (item 550) | about 13 px (radius 6.6 ink px) | printed, a still (above) |
 
 *On the phone (PC-D6 A, the design page Chat in a Pocket, ruled 2026-11-04; drawn from IOS-12b):* the kit
 transcribes `agentDNA` into Swift, held to goldens the vendored engine deals (IOS-12a's fixture), as `FaceDeckTests`
@@ -953,6 +1064,39 @@ measures true, and keep the last 256 pictures. The flat star is drawn from the s
 (`agentDNA`'s points and palette), so a face is the same face with or without WebGL2. While the
 engine first loads (below), a framed face holds its place as its disc in the inset fill
 (`--vf-fill`), and a free face as its box.
+
+*Amended 2026-11-18 (item 550; James's pick `spark-form` free, 10:57:15Z, on *The Fourth Hand*):* **the desk is a stage
+while a spark works on it.** A spark at work on a desk object shows its own star there, free at 34 (the table above;
+its eyes 1.12× there, its points about 27 across), seated first where the agents' stickers sit, floating a little off
+the mat over its soft shadow (§5). It is live **only while its work moves** — a pulse of work, its arrival, its
+leaving, a change of its status — and for the desk's 8 s ambient after the last touch (§6, M5); otherwise it is a
+still. The stage stands in the desk's box over the at-work overlay and under the peers, the bar and the line, and **the
+overlay drives it**: it places each face and calls the stage's render from its own frame, so the star and its line move
+with the camera as one. That stage is one new door in the kit's `./spark-face`, added beside what is there:
+`SparkStage`, the hatch, the night and the vendored engine stay byte for byte, as do the faces' goldens; `SparkFace` and
+the still it draws gain one optional `props`, which the desk's star sets by its switch, and a face that names none draws
+as it always has; and plugins never reach the door (the SDK's `ui.ts` does not re-export it). It draws nothing under a
+cover, under the pegboard or while the desk does not draw, and where its context is lost the face is the flat star,
+never a blank. On arrival the star rides the head of its line once round the object and settles where the line closes
+(§6). **Its status is the one Chat reads** (S-3): the star wears the spark's status as Chat's list holds it
+(`sparkEntryNow(spark)?.status`, through `sparkStatusOf`), never one mapped from its at-work row, so a spark has one
+status on every surface, and while it acts on the object it wears whatever that status is, its starlight running wet
+with the work (§6). It is drawn as the engine draws a free face, **its props on**, as on the page James picked, so at
+three of the statuses that need you and at Failed its props wear the engine's own colours (amber, yellow and sand; at
+Failed a red ✕ on a face tinted toward red), the one state colour on the mat (§2.5), ‹for James› at §8's chip line. One
+switch in the build turns its props off, which takes away their amber, yellow and sand and the red ✕, though at Failed
+the face still tints toward red, as every Failed face does in Chat; no colour of the engine's is restyled. A free face
+draws no badge and no ring: the engine draws those only with a frame. While Chat's list does not hold the spark, its
+star is its still and wears no word. The overlay hears that list's publishes and wakes when a spark at work on the desk
+changes status, for at rest it draws no frame (§6, M5). **Its word stands where the desk has words**, in its chip and in
+the board's names (§8, §9), not beside the face wherever there is room, as S-3 has it: on the mat a word is a chip on
+the line's glass, never bare (§8, peers on the mat), and its chip stands while its status is one of the four that need
+you (S-4: Asking you, Needs your OK, Stuck, Rate limited), and for 2.4s from the moment it turns Failed, as an agent's
+does: a chip that lasts waits on your answer, and Failed asks nothing of you on the mat (the board's names keep "Failed"
+while it holds, and Chat its word). That is as the page James picked showed a chip, only when a run needed you or
+failed. Reduced motion (M6): on the desk the star is a still, which changes with its status — a departure from "Motion"
+below, which keeps a face's blinks, because under reduced motion the at-work marks hold still (§6) and the star holds
+still with them.
 
 **Motion.** Reduced motion keeps the faces, their blinks and their status changes, and drops the hops,
 the shakes and the falling star (M6).
@@ -1301,6 +1445,42 @@ up wears a print at 2.4×). Until it has printed, and wherever WebGL2 is refused
   it is the face's, the stock's own ink `--vf-card-stock-ink` since round 5's face. The lamp's and the room's light
   stay the press's own numbers, above: they are light, not ink.
 
+**The at-work mark's shadows and its light** (item 550, 2026-11-18; the numbers of *The Fourth Hand*, James's pick of A;
+§8 "At work on the mat"). The mark lies on the mat under the mat's one light (§1's first signature), so it casts as the
+desk's objects cast, down and a little right (away from a light toward −0.289, −0.957), and keeps no light of its own.
+Three shadows, in ink px, each in `--vf-atwork-cast` (`#0e1a0a`) by day and `--vf-atwork-cast-night` (`#050509`) by
+night, mixed by the theme's night as the light turns:
+- **The stroke's:** its own band, shifted outward along its normal by the normal's share of (0.9, 1.9), soft from 0.7
+  inside to 1.7 outside its edge, at **46%** × (1 − 0.7·night), and only where no ink lies — so every stretch of it has
+  a dark lower-right flank, which holds its edge where the ink dims by day (§2.9).
+- **The sticker's:** its sheet's outline offset (0.6, 1.5) × (1 + 1.9·lift), soft from 1.2 inside to 2.2 + 2.2·lift
+  outside, at **38%** × (1 − 0.45·night): it lengthens as the sticker lifts.
+- **The free star's:** a soft round fall centred (1.4, 4.4) × (1 + 0.8·lift) from the star's centre, e^(−d²/103.7) at
+  **36%** × (1 − 0.4·night): the star floats a little off the mat.
+
+*A departure from this section's first law, said:* shadows are "ambient … Never small, dark, or hard" (above). The
+stroke's at 46% and the sticker's at 38% are smaller, darker and harder than that law allows, because they are the mat's
+light falling past a mark that lies on the mat, as the desk's objects cast, not the chrome's elevation; and the stroke's
+shadow holds the ink's edge where the mat's light dims the ink by day (§2.9); the free star's is a soft fall (σ about
+7.2 ink px) at 36%, ambient in softness, and darker than the chrome's recipes for the same reason (the mat's light).
+
+**The ink's light** is a bright ink lit by the mat, kin to the card back's three lights, "a bright ink that holds its
+colour in shadow and glows a little by night" (§5, The back, Pressed, above): never a light of its own, and never a
+colour cast under the object's edge. A tight **lip** (5 ink px, in the ink, at 36%) and a wide **glow** (30 ink px,
+leaning through the ink's neighbours, at 30%) are added round the stroke — by day at a fifth (the lip) and three tenths
+(the glow) of their night, so the edge stays crisp; by night in full, when the ink is the light, brightest where it lies
+thickest. Their weight is the state's: open 0.22, reading 0.5, acting 0.95, needs you 0.5, failed 0.3, your hand none, a
+spark's starlight 0.8 of these, raised while the ink runs wet. Flecks in the ink catch the light a few at a time, by
+night only. Its lights' white, and the printed star's eyes by night (§2.10), stay the overlay's own numbers, as the
+press's lamp does (above): they are light, not ink. **How it composes:** the overlay is VibeField's own WebGL2 layer
+over ICE's pass, not one of ICE's marks (§8), so it composes premultiplied — ink, foil, paper and shadows as colour with
+alpha, the light as light with no alpha, added after a tone map of g/(1 + 0.45g) — and it keeps §5.1's **one physics**
+and its one light by lighting its marks with the theme's night and the lit mat's mean light, one constant read off the
+plate: **0.71**, in both lights, the night applied by the theme's night as the rest of the mark's is (light, not ink, so
+no token; as this section states the front's light). That constant stands in for the palm's dapple, which the overlay
+cannot sample, until ICE's host-marks hook (item 553) lets the mark lie inside ICE's pass: so the mark never lies in
+full sun beside a mat in shade, and the gap is said (§8).
+
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 
 **Ruled 2026-09-25 (DK-D5; thinking-the-desk §6): §5 is the material book.** The desk's materials
@@ -1318,7 +1498,7 @@ rect, its props, its stratum (pads · sheets · things), taped or not — is ICE
 | **pictures** | a captured image | prints; off the desk, the print on a picture card (§8 "The hand") | drawn — device-local until the upload plane (DK-D21) |
 | **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
 | **boards** (the mat) | a place: it holds a desk | the mat itself, the ground (§2.1); the mini mat, a desk inside the desk | drawn |
-| **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks | not yet, as objects |
+| **stickers** (tape) | an attachment, a label | tags — the masking and label tape are already marks; the at-work sticker, an agent's mark on foil where it works (§8 "At work on the mat"; a mark, never an object) | not yet, as objects; the at-work sticker drawn, VibeField's overlay (item 550) |
 | **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
 | **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
 | **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures, a simulator's screen | drawn — the browser pane (`vibefield.browser-pane`, PT-1 … PT-6): a slab of clear glass cut to its page, its recipe its plugin's own and not yet named here (BROWSER.md Q-10); and the iOS Simulator's, the recipe **cover glass** (`vibefield.simulator`, PT-S1 — its numbers below) |
@@ -1347,6 +1527,16 @@ glass in `plugins/browser-pane/src/theme.ts` (none a DESIGN.md token yet, BROWSE
 simulator's in `plugins/simulator/src/theme.ts` and its law, held to the section below by its design
 test — and the portals row names the simulator's recipe, **cover glass** (corrected 2026-10-29, PT-S1's
 review).
+
+*Amended 2026-11-18 (item 550; at its source):* the stickers row's wearers were the tags alone, and its desk cell said
+only "not yet, as objects". The at-work sticker wears the row for its meaning, an attachment and a label — whose agent
+works on this object — as a mark VibeField's overlay draws on the mat, never an object (no record, no hit, no act:
+MC-1). Its foil's colour means a project, never a person (§2.8). Its stroke is the ink row's meaning, drawn by hand. The
+guardrails hold: it informs (whose, and in words what); it is no control, so the efficiency clause asks nothing of it;
+it reads at the 3:1 mark floor in both lights as dealt, its shadow holds its edge where the ink dims, and its drawn
+floor is measured before it lands (§2.9); it keeps **one physics**: its one light, the lit mat's mean light standing in
+for the palm's dapple until ICE's host-marks hook (item 553), a gap said (§5, §8), and no private motion rule, for every
+motion it makes is §6's ("At work on the mat"); and the agent sees the object it works on by the name the person reads.
 
 #### The iOS Simulator's materials — cover glass, border ink, three metals (PT-S1)
 
@@ -1500,7 +1690,7 @@ Three easings, by name — new curves require a reason recorded here:
 |---|---|---|---|
 | `--vf-ease-island` | `cubic-bezier(0.25, 1, 0.3, 1)` | 600ms morph · 240ms glide · 560ms flow-in | morphs (the name pill, or under a cover the package circle, into the pill's sheet; the Me menu; the create's plus into ✕), the hand's deal across (560ms, "The hand" below), the segmented thumb (300ms), anything that *travels* |
 | `--vf-ease-lift` | `cubic-bezier(0.2, 0.9, 0.3, 1.2)` | 180ms | a lift (slight overshoot = "held"): the face lifting, the views track's 1px dip (240ms) |
-| `--vf-ease-pop` | `cubic-bezier(0.34, 1.45, 0.64, 1)` | 280ms | spring pops: the arrival's OS marks, the line's create growing under the pointer, the update's dot beside the face (once, from 0.4×; AU-D1) |
+| `--vf-ease-pop` | `cubic-bezier(0.34, 1.45, 0.64, 1)` | 280ms | spring pops: the arrival's OS marks, the line's create growing under the pointer, the update's dot beside the face (once, from 0.4×; AU-D1), the at-work sticker landing and its printed star budding (380ms; "At work on the mat" below) |
 | plain `ease` / `ease-out` | — | 120–240ms | opacity, color, shadow (shadow 220ms, ring 120ms) |
 
 *Corrected 2026-10-28 (the housekeeping pass):* the Use column named the island morph, the drag
@@ -1910,6 +2100,54 @@ little before it falls into the hand, so a deal reads as a card tossed into a ha
 sliding along a straight line; the horizontal travel keeps the island curve, so the two together draw the
 arc. It is worn nowhere else.
 
+**At work on the mat** (item 550, 2026-11-18; the motions of *The Fourth Hand*, James's pick of A; §8 "At work on the
+mat"). Every curve is the table's and the retract's, with two new things, each with its reason: the peel's linear 150ms
+and the eased approaches. Lengths are in ink px.
+- **The arrival.** The stroke draws on over **780ms on the island curve**, from under its sticker round the object and
+  on past its start: it travels, and a perimeter is a longer travel than the flow-in's 560, so the page James picked
+  drew it at 780. Its sticker pops in over the pop's **280ms** (the pop row above). A printed star buds from the
+  sticker's shoulder **240ms** after the two begin, as the pop settles, over **380ms on the pop curve**, and withdraws
+  in **200ms on the retract curve**. A spark's free star rides the head of its line once round, drawing it, and settles
+  where the line closes over the draw's last tenth. On a selected object the first arrival carries the selection bar out
+  with the draw-on, 780ms on the island curve (§8 "The selection bar").
+- **The departure** (M4). The stroke reels back along its way over **460ms on the retract curve**, and the sticker
+  peels from three quarters of the way, **345ms**, over **150ms, linear**, shrinking to 0.55 and fading through its
+  last half, so it leaves as the ink reaches it. *Why linear:* the page James picked peels so, and in 150ms under a
+  retract already gathering speed a second curve would not be seen. The last leaving on a selected object brings the
+  bar back with the retract, 460ms on its curve.
+- **Work moves the ink** (HG-L1). While its agent reads, a wet stretch runs the stroke at **95 px/s**, a band of light
+  crossing its foil every 2.4s at 0.6; while it acts, at **235 px/s**, the band at full; each agent's pace within a
+  tenth of these, so two never run in step. A pulse of work is a row turning reading or acting, a new `since` while it
+  stays open, reading or acting, or a new `lastChange`; a move into or out of paused, needs you, failed or released
+  never is one. After the last pulse the ink eases to rest, and at rest nothing on the mark moves.
+- **Needs you.** The stroke stands still; the sticker lifts (1.08×, its angle relaxed to 35%, its shadow lengthening)
+  and **a ring leaves it every 2.4s**, from 14 out to 38, in its ink lifted toward white, fading as it goes. It is the
+  loop law's indicator (above), waiting on a fact it cannot predict, your answer: it stops when you answer and never
+  runs under reduced motion. 2.4s is the frame's notice beat (§8 "The status line").
+- **Failed.** One shiver, 2.4 px at 9 Hz dying away over **0.6s**; its name stands beside it for **2.4s**.
+- **Your hand.** Every stroke on what you hold goes grey and still in about 0.2s and follows the object as it is
+  carried; on the lift each returns to its real state with no pulse.
+- **Something in hand.** While anything is in hand, every other object's marks dim to **0.35** as the desk behind goes
+  out of focus (§7), at the hand's own progress, as the desk's blur and dim do: over **560ms** as it is picked up and
+  back over **440ms** as it is put back, both on the island curve. They dim, never go: no mark says nobody works (§8,
+  "What a person sees"), so marks gone mid-hold would say the agents had left. The whole mark dims — ink, foil, paper,
+  shadows, light and the live star — and with it each object's chip, which stands by its sticker. *Amended 2026-11-24
+  (item 550):* they dim where the desk shows; where the object in hand lies over them they are not drawn, as the desk
+  under it is not seen (§8 "At work on the mat", When not). The cover moves with the hand's pose; it has no curve of
+  its own.
+- **The eased values.** The ink's colour (τ 0.10s), its glow (0.11), its wet (0.16), its speed (0.22), the band (0.20),
+  the ask (0.12), the lift (0.06), your hand's grey (0.09) and a seat's place (0.085) each approach their target,
+  `v ← target + (v − target)·e^(−dt/τ)`. *Why:* they are continuous state that a feed frame retargets whenever it lands
+  (at most every 250ms), never a gesture with a start and an end; an approach follows the newest target from where it
+  is, with no restart and no overshoot, where a timed curve would restart on every frame.
+- **At rest** (M5) the overlay draws no frame: a ring wakes it by its own timer every 2.4s, and it sleeps between; a
+  spark at work that changes status wakes it, heard as Chat's list publishes, never polled (§2.10); and with no mark on
+  screen it is not drawn at all. It draws again when the camera moves, in the desk's own frame, and nothing on it
+  twinkles or sways then: its clock runs only while its work moves, for a pan is no work.
+- **Reduced motion** (M6): fades only. A stroke and its sticker fade in and out where they stand (120ms `ease-out`,
+  M6's fade, where the page set them at once), the ink holds still (no wet stretch, band, ring or shiver), and a spark's
+  star is a still (§2.10).
+
 ---
 
 ## 7. Interactive states
@@ -1956,6 +2194,14 @@ object; a sole selection wears the pencil brackets 6 out and several one union, 
 stays the chrome's focus (MC-4); a picked-up object rises into the hand (§8, tools in hand) while the
 desk behind it goes out of focus. The table above is the chrome's; the desk does not draw it.
 *(Until 2026-10-28 this said the table was the DOM card's and only its last two rows the chrome's.)*
+
+*Amended 2026-11-18 (item 550; §8 "At work on the mat"):* **an object an agent works on wears the at-work stroke round
+it** (§2.3): 9 px for one agent, 8 and 7 each for two and three, about a half width apart, centred 17 off its edge for
+one — outside the brackets' 6 and the union's 10, so a rise, a drag and a selection read as they always have. **It never
+covers the pencil:** while the object is selected its ink is masked out of a 2.5 px band along the brackets' box (6 out,
+the union's 10, and from 14 while they lock on), so your pencil shows through wherever the hand's wobble brings the ink
+in. Your hand wins: while you hold the object every stroke on it goes grey and still and is carried with it, lift and
+all (§6). The selection bar clears the stroke (§8 "The selection bar").
 
 ---
 
@@ -5172,6 +5418,13 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
     (R7); kept **16** from each side (built at HN-8; 42 — the notch's 26 + 16 — until the edges
     left the frame); its top never lower than **660** (its
     foot 8 above the line's top, 708). A selection wholly off-screen hides the bar (R7).
+    *Amended 2026-11-18 (item 550; "At work on the mat", below):* **over an object at work the foot clears the
+    marks.** While any selected object is at work, the foot stands (31.2 + 9) × the marks' scale off the selected
+    objects' edge instead of 10 above the brackets — 40.2 at 100%, from 28.1 at 70% and below to 88.4 at 220% and above
+    — and flipped, as far below: the reach of three strokes whatever the count of agents, so an agent arriving or
+    leaving never moves the bar. It travels only on the first arrival and the last leaving while selected, on the
+    stroke's own times: out with the draw-on, 780ms on the island curve, and back with the retract, 460ms on its curve
+    (§6). An object with no mark keeps the place above exactly.
   - **Size and material** — **40** tall (the top chrome's height), padding 4, gap 2, corners 20, on
     the line's glass (§5) with its hairline and the island shadow; cells **32** × 32, corners 16,
     their glyphs **16** in secondary ink (primary under the pointer); the rule 1 × 18 in the strong
@@ -5603,6 +5856,103 @@ desk behind it goes out of focus. The table above is the chrome's; the desk does
   carries both and the facet is gone. *Amended 2026-10-08 (DK-17b, ICE `0.15.0-desk.7`, petition I44):*
   desk.6 heard only an exit from the desk itself, so a pointer that left through the chrome beside it
   stood on the mat until the 8 s idle; the exit is heard from anywhere in the host's document since.
+- **At work on the mat** (item 550, 2026-11-18; OB-D14, the mark — its controls are OB-D15's and Godview's end OB-D16's,
+  neither here; James's picks on the page *The Fourth Hand*: `at-work-mark` A at 10:55:17Z, `spark-ink` star at
+  10:57:03Z and `spark-form` free at 10:57:15Z, then "picked lean, now start implementation, land it solid and optimal";
+  his notes of 2026-11-17 on the page's first version bind it, §2.5, §2.6, §2.9; the feed is OB-4's
+  `objects.presence.subscribe`, widened by item 550a): **an object an agent works on wears who works on it, on the
+  mat.** One marker stroke per agent round the object, in the colour Godview gives that agent's project (§2.6's second
+  exception; §2.9's rules on the mat), and beside it, down the object's right side, a die-cut sticker per agent, its
+  catalog mark on foil (§2.8). A spark at work there is its own live star, free, drawing its line in starlight (§2.10);
+  an agent a spark started wears that spark's star printed on its sticker. Colour says whose; motion and words say what
+  (§2.5, §2.6).
+  **Where.** VibeField's own WebGL2 overlay, one `.vf-atwork` layer in the desk's box, below `.vf-peers`, the bar and
+  the line. ICE 0.17.0 offers a host no pass of its own, so the overlay stands over ICE's canvas, ICE's own marks
+  included: it is not one of the mat's marks (the desk's chrome, above) and not chrome either, but a mark VibeField
+  draws, lit by the theme's night and the lit mat's mean light (§5) until ICE's host-marks hook (item 553) lets it lie
+  inside ICE's pass. A reflector registered from the desk's door places it, firing after the desk's own compose, so it
+  draws in the desk's frame and is exact to the camera: each object's frame is its kind's as drawn (the lift and the
+  turn in), else its rect's. One context per window, kept across a desk's remounts and let go when the window goes; at
+  most one draw a frame, at a pixel density of at most 2. *Amended 2026-11-24 (item 550; the pages room's second live
+  run, a pane in the person's hand):* **in hand the frame is still the kind's silhouette**, carried by the hand's pose
+  as the hand draws it (its open extent's place and scale on screen, the object's offset from that extent kept), never
+  the open extent itself: a browser pane's extent is its page and head, which leave out its border, so a stroke round
+  the extent ran over the pane's own border and its sticker sat on the head. A kind that shows one page of a spread
+  in hand keeps the shown page as its frame.
+  **The stroke** (§2.3): 9 px for one agent, 8 each for two, 7 for three, about a half width apart, centred 17 off the
+  edge for one; at most three. It starts under its own sticker and closes 9% of its length past its start (at most 56),
+  and the hand shows: it bows off true (about 4, up to 8 at its deepest), cuts some corners short and swings wide on
+  others, is wider across the nib than along it, gathers at both rims, streaks with the nib's fibres and breaks where a
+  long pull ran dry. Its tooth and flecks are taken along and across the stroke, never from the screen, so a pan never
+  crawls through them. Its shadows and its light are §5's. **It never covers the pencil** (§7): on a selected object its
+  ink is masked out of a 2.5 px band along the anchor's box (the brackets' 6, the union's 10, and from 14 while they
+  lock on). A taped object's strips are not traced yet, so the ink may lie over them (a gap, until item 553).
+  **The stickers** (§2.8): about 26 across, the mark 15 on 4.1 of foil, the 1.6 paper edge and the cut. They sit on the
+  stroke's line down the object's right side, the first 16 under where its top-right corner ends and then 28 apart, at
+  most three; past three agents the third is a paper "+N", N the agents past the first two (§9), with no foil. A spark's
+  star and a sticker that wears a printed star take a fifth more of the column. The bar owns the top.
+  **What a person sees.** No feed (refused, ended, or the client not ready): no mark — nothing claims work. Open: the
+  stroke in its colour, still, with its sticker. Reading or acting: the ink runs wet along the stroke, then eases to
+  rest after the last pulse (§6). Paused (dragged, or a note being written): every stroke on it goes grey and still and
+  follows the object, lift and all; on the lift each returns to what it was, with no pulse. Needs you: the stroke still,
+  the sticker lifted and a ring leaving it every 2.4 s, and a chip. Failed: one shiver and a chip for 2.4 s. Released:
+  it leaves at once — the stroke reels back over 460ms and the sticker's peel ends at 495ms, so the leaving takes 495ms
+  (§6); the released row stays 4 s (`OBJECT_ROOM.RELEASED_SHOWN_MS`), so the desk can show it leaving. A pane an agent's
+  run made leaves the desk on that leaving (track EY, EY-1; `whenAtWorkLeft`): 495ms after the last agent at work on it
+  stops, at once when none was, and never later than 4 s after its run's end; unless it is under the person's hand, when
+  it leaves as it is put down (§8 "A page an agent is using"). Many agents: three nested strokes, then "+N". An unknown
+  agent: its letter on the foil. A run in no project: the neutral pearl (§2.9). A spark at work: its star wears the
+  status Chat reads (§2.10). A type the desk cannot draw: the marks go round its missing face's rect. Without WebGL2, or
+  with the context lost: **the DOM form**, a still CSS stroke in the frame's colour and each sticker a chip wearing
+  `AgentIcon` — never a blank; on `webglcontextrestored` the overlay rebuilds and returns.
+  **The names** (I-4, S-5): the marks are an index. Each board keeps a visually hidden list of who works on what, in
+  §9's words, polite to assistive tech at needs you and failed alone. At needs you, and for 2.4 s at failed, a **chip on
+  the line's glass** stands 7 right of its sticker (left of it at the window's edge): the peers' label chip, not a new
+  one (22 tall, full round, padded 0 9 0 7, `--vf-chrome-solid` at 88%, 94% by night, with the line's blur and hairline,
+  11.5/500 in the chrome's primary text ink), reading the agent's mark and its name, the project's folder mark in its
+  colour at the theme's lightness (§2.9) and its name, then the word (§9). A spark's chip reads its name, "spark" and
+  its status's word, and stands while that status, the one Chat reads, is one of S-4's four that need you, and for 2.4s
+  from the moment it turns Failed, as an agent's (§2.10). **Its words take no state ink**, and one switch in the build
+  gives them their inks. ‹for James›, one sentence for each reading: (i) As built, the words keep the chrome's ink, on
+  his words "no need to indicate different state with colors" and on the page he approved, which says "Nothing changes
+  colour" at needs you. (ii) They take §2.5's inks as S-4 does, the attention ink at needs you and the danger ink at
+  failed, so a person scanning the desk finds first the one that needs them. The live star's own colours (§2.10) are in
+  the same question, behind the same switch. As built the engine draws them as on the page he picked. There, at needs
+  you the star asked with a question mark in its own ink, so the tour's "Nothing changes colour" held; at Failed it
+  showed a red ✕ on a red-tinted face; and the three other statuses that need you, which the page never showed, would
+  wear an amber lock, yellow dizzy stars and a sand hourglass. The switch's other position turns the star's props off:
+  that takes away the amber, yellow and sand and the red ✕, and at Failed the face still tints toward red, as every
+  Failed face does in Chat.
+  **When not.** It hides under the pegboard, under a cover and while the desk does not draw — the peers' layer's hiding,
+  never one peer's idle or away. **An object inside a container you have not entered wears no marks**, as a peer inside
+  another canvas hides (above): a gap, named here. While anything is in hand the desk behind goes out of focus (§7), and
+  every other object's marks dim with it to 0.35 on the hand's own progress, as the desk's blur and dim do: over 560ms
+  as it is picked up, and back over 440ms as it is put back, on the island curve (§6). They dim, never go, since no mark
+  says nobody works; the whole mark dims, its live star and its chip with it. A gap, beside item 553's: the overlay
+  cannot take ICE's blur, so a dimmed mark stays sharp over the blurred desk until the mark lies inside ICE's pass.
+  *Amended 2026-11-24 (item 550; the pages room's second live run: a Simulator's stroke drawn across a browser pane
+  lifted to browse):* **the object in hand covers what lies behind it, marks included.** It stands over the whole desk,
+  so every other object's marks are masked out of its silhouette as the hand draws it (the frame above, at the hand's
+  pose through the pickup and the put-back): they dim where the desk shows round it and are not drawn where the held
+  object lies over them. The cover lasts until the object has landed, longer than the dim: after Done the desk comes
+  back over the put-back's 440 ms while the object still flies home over it, and the marks behind stay masked out of
+  it. A sticker and a count are masked by the pixel with the band; a spark's star or a chip, drawn apart from the band,
+  whose centre the silhouette covers stands at none. The held object's own marks stay on it, grey and still (your
+  hand); their frame flies home with it. The DOM form cannot mask by the pixel: an
+  object of it whose marks' reach meets the silhouette wears none of its frame while something is in hand, and its
+  seats and chips follow the centre rule. This is the hand's cover, not an order of objects: an object that only lies
+  over another on the mat does not mask the other's marks (a gap, until item 553).
+  **Zoom.** The marks keep the desk's scale from 70% to 220% zoom, `clamp(zoom, 0.7, 2.2)` screen px per ink px, and
+  hold their size beyond. When an object's shorter side on screen is under 100 px its strokes merge into one line in the
+  first agent's colour and its stickers into the first and "+N"; under 24 px only a 2 px line remains.
+  **The bar clears it** ("The selection bar", Place, above): over any object at work its foot stands (31.2 + 9) × the
+  marks' scale off the edge, the reach of three strokes, where reach = gap + (n − 1)/2 × hw × 1.1 + hw + 3 (24.5, 28.1
+  and 31.2 for one, two and three agents), so the count of agents never moves it.
+  **A mark, never a control** (MC-1): nothing on it takes a press, a hover or a focus. Every act on an agent at work is
+  OB-D15's, on the line's glass, never on the mat.
+  **Its witnesses:** `atWorkDraws()` and `atWorkStageFrames()`. A smoke row draws a fixture snapshot on a change, draws
+  nothing at rest and under a cover, and counts no stage frame 8 s after the last touch. The catalog mounts the shipping
+  `AtWorkView` over fixture rows on a stand-in mat through a fixture camera, as the peers are (`docs/UI_SYSTEM.md`).
 - **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
   the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
   never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or
@@ -12609,6 +12959,33 @@ project, ready to pick up again." and **Look again**. In History the unavailable
 "History isn't available right now.", for the second ("You can bring sessions in later from History.") is the Setup
 Assistant's to say. History's waits say the Setup Assistant's words (`history-line.ts`), which are the room's own.
 
+**The desk's at-work words** (item 550, 2026-11-18; where each stands is §8 "At work on the mat"). They are the agents'
+words above: ‹name› is the agent's catalog label (R23b; never a literal), or the agent's id itself for one this build
+has no row for, as the window names it elsewhere (`agentLabel`) and as the letter on its foil agrees, never the run's
+handle; ‹project› the project as Godview names it, ‹object› the object's name as the bar says it (§8, the desk's chrome)
+and ‹spark› a spark's name. The states' words are the page's (*The Fourth Hand*), and the names' sentences set them
+round its one example; a chip's word is the word the desk already says for that state, Needs you as a session's (§8) and
+Failed as a spark's (§2.10), so an agent's chip and a spark's speak one vocabulary.
+- **The board's names,** one line for each agent at work, visually hidden: open "‹name› in ‹project› has ‹object›
+  open"; reading "‹name› in ‹project› is reading ‹object›", as "Claude Code in vibe-field is reading Q3 plan"; acting
+  "… is changing ‹object›" (the page said the act's own words, which the feed does not carry); needs you "… needs you on
+  ‹object›"; your hand "… is paused: you have ‹object›"; failed "…: an act on ‹object› failed". A crew run ends "for
+  ‹spark›" ("Claude Code in vibe-field is reading Q3 plan for Vela"), and a run in no project leaves out "in ‹project›".
+  A spark's line is "‹spark› on ‹object›: ‹its status's word›" ("Vela on Q3 plan: Asking you"), its status the one
+  Chat reads (§2.10); while Chat's list does not hold the spark, it is "‹spark› on ‹object›", with no word.
+- **The chip,** at needs you and for 2.4 s at failed: "‹name› · ‹project› · Needs you" and "‹name› · ‹project› ·
+  Failed", the agent's mark before its name and the folder mark before the project; a crew run's adds "· ‹spark›'s
+  crew" before the word. A spark's reads "‹spark› · spark · ‹its status's word›" while that word is one of the four
+  that need you (S-4: Asking you, Needs your OK, Stuck, Rate limited), and for 2.4 s from the moment it turns Failed,
+  as an agent's. Its words' inks are §8's. *A
+  departure, said:* a failed chip, and the names' failed line, name neither the act nor a next step, which IS-282-1 asks
+  of a failure ("Every room keeps them inside", above): the feed carries no act's words, and the mark takes no act
+  (MC-1); a next step is OB-D15's.
+- **"+N",** the third seat's paper past three agents: N is the agents it stands for, past the first two ("+2" for four).
+  It is a count, never a word, and the board's names name every one.
+- **Never on screen:** a run's id or handle, `since`, "presence", custody, the state ids, "agent kind" and fieldd; they
+  stay in the log, Diagnostics and the code (this section's first law, item 280).
+
 **The meters' words** (track UM, ruled 2026-11-06 from the page *The Bands Meter*; where each word stands is §8 "The
 Bands circle", "Godview's profiles column", "The moments", "The phone's corner" and "The phone's profile token").
 They are the agents' words above: a **plan** by its product name, a **profile** by its name. ‹plan› is a plan as
@@ -14140,6 +14517,12 @@ size the SF Symbol had, and the swarm's CoreGraphics sprites are the Instrument 
 not an icon — the coin's marks (§2.8), the catalog's fixture stills (and the edge tray's notch and
 drawer, until HN-8 retired them, §8) — and, on the desk, two named exceptions: the bar's ONE path renderer for a kind's own drawing
 (R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
+*(2026-11-18, item 550:)* the desk's at-work sticker (§8 "At work on the mat") needs neither: its agent's mark is the
+toolkit's `agentMark` path data (puppeteer-view-sdk), kept exact as the vendor marks below are (AR-L1), baked once into
+the overlay's own distance-field atlas and drawn on the GPU, never as an inline `<svg>`, and its form without WebGL2 is
+a CSS stroke and `AgentIcon`. Its mark is looked up by the catalog's id, never compared with a literal (R23b), and an
+unknown agent is its letter. If it ever draws an inline `<svg>`, that is a named exception here first and a row in
+`glyphs.test.tsx`'s allow map, as the peers' arrow is.
 **Kept exact, outside this set:** the tray and app masters (James's selected
 `vibefield-icon-collection-v2`, 2026-11-03, superseding the previous masters; reviewed
 source pixels and recipe in `apps/desktop/packaging/icon-source`, packaging mapping in

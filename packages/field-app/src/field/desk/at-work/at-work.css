@@ -1,0 +1,175 @@
+/* THE AT-WORK MARK ON THE MAT (item 550, 2026-11-18; DESIGN.md §8 "At work on the mat", §2.8 the at-work sticker,
+   §2.9 the frame form, §5 its shadows). Tokens only: no colour of any spelling is written here. An ink arrives on the
+   element as `--vf-atwork-ink` (the toolkit's colour for a project, or a token's `var()`), a folder mark's as `--vf-atwork-folder`,
+   the sticker's numbers on the layer as `--vf-atwork-mark`, `--vf-atwork-foil`, `--vf-atwork-edge` and `--vf-atwork-cut`, and the layer writes
+   each element's place. The layer lies in the desk's own box (`<Desk>`'s children), above the mat and the desk's own
+   DOM, below the peers (the same stacking level, and before them), the bar (30), the frame and the line (62). It never
+   takes a pointer: it is a mark, never a control (MC-1). */
+
+.vf-atwork {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* the whole layer away: the desk not drawing, a cover, the board out — never a peer's idle */
+.vf-atwork[data-hidden] {
+  visibility: hidden;
+}
+
+/* THE GL FORM: the window's one canvas, taken into this box by the layer (dpr ≤ 2; display:none with no mark on
+   screen) */
+.vf-atwork__gl {
+  position: absolute;
+  inset: 0;
+}
+
+.vf-atwork__canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* THE DOM FORM: an object's frame is a box of no size at its centre, turned with it; each stroke stands round the
+   object's silhouette `--vf-atwork-gap` ink px out, `2·--vf-atwork-hw` wide, at the marks' scale `--vf-atwork-zs` (the layer writes the
+   half extents, the corner and the scale; the view the gap, the width and the ink) */
+.vf-atwork-frame {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  will-change: transform;
+}
+
+.vf-atwork-stroke {
+  --vf-atwork-out: calc((var(--vf-atwork-gap) + var(--vf-atwork-hw)) * var(--vf-atwork-zs));
+  position: absolute;
+  top: calc(-1px * (var(--vf-atwork-hy) + var(--vf-atwork-out)));
+  left: calc(-1px * (var(--vf-atwork-hx) + var(--vf-atwork-out)));
+  box-sizing: border-box;
+  width: calc(2px * (var(--vf-atwork-hx) + var(--vf-atwork-out)));
+  height: calc(2px * (var(--vf-atwork-hy) + var(--vf-atwork-out)));
+  border: calc(2px * var(--vf-atwork-hw) * var(--vf-atwork-zs)) solid var(--vf-atwork-ink);
+  border-radius: calc(1px * (var(--vf-atwork-r) + var(--vf-atwork-out)));
+  /* §5's stroke cast: 46 % along the normal, (0.9, 1.9) */
+  filter: drop-shadow(0.9px 1.9px 0.6px color-mix(in srgb, var(--vf-atwork-cast) 46%, transparent));
+}
+
+.dark .vf-atwork-stroke {
+  filter: drop-shadow(
+    0.9px 1.9px 0.6px color-mix(in srgb, var(--vf-atwork-cast-night) 46%, transparent)
+  );
+}
+
+/* the far band's line: 2 px, no shadow */
+.vf-atwork-stroke[data-form="line"] {
+  filter: none;
+}
+
+/* THE STICKER (§2.8's at-work sticker): the agent's mark printed on foil in the ink, on the paper edge with the cut
+   beyond it — the mark, the foil either side and the edge either side across (26.4 at zoom 1, the layer's scale its
+   zoom's); still in this form */
+.vf-atwork-sticker {
+  --vf-atwork-side: calc(
+    1px *
+    (var(--vf-atwork-mark) + 2 * (var(--vf-atwork-foil) + var(--vf-atwork-edge)))
+  );
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  box-sizing: border-box;
+  width: var(--vf-atwork-side);
+  height: var(--vf-atwork-side);
+  margin: calc(var(--vf-atwork-side) / -2) 0 0 calc(var(--vf-atwork-side) / -2);
+  border: calc(1px * var(--vf-atwork-edge)) solid var(--vf-sticker-edge);
+  border-radius: 50%;
+  background: var(--vf-atwork-ink, var(--vf-sticker-edge));
+  box-shadow: 0 0 0 calc(1px * var(--vf-atwork-cut)) var(--vf-sticker-cut);
+  color: var(--vf-atwork-print);
+  font: 600 11px / 1 var(--vf-font-sans);
+  will-change: transform;
+  /* §5's sticker cast: (0.6, 1.5) at 38 % */
+  filter: drop-shadow(0.6px 1.5px 1px color-mix(in srgb, var(--vf-atwork-cast) 38%, transparent));
+}
+
+.dark .vf-atwork-sticker {
+  filter: drop-shadow(
+    0.6px 1.5px 1px color-mix(in srgb, var(--vf-atwork-cast-night) 38%, transparent)
+  );
+}
+
+/* past three agents, the paper "+N": no foil */
+.vf-atwork-sticker[data-atwork-seat="count"] {
+  background: var(--vf-sticker-edge);
+}
+
+.vf-atwork-sticker__mark {
+  display: grid;
+  place-items: center;
+  font-size: calc(1px * var(--vf-atwork-mark));
+  line-height: 1;
+}
+
+.vf-atwork-sticker__count {
+  letter-spacing: -0.01em;
+}
+
+/* a crew run's printed star at the sticker's top right (one sheet in the GL form; a still beside it here) */
+.vf-atwork-sticker__crew {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  width: 16px;
+  height: 16px;
+}
+
+/* A SPARK'S OWN STAR, free, 34 at zoom 1, at the head of its seat */
+.vf-atwork-star {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 34px;
+  height: 34px;
+  margin: -17px 0 0 -17px;
+  will-change: transform;
+}
+
+/* THE CHIP on the line's glass: the peers' label chip (§8 "Peers on the mat"), composed — `vf-peer__chip` carries the
+   whole recipe, its night light included, and this only places it in the layer and lays out its parts: the mark, then
+   the words, the project's folder mark before its name */
+.vf-atwork .vf-atwork-chip {
+  top: 0;
+  left: 0;
+  will-change: transform;
+}
+
+.vf-atwork-chip__mark {
+  display: inline-grid;
+  place-items: center;
+  margin-right: 5px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.vf-atwork-chip__folder {
+  margin-right: 3px;
+  color: var(--vf-atwork-folder, currentColor);
+  vertical-align: -0.2em;
+}
+
+/* the words take no state ink (§8, at the chip's line); the build's one switch, `AT_WORK_CHIP_INKS`, gives them
+   these */
+.vf-atwork-chip__word[data-ink="needs-you"] {
+  color: var(--vf-ink-attention);
+}
+
+.vf-atwork-chip__word[data-ink="failed"] {
+  color: var(--vf-ink-danger);
+}

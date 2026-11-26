@@ -242,6 +242,8 @@ describe("UI system ownership boundaries", () => {
     // MA-4a (the lead's C18): From your agents' plates stage the shipping group at the shelf's
     // width, and never restyle a made tile; its rules are made-apps.css's
     expect(catalogCss).not.toMatch(/^\.vf-apps(?:\b|-)/m);
+    // item 550 (2026-11-18): the at-work plates lay the lit mat; the mark's rules are at-work.css's
+    expect(catalogCss).not.toMatch(/^\.vf-atwork(?:\b|-|_)/m);
     // SP-1b: Chat's plate is a box on the frame's ground; the panel's rules are the product's
     expect(catalogCss).not.toMatch(/^\.vf-chat(?:\b|-)/m);
     // SP-1c: the New spark sheet's plate stages it over Chat; the sheet's rules are the product's
@@ -1306,6 +1308,40 @@ describe("UI system ownership boundaries", () => {
       expect(fixture).not.toMatch(door);
   });
 
+  it("keeps the at-work mark's fixture an ADAPTER — the product's model and placements over fixture rows, never its markup (item 550)", () => {
+    // The strokes, stickers, chips and names are the shipping view; the catalog stands in what the desk supplies — an
+    // object's frame through a fixture camera, the rows the feed would carry, the statuses Chat's list would hold —
+    // and marks and places them by the product's own model, placements and words. Never the mark's own classes,
+    // never a stylesheet, never the desk's doors, the store the applier feeds, Chat's list, the reflector or the
+    // controller.
+    const fixture = source("design-system/AtWorkPreview.tsx");
+    expect(fixture).toMatch(/<AtWorkView\s/u);
+    for (const model of [
+      "stepAtWork(",
+      "screenFrameOf(",
+      "atWorkShapeOf(",
+      "atWorkPlacementsOf(",
+      "atWorkNamesOf(",
+      "atWorkChipOf(",
+      "createAtWorkLayer(",
+    ])
+      expect(fixture).toContain(model);
+    expect(fixture).not.toMatch(/className="vf-atwork/u);
+    expect(fixture).not.toContain("<style");
+    for (const door of [
+      /\bgetHost\b/u,
+      /\bcurrentDesk\b/u,
+      /\bpublishDesk\b/u,
+      /\buseAtWorkBoard\b/u,
+      /\batWorkStore\b/u,
+      /\bsparkEntryNow\b/u,
+      /\buseSparksReading\b/u,
+      /\bcreateAtWorkReflector\b/u,
+      /<AtWorkOnTheMat\s/u,
+    ])
+      expect(fixture).not.toMatch(door);
+  });
+
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
     // The temptation for a widget whose pixels need a privileged producer is to
     // draw convincing ones. The catalog is held to supplying what a HOST
@@ -1391,8 +1427,9 @@ describe("UI system ownership boundaries", () => {
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
+    const atWork = source("design-system/AtWorkPreview.tsx");
     const peek = source("design-system/PeekPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${updateCorner}\n${cards}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const catalog = `${atWork}\n${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${updateCorner}\n${cards}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "LiveAppsPreview",
       "CommandPalettePreview",
@@ -1487,6 +1524,13 @@ describe("UI system ownership boundaries", () => {
       "PeerCursorView",
       "arrowBoxAt",
       "peerLabel",
+      // item 550 — at work on the mat over fixture rows, marked and placed by the product's own model
+      "AtWorkPlate",
+      "AtWorkLivePlate",
+      "AtWorkView",
+      "atWorkShapeOf",
+      "atWorkPlacementsOf",
+      "atWorkChipOf",
       // WP12d (L3c-ii) — Settings › General's update card and Settings › Diagnostics' updater block, over fixtures;
       // AU-3 — the card became Settings → Updates, Your devices under it
       "UpdatesSectionView",
@@ -1516,6 +1560,9 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<PegboardPlate\s/u);
     // …and the peers' plates (DK-16)
     expect(page).toMatch(/<PeersPlate\s/u);
+    // …and the at-work plates, the DOM form's and the GL layer's live one (item 550)
+    expect(page).toMatch(/<AtWorkPlate\s/u);
+    expect(page).toMatch(/<AtWorkLivePlate\s/u);
     // …and the line's plates (LN-D1), the line's own view on each
     expect(page).toMatch(/<ComposerLinePlate\s/u);
     // …and the update card and the updater block mounted in the shipping dialog (WP12d L3c-ii)
@@ -1576,8 +1623,11 @@ describe("UI system ownership boundaries", () => {
     // 0.11 magnet projection the field once handed the ground has no consumer.
     expect(stage).toMatch(/<Desk\s+engine=\{ce\}\s+layer=\{layer\}/u);
     expect(stage).toContain("fieldDeskLayer(");
-    // DK-16: the room's other people are the desk's child — in its own box, under its engine — while it draws
-    expect(stage).toMatch(/<Desk[^>]*>\s*<PeersOnTheMat\s+drawing=\{drawing\}\s*\/>\s*<\/Desk>/u);
+    // DK-16: the room's other people are the desk's child — in its own box, under its engine — while it draws;
+    // item 550: and before them, who is at work on the board's objects
+    expect(stage).toMatch(
+      /<Desk[^>]*>\s*<AtWorkOnTheMat\s+drawing=\{drawing\}\s+docId=\{docId\}\s*\/>\s*<PeersOnTheMat\s+drawing=\{drawing\}\s*\/>\s*<\/Desk>/u,
+    );
     expect(field).not.toContain("canvasGridConfig(");
     expect(workbench).toContain("ProductAppearance");
     expect(workbench).not.toContain("useState");
@@ -1642,6 +1692,9 @@ describe("UI system ownership boundaries", () => {
       "field/desk/pegboard/PegboardView.tsx",
       "field/desk/peers/PeersOnTheMat.tsx",
       "field/desk/peers/PeersView.tsx",
+      // item 550 — at work on the mat
+      "field/desk/at-work/AtWorkOnTheMat.tsx",
+      "field/desk/at-work/AtWorkView.tsx",
       // SP-1b — Chat
       "chat/ChatView.tsx",
       "chat/ChatPanelView.tsx",
@@ -1708,6 +1761,7 @@ describe("UI system ownership boundaries", () => {
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
+      "field/desk/at-work/at-work.css",
       "chat/chat.css",
       // track ES: the night (`ChatEmptyView`) and the one starter it shares with the hello (`ChatStarter`)
       "chat/chat-empty.css",
@@ -1723,6 +1777,38 @@ describe("UI system ownership boundaries", () => {
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }
+  });
+
+  it("keeps the at-work mark's code and stylesheet free of colour literals of any spelling — its inks are tokens' and the toolkit's (item 550)", () => {
+    // DESIGN.md first (§2.9's neutral pearl, §2.10's starlight, §5's casts), projected into tokens.css, read from the
+    // root (`readAtWorkInks`, `atWorkShaderColours`) once per theme; a project's ink is the view SDK's (`oklchToHex`
+    // over Godview's deal). Any spelling means what it means for the Setup Assistant (item 136): no hex, no colour
+    // function, and in the stylesheet no named black or white. The shader's own spelling of a colour (GLSL
+    // `vec3(…)` floats) is held by its module's row, test/at-work-shader.test.ts (the press's precedent, item 403).
+    const atWork = join(PACKAGE_ROOT, "src", "field", "desk", "at-work");
+    const files = readdirSync(atWork).filter((name) => /\.(?:ts|tsx|css)$/u.test(name));
+    expect(files).toEqual(
+      expect.arrayContaining([
+        "at-work.css",
+        "at-work-ink.ts",
+        "at-work-layer.ts",
+        "at-work-shader.ts",
+        "AtWorkView.tsx",
+      ]),
+    );
+    const offenders: string[] = [];
+    for (const name of files) {
+      source(`field/desk/at-work/${name}`)
+        .split("\n")
+        .forEach((line, index) => {
+          const named =
+            name.endsWith(".css") &&
+            /:\s*[^;]*\b(?:black|white)\b/i.test(line.replace(/url\([^)]*\)/g, "url()"));
+          if (COLOUR_LITERAL.test(line) || named) offenders.push(`${name}:${index + 1}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+    expect(source("field/desk/at-work/AtWorkOnTheMat.tsx")).toContain("rootToken");
   });
 
   it("keeps the press's code free of hex — every colour it prints with is a token's, read from the root (item 403)", () => {

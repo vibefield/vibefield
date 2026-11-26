@@ -82,6 +82,10 @@ export interface SparkFaceProps {
   live?: boolean | undefined;
   /** the accessible name where no words sit beside it; without it the face is decorative */
   label?: string | undefined;
+  /** whether its STILL wears its props; absent, the engine's own way (free with them, on its disc without). A live
+   * face on a SparkStage is the stage's, which this does not reach. The desk's at-work star, always a still here, sets
+   * it by its switch (item 550, 2026-11-18; DESIGN.md §2.10) */
+  props?: boolean | undefined;
   className?: string | undefined;
 }
 
@@ -92,6 +96,7 @@ export function SparkFace({
   framed = true,
   live = false,
   label,
+  props,
   className,
 }: SparkFaceProps): ReactElement {
   const box = useRef<HTMLSpanElement>(null);
@@ -138,8 +143,8 @@ export function SparkFace({
     typeof engines === "object";
   useLayoutEffect(() => {
     if (!stills || engines === null || cut === null) return;
-    setPicture(drawStill(engines, { seed, status, size, framed, cut }));
-  }, [stills, engines, seed, status, size, framed, cut]);
+    setPicture(drawStill(engines, { seed, status, size, framed, cut, props }));
+  }, [stills, engines, seed, status, size, framed, cut, props]);
 
   const flat =
     typeof engines === "object" &&
