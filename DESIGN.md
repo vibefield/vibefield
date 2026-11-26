@@ -5569,6 +5569,10 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
     the words stood over the neighbouring written line, took the pointer there (a double click on that line's word landed
     on the bar), and its menus covered the words. Its cost, accepted with B: on a tall sheet the bar can stand several
     lines from the words selected.)*
+    *(Added 2026-11-26, on the at-work stroke's landing (item 550; "The selection bar", Place): over a sheet an agent
+    is at work on, the words bar and the caret's keep the objects' bar's clearance for that sheet, their foot standing
+    off its brackets by the same figure as the objects' bar over it, above the sheet and flipped below it alike, because
+    B places the bar where the objects' bar sits.)*
     **The menus** grow from the bar as over objects ("The bar grown"): UPWARD from its row, away from a sheet it stands
     above; DOWNWARD only when the list does not fit above it (a sheet near the top), the row heading it, and then it lies
     over the sheet's top as the objects' menu lies over its object. A bar flipped BELOW the sheet grows its menu DOWNWARD

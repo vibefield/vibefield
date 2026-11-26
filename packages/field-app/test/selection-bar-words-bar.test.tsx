@@ -22,18 +22,30 @@
  *     door it waits and says ⌘V; a right-click anywhere else is the objects' as before;
  *     a slot's declared `keys` printed in its tip; at a bare CARET (round two, the anchor's `caret`) a right-click on the sheet
  *     grows Paste | Select all at the caret, and no bar stands there otherwise.
+ *   OVER A SHEET AT WORK (L1b, 2026-11-26; item 550) — the words bar and the caret's keep the objects' bar's clearance for
+ *     their sheet, above it and flipped below it, and travel it as the objects' bar does; a sheet not at work stands
+ *     where it stood, number for number.
  * No kind on the desk declares words acts yet (ICE's ink acts arrive with the note's next slice): the anchors are fixtures.
  */
+
 import { type CanvasEngine, type Entity, setWidgetProps } from "@vibecook/ice";
 import type { MenuSlot, SelectionAnchor, WordsAnchor } from "@vibecook/ice/desk";
+import type { ObjectsPresenceSnapshot } from "@vibefield/contracts";
 import { act, createElement, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { atWorkBarClear, atWorkInkScale } from "../src/field/desk/at-work/at-work-model";
+import { atWorkStore } from "../src/field/desk/at-work/at-work-store";
 import { readBarStats, resetBarStatsForTest } from "../src/field/desk/bar/bar-stats";
 import { SelectionBar } from "../src/field/desk/bar/SelectionBar";
 import { lastCopy } from "../src/field/desk/copy/copy-record";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
-import { deskObjects, type MountedDesk, publishDesk } from "../src/field/desk/desk-door";
+import {
+  currentDesk,
+  deskObjects,
+  type MountedDesk,
+  publishDesk,
+} from "../src/field/desk/desk-door";
 import { deskLook } from "../src/field/desk/desk-layer";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import { cardsStore } from "../src/frame/cards/cards-store";
@@ -1110,5 +1122,133 @@ describe("the words' More: Cut, Copy, Paste and Select all, right-click at the w
     const chord = key("x", field, { metaKey: true, shiftKey: true });
     expect(chord.defaultPrevented).toBe(false);
     expect(run).not.toHaveBeenCalled();
+  });
+});
+
+// L1b (2026-11-26; DESIGN.md §8 "The words bar" — Place, the line added on the at-work stroke's landing; item 550): B
+// places the words bar where the objects' bar sits, and since item 550 that bar stands its foot clear of an at-work
+// object's stroke. Over a sheet at work the words bar, and the caret's, keep that same clearance for the sheet.
+describe("the words bar over a sheet at work (L1b; item 550)", () => {
+  /** This mount names its board, so the window's at-work store reaches the bar. */
+  const nameTheBoard = (): void => {
+    const desk = currentDesk();
+    if (desk === null) throw new Error("no desk");
+    unpublish();
+    unpublish = publishDesk({ ...desk, docId: "doc-1" });
+  };
+  /** The store's rows: one agent at `state` on the object whose key is `key` (the note's when none is said). */
+  const atWork = (state: "open" | "released", since = 1, key?: string): void => {
+    const at = key ?? (ce.docs.current()?.store.keyOf(note) as string);
+    const agents = [{ run: "r1", handle: "r1 in vibe-field", agent: "agent", state, since }];
+    atWorkStore.publish("doc-1", {
+      objects: [
+        {
+          ref: "vf:obj/note0000",
+          docId: "doc-1",
+          key: at,
+          agents: agents as ObjectsPresenceSnapshot["objects"][number]["agents"],
+        },
+      ],
+    });
+  };
+  /** The bar's place as written: its centre's x and its top's y (happy-dom lays out no width). */
+  const placed = (): { x: number; y: number } => {
+    const m = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(bar().style.transform);
+    if (m === null) throw new Error(`no place in ${bar().style.transform}`);
+    return { x: Number(m[1]), y: Number(m[2]) };
+  };
+  /** The clearance at 100%, past the brackets' 6: the foot stands this far above the sheet's brackets (34.171). */
+  const OFF = atWorkBarClear(atWorkInkScale(1)) - 6;
+
+  afterEach(() => atWorkStore.clear());
+
+  it("stands clear of the stroke by the SAME figure as the objects' bar over the sheet, centred over the words", () => {
+    nameTheBoard();
+    atWork("open");
+    // the objects' bar over the note at work, first
+    selection.publish({ editing: false, words: undefined });
+    mount();
+    const objects = placed();
+    expect(objects.y).toBeCloseTo(BOX.y0 - OFF - 40, 1);
+    // words selected on it: the same height, centred over the words
+    act(() => selection.publish({ editing: true, words: words() }));
+    expect(bar().hasAttribute("data-words")).toBe(true);
+    expect(placed()).toEqual({ x: (450 + 570) / 2, y: objects.y });
+  });
+
+  it("flipped below a sheet at the safe top, by the same figure under its foot", () => {
+    nameTheBoard();
+    atWork("open");
+    mount();
+    act(() =>
+      selection.publish({
+        box: { x0: 0, y0: 60, x1: 200, y1: 200 },
+        words: words({ box: { x0: 20, y0: 70, x1: 60, y1: 90 } }),
+      }),
+    );
+    expect(bar().dataset.below).toBe("true");
+    expect(placed().y).toBeCloseTo(200 + OFF, 1);
+  });
+
+  it("the caret's rows at a sheet at work stand clear by the same figure, centred over the caret", () => {
+    vi.useFakeTimers();
+    nameTheBoard();
+    atWork("open");
+    selection.publish({
+      words: undefined,
+      caret: { box: { x0: 500, y0: 330, x1: 502, y1: 350 }, entity: note, at: 7 },
+    });
+    mount();
+    pick.mockReturnValue({ entity: note });
+    act(() => {
+      deskElement.querySelector("canvas")?.dispatchEvent(
+        new MouseEvent("contextmenu", {
+          bubbles: true,
+          cancelable: true,
+          button: 2,
+          clientX: 500,
+          clientY: 330,
+        }),
+      );
+    });
+    act(() => {
+      vi.advanceTimersByTime(250);
+    });
+    expect(bar().dataset.shown).toBe("true");
+    expect(placed().x).toBe(501);
+    expect(placed().y).toBeCloseTo(BOX.y0 - OFF - 40, 1);
+  });
+
+  it("travels clear as an agent opens the sheet while its words are selected — 780 ms on the island curve, as over the object", () => {
+    vi.useFakeTimers();
+    nameTheBoard();
+    mount();
+    expect(placed().y).toBe(BOX.y0 - 10 - 40);
+    act(() => atWork("open"));
+    expect(placed().y).toBeCloseTo(BOX.y0 - OFF - 40, 1);
+    expect(bar().style.transition).toContain("transform 780ms var(--vf-ease-island)");
+    act(() => vi.advanceTimersByTime(780 + 100));
+    act(() => atWork("released", 2));
+    expect(placed().y).toBe(BOX.y0 - 10 - 40);
+    expect(bar().style.transition).toContain("transform 460ms cubic-bezier(0.4, 0, 1, 1)");
+  });
+
+  it("a sheet NOT at work stands exactly where it stood: an agent on another object, or on a sheet written without being selected", () => {
+    nameTheBoard();
+    atWork("open", 1, "some-other-object");
+    mount();
+    expect(placed()).toEqual({ x: (450 + 570) / 2, y: BOX.y0 - 10 - 40 });
+    act(() =>
+      selection.publish({
+        box: { x0: 0, y0: 60, x1: 200, y1: 200 },
+        words: words({ box: { x0: 20, y0: 70, x1: 60, y1: 90 } }),
+      }),
+    );
+    expect(placed()).toEqual({ x: 40, y: 210 });
+    // the note at work, but written without being the one selected object: the words' own box, no clearance
+    act(() => ce.ops.setSelection([]));
+    act(() => atWork("open", 2));
+    act(() => selection.publish({ box: BOX, words: words() }));
+    expect(placed()).toEqual({ x: (450 + 570) / 2, y: 320 - 10 - 40 });
   });
 });
