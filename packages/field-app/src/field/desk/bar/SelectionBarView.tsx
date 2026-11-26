@@ -70,7 +70,9 @@ import "./selection-bar.css";
 //
 // A CHANGE OF SELECTION (track OM, 2026-11-26; DESIGN.md §8 "The bar grown"): placed over another selection than the one
 // it stood grown over, the grown element closes AT ONCE (`data-cut` until it next grows). Neither a list nor the fold a
-// press began is carried to the next object; the controller has folded it in the read that says the new selection.
+// press began is carried to the next object; the controller has folded it in the read that says the new selection. A
+// press the controller says lands on another object (the desk's pick) is that change already, and cuts it as it lands;
+// a press on the bare mat or on the selection itself folds it where it stands (M4), fading the list that stood open.
 
 /** What the bar is placed from: the anchor's box, its count and the view (ICE's `SelectionAnchor`, narrowed). */
 export interface PlaceAnchor {
@@ -109,6 +111,9 @@ export interface SelectionBarViewProps {
   /** The bar grown into its menu — one of the frame's open surfaces (R5). */
   readonly open: boolean;
   readonly onOpenChange: (open: boolean) => void;
+  /** Whether a press lands on another object than the selection — the controller's, by the desk's pick (track OM,
+   * 2026-11-26). Such a press IS a change of selection: the grown bar closes at once instead of folding. */
+  readonly pressSelects?: (event: PointerEvent) => boolean;
   /** A cell pressed (every act but More, which grows the bar). */
   readonly onCell: (cell: BarCell) => void;
   /** A row taken — a choice that asks for values with its fields' values. */
@@ -219,6 +224,7 @@ export function SelectionBarView({
   choosing = null,
   expandedRow,
   onOpenChange,
+  pressSelects,
   onCell,
   onRow,
   held = false,
@@ -263,6 +269,13 @@ export function SelectionBarView({
   const fieldsRef = useRef<ChoiceFieldsHandle>(null);
   const choosingRef = useRef(choosing);
   choosingRef.current = choosing;
+  // THE FOLD FOLDS WHAT STOOD OPEN (track OM, 2026-11-26; M4): the list as it last stood open, its rows and its eyebrow,
+  // stays in it until it next grows, so a fold fades the rows it folds. The controller names More's menu again as the
+  // list closes, and those rows, new and unseen, would leave the material empty as it folds.
+  const [stood, setStood] = useState({ groups, eyebrow });
+  if (open && (stood.groups !== groups || stood.eyebrow !== eyebrow)) setStood({ groups, eyebrow });
+  const listGroups = open ? groups : stood.groups;
+  const listEyebrow = open ? eyebrow : stood.eyebrow;
 
   // AWAY for a gesture and while a note is written (R8) — and, in hand, while the object flies home: out at once, back
   // `backMs` (200) after it ends
@@ -532,7 +545,7 @@ export function SelectionBarView({
     listNatural.current = listRef.current?.scrollHeight ?? 0;
     const anchor = fixed ?? lastAnchor.current;
     if (anchor !== null) place(anchor);
-  }, [cells, handShown, groups, eyebrow, expanded, fixed, place]);
+  }, [cells, handShown, listGroups, listEyebrow, expanded, fixed, place]);
 
   // the grow follows `open`; the hot row is the nearest takeable one as it opens
   useLayoutEffect(() => {
@@ -635,7 +648,14 @@ export function SelectionBarView({
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent): void => {
-      if (rootRef.current?.contains(event.target as Node)) return;
+      const root = rootRef.current;
+      if (root?.contains(event.target as Node)) return;
+      // a press on another object IS a change of selection (track OM, 2026-11-26): the grown element closes at once,
+      // nothing of it folding over the object it leaves; on the bare mat or the selection itself it folds (M4)
+      if (root !== null && pressSelects?.(event) === true) {
+        grownOver.current = undefined;
+        root.dataset.cut = "";
+      }
       onOpenChange(false);
     };
     const onKey = (event: globalThis.KeyboardEvent): void => {
@@ -685,7 +705,7 @@ export function SelectionBarView({
       window.removeEventListener("pointerdown", onPointerDown, true);
       window.removeEventListener("keydown", onKey, true);
     };
-  }, [open, onOpenChange, walk, take, takeable, hot, focusOrigin]);
+  }, [open, onOpenChange, pressSelects, walk, take, takeable, hot, focusOrigin]);
 
   // THE TOOLBAR'S KEYS (R9): ← → between its cells, Home End to its ends, Esc back to the desk, Enter and Space
   // run the cell — each taken from the desk's keymap (its arrows nudge, its ⏎ opens, its Esc climbs out). In hand the
@@ -1024,7 +1044,7 @@ export function SelectionBarView({
   // the list, nearest first in the DOM (it is read that way); grown up it stands bottom-up (column-reverse)
   let order = 0;
   const listNodes: ReactElement[] = [];
-  groups.forEach((group, g) => {
+  listGroups.forEach((group, g) => {
     if (group.length === 0) return;
     if (listNodes.length > 0) listNodes.push(<hr key={`sep-${g}`} className="vf-bar-sep" />);
     for (const row of group) {
@@ -1100,7 +1120,7 @@ export function SelectionBarView({
       role="presentation"
       style={{ "--vf-bar-delay": `${rowDelay(motion, order)}ms` } as CSSProperties}
     >
-      {eyebrow}
+      {listEyebrow}
     </div>,
   );
 
@@ -1139,7 +1159,7 @@ export function SelectionBarView({
         ref={listRef}
         className="vf-bar-list"
         role="menu"
-        aria-label={`${eyebrow.charAt(0)}${eyebrow.slice(1).toLowerCase()}`}
+        aria-label={`${listEyebrow.charAt(0)}${listEyebrow.slice(1).toLowerCase()}`}
         {...(choosing === null ? {} : { "data-choices": choosing.id })}
         inert={!open}
       >

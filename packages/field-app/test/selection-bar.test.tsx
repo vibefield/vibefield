@@ -711,8 +711,8 @@ describe("a kind's act now, and a choice (track OM; ICE I61, I62)", () => {
     pressElsewhere();
     expect(surfaceNow).toBeNull();
     expect(bar().hasAttribute("data-cut")).toBe(false);
-    // the press that selects the next object (a pane's list open, a press on the clock): the fold starts where the
-    // list stands, and the next object's selection cuts it, so the bar stands over that object as the bar
+    // a press the desk's pick does not place on another object (here, outside the desk) folds the list where it
+    // stands; a change of selection that comes anyway then cuts it, so the bar stands over the next object as the bar
     act(() => {
       ce.ops.setSelection([note]);
       selection.publish({ box: BOX, menu: [DEVICE, SOUND] });
@@ -724,6 +724,114 @@ describe("a kind's act now, and a choice (track OM; ICE I61, I62)", () => {
     selectNext();
     expect(bar().hasAttribute("data-cut")).toBe(true);
     expect(bar().style.getPropertyValue("--vf-bar-grow-t")).toBe("0px");
+  });
+
+  it("a fold fades the list that stood open: a choice's rows and eyebrow stay in it as it folds, More's come only when More grows (track OM, 2026-11-26)", () => {
+    withActs([DEVICE, SOUND]);
+    const device = ["choice:laptop", "choice:phone", "choice:custom"];
+    const eyebrow = (): string | null | undefined =>
+      bar().querySelector(".vf-bar-eye")?.textContent;
+    // Esc: the bar stays, and its list folds (M4) — the rows going first are the ones that stood
+    act(() => cell("act:device").click());
+    key("Escape");
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-open")).toBe(false);
+    expect(rows()).toEqual(device);
+    expect(eyebrow()).toBe("DEVICE");
+    // a press elsewhere (the pane's list open, a press on the clock) folds the same list, never More's born unseen there
+    act(() => cell("act:device").click());
+    act(() => {
+      document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+    });
+    expect(surfaceNow).toBeNull();
+    expect(rows()).toEqual(device);
+    expect(eyebrow()).toBe("DEVICE");
+    // More grows its own menu, not the list it folded
+    act(() => cell("more").click());
+    expect(rows()[0]).toBe("act:device");
+    expect(eyebrow()).toBe("NOTE");
+  });
+
+  it("the pill's words and chevron fade with its inverted fill as its list folds, never dark on it: the cell's colour motion (selection-bar.css; track OM, 2026-11-26)", () => {
+    const sheet = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/field/desk/bar/selection-bar.css"),
+      "utf8",
+    );
+    /** The declarations of the rule whose selector is exactly this one. */
+    const rule = (selector: string): string => {
+      const at = sheet.indexOf(`\n${selector} {`);
+      if (at < 0) throw new Error(`no rule ${selector}`);
+      return sheet.slice(at, sheet.indexOf("}", at));
+    };
+    // the cell's own fill and colour move over 120 ms; the words and the chevron must move with them
+    expect(rule(".vf-bar-cell,\n.vf-bar-copy")).toMatch(
+      /background-color 120ms ease,\s+color 120ms ease/,
+    );
+    expect(rule(".vf-bar-choice-label")).toMatch(/transition: color 120ms ease;/);
+    expect(rule(".vf-bar-chevron")).toMatch(/transition: color 120ms ease;/);
+  });
+
+  it("a change of selection is drawn in the desk's own frame: the publish re-renders the bar there, cut, never a frame later (track OM, 2026-11-26)", async () => {
+    withActs([DEVICE, SOUND]);
+    act(() => cell("act:device").click());
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    const env = globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean };
+    // ICE publishes the anchor from its frame (a requestAnimationFrame), right after drawing it: no act, no event — the
+    // bar is drawn with that frame only if it is rendered in the publish itself
+    env.IS_REACT_ACT_ENVIRONMENT = false;
+    try {
+      ce.ops.setSelection([pad]);
+      selection.publish({ box: { x0: 700, y0: 300, x1: 900, y1: 500 }, menu: undefined });
+      expect({
+        open: bar().hasAttribute("data-open"),
+        cut: bar().hasAttribute("data-cut"),
+        device: bar().querySelector('.vf-bar-row [data-act="act:device"]') !== null,
+        surface: surfaceNow,
+      }).toEqual({ open: false, cut: true, device: false, surface: null });
+    } finally {
+      env.IS_REACT_ACT_ENVIRONMENT = true;
+      // whatever the publish left to a later task runs before the row ends
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+    }
+  });
+
+  it("a press the desk's pick lands on ANOTHER object closes the list AT ONCE, as its selection will; on the bare mat or the selection itself it folds where it stands (track OM, 2026-11-26)", () => {
+    withActs([DEVICE, SOUND]);
+    const pressDesk = (): void =>
+      act(() => {
+        deskElement
+          .querySelector("canvas")
+          ?.dispatchEvent(
+            new PointerEvent("pointerdown", { bubbles: true, clientX: 750, clientY: 380 }),
+          );
+      });
+    const under = (entity: Entity | null, type = ""): void => {
+      pick.mockImplementation(() =>
+        entity === null ? null : { entity, type, canvas: 0, part: "" },
+      );
+    };
+    // the pane's list open, a press on the clock: the press IS a change of selection, so nothing of the list folds
+    under(pad, "vibefield.comment-pad");
+    act(() => cell("act:device").click());
+    pressDesk();
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-cut")).toBe(true);
+    expect(pick).toHaveBeenLastCalledWith({ x: 750, y: 380 });
+    // a press on the selection itself: the bar stays, and its list folds where it stands (M4)
+    under(note, "desk.note");
+    act(() => cell("act:device").click());
+    expect(bar().hasAttribute("data-cut")).toBe(false);
+    pressDesk();
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-cut")).toBe(false);
+    // the bare mat: the same
+    under(null);
+    act(() => cell("act:device").click());
+    pressDesk();
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-cut")).toBe(false);
   });
 
   it("an act its kind says is disabled is faint and inert; one whose word changed says it (Mute → Unmute); a swatch is a dot", () => {

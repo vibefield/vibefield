@@ -11,6 +11,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { flushSync } from "react-dom";
 import { type FrameSurface, foldSurface } from "../../../frame/frame-surface";
 import { isCopyChord, listenForProductChord } from "../../product-chords";
 import { atWorkBarClear, atWorkInkScale } from "../at-work/at-work-model";
@@ -49,12 +50,17 @@ import { type PlaceAnchor, type SelectionBarHandle, SelectionBarView } from "./S
 //
 // Each publish the bar either PLACES itself (an imperative write — the common case: the selection moved) or, when
 // what it says changed (the selection, its tape, its acts, its words, a gesture, the hand, the screen's edge), it
-// re-renders and then places once. Never a render per frame (`barStats`: placements ≤ publishes).
+// re-renders and then places once. Never a render per frame (`barStats`: placements ≤ publishes). A CHANGE OF
+// SELECTION that the desk publishes re-renders IN the publish (track OM, 2026-11-26): ICE publishes from its frame, right
+// after drawing it, and an update made there renders in a task after that frame's paint, so the bar (its grown
+// element with it) would stand a frame over the next object's brackets.
 //
 // The grown menu is one of the frame's open surfaces (`surface === "selection"`, §10): opening it folds the rest,
 // any of them folds it. It closes on Esc, a press elsewhere (the view's), a gesture, a change of selection — and when
 // the bar goes (R5). A change of selection closes it AT ONCE (track OM, 2026-11-26): in the read that says the new
-// selection, and the view cuts the fold a press began, so nothing of the list is carried to the next object. RIGHT-CLICK (R26, I27 + I28): a `contextmenu` listener over the desk selects the object under
+// selection, and the view cuts the fold a press began, so nothing of the list is carried to the next object. A press
+// the desk's pick lands on another object is that change already: the view cuts it as it lands (`pressSelects`).
+// RIGHT-CLICK (R26, I27 + I28): a `contextmenu` listener over the desk selects the object under
 // the pointer FIRST by the desk's pick (`handle.pick`), then grows this same bar into this same menu (MC-D6).
 //
 // IN HAND (DK-12; §8 "Tools in hand"; R13): when an object is picked up (the anchor's `held`, not flying home) the same
@@ -324,7 +330,9 @@ function SelectionBarOn({
   useLayoutEffect(() => {
     /** the clearance the bar was last placed with (item 550): a store change re-places it only when it moved */
     let clear = 0;
-    const read = (): void => {
+    /** `fromDesk`: the desk's own publish, from its frame — never a render or an effect of ours (the mount's read, a
+     * store's), where React cannot render at once. */
+    const read = (fromDesk: boolean): void => {
       barStats.publishes += 1;
       const anchor = source.anchor();
       const prev = factsRef.current;
@@ -333,30 +341,35 @@ function SelectionBarOn({
       const at: PlaceAnchor = { ...anchor, clear, selection: next.key };
       if (next !== prev) {
         factsRef.current = next;
-        setFacts(next);
-        // R5: a change of selection closes the grown bar in the read that says it, so it is never drawn grown over
-        // the next selection (track OM, 2026-11-26), unless a right-click grows it for that selection (R26)
-        if (
-          next.key !== prev.key &&
-          growFor.current !== next.key &&
-          surfaceRef.current.surface === "selection"
-        )
-          fold();
-        // what it SAYS changed — the selection's cells, or the hand's — so it is placed once it has re-rendered
-        if (next.selection !== prev.selection || next.hand !== prev.hand) {
-          barRef.current?.place(at, false);
-          return;
-        }
+        // what it SAYS changed — the selection's cells, or the hand's — so it is placed once it has re-rendered: this
+        // anchor is remembered first, since that render may be this very read's
+        const says = next.selection !== prev.selection || next.hand !== prev.hand;
+        if (says) barRef.current?.place(at, false);
+        const commit = (): void => {
+          setFacts(next);
+          // R5: a change of selection closes the grown bar in the read that says it, so it is never drawn grown over
+          // the next selection (track OM, 2026-11-26), unless a right-click grows it for that selection (R26)
+          if (
+            next.key !== prev.key &&
+            growFor.current !== next.key &&
+            surfaceRef.current.surface === "selection"
+          )
+            fold();
+        };
+        // a change of selection the desk published is drawn with the frame that publishes it (track OM, 2026-11-26)
+        if (fromDesk && next.key !== prev.key) flushSync(commit);
+        else commit();
+        if (says) return;
       }
       // in hand it stands under the head whatever the selection's box; over a selection, only where it can stand
       const placing = next.inHand || (next.count > 0 && next.onScreen && !next.stepAside);
       barRef.current?.place(at, placing);
     };
-    read();
-    const offAnchor = source.subscribe(read);
+    read(false);
+    const offAnchor = source.subscribe(() => read(true));
     // an agent arriving on the selection or leaving it moves the foot, even while the desk sleeps (item 550)
     const offAtWork = atWorkStore.subscribe(() => {
-      if (atWorkClearOf(desk) !== clear) read();
+      if (atWorkClearOf(desk) !== clear) read(false);
     });
     return () => {
       offAnchor();
@@ -412,6 +425,21 @@ function SelectionBarOn({
     container.addEventListener("contextmenu", onContextMenu);
     return () => container.removeEventListener("contextmenu", onContextMenu);
   }, [desk, engine, handle]);
+
+  /** A press on the desk that its pick lands on another object than the selection IS a change of selection (track OM,
+   * 2026-11-26): the grown bar closes at once (the view's cut). A press on the bare mat, on the selection itself or off
+   * the desk is not, and folds it where it stands (M4). */
+  const pressSelects = useCallback(
+    (event: PointerEvent): boolean => {
+      const container = containerOf(desk);
+      if (container === null || !(event.target instanceof Node)) return false;
+      if (!container.contains(event.target)) return false;
+      const rect = container.getBoundingClientRect();
+      const hit = handle.pick({ x: event.clientX - rect.left, y: event.clientY - rect.top });
+      return hit !== null && !selectedEntities(engine.world).includes(hit.entity);
+    },
+    [desk, engine, handle],
+  );
 
   const cells = useMemo(() => barCells(facts.selection, keys), [facts.selection, keys]);
   const hand = useMemo(() => {
@@ -557,6 +585,7 @@ function SelectionBarOn({
       open={open && shown}
       choosing={open && shown && chosen !== undefined ? choosing : null}
       onOpenChange={onOpenChange}
+      pressSelects={pressSelects}
       onCell={onCell}
       onRow={onRow}
       held={facts.inHand}

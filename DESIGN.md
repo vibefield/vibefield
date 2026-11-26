@@ -5546,7 +5546,10 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
   *Added 2026-11-26 (track OM, OM-1's mend):* **A change of selection closes it at once**, More's menu and a choice's
   list alike. The bar stands over the next object as the bar: nothing of the list is carried there, and nothing folds
   there. The fold (M4) is for a close where the bar stays: Esc, a choice taken, a gesture, a click that selects nothing
-  new. A press on another object starts the fold where the list stands, and that object's selection ends it at once.
+  new. *Amended 2026-11-26 (track OM, OM-1's second mend; it said a press on another object "starts the fold where the
+  list stands"):* a press that the desk's pick lands on another object **closes it at once** too, since that press is a
+  change of selection. A press on the bare mat or on the selection itself folds it where it stands. A fold fades the
+  list that stood open, its rows and eyebrow, and the pill's words fade with its fill.
 - **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
   readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
   `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element

@@ -548,9 +548,12 @@
   gap: 6px;
   padding: 0 8px 0 9px;
 }
+/* its words and chevron take the cell's colour motion (track OM, 2026-11-26): the inverted fill fades over 120 ms as the
+   list folds, and a colour taken at once would stand dark on it (light by night) until it had gone */
 .vf-bar-choice-label {
   color: var(--vf-text-primary);
   white-space: nowrap;
+  transition: color 120ms ease;
 }
 .vf-bar-choice[data-mixed] .vf-bar-choice-label {
   color: var(--vf-text-secondary);
@@ -559,6 +562,7 @@
   flex: none;
   margin-left: -2px;
   color: var(--vf-text-tertiary);
+  transition: color 120ms ease;
 }
 .vf-bar-choice[aria-expanded="true"] .vf-bar-choice-label,
 .vf-bar-choice[aria-expanded="true"] .vf-bar-chevron,
@@ -726,9 +730,10 @@
   transform: none;
 }
 
-/* A CHANGE OF SELECTION (track OM, 2026-11-26; §8 "The bar grown"): placed over another selection, the grown element
-   is closed at once, its fold (M4, and M6's fade) cut wherever it had got to. Nothing of the list is carried to the
-   next object. Last in the file, so it holds over M6's rules; while grown (`data-open`) it never applies. */
+/* A CHANGE OF SELECTION (track OM, 2026-11-26; §8 "The bar grown"): placed over another selection, or pressed on
+   another object (the desk's pick), the grown element is closed at once, its fold (M4, and M6's fade) cut wherever it
+   had got to. Nothing of the list is carried to the next object. Last in the file, so it holds over M6's rules; while
+   grown (`data-open`) it never applies. */
 .vf-bar[data-cut]:not([data-open]) .vf-bar-panel,
 .vf-bar[data-cut]:not([data-open]) .vf-bar-hairline,
 .vf-bar[data-cut]:not([data-open]) .vf-bar-list,
