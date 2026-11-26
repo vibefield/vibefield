@@ -53,7 +53,8 @@ import { type PlaceAnchor, type SelectionBarHandle, SelectionBarView } from "./S
 //
 // The grown menu is one of the frame's open surfaces (`surface === "selection"`, §10): opening it folds the rest,
 // any of them folds it. It closes on Esc, a press elsewhere (the view's), a gesture, a change of selection — and when
-// the bar goes (R5). RIGHT-CLICK (R26, I27 + I28): a `contextmenu` listener over the desk selects the object under
+// the bar goes (R5). A change of selection closes it AT ONCE (track OM, 2026-11-26): in the read that says the new
+// selection, and the view cuts the fold a press began, so nothing of the list is carried to the next object. RIGHT-CLICK (R26, I27 + I28): a `contextmenu` listener over the desk selects the object under
 // the pointer FIRST by the desk's pick (`handle.pick`), then grows this same bar into this same menu (MC-D6).
 //
 // IN HAND (DK-12; §8 "Tools in hand"; R13): when an object is picked up (the anchor's `held`, not flying home) the same
@@ -333,6 +334,14 @@ function SelectionBarOn({
       if (next !== prev) {
         factsRef.current = next;
         setFacts(next);
+        // R5: a change of selection closes the grown bar in the read that says it, so it is never drawn grown over
+        // the next selection (track OM, 2026-11-26), unless a right-click grows it for that selection (R26)
+        if (
+          next.key !== prev.key &&
+          growFor.current !== next.key &&
+          surfaceRef.current.surface === "selection"
+        )
+          fold();
         // what it SAYS changed — the selection's cells, or the hand's — so it is placed once it has re-rendered
         if (next.selection !== prev.selection || next.hand !== prev.hand) {
           barRef.current?.place(at, false);
@@ -353,7 +362,7 @@ function SelectionBarOn({
       offAnchor();
       offAtWork();
     };
-  }, [source, desk]);
+  }, [source, desk, fold]);
 
   const shown = !hidden && (facts.inHand || (facts.count > 0 && facts.onScreen));
   const stepAside = facts.stepAside;
@@ -369,19 +378,16 @@ function SelectionBarOn({
     if (!open) setChoosing(null);
   }, [open]);
 
-  // R5: a change of selection closes it — but a right-click's own selection is the one it grows for (R26)
+  // R26: a right-click's own selection is the one the menu grows for, once the desk has drawn it (any other change of
+  // selection folded it in the read, above)
   const keySeen = useRef(facts.key);
   useEffect(() => {
     if (facts.key === keySeen.current) return;
     keySeen.current = facts.key;
-    if (growFor.current !== null && growFor.current === facts.key) {
-      growFor.current = null;
-      surfaceRef.current.onSurfaceChange("selection");
-      return;
-    }
+    const grow = growFor.current === facts.key;
     growFor.current = null;
-    if (surfaceRef.current.surface === "selection") fold();
-  }, [facts.key, fold]);
+    if (grow) surfaceRef.current.onSurfaceChange("selection");
+  }, [facts.key]);
 
   // RIGHT-CLICK over the desk (R26, I27; MC-D6): the object under the pointer is selected FIRST by the desk's own
   // pick, then the same bar grows the same menu. On the bare mat nothing grows (the mat's own menu is not built).

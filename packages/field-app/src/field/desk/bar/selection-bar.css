@@ -725,3 +725,15 @@
 .vf-bar[data-motion="fade"] .vf-bar-swatch:hover .vf-bar-dot-ink {
   transform: none;
 }
+
+/* A CHANGE OF SELECTION (track OM, 2026-11-26; §8 "The bar grown"): placed over another selection, the grown element
+   is closed at once, its fold (M4, and M6's fade) cut wherever it had got to. Nothing of the list is carried to the
+   next object. Last in the file, so it holds over M6's rules; while grown (`data-open`) it never applies. */
+.vf-bar[data-cut]:not([data-open]) .vf-bar-panel,
+.vf-bar[data-cut]:not([data-open]) .vf-bar-hairline,
+.vf-bar[data-cut]:not([data-open]) .vf-bar-list,
+.vf-bar[data-cut]:not([data-open]) .vf-bar-item,
+.vf-bar[data-cut]:not([data-open]) .vf-bar-eye,
+.vf-bar[data-cut]:not([data-open]) .vf-bar-sep {
+  transition: none;
+}

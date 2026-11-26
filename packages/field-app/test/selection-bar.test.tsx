@@ -676,6 +676,56 @@ describe("a kind's act now, and a choice (track OM; ICE I61, I62)", () => {
     expect(rows()).toEqual(["choice:laptop", "choice:phone", "choice:custom"]);
   });
 
+  it("a change of selection closes the list AT ONCE: never drawn open over the next object, nor its fold carried there (track OM, 2026-11-26)", () => {
+    withActs([DEVICE, SOUND]);
+    const NEXT = { x0: 700, y0: 300, x1: 900, y1: 500 };
+    const selectNext = (): void =>
+      act(() => {
+        ce.ops.setSelection([pad]);
+        selection.publish({ box: NEXT, menu: undefined });
+      });
+    const pressElsewhere = (): void =>
+      act(() => {
+        document.body.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      });
+    // the list open as the selection changes (a key, an undo, an agent): it closes in the render that says the next
+    // object, so More's menu is never said open over it, and the grown element is cut there
+    act(() => cell("act:device").click());
+    const said = new MutationObserver(() => undefined);
+    said.observe(cell("more"), {
+      attributes: true,
+      attributeFilter: ["aria-expanded"],
+      attributeOldValue: true,
+    });
+    selectNext();
+    const moreSaid = said.takeRecords().map((record) => record.oldValue);
+    said.disconnect();
+    expect(moreSaid).toEqual([]);
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-open")).toBe(false);
+    expect(bar().hasAttribute("data-cut")).toBe(true);
+    // grown again over this object, the cut is gone: a press elsewhere folds it where it stands (M4)
+    act(() => cell("more").click());
+    expect(bar().hasAttribute("data-open")).toBe(true);
+    expect(bar().hasAttribute("data-cut")).toBe(false);
+    pressElsewhere();
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-cut")).toBe(false);
+    // the press that selects the next object (a pane's list open, a press on the clock): the fold starts where the
+    // list stands, and the next object's selection cuts it, so the bar stands over that object as the bar
+    act(() => {
+      ce.ops.setSelection([note]);
+      selection.publish({ box: BOX, menu: [DEVICE, SOUND] });
+    });
+    act(() => cell("act:device").click());
+    pressElsewhere();
+    expect(surfaceNow).toBeNull();
+    expect(bar().hasAttribute("data-cut")).toBe(false);
+    selectNext();
+    expect(bar().hasAttribute("data-cut")).toBe(true);
+    expect(bar().style.getPropertyValue("--vf-bar-grow-t")).toBe("0px");
+  });
+
   it("an act its kind says is disabled is faint and inert; one whose word changed says it (Mute → Unmute); a swatch is a dot", () => {
     withActs([
       { ...SOUND, enabled: false },

@@ -5543,6 +5543,10 @@ all (§6). The selection bar clears the stroke (§8 "The selection bar").
   again folds the list (R5). A value outside its field's bounds or off its step, or a text too long, marks its field
   with a 1.5px ring in `--vf-ink-danger` and says why under the fields in secondary ink — "Width is 320 to 8192" —
   and Use waits, faint by ink, until every value fits. The fields open with the first selected object's values.
+  *Added 2026-11-26 (track OM, OM-1's mend):* **A change of selection closes it at once**, More's menu and a choice's
+  list alike. The bar stands over the next object as the bar: nothing of the list is carried there, and nothing folds
+  there. The fold (M4) is for a close where the bar stays: Esc, a choice taken, a gesture, a click that selects nothing
+  new. A press on another object starts the fold where the list stands, and that object's selection ends it at once.
 - **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
   readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
   `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element

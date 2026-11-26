@@ -67,6 +67,10 @@ import "./selection-bar.css";
 // (ChoiceFields), and Use takes it with them. An act its kind says is disabled now is faint by ink and inert; one with a
 // swatch shows the hand's dot in its glyph's place. OM-2: a choice whose every choice carries a swatch is a SWATCH PILL —
 // the current choice's dot (an empty ring while Mixed) and the chevron, no words — over a selection and in hand alike.
+//
+// A CHANGE OF SELECTION (track OM, 2026-11-26; DESIGN.md §8 "The bar grown"): placed over another selection than the one
+// it stood grown over, the grown element closes AT ONCE (`data-cut` until it next grows). Neither a list nor the fold a
+// press began is carried to the next object; the controller has folded it in the read that says the new selection.
 
 /** What the bar is placed from: the anchor's box, its count and the view (ICE's `SelectionAnchor`, narrowed). */
 export interface PlaceAnchor {
@@ -241,6 +245,8 @@ export function SelectionBarView({
   const listNatural = useRef(0);
   const lastAnchor = useRef<PlaceAnchor | null>(fixed ?? null);
   const placed = useRef<BarPlace | null>(null);
+  /** The selection the grown element last stood open over (the anchor's key), until it is cut over another. */
+  const grownOver = useRef<string | undefined>(undefined);
   const openRef = useRef(open);
   openRef.current = open;
   /** The role the bar is placed for — its target; the face below is what it SHOWS (they differ through a travel). */
@@ -349,6 +355,9 @@ export function SelectionBarView({
         set(name, 0);
       return;
     }
+    // grown, it is this selection's, and its motion is its own again (a cut, below, lasts until it grows)
+    grownOver.current = anchor.selection;
+    delete root.dataset.cut;
     const w = roleRef.current === "hand" ? handWidthRef.current : widthRef.current;
     const g = growMenu({ x: at.x, y: at.y, width: w }, listNatural.current, anchor.view);
     const listOut = g.listHeight + 1; // the list and the strong hairline between it and the row
@@ -414,6 +423,21 @@ export function SelectionBarView({
       root.dataset.below = at.below ? "true" : "false";
       fit();
       barStats.placements += 1;
+      // track OM (2026-11-26): over another selection than the one it stood grown over, the grown element closes AT
+      // ONCE. `data-cut` takes its parts' motion off until it next grows, so a fold that a press on this object
+      // began is never carried here
+      const over = grownOver.current;
+      if (
+        !openRef.current &&
+        over !== undefined &&
+        anchor.count > 0 &&
+        anchor.selection !== undefined &&
+        anchor.selection !== over
+      ) {
+        grownOver.current = undefined;
+        root.dataset.cut = "";
+        layoutGrow();
+      }
       if (openRef.current) layoutGrow();
     },
     [layoutGrow, fit, travelClear],
