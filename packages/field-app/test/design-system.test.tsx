@@ -834,7 +834,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       [
         ...(shownWords(wordsPlates[1])?.querySelectorAll<HTMLElement>(
-          ".vf-bar-choice .vf-bar-swatch",
+          ".vf-words-choice .vf-words-swatch",
         ) ?? []),
       ].map((s) => `${s.dataset.shape}${s.hasAttribute("data-hollow") ? ":hollow" : ""}`),
     ).toEqual(["dot:hollow", "stripe:hollow"]);

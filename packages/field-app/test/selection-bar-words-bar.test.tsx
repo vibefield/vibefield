@@ -22,12 +22,18 @@
  *     door it waits and says ⌘V; a right-click anywhere else is the objects' as before;
  *     a slot's declared `keys` printed in its tip; at a bare CARET (round two, the anchor's `caret`) a right-click on the sheet
  *     grows Paste | Select all at the caret, and no bar stands there otherwise.
+ *   ITS OWN CLASSES (L1c, 2026-11-26) — the words' own elements wear `vf-words-*` classes beside the bar's shared chrome,
+ *     and no rule of the stylesheet outside the words' section names one (two lines both naming `vf-bar-swatch` and
+ *     `vf-bar-choice` emptied every words swatch on a running desk: jsdom computes no cascade, so it is pinned at the source);
  *   OVER A SHEET AT WORK (L1b, 2026-11-26; item 550) — the words bar and the caret's keep the objects' bar's clearance for
  *     their sheet, above it and flipped below it, and travel it as the objects' bar does; a sheet not at work stands
  *     where it stood, number for number.
  * No kind on the desk declares words acts yet (ICE's ink acts arrive with the note's next slice): the anchors are fixtures.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type CanvasEngine, type Entity, setWidgetProps } from "@vibecook/ice";
 import type { MenuSlot, SelectionAnchor, WordsAnchor } from "@vibecook/ice/desk";
 import type { ObjectsPresenceSnapshot } from "@vibefield/contracts";
@@ -313,14 +319,14 @@ describe("the words bar: the model and its place (IK)", () => {
   it("draws the words' pen a dot and their highlighter a stripe in the desk's own inks — hollow when none is shared", () => {
     mount();
     const palette = deskLook(getAppTheme().resolved).palette;
-    const pen = cell("word:ink.pen").querySelector<HTMLElement>(".vf-bar-swatch");
+    const pen = cell("word:ink.pen").querySelector<HTMLElement>(".vf-words-swatch");
     expect(pen?.dataset.shape).toBe("dot");
     expect(pen?.style.getPropertyValue("--vf-bar-swatch")).toBe(palette.pens?.fountain?.css);
-    const highlight = cell("word:ink.highlight").querySelector<HTMLElement>(".vf-bar-swatch");
+    const highlight = cell("word:ink.highlight").querySelector<HTMLElement>(".vf-words-swatch");
     expect(highlight?.dataset.shape).toBe("stripe");
     expect(highlight?.hasAttribute("data-hollow")).toBe(true);
     // each choice cell is a 44 cell: its value, then the ▾ — the chevron turned down
-    expect(cell("word:ink.pen").classList.contains("vf-bar-choice")).toBe(true);
+    expect(cell("word:ink.pen").classList.contains("vf-words-choice")).toBe(true);
     const tick = cell("word:ink.pen").querySelector('[data-glyph="chevron"]');
     expect(tick?.getAttribute("width")).toBe("8");
     expect(tick?.firstElementChild?.getAttribute("transform")).toBe("rotate(90 12 12)");
@@ -333,12 +339,12 @@ describe("the words bar: the model and its place (IK)", () => {
     act(() => selection.publish({ words: words({ menu: inkMenu({ highlight: "orange" }) }) }));
     expect(
       cell("word:ink.highlight")
-        .querySelector<HTMLElement>(".vf-bar-swatch")
+        .querySelector<HTMLElement>(".vf-words-swatch")
         ?.style.getPropertyValue("--vf-bar-swatch"),
     ).toBe(palette.calendars?.highlighters?.orange?.css);
     expect(
       cell("word:ink.pen")
-        .querySelector<HTMLElement>(".vf-bar-swatch")
+        .querySelector<HTMLElement>(".vf-words-swatch")
         ?.hasAttribute("data-hollow"),
     ).toBe(true);
   });
@@ -472,7 +478,7 @@ describe("the words bar: its rows and its acts (IK)", () => {
     ]);
     expect(pickOf("ink.pen", "ball").getAttribute("aria-label")).toBe("Ball pen");
     expect(
-      pickOf("ink.pen", "felt").querySelector<HTMLElement>(".vf-bar-swatch")?.dataset.shape,
+      pickOf("ink.pen", "felt").querySelector<HTMLElement>(".vf-words-swatch")?.dataset.shape,
     ).toBe("dot");
     expect(bar().style.transition).toContain("width 120ms ease");
     act(() => vi.advanceTimersByTime(120 + 100));
@@ -488,7 +494,7 @@ describe("the words bar: its rows and its acts (IK)", () => {
     ).toEqual(["yellow", "green", "pink", "blue", "orange", "none"]);
     expect(
       pickOf("ink.highlight", "none")
-        .querySelector<HTMLElement>(".vf-bar-swatch")
+        .querySelector<HTMLElement>(".vf-words-swatch")
         ?.hasAttribute("data-hollow"),
     ).toBe(true);
   });
@@ -1250,5 +1256,69 @@ describe("the words bar over a sheet at work (L1b; item 550)", () => {
     act(() => atWork("open", 2));
     act(() => selection.publish({ box: BOX, words: words() }));
     expect(placed()).toEqual({ x: (450 + 570) / 2, y: 320 - 10 - 40 });
+  });
+});
+
+// L1c (2026-11-26): the words bar's own classes are its own. Two lines that each named a class for a different element
+// (`vf-bar-swatch`: the words' swatch SPAN, and an object's act CELL that wears a swatch; `vf-bar-choice`: the words' 44 cell
+// and an object's choice PILL) met in one stylesheet, and the later rule won at equal specificity: every words swatch drew
+// empty and its cells lost their 44. jsdom computes no cascade, so the row holds the boundary at its source: the words'
+// section declares only `vf-words-*` classes beyond the bar's shared chrome, no rule outside the section names a
+// `vf-words-*` class, and the words' cells and swatches wear nothing else. It reads one section of one stylesheet and the
+// words' own elements, so another line's classes elsewhere never touch it; only a rule that reaches into the words' own
+// elements (or the words reaching into another's) turns it red, which is the clash itself.
+describe("the words bar's own classes (L1c)", () => {
+  /** The bar's shared chrome, main's: the element, its rows, its cells and its rules, which the words' cells are on purpose. */
+  const SHARED = new Set([
+    "vf-bar",
+    "vf-bar-row",
+    "vf-bar-cell",
+    "vf-bar-cell--text",
+    "vf-bar-rule",
+  ]);
+  const css = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "../src/field/desk/bar/selection-bar.css"),
+    "utf8",
+  );
+  /** The stylesheet's sections, split at its `/* ── ` headers, comments taken out: each one's selectors. */
+  const sections = css.split(/\n(?=\/\* ── )/).map((text) => ({
+    words: text.startsWith("/* ── THE WORDS BAR"),
+    selectors: text
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .split("}")
+      .map((rule) => rule.split("{")[0]?.trim() ?? "")
+      .filter((selector) => selector !== ""),
+  }));
+  const classesOf = (selector: string): string[] =>
+    [...selector.matchAll(/\.(vf-[a-z0-9-]+)/g)].map((m) => m[1] as string);
+
+  it("the words' section declares only its own `vf-words-*` classes beyond the bar's shared chrome, and no rule outside it names one", () => {
+    const words = sections.filter((s) => s.words);
+    expect(words).toHaveLength(1);
+    const declared = new Set(words.flatMap((s) => s.selectors.flatMap(classesOf)));
+    expect([...declared].filter((c) => !SHARED.has(c) && !c.startsWith("vf-words-"))).toEqual([]);
+    const reaching = sections
+      .filter((s) => !s.words)
+      .flatMap((s) => s.selectors)
+      .filter((selector) => classesOf(selector).some((c) => c.startsWith("vf-words-")));
+    expect(reaching).toEqual([]);
+  });
+
+  it("the words' cells, their choices and their swatches wear only the bar's shared chrome and `vf-words-*` classes", () => {
+    mount();
+    act(() => cell("word:ink.pen").click());
+    const worn = [
+      ...bar().querySelectorAll<HTMLElement>(
+        '[data-face-row="words"] [data-act], [data-face-row="words"] [data-choice], [data-face-row="words"] [data-shape]',
+      ),
+    ];
+    // the pen's cell, the highlight's, the toggles, Clear, More; the pens' row; and the swatches inside them
+    expect(worn.filter((el) => el.dataset.shape !== undefined).length).toBeGreaterThan(4);
+    const foreign = new Set(
+      worn
+        .flatMap((el) => [...el.classList])
+        .filter((c) => !SHARED.has(c) && !c.startsWith("vf-words-")),
+    );
+    expect([...foreign]).toEqual([]);
   });
 });

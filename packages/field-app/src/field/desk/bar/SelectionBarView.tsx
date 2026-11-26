@@ -1291,7 +1291,7 @@ export function SelectionBarView({
     const { shape, ink } = face.swatch;
     return (
       <span
-        className="vf-bar-swatch"
+        className="vf-words-swatch"
         data-shape={shape}
         aria-hidden="true"
         {...(ink === undefined
@@ -1318,8 +1318,8 @@ export function SelectionBarView({
             type="button"
             className={
               cell.face.by === "label"
-                ? "vf-bar-cell vf-bar-choice vf-bar-cell--text"
-                : "vf-bar-cell vf-bar-choice"
+                ? "vf-bar-cell vf-words-choice vf-bar-cell--text"
+                : "vf-bar-cell vf-words-choice"
             }
             data-act={`word:${cell.id}`}
             data-face={cell.face.by}
@@ -1427,8 +1427,8 @@ export function SelectionBarView({
             type="button"
             className={
               choice.face.by === "label"
-                ? "vf-bar-cell vf-bar-pick vf-bar-cell--text"
-                : "vf-bar-cell vf-bar-pick"
+                ? "vf-bar-cell vf-words-pick vf-bar-cell--text"
+                : "vf-bar-cell vf-words-pick"
             }
             data-choice={choice.id}
             data-face={choice.face.by}
