@@ -18,6 +18,7 @@ import type {
 } from "@vibefield/contracts";
 import {
   CoreSimulatorRuntimeIdV1,
+  isBrowserProfileRef,
   LiveSurfaceSimulatorDeviceRowV1,
   LiveSurfaceSimulatorRuntimeOptionV1,
   PAGES_MADE_EMULATION,
@@ -482,6 +483,7 @@ export class LiveSurfaceAuthority {
     if (resolved === null) throw kindError("PRECONDITION_FAILED");
     const host = this.#deps.hostFor(resolved.webContentsId);
     if (host === null) throw kindError("UNAVAILABLE");
+    this.#assertPersistentProfile(params.source);
 
     // EY-1 (1f): a mint naming a run's made page adopts it; a run's own session opens only so, or
     // for a key a window adopted into that run while it lives; an adopted key never leaves it
@@ -549,6 +551,23 @@ export class LiveSurfaceAuthority {
       },
     );
     return { surfaceId: entry.surfaceId, ticket };
+  }
+
+  /** BP-D10 (2026-11-25): a PERSISTENT browser profile is a person's browser profile, so its ref is one's id
+   * (isBrowserProfileRef: the desk's, or a `p-` id) or the mint is refused before any session or folder is made. A
+   * run's session name, a path or a label never names a folder of sign-ins. The wire's ref stays tolerant (a memory
+   * ref of any bounded shape mints as before), so the rule is held here. The ref is a page's or an agent's text, so the
+   * log says only its length and whether it had a run's prefix. */
+  #assertPersistentProfile(source: LiveSurfaceSourceSpecV1): void {
+    if (source.kind !== "browser" || source.profile.mode !== "persistent") return;
+    const ref = source.profile.ref;
+    if (isBrowserProfileRef(ref)) return;
+    this.#deps.logger?.warn(
+      "desktop.live_surfaces.profile_ref_refused",
+      "a persistent browser profile was asked for by a ref that is no browser profile's id",
+      { length: ref.length, run: ref.startsWith(RUN_PROFILE_PREFIX) ? 1 : 0 },
+    );
+    throw kindError("PRECONDITION_FAILED");
   }
 
   /** EY-1 (1f): a page for a run, in the run's own memory session, held by the run with no window

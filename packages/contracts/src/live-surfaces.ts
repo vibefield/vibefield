@@ -204,8 +204,29 @@ export type LiveSurfaceBrowserEmulationV1 = z.infer<typeof LiveSurfaceBrowserEmu
 
 /** THE DESK'S BROWSER PROFILE (PT-4 ruling 3): every desk page's `profile.ref` — one persistent session, as the tabs of one
  * browser share theirs. One declaration for both planes: the renderer mints every desk page with it, and main names the
- * profile Settings' "Clear browsing data" clears by it (thinking-browser-profile.md BP-D4, 2026-10-26). */
+ * profile Settings' "Clear browsing data" clears by it (thinking-browser-profile.md BP-D4, 2026-10-26).
+ * Errata (BP-D10, 2026-11-25): a person has SEVERAL browser profiles now; this is the default one among them, its id
+ * for good. Desk pages mint it until the pane names a profile of its own, and Clear clears it as one of the known ids
+ * (BrowserProfileRef below), no longer as the only profile it names. */
 export const BROWSER_DESK_PROFILE_REF = "desk";
+
+/** BP-D10 (2026-11-25) — A PERSON'S BROWSER PROFILE, BY ITS ID: several named profiles, each with its own sign-ins (the
+ * word is "Browser profile", BP-D13). An id is the desk's (BROWSER_DESK_PROFILE_REF, the default profile for good: its
+ * digest is its folder, so it is never re-keyed) or `p-` and 16 to 32 of `[a-z0-9]`. It is opaque: it never carries a
+ * label (a rename never moves a folder), and it can never begin with a run's session prefix (pages.ts
+ * PAGES_RUN_PROFILE_PREFIX: no `:`). The wire's `profile.ref` stays as tolerant as before (a run's session, a probe's
+ * and a smoke's memory refs are other shapes): main holds a PERSISTENT mint to this, and Clear reads its list by it. */
+export const BROWSER_PROFILE_REF_PATTERN = /^(?:desk|p-[a-z0-9]{16,32})$/u;
+export const BrowserProfileRefSchema = z.string().regex(BROWSER_PROFILE_REF_PATTERN);
+export type BrowserProfileRef = z.infer<typeof BrowserProfileRefSchema>;
+
+/** A plain boolean, not a type guard: the id's type is a string, so a guard's false branch would narrow to `never`. */
+export function isBrowserProfileRef(ref: string): boolean {
+  return BROWSER_PROFILE_REF_PATTERN.test(ref);
+}
+
+/** BP-D10 (2026-11-25) — the most browser profiles a person's list holds (`BrowserDataClearResult.profiles`' bound). */
+export const BROWSER_PROFILES_MAX = 64;
 
 export const LiveSurfaceBrowserSourceV1 = z
   .object({

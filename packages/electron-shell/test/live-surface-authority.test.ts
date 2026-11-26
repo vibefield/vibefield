@@ -4,7 +4,8 @@ import type {
   RendererParticipantIdentity,
   ShellSurfacesMintParams,
 } from "@vibefield/contracts";
-import { SURFACE_LIMITS } from "@vibefield/contracts";
+import { BROWSER_DESK_PROFILE_REF, SURFACE_LIMITS } from "@vibefield/contracts";
+import type { Logger } from "@vibefield/logging";
 import { describe, expect, it, vi } from "vitest";
 import {
   LiveSurfaceAuthority,
@@ -12,6 +13,10 @@ import {
   type LiveSurfaceRuntimeHandle,
   type LiveSurfaceSimulatorCensus,
 } from "../src/main/live-surfaces/authority";
+import {
+  browserSurfacePartition,
+  browserSurfaceProfileName,
+} from "../src/main/live-surfaces/browser-security";
 
 interface IssuedBinding {
   surfaceId: string;
@@ -806,5 +811,134 @@ describe("LiveSurfaceAuthority", () => {
       expect.objectContaining({ kind: "UNAVAILABLE" }),
     );
     authority.dispose();
+  });
+});
+
+// BP-D10 (2026-11-25) — a PERSISTENT browser profile is a person's browser profile: main mints one only by a browser
+// profile's id (the desk's, or a `p-` id), and refuses any other ref before a runtime, a session or a folder is made. A
+// memory ref of any bounded shape (a run's session among them) mints as before.
+describe("BP-D10 — a persistent mint names a browser profile's id, or nothing is made", () => {
+  const named = `p-${"k7".repeat(10)}`;
+  const persistent = (ref: string) =>
+    ({
+      ...BROWSER_SOURCE,
+      profile: { mode: "persistent", ref },
+    }) as ShellSurfacesMintParams["source"];
+
+  /** a logger that keeps what was said, by level: its message too, so the never-its-text sweep reads every argument */
+  function said() {
+    const lines: { level: string; event: string; message: string; attrs: unknown }[] = [];
+    const at =
+      (level: string) =>
+      (event: string, message: string, ...rest: unknown[]) => {
+        lines.push({ level, event, message, attrs: rest.at(-1) });
+      };
+    const logger = {
+      debug: at("debug"),
+      info: at("info"),
+      warn: at("warn"),
+      error: at("error"),
+      fatal: at("fatal"),
+    } as unknown as Logger;
+    return { logger, lines };
+  }
+
+  it("mints the desk's profile and a well-formed id, into DIFFERENT folders, each its own for a packaged shell", () => {
+    const { authority, factories, windows } = fixture();
+    const alice = participant("window-1", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    const desk = authority.mint(mintParams(alice, persistent(BROWSER_DESK_PROFILE_REF)));
+    const work = authority.mint(mintParams(alice, persistent(named)));
+    expect(desk.surfaceId).not.toBe(work.surfaceId);
+    expect(factories.browser).toHaveBeenCalledTimes(2);
+    const [deskSource, workSource] = factories.browser.mock.calls.map(
+      (call) => (call as unknown as [string, Parameters<typeof browserSurfaceProfileName>[0]])[1],
+    );
+    expect(deskSource?.profile).toEqual({ mode: "persistent", ref: BROWSER_DESK_PROFILE_REF });
+    expect(workSource?.profile).toEqual({ mode: "persistent", ref: named });
+    const folders = [deskSource, workSource].map((source) => {
+      if (source === undefined) throw new Error("no source");
+      return {
+        unpackaged: browserSurfaceProfileName(source, false),
+        packaged: browserSurfaceProfileName(source, true),
+      };
+    });
+    expect(folders[0]?.unpackaged).not.toBe(folders[1]?.unpackaged);
+    expect(folders[0]?.packaged).not.toBe(folders[1]?.packaged);
+    for (const folder of folders) expect(folder.unpackaged).not.toBe(folder.packaged);
+    // and Chromium's partitions are two as well
+    expect(browserSurfacePartition(persistent(named) as never)).not.toBe(
+      browserSurfacePartition(persistent(BROWSER_DESK_PROFILE_REF) as never),
+    );
+  });
+
+  it("refuses a persistent mint by any other ref before any runtime is made, and logs its length and run prefix, never its text", () => {
+    const { logger, lines } = said();
+    const { authority, buildCount, factories, issued, windows } = fixture({ logger });
+    const alice = participant("window-1", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    const refused = ["run:x", "", "../x", `p-${"a".repeat(33)}`, "Desk", "private profile name"];
+    for (const ref of refused) {
+      let thrown: unknown;
+      try {
+        authority.mint(mintParams(alice, persistent(ref), { reuseKey: "pane-1" }));
+      } catch (error) {
+        thrown = error;
+      }
+      expect(thrown, JSON.stringify(ref)).toEqual({ kind: "PRECONDITION_FAILED" });
+    }
+    expect(buildCount()).toBe(0);
+    expect(factories.browser).not.toHaveBeenCalled();
+    expect(issued).toEqual([]);
+    expect(authority.state().runtimes).toBe(0);
+    const refusals = lines.filter(
+      (line) => line.event === "desktop.live_surfaces.profile_ref_refused",
+    );
+    expect(refusals.map((line) => line.level)).toEqual(refused.map(() => "warn"));
+    expect(refusals.map((line) => line.attrs)).toEqual(
+      refused.map((ref) => ({ length: ref.length, run: ref.startsWith("run:") ? 1 : 0 })),
+    );
+    const text = JSON.stringify(lines);
+    for (const ref of refused.filter((ref) => ref.length > 1)) expect(text).not.toContain(ref);
+    // the same window's well-formed mint still goes
+    expect(() => authority.mint(mintParams(alice, persistent(named)))).not.toThrow();
+    expect(buildCount()).toBe(1);
+  });
+
+  it("refuses it on the adopt path too: a made page's mint that asks for a persistent profile by a run's ref adopts nothing", () => {
+    const { logger, lines } = said();
+    const { authority, buildCount, windows } = fixture({ logger });
+    const alice = participant("window-1", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    expect(() =>
+      authority.mint(
+        mintParams(alice, persistent("run:r1"), { made: "surface_made_0000000001", reuseKey: "k" }),
+      ),
+    ).toThrow();
+    expect(lines.map((line) => [line.event, line.attrs])).toEqual([
+      ["desktop.live_surfaces.profile_ref_refused", { length: 6, run: 1 }],
+    ]);
+    expect(buildCount()).toBe(0);
+  });
+
+  it("leaves a MEMORY mint as before: a run's ref of no run main holds is refused bare by the run's own rule, any other memory ref mints", () => {
+    const { logger, lines } = said();
+    const { authority, buildCount, windows } = fixture({ logger });
+    const alice = participant("window-1", "document-1");
+    windows.set(alice.incarnation, { webContentsId: 7 });
+    const memory = (ref: string) =>
+      ({
+        ...BROWSER_SOURCE,
+        profile: { mode: "memory", ref },
+      }) as ShellSurfacesMintParams["source"];
+    expect(() => authority.mint(mintParams(alice, memory("run:x")))).toThrow();
+    expect(lines.map((line) => line.event)).toContain("desktop.live_surfaces.run_session_refused");
+    expect(lines.map((line) => line.event)).not.toContain(
+      "desktop.live_surfaces.profile_ref_refused",
+    );
+    expect(buildCount()).toBe(0);
+    for (const ref of ["t", "live-surfaces-browser-lab", "../x", "Desk"])
+      authority.mint(mintParams(alice, memory(ref)));
+    expect(buildCount()).toBe(4);
   });
 });

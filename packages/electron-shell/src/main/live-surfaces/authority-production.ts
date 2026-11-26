@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import {
+  BROWSER_DESK_PROFILE_REF,
   type BrowserDataClearResult,
   type LiveSurfaceBrowserSourceV1,
   type ShellSurfacesControlParams,
@@ -382,6 +383,9 @@ export function createProductionLiveSurfaceSupport(opts: {
       const result = await clearBrowsingData({
         profilesRoot: opts.browserProfilesRoot,
         packaged: opts.browserProfilesPackaged === true,
+        // BP-D10 (2026-11-25): the person's known browser profiles are the desk's alone until their list has its
+        // store; a profile an open page has is cleared beside them, as before
+        refs: [BROWSER_DESK_PROFILE_REF],
         surfaces: browserSurfaces,
         exists: existsSync,
         clearProfile: (path) => ensureBrowserNative().clearProfile(path),
