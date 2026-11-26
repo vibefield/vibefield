@@ -592,9 +592,6 @@ verifyDepsBeforeRun: prompt
 minimumReleaseAgeStrict: true
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  # EL8 2026-11-26: reviewed ICE 0.22.0 (published 2026-11-25, inside the release-age window). The 0.21.0 row was
-  # retained through the install that regenerated the lock, then removed.
-  - '@vibecook/ice@0.22.0'
   # EL8 2026-11-17: reviewed mille 0.3.6 (tag v0.3.6 = 85c35e7d, published 2026-11-12). (Corrected 2026-11-18,
   # item 531: this said "inside the window". The registry dates 0.3.6 at 2026-11-12T06:40:04Z, read 2026-11-18:
   # five days before the EL8, and this file sets no minimumReleaseAge, so pnpm 11.13.1's default of 1440 minutes
