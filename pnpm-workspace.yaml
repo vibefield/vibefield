@@ -708,3 +708,11 @@ minimumReleaseAgeExclude:
   # so 0.7.28 needs no row, and the five 0.7.27 rows went with this event: 0.7.27 is past the window too. #261
   # builds every sidecar with Go 1.27.4 (GO-2026-6859); protocol 13 stands. The kit's Swift plane stays 0.7.26
   # (ghosttea 0.15.0 declares it exact).
+
+  # PB's desktop EL8 adopts the five 0.7.30 sidecars together on release day.
+  # Limit the release-age exception to the exact packages verified in this event.
+  - '@vibecook/truffle-sidecar-darwin-arm64@0.7.30'
+  - '@vibecook/truffle-sidecar-darwin-x64@0.7.30'
+  - '@vibecook/truffle-sidecar-linux-arm64@0.7.30'
+  - '@vibecook/truffle-sidecar-linux-x64@0.7.30'
+  - '@vibecook/truffle-sidecar-win32-x64@0.7.30'

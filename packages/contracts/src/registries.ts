@@ -52,11 +52,11 @@ export const PORTS = {
    * `/cell/<cellBootId>/control|frames` → that cell's loopback T1 door. fieldd
    * declares it; the sidecar serves it; the floor is never in the byte path.
    *
-   * ITS OWN PORT, not the product serve's, and the reason is truffle's API,
-   * not taste: `Proxy` offers `add` and `remove` and NO update
-   * (truffle-core 0.7.12 `src/proxy/mod.rs`), and a same-id add is
-   * `PROXY_EXISTS` — so changing a serve's route list is remove-then-add,
-   * which drops every live connection on that listener. Cell routes change
+   * The separate port dates to truffle-core 0.7.12. Its proxy API required
+   * remove-then-add to change a route list, dropping every live connection
+   * on that listener. Since the desktop EL8 to 0.7.30 (2026-11-26),
+   * Truffle also supports live route replacement. fieldd's existing
+   * reconciliation still removes and re-adds these serves. Cell routes change
    * whenever a cell is born or exits; the product door is the channel a
    * dropped client would have to re-dial to get a replacement ticket, so
    * bouncing it on cell churn would break the recovery path itself. Confining
@@ -100,10 +100,9 @@ export const PORTS = {
    * DS-7; it is assigned at SP-3 so the template has a listener to name. Fixed
    * for the reason its two neighbours are: a peer DERIVES the coordinate.
    *
-   * ITS OWN PORT for the cells' reason: truffle's proxy has `add` and `remove`
-   * and no update, so re-aiming a serve is remove-then-add, and rosettad's port
-   * moves on every restart. On 9422 that would drop every live terminal leg; on
-   * 9423, every door.
+   * rosettad's port moves on every restart. The separate listener confines
+   * fieldd's current remove-then-add reconciliation to index clients. See
+   * TERMINAL_CELLS_SERVE for the 0.7.30 live-update API.
    *
    * PUBLISHED ONLY BEHIND fieldd's `indexDirectPlane` flag, OFF: the pinned
    * rosettad verifies no credential (RO-1's bearer and RO-10's grants are built
@@ -121,8 +120,8 @@ export const PORTS = {
   /** The freeway (FW-D1, FW-D6; `draft/thinking-freeway.md` v0.3 §3) — ONE link per peer, the
    * phone's to each desktop it shows and one per desktop pair, every plane a stream on it. Its
    * OWN tailnet listener with one static route to the floor-held loopback door's secret path
-   * (`/f/<pathSecret>`): a route list changes only by remove-then-add, which drops every
-   * connection on it, and the freeway's route never changes while its floor lives. Numbers are
+   * (`/f/<pathSecret>`). fieldd reconciles serves by removing and re-adding the listener,
+   * and the freeway's route is fixed for its floor's lifetime. Numbers are
    * assigned at landing, in landing order (the PM, 2026-10-17 02:39Z): `BLOB_SERVE` takes the
    * next free one at its own landing. */
   FREEWAY_SERVE: 9425,

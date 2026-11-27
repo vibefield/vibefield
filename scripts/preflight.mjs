@@ -169,18 +169,19 @@ const PIN_EXPECTATIONS = [
   // 2026-11-18 (the EL8 to ghosttea 0.16.0): the Swift row stays 0.7.26, which ghosttea 0.16.0 declares exact too.
   // 0.7.26 → 0.7.29 on 2026-11-21 (the EL8 to ghosttea 0.16.1, the first ghosttea that declares it, #109): the Swift
   // row alone; the crate and the five npm sidecars stay 0.7.28.
+  // The desktop EL8 to 0.7.30 (2026-11-26) brings live route replacement and public Funnel serving.
   // The Swift row stands aside while the dev overlay links truffle and renders it nil (RD-3).
   // Cargo.toml's closure note carries every event and every place they touched.
   {
     file: "Cargo.toml",
-    re: /^truffle-core\s*=\s*"=0\.7\.28"$/m,
-    label: 'truffle-core = "=0.7.28"',
+    re: /^truffle-core\s*=\s*"=0\.7\.30"$/m,
+    label: 'truffle-core = "=0.7.30"',
   },
   {
     file: "apps/ios/VibeFieldKit/Package.swift",
     re: /^let truffleRelease: Version\? = "0\.7\.29"$/m,
     label:
-      'let truffleRelease: Version? = "0.7.29" (matches Ghosttea 0.16.3; desktop Rust/sidecar at 0.7.28)',
+      'let truffleRelease: Version? = "0.7.29" (matches Ghosttea 0.16.3; desktop Rust/sidecar at 0.7.30)',
     overlay: "truffle",
   },
   // The FINAL 0.16.0 on `latest` since PORTALS PT-6b (M24 LT1–LT5; LT5 — I52 — the reference

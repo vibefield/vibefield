@@ -235,7 +235,10 @@ opt-level = 3
 # and that the record is owed before the 0.9 tag, naming sidecar 0.7.27 until then. They were false from the
 # event's second commit on: the rider ran with it, and the repo's own test holds the record to the sidecar pin,
 # so the event could not land without it.
-truffle-core = "=0.7.28"
+# EL8 (PB, 2026-11-26). Protocol 14 adds live route replacement. Protocol 15 adds
+# public-only Funnel listeners and grant events. The five desktop sidecars share
+# this exact version. The existing field-native serves are tailnet-only.
+truffle-core = "=0.7.30"
 # NF-0 (native-floor spec NF-D1): ghosttea graduated to crates.io the same way,
 # 2026-07-29 — exact pin, upgrades are deliberate events. NF-7 (2026-08-01) bumped
 # 0.6.0 → 0.7.0 for the G7/G8/G9 petition landings (shutdown drain, silent serve,

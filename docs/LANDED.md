@@ -69378,3 +69378,17 @@ James's pick on *Editing the Ink*: ink-agent A, three shared tools.
   turns its row red.
 - **Never seen:** a real agent using the three tools, on any desk; an agent's edit landing in a sheet a person is
   typing in, and that person's undo after it, are untested.
+
+## EL8 — Truffle 0.7.30 for desktop publishing
+
+**2026-11-26.** Desktop pins `truffle-core` and the five platform sidecars to 0.7.30.
+Protocol 14 can replace a serve's route table while unchanged routes keep their live
+connections. Protocol 15 adds Funnel grant status, grant events, and a public-only
+HTTPS listener. Bare directory mounts redirect to their slash URL.
+[Truffle 0.7.30](https://github.com/vibecook-dev/truffle/releases/tag/truffle-v0.7.30)
+
+VibeField's port, directory and terminal-route serves explicitly select tailnet access.
+A route-only update preserves the listener status and URL in the management subscription.
+The iOS kit uses Ghosttea's Swift pin of 0.7.29. The Go license record was regenerated
+from all five published sidecars and the kit's device binary. Together they include
+42 modules, with 11 Linux and Windows modules newly recorded.

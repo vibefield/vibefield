@@ -1481,6 +1481,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 announce: false,
                 tls,
                 allow_non_loopback: false,
+                funnel: false,
                 allow,
                 routes,
                 // Explicit EMPTY (the EL8 to truffle 0.7.22, 2026-10-25), for
@@ -1565,6 +1566,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 announce: false,                // the same law as the other arms
                 tls,
                 allow_non_loopback: false,
+                funnel: false,
                 allow,
                 routes,
                 accept_app_capabilities: vec![], // the port arm's law: no grant forwarded
@@ -1605,6 +1607,7 @@ pub fn build_serve_config(input: ServeConfigInput<'_>) -> Result<ProxyConfig, St
                 announce: false, // same law as the port arm — no surprise broadcasts
                 tls,
                 allow_non_loopback: false,
+                funnel: false,
                 allow,
                 routes,
                 accept_app_capabilities: vec![], // the port arm's law: no grant forwarded
@@ -1790,6 +1793,9 @@ fn spawn_serve_forwarder(
                         ProxyEvent::Started { id, url, .. } => {
                             json!({"serveId": id, "status": "running", "url": url})
                         }
+                        // A route swap preserves the listener's status and URL.
+                        // This subscription projects those listener fields.
+                        ProxyEvent::Updated { .. } => continue,
                         ProxyEvent::Stopped { id } => {
                             json!({"serveId": id, "status": "stopped"})
                         }
@@ -2153,6 +2159,7 @@ mod tests {
         assert_eq!(cfg.target.port, 3000);
         assert_eq!(cfg.target.scheme, "http");
         assert_eq!(cfg.listen_port, 3000);
+        assert!(!cfg.funnel, "port serves are tailnet-only");
         assert!(
             cfg.tls,
             "tls defaults to true when unset (upstream default)"
@@ -2186,6 +2193,7 @@ mod tests {
         assert_eq!(cfg.routes[0].dir.as_deref(), Some(PUB_DIR));
         assert_eq!(cfg.allow, vec!["*@corp.com".to_string()]);
         assert_eq!(cfg.listen_port, 0);
+        assert!(!cfg.funnel, "directory serves are tailnet-only");
     }
 
     // ---- TM-2: the terminal-cell routes serve ----
@@ -2231,6 +2239,7 @@ mod tests {
         );
         assert!(!cfg.announce);
         assert!(!cfg.allow_non_loopback);
+        assert!(!cfg.funnel, "terminal routes are tailnet-only");
     }
 
     #[test]

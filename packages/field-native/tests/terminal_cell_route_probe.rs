@@ -134,6 +134,7 @@ fn cell_route_config(
         announce: false,
         tls: false,
         allow_non_loopback: false,
+        funnel: false,
         allow,
         routes: vec![ProxyRoute {
             // NO trailing slash: this row MEASURED the shipped sidecar refusing
