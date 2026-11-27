@@ -69232,3 +69232,149 @@ its colours", at 17:30:18.505Z; typed at 17:32:01Z: "i picked lean".
 - **A question the look left for James:** by night the sheet (28,28,30) on the phone's unlit glass (28,29,29) shows
   no edge, its 2.6 mm corners included; only its contents read. Nothing changed for it.
 - **Owed:** the smoke row SIM-ATTACH on the test Mac (its new steps), and James's word on the night sheet's edge.
+
+## EL8: ICE 0.23.0 — the desk's pen (I59), and editing the ink (I60) (M566)
+
+**2026-11-27 · on local main: `fff486c51` (EL8: ICE 0.23.0). Upstream: vibefield/infinite-canvas-engine #16 (I59 and
+I60, merge `9d3fe88632a5`) and the release #17 (merge `4151e4a89701`, tag v0.23.0; the release commit `b7c740b098bb`).
+NOT pushed.**
+James, 2026-11-25, typed in the ink lane's session just after 08:26Z, with his picks made on the two pages below: "now
+start implementation, land it properly in ICE and vibefield". The two petitions are what the desk's pen and the ink's
+editing needed from ICE. Of ICE's no-rich-text fence, in his words: "yes, cross that rule, land it in ICE".
+
+- **Upstream, I59 (the desk's pen).** The desk's handwriting is read from a distance-field atlas in each kind's own
+  shader, with no bitmap per object and no raster per zoom rung. `@vibecook/ice/desk/bake` bakes a font into an
+  `ice-hand/1` atlas (the ink's edge and the moment each texel is written); a host lends its faces with
+  `deskLayer({ hand })`. The writing moves as it is typed and as writing arrives, never when a desk opens.
+- **Upstream, I60 (editing the ink).** The words on a written object are selected, cut, copied and pasted, written in
+  another pen, highlighted, struck through and underlined. A mark is a glyph's, kept in the object's `ink` cell beside
+  its text and seeds (`inkPart`, `inkTyping`, `inkActs`); a menu act may be declared `on: "words"`, and the anchor says
+  the `words` and the `caret`.
+- **Not only additive.** ICE's CHANGELOG lists seven entries under 0.23.0's `### Changed`: `DeskEditor` gains three
+  required members; a press on a lent part's writing is the editor's; an act `on: "words"` is never the selection's;
+  the note's `ink` group gains `marks` (a stored note reads unmarked, its version stays 1); `HighlighterName` is the
+  kit's own type; the note is written by the pen where a host lends faces; the React menu's glyph set gains four names.
+- **The fence.** ICE's scope fence said no rich text. The marks are a closed set, the desk's own pens and highlighters
+  a glyph, in the desk's kit and not the engine's core; ICE's `docs/implementation-plan.md` carries the dated note
+  with James's words. The rest of the fence stands.
+- **The release.** The packet is the ink lane's, in 0.22.0's form (`lanes/ink/rel023`, PACKET-023.md): the release
+  commit cut in the lane's clone on VF-PM's word, the pack on a test Mac, the push, merge, tag and GitHub release by
+  VF-PM. The registry dates it 2026-11-26T17:46:40.193Z; its dist.integrity, read anonymously at 17:47:27Z, equals
+  the packed tarball's (sha512-bOvgBTY8…Kvww==).
+- **ICE's gate, before the merge (on a test Mac).** `gate:landing`'s 27 stages, each alone, at ICE's main and at the
+  petitions' head: 21 green in both, two red in both and equal (the oracle's golden and the desk clock's still), and
+  four that differ by the petitions' own rows, which pass. A `gate:landing` on the goldens' Mac is still owed upstream.
+- **Here, the pin.** The EL8's usual set, place for place as 0.22.0's (`435d05913`): the lock's `ice` entry
+  (`b7c740b0`, release.npm 0.23.0), the overrides row and its note, PIN_EXPECTATIONS, the release-age row for 0.23.0,
+  the lock by that one install (the ICE entries alone, 10 out and 10 in), and fieldd's ICE1 probe fixtures by their own
+  generator (13 files). `pnpm gen` moved nothing at the EL8; ROADMAP's ICE pins row and upstream bullet moved with it.
+- **Proof** (in the lane, each heavy step under the lanes' shared heavy lock after a lone load read under 10,
+  kern.waketime the same before and after):
+  - At the EL8 as first made (`67e4355b6`, on the OM line's head of 2026-11-26): the one install and a frozen one, each
+    with pnpm's supply-chain check (669 entries); `check:deps` (one copy each of ICE 0.23.0, strata 0.13.0, loro
+    1.13.8); `siblings render --prod --check`; preflight OK (one warning, not this EL8's); `pnpm typecheck` 28
+    projects; biome on the changed files; fieldd's ice1 probes 18 of 18; `pnpm still` 19 of 19, byte for byte.
+  - On the line as it lands (`b828e1b79`, every slice of this land but the census baseline and this ledger), verify's
+    whole list, each stage alone (verify-final, 2026-11-27, 03:14Z to 03:26Z): every stage exit 0, the
+    Rust stages included, but `census:assert`, red by exactly the hand's three shapes (M567). Nx had read 25 of
+    the typecheck's 28 projects and 24 of the test stage's from its cache, so both ran again past the cache on the
+    census commit (`f82f65d06`, 03:27Z to 03:44Z), with lint: the typecheck 28 projects; the test stage 28
+    projects, none from Nx's cache, 1,294 files and 20,325 tests passed, 0 failed, 43 skipped.
+  - Then the census baseline (M567) and `census:assert` again, and `pnpm still` on that tree: OK, and 19 of
+    19 byte for byte with nothing re-blessed (a still lends no faces, so every sheet takes the raster's road).
+- **Not run:** any smoke; `gate:landing`; the test Mac's V row.
+- **Owed:** `gate:landing` on the test Mac (nothing of this land has run in a smoke); the one-row commit that drops
+  0.23.0's release-age row once 2026-11-27T17:46:40Z has passed; upstream, a `gate:landing` on the goldens' Mac.
+
+## IK-1 — the desk writes with the pen: its three faces baked, held fresh, and lent to every kind (M567)
+
+**2026-11-27 · on local main: `c655a08d9` (the desk writes with the pen) and `f82f65d06` (the census gains the
+hand's three shapes). NOT pushed.**
+James's picks on the page *The Desk's Pen*, A on all four, read from its store on 2026-11-25: the face (Caveat with a
+derived path), its home (ICE's kit), the drawing (the field read in the kind's shader), and when it moves (as you
+type and when writing arrives; never at open).
+
+- **The bake.** `scripts/gen-desk-hands.mjs` (`pnpm gen:hands`, the last step of `pnpm gen`) bakes the desk's three
+  fonts with ICE's baker into `field/desk/assets/hand/{caveat-500,caveat-600,kalam-400}.hand.{json,bin}`, with the
+  fonts' OFL note beside them. `gen:check` re-bakes and holds the folder; the six files are byte for byte ICE's own
+  desk's.
+- **The lending.** `fieldDeskLayer` lends `hand: deskHand()` over the three shipped faces by their pen names (caveat,
+  caveat-bold, kalam); marker and noteworthy are the platform's own faces and keep the raster. The packaged
+  `connect-src` refuses a fetch, so the desk hands its own reader: each file is a lazy chunk of its own.
+- **The census** (`f82f65d06`). `census:assert` read the hand's chunks as three unexpected shapes (caveat-500,
+  caveat-600 and kalam-400 `.hand-[hash].js`, two files each, about 5.4 MB, none in the initial chunk); the baseline
+  was rewritten by `--update` on the lane's build, committed alone, and asserted again.
+- **Proof:** the whole suites at the line's tip (M566's proof, above); the generator's check fresh and stale; rows
+  under a policy where every connect door throws (every face lands, each bundled file is the committed bytes).
+- **The looks (2026-11-25 and 11-26, a desktop of the lane's own, no agent in it).** The pen as it is typed on a note
+  and on a comment pad, the far band, by day and by night; every edge sampled held.
+- **Not run:** `smoke:canvas` (the real packaged policy) and every browser row; gate:landing.
+- **Never seen:** a stylus; the glass look; the pen in a packaged app.
+
+## IK-2 — editing the ink: the selection bar comes to the selected words, and the comment pad keeps its marks (M568)
+
+**2026-11-27 · on local main: the words bar, seventeen of the commits from `9ad88acb7` to `b828e1b79` (DESIGN.md
+§8 and §13 first each time), and the comment pad, `7f2219157`, `a96e4b1a2`, `a7fb60779` and `649daa3f3`. NOT pushed.**
+James's picks on the page *Editing the Ink*, A on all six, read from its store on 2026-11-25: a drag across writing
+selects once the sheet is being written; the selection bar comes to the words; the desk's pens by name; a line through
+for a strike; a paste writes the words and their marks again in a fresh hand; three shared tools for agents (M569). On
+the page *Where the Words Bar Stands* he picked B, "Always off the writing" (its store, 2026-11-25T18:02:45Z; typed in
+the lane's session: "I picked B").
+
+- **The words bar (field-app), DESIGN.md §8 "The words bar".**
+  - While a sheet is written and words on it are selected, the selection bar is the words' bar: the same element, the
+    words' row in place of the objects'. It stands off the writing, where the objects' bar stands for that sheet,
+    centred over the selected words; over a sheet an agent works on it keeps the objects' bar's clearance.
+  - Its row: Pen and Highlight (each a 44-wide choice cell showing the words' own, hollow where they differ), Strike
+    and Underline (toggles), Clear, More. Pen and Highlight swap the row for the pens' and the highlighters' rows, the
+    desk's own inks as swatches, the current one ringed.
+  - More holds Cut · Copy · Paste | Select all through the editor's command; Paste reads the clipboard through the
+    shell's door and waits where there is none. A right-click at a bare caret grows Paste and Select all there.
+  - The bar reads ICE's act slots in I61/I62's shape through one adapter and runs them through one function.
+- **On the object menus' line (OM, M564).** Three commits made the two bars one: the clearance above, the words bar's
+  own classes (its swatches had drawn empty under OM-1's cell rules, found by the look), and a turn between the words
+  and the objects on the SAME sheet closing the bar's list at once, through OM's own cut with no OM line changed.
+- **The comment pad (plugins/comment-pad, 0.1.0 → 0.2.0).** `marks` joins `text` and `seeds` in its one `ink` group
+  (a stored pad reads unmarked; no migration). Its typing is the kit's (`inkPart`), its menu `inkActs`, and its words
+  are read in its own shader where the desk lends faces; the raster stays for a glyph the face lacks and where none
+  are lent. Its inks reach the bar as swatches.
+- **Proof:** the whole suites at the line's tip (M566's proof, above). Each behaviour's rows were red first on the
+  head before it; the same-sheet turn's two rows redden again when either half of it is dropped.
+- **The looks (five, 2026-11-25 to 11-27, a desktop of the lane's own, no agent and no pages engine in it).** The row
+  and its two swap rows on a note and a pad, by day and by night; every mark drawn; pointer selection; the bar off
+  the writing; the swatches in their inks; the crossings between the objects' bar and the words' with a list open.
+  The last was on the line as it lands (`f82f65d06`, 2026-11-27), with OM's second mend under it: a list is gone at
+  once at a press on another object with no empty frame, the same-sheet turns fade in place, and the pills and
+  swatches hold by day and by night. One thing it saw is the fold's own, for the words' More and OM's Device list
+  alike: on Esc the rows are faded by about 130 ms and an empty body folds for about 200 ms more.
+- **Two slips of those looks.** The lane's desktop wrote James's system clipboard twice (2026-11-25 17:38Z, the bar's
+  Copy; 2026-11-26 19:09Z, a press through a note's More grown down over it onto Make a card). Since then no look on
+  his Mac presses a row or key that writes the clipboard; those rows are proven by their tests.
+- **Not run:** gate:landing; every smoke.
+- **Never seen:** a Paste landing words; a stylus.
+- **Left as two, a follow-up slice:** OM's choice cell and the words bar each read `MenuSlot.choices`, draw a swatch
+  and show the current choice in their own way (a checked list row; a ringed swap row). DESIGN.md §8 describes both.
+- **Questions the looks left for James:** with a sheet's top a little under the head, the words bar's More and the
+  right-click menu grow DOWN over the writing, and an objects' More grows down over its own note's words; a double
+  click on a word from a shown bar flashes the objects' row for about 90 ms before the words'.
+
+## IK-3 — agents read and mark writing: three ink tools shared by every written kind (M569)
+
+**2026-11-27 · on local main: `f1e65f1fe` (the three tools) and `7a7cfc0d1` (ICE's note keeps its marks, so
+`mark_text` marks a note). NOT pushed.**
+James's pick on *Editing the Ink*: ink-agent A, three shared tools.
+
+- **The declarations (contracts, `ink-tools.ts`).** `INK_TOOLS`: `read_writing` (read-only), `edit_text { quote, with,
+  occurrence? }` and `mark_text { quote, occurrence?, pen?, highlight?, strike?, underline?, clear? }`, with the desk's
+  pens and highlighters as words in ICE's order.
+- **The SDK door.** `withInkTools(half, opts?)` adds the three handlers to a kind's agent half over ICE's ink value.
+  An agent names words by quoting them; a quote not found, or found more than once with no `occurrence`, is refused
+  in words that say which (`AgentToolRefusal`, answered as `bad-input`).
+- **The applier.** Before an act, an open typing on the object lands its draft as the person's own step, so the act
+  reads the words the person sees. A read lands nothing.
+- **The kinds.** The note and the comment pad are wrapped the same way; `write_text` clears a note's marks, and
+  `add_comment` leaves a new line unmarked.
+- **Proof:** the whole suites at the line's tip (M566's proof, above); a mutant applier without the draft landing
+  turns its row red.
+- **Never seen:** a real agent using the three tools, on any desk; an agent's edit landing in a sheet a person is
+  typing in, and that person's undo after it, are untested.
