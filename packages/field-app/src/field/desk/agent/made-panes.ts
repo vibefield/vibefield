@@ -55,7 +55,7 @@ export interface MadePaneLeaving {
  * 2026-11-24: never from under the person's hand. The hand is read again when the wait ends, as the applier and the
  * at-work reflector read it (`handOn`: the held entity, or one ICE may let diverge, a pane taken into its live mode): a
  * pane picked up during its leaving is not taken off, and stays, wearing desk-live's closed still (the 1f text: "never
- * from under the person's hand"; a pane held at the run's end, ‹for James›). A page that never arrived is asked only
+ * from under the person's hand"; a pane held at the run's end, ‹ruling owed›). A page that never arrived is asked only
  * where desk-live has read the hand itself, at once or at its put-down. */
 export function madePaneLeaving(
   engine: CanvasEngine,
