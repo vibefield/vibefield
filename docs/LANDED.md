@@ -68994,3 +68994,91 @@ merged each on green and took the release.
   reader of the paste wrapper in the spark's transcript (`spark-transcripts.ts`, `pastedWords`) is now a second line
   of defence: with 0.4.15 `turn:started` already says the words. It stays for a run on an older adapter and may go
   at the next pin.
+
+## The pages room — an agent opens its own browser pane and iOS Simulator, the mat shows who works on an object, and a gate row checks the engine main starts; with the last-run curtain, the verified plugin load and named browser profiles (M562)
+
+**2026-11-27 · on local main: `34264b347` (eight commits over `5c48d5a87`), then `53e7030b5` (one comment) and this
+entry. Upstream: none. The pages engine is agent-browser 0.41.0, started as a source build of it made here (below).**
+James, 2026-11-24, in the Godview QA session: "overturn the rule of agent not allowed to add browser or simulator, now
+fanout agents to land this soon … and land this in this worktree soon"; the lane itself from his ask of the same day,
+"i do the qa test to find issues for you to fix". On 2026-11-27, asked what needed him: "land".
+
+- **The commits, in order.**
+  - `1c37de3fbb10d64f1512001ec69c51e1bd02e979` LR: the last-run curtain counts what is still gone, is read again as
+    Godview opens onto it, and an agent's pane is never a shell. Found by the Spark QA round of 2026-11-25: the first
+    Godview visit after a restart counted the previous run's sessions over the live ones.
+  - `d2a56dd000475cfc6e1e73aef4e0ec35bc37ece4` 279 (S3, with item 333): with a plugin list key configured, an install
+    keeps what it verified (the artifact inside the revision, the signed list beside it), each refresh checks the
+    selected revision against that record, and a revision that fails is a refused row as a refused bundled plugin is.
+    A parked entry comes off by its uninstall (item 333).
+  - `e71376908a10e065b9b73216ca593c2b04beb848` OB (R-2, R-2b): a kind whose tools are a room's rows answers the desk's
+    verbs with them and binds no agent. The agent half gains `room: "pages"`, so a browser pane has no second door
+    that opens any address outside `browser_open`.
+  - `f177c7a0a9f75e19930958fe2cbe008097c699ec` 550b: an object an agent works on wears who works on it, on the mat
+    (DESIGN.md §8 "At work on the mat", OB-D14): one marker stroke per agent round it in its project's colour, a
+    die-cut sticker per agent down its right side, a spark at work its own live star. One WebGL2 layer a window, and a
+    DOM form without it. Its feed is this desktop's own (550a).
+  - `d1be2a557aa98a3c38c1f2410e1405253c919ed4` EY: the pages room. fieldd serves the 29 `browser_*` rows of contracts'
+    pages.ts, each held to the run's grant, and reaches main only through `shell.surfaces.control`. Main's pages plane
+    (the broker with its engine supervisor and identity, the core, the endpoint and its bridge) runs the pinned
+    engine. A run's pages are memory-only, signed out, never the desk's profile; a run's pane keeps its address in
+    `runAddress`, never `url`, so an older build shows the sample. Screenshots go to a 0700 folder per run under
+    `PAGES_STILLS_DIR` and are forgotten with the run's record. The root's `engines.node` moves to `>=24`.
+  - `0ad68d100cb79fb4117936a98d0af7b8d89c4fe3` 581 overturned: an agent places the bundled iOS Simulator on a device
+    of its own, and `canvas_kinds` names `browser_open` for a browser. `AGENT_PLACEABLE_LIVE` names kinds, never
+    pairs: a list of pairs would let an agent place any plugin's browser, which opens in the person's signed-in
+    profile.
+  - `76693383048c565540e188ea341c28c2ff677091` BP-D10: a browser profile's id has one shape, main mints a persistent
+    profile only by one, and Clear clears the known ids. Ruled 2026-11-25 on the page *Profiles on a Pane*: BP-D10 A
+    (several profiles, each with its own sign-ins; it overturns BP-D3), D13 A ("Browser profile"), D15 D (the name on
+    label tape). No list of profiles exists yet; the wire's `profile.ref` is not tightened.
+  - `34264b34713ba78800522a32f2251c7320707707` EY (item 658): desk-gates row 41, `pnpm smoke:pages`, in gate:landing
+    after the GPU-less canvas rows. On a real Electron, the engine main starts is the recorded source build, its
+    stream off and its peer check on: ten legs (OPEN, IDENTITY, CENSUS, PEER, TCP, CLOSE, CONTROL, LATCH, STOP,
+    ENGINES), each ok, red or blind (exit 0, 1, 2; blind is never ok). After its verdict the smoke closes the pages'
+    surfaces as the product's quit does and watches its own exit. In the product, found by the item's reviews: a call
+    joins a start in progress before it is handed anything, and a refused engine is retired and counted at its refusal
+    and never leased (both older than the item); no logger's failure leaves a held engine unchecked, unended or
+    untold. The engine is started with no browser file it could launch by itself; a package starts no engine until the
+    record names a staged engine's CodeDirectory digest; the browser benchmark's agent provider is removed.
+  - `53e7030b5` EY: a comment in the pages room's leaver names the ruling it waits on, not a person (found at this
+    landing's read).
+- **The pin.** agent-browser 0.41.0 is an exact `dependencies` row in apps/desktop's manifest; its postinstall is
+  refused by pnpm-workspace.yaml's `allowBuilds` (it would download a binary and may relink a global bin); preflight
+  holds the row, the lock's entry and integrity, the installed version and this host's binary to contracts'
+  `PAGES_ENGINE_RECORD` (scripts/pages-pin.mjs, the pin's one reader). The engine main starts is the record's
+  `sourceBuild`, darwin-arm64 alone. No release-age row was added: 0.41.0 is past the window, and the lock passes its
+  supply-chain policy.
+- **Ran.** On James's Mac, each alone after a lone load read, niced, 4 workers, a cargo target of the lane's own:
+  verify's whole list on each commit's own tree. Green on 1 (one fieldd row red once under another lane's load, then
+  fieldd's whole suite green alone), 2, 3, 4, 5 (on its third run: the first cut red by a split, one import; the
+  second void, the Mac slept), 6, 7 (on its second run: the first void by a 9-second sleep) and 8: verify-final, once,
+  on its tree, every stage exit 0, the tests 28 projects none from Nx's cache (1286 files, 20139 tests passed, 0
+  failed, 43 skipped), the Rust tests and `gen:check`, the Mac awake throughout. Item 658 was read by four panels of
+  independent reviewers, every one of which said mend, then each of the fourth panel's mends by one reader, twice;
+  every mend red first; 408 breakages (every one written for it since its first build, each by its last set) caught on
+  its final code tree; 42 physical runs of row 41 on one development Mac (the ninth's exit held for fifteen minutes;
+  after the exit's mend, 33 runs each ended at once, ten of them on the final tree). The pages room was driven live in
+  the lane's QA desktop before its cut (2026-11-24; 550b's in-hand mends came from its second live run). After the
+  fast-forward, `pnpm install --frozen-lockfile` in this checkout: exit 0, the tree clean.
+- **Not run:** `pnpm gate:landing` (the test Mac's screen is locked), so row 41 has run at no landing and on no second
+  host; the other smokes and `pnpm still` on this line; a package or a signed build; row 31 (`smoke:profile`) on a
+  named profile; the engine's own browser launch (its guard is read in the engine's source, never run).
+- **Owed.**
+  - gate:landing on the test Mac, with the engine placed on that host as row 41 needs it (the file of the record's
+    SHA-256 `f3a53cbc…3dea` at a fixed path outside every checkout, and `VIBEFIELD_DEV_PAGES_ENGINE_SOURCE` exported).
+    On a host with Google Chrome in /Applications, the row's first run is watched by a person and its END line read.
+  - The push.
+  - No release-age row to drop. agent-browser's version moves only as an EL8 event: the manifest row, the lock, the
+    refused postinstall's note, preflight's row and the record together.
+  - Upstream: the engine's patch could refuse its own launch under the switches (a third revision of BU-14). Nothing
+    is prepared.
+  - The profiles' records: dated corrections at BP-D3 and section 0 of `draft/thinking-browser-profile.md`, DECISIONS'
+    BP rows, PT-4's note that BW-8 is taken up, ESP 7.5. BP-D11 is settled by James's ruling of 2026-11-27: a browser
+    pane and an iOS Simulator live on the desktop that made them, and other desktops show a placeholder; its
+    contract's picks (WO-D1…WO-D3) wait on him.
+  - Docket, no owner: product comments on main that name a person, none from this line: field-app `made-apps.ts:492`,
+    `godview-model-fixture.ts:54`, `PluginSettings.tsx:22`, `plugins-model.ts:882`, `plugins-words.ts` (4, 57, 156,
+    207), and electron-shell's `root-chain.test.ts:69`.
+  - What item 658 does not prove is listed in its commit message (NOT PROVEN): one Mac, the held exit's cause, the
+    census as one read, the guard never run.
