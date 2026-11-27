@@ -338,6 +338,7 @@ async fn a_peer_door_is_reached_through_the_floors_egress_and_names_the_floors_n
             announce: false,
             tls: false,
             allow_non_loopback: false,
+            funnel: false,
             allow: vec![],
             routes: vec![],
             accept_app_capabilities: vec![],

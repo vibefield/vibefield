@@ -145,6 +145,7 @@ done
             announce: false,
             tls: false,
             allow_non_loopback: false,
+            funnel: false,
             allow: vec![login.clone()],
             routes: vec![truffle_core::proxy::ProxyRoute {
                 prefix: "/".into(),
