@@ -36,7 +36,12 @@ import {
   type RunFile,
   readAppTeam,
 } from "./engine-identity";
-import { type EngineChild, PagesEngineSupervisor, type SpawnEngine } from "./engine-supervisor";
+import {
+  type EngineChild,
+  type EngineSpawned,
+  PagesEngineSupervisor,
+  type SpawnEngine,
+} from "./engine-supervisor";
 import { removePagesRoot, sweepStalePagesRoots } from "./roots";
 import {
   makePagesSurroundings,
@@ -168,6 +173,10 @@ export function productionStills(): PagesStillsPort {
  * environment variable, which whatever main starts would inherit. */
 export const PAGES_DAEMON_KILL_FLAG = "--pages-daemon-kill";
 
+/** The pages smoke's switch for its engine witness (item 658, 2026-11-26), on main's command line
+ * for the same reason: a whole word of its own, which the kill's flag only begins with. */
+export const PAGES_WITNESS_FLAG = "--pages";
+
 export interface CreatePagesBrokerDeps {
   /** resources' pinned engine path: null when this build has none */
   readonly enginePath: () => string | null;
@@ -187,9 +196,14 @@ export interface CreatePagesBrokerDeps {
   readonly windows: PagesWindowsPort;
   readonly spawn?: SpawnLike;
   readonly exec?: ExecFileLike;
-  /** The testing engine kill's hook, passed only when pagesDaemonKillAsked; production passes
-   * none, so no engine child is held for a kill. */
-  readonly onSpawned?: (run: string, generation: number, child: EngineChild) => void;
+  /** A testing hook (the engine kill's when pagesDaemonKillAsked, the pages smoke's witness when
+   * pagesWitnessAsked); production passes none, so no engine child is held outside the supervisor. */
+  readonly onSpawned?: (
+    run: string,
+    generation: number,
+    child: EngineChild,
+    spawned: EngineSpawned,
+  ) => void;
   /** a still's disk; absent: the product's (node's fs). A row's own for a row. */
   readonly stills?: PagesStillsPort;
   /** Durations, sizes and states only. */
@@ -206,6 +220,16 @@ export function pagesDaemonKillAsked(
 ): boolean {
   const mark = env[SMOKE_RUN_ENV];
   return mark !== undefined && mark !== "" && argv.includes(PAGES_DAEMON_KILL_FLAG);
+}
+
+/** Whether main may make the pages smoke's engine witness (item 658, 2026-11-26): only in a smoke
+ * run (its mark, not empty) whose command line carries the flag as a whole word. */
+export function pagesWitnessAsked(
+  env: Readonly<Record<string, string | undefined>>,
+  argv: readonly string[],
+): boolean {
+  const mark = env[SMOKE_RUN_ENV];
+  return mark !== undefined && mark !== "" && argv.includes(PAGES_WITNESS_FLAG);
 }
 
 /** The broker main runs: nothing starts until a run's first call. */

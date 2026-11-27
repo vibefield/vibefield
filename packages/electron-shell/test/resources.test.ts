@@ -9,6 +9,7 @@ import {
   type DesktopResources,
   dropDevelopmentPagesEngine,
   packagedPagesEngineFile,
+  pagesStagedEngineRecorded,
   ResourceError,
   readBundledTrust,
   resolveDevelopmentRepoRoot,
@@ -346,8 +347,26 @@ describe("resolvePackagedResources", () => {
     expect(pkg.rosettadPath).toBe(join(RESOURCES, "bin", "rosettad"));
   });
 
-  it("puts the pages engine beside fieldd on macOS, and names none elsewhere (EY-1 1b)", () => {
-    expect(pkg.pagesEnginePath).toBe(join(RESOURCES, "bin", packagedPagesEngineFile("darwin")));
+  it("names no packaged engine until the record names a staged engine for the host (item 658, 2026-11-26)", () => {
+    // the record names no staged engine's digest today, so a package names no engine to start, and pages answer
+    // not-installed; an Apple silicon Mac with the source build recorded included
+    expect(Object.keys(PAGES_ENGINE_RECORD.sourceBuild.binarySha256)).toContain("darwin-arm64");
+    expect(pkg.pagesEnginePath).toBeNull();
+    expect(pagesStagedEngineRecorded("darwin", "arm64")).toBe(false);
+    expect(pagesStagedEngineRecorded("darwin", "arm64", PAGES_ENGINE_RECORD)).toBe(false);
+    // a record that names one for darwin-arm64 names that host's alone
+    const staged = {
+      sourceBuild: {
+        ...PAGES_ENGINE_RECORD.sourceBuild,
+        stagedCdhash: { "darwin-arm64": "c".repeat(64) },
+      },
+    };
+    expect(pagesStagedEngineRecorded("darwin", "arm64", staged)).toBe(true);
+    expect(pagesStagedEngineRecorded("darwin", "x64", staged)).toBe(false);
+    expect(pagesStagedEngineRecorded("win32", "arm64", staged)).toBe(false);
+  });
+
+  it("names no packaged engine off macOS (EY-1 1b)", () => {
     for (const platform of ["win32", "linux"] as const) {
       expect(
         resolvePackagedResources({
@@ -384,11 +403,13 @@ describe("resolvePackagedResources", () => {
   });
 
   it("does not make the pages engine a boot-fatal resource (EY-1 1b)", () => {
-    // absent, the broker answers not-installed; main starts as before
-    const okHeads = (path: string): Uint8Array | null =>
-      path === pkg.pagesEnginePath ? null : MACHO_ARM64;
+    // absent, the broker answers not-installed; main starts as before. The record names no staged engine today
+    // (item 658, 2026-11-26), so the row names the engine's place itself, as a package with one staged would
+    const engine = join(RESOURCES, "bin", packagedPagesEngineFile("darwin"));
+    const staged: DesktopResources = { ...pkg, pagesEnginePath: engine };
+    const okHeads = (path: string): Uint8Array | null => (path === engine ? null : MACHO_ARM64);
     expect(() =>
-      assertPackagedResources(pkg, {
+      assertPackagedResources(staged, {
         nodeArch: "arm64",
         readHead: okHeads,
         readText: textReader(),

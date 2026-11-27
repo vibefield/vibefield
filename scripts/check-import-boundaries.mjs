@@ -706,6 +706,10 @@ const RULES = [
     // node_modules, the staged bin/ file) is named only by main's broker, main's resource layout, the pin's one reader
     // (scripts/pages-pin.mjs) and the shell's testing harnesses: the browser benchmark runs the engine by a path its
     // caller hands it, and testing ships in no package. Prose may name it (R7's rule).
+    // Correction (item 658, 2026-11-26): the benchmark runs no engine now. Its agent provider, which started whatever
+    // binary its caller named, is removed (electron-shell's test/pages-engine-alone.test.ts keeps it gone), and the
+    // engine runs only through main's broker. The testing harnesses stay namers in this slice because testing ships
+    // in no package; whether they leave is a later slice's question.
     enforce: true,
     stripComments: true,
     description:
@@ -723,6 +727,9 @@ const RULES = [
     // path again. The pin's one reader keeps it for preflight's hold of the install, and the testing harnesses for
     // the benchmark that runs a binary its caller hands it. A computed path is not seen here: rows in
     // tooling/dev-runner/test hold that the helpers that place the installed binary serve preflight's hold alone.
+    // Correction (item 658, 2026-11-26): no benchmark runs a binary its caller hands it any more; its agent provider
+    // is removed, and the engine runs only through main's broker. The testing harnesses keep their place here in
+    // this slice only because testing ships in no package.
     enforce: true,
     stripComments: true,
     description:
@@ -1667,8 +1674,9 @@ function runSelfTest() {
   ];
   const cleans = [
     // EY-1 (R33): the broker names the staged engine, the record names its package, a testing harness names the
-    // installed binary and the engine's plugin protocol, and prose names anything. The installed half (2026-11-24)
-    // leaves each of them clean: the broker's staged name is not the installed binary's.
+    // installed binary, and prose names anything. The installed half (2026-11-24) leaves each of them clean: the
+    // broker's staged name is not the installed binary's. (Item 658, 2026-11-26: the testing fixture no longer
+    // spells the engine's plugin protocol, which only the removed benchmark agent provider spoke.)
     {
       file: "packages/electron-shell/src/main/pages/clean-broker.ts",
       body: 'import { join } from "node:path";\nexport const engine = (resources: string) => join(resources, "bin/agent-browser");\n',
@@ -1679,7 +1687,7 @@ function runSelfTest() {
     },
     {
       file: "packages/electron-shell/src/testing/clean-perf-engine.ts",
-      body: 'export const protocol = "agent-browser.plugin.v1";\nexport const engine = "node_modules/agent-browser/bin/agent-browser-darwin-arm64";\n',
+      body: 'export const engine = "node_modules/agent-browser/bin/agent-browser-darwin-arm64";\n',
     },
     {
       file: "packages/electron-shell/test/clean-built-engine.test.ts",

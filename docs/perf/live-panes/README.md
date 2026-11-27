@@ -11,7 +11,7 @@ node scripts/benchmark-browser-pane.mjs --mode canvas --panes 4
 node scripts/benchmark-browser-pane.mjs --ui
 ```
 
-Each run serves the same local WebGL page on a fresh loopback port. The UI check also plays a generated two-second VP9/Opus test pattern in a loop to exercise mute, unmute, and in-pane fullscreen. Browser reports and screenshots go under `.vibefield/browser-perf/`. The summary script reads a run’s report.
+Each run serves the same local WebGL page on a fresh loopback port. The UI check also plays a generated two-second VP9/Opus test pattern in a loop to exercise mute, unmute, and in-pane fullscreen. Browser reports and screenshots go under `.vibefield/browser-perf/`. The summary script reads a run’s report. The benchmark drives no agent-browser (item 658, 2026-11-26: it takes no `--agent`); the pages engine runs only through main’s pages broker.
 
 The mixed interaction benchmark uses a disposable canvas, two independently created simulator devices, and two local GPU pages. Choose an installed iOS runtime compatible with iPhone 11. The runner installs its UIKit input probe, records per-pane frame rates and tap latency, then shuts down and deletes the devices it created.
 

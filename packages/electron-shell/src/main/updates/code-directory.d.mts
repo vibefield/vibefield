@@ -1,5 +1,5 @@
-// Types for code-directory.mjs (TD-4, LP-D16): main's `native-plane.ts` imports it from TypeScript, and
-// `scripts/release-manifest.mjs` from node.
+// Types for code-directory.mjs (TD-4, LP-D16): main's `native-plane.ts` and pages `engine-identity.ts` (item 658,
+// 2026-11-26) import it from TypeScript, and `scripts/release-manifest.mjs` from node.
 
 /** One signed image: its Mach-O header's cpu, the CodeDirectory's hash type, and the SHA-256 of that CodeDirectory. */
 export type CodeDirectorySlice = {

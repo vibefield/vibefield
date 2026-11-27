@@ -16,6 +16,8 @@ import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
 const repo = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+// Item 658 (2026-11-26): the benchmark drives no agent-browser (the engine runs only through main's pages broker),
+// so it takes no --agent: the parser is strict, and an unknown option fails it.
 const { values } = parseArgs({
   options: {
     mode: { type: "string", default: "canvas" },
@@ -24,7 +26,6 @@ const { values } = parseArgs({
     seconds: { type: "string", default: "12" },
     warmup: { type: "string", default: "20" },
     fps: { type: "string", default: "60" },
-    agent: { type: "string" },
     panes: { type: "string", default: "1" },
     interactive: { type: "boolean", default: false },
     ui: { type: "boolean", default: false },
@@ -109,8 +110,6 @@ try {
         ...(values["playback-only"] ? { VF_BROWSER_PERF_MEDIA_ONLY: "1" } : {}),
         ...(values["source-fps"] ? { VF_BROWSER_PERF_SOURCE_FPS: values["source-fps"] } : {}),
         ...(values["source-only"] ? { VF_BROWSER_PERF_SOURCE_ONLY: "1" } : {}),
-        VF_BROWSER_PERF_NODE_BIN: process.execPath,
-        ...(values.agent ? { VF_BROWSER_PERF_AGENT_BIN: resolve(values.agent) } : {}),
       },
     },
   );

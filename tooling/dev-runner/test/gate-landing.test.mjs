@@ -47,6 +47,7 @@ test("the list: verify's chain stage by stage, then this host's GPU gates", () =
       "smoke:canvas",
       "smoke:canvas:no-gpu",
       "smoke:canvas:no-webgpu",
+      "smoke:pages",
       "smoke:kind-faults",
       "smoke:plugin-restart",
       "smoke:plugin",
@@ -154,6 +155,50 @@ test("a verdict quotes the run's own words for its result", () => {
     "Tests  1 failed | 1908 passed | 23 skipped (1932)",
     'SMOKE_DAEMONS {"left":[]}',
   ]);
+});
+
+test("the pages smoke's VERDICT is what a gate quotes, never the exit's counts said after it (item 658, 2026-11-27)", () => {
+  // The order of a real run's lines (row 41): the legs, the verdict, the teardown, then the exit's own line. The gate
+  // keeps the LAST line of each kind, and one kind took every SMOKE_PAGES line: since the exit was said, the gate
+  // quoted counts of windows, and a red run's legs never reached its words.
+  const verdict =
+    'SMOKE_PAGES {"verdict":"red","legs":{"open":"ok","identity":"ok","census":"red"},"spawns":2,"why":"the run holds a second engine"}';
+  const exit =
+    'SMOKE_PAGES_EXIT {"before":{"windows":3,"offscreen":2,"contents":3},"surfaces":"closed","windows":1,"offscreen":0,"contents":1}';
+  const legs = ['SMOKE_PAGES_OPEN {"verdict":"ok"}', 'SMOKE_PAGES_CENSUS {"verdict":"red"}'];
+  const tail = [
+    'SMOKE_TEARDOWN {"left":[]}',
+    exit,
+    'SMOKE_DAEMONS {"left":[]}',
+    'PAGES_ENGINE_STAGE_DONE {"exit":1,"hits":1,"removed":true}',
+  ];
+  const lines = said([...legs, verdict, ...tail].join("\n"));
+  assert.ok(lines.includes(verdict), lines.join(" | "));
+  assert.equal(
+    lines.some((l) => l.startsWith("SMOKE_PAGES_EXIT ")),
+    false,
+  );
+  assert.ok(lines.includes('SMOKE_DAEMONS {"left":[]}'));
+  assert.ok(lines.includes('PAGES_ENGINE_STAGE_DONE {"exit":1,"hits":1,"removed":true}'));
+  // an exit that was HELD is said beside the verdict, not in its place
+  const held =
+    'SMOKE_PAGES_EXIT_HELD {"afterMs":10000,"windows":1,"offscreen":1,"contents":2,"active":{"Timeout":1}}';
+  const both = said([...legs, verdict, ...tail, held].join("\n"));
+  assert.ok(both.includes(verdict), both.join(" | "));
+  assert.ok(both.includes(held), both.join(" | "));
+  // ROWS THAT THREW before their verdict, in the order the smoke really says it: the legs, then its own line that
+  // the rows did not run to their end. Both are quoted: the last leg says how far they got. (This block fed legs
+  // and no such line, a shape the smoke never says; the trouble line then took the leg's place.)
+  const threw = "SMOKE_PAGES failed: the rows did not run to their end";
+  const cut = said([...legs, threw, ...tail].join("\n"));
+  assert.ok(cut.includes('SMOKE_PAGES_CENSUS {"verdict":"red"}'), cut.join(" | "));
+  assert.ok(cut.includes(threw), cut.join(" | "));
+  // ROWS THAT FINISHED, and a trouble of the run around them said AFTER the verdict: the verdict is still quoted,
+  // beside the trouble's line, never behind it
+  const trouble = "SMOKE_PAGES failed: 2 trouble(s) of the run around the rows";
+  const troubled = said([...legs, verdict, trouble, ...tail].join("\n"));
+  assert.ok(troubled.includes(verdict), troubled.join(" | "));
+  assert.ok(troubled.includes(trouble), troubled.join(" | "));
 });
 
 // DEBTS (s-debts-fieldd.md Appendix 3) — a perf measurement owns the host while its lock exists: the run waits before EACH

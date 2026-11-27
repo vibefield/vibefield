@@ -27,8 +27,9 @@
 // flags, another identifier) left the digest unmoved while the kernel enforced the added one — an untouched read of a
 // floor whose enforced signing changed, against this header's "a doubt can only read TOUCHED".
 //
-// ONE copy, two readers: main's `native-plane.ts` (the installed plane) and `scripts/release-manifest.mjs` (the release
-// workflow's) import this file, so the two cannot disagree on a rule. Plain JavaScript so node runs it unbuilt, as
+// ONE copy, three readers: main's `native-plane.ts` (the installed plane), main's pages `engine-identity.ts` (a
+// package's staged engine, by its `memberDigest`; item 658, 2026-11-26) and `scripts/release-manifest.mjs` (the release
+// workflow's) import this file, so none can disagree on a rule. Plain JavaScript so node runs it unbuilt, as
 // `smoke-census.mjs` is (item 116); its types are `code-directory.d.mts`. Pure over bytes: it never throws.
 
 import { createHash } from "node:crypto";

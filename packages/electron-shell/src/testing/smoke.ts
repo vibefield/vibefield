@@ -77,6 +77,7 @@ import {
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { ElectronLogging } from "../main/logging";
+import { PAGES_WITNESS_FLAG } from "../main/pages/broker/index";
 import { sharedProfilePath, smokeHomeParent } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
@@ -159,6 +160,7 @@ import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons"
 import { deskCopyRows } from "./smoke-desk-copy";
 import { deskRigRows } from "./smoke-desk-rig";
 import { DEVICE_FLAG, type DeviceRowsDriver, devicePaneRows } from "./smoke-device-pane";
+import { censusAtExit, exitSaid, type PagesExitDeps } from "./smoke-exit";
 import { FIRST_FLAG, type FirstLoadDriver, firstLoadRows } from "./smoke-first-load";
 import {
   FIRST_RUN_WALKS,
@@ -180,6 +182,7 @@ import {
   marketRunRows,
 } from "./smoke-market";
 import { moreRows } from "./smoke-more";
+import { type PagesSmokeDoor, pagesFixture, runPagesRows } from "./smoke-pages";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
 import { PHONE_FLAG, type PhoneRowsDriver, phoneRows as phonePaneRows } from "./smoke-phone";
@@ -255,6 +258,9 @@ export { runGodviewPerfLab } from "./godview-perf-lab";
 // EY-1 (1e, 2026-11-19) — the testing engine kill, made by main only under the smoke's mark and
 // its own flag (pagesDaemonKillAsked), and handed to 1i's in-process adapter alone.
 export { createPagesEngineKill } from "./pages-engine-kill";
+// Item 658 (2026-11-26) — the pages smoke's witness, made by main only unpackaged, in the canvas
+// smoke, under the smoke's mark and the `--pages` flag (pagesWitnessAsked).
+export { createPagesEngineWitness } from "./pages-engine-witness";
 // Item 212 (RV #29) — main reads the plugin-runtime soak's own fieldd recovery
 // intensity BEFORE the pair boots (each pair's coordinator is built with it),
 // so the soak's reader is a door of this bundle's like the stagers below.
@@ -1130,6 +1136,9 @@ export async function runSmokeCanvas(opts: {
   /** HN-5 (R-T 4) — the PNG sizes main's picture door KEPT in place of the system clipboard, a marked run's; absent in
    * an unmarked run. */
   pictures?: readonly number[];
+  /** Item 658 (2026-11-26) — main's ONE pages plane and the witness main made for this run, handed only when main
+   * made the witness (unpackaged, the canvas smoke, the run's mark and `--pages`): the pages rows' door. */
+  pages?: PagesSmokeDoor;
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
   // DK-16: the GPU kept and the page given no `navigator.gpu` (`--smoke-no-webgpu`, as a remote desktop has none —
@@ -1306,6 +1315,88 @@ export async function runSmokeCanvas(opts: {
     }
     await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
     app.exit(ok ? 0 : 2);
+    return;
+  }
+  if (process.argv.includes(PAGES_WITNESS_FLAG)) {
+    // Item 658 (2026-11-26) — THE ENGINE MAIN STARTS FOR AN AGENT'S PAGES (`pnpm smoke:pages`, desk-gates row 41): on
+    // this ONE run, whether it is the recorded source build with its stream off and its peer check on, read by the
+    // witness main made for the run and judged in smoke-pages.ts; none of the canvas witnesses below. The engine and
+    // the page are the stager's (packaging/stage-pages-engine.mjs). The product's first board, the desk's verdict
+    // awaited as the bundled rows await it. Exit 0 ok, 1 red, 2 blind: a leg that could not see what it claims is
+    // never ok. The gate quotes the LAST line of each kind it knows (scripts/gate-landing.mjs): of this branch's, the
+    // verdict (or the last leg said, when the rows threw), the smoke's own `SMOKE_PAGES failed: …` line by the kind
+    // that quotes every `failed:` line, and an exit that was held; never the exit's line of counts. So a trouble's own
+    // words, which can hold a local path, go to a line of another name (`smoke-pages trouble:`), which no kind quotes.
+    let code: 0 | 1 | 2 = 2;
+    try {
+      const read = pagesFixture(process.env);
+      if ("problem" in read) throw new Error(read.problem);
+      const door = opts.pages;
+      if (door === undefined) {
+        throw new Error(
+          `${PAGES_WITNESS_FLAG} without the witness: main makes it only unpackaged, in a marked run of the canvas smoke`,
+        );
+      }
+      const drawing = gpu && !noWebgpu;
+      const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
+      const deskVerdict = waitForConsole(
+        win,
+        drawing ? "DESK_READY " : "DESK_UNAVAILABLE ",
+        60_000,
+      );
+      await loadRenderer(win, "smoke-canvas", opts.viteUrl);
+      console.log(`SMOKE_CANVAS ${await canvasReady}`);
+      const problems = [...smokeProfileFailures()];
+      console.log(
+        `SMOKE_CANVAS_DESK ${drawing ? "DESK_READY" : "DESK_UNAVAILABLE"} ${await deskVerdict}`,
+      );
+      deskSaid.stop();
+      const rows = await runPagesRows({
+        door,
+        fixture: read.fixture,
+        mainPid: process.pid,
+        mark: process.env[SMOKE_RUN_ENV],
+        say: (line) => console.log(line),
+      });
+      if (win.webContents.isCrashed()) problems.push("the renderer crashed");
+      if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
+      // a red of the rows stays red; a trouble of the run around them makes an ok blind, never green
+      if (problems.length > 0) {
+        console.error(
+          `SMOKE_PAGES failed: ${problems.length} trouble(s) of the run around the rows`,
+        );
+        for (const problem of problems) console.error(`smoke-pages trouble: ${problem}`);
+      }
+      code = rows.exit === 0 && problems.length > 0 ? 2 : rows.exit;
+    } catch (e) {
+      console.error("SMOKE_PAGES failed: the rows did not run to their end");
+      console.error(`smoke-pages trouble: ${e instanceof Error ? e.message : e}`);
+    }
+    // THE EXIT (smoke-exit.ts). The product's quit ends its pages' offscreen windows before it exits; a smoke skips
+    // that flow, and one run of this row was held at its exit for fifteen minutes. So the pages' surfaces are closed
+    // here the product's way, before the teardown stops the logging they speak to; then the exit is said, watched, and
+    // asked for once. The verdict is said already: nothing here changes a leg.
+    const exitDeps: PagesExitDeps = {
+      windows: () =>
+        BrowserWindow.getAllWindows()
+          .filter((w) => !w.isDestroyed())
+          .map((w) => ({ offscreen: w.webContents.isOffscreen() })),
+      contents: () => webContents.getAllWebContents().filter((c) => !c.isDestroyed()).length,
+      active: () => process.getActiveResourcesInfo(),
+      say: (line) => console.log(line),
+      exit: (exitCode) => app.exit(exitCode),
+      end: () => process.kill(process.pid, "SIGKILL"),
+      setTimeout: (fn, ms) => setTimeout(fn, ms),
+    };
+    const before = censusAtExit(exitDeps);
+    let surfaces: "closed" | "threw" | "none" = opts.pages === undefined ? "none" : "closed";
+    try {
+      opts.pages?.closeSurfaces();
+    } catch {
+      surfaces = "threw";
+    }
+    await teardown(opts.supervisor, opts.root, opts.beforeExit, code === 0);
+    exitSaid(code, exitDeps, { before, surfaces });
     return;
   }
   try {

@@ -1,0 +1,903 @@
+diff -ruN src-1453dd3/cli/src/connection.rs build-patched/cli/src/connection.rs
+--- src-1453dd3/cli/src/connection.rs	2026-10-28 19:37:57
++++ build-patched/cli/src/connection.rs	2026-10-31 10:52:21
+@@ -638,6 +638,15 @@
+     opts.idle_timeout.hash(&mut hasher);
+     opts.default_timeout.hash(&mut hasher);
+     opts.no_auto_dialog.hash(&mut hasher);
++    // BU-14: the switches the daemon reads at start (NO_STREAM, HIDE_CDP_URL,
++    // PEER_PIDS, PEER_UID_CHECK), normalised by the daemon's own parsers, so a
++    // live daemon started with different switches is restarted, never silently
++    // reused. Hashed only when one is on, so with every switch unset the
++    // fingerprint is stock's.
++    let switches = crate::native::daemon::Bu14Switches::from_env();
++    if !switches.is_stock() {
++        switches.hash(&mut hasher);
++    }
+     format!("{:016x}", hasher.finish())
+ }
+ 
+@@ -1649,6 +1658,12 @@
+ 
+     #[test]
+     fn test_daemon_config_fingerprint_tracks_daemon_owned_options() {
++        // Hold the env lock so a BU-14 switch set by another test cannot move
++        // the fingerprint between the calls below.
++        let guard = EnvGuard::new(&BU14_SWITCH_VARS);
++        for name in BU14_SWITCH_VARS {
++            guard.remove(name);
++        }
+         let domains = vec!["example.com".to_string()];
+         let base = test_daemon_options(None, false, None);
+         let idle_changed = test_daemon_options(Some("1000"), false, None);
+@@ -1668,6 +1683,64 @@
+             daemon_config_fingerprint(&domains_changed),
+             "allowed domains are browser launch state, not daemon identity"
+         );
++    }
++
++    const BU14_SWITCH_VARS: [&str; 4] = [
++        "AGENT_BROWSER_NO_STREAM",
++        "AGENT_BROWSER_HIDE_CDP_URL",
++        "AGENT_BROWSER_PEER_PIDS",
++        "AGENT_BROWSER_PEER_UID_CHECK",
++    ];
++
++    // BU-14: the switches are part of the daemon's identity, normalised, and
++    // invisible when every one is off.
++    #[test]
++    fn test_bu14_fingerprint_tracks_switches() {
++        let guard = EnvGuard::new(&BU14_SWITCH_VARS);
++        for name in BU14_SWITCH_VARS {
++            guard.remove(name);
++        }
++        let opts = test_daemon_options(None, false, None);
++
++        // All unset: the stock fingerprint, byte for byte.
++        let mut stock = std::collections::hash_map::DefaultHasher::new();
++        opts.debug.hash(&mut stock);
++        opts.action_policy.hash(&mut stock);
++        opts.confirm_actions.hash(&mut stock);
++        opts.idle_timeout.hash(&mut stock);
++        opts.default_timeout.hash(&mut stock);
++        opts.no_auto_dialog.hash(&mut stock);
++        let stock = format!("{:016x}", stock.finish());
++        assert_eq!(daemon_config_fingerprint(&opts), stock);
++
++        // Explicitly off is still stock.
++        guard.set("AGENT_BROWSER_NO_STREAM", "0");
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "false");
++        assert_eq!(daemon_config_fingerprint(&opts), stock);
++
++        // Each switch moves it; spellings the parser treats alike do not.
++        guard.set("AGENT_BROWSER_NO_STREAM", "1");
++        let no_stream = daemon_config_fingerprint(&opts);
++        assert_ne!(no_stream, stock);
++        guard.set("AGENT_BROWSER_NO_STREAM", "TRUE");
++        assert_eq!(daemon_config_fingerprint(&opts), no_stream);
++        guard.remove("AGENT_BROWSER_NO_STREAM");
++
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "yes");
++        assert_ne!(daemon_config_fingerprint(&opts), stock);
++        guard.remove("AGENT_BROWSER_HIDE_CDP_URL");
++
++        guard.set("AGENT_BROWSER_PEER_PIDS", "12,34");
++        let pids = daemon_config_fingerprint(&opts);
++        assert_ne!(pids, stock);
++        guard.set("AGENT_BROWSER_PEER_PIDS", " 12 , 34 ");
++        assert_eq!(daemon_config_fingerprint(&opts), pids);
++        guard.set("AGENT_BROWSER_PEER_PIDS", "12");
++        assert_ne!(daemon_config_fingerprint(&opts), pids);
++        guard.remove("AGENT_BROWSER_PEER_PIDS");
++
++        guard.set("AGENT_BROWSER_PEER_UID_CHECK", "1");
++        assert_ne!(daemon_config_fingerprint(&opts), stock);
+     }
+ 
+     #[test]
+diff -ruN src-1453dd3/cli/src/main.rs build-patched/cli/src/main.rs
+--- src-1453dd3/cli/src/main.rs	2026-10-28 19:37:57
++++ build-patched/cli/src/main.rs	2026-10-31 10:53:41
+@@ -291,6 +291,58 @@
+     None
+ }
+ 
++/// BU-14 patch 1: why `dashboard start` refuses under the stream opt-out.
++const DASHBOARD_NO_STREAM_ERROR: &str = "The dashboard is disabled: AGENT_BROWSER_NO_STREAM is \
++     set, so agent-browser binds no TCP listener. Unset it to use the dashboard.";
++
++/// BU-14: whether the CLI may send its pre-launches for this command. False
++/// for `cdp_url`, or a batch whose every command is `get cdp-url` (given as
++/// arguments or on stdin), while AGENT_BROWSER_HIDE_CDP_URL is on, so answering
++/// it never launches a session (patch 3); and for `inspect` while
++/// AGENT_BROWSER_NO_STREAM is on, because the daemon refuses it (patch 1).
++/// A mixed batch still launches; its `get cdp-url` step is refused by the
++/// daemon where the URL is withheld.
++fn prelaunch_allowed(command: &serde_json::Value, hide_cdp_url: bool, no_stream: bool) -> bool {
++    match command.get("action").and_then(|a| a.as_str()) {
++        Some("cdp_url") => !hide_cdp_url,
++        Some("inspect") => !no_stream,
++        Some("batch") => !(hide_cdp_url && batch_is_only_get_cdp_url(command)),
++        _ => true,
++    }
++}
++
++/// BU-14 patch 3: true when a batch holds at least one command and every one
++/// is `get cdp-url`, read the way `command_is_browserless` reads a batch.
++fn batch_is_only_get_cdp_url(cmd: &serde_json::Value) -> bool {
++    let is_get_cdp_url =
++        |words: &[String]| words.len() >= 2 && words[0] == "get" && words[1] == "cdp-url";
++    let batch: Vec<Vec<String>> = if let Some(argv) = cmd.get("argv").and_then(|v| v.as_array()) {
++        argv.iter()
++            .map(|c| {
++                c.as_array()
++                    .map(|ws| {
++                        ws.iter()
++                            .filter_map(|w| w.as_str().map(str::to_string))
++                            .collect()
++                    })
++                    .unwrap_or_default()
++            })
++            .collect()
++    } else if let Some(commands) = cmd.get("commands").and_then(|v| v.as_array()) {
++        commands
++            .iter()
++            .map(|c| {
++                c.as_str()
++                    .map(commands::shell_words_split)
++                    .unwrap_or_default()
++            })
++            .collect()
++    } else {
++        return false;
++    };
++    !batch.is_empty() && batch.iter().all(|words| is_get_cdp_url(words))
++}
++
+ fn should_send_local_launch_config(flags: &Flags, command: &serde_json::Value) -> bool {
+     (flags.headed
+         || flags.cli_headed
+@@ -1436,6 +1488,12 @@
+ 
+     // Standalone dashboard server mode
+     if env::var("AGENT_BROWSER_DASHBOARD").is_ok() {
++        // BU-14 patch 1: the dashboard is a TCP listener (127.0.0.1 and [::1])
++        // whose /api/exec runs CLI commands; under the opt-out none is bound.
++        if native::daemon::stream_opt_out() {
++            eprintln!("{} {}", color::error_indicator(), DASHBOARD_NO_STREAM_ERROR);
++            exit(1);
++        }
+         let port: u16 = env::var("AGENT_BROWSER_DASHBOARD_PORT")
+             .ok()
+             .and_then(|s| s.parse().ok())
+@@ -1536,6 +1594,15 @@
+                 port,
+                 allowed_origins,
+             } => {
++                // BU-14 patch 1: no dashboard listener under the opt-out.
++                if native::daemon::stream_opt_out() {
++                    if flags.json {
++                        print_json_error(DASHBOARD_NO_STREAM_ERROR);
++                    } else {
++                        eprintln!("{} {}", color::error_indicator(), DASHBOARD_NO_STREAM_ERROR);
++                    }
++                    exit(1);
++                }
+                 let env_allowed_origins = env::var("AGENT_BROWSER_DASHBOARD_ALLOWED_ORIGINS").ok();
+                 let configured_origins = allowed_origins
+                     .as_deref()
+@@ -1846,7 +1913,15 @@
+ 
+     // Auto-connect to existing browser. This is sent even when the daemon is
+     // already running so launch compatibility stays idempotent.
+-    if flags.auto_connect {
++    // BU-14 patch 3: under AGENT_BROWSER_HIDE_CDP_URL, `get cdp-url` sends no
++    // launch of any kind (auto-connect, --cdp, provider or local config).
++    let may_launch = prelaunch_allowed(
++        &cmd,
++        native::actions::hide_cdp_url(),
++        native::daemon::stream_opt_out(),
++    );
++
++    if flags.auto_connect && may_launch {
+         let mut launch_cmd = json!({
+             "id": gen_id(),
+             "action": "launch",
+@@ -1894,7 +1969,7 @@
+ 
+     // Connect via CDP if --cdp flag is set
+     // Accepts either a port number (e.g., "9222") or a full URL (e.g., "ws://..." or "wss://...")
+-    if let Some(ref cdp_value) = flags.cdp {
++    if let Some(cdp_value) = flags.cdp.as_ref().filter(|_| may_launch) {
+         // Validate CDP value eagerly (even when daemon is already running) so
+         // the user gets an immediate error for bad input instead of a silent no-op.
+         let launch_cmd = if cdp_value.starts_with("ws://")
+@@ -1995,7 +2070,7 @@
+     }
+ 
+     // Launch with cloud provider if -p flag is set.
+-    if let Some(ref provider) = flags.provider {
++    if let Some(provider) = flags.provider.as_ref().filter(|_| may_launch) {
+         let launch_cmd = build_provider_launch_command(provider, &flags);
+ 
+         let err = match send_command(launch_cmd, &flags.session) {
+@@ -2019,7 +2094,7 @@
+     }
+ 
+     // Launch headed browser or configure browser options (without CDP or provider)
+-    if should_send_local_launch_config(&flags, &cmd) {
++    if may_launch && should_send_local_launch_config(&flags, &cmd) {
+         let mut launch_cmd = json!({
+             "id": gen_id(),
+             "action": "launch",
+@@ -3108,5 +3183,42 @@
+         assert_eq!(prompt.action, "plugin:stealth:launch.mutate");
+         assert_eq!(prompt.description, "plugin:stealth:launch.mutate");
+         assert_eq!(prompt.confirmation_id, "original-command");
++    }
++
++    // BU-14: which commands skip the CLI's launches, and only under a switch.
++    #[test]
++    fn test_bu14_prelaunch_allowed() {
++        let cdp_url = json!({ "id": "1", "action": "cdp_url" });
++        let navigate = json!({ "id": "2", "action": "navigate", "url": "https://example.com" });
++        let inspect = json!({ "id": "3", "action": "inspect" });
++        assert!(prelaunch_allowed(&cdp_url, false, false));
++        assert!(!prelaunch_allowed(&cdp_url, true, false));
++        assert!(prelaunch_allowed(&cdp_url, false, true));
++        assert!(prelaunch_allowed(&navigate, true, true));
++        assert!(prelaunch_allowed(&navigate, false, false));
++        assert!(prelaunch_allowed(&inspect, true, false));
++        assert!(!prelaunch_allowed(&inspect, false, true));
++    }
++
++    // BU-14 patch 3: a batch of only `get cdp-url` launches nothing under the
++    // switch, given as arguments or on stdin (argv); a mixed batch launches.
++    #[test]
++    fn test_bu14_prelaunch_allowed_batch() {
++        let only_argv = json!({ "id": "1", "action": "batch", "argv": [["get", "cdp-url"]] });
++        let only_args = json!({
++            "id": "2", "action": "batch", "commands": ["get cdp-url", " get  cdp-url "]
++        });
++        let mixed = json!({
++            "id": "3", "action": "batch", "argv": [["get", "cdp-url"], ["open", "https://example.com"]]
++        });
++        let other_get = json!({ "id": "4", "action": "batch", "commands": ["get url"] });
++        let empty = json!({ "id": "5", "action": "batch", "argv": [] });
++        assert!(!prelaunch_allowed(&only_argv, true, false));
++        assert!(!prelaunch_allowed(&only_args, true, false));
++        assert!(prelaunch_allowed(&only_argv, false, false));
++        assert!(prelaunch_allowed(&only_args, false, true));
++        assert!(prelaunch_allowed(&mixed, true, false));
++        assert!(prelaunch_allowed(&other_get, true, false));
++        assert!(prelaunch_allowed(&empty, true, false));
+     }
+ }
+diff -ruN src-1453dd3/cli/src/native/actions.rs build-patched/cli/src/native/actions.rs
+--- src-1453dd3/cli/src/native/actions.rs	2026-10-28 19:37:57
++++ build-patched/cli/src/native/actions.rs	2026-10-31 10:53:41
+@@ -2978,7 +2978,12 @@
+         _ => {}
+     }
+ 
+-    let skip_launch = skip_launch_action(action);
++    // BU-14 patch 3: under AGENT_BROWSER_HIDE_CDP_URL, `cdp_url` never launches.
++    // BU-14 patch 1: under AGENT_BROWSER_NO_STREAM, `inspect` refuses, so it
++    // never launches a browser first either.
++    let skip_launch = skip_launch_action(action)
++        || (action == "cdp_url" && hide_cdp_url())
++        || (action == "inspect" && super::daemon::stream_opt_out());
+     let restore_key_change_needs_launch = !skip_launch
+         && command_changes_restore_key(cmd, state)
+         && has_active_browser_session(state);
+@@ -5914,12 +5919,66 @@
+     ))
+ }
+ 
++/// BU-14 patch 3: true when AGENT_BROWSER_HIDE_CDP_URL is on. `get cdp-url`
++/// then never launches a session to answer, and refuses for a session
++/// launched through a provider or attached by a URL that carries a credential.
++pub(crate) fn hide_cdp_url() -> bool {
++    super::daemon::env_flag_is_set(env::var("AGENT_BROWSER_HIDE_CDP_URL").ok().as_deref())
++}
++
++/// BU-14 patch 3: a CDP URL with a query string or userinfo can carry a
++/// credential (a provider's `?token=…`, `user:pass@`), whatever attached it.
++/// A URL that does not parse is treated as carrying one.
++pub(crate) fn cdp_url_may_carry_credential(raw: &str) -> bool {
++    url::Url::parse(raw).map_or(true, |u| {
++        u.query().is_some() || !u.username().is_empty() || u.password().is_some()
++    })
++}
++
++/// BU-14 patch 3: under the switch, why this session's CDP URL is withheld.
++fn cdp_url_withheld(state: &DaemonState) -> Option<&'static str> {
++    if !hide_cdp_url() {
++        return None;
++    }
++    if state.active_provider_connection || state.active_provider_session.is_some() {
++        return Some("The CDP URL is withheld for a provider session (AGENT_BROWSER_HIDE_CDP_URL)");
++    }
++    if state
++        .browser
++        .as_ref()
++        .is_some_and(|mgr| cdp_url_may_carry_credential(mgr.get_cdp_url()))
++    {
++        return Some(
++            "The CDP URL is withheld: it carries a query string or userinfo \
++             (AGENT_BROWSER_HIDE_CDP_URL)",
++        );
++    }
++    None
++}
++
+ fn handle_cdp_url(state: &DaemonState) -> Result<Value, String> {
++    if let Some(reason) = cdp_url_withheld(state) {
++        return Err(reason.to_string());
++    }
+     let mgr = state.browser.as_ref().ok_or("Browser not launched")?;
+     Ok(json!({ "cdpUrl": mgr.get_cdp_url() }))
+ }
+ 
+ async fn handle_inspect(state: &mut DaemonState) -> Result<Value, String> {
++    // BU-14 patch 1: the inspect server is a TCP listener (127.0.0.1:0) that
++    // proxies CDP for the active page to any local client; under the stream
++    // opt-out the daemon opens no TCP listener, so it refuses.
++    if super::daemon::stream_opt_out() {
++        return Err(
++            "inspect is disabled: this daemon was started with AGENT_BROWSER_NO_STREAM".to_string(),
++        );
++    }
++    // BU-14 patch 3: the inspect server's redirect is built from the CDP URL's
++    // authority, which can carry its query string (a credential) to the
++    // default browser; refuse wherever `get cdp-url` would.
++    if let Some(reason) = cdp_url_withheld(state) {
++        return Err(format!("inspect is disabled: {}", reason));
++    }
+     let mgr = state.browser.as_ref().ok_or("Browser not launched")?;
+ 
+     // Shut down any existing inspect server so we always target the current page
+@@ -9662,6 +9721,13 @@
+ }
+ 
+ async fn handle_stream_enable(cmd: &Value, state: &mut DaemonState) -> Result<Value, String> {
++    if super::daemon::stream_opt_out() {
++        return Err(
++            "Streaming is disabled: this daemon was started with AGENT_BROWSER_NO_STREAM. \
++             Unset it and restart the daemon to use streaming."
++                .to_string(),
++        );
++    }
+     if state.stream_server.is_some() {
+         return Err("Streaming is already enabled for this session".to_string());
+     }
+@@ -19447,5 +19513,135 @@
+             let auto_handled = auto_dialog && matches!(*dialog_type, "beforeunload" | "alert");
+             assert!(!auto_handled, "{dialog_type} should NOT be auto-handled");
+         }
++    }
++
++    // BU-14 patch 1: the stream opt-out refuses `stream enable`.
++    #[tokio::test]
++    async fn test_bu14_stream_enable_refuses_under_no_stream_opt_out() {
++        let guard = EnvGuard::new(&["AGENT_BROWSER_NO_STREAM"]);
++        guard.set("AGENT_BROWSER_NO_STREAM", "1");
++
++        let mut state = DaemonState::new();
++        let err = handle_stream_enable(&json!({}), &mut state)
++            .await
++            .expect_err("stream enable must refuse under the opt-out");
++        assert!(err.contains("AGENT_BROWSER_NO_STREAM"));
++        assert!(state.stream_server.is_none());
++        assert!(state.stream_client.is_none());
++    }
++
++    // BU-14 patch 1: the stream opt-out refuses `inspect` (its TCP listener)
++    // before anything else, and `execute_command` launches nothing for it.
++    #[tokio::test]
++    async fn test_bu14_inspect_refuses_under_no_stream_opt_out() {
++        let guard = EnvGuard::new(&["AGENT_BROWSER_NO_STREAM", "AGENT_BROWSER_PROVIDER"]);
++        guard.set("AGENT_BROWSER_NO_STREAM", "1");
++
++        let mut state = DaemonState::new();
++        let err = handle_inspect(&mut state)
++            .await
++            .expect_err("inspect must refuse under the opt-out");
++        assert!(err.contains("AGENT_BROWSER_NO_STREAM"), "{err}");
++        assert!(state.inspect_server.is_none());
++
++        // Through execute_command, with a provider that does not exist: a
++        // launch attempt would surface as a provider error instead.
++        guard.set("AGENT_BROWSER_PROVIDER", "vf-bu14-no-such-provider");
++        let resp = execute_command(&json!({ "id": "1", "action": "inspect" }), &mut state).await;
++        assert_eq!(resp["success"], false, "{resp}");
++        assert!(
++            resp["error"]
++                .as_str()
++                .unwrap_or("")
++                .contains("AGENT_BROWSER_NO_STREAM"),
++            "{resp}"
++        );
++        assert!(state.browser.is_none());
++        assert!(!state.active_provider_connection);
++
++        // Unset: stock path (no browser here, so stock's own error).
++        guard.remove("AGENT_BROWSER_NO_STREAM");
++        let err = handle_inspect(&mut state).await.unwrap_err();
++        assert_eq!(err, "Browser not launched");
++    }
++
++    #[tokio::test]
++    async fn test_bu14_inspect_refuses_for_provider_session_under_hide() {
++        let guard = EnvGuard::new(&["AGENT_BROWSER_NO_STREAM", "AGENT_BROWSER_HIDE_CDP_URL"]);
++        guard.remove("AGENT_BROWSER_NO_STREAM");
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "1");
++        let mut state = DaemonState::new();
++        state.active_provider_connection = true;
++        let err = handle_inspect(&mut state).await.unwrap_err();
++        assert!(err.contains("AGENT_BROWSER_HIDE_CDP_URL"), "{err}");
++    }
++
++    #[test]
++    fn test_bu14_cdp_url_may_carry_credential() {
++        assert!(cdp_url_may_carry_credential(
++            "wss://connect.example.com?token=abc"
++        ));
++        assert!(cdp_url_may_carry_credential(
++            "wss://host/devtools/browser/x?apiKey=k"
++        ));
++        assert!(cdp_url_may_carry_credential(
++            "wss://user:pass@host/devtools/browser/x"
++        ));
++        assert!(cdp_url_may_carry_credential(
++            "wss://user@host/devtools/browser/x"
++        ));
++        assert!(cdp_url_may_carry_credential("not a url"));
++        assert!(!cdp_url_may_carry_credential(
++            "ws://127.0.0.1:9222/devtools/browser/abc"
++        ));
++        assert!(!cdp_url_may_carry_credential(
++            "wss://host.example/devtools/browser/abc"
++        ));
++    }
++
++    // BU-14 patch 3: a provider session's CDP URL is withheld under the switch,
++    // and only under it.
++    #[test]
++    fn test_bu14_cdp_url_withheld_for_provider_session() {
++        let guard = EnvGuard::new(&["AGENT_BROWSER_HIDE_CDP_URL"]);
++        let mut state = DaemonState::new();
++        state.active_provider_connection = true;
++
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "1");
++        let err = handle_cdp_url(&state).expect_err("provider URL must be withheld");
++        assert!(err.contains("AGENT_BROWSER_HIDE_CDP_URL"));
++
++        guard.remove("AGENT_BROWSER_HIDE_CDP_URL");
++        let err = handle_cdp_url(&state).expect_err("no browser in this state");
++        assert_eq!(err, "Browser not launched");
++
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "0");
++        assert_eq!(handle_cdp_url(&state).unwrap_err(), "Browser not launched");
++    }
++
++    #[test]
++    fn test_bu14_cdp_url_switch_ignores_non_provider_session() {
++        let guard = EnvGuard::new(&["AGENT_BROWSER_HIDE_CDP_URL"]);
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "1");
++        let state = DaemonState::new();
++        assert_eq!(handle_cdp_url(&state).unwrap_err(), "Browser not launched");
++    }
++
++    // BU-14 patch 3: under the switch, `cdp_url` on a fresh daemon launches
++    // nothing. The provider named here does not exist, so a launch attempt
++    // would surface as a provider error rather than "Browser not launched".
++    #[tokio::test]
++    async fn test_bu14_cdp_url_hidden_never_launches() {
++        let guard = EnvGuard::new(&["AGENT_BROWSER_HIDE_CDP_URL", "AGENT_BROWSER_PROVIDER"]);
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "1");
++        guard.set("AGENT_BROWSER_PROVIDER", "vf-bu14-no-such-provider");
++
++        let mut state = DaemonState::new();
++        let resp = execute_command(&json!({ "id": "1", "action": "cdp_url" }), &mut state).await;
++        assert_eq!(resp["success"], false, "{resp}");
++        assert_eq!(resp["error"], "Browser not launched", "{resp}");
++        assert!(state.browser.is_none());
++        assert!(!state.active_provider_connection);
++        assert!(state.active_provider_session.is_none());
+     }
+ }
+diff -ruN src-1453dd3/cli/src/native/daemon.rs build-patched/cli/src/native/daemon.rs
+--- src-1453dd3/cli/src/native/daemon.rs	2026-10-28 19:37:57
++++ build-patched/cli/src/native/daemon.rs	2026-10-31 10:53:41
+@@ -21,6 +21,76 @@
+ use crate::connection::INTERNAL_DAEMON_SHUTDOWN_ACTION;
+ use crate::session_files::{owns_session, remove_daemon_files, SessionFile};
+ 
++/// BU-14 patch 1 (after upstream PR #1591): true when AGENT_BROWSER_NO_STREAM
++/// is on. The daemon then binds no stream server (no TCP listener, so no
++/// WebSocket input and no `/api/command` relay), writes no `.stream` file, and
++/// `stream enable`, `inspect` and the CLI's `dashboard start` refuse. Read from
++/// the daemon's own environment, inherited from the CLI that spawned it, so it
++/// is stable for its lifetime.
++pub(crate) fn stream_opt_out() -> bool {
++    env_flag_is_set(env::var("AGENT_BROWSER_NO_STREAM").ok().as_deref())
++}
++
++/// A BU-14 switch is on for any value except unset, empty, `0`, `false` or
++/// `no` (case-insensitive, trimmed): upstream's own `env_var_is_truthy`
++/// convention (flags.rs, providers.rs), so a security switch never stays off
++/// on a spelling such as `TRUE` or `yes`.
++pub(crate) fn env_flag_is_set(raw: Option<&str>) -> bool {
++    raw.map(|v| v.trim().to_ascii_lowercase())
++        .is_some_and(|v| !matches!(v.as_str(), "" | "0" | "false" | "no"))
++}
++
++/// BU-14 patch 2: the peer check, or None for stock (no check at all). The
++/// check is on when AGENT_BROWSER_PEER_PIDS is present (even blank) or
++/// AGENT_BROWSER_PEER_UID_CHECK is on; with every switch unset the accept loop
++/// is stock's.
++#[derive(Debug, Clone, PartialEq, Eq, Hash)]
++pub(crate) struct PeerPolicy {
++    /// None: any same-uid peer. Some: only these pids (empty admits no one).
++    pub allowed_pids: Option<Vec<i32>>,
++}
++
++pub(crate) fn peer_policy(
++    pids_raw: Option<&str>,
++    uid_check_raw: Option<&str>,
++) -> Option<PeerPolicy> {
++    let allowed_pids = parse_peer_pids(pids_raw);
++    (allowed_pids.is_some() || env_flag_is_set(uid_check_raw))
++        .then_some(PeerPolicy { allowed_pids })
++}
++
++pub(crate) fn peer_policy_from_env() -> Option<PeerPolicy> {
++    peer_policy(
++        env::var("AGENT_BROWSER_PEER_PIDS").ok().as_deref(),
++        env::var("AGENT_BROWSER_PEER_UID_CHECK").ok().as_deref(),
++    )
++}
++
++/// BU-14: every switch the daemon reads, normalised by the daemon's own
++/// parsers. The CLI hashes it into the daemon config fingerprint when it is
++/// not stock, so a daemon started with different switches is restarted rather
++/// than silently reused.
++#[derive(Debug, Clone, PartialEq, Eq, Hash)]
++pub(crate) struct Bu14Switches {
++    pub no_stream: bool,
++    pub hide_cdp_url: bool,
++    pub peer: Option<PeerPolicy>,
++}
++
++impl Bu14Switches {
++    pub(crate) fn from_env() -> Self {
++        Self {
++            no_stream: stream_opt_out(),
++            hide_cdp_url: env_flag_is_set(env::var("AGENT_BROWSER_HIDE_CDP_URL").ok().as_deref()),
++            peer: peer_policy_from_env(),
++        }
++    }
++
++    pub(crate) fn is_stock(&self) -> bool {
++        !self.no_stream && !self.hide_cdp_url && self.peer.is_none()
++    }
++}
++
+ pub async fn run_daemon(session: &str) {
+     let socket_dir = get_daemon_socket_dir();
+     if !socket_dir.exists() {
+@@ -101,28 +171,32 @@
+     let mut stream_client: Option<Arc<RwLock<Option<Arc<CdpClient>>>>> = None;
+     let mut stream_server_instance: Option<Arc<StreamServer>> = None;
+     let idle_activity = Arc::new(IdleActivity::new());
+-    let preferred_port = env::var("AGENT_BROWSER_STREAM_PORT")
+-        .ok()
+-        .and_then(|s| s.parse::<u16>().ok())
+-        .unwrap_or(0);
+-    match StreamServer::start_without_client(
+-        preferred_port,
+-        session.to_string(),
+-        true,
+-        idle_activity.clone(),
+-    )
+-    .await
+-    {
+-        Ok((stream_server, client_slot)) => {
+-            stream_client = Some(client_slot.clone());
+-            if let Err(e) = fs::write(&stream_path, stream_server.port().to_string()) {
+-                let _ = writeln!(std::io::stderr(), "Failed to write .stream file: {}", e);
++    // BU-14 patch 1: with AGENT_BROWSER_NO_STREAM the daemon starts no stream
++    // server at all. The stale `.stream` file was removed above.
++    if !stream_opt_out() {
++        let preferred_port = env::var("AGENT_BROWSER_STREAM_PORT")
++            .ok()
++            .and_then(|s| s.parse::<u16>().ok())
++            .unwrap_or(0);
++        match StreamServer::start_without_client(
++            preferred_port,
++            session.to_string(),
++            true,
++            idle_activity.clone(),
++        )
++        .await
++        {
++            Ok((stream_server, client_slot)) => {
++                stream_client = Some(client_slot.clone());
++                if let Err(e) = fs::write(&stream_path, stream_server.port().to_string()) {
++                    let _ = writeln!(std::io::stderr(), "Failed to write .stream file: {}", e);
++                }
++                stream_server_instance = Some(Arc::new(stream_server));
+             }
+-            stream_server_instance = Some(Arc::new(stream_server));
++            Err(e) => {
++                let _ = writeln!(std::io::stderr(), "Stream server failed to start: {}", e);
++            }
+         }
+-        Err(e) => {
+-            let _ = writeln!(std::io::stderr(), "Stream server failed to start: {}", e);
+-        }
+     }
+ 
+     // Auto-shutdown the daemon after this many ms of inactivity (no commands
+@@ -208,7 +282,86 @@
+         .unwrap_or(30_000)
+ }
+ 
++/// BU-14 patch 2: parse AGENT_BROWSER_PEER_PIDS (a comma list of pids). Unset
++/// means no pid allowlist. Entries that do not parse are dropped, so a present
++/// value that names no valid pid, blank included, admits no peer (fail closed).
++pub(crate) fn parse_peer_pids(raw: Option<&str>) -> Option<Vec<i32>> {
++    Some(
++        raw?.split(',')
++            .filter_map(|p| p.trim().parse::<i32>().ok())
++            .filter(|p| *p > 0)
++            .collect(),
++    )
++}
++
++/// BU-14 patch 2: why a peer is refused, or None to admit it. A peer of any
++/// other uid is refused; with an allowlist, so is a peer whose pid is not on it
++/// (or whose pid could not be read).
+ #[cfg(unix)]
++pub(crate) fn peer_refusal(
++    peer_uid: u32,
++    peer_pid: Option<i32>,
++    own_uid: u32,
++    allowed_pids: Option<&[i32]>,
++) -> Option<String> {
++    if peer_uid != own_uid {
++        return Some(format!(
++            "uid {} is not the daemon's uid {} (pid {:?})",
++            peer_uid, own_uid, peer_pid
++        ));
++    }
++    match (allowed_pids, peer_pid) {
++        (Some(allowed), Some(pid)) if !allowed.contains(&pid) => {
++            Some(format!("pid {} is not in AGENT_BROWSER_PEER_PIDS", pid))
++        }
++        (Some(_), None) => Some("peer pid unavailable under AGENT_BROWSER_PEER_PIDS".to_string()),
++        _ => None,
++    }
++}
++
++/// The peer's pid: LOCAL_PEERPID on macOS, SO_PEERCRED's pid on Linux.
++#[cfg(target_os = "macos")]
++fn unix_peer_pid(stream: &tokio::net::UnixStream) -> Option<i32> {
++    use std::os::unix::io::AsRawFd;
++    let mut pid: libc::pid_t = 0;
++    let mut len = std::mem::size_of::<libc::pid_t>() as libc::socklen_t;
++    // SAFETY: getsockopt writes at most `len` bytes into `pid`.
++    let rc = unsafe {
++        libc::getsockopt(
++            stream.as_raw_fd(),
++            libc::SOL_LOCAL,
++            libc::LOCAL_PEERPID,
++            &mut pid as *mut libc::pid_t as *mut libc::c_void,
++            &mut len,
++        )
++    };
++    (rc == 0 && pid > 0).then_some(pid)
++}
++
++#[cfg(all(unix, not(target_os = "macos")))]
++fn unix_peer_pid(stream: &tokio::net::UnixStream) -> Option<i32> {
++    stream.peer_cred().ok()?.pid()
++}
++
++/// BU-14 patch 2: check an accepted socket's peer. The uid comes from
++/// getpeereid (macOS) or SO_PEERCRED (Linux) through tokio's `peer_cred`.
++#[cfg(unix)]
++pub(crate) fn check_unix_peer(
++    stream: &tokio::net::UnixStream,
++    allowed_pids: Option<&[i32]>,
++) -> Result<(), String> {
++    let cred = stream
++        .peer_cred()
++        .map_err(|e| format!("peer credentials unreadable: {}", e))?;
++    // SAFETY: geteuid has no preconditions.
++    let own_uid = unsafe { libc::geteuid() };
++    match peer_refusal(cred.uid(), unix_peer_pid(stream), own_uid, allowed_pids) {
++        Some(reason) => Err(reason),
++        None => Ok(()),
++    }
++}
++
++#[cfg(unix)]
+ async fn run_socket_server(
+     socket_path: &PathBuf,
+     _session: &str,
+@@ -224,6 +377,9 @@
+ 
+     let listener =
+         UnixListener::bind(socket_path).map_err(|e| format!("Failed to bind socket: {}", e))?;
++    // BU-14 patch 2: read once, so the policy is fixed for the daemon's life.
++    // None (every peer switch unset) is stock: no peer check.
++    let peer_policy = peer_policy_from_env();
+ 
+     let state: std::sync::Arc<tokio::sync::Mutex<DaemonState>> =
+         std::sync::Arc::new(tokio::sync::Mutex::new(DaemonState::new_with_stream(
+@@ -250,6 +406,15 @@
+             accept_result = listener.accept() => {
+                 match accept_result {
+                     Ok((stream, _)) => {
++                        if let Some(policy) = &peer_policy {
++                            if let Err(reason) =
++                                check_unix_peer(&stream, policy.allowed_pids.as_deref())
++                            {
++                                let _ = writeln!(std::io::stderr(), "Peer refused: {}", reason);
++                                drop(stream);
++                                continue;
++                            }
++                        }
+                         let state = state.clone();
+                         let idle_activity = idle_activity.clone();
+                         let close = close.clone();
+@@ -1029,5 +1194,147 @@
+                 other
+             ),
+         }
++    }
++
++    // BU-14: the env switches.
++    #[test]
++    fn test_bu14_env_flag_is_set() {
++        assert!(env_flag_is_set(Some("1")));
++        assert!(env_flag_is_set(Some("true")));
++        assert!(env_flag_is_set(Some(" 1 ")));
++        assert!(env_flag_is_set(Some("TRUE")));
++        assert!(env_flag_is_set(Some("True")));
++        assert!(env_flag_is_set(Some("yes")));
++        assert!(env_flag_is_set(Some("on")));
++        assert!(!env_flag_is_set(None));
++        assert!(!env_flag_is_set(Some("")));
++        assert!(!env_flag_is_set(Some("  ")));
++        assert!(!env_flag_is_set(Some("0")));
++        assert!(!env_flag_is_set(Some("false")));
++        assert!(!env_flag_is_set(Some("FALSE")));
++        assert!(!env_flag_is_set(Some("no")));
++        assert!(!env_flag_is_set(Some(" No ")));
++    }
++
++    // BU-14 patch 2: with every peer switch unset there is no check (stock).
++    #[test]
++    fn test_bu14_peer_policy_is_off_by_default() {
++        assert_eq!(peer_policy(None, None), None);
++        assert_eq!(peer_policy(None, Some("0")), None);
++        assert_eq!(
++            peer_policy(None, Some("1")),
++            Some(PeerPolicy { allowed_pids: None })
++        );
++        assert_eq!(
++            peer_policy(Some("12"), None),
++            Some(PeerPolicy {
++                allowed_pids: Some(vec![12])
++            })
++        );
++        // Present but blank: on, and admits no one.
++        assert_eq!(
++            peer_policy(Some(" "), None),
++            Some(PeerPolicy {
++                allowed_pids: Some(vec![])
++            })
++        );
++    }
++
++    #[test]
++    fn test_bu14_switches_from_env() {
++        let guard = crate::test_utils::EnvGuard::new(&[
++            "AGENT_BROWSER_NO_STREAM",
++            "AGENT_BROWSER_HIDE_CDP_URL",
++            "AGENT_BROWSER_PEER_PIDS",
++            "AGENT_BROWSER_PEER_UID_CHECK",
++        ]);
++        for name in [
++            "AGENT_BROWSER_NO_STREAM",
++            "AGENT_BROWSER_HIDE_CDP_URL",
++            "AGENT_BROWSER_PEER_PIDS",
++            "AGENT_BROWSER_PEER_UID_CHECK",
++        ] {
++            guard.remove(name);
++        }
++        assert!(Bu14Switches::from_env().is_stock());
++        guard.set("AGENT_BROWSER_NO_STREAM", "0");
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "false");
++        guard.set("AGENT_BROWSER_PEER_UID_CHECK", "no");
++        assert!(Bu14Switches::from_env().is_stock());
++        guard.set("AGENT_BROWSER_HIDE_CDP_URL", "Yes");
++        let s = Bu14Switches::from_env();
++        assert!(!s.is_stock());
++        assert!(s.hide_cdp_url);
++        guard.remove("AGENT_BROWSER_HIDE_CDP_URL");
++        guard.set("AGENT_BROWSER_PEER_PIDS", "");
++        assert_eq!(
++            Bu14Switches::from_env().peer,
++            Some(PeerPolicy {
++                allowed_pids: Some(vec![])
++            })
++        );
++    }
++
++    #[test]
++    fn test_bu14_stream_opt_out_reads_env() {
++        let guard = crate::test_utils::EnvGuard::new(&["AGENT_BROWSER_NO_STREAM"]);
++        guard.remove("AGENT_BROWSER_NO_STREAM");
++        assert!(!stream_opt_out());
++        guard.set("AGENT_BROWSER_NO_STREAM", "1");
++        assert!(stream_opt_out());
++        guard.set("AGENT_BROWSER_NO_STREAM", "0");
++        assert!(!stream_opt_out());
++        guard.set("AGENT_BROWSER_NO_STREAM", "TRUE");
++        assert!(stream_opt_out());
++    }
++
++    // BU-14 patch 2: the peer check.
++    #[cfg(unix)]
++    #[test]
++    fn test_bu14_parse_peer_pids() {
++        assert_eq!(parse_peer_pids(None), None);
++        // Present but blank: an empty allowlist (fail closed), not "unset".
++        assert_eq!(parse_peer_pids(Some("")), Some(vec![]));
++        assert_eq!(parse_peer_pids(Some("  ")), Some(vec![]));
++        assert_eq!(parse_peer_pids(Some("12")), Some(vec![12]));
++        assert_eq!(parse_peer_pids(Some("12, 34 ,56")), Some(vec![12, 34, 56]));
++        // Set but naming no valid pid: an empty allowlist, which admits no one.
++        assert_eq!(parse_peer_pids(Some("abc,-1,0")), Some(vec![]));
++        assert_eq!(parse_peer_pids(Some("7,x")), Some(vec![7]));
++    }
++
++    #[cfg(unix)]
++    #[test]
++    fn test_bu14_peer_refusal_rules() {
++        // Same uid, no allowlist: admitted (stock behaviour for a same-uid peer).
++        assert_eq!(peer_refusal(501, Some(10), 501, None), None);
++        assert_eq!(peer_refusal(501, None, 501, None), None);
++        // Any other uid: refused, with or without an allowlist.
++        assert!(peer_refusal(0, Some(10), 501, None).is_some());
++        assert!(peer_refusal(502, Some(10), 501, Some(&[10])).is_some());
++        // Allowlist: listed pid admitted, others and unknown pids refused.
++        assert_eq!(peer_refusal(501, Some(10), 501, Some(&[10, 11])), None);
++        assert!(peer_refusal(501, Some(12), 501, Some(&[10, 11])).is_some());
++        assert!(peer_refusal(501, None, 501, Some(&[10])).is_some());
++        assert!(peer_refusal(501, Some(10), 501, Some(&[])).is_some());
++    }
++
++    // A real socket pair: the peer is this test process, same uid and pid.
++    #[cfg(unix)]
++    #[tokio::test]
++    async fn test_bu14_check_unix_peer_on_a_real_socket() {
++        let dir = tempfile::tempdir().unwrap();
++        let path = dir.path().join("peer.sock");
++        let listener = tokio::net::UnixListener::bind(&path).unwrap();
++        let _client = tokio::net::UnixStream::connect(&path).await.unwrap();
++        let (server_side, _) = listener.accept().await.unwrap();
++
++        let me = std::process::id() as i32;
++        assert_eq!(unix_peer_pid(&server_side), Some(me));
++        assert_eq!(check_unix_peer(&server_side, None), Ok(()));
++        assert_eq!(check_unix_peer(&server_side, Some(&[me])), Ok(()));
++        let err = check_unix_peer(&server_side, Some(&[me + 1_000_000])).unwrap_err();
++        assert!(err.contains("AGENT_BROWSER_PEER_PIDS"), "{err}");
++        assert!(check_unix_peer(&server_side, Some(&[])).is_err());
+     }
+ }

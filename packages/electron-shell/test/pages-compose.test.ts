@@ -410,6 +410,18 @@ describe("the pages plane, composed (EY-1 7b)", () => {
     for (const event of logged) expect(PAGES_DESKTOP_EVENTS[event]).toBe(`desktop.${event}`);
   });
 
+  it("the table names the two lines item 658 gave the supervisor: an engine not usable after its ready wait, and a testing hook that threw (2026-11-26)", () => {
+    expect(PAGES_DESKTOP_EVENTS["pages.engine.unready"]).toBe("desktop.pages.engine.unready");
+    expect(PAGES_DESKTOP_EVENTS["pages.engine.hook"]).toBe("desktop.pages.engine.hook");
+    // and the supervisor says both, so the scan above holds them too
+    const supervisor = readFileSync(
+      join(import.meta.dirname, "../src/main/pages/broker/engine-supervisor.ts"),
+      "utf8",
+    );
+    expect(supervisor).toContain('log?.("pages.engine.unready"');
+    expect(supervisor).toContain('log?.("pages.engine.hook"');
+  });
+
   it("the plane ends every run the broker holds, with the control call's own bound, and never rejects", async () => {
     // EY-1 (2026-11-24, a fieldd that was replaced): main asks this beside custody's own end of its runs
     const h = harness();

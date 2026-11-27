@@ -18,6 +18,19 @@
 // binary's SHA-256. `binarySha256` stays the release binary's (the npm package's), which preflight holds the install
 // to and which is never started. The converter owes both fields before its next run: the record's schema requires
 // them, so a run that drops them fails its parse.
+//
+// The note and the patch in the tree (item 658, 2026-11-26), by hand as well: the tree carries a redacted copy of the
+// converter's input note at src/notes/bu14-build.md, with this SHA-256:
+// the redacted copy: 54496b61c93eeb201941cd47e676995187d615b9fb90b015adb539a73867a623  src/notes/bu14-build.md
+// It is a redaction of the draft original whose SHA-256 the converter's line above names: local paths become
+// placeholders and a person becomes "the owner", nothing else (src/notes/README.md has the table). The patch is
+// carried byte for byte at src/notes/bu14-patch-1453dd3.diff. packages/contracts/test/pages-entry.test.ts holds
+// both to this record.
+//
+// The staged engine (item 658, 2026-11-26): `sourceBuild.stagedCdhash` is a hand-written field as well, the same
+// departure. It names, by platform, the CodeDirectory digest of the source build as a package stages it, signed by the
+// app's team. It is empty until a stage step records one, and no such step exists yet, so a package starts no engine.
+// The converter owes this field too before its next run.
 
 import type { PagesEngineRecordV1, PagesScriptSetV1 } from "./pages";
 
@@ -37,6 +50,7 @@ export const PAGES_ENGINE_RECORD: PagesEngineRecordV1 = {
     binarySha256: {
       "darwin-arm64": "f3a53cbce43fe30875d7d785a6f67647af4e96d987b8ea889fee8f0e68213dea",
     },
+    stagedCdhash: {},
   },
   starts: "sourceBuild",
   mcpToolsSha256: "a5bff3fe0c7470915242f7a4705fe36482026b4260b012b9f4798dc1fffc4c49",

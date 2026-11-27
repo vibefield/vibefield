@@ -1235,7 +1235,7 @@ agent is using"
   pages answer not installed. Main composes the broker, the bridge and the endpoint behind
   `shell.surfaces.control` (7b-2); fieldd's pages room serves the 29 rows (EY-2); main makes a run's first page and
   the window places and adopts it. Real agents used it live in a QA desktop on 2026-11-24 and 2026-11-25, on earlier
-  builds of this work. No smoke and no gate row drives it yet (EY-1's desk smoke row, above, is not built), sitting 2
+  builds of this work. Desk-gates row 41 (item 658, `pnpm smoke:pages`) starts main's pages plane and the engine and checks, on the run it is run on, that the engine main started is the recorded source build, that no read of it showed a TCP listener or a stream file, and that a process that is not main was dropped at its socket. It has run green ten times as it stands, all on one development Mac on 2026-11-27, and at no landing yet (what was read on those runs, and what no read covers: that row); no row drives the room as an agent calls it, and EY-1's desk smoke row, above, which measures the numbers, is not built; sitting 2
   has not run on this build, and a packaged app carries no engine yet (1b-ii), so a package has no pages. What is built and what is not: `docs/agent-plane/api.html` (#pages-built).
 
 **ES — Chat's empty state, "The night that becomes the window"** · vibe-field-b4 (lane `lanes/es`, branch

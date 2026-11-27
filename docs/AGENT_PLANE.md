@@ -47,6 +47,13 @@ desktop on 2026-11-24 and 2026-11-25, on earlier builds of this work, and called
 api's note. No smoke and no gate row drives them yet, and a packaged app carries no
 engine yet, so a package has no pages. What is built and what is not, item 581's overturn for the browser and the iOS
 Simulator included, is api's [note](agent-plane/api.html#pages-built).
+*Corrected 2026-11-26 (item 658):* desk-gates row 41 (`pnpm smoke:pages`) now starts main's pages plane and the engine
+with the navigate `browser_open` sends, and checks, on the run it is run on, that the engine main started is the
+recorded source build, that no read of it showed a TCP listener or a stream file, and that a process that is not main
+was dropped at its socket. It has run green ten times as it stands, all on one development Mac on 2026-11-27, and at no landing yet. What it read on those runs, and what no read covers, are in that row: it is a check of the runs it names,
+no standing fact of every start. No row drives the rows as an agent calls them: fieldd's room, the tool call and the
+fieldd-to-main call are still driven by none. A package starts no engine until the record names a staged engine's
+digest.
 
 Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard as the left one.
 

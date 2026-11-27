@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import {
   chmodSync,
+  existsSync,
   mkdirSync,
   mkdtempSync,
   renameSync,
@@ -18,6 +19,7 @@ import {
   makePagesSurroundings,
   PAGES_ENGINE_ENV_KEYS,
   PAGES_ENGINE_IDLE_TIMEOUT_MS,
+  PAGES_ENGINE_NO_BROWSER,
   PAGES_ENGINE_PATH,
   PAGES_ENGINE_SWITCHES,
   type PagesSurroundings,
@@ -86,6 +88,8 @@ describe("the engine's environment", () => {
       AGENT_BROWSER_PEER_PIDS: String(PEER),
       // the bridge's address, which carries the launch's key, is never told back
       AGENT_BROWSER_HIDE_CDP_URL: "1",
+      // the one browser file the engine may start is no file: it starts none of its own
+      AGENT_BROWSER_EXECUTABLE_PATH: PAGES_ENGINE_NO_BROWSER,
     });
     expect(Object.isFrozen(env)).toBe(true);
     for (const name of PAGES_ENGINE_SWITCHES) expect(PAGES_ENGINE_ENV_KEYS).toContain(name);
@@ -94,6 +98,50 @@ describe("the engine's environment", () => {
       "AGENT_BROWSER_PEER_PIDS",
       "AGENT_BROWSER_HIDE_CDP_URL",
     ]);
+  });
+
+  it("names, as the one browser the engine may start, a path that is no file and can become none (item 658, 2026-11-26)", () => {
+    // The engine starts a browser BY ITSELF when a page action meets it with no live connection: its
+    // own cache under HOME (empty here), then the system's browsers by their fixed paths. Named a
+    // browser file, it takes that file and searches no further; this one is beneath a device, so
+    // nobody of any uid can make it a file.
+    expect(PAGES_ENGINE_NO_BROWSER).toBe("/dev/null/vibefield-no-browser");
+    expect(PAGES_ENGINE_ENV_KEYS).toContain("AGENT_BROWSER_EXECUTABLE_PATH");
+    expect(existsSync(PAGES_ENGINE_NO_BROWSER)).toBe(false);
+    expect(() => writeFileSync(PAGES_ENGINE_NO_BROWSER, "#!/bin/sh\n", { mode: 0o755 })).toThrow(
+      /ENOTDIR/u,
+    );
+    expect(() => mkdirSync(dirname(PAGES_ENGINE_NO_BROWSER), { recursive: true })).toThrow();
+    expect(existsSync(PAGES_ENGINE_NO_BROWSER)).toBe(false);
+    // not a browser's name to the engine either: it tells engines apart by words in the path
+    for (const word of ["chrome", "chromium", "firefox", "webkit", "safari", "lightpanda"]) {
+      expect(PAGES_ENGINE_NO_BROWSER.toLowerCase()).not.toContain(word);
+    }
+  });
+
+  it("refuses an environment that names no browser file, or any other: no engine starts free to launch a browser (item 658, 2026-11-26)", () => {
+    const s = at(parent());
+    const env = pagesEngineEnv(s, peer);
+    const { AGENT_BROWSER_EXECUTABLE_PATH: _gone, ...without } = env;
+    expect(pagesEngineEnvViolations(without, s, { smoke: false, ...peer })).toEqual([
+      "missing:AGENT_BROWSER_EXECUTABLE_PATH",
+    ]);
+    for (const other of [
+      "",
+      "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+      join(s.root, "no-browser"),
+      "/dev/null",
+      `${PAGES_ENGINE_NO_BROWSER}/x`,
+    ]) {
+      expect(
+        pagesEngineEnvViolations({ ...env, AGENT_BROWSER_EXECUTABLE_PATH: other }, s, {
+          smoke: false,
+          ...peer,
+        }),
+        other,
+      ).toEqual(["wrong-value:AGENT_BROWSER_EXECUTABLE_PATH"]);
+    }
+    expect(pagesEngineEnvViolations(env, s, { smoke: false, ...peer })).toEqual([]);
   });
 
   it("refuses an environment with a switch missing or off: no engine starts with the stream on", () => {

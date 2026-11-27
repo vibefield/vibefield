@@ -93,6 +93,14 @@ export interface EngineChild {
   kill(signal: "SIGTERM" | "SIGKILL"): boolean;
   once(event: "exit", listener: (code: number | null, signal: string | null) => void): this;
   once(event: "error", listener: (error: Error) => void): this;
+  /** As `once`, ahead of every listener already on the child (item 658, 2026-11-26): the pages
+   * smoke's witness looks at an engine's root at its exit, and the supervisor's own exit listener,
+   * which is on the child first, removes that root. The supervisor uses `once` alone. */
+  prependOnceListener(
+    event: "exit",
+    listener: (code: number | null, signal: string | null) => void,
+  ): this;
+  prependOnceListener(event: "error", listener: (error: Error) => void): this;
 }
 
 export type SpawnEngine = (
@@ -142,9 +150,28 @@ export interface PagesEngineSupervisorDeps {
   readonly stopRungMs?: number;
   /** Durations and counts only, never a value, a key or a path. */
   readonly log?: (event: string, fields: Readonly<Record<string, number | string>>) => void;
-  /** A testing hook alone (src/testing/pages-engine-kill.ts): told each engine child once it is
-   * spawned. Production passes none, so main holds no child beyond the supervisor's own. */
-  readonly onSpawned?: (run: string, generation: number, child: EngineChild) => void;
+  /** A testing hook alone (src/testing/pages-engine-kill.ts, and the pages smoke's witness): told
+   * each engine child once it is spawned, before the ready wait, so a start that is then refused
+   * or never ready is told too. Production passes none, so main holds no child beyond the
+   * supervisor's own. Item 658 (2026-11-26): it is also told what was spawned. */
+  readonly onSpawned?: (
+    run: string,
+    generation: number,
+    child: EngineChild,
+    spawned: EngineSpawned,
+  ) => void;
+}
+
+/** What the testing hook is told of a spawn (item 658, 2026-11-26): `file`, the file that was run,
+ * which is the one the identity check answered, and the surroundings the child was started in.
+ * `file` is the engine's pinned place: a LOCAL PATH outside every run's root, which whoever takes
+ * it never prints or logs. The surroundings' paths are of the run's own root. Never an environment,
+ * a key or a pid.
+ * Erratum (2026-11-26, the same day): this first said "paths of the run's own root alone", which
+ * `file` is not. */
+export interface EngineSpawned {
+  readonly file: string;
+  readonly surroundings: PagesSurroundings;
 }
 
 interface Engine {
@@ -194,10 +221,14 @@ export class PagesEngineSupervisor {
     if (this.#streamOn) return Promise.resolve({ ok: false, unavailable: "engine-refused" });
     const state = this.#state(run);
     if (state.stopped) return Promise.resolve({ ok: false, unavailable: "engine-stopped" });
+    // A start in progress first (item 658, 2026-11-26): the run holds its engine from the spawn on,
+    // so a call that comes during the ready wait or the stream check joins the start, and is
+    // answered what the start is. Looked at after the run's engine, it was handed that engine
+    // before either check.
+    if (state.starting !== null) return state.starting;
     if (state.engine !== null && !state.engine.gone && !state.engine.retired) {
       return Promise.resolve({ ok: true, engine: state.engine.lease });
     }
-    if (state.starting !== null) return state.starting;
     const starting = this.#start(run, state).finally(() => {
       if (state.starting === starting) state.starting = null;
     });
@@ -338,15 +369,45 @@ export class PagesEngineSupervisor {
     child.once("exit", onGone);
     child.once("error", onGone);
     state.engine = engine;
-    this.#deps.onSpawned?.(run, state.generation, child);
+    try {
+      this.#deps.onSpawned?.(run, state.generation, child, {
+        file: identity.path,
+        surroundings: s,
+      });
+    } catch {
+      // a testing hook's failure is its own (item 658, 2026-11-26): the run already holds this
+      // engine, so the start goes on to the ready wait and the stream check, never past them. It is
+      // SAID: whoever holds the hook was told of no engine here, and reads this line to know it.
+      // The line's own logger may fail (item 658, 2026-11-27): that ends nothing here either, or an
+      // engine that passed neither check would be left held by the run, and handed to its next call.
+      try {
+        this.#deps.log?.("pages.engine.hook", { threw: "yes" });
+      } catch {
+        // on to the ready wait
+      }
+    }
     const ready = await (this.#deps.ready ?? daemonReady)(
       s.socketPath,
       daemonOptions(startedAt + (this.#deps.readyMs ?? ENGINE_READY_MS), this.#deps),
     );
     if (!ready || engine.gone) {
-      // still running and not ready in time: a slow start, which main ends and does not count
-      if (!engine.gone) engine.retired = true;
-      await this.#ladder(engine);
+      // An engine that is not usable after its ready wait, said as it is (item 658, 2026-11-26):
+      // slow and still running, gone before it was ready, or gone AFTER it took main's connection.
+      // The last one answered main, and is a state of its own.
+      const gone = engine.gone;
+      // still running and not ready in time: a slow start, which main ends and does not count.
+      // Retired before the line and ended whatever the line's logger does (the ladder's own line
+      // is guarded too): no logger's failure leaves an engine that was never checked unsignalled,
+      // or handed to a later call. The logger's error still reaches the caller, after the ladder.
+      if (!gone) engine.retired = true;
+      try {
+        this.#deps.log?.("pages.engine.unready", {
+          answered: ready ? "yes" : "no",
+          gone: gone ? "yes" : "no",
+        });
+      } finally {
+        await this.#ladder(engine);
+      }
       return { ok: false, unavailable: "engine-starting" };
     }
     // An engine with the stream on writes its port file before it binds the socket, so a ready
@@ -357,8 +418,18 @@ export class PagesEngineSupervisor {
     if (shown !== "off") {
       if (shown === "on") this.#streamOn = true;
       const reason = shown === "on" ? "stream-on" : "stream-unread";
-      this.#deps.log?.("pages.engine.refused", { reason });
-      await this.#ladder(engine);
+      // Refused, so never leased (item 658, 2026-11-27). An unread folder latches nothing, and an
+      // engine refused for it that outlived every rung was neither gone nor retired: the run's
+      // next call was handed its lease. Older than the item. So it is retired before the line and
+      // counted here, as `replace` counts the engine it ends (its exit, when it comes, is not
+      // counted again), and it is ended whatever the line's logger does.
+      engine.retired = true;
+      this.#count(state);
+      try {
+        this.#deps.log?.("pages.engine.refused", { reason });
+      } finally {
+        await this.#ladder(engine);
+      }
       return { ok: false, unavailable: "engine-refused" };
     }
     this.#deps.log?.("pages.engine.ready", {
@@ -369,12 +440,18 @@ export class PagesEngineSupervisor {
     return { ok: true, engine: lease };
   }
 
-  /** The root goes only after its engine is gone; its failure is said, never thrown. */
+  /** The root goes only after its engine is gone; its failure is said, never thrown: the line's own
+   * logger's failure included (item 658, 2026-11-27), as this is said from an engine's exit
+   * listener, before that exit is counted against its run and told to the broker. */
   #forget(s: PagesSurroundings): void {
     try {
       this.#deps.forget?.(s);
     } catch {
-      this.#deps.log?.("pages.engine.root", { forgotten: "no" });
+      try {
+        this.#deps.log?.("pages.engine.root", { forgotten: "no" });
+      } catch {
+        // the exit is still counted and told
+      }
     }
   }
 
@@ -418,7 +495,12 @@ export class PagesEngineSupervisor {
       close,
       daemonOptions(this.#now() + rung, this.#deps),
     );
-    this.#deps.log?.("pages.engine.close", { answered: answer.ok ? "yes" : answer.failure });
+    try {
+      this.#deps.log?.("pages.engine.close", { answered: answer.ok ? "yes" : answer.failure });
+    } catch {
+      // the rungs go on whatever the line's logger does (item 658, 2026-11-27): a sink that
+      // fails on every line left an engine that ignored its close unsignalled
+    }
     if (await waitExit(rung)) return true;
     engine.child.kill("SIGTERM");
     if (await waitExit(rung)) return true;

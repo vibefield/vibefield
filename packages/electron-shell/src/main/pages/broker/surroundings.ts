@@ -39,6 +39,30 @@
 //   use.
 // Once an engine is ready, main reads its socket folder: any `.stream` file there means a stream
 // server came up after all, and the engine is refused and stopped (engine-supervisor.ts).
+//
+// No browser of the engine's own (item 658, 2026-11-26). Main never asks the engine to start a
+// browser: its launch carries the bridge's address, and the engine attaches there. But the engine
+// launches by itself before any action outside a short list (launch, close, read, session_info
+// and the like) when it holds no browser or its connection is not alive (actions.rs at v0.41.0,
+// `skip_launch_action` and `auto_launch`). What that launch reaches turns on whether the engine
+// was attached. Once main's launch by address has succeeded the engine keeps the address
+// (`attached_target`), and its own launch goes back to that SAME address (`resolve_launch_target`):
+// a re-attach to a bridge address that is spent, never a search for a browser. A LOCAL launch,
+// which searches its own cache under HOME (empty here) and then the system's browsers by their
+// fixed paths, each started with a debugging port of its own, is reached only with no attached
+// target: before main's launch has succeeded, after a launch that failed, and after the engine's
+// own `close` (the first rung of main's stop ladder, which clears the target) for a page action
+// that reaches it between that close and its exit. So the environment names the ONE browser file
+// the engine may start, AGENT_BROWSER_EXECUTABLE_PATH, as a path that is no file: named a file,
+// the engine takes it and searches no further (cdp/chrome.rs `launch_chrome`), and the launch
+// fails as an error. The switches do not cover this: it is the environment's fourth hold, and the
+// violations check requires it at its one value.
+// All of this is READ in the engine's source at the tag. No run has brought an engine to that
+// launch, in any of the three windows, and whether main ever sends a page action inside one of
+// them is not established: the guard does not rest on it.
+// Erratum (2026-11-26, the same day, from the review of this item): this first gave the window as
+// "a page action already on the engine's socket" when main ends an engine whose bridge connection
+// closed. An engine that was attached re-attaches to the same address there and starts nothing.
 
 import { chmodSync, lstatSync, mkdirSync, readdirSync, type Stats, statSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -63,6 +87,11 @@ export const PAGES_ENGINE_PATH = "/usr/bin:/bin:/usr/sbin:/sbin";
  * call" above is no longer so for a run with an engine launched. The broker's reap counts from the
  * engine's last command of main's, sent or answered, which is where the engine counts from. */
 export const PAGES_ENGINE_IDLE_TIMEOUT_MS = 600_000;
+/** The one browser file the engine may start by itself (item 658, 2026-11-26): a path beneath a
+ * device, so it is no file and nobody of any uid can make it one (a path in the run's own root
+ * could be planted by any process of this uid). Its name holds none of the words the engine tells
+ * browsers apart by. */
+export const PAGES_ENGINE_NO_BROWSER = "/dev/null/vibefield-no-browser";
 /** The run's mark a smoke gives every process it starts (run-smoke.mjs; smoke-census.mjs). */
 export const SMOKE_RUN_ENV = "VF_SMOKE_RUN";
 
@@ -86,6 +115,7 @@ export const PAGES_ENGINE_ENV_KEYS = [
   "AGENT_BROWSER_IDLE_TIMEOUT_MS",
   "AGENT_BROWSER_DAEMON",
   "AGENT_BROWSER_SESSION",
+  "AGENT_BROWSER_EXECUTABLE_PATH",
   ...PAGES_ENGINE_SWITCHES,
 ] as const;
 
@@ -311,6 +341,7 @@ export function pagesEngineEnv(
     AGENT_BROWSER_NO_STREAM: "1",
     AGENT_BROWSER_PEER_PIDS: String(o.peerPid),
     AGENT_BROWSER_HIDE_CDP_URL: "1",
+    AGENT_BROWSER_EXECUTABLE_PATH: PAGES_ENGINE_NO_BROWSER,
   };
   if (o.smokeRun !== undefined) {
     if (o.smokeRun === "" || /[\0\n\r]/u.test(o.smokeRun)) {
@@ -374,6 +405,10 @@ export function pagesEngineEnvViolations(
   }
   for (const key of ["AGENT_BROWSER_NO_STREAM", "AGENT_BROWSER_HIDE_CDP_URL"] as const) {
     if (env[key] !== undefined && env[key] !== "1") out.push(`wrong-value:${key}`);
+  }
+  const browser = env.AGENT_BROWSER_EXECUTABLE_PATH;
+  if (browser !== undefined && browser !== PAGES_ENGINE_NO_BROWSER) {
+    out.push("wrong-value:AGENT_BROWSER_EXECUTABLE_PATH");
   }
   const peers = env.AGENT_BROWSER_PEER_PIDS;
   if (peers !== undefined) {

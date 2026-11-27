@@ -172,6 +172,7 @@ import {
   smokeSimctlDeveloperDir,
 } from "./modes";
 import { NeedsNoticeObserver } from "./needs-notices";
+import { pagesWitnessAsked } from "./pages/broker/index";
 import { composePages, type PagesComposition, pagesEngineOf } from "./pages/compose";
 import { agentInput } from "./pages/endpoint/input";
 import { makeBridgeWss } from "./pages/endpoint/wss";
@@ -1373,6 +1374,13 @@ async function main(
   // PT-S3 (D2) — and main's simctl calls are COUNTED, by name — never an argument, so never a UDID: the phone rows read
   // them on the live census (`state().simulator.simctl`). Production counts nothing.
   const harnessSimctlCalls: SimctlCallCounts | null = isSmokeLike(MODE) ? simctlCallCounts() : null;
+  // Item 658 (2026-11-26) — the pages smoke's witness: made only unpackaged, in the canvas smoke, in a marked run
+  // that asks for it (`--pages`). It hears main's pages lines and is handed, with main's ONE pages plane, to the
+  // canvas smoke's pages rows; no other mode and no package ever makes it.
+  const pagesWitness =
+    !app.isPackaged && MODE === "smoke-canvas" && pagesWitnessAsked(process.env, process.argv)
+      ? (await testing()).createPagesEngineWitness({ mark: process.env["VF_SMOKE_RUN"] })
+      : null;
   const wireAttachment = (
     bundle: PairBundle,
     userRoot: string,
@@ -1566,10 +1574,19 @@ async function main(
         appBundlePath:
           app.isPackaged && process.platform === "darwin" ? bundlePathOf(process.execPath) : null,
         env: process.env,
+        // item 658 (2026-11-26): the supervisor's testing hook, the pages smoke's witness alone; every other start
+        // passes none, so no engine child is held outside the supervisor
+        ...(pagesWitness === null ? {} : { onSpawned: pagesWitness.onSpawned }),
       },
       log: {
-        info: (event, fields) => pagesLogger.info(event, "pages plane", fields),
-        warn: (event, fields) => pagesLogger.warn(event, "pages plane", fields),
+        info: (event, fields) => {
+          pagesWitness?.line(event, fields);
+          pagesLogger.info(event, "pages plane", fields);
+        },
+        warn: (event, fields) => {
+          pagesWitness?.line(event, fields);
+          pagesLogger.warn(event, "pages plane", fields);
+        },
       },
     });
     const shellProvider = new RecoveringShellProvider(
@@ -2714,6 +2731,28 @@ async function main(
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
       ...(harnessCopies === null ? {} : { copies: harnessCopies }),
       ...(harnessPictures === null ? {} : { pictures: harnessPictures }),
+      // item 658 (2026-11-26): the pages rows drive the plane the shell provider's controlSurface reaches, and stop
+      // it as a quit does; handed only with the witness
+      ...(pagesWitness === null
+        ? {}
+        : {
+            pages: {
+              witness: pagesWitness,
+              control: async (p, ctx) => {
+                const plane = pagesPlane;
+                if (plane === null) throw { kind: "UNAVAILABLE" };
+                return plane.control(p, ctx);
+              },
+              stop: async () => {
+                await pagesPlane?.stop("quit");
+              },
+              // the rest of a quit for the pages: the call `disposeShellState` makes of the custody,
+              // which ends each page's offscreen window before Electron is asked to exit
+              closeSurfaces: () => {
+                liveSurfaceAuthority?.dispose();
+              },
+            },
+          }),
       onWindow: (window) => {
         installLiveSurfaceHost(window, logger);
         installRendererLogging({

@@ -1,8 +1,7 @@
 /** Real product multi-pane stress run. Each pane runs the local GPU fixture. */
 import { mkdirSync, writeFileSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import { app, screen, webContents } from "electron";
-import { checkBrowserPerfAgent } from "./browser-perf-agent";
 import {
   layPane,
   type PaneRow,
@@ -264,32 +263,7 @@ export async function browserPerfMulti(
       writeFileSync(join(out, `${phase}.png`), (await d.win.webContents.capturePage()).toPNG());
     }
     await measure("all-visible");
-    const agent = process.env["VF_BROWSER_PERF_AGENT_BIN"];
-    if (agent) {
-      const node = process.env["VF_BROWSER_PERF_NODE_BIN"];
-      if (!node) throw Error("Missing agent provider node binary");
-      const s = sources[0]!;
-      const f = await s.page.executeJavaScript(facts);
-      const before = await snap();
-      const face = before.live.faces.find((p) => p.key === s.key)!;
-      const sourceBefore = s.counts().paints;
-      report.agentBrowser = await checkBrowserPerfAgent(
-        s.page,
-        resolve(app.getAppPath(), "../.."),
-        agent,
-        node,
-        (face.texture?.width ?? f.width * f.dpr) / (f.width * f.dpr),
-      );
-      await sleep(250);
-      const after = await snap();
-      const presented = after.live.faces.find((p) => p.key === s.key)!.presented - face.presented;
-      report.agentRendering = {
-        sourcePaints: s.counts().paints - sourceBefore,
-        panePresents: presented,
-      };
-      if (presented <= 0 || s.counts().paints <= sourceBefore)
-        throw Error("Agent stopped the preview pipeline");
-    }
+    // Item 658 (2026-11-26): the benchmark drives no agent-browser. The pages engine runs only through main's broker.
     const active = (await h.rows()).find((r) => r.entity === first.entity)!;
     const cam = await h.js<{ x: number; y: number; zoom: number }>("globalThis.__vfDesk.camera()");
     await h.press({

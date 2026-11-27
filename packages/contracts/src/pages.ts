@@ -362,14 +362,33 @@ export type PagesEngineToolV1 = z.infer<typeof PagesEngineToolV1>;
  * - `tagCommit`: the commit it is built from, the record's own `tagCommit`;
  * - `patchSha256`: the SHA-256 of the patch laid on that tree (a unified diff);
  * - `binarySha256`: each platform's built binary, by `<platform>-<arch>`. A platform absent here has no engine, and
- *   pages answer `not-installed` there. */
+ *   pages answer `not-installed` there;
+ * - `stagedCdhash` (item 658, 2026-11-26): each platform's STAGED engine, the source build as a package carries it,
+ *   signed by the app's team: the SHA-256 of its CodeDirectory (electron-shell's code-directory.mjs `memberDigest`,
+ *   read by cdhash), never its bytes, which every signing moves. A platform absent here has no packaged engine, and a
+ *   package's pages answer `not-installed` there. Only a platform the source build names a binary for may be staged.
+ *   Required, and empty until a stage step records one. */
+const PagesEnginePlatform = z.string().regex(/^[a-z0-9]+(?:-[a-z0-9_]+)+$/);
 export const PagesEngineSourceBuildV1 = z
   .object({
     tagCommit: z.string().regex(/^[0-9a-f]{40}$/),
     patchSha256: Sha256Hex,
-    binarySha256: z.record(z.string().regex(/^[a-z0-9]+(?:-[a-z0-9_]+)+$/), Sha256Hex),
+    binarySha256: z.record(PagesEnginePlatform, Sha256Hex),
+    stagedCdhash: z.record(PagesEnginePlatform, Sha256Hex),
   })
-  .passthrough();
+  .passthrough()
+  .superRefine((source, ctx) => {
+    // a staged engine is the source build as a package carries it: a platform with no source build has none
+    for (const platform of Object.keys(source.stagedCdhash)) {
+      if (!Object.hasOwn(source.binarySha256, platform)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["stagedCdhash", platform],
+          message: `a staged engine for ${platform}, which the source build names no binary for`,
+        });
+      }
+    }
+  });
 export type PagesEngineSourceBuildV1 = z.infer<typeof PagesEngineSourceBuildV1>;
 
 /** Which of the record's two identities may be started: the source build, and no other. A record that says anything

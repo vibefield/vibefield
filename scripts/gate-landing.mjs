@@ -71,6 +71,10 @@ export const LANDING = [
   { name: "smoke:canvas", run: pnpm("smoke:canvas") },
   { name: "smoke:canvas:no-gpu", run: pnpm("smoke:canvas:no-gpu") },
   { name: "smoke:canvas:no-webgpu", run: pnpm("smoke:canvas:no-webgpu") },
+  // item 658 (desk-gates row 41): the engine main starts for an agent's pages, on smoke:canvas's build and GPU-less,
+  // is checked to be the recorded source build, its stream off and its peer check on. The gate's shell names the
+  // source build (VIBEFIELD_DEV_PAGES_ENGINE_SOURCE); a host without it is BLIND, exit 2, which is red here
+  { name: "smoke:pages", run: pnpm("smoke:pages") },
   { name: "smoke:kind-faults", run: pnpm("smoke:kind-faults") },
   { name: "smoke:plugin-restart", run: pnpm("smoke:plugin-restart") },
   // the try board as an author runs it: the kit stages the example clock ALONE in a dev root of its own, then
@@ -193,6 +197,13 @@ const SAYS = [
   /^STUDIO_PHYSICAL .*$/u,
   /^BUNDLED_FIXTURE_DONE .*$/u,
   /^MARKET_FIXTURE_DONE .*$/u,
+  // row 41 (item 658, 2026-11-27): the verdict, or the last leg said when the rows threw before it. Two lines of the
+  // smoke are said AFTER those and are not the rows' result, so this kind takes neither: the exit's line of counts,
+  // and the smoke's own trouble line (`SMOKE_PAGES failed: …`), which the `failed:` kind above quotes beside it. An
+  // exit that was HELD is quoted too.
+  /^SMOKE_PAGES(?:_(?!EXIT)\w+)? (?!failed:).*$/u,
+  /^SMOKE_PAGES_EXIT_HELD .*$/u,
+  /^PAGES_ENGINE_STAGE(?:_DONE)? .*$/u,
   /^(?:ok|fail)\s+try\s+.*$/u,
   /^icons current.*$|^ios (?:fixtures|pins): .*$/u,
 ];

@@ -4,6 +4,7 @@ import {
   BUNDLED_PLUGIN_INDEX_FILE,
   IDENTITY_DIR,
   type KeyClass,
+  type PagesEngineRecordV1,
   RELEASE_IDENTITY_FILE,
   SIGNATURE_SUFFIX,
   StagedReleaseIdentity,
@@ -97,7 +98,10 @@ export interface DesktopResources {
    *
    * The release binary's stream port (2026-11-24): the engine is the pin's SOURCE BUILD alone, so the path is null on
    * every host the record names no source build for (`pagesSourceBuildRecorded`), in development and in a package,
-   * whatever main was handed. The broker's identity check then holds the file at the path to that build. */
+   * whatever main was handed. The broker's identity check then holds the file at the path to that build.
+   *
+   * Item 658 (2026-11-26): a package names its engine only where the record also names a STAGED engine's digest
+   * (`pagesStagedEngineRecorded`). The record names none yet, so a package's path is null everywhere. */
   readonly pagesEnginePath: string | null;
   /** plugin discovery roots — absolute, never derived by the daemon itself */
   readonly pluginRoots: {
@@ -220,6 +224,17 @@ export function dropDevelopmentPagesEngine(env: NodeJS.ProcessEnv): null {
  * pages answer `not-installed` there. The record's release binaries (`binarySha256`) name no engine. */
 export function pagesSourceBuildRecorded(platform: string, arch: string): boolean {
   return Object.hasOwn(PAGES_ENGINE_RECORD.sourceBuild.binarySha256, `${platform}-${arch}`);
+}
+
+/** Item 658 (2026-11-26) — whether the pin's record names a STAGED engine for a host (`<platform>-<arch>`): the
+ * CodeDirectory digest of the source build as a package carries it (`sourceBuild.stagedCdhash`). A package names its
+ * engine only on such a host, so a package with none answers pages `not-installed`. The record names none today. */
+export function pagesStagedEngineRecorded(
+  platform: string,
+  arch: string,
+  record: Pick<PagesEngineRecordV1, "sourceBuild"> = PAGES_ENGINE_RECORD,
+): boolean {
+  return Object.hasOwn(record.sourceBuild.stagedCdhash, `${platform}-${arch}`);
 }
 
 /** Development: the repo IS the layout. Electron runs the fieldd bundle in node
@@ -374,9 +389,13 @@ export function resolvePackagedResources(opts: {
     desktopSoundPlayerPath: platform === "darwin" ? join(bin, "desktop-sound-player.node") : null,
     rosettadPath: join(bin, exe("rosettad", platform)),
     // EY-1 1b: the stager puts it here on macOS. The file there must be the pin's SOURCE BUILD (2026-11-24): a Mac
-    // the record names no source build for has no engine, and the broker refuses a staged release build by its bytes
+    // the record names no source build for has no engine, and the broker refuses a staged release build by its bytes.
+    // Item 658 (2026-11-26): and none until the record names the staged engine's digest for the host, which it does
+    // nowhere yet, so a package answers pages not-installed (the broker's identity check fails closed besides)
     pagesEnginePath:
-      platform === "darwin" && pagesSourceBuildRecorded(platform, arch)
+      platform === "darwin" &&
+      pagesSourceBuildRecorded(platform, arch) &&
+      pagesStagedEngineRecorded(platform, arch)
         ? join(bin, packagedPagesEngineFile(platform))
         : null,
     pluginRoots: {

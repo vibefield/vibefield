@@ -25,6 +25,10 @@ import {
   createPagesBroker,
   type ExecFileLike,
   engineSpawnOptions,
+  PAGES_DAEMON_KILL_FLAG,
+  PAGES_WITNESS_FLAG,
+  pagesDaemonKillAsked,
+  pagesWitnessAsked,
   productionRunFile,
   productionSpawnEngine,
   productionStills,
@@ -32,6 +36,7 @@ import {
   runFileOptions,
   type SpawnLike,
 } from "../src/main/pages/broker/index";
+import { resolvePackagedResources } from "../src/main/resources";
 
 // EY-1 (2026-11-19): the broker as main makes it. The spawn and the runner are fakes: nothing here
 // starts a process. Every build's socket parent is the test's own temp folder, never /tmp.
@@ -284,5 +289,56 @@ describe("createPagesBroker", () => {
     expect(readdirSync(uidFolder)).toEqual([]);
     expect(spawn).not.toHaveBeenCalled();
     expect(exec).not.toHaveBeenCalled();
+  });
+
+  it("answers a package on an Apple silicon Mac not-installed while the record names no staged engine (item 658, 2026-11-26)", async () => {
+    const spawn = vi.fn<SpawnLike>();
+    const exec = vi.fn<ExecFileLike>();
+    const resources = resolvePackagedResources({
+      resourcesPath: "/Applications/VibeField.app/Contents/Resources",
+      electronExecPath: "/Applications/VibeField.app/Contents/MacOS/VibeField",
+      platform: "darwin",
+      arch: "arm64",
+    });
+    const broker = createPagesBroker({
+      enginePath: () => resources.pagesEnginePath,
+      packaged: true,
+      appBundlePath: null,
+      env: { FIELD_SOCKET_ALIAS_PARENT: parent() },
+      ...ports(),
+      spawn,
+      exec,
+    });
+    const answer = broker.control(
+      {
+        run: "run-1",
+        surfaceId: "surface_0123456789abcdef",
+        window: "read",
+        command: { action: "snapshot" },
+      },
+      { signal: new AbortController().signal, deadlineAt: Date.now() + 5_000 },
+    );
+    await expect(answer).rejects.toMatchObject({ kind: "UNAVAILABLE", state: "not-installed" });
+    expect(spawn).not.toHaveBeenCalled();
+    expect(exec).not.toHaveBeenCalled();
+  });
+});
+
+describe("the pages witness's flag (item 658, 2026-11-26)", () => {
+  it("is asked only by a smoke run's mark AND its own flag, a whole word on the command line", () => {
+    const mark = { VF_SMOKE_RUN: "run-1" };
+    expect(PAGES_WITNESS_FLAG).toBe("--pages");
+    // no mark, or an empty one: the flag alone asks for nothing
+    expect(pagesWitnessAsked({}, ["electron", ".", "--pages"])).toBe(false);
+    expect(pagesWitnessAsked({ VF_SMOKE_RUN: "" }, ["electron", ".", "--pages"])).toBe(false);
+    // the mark alone asks for nothing
+    expect(pagesWitnessAsked(mark, ["electron", ".", "--smoke-canvas"])).toBe(false);
+    // a whole word, never a prefix: the engine kill's flag begins with it and is another switch
+    expect(pagesWitnessAsked(mark, ["electron", ".", PAGES_DAEMON_KILL_FLAG])).toBe(false);
+    expect(pagesWitnessAsked(mark, ["electron", ".", "--pages-witness"])).toBe(false);
+    expect(pagesWitnessAsked(mark, ["electron", ".", "--pages=1"])).toBe(false);
+    expect(pagesWitnessAsked(mark, ["electron", ".", "--smoke-canvas", "--pages"])).toBe(true);
+    // and neither switch asks for the other
+    expect(pagesDaemonKillAsked(mark, ["electron", ".", "--pages"])).toBe(false);
   });
 });

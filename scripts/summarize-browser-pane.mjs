@@ -26,8 +26,6 @@ for (const path of process.argv.slice(2)) {
                 f.facts.timeOrigin === p.facts.timeOrigin,
             ),
           ),
-          agent: report.agentBrowser,
-          agentRendering: report.agentRendering,
           rows: report.phases.map((p) => ({
             phase: p.phase,
             deskFps: p.deskFps,
@@ -105,8 +103,6 @@ for (const path of process.argv.slice(2)) {
         sourceFpsOverride: report.sourceFpsOverride,
         sourceOnly: report.sourceOnly,
         sameDocument: report.page?.timeOrigin === report.finalPage?.timeOrigin,
-        agent: report.agentBrowser,
-        agentRendering: report.agentRendering,
         rows,
       },
       null,

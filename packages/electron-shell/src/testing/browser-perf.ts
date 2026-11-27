@@ -3,7 +3,6 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { app, BrowserWindow, screen, type WebContents, webContents } from "electron";
 import { browserPaneUi } from "./browser-pane-ui";
-import { checkBrowserPerfAgent } from "./browser-perf-agent";
 import { browserPerfMulti } from "./browser-perf-multi";
 import { startLiveFixture } from "./live-fixture";
 import {
@@ -377,33 +376,7 @@ async function browserPerfSingle(d: PaneRowsDriver, pageUrl: string): Promise<st
         source.invalidate();
       }
     }
-    const agent = process.env["VF_BROWSER_PERF_AGENT_BIN"];
-    if (agent) {
-      const node = process.env["VF_BROWSER_PERF_NODE_BIN"];
-      if (!node) throw Error("VF_BROWSER_PERF_NODE_BIN is required for the agent provider");
-      const paintsBefore = paints;
-      const deskBefore = await deskSnapshot();
-      report.agentBrowser = await checkBrowserPerfAgent(
-        source,
-        resolve(app.getAppPath(), "../.."),
-        agent,
-        node,
-      );
-      await sleep(250);
-      const deskAfter = await deskSnapshot();
-      const presented = (s: DeskSnapshot) =>
-        s.live?.faces.find((f) => f.key === key)?.presented ?? 0;
-      report.agentRendering = {
-        sourcePaints: paints - paintsBefore,
-        panePresents: presented(deskAfter) - presented(deskBefore),
-      };
-      if (
-        MODE === "canvas" &&
-        (paints <= paintsBefore || presented(deskAfter) <= presented(deskBefore))
-      )
-        throw Error("Pane stopped rendering during agent control");
-      d.say(`BROWSER_PERF_AGENT ${JSON.stringify(report.agentBrowser)}`);
-    }
+    // Item 658 (2026-11-26): the benchmark drives no agent-browser. The pages engine runs only through main's broker.
     report.finalNativeFrameRate = source.isOffscreen() ? source.getFrameRate() : null;
     report.finalPage = await source.executeJavaScript(PAGE_FACTS);
     report.finalTarget = await source.debugger.sendCommand("Target.getTargetInfo");

@@ -22,6 +22,16 @@
 //   team whose bytes do not name all three is refused (`no-switches`). This guards against a
 //   stage that put the wrong build in the package, not against the team's own signature.
 //
+// The staged engine (item 658, 2026-11-26): a package also starts no engine until the record
+// names the STAGED engine's digest for this host (`sourceBuild.stagedCdhash`): the SHA-256 of its
+// CodeDirectory, which a new signature of the same code does not move, read by the one reader
+// main ships (updates/code-directory.mjs `memberDigest`). It fails closed, before codesign or the
+// engine runs: a host with no digest recorded is `unstaged` (the record names none yet), and a
+// file whose CodeDirectory is not the recorded one, or that is not signed code at all, is
+// `digest-mismatch`. The file is read once, whole, through one descriptor opened without
+// following a link; codesign and `--version` then read it again by its path, the same window
+// development has (below).
+//
 // Known and accepted: in development a same-uid process could swap the file between the hash and
 // the start (the hash, then exec); the identity is a check against a stale or wrong pin, not a
 // fence against same-uid code (EL7 is the tokens' and the walls' work).
@@ -29,6 +39,7 @@
 import { createHash } from "node:crypto";
 import { closeSync, constants, fstatSync, openSync, readSync } from "node:fs";
 import type { PagesEngineRecordV1 } from "@vibefield/contracts";
+import { memberDigest } from "../../updates/code-directory.mjs";
 import { PAGES_ENGINE_SWITCHES } from "./surroundings";
 
 /** How long `--version` and each codesign read may take. */
@@ -43,6 +54,8 @@ export type PagesEngineIdentityFailure =
   | "release-binary"
   | "sha256-mismatch"
   | "unsigned"
+  | "unstaged"
+  | "digest-mismatch"
   | "team-mismatch"
   | "no-switches"
   | "version-mismatch";
@@ -116,10 +129,10 @@ export function sha256OfRegularFile(path: string): string | null {
   }
 }
 
-/** Whether a regular file's bytes hold every one of `needles`, read through one descriptor opened
- * without following a link; null when it is not a regular file there. A needle is found across a
- * read's edge too: each read is searched together with the tail of the one before. */
-export function regularFileHolds(path: string, needles: readonly string[]): boolean | null {
+/** Item 658 (2026-11-26) — a regular file's whole bytes, read through one descriptor opened without
+ * following a link, or null when it is not a regular file there (a link, a folder, nothing). The
+ * package's check reads its CodeDirectory and its switch names from these same bytes. */
+export function readRegularFile(path: string): Buffer | null {
   let fd: number;
   try {
     fd = openSync(path, constants.O_RDONLY | constants.O_NOFOLLOW);
@@ -128,19 +141,15 @@ export function regularFileHolds(path: string, needles: readonly string[]): bool
   }
   try {
     if (!fstatSync(fd).isFile()) return null;
-    const wanted = needles.map((needle) => Buffer.from(needle, "utf8"));
-    const keep = Math.max(0, ...wanted.map((needle) => needle.length - 1));
-    const missing = new Set(wanted);
-    const chunk = Buffer.allocUnsafe(CHUNK_BYTES);
-    let tail: Buffer = Buffer.alloc(0);
+    const chunks: Buffer[] = [];
+    let chunk = Buffer.allocUnsafe(CHUNK_BYTES);
     let n = readSync(fd, chunk, 0, CHUNK_BYTES, null);
-    while (n > 0 && missing.size > 0) {
-      const window = Buffer.concat([tail, chunk.subarray(0, n)]);
-      for (const needle of [...missing]) if (window.includes(needle)) missing.delete(needle);
-      tail = Buffer.from(window.subarray(Math.max(0, window.length - keep)));
+    while (n > 0) {
+      chunks.push(chunk.subarray(0, n));
+      chunk = Buffer.allocUnsafe(CHUNK_BYTES);
       n = readSync(fd, chunk, 0, CHUNK_BYTES, null);
     }
-    return missing.size === 0;
+    return Buffer.concat(chunks);
   } finally {
     closeSync(fd);
   }
@@ -202,9 +211,11 @@ export function teamRequirement(team: string): string {
   return `=anchor apple generic and certificate leaf[subject.OU] = "${team}"`;
 }
 
-/** A package: the engine must verify strictly as code signed by the app's own team, and its bytes
- * must name every switch main starts it with (the source build does; the release build names
- * none). Nothing of the engine runs, `--version` included, unless both hold. */
+/** A package: the engine's CodeDirectory must be the staged one the record names for this host
+ * (item 658, 2026-11-26), checked before anything runs, codesign included; then it must verify
+ * strictly as code signed by the app's own team, and its bytes must name every switch main starts
+ * it with (the source build does; the release build names none). Nothing of the engine runs,
+ * `--version` included, unless all three hold. */
 export async function checkPackagedEngine(
   path: string | null,
   appTeam: string | null,
@@ -212,8 +223,16 @@ export async function checkPackagedEngine(
 ): Promise<PagesEngineIdentityResult> {
   if (path === null || !path.startsWith("/")) return fail("no-path");
   if (appTeam === null || !TEAM.test(appTeam)) return fail("unsigned");
-  const switched = regularFileHolds(path, PAGES_ENGINE_SWITCHES);
-  if (switched === null) return fail("not-regular");
+  const bytes = readRegularFile(path);
+  if (bytes === null) return fail("not-regular");
+  const staged = deps.record.sourceBuild.stagedCdhash;
+  const wanted = Object.hasOwn(staged, deps.host) ? staged[deps.host] : undefined;
+  if (wanted === undefined) return fail("unstaged");
+  const member = memberDigest(bytes);
+  if (member.by !== "cdhash" || member.digest !== wanted.toLowerCase()) {
+    return fail("digest-mismatch");
+  }
+  const switched = PAGES_ENGINE_SWITCHES.every((name) => bytes.includes(name, 0, "utf8"));
   const verify = await deps.run(
     "/usr/bin/codesign",
     ["--verify", "--strict", `-R${teamRequirement(appTeam)}`, path],
