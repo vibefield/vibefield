@@ -69082,3 +69082,153 @@ fanout agents to land this soon … and land this in this worktree soon"; the la
     207), and electron-shell's `root-chain.test.ts:69`.
   - What item 658 does not prove is listed in its commit message (NOT PROVEN): one Mac, the held exit's cause, the
     census as one read, the guard never run.
+
+## EL8: ICE 0.22.0 — a menu act says its state (I61), and an act may be a choice (I62) (M563)
+
+**2026-11-27 · on local main: `435d05913` (EL8: ICE 0.22.0) and `4340c6e30` (its release-age row dropped once its
+day had passed). Upstream: vibefield/infinite-canvas-engine #12 (I61 and I62, merge `2248866897cc`) and the release
+#13 (merge `1c41927fa50d`, tag v0.22.0; the release commit `348f6b7337bf`). NOT pushed.**
+James asked on 2026-11-25 for the browser pane's and the simulator's menus to be redesigned (OM-1 and OM-2, below, with
+his words); the two petitions are what those menus needed from ICE. Of the release, typed in the OM lane's session at
+17:29:52Z: "done publish".
+
+- **Upstream, I61 (an act says what it is now).** A selection menu's act may carry a `state`: disabled, another label
+  or glyph, a swatch. It is carried on its slot, and `ops.runMenuAction` does nothing for a type whose act says it is
+  disabled.
+- **Upstream, I62 (an act may be a choice).** A menu act or a held tool's action may be a choice (`choices`,
+  `ActChoice`), one of which may ask for values first; it is taken with `ops.runMenuAction(id, taken)` or
+  `ops.useHeldTool(id, taken)`. Both petitions are additive: no existing op moves, no shader or draw path.
+- **The release.** The packet is the OM lane's, in 0.21.0's form (`lanes/gvqa/w/om/rel022`, PACKET-022.md): the
+  release commit cut in the lane's clone on VF-PM's word (14:00:42Z), the pack on the test Mac by the fixer, the push,
+  merge, tag and GitHub release by VF-PM, and the npm publish by James. The registry dates it
+  2026-11-25T17:31:41.571Z; its dist.integrity, read anonymously at 17:32:15Z, equals the packed tarball's
+  (sha512-qeJ0D26N…S+lg==).
+- **ICE's gate, before the merge (gate D, the fixer's, on the test Mac).** `gate:landing`'s 27 stages, each alone, at
+  ICE's main and at the petitions' head: 22 green in both, five red in both and equal, no stage the pull request's own.
+- **Here, the pin.** The EL8's usual set, place for place as 0.21.0's (`522ab5ec2`): the lock's `ice` entry
+  (`348f6b73`, release.npm 0.22.0), the overrides row and its note, PIN_EXPECTATIONS, the release-age rows (0.21.0's
+  kept for the one install, then dropped here; the separate one-row commit owed for it is cancelled; 0.22.0's dropped
+  by its own commit after its day, below), the lock by that one install (the ICE entries alone, 10 out and 10 in), and fieldd's
+  ICE1 probe fixtures by their own generator (13 files). `pnpm gen` moved docs/plugin-authoring/objects.md alone
+  (`HeldToolDef`'s I62 lines). The notes were made on 2026-11-26, the day of the EL8.
+- **Proof** (in the lane, each heavy step under the gvqa lane's shared heavy lock after a lone load read under 10,
+  kern.waketime the same before and after): at the EL8, the one install and the frozen one, each with pnpm's
+  supply-chain check (669 entries); `check:deps` (one copy each of ICE 0.22.0, strata 0.13.0, loro 1.13.8);
+  `siblings render --prod --check`; preflight OK (two warnings, neither this EL8's); `pnpm typecheck` 28 projects;
+  biome on the changed files; fieldd's ice1-envelope probe 15 of 15; `pnpm still` 19 of 19, byte for byte. On the
+  line's tree as it stood on `34264b347` (`069e57c5b15f`, every slice of the land in it), verify's whole list, each
+  stage alone (verify-final, 2026-11-27, 02:00Z to 02:31Z): every stage exit 0, the Rust stages included; the test
+  stage 28 projects, none from Nx's cache, 1,288 files and 20,190 tests passed, 0 failed, 43 skipped. Then
+  `pnpm still` on that tree, 19 of 19 with nothing re-blessed. The land's eight (`435d05913`…`51c5cac84`) sit
+  on M562's two commits; each differs from the pick verify-final read at exactly their two paths (docs/LANDED.md
+  and field-app's made-panes.ts), with their bytes, read pick by pick before the land.
+- **Not run:** verify's list on the moved picks themselves (each differs from a verified tree only by M562's two
+  files); any smoke; `gate:landing`; the test Mac's V row.
+- **The window's drop** (`4340c6e30`, made at 2026-11-26T17:31:57Z; the maker refuses before 17:31:42Z): the row and
+  its note out, three lines. One frozen install under that yaml said "Already up to date" and left the lock as it was by
+  its sum, and pnpm's supply-chain check passed (669 entries) with no exclude row for ICE.
+
+## OM-1 — the browser pane's Device is a choice of presets and Custom, and Mute says Unmute (M564)
+
+**2026-11-27 · on local main: `5f7f8c293` (OM-1, design), `6a62d6b56` (OM-1), `9d41a0f79` (OM-1, mend) and
+`51c5cac84` (OM-1, mend 2). NOT pushed.**
+James, 2026-11-25, typed in the OM lane's session at 10:57:40Z: "yes, this is poorly designed, for the browser pane's
+menu, i want a more chrome devtool device toolbar design instead of putting everything in one big dropdown. as for
+simulator's initial setup form, it has that bug and it should instead show on top of the simulator screen as overlay.
+and everything should be designed with our object menu conventions. now help me complete redesign them". At
+11:31:58Z: "for browser pane menu, let's make it more simpler and user firendly, let's remove pixel ratio, input and ua selection,
+make the resolution inside the device selector, so everything are just preset conatined in different devices in device
+list, and add a new costum in the list where user custom the resolution and ua. and i do want the mute toggle button".
+
+- **The pane (plugins/browser-pane), DESIGN.md §9 "The browser pane's acts".**
+  - Device is an I62 choice: the four presets (devices.ts) with their sizes, Turn to landscape (or portrait) for the
+    iPad and the iPhone, and Custom: width 320 to 8192, height 240 to 8192, an agent of at most 512 characters, empty
+    for the browser's own.
+  - A preset cuts each selected pane to its size about the centre and clears the old form's overrides (pixel ratio,
+    input, agent mode), in one transaction; Custom cuts at a laptop's density.
+  - Mute says Unmute (I61's state, its speaker struck through) once every selected pane is muted.
+  - The same two acts stand in hand. The settings form retires (device-menu.ts, menu-host.ts).
+- **The SDK door** re-exports `ActChoice`, `ActChoiceField`, `ActChoiceTaken`, `MenuActionState` and
+  `MenuActionStateContext`.
+- **The selection bar (field-app).**
+  - A choice act is a choice pill: its current choice, or Mixed, with the tip "Device: Laptop".
+  - Its list draws `menuitemradio` rows with a check, the hints in the key's place.
+  - A choice that asks for values draws its fields (ChoiceFields): held to their bounds, step and length; Return takes
+    them, and Esc puts a value back.
+  - An act's state rides its cell (disabled, swatch). More lists a choice act as a row that opens its list.
+  - The catalog has five new plates of the shipping view.
+- **Smoke drivers** (electron-shell testing): `choosePaneDevice`, `openPaneCustom`, `typePaneCustom`, `takePaneCustom`.
+  browser-pane-ui's in-hand Custom and preset steps use them; they are gate:landing's, on the test Mac.
+- **Proof:** the whole suites at the line's tip (M563's proof, above) and, on the overlay before the EL8, its own
+  whole suites and typechecks (its commit message says which). The design catalog's plates were rendered offscreen
+  by day and by night.
+- **Not run:** gate:landing; its browser-pane smokes drive the new list and fields, and they are the test Mac's.
+- **The look (2026-11-26).** In a desktop of the lane's own, by night and by day: the bar, Device's list (Custom, then
+  the four presets with their sizes, the current one checked), Custom's Width, Height and User agent with Use, and
+  Mute turned Unmute on the pressed fill. Every edge sampled held (the list's hairline on the desk and on a pane).
+- **The mend (`9d41a0f79`, 2026-11-26): a change of selection closes the bar's list at once.** The ink lane's look at
+  the merged bar (its trial on this line, frames q4-cast-pane-to-clock) found the fault before any merge. With a pane's
+  Device list open, a press on the clock folded the list where it stood, and the clock's selection then placed the bar
+  over the clock with the fold under way: an empty body folding there for about 300 ms. More's menu had been carried
+  the same way since DK-11.
+  - The controller folds the grown bar in the read that says the new selection, so it is never drawn grown over it.
+  - The view, placed over another selection, writes `data-cut`: the grown element's motion is off until it next grows.
+  - DESIGN.md §8 "The bar grown" says it, dated.
+  - Its row was red first on the line's head before it (More's menu said open over the next object for one render),
+    then green. field-app's whole suite was 6,341 passed and its typecheck 0 errors.
+- **The second mend (`51c5cac84`, 2026-11-26): a fold fades the list that stood open, and a press on another object
+  closes it at once.** The ink lane's re-look at the line's head (frames q5-cast-a2-pane-to-clock) saw the Device list
+  stand EMPTY at the pane for 40 to 90 ms after a press on the clock.
+  - The pane was still selected in those frames, so this was not the cut. It was the fold the press began, drawn empty:
+    the list was swapped for More's menu as it closed, and the pill's words took their rest ink under its fading fill.
+  - Read from the code, the cut itself came a frame after ICE drew the new selection. ICE publishes from its frame, and
+    React rendered that update after the frame's paint.
+  - The view keeps the list that stood open until it next grows, and the pill's words and chevron fade with its fill.
+  - A change of selection the desk publishes is committed in the publish (`flushSync`, the desk's own publish only), so
+    the bar is drawn in ICE's frame.
+  - A press that the desk's pick lands on another object closes the list at once: that press is a change of selection,
+    which the first mend already rules. DESIGN.md §8's dated line is amended to say so.
+  - Its four rows were red first on the head before it, then green. field-app's whole suite was 6,345 passed, its
+    typecheck 0 errors, and check:walls clean.
+
+## OM-2 — the simulator's settings are a sheet on its glass, picked up through the desk's hold, and Finish is a choice (M565)
+
+**2026-11-27 · on local main: `0793e51f1` (OM-2, design) and `be527d76e` (OM-2). NOT pushed.**
+James, 2026-11-25, on the page *Pane and Phone Menus* (https://claude.ai/artifact/A835fgE2pkwbjVEZ21iwDP, its
+`decisions` store read back): settings-place A, "Picked up, on its glass", at 17:30:10.924Z, and finish A, "A choice of
+its colours", at 17:30:18.505Z; typed at 17:32:01Z: "i picked lean".
+
+- **The desk's hold, a new SDK door** (plugin-sdk `DESK_HOLD`, `DeskHold.pickUp(entity)`), lent by field-app's desk
+  layer.
+  - It refuses an object that is not selected or cannot be opened.
+  - Otherwise it is ICE's own pick-up, `ops.open`, which leaves the object the selection alone.
+  - It does not know which kind asks or whether a person pressed; its doc says so. It needs no contract row, as the
+    SDK's other doors have none.
+- **The simulator (plugins/simulator).**
+  - Simulator settings… wears its own drawing (§13). From the bar it picks the first selected phone up through the
+    hold, and its sheet rises on the glass for every phone it ran on.
+  - The sheet replaces the window's modal setup dialog and its top-left corner bug. It runs from under the island (or
+    notch, or the display's top) plus 2.5% of the display, down to the display's foot, at full width, with top corners
+    of 2.6 mm.
+  - Its selects are pills that open inline lists (`menuitemradio`, a check column; Esc folds a list before it closes
+    the sheet). Every state and behaviour of the old form is kept.
+  - Finish is an I62 choice: the model's finishes by name, each with its swatch. Phones of different models leave it
+    faint. It writes one transaction, and a finish every phone wears writes nothing.
+- **The selection bar.** The swatch pill: the dot and the chevron, no words. Mixed is an empty ring. The open pill's
+  dot is ringed in the solid's own ink at 40%. A catalog plate shows it, with stand-in token swatches.
+- **The smoke row SIM-ATTACH** is rewritten for the hold, the sheet's pills and the bar's Finish; its judge checks the
+  finish taken. It is the test Mac's.
+- **An independent review** found no high-severity bug. Three minor findings were fixed with tests: focus goes back to
+  its opener, an open list survives a poll, and the arrows work from a faint row. The hold's caller limit is
+  documented.
+- **Proof:** the whole suites at the line's tip (M563's proof, above); after the look's fix, the simulator's whole
+  suite 159 of 159 and the attach test that pins the fix.
+- **Not run:** gate:landing and the smoke row SIM-ATTACH, the test Mac's.
+- **The look (2026-11-26) found a bug, fixed before the land.** Simulator settings… on the selection bar opened the
+  sheet while the phone was still rising into the hand, and the phone's driver idled as soon as the ask was spent, so
+  the sheet kept the rise's frame: a 209 × 417 panel off the phone's right edge, the same by day and by night. The
+  driver no longer idles while the sheet shows; the attach test had pinned the old idle. Seen fixed in the same
+  desktop.
+- **A question the look left for James:** by night the sheet (28,28,30) on the phone's unlit glass (28,29,29) shows
+  no edge, its 2.6 mm corners included; only its contents read. Nothing changed for it.
+- **Owed:** the smoke row SIM-ATTACH on the test Mac (its new steps), and James's word on the night sheet's edge.
