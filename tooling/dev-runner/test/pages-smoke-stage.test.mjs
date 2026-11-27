@@ -25,7 +25,11 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
-import { pagesEngineDevCopy } from "../../../scripts/pages-pin.mjs";
+import {
+  pagesEngineDevCopy,
+  pagesEnginePlatform,
+  readPagesPin,
+} from "../../../scripts/pages-pin.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const STAGER = join(REPO_ROOT, "apps/desktop/packaging/stage-pages-engine.mjs");
@@ -59,28 +63,42 @@ function blindRun(name, env) {
   };
 }
 
+// The CLI reads the real record. A host without a recorded build is refused before the source path is checked.
+function assertSourceFailure(reason, expectedForRecordedBuild) {
+  const platform = pagesEnginePlatform();
+  const pin = readPagesPin(REPO_ROOT);
+  if (Object.hasOwn(pin.sourceBuild.binarySha256, platform)) {
+    assert.match(reason, expectedForRecordedBuild);
+  } else {
+    assert.equal(
+      reason,
+      `the record names no source build of ${pin.package} for ${platform}: main has no engine there`,
+    );
+  }
+}
+
 test("a host that names no source build is blind: exit 2, in the copy function's own words, and the command never starts", () => {
   const got = blindRun("unset", {});
   assert.equal(got.status, 2);
   assert.equal(got.said?.verdict, "blind");
-  assert.match(got.said?.why, /VIBEFIELD_DEV_PAGES_ENGINE_SOURCE is not set/u);
+  assertSourceFailure(got.said?.why, /VIBEFIELD_DEV_PAGES_ENGINE_SOURCE is not set/u);
   assert.equal(got.ran, false);
   assert.deepEqual(got.left, []);
   assert.doesNotMatch(got.stdout, /PAGES_ENGINE_STAGE_DONE/u);
 });
 
-test("a file that is not the record's source build is blind, by its sum; so is a path that is not absolute", () => {
+test("an incorrect file or a relative source path is blind and the command never starts", () => {
   const other = join(work, "not-the-build");
   writeFileSync(other, randomBytes(64), { mode: 0o755 });
   const wrong = blindRun("wrong", { [SOURCE_ENV]: other });
   assert.equal(wrong.status, 2);
   assert.equal(wrong.said?.verdict, "blind");
-  assert.match(wrong.said?.why, /names a file with SHA-256 [0-9a-f]{64}/u);
+  assertSourceFailure(wrong.said?.why, /names a file with SHA-256 [0-9a-f]{64}/u);
   assert.equal(wrong.ran, false);
   assert.deepEqual(wrong.left, []);
   const relative = blindRun("relative", { [SOURCE_ENV]: "built/agent-browser" });
   assert.equal(relative.status, 2);
-  assert.match(relative.said?.why, /must be an absolute path/u);
+  assertSourceFailure(relative.said?.why, /must be an absolute path/u);
   assert.equal(relative.ran, false);
 });
 
